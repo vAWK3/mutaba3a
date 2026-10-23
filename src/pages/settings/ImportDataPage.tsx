@@ -152,7 +152,7 @@ export function ImportDataPage() {
 
   const handleDownloadTemplate = useCallback(() => {
     const template = generateImportTemplate();
-    downloadTextFile('mutaba3a-import-template.csv', template);
+    downloadTextFile('mtb3a-import-template.csv', template);
   }, []);
 
   const handleValidateCSV = useCallback(async () => {

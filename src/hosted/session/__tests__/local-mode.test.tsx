@@ -368,7 +368,7 @@ describe('Your data (D2)', () => {
 
     await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
     const link = click.mock.instances[0] as unknown as HTMLAnchorElement;
-    expect(link.download).toMatch(/^mutaba3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
+    expect(link.download).toMatch(/^mtb3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
     expect(backend.exportRecords).toHaveBeenCalledTimes(1);
   });
 

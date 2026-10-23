@@ -182,6 +182,13 @@ describe('ImportDataPage: choosing a file', () => {
     expect(screen.getByText(/Drop a .json or .csv file here/i)).toBeInTheDocument();
   });
 
+  it('names the CSV template mtb3a-import-template.csv (MUT-402 D6)', async () => {
+    const download = vi.spyOn(csvUtils, 'downloadTextFile').mockImplementation(() => {});
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /Download CSV Template/i }));
+    expect(download).toHaveBeenCalledWith('mtb3a-import-template.csv', expect.any(String));
+  });
+
   it('goes back to Settings', async () => {
     renderPage();
     await userEvent.click(screen.getByRole('button', { name: /Back to Settings/i }));
