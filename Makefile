@@ -22,7 +22,9 @@
 # Operator steps still owed before a release (an infra change to approve, a
 # tfvars value to set) live in docs/operations/before-release.md. Each release
 # target prints its open items before it asks to deploy
-# (scripts/before-release.sh). Delete an item there once it's done.
+# (scripts/before-release.sh). Delete an item there once it's done. The server
+# target also lists the restore drill when the pilot runbook's §10 has none
+# from the last 60 days.
 
 SHELL      := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c

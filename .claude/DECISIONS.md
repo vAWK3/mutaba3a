@@ -4574,7 +4574,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 3. **A release gate, not a migration.** `server/scripts/currency-rows.sh count` lists every live row outside the list, by profile or (for the inbox) user. Its columns are read from the catalog and its list from `money.ts`; `billing_*` is left out and soft-deleted rows don't count. It exits 3 when there are any.
    - It runs through `npm run db:run` before and after the server release.
    - Rows on the operator's own test profiles and users go with `delete-test-profiles` (review D3). It soft-deletes where a table has `deletedAt`, the app's own delete. Elsewhere it hard-deletes only rows nothing points at; otherwise it lists the blockers and changes nothing. It always previews first.
-   - Rows on anyone else's profile stop the release for Basel's call (`docs/operations/pilot-runbook.md` §10).
+   - Rows on anyone else's profile stop the release for Basel's call (`docs/operations/pilot-runbook.md` §11).
    - **Portal local mode (signed-out, IndexedDB) is outside the gate.** Such rows read back with their amounts (point 2) and refuse a new amount until their currency changes.
 4. **The phone keeps its Gulf enum values, unused.** It offers only what `/v1/me.currencies` lists (MUT-279 D4), so the server is the switch; its parity tests become subset checks. Only lists that don't follow the server change there (the iOS FX widget picker, the release notes).
 5. **Analytics contract 2.0.0** (four currencies): a removal is a major version (`docs/analytics/README.md`).
