@@ -206,7 +206,7 @@ export function projectRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/projects/{projectId}/archive',
       tags: ['Projects'],
       summary: 'Archive a project',
-      description: 'Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.',
+      description: 'Idempotent. Refused with 409 PROJECT_HAS_OUTSTANDING while receivables are outstanding (an Owed dated ahead counts here although the summaries leave it out until its day: it is work still to be paid, MUT-392) and 409 PROPOSAL_OPEN while a fee proposal is open (withdraw it first). Nothing is ever deleted.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('projects:write'), idempotent(store, 'projects.archive')] as const,
       request: { params: ProjectIdParamSchema, headers: IdempotencyHeaderSchema },

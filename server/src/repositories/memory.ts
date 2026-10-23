@@ -1408,11 +1408,11 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
       return { ...r };
     },
-    redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate) => {
+    redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate, dueDate) => {
       const r = this.recs.get(id);
       if (!r || r.organizationId !== organizationId || r.origin !== 'ADJUSTMENT' || r.createdByUserId !== userId || r.deletedAt) return { kind: 'not_found' };
       if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
-      Object.assign(r, { postingDate, version: r.version + 1 });
+      Object.assign(r, { postingDate, ...(dueDate ? { dueDate } : {}), version: r.version + 1 });
       return { kind: 'updated', record: { ...r } };
     },
   };

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
 import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
-import { FakeApi, STORAGE, apiError, category, expense, project, todayInJerusalem } from '../../support/portalApi';
+import { FakeApi, STORAGE, apiError, category, ceilingOf, daysAfter, expense, project, todayInJerusalem } from '../../support/portalApi';
 
 /**
  * Expenses in the portal (MUT-44): the list, the Record/Edit expense drawer and
@@ -300,6 +300,38 @@ test('An expense changed on another device: Save is refused, the drawer shows th
     await drawer.getByRole('button', { name: 'Save' }).click();
     await expect(drawer).toHaveCount(0);
     expect(api.last('PATCH', /^\/v1\/expenses\//)?.headers['if-match']).toBe('2');
+  });
+});
+
+test('An expense may be dated ahead up to ten years; the server’s ten-year refusal is said at the date (MUT-392)', { tag: '@portal.expenses.date-too-far' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+  const ahead = daysAfter(todayInJerusalem(), 3);
+
+  await step('Open Expenses and choose Record expense', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(drawer.getByLabel('Date')).toHaveAttribute('max', ceilingOf(todayInJerusalem()));
+  });
+
+  await step('Type 40, pick Office supplies, set the date 3 days ahead and save', async () => {
+    await drawer.getByLabel('Amount').fill('40');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByLabel('Date').fill(ahead);
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/expenses$/)?.body).toMatchObject({ occurredOn: ahead, categoryId: office_.id });
+  });
+
+  await step('Record another dated 2040-01-01 while the server refuses it as more than ten years ahead', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Amount').fill('40');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByLabel('Date').fill('2040-01-01');
+    api.once('POST', /^\/v1\/expenses$/, apiError(422, 'VALIDATION_FAILED', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' }));
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer.getByText("The date can't be more than ten years ahead")).toBeVisible();
+    await expect(drawer).toBeVisible();
   });
 });
 

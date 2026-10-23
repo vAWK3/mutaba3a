@@ -93,6 +93,21 @@ features:
       - POST /v1/income was sent with occurredOn 2001-03-04
       - The date field says "The date can't be more than ten years ago" and does not say "later than today"
       - The drawer stays open with 1,200 and the date still filled in
+  - id: add-owed-future
+    title: Add income, Owed, dated 30 days ahead saves with that date; a Received dated tomorrow is refused as later than today without a request (MUT-392)
+    tier: secondary
+    paths:
+      - src/hosted/components/incomeForm.ts
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/format/dates.ts
+    steps:
+      - Open Payments, choose + Add income (Received), type 1,200, set tomorrow under More details and save
+      - Open Receivables, choose + Add income (Owed)
+      - Type 750, pick Client 1, set the date 30 days ahead under More details and save
+    expect:
+      - The date field's max is today for Received and ten years after today for Owed
+      - Received with tomorrow shows "The date can't be later than today" and no POST is sent
+      - POST /v1/income gets {kind owed, 750.00, the future date, Client 1}, and the drawer closes
   - id: owed-errors
     title: Add income, Owed, says at the field what is missing or wrong, keeps the entry through a refusal or a dropped connection, and a retry reuses the attempt's Idempotency-Key
     tier: secondary
@@ -190,16 +205,31 @@ features:
       - The payment line opens ?payment=<id>, and PATCH /v1/payments/<id> gets the new receivedOn
       - The entry's drawer now lists the payment with the new date
   - id: redate-no-future
-    title: The date picker stops at the profile's today, and a later date typed in is refused at the field without a request (MUT-224)
+    title: A payment's date picker stops at the profile's today, and a later date typed in is refused at the field without a request (MUT-224; MUT-392 keeps payments past-only)
     tier: secondary
     paths:
       - src/hosted/components/RedateDrawer.tsx
     steps:
-      - Open an Owed entry
+      - Open a Received payment
       - Type tomorrow's date and save
     expect:
       - The date field's max is today in the profile's timezone
       - The message "The date can't be later than today" shows under the date and no PATCH is sent
+  - id: redate-owed-future
+    title: An Owed entry moves to a day after its due date; the drawer says the due date moves to the 15th of the next month, and a day past ten years ahead is refused at the field (MUT-392)
+    tier: secondary
+    paths:
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/components/incomeApiErrors.ts
+      - src/hosted/format/dates.ts
+    steps:
+      - Open the Owed entry (due Nov 15, 2026)
+      - Type a day more than ten years ahead and save
+      - Type 2026-12-01 and save
+    expect:
+      - The date field's max is ten years after today
+      - The far day shows "The date can't be more than ten years ahead" with no PATCH
+      - On 2026-12-01 the drawer says "Due Jan 15, 2027 — moves with the new date", and PATCH /v1/income/<id> gets {occurredOn 2026-12-01}
   - id: redate-conflict
     title: A date changed on another device is refused on Save; the drawer refills with the latest date and saving again works (MUT-224)
     tier: secondary

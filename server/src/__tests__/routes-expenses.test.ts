@@ -265,6 +265,22 @@ describe('PATCH /v1/expenses/{id}', () => {
     expect(atFloor.status).toBe(200);
   });
 
+  it('MUT-392: create and edit refuse a date more than ten years ahead (bound future); the ceiling day is accepted', async () => {
+    // Today is 2026-10-20 in Jerusalem, so the ceiling is 2036-10-27.
+    const { h, a, p, create } = await setup();
+    const tooFar = await create({ occurredOn: '2036-10-28' });
+    expect(tooFar.status).toBe(422);
+    expect((await read(tooFar)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    const ahead = await read(await create({ occurredOn: '2026-10-23' }));
+    expect(ahead.occurredOn).toBe('2026-10-23');
+    const url = `/v1/expenses/${ahead.id}`;
+    const moved = await h.app.request(url, json({ occurredOn: '2036-10-28' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(moved.status).toBe(422);
+    expect((await read(moved)).error.details).toEqual({ reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' });
+    const atCeiling = await h.app.request(url, json({ occurredOn: '2036-10-27' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(atCeiling.status).toBe(200);
+  });
+
   it('MUT-227: a row already older than the floor stays readable, editable without its date, and inside old-date filters', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(

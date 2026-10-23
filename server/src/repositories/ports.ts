@@ -1000,9 +1000,9 @@ export interface ReceivableRepository {
   /**
    * MUT-223: moves an Owed entry's `postingDate`, keeping `dueDate`, and bumps `version`. One conditional write: only a
    * live ADJUSTMENT row this user created, at `expectedVersion`. `not_found` covers every other row, so a stale
-   * answer never reveals a row the user may not touch.
+   * answer never reveals a row the user may not touch. MUT-392 (D3): a `dueDate`, when given, moves in the same write.
    */
-  redateAdjustment(organizationId: string, id: string, userId: string, expectedVersion: number, postingDate: IsoDate): Promise<UpdateResult<ReceivableRecord>>;
+  redateAdjustment(organizationId: string, id: string, userId: string, expectedVersion: number, postingDate: IsoDate, dueDate?: IsoDate): Promise<UpdateResult<ReceivableRecord>>;
 }
 
 // ---- Milestone 4: payments, allocations, credits ----------------------------

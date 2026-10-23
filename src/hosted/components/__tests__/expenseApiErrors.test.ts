@@ -10,6 +10,7 @@ const labels: ExpenseErrorLabels = {
   amountInvalid: 'amount-invalid',
   dateInvalid: 'date-invalid',
   dateTooOld: 'date-too-old',
+  dateTooFar: 'date-too-far',
   conflict: 'conflict',
   network: 'network',
 };
@@ -39,6 +40,12 @@ describe('applyExpenseApiError', () => {
     const setError = vi.fn();
     applyExpenseApiError(new ApiError(422, 'VALIDATION_FAILED', 'm', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'past' }), setError, labels, vi.fn());
     expect(setError).toHaveBeenCalledWith('occurredAt', { type: 'manual', message: 'date-too-old' });
+  });
+
+  it('says the date is too far ahead when the server reports the future bound (MUT-392)', () => {
+    const setError = vi.fn();
+    applyExpenseApiError(new ApiError(422, 'VALIDATION_FAILED', 'm', { reason: 'DATE_INVALID', field: 'occurredOn', bound: 'future' }), setError, labels, vi.fn());
+    expect(setError).toHaveBeenCalledWith('occurredAt', { type: 'manual', message: 'date-too-far' });
   });
 
   it('toasts an unrecognised validation reason rather than silently dropping it', () => {

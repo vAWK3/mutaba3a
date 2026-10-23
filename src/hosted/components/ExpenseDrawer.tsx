@@ -18,7 +18,7 @@ import { usePendingPicks } from './usePendingPicks';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
-import { todayInZone, todayLocalISO } from '../format/dates';
+import { moneyDateCeiling, todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
 import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
@@ -131,6 +131,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     amountInvalid: t('hosted.expenses.errors.amountInvalid'),
     dateInvalid: t('hosted.expenses.errors.dateInvalid'),
     dateTooOld: t('hosted.expenses.errors.dateTooOld'),
+    dateTooFar: t('hosted.expenses.errors.dateTooFar'),
     conflict: t('hosted.expenses.errors.conflict'),
     network: t('hosted.expenses.errors.network'),
   };
@@ -249,9 +250,12 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
         </>
       }
     >
-      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))}>
+      {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
+          date's ten-year max (MUT-392) would otherwise block Save with no message the drawer can show. */}
+      <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ExpenseFormFields
           control={control}
+          dateMax={moneyDateCeiling(timezone ? todayInZone(timezone) : todayLocalISO())}
           errors={formState.errors}
           categories={categories ?? []}
           currencyOptions={HOSTED_CURRENCIES}

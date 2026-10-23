@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
@@ -289,14 +289,35 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     expect(posts).toHaveLength(0);
   });
 
-  it('caps the date at today in the profile\'s zone, not the browser\'s (R3)', async () => {
+  it('caps a Received date at today in the profile\'s zone, not the browser\'s (R3)', async () => {
     // 22:30Z on the 13th is already the 14th in Jerusalem.
+    vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
+    stub((r) => created(r.body));
+    const { user } = renderDrawer({ defaultCustomerId: C1, initialKind: 'received' });
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-10-14');
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-14');
+  });
+
+  it('refuses a Received dated after today at the date, without a request (MUT-392)', async () => {
+    vi.setSystemTime(new Date('2026-10-14T09:00:00Z'));
+    const posts = stub((r) => created(r.body));
+    const { user, onClose } = renderDrawer({ defaultCustomerId: C1, initialKind: 'received' });
+    await user.type(screen.getByLabelText('Amount'), '750');
+    await user.click(screen.getByRole('button', { name: /More details/ }));
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-15' } });
+    await user.click(screen.getByRole('button', { name: 'Save income' }));
+    expect(await screen.findByText("The date can't be later than today")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(0);
+  });
+
+  it('lets an Owed date go up to ten years ahead of the profile\'s today (MUT-392)', async () => {
     vi.setSystemTime(new Date('2026-10-13T22:30:00Z'));
     stub((r) => created(r.body));
     const { user } = renderDrawer({ defaultCustomerId: C1 });
     await user.click(screen.getByRole('button', { name: /More details/ }));
-    expect(screen.getByLabelText('Date')).toHaveValue('2026-10-14');
-    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-14');
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2036-10-21');
   });
 
   it('resends the same Idempotency-Key when Save is retried after a network failure, and a new one after an edit', async () => {

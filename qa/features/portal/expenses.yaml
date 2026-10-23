@@ -99,6 +99,22 @@ features:
       - On a firm's business profile, open Expenses and choose an expense that has a category, a client and a matter
     expect:
       - The expense's drawer shows its category, its client and its matter
+  - id: date-too-far
+    title: An expense may be dated ahead up to ten years; a date the server refuses as more than ten years ahead is said at the date field (MUT-392)
+    tier: secondary
+    paths:
+      - src/hosted/components/ExpenseDrawer.tsx
+      - src/hosted/components/expenseApiErrors.ts
+      - src/components/expenses/ExpenseFormFields.tsx
+      - src/hosted/format/dates.ts
+    steps:
+      - Open Expenses and choose Record expense
+      - Type 40, pick Office supplies, set the date 3 days ahead and save
+      - Record another dated 2040-01-01 while the server refuses it as more than ten years ahead
+    expect:
+      - The date field's max is ten years after today
+      - POST /v1/expenses gets the date 3 days ahead and the drawer closes
+      - The refused one shows "The date can't be more than ten years ahead" under the date and the drawer stays open
   - id: save-feedback-animation
     title: A successful expense save shows the animated save-feedback icon in SavedNotice (MUT-338)
     tier: tertiary

@@ -1284,10 +1284,10 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
     // write — never an undo or a second re-date that landed between two separate statements (404 with no audit row).
-    redateAdjustment: (organizationId, id, userId, expectedVersion, postingDate) =>
+    redateAdjustment: (organizationId, id, userId, expectedVersion, postingDate, dueDate) =>
       this.prisma.$transaction(async (tx): Promise<UpdateResult<ReceivableRecord>> => {
         const owned = { id, organizationId, origin: 'ADJUSTMENT' as const, createdByUserId: userId, deletedAt: null };
-        const { count } = await tx.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, version: { increment: 1 } } });
+        const { count } = await tx.receivable.updateMany({ where: { ...owned, version: expectedVersion }, data: { postingDate, ...(dueDate ? { dueDate } : {}), version: { increment: 1 } } });
         if (count === 1) return { kind: 'updated', record: await tx.receivable.findUniqueOrThrow({ where: { id } }) };
         const record = await tx.receivable.findFirst({ where: owned });
         return record ? { kind: 'stale', record } : { kind: 'not_found' };

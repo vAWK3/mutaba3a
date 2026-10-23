@@ -328,7 +328,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { organization, user, membershipRole } = sessionAuth(c);
       const now = c.get('now')();
-      const receivedOn = redateTo(c.req.valid('json').receivedOn, organization, now, 'receivedOn');
+      const receivedOn = redateTo(c.req.valid('json').receivedOn, 'received', organization, now, 'receivedOn');
       const notFound = () => new ApiError('NOT_FOUND', 'No such payment');
       const payment = await store.payments.getById(organization.id, c.req.valid('param').paymentId);
       if (!payment || !isOwnProfile(organization, user.id, membershipRole) || !isOwnCapture(payment, user.id)) throw notFound();

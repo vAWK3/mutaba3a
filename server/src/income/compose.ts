@@ -1,4 +1,4 @@
-import { assertIsoDate, assertNotTooOld, todayFor, validationError, type DateBound } from '../agreements/compose.js';
+import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import type { ProfileWriter } from '../auth/writability.js';
 import { compareIsoDates, dueDateFor, type IsoDate } from '../dates.js';
 import { ownsProfile } from '../personal-profile.js';
@@ -89,6 +89,28 @@ export function dueDateForOwed(occurredOn: IsoDate, explicit: IsoDate | undefine
   return explicit ?? dueDateFor(occurredOn, 'EOM_15');
 }
 
+/**
+ * MUT-392 (D3): the due date an Owed gets when it is re-dated. MUT-223 keeps the stored one, unless the new date has
+ * passed it (only possible since an Owed may move forward): then the default for the new date, so an entry is never
+ * due before its own date. `undefined` = keep it.
+ */
+export function dueDateAfterRedate(dueDate: IsoDate, occurredOn: IsoDate): IsoDate | undefined {
+  return compareIsoDates(dueDate, occurredOn) < 0 ? dueDateForOwed(occurredOn, undefined) : undefined;
+}
+
+/**
+ * MUT-392 review: an explicit Owed due date on create or file-as-income. Never before the entry's own date (an entry
+ * hidden until its day must not read overdue on it, the rule D3 keeps for re-dates) and not more than ten years
+ * ahead. Absent → EOM_15 of occurredOn.
+ */
+export function owedDueDate(raw: string | undefined, occurredOn: IsoDate, today: IsoDate): IsoDate {
+  if (!raw) return dueDateForOwed(occurredOn, undefined);
+  const dueDate = assertIsoDate(raw, 'dueDate');
+  if (compareIsoDates(dueDate, occurredOn) < 0) throw validationError('DATE_INVALID', 'dueDate may not be before occurredOn', { field: 'dueDate' });
+  assertNotAbsurdDate(dueDate, today, 'dueDate');
+  return dueDate;
+}
+
 export interface OwedVatFields {
   vatTreatment: VatTreatment;
   vatRateBasisPoints: number;
@@ -110,7 +132,9 @@ export function owedVatFields(amountMinor: bigint): OwedVatFields {
 /**
  * ADR-038's rule — a payment date is never later than today; backdating is
  * accepted — ported to the server (MUT-65 addendum to ADR-038; see
- * DECISIONS.md). Distinct from `assertNotAbsurdDate` (agreements/compose.ts),
+ * DECISIONS.md). Since MUT-392 (ADR-169) it binds money that has moved
+ * (Received, settle, conversions); an Owed may be dated ahead, see
+ * `incomeMoneyDate`. Distinct from `assertNotAbsurdDate` (agreements/compose.ts),
  * which only rejects a date more than ten years ahead: `POST /v1/payments`'s
  * `receivedOn` applies that ten-year ceiling and MUT-227's floor, but no
  * same-day cutoff, so this is a stricter check for the income-like dates
@@ -133,6 +157,19 @@ export function pastMoneyDate(raw: string, today: IsoDate, field: string): IsoDa
 }
 
 /**
+ * MUT-392 (ADR-169): an income date by kind. Received money has moved, so it keeps `pastMoneyDate`; an Owed is work
+ * you may log before it is dated, so it may be up to ten years ahead (the ceiling payments and agreements already
+ * use) and not more than ten years back.
+ */
+export function incomeMoneyDate(raw: string, kind: IncomeKind, today: IsoDate, field: string): IsoDate {
+  if (kind === 'received') return pastMoneyDate(raw, today, field);
+  const date = assertIsoDate(raw, field);
+  assertNotAbsurdDate(date, today, field);
+  assertNotTooOld(date, today, field);
+  return date;
+}
+
+/**
  * MUT-223: a date may be changed only on a profile the person owns (personal or self-service, MUT-182, or co-owned,
  * MUT-373). A Malafat-fed or firm profile is never theirs: Malafat owns allocations there, and a moved date would
  * change its books.
@@ -146,7 +183,7 @@ export function isOwnCapture(payment: Pick<PaymentRecord, 'origin' | 'createdByU
   return payment.origin === 'CAPTURE' && payment.createdByUserId === userId && payment.status === 'POSTED';
 }
 
-/** MUT-223: the new date of a re-date — the same rules as create (MUT-227's floor included), in the organization's timezone. */
-export function redateTo(raw: string, organization: Organization, now: Date, field: string): IsoDate {
-  return pastMoneyDate(raw, todayFor(organization, now), field);
+/** MUT-223: the new date of a re-date — the same rules as create for that kind (MUT-227's floor, MUT-392's Owed ceiling), in the organization's timezone. */
+export function redateTo(raw: string, kind: IncomeKind, organization: Organization, now: Date, field: string): IsoDate {
+  return incomeMoneyDate(raw, kind, todayFor(organization, now), field);
 }
