@@ -42,6 +42,10 @@
 
 ### Changed
 - `GET /v1/entries` leaves LOCKED profiles out. `buildMe`'s membership reads are batched (shared with the gate). API `1.60.0-mut361`.
+
+---
+
+
 ## [Unreleased] - 2026-10-24 — The dev server can keep receipts on local disk, so receipt flows run end to end in local QA (MUT-396)
 
 ### Added
