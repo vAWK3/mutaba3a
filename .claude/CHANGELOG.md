@@ -28,12 +28,12 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — Portal Reports (MUT-175, ADR-188)
+## [Unreleased] - 2026-10-24 — Portal Reports (MUT-175, ADR-189, API 1.68.0-mut175)
 
 **Why:** the portal had no reports, and MUT-292 can't retire the web Insights page until it does (MUT-322 GA gate). Basel wants a screen people come back to weekly: what came in, where it went, who paid, and what the history says.
 
 ### Added
-- **`GET /v1/summaries/activity`** (`server/src/summaries/activity.ts`, `routes/summaries.ts`): per currency, received and spent per day or month, the period's categories and received by client, a 12-month history, `dataSince`/`earlierData`, and days to get paid (median over fully settled Owed, n ≥ 3). Session-only, `summaries:read` + `expenses:read`; 422 `END_BEFORE_START`, `RANGE_TOO_LONG`. Runs signed out through `PORTAL_ROUTES`. API `1.67.0-mut175`.
+- **`GET /v1/summaries/activity`** (`server/src/summaries/activity.ts`, `routes/summaries.ts`): per currency, received and spent per day or month, the period's categories and received by client, a 12-month history, `dataSince`/`earlierData`, and days to get paid (median over fully settled Owed, n ≥ 3). Session-only, `summaries:read` + `expenses:read`; 422 `END_BEFORE_START`, `RANGE_TOO_LONG`. Runs signed out through `PORTAL_ROUTES`. API `1.68.0-mut175`.
 - `payments.listAllocationsFor` (memory + Prisma, M4 store contract); `daysBetween` in `server/src/dates.ts`.
 - **Reports page** `/p/$profileId/reports` (nav item after Overview): Received as the anchor figure, Spent and Kept, ≈ at today's ECB rate with the exact per-currency breakdown, Owed to you now, "Lately" staged insights and the teaser, a received-and-spent chart, Where it went and Who paid; Week/Month/Year with ‹ ›; the All profiles switch (`?scope=all`) with partial-load handling; first run, empty periods and a no-access explainer. Portal modules `data/reports.ts`, `data/reportInsights.ts`, `data/reportQueries.ts`, `format/reportFormat.ts`, `components/reports/*`, `analytics/reportViewed.ts`.
 - `hosted.reports.*` and `hosted.shell.nav.reports` (en + ar, approved copy table); `--text-figure-fluid` in `theme.css`.
@@ -46,6 +46,22 @@
 - `everyPage` is exported from `data/queries.ts`.
 
 ---
+## [Unreleased] - 2026-10-24 — Close my account: 30 days of grace, then an hourly hard delete (MUT-333 web half, ADR-188, API 1.67.0-mut333)
+
+**Why:** GA needs self-service account deletion (privacy law, App Store 5.1.1(v)); the operator did it by hand. Basel's decisions: 30 days' grace then a hard delete, closing cancels Stripe, terms audit rows purged, records on others' profiles anonymized. D1–D20 and R1–R17 are pending Basel. The phone half is still to build (MUT-371/364 phase).
+
+### Added
+- `POST /v1/me/closure {password}` (close; Stripe subscriptions end at the period end, past-due ones are cancelled, open checkouts expired; other sessions revoked; `account-closing` mail en/ar with the deletion day) and `DELETE /v1/me/closure` (keep, within the grace). `/v1/me` `user.closure`. Errors `ACCOUNT_CLOSING` (403) and `ACCOUNT_CLOSE_BLOCKED` (409: a profile they created has other members and no co-owner, R18).
+- The hourly hard delete: `POST /jobs/v1/accounts/purge`, `POST /admin/v1/accounts/purge {dryRun}`, `npm run accounts:purge [-- --dry-run]`; `server/src/accounts/{closure,purge-plan,purge-run}.ts`; `accountPurge` repository (memory + Prisma); `storage_purges`; `AccountStripeGateway`; `AttachmentStorage.removePrefix`.
+- Terraform: `google_cloud_scheduler_job.account_purge` (hourly, always on) and two `account_purge` log alerts; `tests/account_purge.tftest.hcl`.
+- Portal: `CloseAccountDrawer` (`?closeAccount=true`, the last row of You › Account, after Sign out; MUT-425 replaced the account menu), `AccountClosingPage` (AuthGate, before the terms step), `data/closeAccount.ts`; en/ar `hosted.closeAccount.*`.
+- QA: `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` (FakeApi tracks a closing).
+- Tests: closure and purge rules, the store contract on both stores, a Postgres catalog test that no value names a purged person, the routes, the Stripe gateway under the real SDK, the CLI, the templates.
+
+### Changed
+- Migration `20261024210000_mut333_account_closure`: closure columns on `users`; creator columns nullable with SET NULL; `firmRequestedByUserId` SET NULL with a relaxed CHECK. API `createdByUserId`/`uploadedByUserId` are nullable.
+- `POST /v1/me/password` and close share `auth/current-password.ts`. Trial reminders skip closing accounts. The portal re-reads `/v1/me` on 403 `ACCOUNT_CLOSING`. Local snapshot format 6 → 7 (`people.closure`).
+- `profile-rows.sh purge-user` no longer refuses records on others' profiles (they are anonymized by the foreign key); its header points at the hourly purge.
 
 ## [web 0.2.0 / api 0.6.0] - 2026-10-24 — Release prep
 

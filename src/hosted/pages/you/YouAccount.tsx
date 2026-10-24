@@ -11,7 +11,8 @@ import { useAccountDrawers } from '../../shell/AccountDrawers';
 
 /**
  * You › Account (MUT-425; was the account menu, hosted-portal.md §7.1): Billing with the trial or the open profile's
- * lapse state (eng D6), Your data, Change password, and Sign out set apart. Signed out on this device (MUT-286) there
+ * lapse state (eng D6), Your data, Change password, and Sign out set apart; MUT-333's Close my account last, on its own.
+ * Signed out on this device (MUT-286) there
  * is no account: Sign in and Your data instead, nothing that needs one.
  */
 export function YouAccount({ profile }: { profile: HostedProfile | null }) {
@@ -37,6 +38,10 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         <RowButton label={t('hosted.auth.changePassword')} onClick={drawers.open} />
       </RowGroup>
       <SignOutGroup />
+      {/* MUT-333: set apart, last: it can't be undone after 30 days */}
+      <RowGroup>
+        <RowButton tone="danger" label={t('hosted.closeAccount.menu')} sub={t('hosted.closeAccount.rowSub')} onClick={drawers.openCloseAccount} />
+      </RowGroup>
     </>
   );
 }

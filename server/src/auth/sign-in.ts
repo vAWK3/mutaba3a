@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import { isAccountGone } from '../accounts/closure.js';
 import { ApiError } from '../errors.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
@@ -75,6 +76,8 @@ export async function signIn(
   if (user && !locked && matches && user.status === 'PENDING_REVIEW') {
     throw new ApiError('ACCOUNT_UNDER_REVIEW', 'Your account is waiting for our review; we’ll email you when it’s ready');
   }
+  // MUT-333 (D5): a closed account past its deadline is gone to its person: the usual refusal, and no failure counted.
+  if (user && matches && isAccountGone(user.closure, now)) throw new ApiError('INVALID_CREDENTIALS', 'That email and password do not match');
   if (!user || locked || !matches || user.status !== 'ACTIVE') {
     if (!locked) {
       const lockUntil = throttle.recordFailure(key, now);

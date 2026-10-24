@@ -118,7 +118,7 @@ if (!url) {
       await backfillVendors(db);
       const linked = (await reread(w.first.id)).vendorId;
       await db.expense.update({ where: { id: w.first.id }, data: { vendor: 'Bakery Salam', updatedAt: t(1) } });
-      const fresh = await store.expenses.create({ organizationId: w.org.id, occurredOn: '2026-10-01', amountMinor: 500n, currency: 'ILS', title: null, vendor: 'Kiosk Amal', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.first.createdByUserId }, t(9));
+      const fresh = await store.expenses.create({ organizationId: w.org.id, occurredOn: '2026-10-01', amountMinor: 500n, currency: 'ILS', title: null, vendor: 'Kiosk Amal', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.first.createdByUserId! }, t(9));
 
       await backfillVendors(db, { relinkSince: t(5) });
 

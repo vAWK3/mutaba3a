@@ -366,10 +366,14 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const disabled = await make(5, 'DISABLED');
       const pending = await make(5, 'PENDING_REVIEW');
       const never = await make(null);
+      // MUT-333 (R16): someone closing their account gets no reminders.
+      const closing = await make(5);
+      const session = await store.sessions.create({ userId: closing.id, tokenDigest: randomUUID().replace(/-/g, '').padEnd(64, '0'), kind: 'cookie', at: at(2), idleExpiresAt: at(3), absoluteExpiresAt: at(3), userAgent: null });
+      await store.users.requestClosure({ userId: closing.id, at: at(2), deleteAfter: new Date(at(2).getTime() + 30 * 86_400_000), endedSubscriptionIds: [], exceptSessionId: session.id, audit: [] });
 
       // (after, upTo]: the window's lower bound is open, its upper bound closed.
       const rows = await store.billing.trialMailCandidates({ startedAfter: start(2), startedUpTo: start(9) });
-      const ours = new Set([tooEarly, firstIn, lastIn, tooLate, disabled, pending, never].map((u) => u.id));
+      const ours = new Set([tooEarly, firstIn, lastIn, tooLate, disabled, pending, never, closing].map((u) => u.id));
       const mine = rows.filter((r) => ours.has(r.userId));
       expect(mine).toEqual([
         { userId: firstIn.id, email: firstIn.email, locale: 'ar', trialStartedAt: start(3) },

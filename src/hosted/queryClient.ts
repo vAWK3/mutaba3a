@@ -24,11 +24,16 @@ export function isLapseRefusal(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'SUBSCRIPTION_LAPSED';
 }
 
+/** MUT-333: the account is closing (another tab or the phone closed it): `/v1/me` shows the closing page instead. */
+export function isClosingRefusal(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'ACCOUNT_CLOSING';
+}
+
 /** `defaultOptions` replaces the portal's own (tests: no retries, no stale time); the lapse handling stays. */
 export function createPortalQueryClient(defaultOptions?: DefaultOptions): QueryClient {
   const rereadMe = (error: unknown) => {
     // cancelRefetch false: a page of refused reads re-reads /v1/me once, not once per query (review).
-    if (isLapseRefusal(error)) void client.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false });
+    if (isLapseRefusal(error) || isClosingRefusal(error)) void client.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false });
   };
   const client: QueryClient = new QueryClient({
     queryCache: new QueryCache({ onError: rereadMe }),

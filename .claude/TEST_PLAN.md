@@ -3626,7 +3626,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Server | `routes-self-service.test.ts` (+2): doors GET has ACAO `*` and no allow-credentials; signup and recovery have none | `npm --prefix server test` |
 | Release-QA | `web.landing.signup-open`, `web.landing.signup-closed`, `web.legal.privacy-signup` (recorded, passing; `qa/runs/MUT-369/`) | `release-qa run --app web --only …` |
 
-## MUT-175 — Portal Reports (2026-10-24, ADR-188)
+## MUT-175 — Portal Reports (2026-10-24, ADR-189)
 
 | Layer | Tests | Command |
 |---|---|---|
@@ -3715,3 +3715,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Store contract | `store-contract-receipts.ts`: a FILED row's expense summary, none To review, none after the expense is deleted (memory + Prisma) | `npm --prefix server test` + `test:db` |
 | Routes | `routes-receipts.test.ts`: the serialized `expense` (formatted amount) on a filed row, null on a To-review one | `npm --prefix server test` |
 
+
+## MUT-333 — Close my account, web half (2026-10-24, ADR-188)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `accounts/__tests__/closure.test.ts` (deadline, open endpoints, gone, due, subscription actions, deletion day), `purge-plan.test.ts` (transfer target, decisions, tombstones), `purge-run.test.ts` (dry run, Stripe customers, not due, Stripe failure keeps the claim, Stripe unconfigured, storage queue, cap and budget, one failure), `billing/stripe/__tests__/account-gateway.test.ts` (real SDK, fake fetch) | `npm --prefix server test` |
+| Store contract | `store-contract-account-closure.ts` (memory + Prisma): close/keep, revoked sessions, deadline and claim refuse a keep, listDue order, purge without claim, full purge (transfer, anonymize, scrub, tombstone, own rows, SIGNUP link, billing), storage queue | `test` + `test:db` |
+| Catalog | `prisma-account-purge-catalog.test.ts`: every org table and user FK classified; no value names a purged person anywhere but the audit tombstone | `test:db` (private DB) |
+| Routes | `routes-account-closure.test.ts`: close, mail en/ar, wrong password + lockout, other sessions revoked, the grace session's 403s, sign-in during grace, Stripe end/cancel/compensate, 503 without Stripe, a locked person, keep (+ billing attention), after the deadline, job/admin doors | `npm --prefix server test` |
+| Mail / CLI / infra | `templates.test.ts` (`account-closing`, the date exemption), `users-cli.test.ts` (`accounts-purge`), `tests/account_purge.tftest.hcl` | `test`, `terraform test` |
+| Portal | `CloseAccountDrawer.test.tsx` (impact, menu → drawer, download, wrong password, Stripe down, close → closing page, keep, Arabic, before the terms step), `queryClient.test.ts` (ACCOUNT_CLOSING re-reads me), local `migrations.test.ts` 6 → 7 | `npm run test:run` |
+| Release-QA | `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` | `release-qa run --only portal.account.close` |

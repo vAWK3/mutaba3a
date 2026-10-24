@@ -43,6 +43,9 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/billing/portal-session': 'open',
   // Reference rates: no record of anyone's.
   'GET /v1/fx-rates': 'open',
+  // MUT-333: a locked or read-only person can always close their account, and keep it.
+  'POST /v1/me/closure': 'open',
+  'DELETE /v1/me/closure': 'open',
   // D6: leaving a co-owned profile, or its creator removing someone, adds no record.
   'DELETE /v1/profiles/:profileId/owners/:userId': 'open',
   // D4: the person's own captures and their cross-profile feed, and a new profile of their own.

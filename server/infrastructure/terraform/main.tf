@@ -53,6 +53,7 @@ locals {
   secret_job_token             = "mutaba3a-api-job-token${local.suffix}"
   # By name, so monitoring.tf's alert on its failed attempts never plans the job itself.
   stripe_reconcile_job = "mutaba3a-stripe-reconcile${local.suffix}"
+  account_purge_job    = "mutaba3a-account-purge${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
 
@@ -830,6 +831,36 @@ resource "google_cloud_scheduler_job" "trial_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/trial-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-333 (ADR-188, D11): the hourly hard delete of closed accounts whose 30 days of grace have run out. Always on:
+# closing is a promise (the privacy policy's 30 days), so no switch turns it off. At minute 15, so a deletion lands
+# within the hour of its deadline and the mailed day stays true. The run stops itself at about 200 s or 25 accounts
+# and answers 200 with `incomplete`; the next hour continues. A retry re-runs it safely: a purged person is gone and
+# a claimed one is resumed. A person Stripe fails for is retried next hour and alerts (monitoring.tf account_purge).
+resource "google_cloud_scheduler_job" "account_purge" {
+  project          = var.project_id
+  name             = local.account_purge_job
+  region           = var.region
+  description      = "Hourly hard delete of closed accounts (MUT-333)."
+  schedule         = "15 * * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+
+  retry_config {
+    retry_count = 2
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/accounts/purge"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

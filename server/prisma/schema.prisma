@@ -192,7 +192,8 @@ model Organization {
   /// when an operator enables or declines. Set together with firmRequestedByUserId (CHECK).
   firmRequestedAt       DateTime?
   firmRequestedByUserId String?      @db.Uuid
-  firmRequestedBy       User?        @relation("FirmRequests", fields: [firmRequestedByUserId], references: [id], onDelete: Restrict)
+  /// MUT-333 (D7): SET NULL, so a pending request outlives its requester's account (the pair CHECK allows it).
+  firmRequestedBy       User?        @relation("FirmRequests", fields: [firmRequestedByUserId], references: [id], onDelete: SetNull)
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
@@ -317,7 +318,7 @@ model User {
   personalProfile  Organization?       @relation("PersonalProfile")
   /// MUT-182: every profile this user owns, the personal one included.
   ownedProfiles    Organization[]      @relation("OwnedProfiles")
-  /// MUT-300: firm-feature requests this user made (RESTRICT: users are never hard-deleted).
+  /// MUT-300: firm-feature requests this user made (MUT-333: SET NULL when the account is deleted).
   firmRequests     Organization[]      @relation("FirmRequests")
 
   expenses            Expense[]
@@ -343,6 +344,15 @@ model User {
   entitlementGrants EntitlementGrant[]
   /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
   signupReview      SignupReview?
+
+  /// MUT-333 (ADR-188, D18): Close my account. Set together (CHECK); the account is deleted once deleteAfter passes.
+  closeRequestedAt          DateTime?
+  deleteAfter               DateTime?
+  /// MUT-333 (D1): the Stripe subscriptions this closing set to end, so "Keep my account" turns back on only those.
+  closeEndedSubscriptionIds String[]  @default([])
+  /// MUT-333 (R1): the hard delete's claim; once set, the closing can no longer be cancelled. R13: retries' order.
+  purgeStartedAt            DateTime?
+  purgeLastTriedAt          DateTime?
 
   @@map("users")
 }
@@ -1117,8 +1127,9 @@ model Expense {
   projectId       String?          @db.Uuid
   project         Project?         @relation(fields: [projectId], references: [id])
   notes           String?
-  createdByUserId String           @db.Uuid
-  createdBy       User             @relation(fields: [createdByUserId], references: [id])
+  /// MUT-333 (D7): null once the person who entered it has deleted their account ("former member").
+  createdByUserId String?          @db.Uuid
+  createdBy       User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version         Int              @default(1)
   createdAt       DateTime
   updatedAt       DateTime
@@ -1246,8 +1257,9 @@ model ExpenseReceipt {
   /// The UTC-day default only serves inserts from a revision that predates MUT-255 (rolling deploy); this one always sets it.
   receivedOn       String              @default(dbgenerated("to_char((now() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD'::text)")) @db.VarChar(10)
   storageKey       String
-  uploadedByUserId String              @db.Uuid
-  uploadedBy       User                @relation("ReceiptUploadedBy", fields: [uploadedByUserId], references: [id])
+  /// MUT-333 (D7): null once the uploader has deleted their account.
+  uploadedByUserId String?             @db.Uuid
+  uploadedBy       User?               @relation("ReceiptUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
   /// What the device's reader suggested (firm-books brief §6.1 `ReceiptSuggestion`); null when nothing was read.
   suggested        Json?
   /// What approval wrote into the expense; kept after an unlink, for the edit-rate figure.
@@ -1286,8 +1298,9 @@ model Conversion {
   toAmountMinor   BigInt
   toCurrency      String       @db.VarChar(3)
   notes           String?
-  createdByUserId String       @db.Uuid
-  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  /// MUT-333 (D7): null once the person who logged it has deleted their account.
+  createdByUserId String?      @db.Uuid
+  createdBy       User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version         Int          @default(1)
   createdAt       DateTime
   updatedAt       DateTime
@@ -1314,8 +1327,9 @@ model ExpenseGroup {
   startOn         String       @db.VarChar(10)
   endOn           String?      @db.VarChar(10)
   notes           String?
-  createdByUserId String       @db.Uuid
-  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+  /// MUT-333 (D7): null once the person who made it has deleted their account.
+  createdByUserId String?      @db.Uuid
+  createdBy       User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version         Int          @default(1)
   createdAt       DateTime
   updatedAt       DateTime
@@ -1480,4 +1494,13 @@ model EmailSuppression {
   createdAt DateTime
 
   @@map("email_suppressions")
+}
+
+/// MUT-333 (R1): a deleted profile's bucket prefix (`org/<id>/`) waiting to be emptied. Written in the hard delete's
+/// own transaction, removed once the objects are gone; no foreign key, since the profile no longer exists.
+model StoragePurge {
+  organizationId String   @id @db.Uuid
+  queuedAt       DateTime
+
+  @@map("storage_purges")
 }

@@ -2328,3 +2328,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `CarryOverDetails`: the summary (counts, totals, changed, not carried, JOD); also inside Your data › Restore. `ReceivePage`, `CarryOverPage`.
 - `CarryOverGate` / `CarriedBanner`: the free web app's screen in front of its router.
 - `MemoryAttachmentStorage` (`src/hosted/local/attachments.ts`), `useRestoredHome` (`src/hosted/session/restoredHome.ts`).
+
+### Close my account — MUT-333 (ADR-188)
+- `server/src/accounts/closure.ts`: `GRACE_DAYS`, `closureDeadline`, `CLOSING_OPEN_ENDPOINTS`, `closingRefusal`, `isAccountGone`, `isDueForPurge`, `subscriptionActionsAtClose`, `deletionDayOf`.
+- `server/src/accounts/purge-plan.ts`: `decidePurge`, `transferTargetOf`, `purgeAuditRows` (both stores decide alike).
+- `server/src/accounts/purge-run.ts`: `runAccountPurge({ store, stripe, storage, logger, now, dryRun })` → `{ summary, rows }`.
+- `server/src/auth/current-password.ts`: `verifyCurrentPassword` (change password and close share it).
+- `server/src/billing/stripe/account-gateway.ts`: `AccountStripeGateway` (`customersOf`, `liveSubscriptionsOf`, `setCancelAtPeriodEnd`, `cancelNow`, `expireOpenCheckouts`, `deleteCustomer`); `FakeAccountStripeGateway` in `__tests__/fake.ts`.
+- `AttachmentStorage.removePrefix(prefix)` and `profileStoragePrefix(organizationId)` (`server/src/attachments/`).
+- `server/src/repositories/prisma-purge-tables.ts`: `PURGE_PROFILE_TABLES`, `PURGE_USER_COLUMNS`, `PURGE_UNKEYED_USER_COLUMNS`.
+- Portal: `CloseAccountDrawer` (`src/hosted/components/`), `AccountClosingPage` (`src/hosted/pages/auth/`), `closeAccountImpactOf` / `closingDayLabel` (`src/hosted/data/closeAccount.ts`); `useAccountDrawers().openCloseAccount`.

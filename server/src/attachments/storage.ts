@@ -30,6 +30,11 @@ export interface AttachmentStorage {
    * portal can't fetch a signed URL itself). Streamed, never buffered.
    */
   read(key: string): Promise<ReadableStream<Uint8Array> | null>;
+  /**
+   * MUT-333 (R1): deletes every object under `<prefix>/` (a deleted profile's `org/<id>`, profileStoragePrefix). Safe
+   * to repeat: nothing there is not an error.
+   */
+  removePrefix(prefix: string): Promise<void>;
 }
 
 export class GcsAttachmentStorage implements AttachmentStorage {
@@ -72,6 +77,10 @@ export class GcsAttachmentStorage implements AttachmentStorage {
     await this.storage.bucket(this.bucket).file(key).delete({ ignoreNotFound: true });
   }
 
+  async removePrefix(prefix: string): Promise<void> {
+    await this.storage.bucket(this.bucket).deleteFiles({ prefix: `${prefix}/`, force: true });
+  }
+
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const file = this.storage.bucket(this.bucket).file(key);
     const [exists] = await file.exists();
@@ -110,6 +119,10 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
     this.objects.delete(key);
     this.contents.delete(key);
     this.removed.push(key);
+  }
+
+  async removePrefix(prefix: string): Promise<void> {
+    for (const key of [...this.objects.keys()]) if (key.startsWith(`${prefix}/`)) await this.remove(key);
   }
 
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {

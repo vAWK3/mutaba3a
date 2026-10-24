@@ -134,6 +134,9 @@ const SESSION_OPERATIONS = [
   'POST /v1/me/terms-acceptance',
   // MUT-418: the person's answers to the trial's card prompt (organization-independent, like GET /v1/me)
   'PATCH /v1/me/trial-prompt',
+  // MUT-333: a person closes their account, or keeps it (organization-independent, like GET /v1/me)
+  'POST /v1/me/closure',
+  'DELETE /v1/me/closure',
   'GET /v1/payments',
   'GET /v1/payments/{paymentId}',
   'GET /v1/projects',
@@ -154,9 +157,9 @@ const SESSION_OPERATIONS = [
 const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current'), 'DELETE /v1/device-sessions/current'].sort();
 /** Sign-in (MUT-38, MUT-64), the setup-link pair (MUT-235), the public FX snapshot (MUT-287), the Stripe webhook (MUT-360, signed by Stripe) and the Resend webhook (MUT-359, signed by Svix): no session or key. */
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup', 'GET /v1/public/fx-rates', 'POST /v1/billing/stripe/webhook', 'POST /v1/email/resend/webhook', 'POST /v1/signups', 'POST /v1/account-recovery', 'GET /v1/self-service'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current'];
+const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure'];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current'];
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure'];
 
 interface Operation {
   key: string;

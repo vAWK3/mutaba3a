@@ -1,9 +1,10 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { verifyCurrentPassword } from '../auth/current-password.js';
 import { signIn, warmDummyHash } from '../auth/sign-in.js';
 import { isSamePortalOrigin, requestClientIp, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
-import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
+import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -233,22 +234,8 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       // and a device bearer token has no comparable CSRF signal to check (same reasoning as GET /v1/me below).
       const { user, session } = c.get('identity');
       const { currentPassword, newPassword } = c.req.valid('json');
-      const key = normalizeEmail(user.email);
-      const now = c.get('now')();
-      // The session already proves identity; there is no "unknown email" to hide, so no dummy-hash timing defense is needed here.
-      const locked = throttle.isLocked(key, now) || (user.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
-      const verifiedPasswordHash = user.passwordHash;
-      const matches = !locked && verifiedPasswordHash !== null && (await passwordHasher.verify(verifiedPasswordHash, currentPassword));
-      if (locked || !matches || verifiedPasswordHash === null) {
-        if (!locked) {
-          const lockUntil = throttle.recordFailure(key, now);
-          await store.users.recordFailedSignIn(user.id, now, lockUntil);
-          // ADR-037 decision 4: a real lockout is always written to the audit log too, whichever route trips it.
-          if (lockUntil) for (const event of await lockedOutAudit(store, c.get('requestId'), user)) await store.audit.append(event);
-        }
-        throw new ApiError('CURRENT_PASSWORD_WRONG', 'Current password is wrong');
-      }
-      throttle.clear(key);
+      // MUT-333: the same check closing an account makes (auth/current-password.ts).
+      const verifiedPasswordHash = await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword, c.get('now')(), c.get('requestId'));
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
       const passwordHash = await passwordHasher.hash(newPassword);
       const at = c.get('now')();
@@ -268,18 +255,6 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
   );
 
   return app;
-
-  async function lockedOutAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord): Promise<AuditEventInput[]> {
-    return (await ledger.memberships.listByUser(person.id)).map((m) => ({
-      organizationId: m.organizationId,
-      actorType: 'USER',
-      actorId: person.id,
-      action: 'user.locked_out',
-      entityType: 'user',
-      entityId: person.id,
-      requestId,
-    }));
-  }
 
   async function changePasswordAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord): Promise<AuditEventInput[]> {
     return (await ledger.memberships.listByUser(person.id)).map((m) => ({

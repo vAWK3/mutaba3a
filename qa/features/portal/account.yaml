@@ -43,3 +43,64 @@ features:
       - Open You › Account
     expect:
       - '"Get the iPhone app" links to the App Store in a new tab with ct=mutaba3a-portal (MUT-155), and "Get the Android app", the last row, links to the Play Store listing in a new tab with utm_campaign=mutaba3a-portal'
+  - id: close
+    title: Close my account from You › Account, with the password; the closing page takes over
+    tier: secondary # self-service; until it ships the operator closes accounts by hand
+    paths:
+      - src/hosted/components/CloseAccountDrawer.tsx
+      - src/hosted/data/closeAccount.ts
+      - src/hosted/pages/auth/AccountClosingPage.tsx
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+      - src/hosted/pages/you/YouAccount.tsx
+      - src/hosted/data/filters.ts
+      - src/hosted/api/client.ts
+      - src/hosted/hosted.css
+      - src/hosted/i18n/en.json
+    steps:
+      - From You › Account, choose Close my account
+      - Read what is deleted and what is kept, and that Download my records is offered first
+      - Enter a wrong password and Close my account, then the right one
+    expect:
+      - The drawer opens over the current page, not as a page, and names the address being closed
+      - It lists the profiles that are deleted, the shared one that passes to its co-owner and the firm that keeps the records
+      - A wrong password shows "That password is wrong." and closes nothing
+      - The right password closes the account and the closing page names the day it will be deleted, with Keep my account and Sign out
+  - id: close-cancel
+    title: Signing in while the account is closing shows only the closing page; Keep my account brings everything back
+    tier: secondary
+    paths:
+      - src/hosted/pages/auth/AccountClosingPage.tsx
+      - src/hosted/queryClient.ts
+    steps:
+      - Sign in while the account is closing
+      - Press Keep my account
+    expect:
+      - Only the closing page shows, with the deletion day; no section of the portal is reachable
+      - Keep my account says "Your account stays open." and the portal is back, with every profile
+  - id: close-locked
+    title: A locked account can still close itself
+    tier: secondary
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/components/CloseAccountDrawer.tsx
+    steps:
+      - Sign in on day 31 of a trial that never got a card (locked)
+      - From You › Account, choose Close my account and enter the password
+    expect:
+      - The You page stays reachable on the locked profile, and Close my account works from it
+      - The closing page takes over
+  - id: close-arabic-phone
+    title: Close my account and the closing page read right to left in Arabic on a 375px phone
+    tier: secondary
+    paths:
+      - src/hosted/components/CloseAccountDrawer.tsx
+      - src/hosted/pages/auth/AccountClosingPage.tsx
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - On a 375px phone, in Arabic, open Close my account
+      - Close the account with the password
+    expect:
+      - The drawer and the closing page are right to left, in Arabic, and nothing scrolls sideways
+      - The address being closed reads left to right inside the Arabic sentence

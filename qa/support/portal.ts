@@ -123,6 +123,8 @@ export function meBody(
       // MUT-418: this person answered the first-run trial step long ago (the portal-live app covers it).
       trialPrompt: { welcomedAt: '2026-10-01T09:00:00.000Z', welcomeAnswer: 'skipped', bannerSnoozedUntil: null },
       status: 'ACTIVE',
+      // MUT-333: not closing (FakeApi tracks a closing of its own).
+      closure: null as { requestedAt: string; deleteAfter: string } | null,
     },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
