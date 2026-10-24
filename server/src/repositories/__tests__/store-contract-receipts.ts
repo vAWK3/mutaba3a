@@ -398,18 +398,16 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
         expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
       });
 
-      if (options.concurrent) {
-        it('of two concurrent completions at one place left, exactly one wins (expense lock)', async () => {
-          const store = await makeStore();
-          const w = await world(store);
-          const { e, r } = await pendingOn(store, w);
-          const r2 = await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(2));
-          await fill(w, e.id, MAX - 1);
-          const results = await Promise.all([r, r2].map((x) => store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: x.id, maxReceipts: MAX }, at(5))));
-          expect(results.map((x) => x.kind).sort()).toEqual(['completed', 'too_many_receipts']);
-          expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
-        });
-      }
+      it('of two concurrent completions at one place left, exactly one wins (expense lock; no interleaving in memory)', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        const r2 = await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(2));
+        await fill(w, e.id, MAX - 1);
+        const results = await Promise.all([r, r2].map((x) => store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: x.id, maxReceipts: MAX }, at(5))));
+        expect(results.map((x) => x.kind).sort()).toEqual(['completed', 'too_many_receipts']);
+        expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
+      });
     });
 
     it('counts the edit rate per field over approvals in a range, never values', async () => {
