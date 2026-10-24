@@ -53,6 +53,8 @@ locals {
   secret_job_token             = "mutaba3a-api-job-token${local.suffix}"
   # By name, so monitoring.tf's alert on its failed attempts never plans the job itself.
   stripe_reconcile_job = "mutaba3a-stripe-reconcile${local.suffix}"
+  # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
+  trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -773,7 +775,7 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 # Nightly Stripe reconcile (MUT-360)
 # ============================================================================
 
-# The job token opens only this route (MUT-360 D2). Reconcile answers 200 with its error list, so the
+# The job token opens /jobs/* only: this route (MUT-360 D2) and, since MUT-419, the trial reminders below. Reconcile answers 200 with its error list, so the
 # retries only follow a run that never completed: 502 RECONCILE_FAILED (Stripe couldn't be listed), 409
 # RECONCILE_RUNNING (overlap), a timeout or a cold start that failed. 280 s stays under Cloud Run's 300 s
 # request timeout; the server stops its own run at about 200 s and reports TIME_BUDGET. Failed attempts
@@ -796,6 +798,38 @@ resource "google_cloud_scheduler_job" "stripe_reconcile" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/stripe-reconcile"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-419 (ADR-182, D7/D8): the daily trial reminders (ending within 3 days, read-only, locking within 3 days). At
+# 10:00 Jerusalem time, a waking hour. Only with mail on, Stripe on (every mail links to Subscribe) and the lapse gate
+# on (the mails announce what it does). The run stops itself at about 200 s and answers 200 with `incomplete`; the
+# next day continues. A second run the same day sends nothing new, so the retries are safe. The job token now also
+# triggers customer mail: a leaked token can only re-run that idempotent mail (D15).
+resource "google_cloud_scheduler_job" "trial_mail" {
+  count = local.trial_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-trial-mail${local.suffix}"
+  region           = var.region
+  description      = "Daily trial reminders (MUT-419)."
+  schedule         = "0 10 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/trial-mail"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"
