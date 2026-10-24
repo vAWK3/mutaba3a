@@ -30,6 +30,8 @@ const SIDEBAR_MARK_SIZE = 32;
 
 const SECTIONS = [
   { path: '', key: 'overview', exact: true },
+  // MUT-175 (X2): a nav item until MUT-426 moves Reports to the shell's corner icon
+  { path: '/reports', key: 'reports', exact: false },
   { path: '/clients', key: 'clients', exact: false },
   { path: '/receivables', key: 'receivables', exact: false },
   { path: '/payments', key: 'payments', exact: false },

@@ -1,8 +1,9 @@
 import { parseAmountToMinor } from '../../lib/utils';
 import type { Language } from '../../lib/i18n/types';
-import type { ActivitySummary, Currency, FxRatesResponse } from '../api/client';
+import type { ActivitySummary, Currency, FxRatesResponse, HostedProfile } from '../api/client';
 import { minorToDecimal } from '../format/currencies';
-import { addDays, convertTotal, weekStart } from './expenseGroups';
+import { addDays, convertTotal, UNCATEGORIZED, weekStart, type Bar, type CategoryRow } from './expenseGroups';
+import type { MonthPoint } from './reportInsights';
 
 /**
  * Reports (MUT-175): the pure part. Periods and stepping, the data stage
@@ -77,7 +78,7 @@ export function hasPrevious(period: Period, at: Day, since: Day | null, earlier:
 
 /** The first month that counts as complete-able: since's own month if records began by its 7th day, else the next. */
 function firstCountedMonth(since: Day): Month {
-  return Number(since.slice(8, 10)) <= COMPLETE_MONTH_CUTOFF_DAY ? monthOf(since) : addMonths(monthOf(since), 1);
+  return since.slice(8, 10) <= String(COMPLETE_MONTH_CUTOFF_DAY).padStart(2, '0') ? monthOf(since) : addMonths(monthOf(since), 1);
 }
 
 /** The complete months before today's, oldest first, within the history the server reads. */
@@ -98,6 +99,11 @@ export function stageOf(completeCount: number): Stage {
 export function unlockMonth(since: Day | null, stage: Stage): Month | null {
   if (!since || stage === 3) return null;
   return addMonths(firstCountedMonth(since), stage);
+}
+
+/** Reports reads payments and expenses; a profile that can see neither is never in the switch (DR12). */
+export function canReadReports(profile: Pick<HostedProfile, 'access'>): boolean {
+  return profile.access.payments !== 'none' && profile.access.expenses !== 'none';
 }
 
 // ---- Money per currency, in minor units --------------------------------------
@@ -301,4 +307,67 @@ export function inUnit(money: Money, unit: Unit): number {
 export function convertMoney(money: Money, rates: FxRatesResponse) {
   const currencies = [...money.entries()].map(([currency, minor]) => ({ currency, total: minorToDecimal(minor, currency) }));
   return convertTotal({ currencies }, rates);
+}
+
+// ---- Shaping for the page (CLAUDE.md: tables and charts get shaped rows) -----
+
+const PERCENT = 100;
+const NO_CATEGORY_KEY = '\u0000none';
+const isNoClient = (key: string) => key.endsWith(':none');
+
+/** A bucket's last day: the day itself, or its month's last day. */
+function bucketEnd(start: Day, bucket: 'day' | 'month'): Day {
+  return bucket === 'day' ? start : endOfMonth(monthOf(start));
+}
+
+/**
+ * The chart's bars in the unit's minor units (received as the first series,
+ * spent beside it), the days before the first record marked "before" (DR13),
+ * and the buckets whose money sits only in a currency the unit left out (D3's dot).
+ */
+export function chartBars(c: Combined, unit: Unit, bucket: 'day' | 'month' = 'day'): { bars: Bar[]; spent: ReadonlyMap<string, number>; other: ReadonlySet<string> } {
+  const shaped = c.buckets.map((b) => ({ start: b.start, received: inUnit(b.received, unit), spent: inUnit(b.spent, unit), raw: [...b.received, ...b.spent] }));
+  const max = Math.max(0, ...shaped.flatMap((b) => [b.received, b.spent]));
+  const before = (start: Day) => !c.earlier && c.since !== null && bucketEnd(start, bucket) < c.since;
+  return {
+    bars: shaped.map((b) => ({ key: b.start, from: b.start, to: bucketEnd(b.start, bucket), position: before(b.start) ? 'before' : 'in', minor: b.received, total: minorToDecimal(b.received, unit.currency), count: 0, max })),
+    spent: new Map(shaped.map((b) => [b.start, b.spent])),
+    other: new Set(shaped.filter((b) => !unit.rates && b.raw.some(([currency, minor]) => currency !== unit.currency && minor !== 0)).map((b) => b.start)),
+  };
+}
+
+/** List rows as shares of their total in the unit: largest first, Uncategorized and "no client" last. */
+export function shareRows(rows: ReadonlyArray<{ key: string; name: string; amounts: Money }>, unit: Unit): CategoryRow[] {
+  const shaped = rows.map((row) => ({ row, minor: inUnit(row.amounts, unit), last: row.key === NO_CATEGORY_KEY || isNoClient(row.key) })).filter((r) => r.minor > 0);
+  const total = shaped.reduce((sum, r) => sum + r.minor, 0);
+  return shaped
+    .sort((a, b) => (a.last ? 1 : 0) - (b.last ? 1 : 0) || b.minor - a.minor)
+    .map(({ row, minor }) => ({ key: row.key === NO_CATEGORY_KEY ? UNCATEGORIZED : row.key, name: row.name, total: minorToDecimal(minor, unit.currency), count: 0, share: total === 0 ? 0 : Math.round((minor / total) * PERCENT) }));
+}
+
+/** Insight input: each month's totals and rows in the unit (months absent from the history are empty). */
+export function monthPoints(c: Combined, months: readonly Month[], unit: Unit): MonthPoint[] {
+  return months.map((month) => {
+    const h = c.history.find((m) => m.month === month);
+    if (!h) return { month, received: 0, spent: 0, categories: [], clients: [] };
+    return {
+      month,
+      received: inUnit(h.received, unit),
+      spent: inUnit(h.spent, unit),
+      categories: h.categories.map((row) => ({ key: row.key, name: row.name, amount: inUnit(row.amounts, unit) })),
+      clients: h.clients.map((row) => ({ key: row.key, name: row.name, amount: inUnit(row.amounts, unit), ...(isNoClient(row.key) ? { none: true } : {}) })),
+    };
+  });
+}
+
+/** How many months each currency has money in across the history: D3's "largest currency in view". */
+export function recordWeight(c: Combined): (currency: Currency) => number {
+  return (currency) => c.history.reduce((sum, h) => sum + (h.received.get(currency) ? 1 : 0) + (h.spent.get(currency) ? 1 : 0), 0);
+}
+
+/** Every currency with money in the period or the history, sorted. */
+export function currenciesIn(c: Combined): Currency[] {
+  const all = new Set<Currency>();
+  for (const money of [c.received, c.spent, ...c.history.flatMap((h) => [h.received, h.spent])]) for (const [currency, minor] of money) if (minor !== 0) all.add(currency);
+  return [...all].sort();
 }

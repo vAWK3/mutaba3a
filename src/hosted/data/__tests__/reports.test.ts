@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivitySummary, FxRatesResponse } from '../../api/client';
 import {
+  chartBars,
   chooseUnit,
   combine,
+  monthPoints,
+  shareRows,
+  type Combined,
   completeMonths,
   hasNext,
   hasPrevious,
@@ -181,6 +185,60 @@ const rates: FxRatesResponse = {
     { currency: 'USD', rate: 0.25, derived: false },
   ],
 } as FxRatesResponse;
+
+describe('shaping for the page (rows arrive already shaped)', () => {
+  const ils = { currency: 'ILS' as const, rates: null, singleCurrency: false };
+  const c = {
+    since: '2026-10-02',
+    earlier: false,
+    received: new Map([['ILS', 30000]]),
+    spent: new Map([['ILS', 10000]]),
+    buckets: [
+      { start: '2026-10-01', received: new Map(), spent: new Map() },
+      { start: '2026-10-02', received: new Map([['ILS', 30000]]), spent: new Map([['ILS', 6000]]) },
+      { start: '2026-10-03', received: new Map([['USD', 500]]), spent: new Map([['ILS', 4000]]) },
+    ],
+    categories: [
+      { key: '\u0000none', name: 'Uncategorized', uncategorized: true, amounts: new Map([['ILS', 7000]]) },
+      { key: 'food', name: 'Food', uncategorized: false, amounts: new Map([['ILS', 3000]]) },
+    ],
+    clients: [
+      { key: 'p1:none', name: 'No client', profileName: null, amounts: new Map([['ILS', 10000]]), daysToPaid: null },
+      { key: 'p1:c1', name: 'Haddad', profileName: null, amounts: new Map([['ILS', 20000]]), daysToPaid: 6 },
+    ],
+    history: [{ month: '2026-09', received: new Map([['ILS', 9000]]), spent: new Map(), categories: [], clients: [{ key: 'p1:none', name: 'No client', profileName: null, amounts: new Map([['ILS', 9000]]), daysToPaid: null }] }],
+    daysToPaid: null,
+  } as unknown as Combined;
+
+  it('draws one bar per bucket in the unit, days before the first record as “before”, with the tallest of both series as max', () => {
+    const { bars, spent, other } = chartBars(c, ils);
+    expect(bars.map((b) => [b.key, b.position, b.minor, b.max])).toEqual([
+      ['2026-10-01', 'before', 0, 30000],
+      ['2026-10-02', 'in', 30000, 30000],
+      ['2026-10-03', 'in', 0, 30000],
+    ]);
+    expect(spent.get('2026-10-03')).toBe(4000);
+    // money only in a currency left out of the unit gets the dot
+    expect([...other]).toEqual(['2026-10-03']);
+  });
+
+  it('turns rows into shares of the total, largest first, Uncategorized and no client last', () => {
+    expect(shareRows(c.categories, ils).map((r) => [r.key, r.total, r.share])).toEqual([
+      ['food', '30.00', 30],
+      ['none', '70.00', 70],
+    ]);
+    expect(shareRows(c.clients, ils).map((r) => [r.key, r.share])).toEqual([
+      ['p1:c1', 67],
+      ['p1:none', 33],
+    ]);
+  });
+
+  it('makes month points for insights, marking money with no client', () => {
+    const [sept] = monthPoints(c, ['2026-09'], ils);
+    expect(sept).toEqual({ month: '2026-09', received: 9000, spent: 0, categories: [], clients: [{ key: 'p1:none', name: 'No client', amount: 9000, none: true }] });
+    expect(monthPoints(c, ['2026-08'], ils)).toEqual([{ month: '2026-08', received: 0, spent: 0, categories: [], clients: [] }]);
+  });
+});
 
 describe('units for insights (D3)', () => {
   it('uses one currency with no rates when only one is in view', () => {
