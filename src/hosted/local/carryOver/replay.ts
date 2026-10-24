@@ -87,7 +87,8 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
     if (profileId) headers['X-Mutaba3a-Profile'] = profileId;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
-    return app.fetch(new Request(`http://local${path}`, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }));
+    // In-page only: never fetched over the network; the one loopback origin the portal bundle may name (bundle-origins.json).
+    return app.fetch(new Request(`http://localhost${path}`, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }));
   };
 
   /** The created row's id; a 4xx is recorded and answers null; a 5xx stops everything. */
