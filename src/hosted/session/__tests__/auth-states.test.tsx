@@ -19,6 +19,7 @@ import { pageStartsNow } from '../../../test/pageStart';
 
 /** mut-43-auth-states.md §2–§3, one block per state. */
 
+/** While the server opens no self-service door (GET /v1/self-service, MUT-368 D1), sign-in shows none, in either language. */
 const BANNED = /sign ?up|create account|forgot|reset password|invite|إنشاء حساب|نسيت|إعادة تعيين|دعوة|اشترك/i;
 
 beforeEach(() => {

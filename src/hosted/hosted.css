@@ -163,6 +163,15 @@
 .hp-field-hint { font-size: var(--text-label); color: var(--muted); margin: var(--space-1-5) 0 0; }
 .hp-setup-lead { color: var(--text-secondary); margin: calc(-1 * var(--space-2)) 0 var(--space-4); }
 
+/*
+ * MUT-368: Cloudflare Turnstile on /signup and /recover. The box reserves the managed widget's height so the form
+ * doesn't jump when it appears; the widget is at least 300 px wide, so a phone-width card trims its padding to fit it.
+ */
+.hp-turnstile { min-height: 65px; }
+@media (max-width: 400px) {
+  .hp-signin-card { padding: var(--space-4); }
+}
+
 /* Addresses and passwords are left-to-right strings, aligned with the label's side. */
 .hp-ltr-input { text-align: left; }
 [dir="rtl"] .hp-ltr-input { text-align: right; }

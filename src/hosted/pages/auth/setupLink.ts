@@ -1,4 +1,4 @@
-import { ApiError, retryMinutes, type SetupLinkRefusal } from '../../api/client';
+import { ApiError, apiErrorFields, retryMinutes, type SetupLinkRefusal } from '../../api/client';
 
 /**
  * The pure half of `/setup` (MUT-236, mut-236-setup-page.md §2.3–§2.4): the
@@ -36,6 +36,8 @@ export type RedeemFailure =
   /** "used" after an attempt whose answer never arrived: that attempt most likely set the password (TD-149, D3). */
   | { kind: 'trySignIn' }
   | { kind: 'policy' }
+  /** MUT-368: a SIGNUP redeem's time zone was refused (review P1-2: never shown as the password rule). */
+  | { kind: 'timezone' }
   /** MUT-324: the terms changed since the page asked; `current` is the version to show and accept now. */
   | { kind: 'termsChanged'; current: string | null }
   | { kind: 'rateLimited'; minutes: number }
@@ -65,7 +67,12 @@ export function redeemFailure(error: unknown, answerLost: boolean): RedeemFailur
     const current = (error.details as { current?: unknown } | null)?.current;
     return { kind: 'termsChanged', current: typeof current === 'string' ? current : null };
   }
-  if (error.status === 422) return { kind: 'policy' };
+  if (error.status === 422) {
+    // Only a 422 about the password is the password rule (MUT-368 review P1-2); the page sends every other field itself.
+    const fields = apiErrorFields(error);
+    if (fields.length === 0 || fields.includes('password')) return { kind: 'policy' };
+    return fields.includes('timezone') ? { kind: 'timezone' } : { kind: 'unreachable' };
+  }
   if (error.status === 429) return { kind: 'rateLimited', minutes: retryMinutes(error) };
   return { kind: 'unreachable' };
 }

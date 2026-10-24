@@ -134,7 +134,8 @@ describe('the shell signed out', () => {
     await user.click(within(menu).getByRole('menuitem', { name: 'Sign in' }));
     expect(await screen.findByLabelText('Email')).toBeInTheDocument();
     expect(locationOf(router)).toBe('/sign-in');
-    expect(server.calls).toHaveLength(0);
+    // No bounce (no /v1/me). The one request is the server's public doors (MUT-368 D1): the person chose the server.
+    expect(server.calls.map((call) => `${call.method} ${call.url.pathname}`)).toEqual(['GET /v1/self-service']);
   });
 
   it('shows the same sections as signed in, Expenses and Conversions included (MUT-287)', async () => {

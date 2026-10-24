@@ -61,7 +61,12 @@
       "signOut": "Sign out",
       "signOutFailed": "Couldn't sign out. Check your connection and try again.",
       "changePassword": "Change password",
-      "lostAccess": "You no longer have access to {profile}. What you recorded stays."
+      "lostAccess": "You no longer have access to {profile}. What you recorded stays.",
+      "forgot": "Forgot your password?",
+      "create": {
+        "lead": "No account?",
+        "link": "Create an account"
+      }
     },
     "account": {
       "changePassword": {
@@ -78,11 +83,13 @@
       "checking": "Checking your link",
       "title": {
         "setup": "Set your password",
-        "reset": "Choose a new password"
+        "reset": "Choose a new password",
+        "signup": "Finish creating your account"
       },
       "lead": {
         "setup": "You'll use it to sign in to MTB3A on the web and in the phone app.",
-        "reset": "Saving it signs this account out everywhere else. You'll use it on the web and in the phone app."
+        "reset": "Saving it signs this account out everywhere else. You'll use it on the web and in the phone app.",
+        "signup": "Choose a password. You'll use it to sign in to MTB3A on the web and in the phone app."
       },
       "account": "Account",
       "password": "New password",
@@ -101,19 +108,22 @@
         },
         "invalid": {
           "title": "This link doesn't work",
-          "body": "It may have been copied wrong. Ask the person who set up your account for a new link."
+          "body": "It may have been copied wrong. Open the link from your email again, or ask for a new one."
         },
         "expired": {
           "title": "This link has expired",
-          "body": "Setup links work for a limited time. Ask the person who set up your account for a new link."
+          "body": "Setup links work for a limited time. Ask the person who set up your account for a new link.",
+          "bodySelf": "Links work for a limited time. Ask for a new one."
         },
         "used": {
           "title": "This link has been used",
-          "body": "Each link works once. If you set your password with it, sign in. If not, ask the person who set up your account for a new link."
+          "body": "Each link works once. If you set your password with it, sign in. If not, ask the person who set up your account for a new link.",
+          "bodySelf": "Each link works once. If you set your password with it, sign in. If not, ask for a new link."
         },
         "superseded": {
           "title": "A newer link replaced this one",
-          "body": "Use the most recent link you were sent, or ask the person who set up your account for a new link."
+          "body": "Use the most recent link you were sent, or ask the person who set up your account for a new link.",
+          "bodySelf": "Use the most recent link we sent you, or ask for a new one."
         }
       },
       "usedAfterRetry": {
@@ -129,7 +139,13 @@
         "link": "terms of service",
         "required": "Tick to agree to the terms before you continue.",
         "changed": "The terms changed while this page was open. Read the new version, then tick again."
-      }
+      },
+      "submitSignup": "Create account",
+      "name": "Your name (optional)",
+      "nameHint": "How MTB3A greets you. Leave it empty to use your email's name.",
+      "currency": "Main currency",
+      "currencyHint": "Your personal profile's currency. You can record other currencies too.",
+      "sendNew": "Send a new link"
     },
     "terms": {
       "title": "We've updated our terms",
@@ -1063,6 +1079,74 @@
       },
       "mailSubject": "MTB3A billing",
       "coOwnedNote": "Shared profiles you co-own are covered by their creator's plan."
+    },
+    "selfService": {
+      "checking": "Checking that you're a person…",
+      "sending": "Sending…",
+      "check": {
+        "failed": "The check that you're a person couldn't run.",
+        "retry": "Try again",
+        "help": "If it keeps failing, write to us at"
+      },
+      "refused": {
+        "checkFailed": "The check didn't pass. Try again.",
+        "disposable": "This address is from a throwaway email service. Use one you'll keep.",
+        "noMail": "This address can't receive email. Check it for typos, or use another one.",
+        "other": "This address can't be used. Try another one."
+      },
+      "wait": {
+        "minutes": {
+          "one": "Please wait a minute before asking again.",
+          "other": "Please wait {count} minutes before asking again."
+        },
+        "hours": {
+          "one": "You've asked several times today. Try again in an hour.",
+          "other": "You've asked several times today. Try again in {count} hours."
+        }
+      },
+      "spam": "Didn't get it? Check your spam folder, then send it again.",
+      "sendAgain": "Send again",
+      "sendAgainIn": {
+        "one": "Send again in {count} second",
+        "other": "Send again in {count} seconds"
+      },
+      "toSignIn": "Back to sign in",
+      "haveAccount": "Already have an account?",
+      "signIn": "Sign in"
+    },
+    "signup": {
+      "title": "Create your account",
+      "lead": "Enter your email. We'll send you a link to finish creating your account.",
+      "terms": "You'll accept the terms when you set your password.",
+      "termsLink": "Read the terms",
+      "submit": "Continue",
+      "sent": {
+        "title": "Check your email",
+        "body": "We sent a link to {email}. Open it within 24 hours to finish creating your account. If this address already has an account, the email says how to sign in instead."
+      },
+      "closed": {
+        "title": "Accounts are by request for now",
+        "body": "Ask for one and we'll set it up with you.",
+        "link": "Request an account"
+      }
+    },
+    "recover": {
+      "title": "Reset your password",
+      "lead": "Enter your account's email. We'll send you a link to choose a new password.",
+      "submit": "Send link",
+      "sent": {
+        "title": "Check your email",
+        "body": "If {email} has an account, we've sent it a link to choose a new password. Open it soon: it works for a short time."
+      },
+      "unavailable": {
+        "title": "Resetting by email isn't available yet",
+        "body": "Ask the person who set up your account for a new link, or write to us at"
+      }
+    },
+    "underReview": {
+      "title": "We're reviewing your account",
+      "body": "We'll email you within 2 working days.",
+      "help": "Questions? Write to us at"
     }
   }
 }

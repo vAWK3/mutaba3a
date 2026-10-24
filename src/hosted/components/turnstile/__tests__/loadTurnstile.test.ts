@@ -4,7 +4,7 @@ import { TURNSTILE_LOAD_TIMEOUT_MS, TURNSTILE_ONLOAD, TURNSTILE_SCRIPT_URL, forg
 /** MUT-368 (D5): Cloudflare's script, explicit render, injected once per page and only when a form asks for it. */
 
 type Win = Window & { turnstile?: TurnstileApi } & Record<string, unknown>;
-const win = window as Win;
+const win = window as unknown as Win;
 const fakeApi: TurnstileApi = { render: () => 'w1', reset: () => {}, remove: () => {} };
 const scripts = () => [...document.head.querySelectorAll('script')].filter((s) => s.src.startsWith('https://challenges.cloudflare.com/'));
 

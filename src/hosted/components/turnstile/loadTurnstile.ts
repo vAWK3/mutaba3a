@@ -17,6 +17,8 @@ export interface TurnstileRenderOptions {
   action: string;
   language: string;
   theme: 'auto' | 'light' | 'dark';
+  /** `flexible`: the card's width, never under Turnstile's 300 px minimum. */
+  size: 'normal' | 'flexible' | 'compact';
   callback: (token: string) => void;
   'expired-callback': () => void;
   'timeout-callback': () => void;
@@ -36,7 +38,7 @@ let loading: Promise<TurnstileApi> | null = null;
 
 /** The API, loading Cloudflare's script on the first ask. A failed or silent load is forgotten, so Try again retries. */
 export function loadTurnstile(): Promise<TurnstileApi> {
-  const win = window as TurnstileWindow;
+  const win = window as unknown as TurnstileWindow;
   if (win.turnstile) return Promise.resolve(win.turnstile);
   loading ??= new Promise<TurnstileApi>((resolve, reject) => {
     const script = document.createElement('script');

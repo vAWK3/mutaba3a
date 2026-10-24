@@ -66,6 +66,7 @@ export function useTurnstile({ action, language, load = loadTurnstile, onToken }
           action,
           language,
           theme: 'auto',
+          size: 'flexible',
           callback: (token) => {
             update(token, 'ready');
             if (live) latest.current.onToken?.(token);

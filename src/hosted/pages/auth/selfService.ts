@@ -18,6 +18,9 @@ export type SelfServiceFailure =
   | { kind: 'invalidEmail' }
   | { kind: 'unreachable' };
 
+/** The shape check both email forms (sign-in, /signup, /recover) run before sending anything. */
+export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** How long "Send again" stays off after a link was sent: the server's per-address budget is one a minute. */
 export const SEND_AGAIN_COOLDOWN_MS = 60_000;
 
