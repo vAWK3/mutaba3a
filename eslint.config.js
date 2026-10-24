@@ -163,6 +163,8 @@ export default defineConfig([
           // lazily loaded /app page can never start it either
           patterns: [
             { regex: '(^|/)landing/analytics(/|$)', message: 'Only the landing pages count visits (ADR-090, MUT-154).' },
+            // MUT-150 review: the same for the website's error reports; main.tsx starts them with an inline exception
+            { regex: '(^|/)landing/observability(/|$)', message: "Only the website's pages report errors; the local app never loads them (ADR-024, MUT-150)." },
             { regex: '(^|/)lib/analytics/(posthogConfig|guard)$', message: 'The PostHog guard and options load only with the SDK, in the landing or portal analytics module (ADR-090).' },
           ],
         },

@@ -635,6 +635,11 @@ describe('vite.config', () => {
       });
     });
 
+    it("never gives the service worker a source map, even when the build's maps are hidden for the upload (MUT-150 review)", () => {
+      // vite-plugin-pwa turns workbox.sourcemap on for a "hidden" build unless it is set
+      expect(PWA_WORKBOX?.sourcemap).toBe(false);
+    });
+
     it('keeps the SDK chunks out of the service worker precache, so the local app never stores them', () => {
       expect(PWA_WORKBOX?.globIgnores).toEqual(expect.arrayContaining(SENTRY_PRECACHE_IGNORES));
       expect(SENTRY_PRECACHE_IGNORES).toEqual([`assets/${SENTRY_CHUNK}-*.js`, 'assets/landingSentry-*.js']);

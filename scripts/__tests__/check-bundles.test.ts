@@ -440,6 +440,11 @@ describe('Sentry on the landing stays in its lazy chunks (MUT-150, ADR-024)', ()
     expect(sentryOutsideLandingChunks(paths, reader(leaky))).toEqual(['assets/vendor-react-b2.js']);
   });
 
+  it('fails on the SDK inlined into a non-JS dist-web file (MUT-150 review)', () => {
+    const all = { ...files, 'index.html': '<script>const n="sentry.javascript.browser"</script>' };
+    expect(sentryOutsideLandingChunks(Object.keys(all), reader(all))).toEqual(['index.html']);
+  });
+
   it('names each precached file that carries Sentry, so the local app never stores it', () => {
     const sw = 'precacheAndRoute([{url:"index.html",revision:"1"},{url:"assets/index-a1.js",revision:null},{url:"assets/vendor-sentry-d4.js",revision:null}])';
     expect(sentryPrecached(sw, reader(files))).toEqual(['assets/vendor-sentry-d4.js']);

@@ -71,6 +71,8 @@ export function browserSentryOptions(surface: BrowserSurface, input: BrowserSent
     profileSessionSampleRate: sdk.profilesSampleRate,
     // Each surface lists its integrations itself; the SDK's defaults would add console capture
     defaultIntegrations: false,
+    // The SDK's drop-count envelopes skip beforeSend, so a page whose events are all dropped could still send them
+    sendClientReports: false,
     initialScope: { tags: { surface } },
     beforeBreadcrumb: (crumb) => (crumb.category === 'console' && !sdk.consoleBreadcrumbs ? null : scrubBreadcrumb(crumb, surface)),
     beforeSend: (event, hint) => {

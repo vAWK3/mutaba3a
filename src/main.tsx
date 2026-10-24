@@ -17,7 +17,10 @@ import { initDatabase } from "./db";
 import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
+// The one place outside the website's pages that may import its error reports (MUT-150, ADR-024)
+// eslint-disable-next-line no-restricted-imports
 import { LANDING_SENTRY_ENABLED, reportLandingCrash, startLandingErrorReporting } from "./pages/landing/observability/landingErrorReporting";
+// eslint-disable-next-line no-restricted-imports
 import { LandingCrashScreen } from "./pages/landing/observability/LandingCrashScreen";
 import { HOSTED_OFFER_URL } from "./content/download-config";
 import { landingRoute, marketingPath } from "./pages/landing/marketingPath";

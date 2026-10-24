@@ -142,12 +142,28 @@ describe('landingErrorReporting (MUT-150)', () => {
     expect(reporter.reportBoundary).not.toHaveBeenCalled();
   });
 
-  it('forgets everything and never throws when the chunk fails to load (ad blocker, stale tab)', async () => {
+  it('ignores a rejection with no reason, as it ignores an error event with none', async () => {
+    const { reporter, fire } = start();
+    rejectOnWindow(undefined);
+    fire();
+    await settle();
+    expect(reporter.reportGlobal).not.toHaveBeenCalled();
+  });
+
+  it('forgets everything, stops listening and never throws when the chunk fails to load (ad blocker, stale tab)', async () => {
+    const removed = vi.spyOn(window, 'removeEventListener');
     const { fire } = start({ load: () => Promise.reject(new Error('chunk 404')) });
     throwOnWindow(new Error('held'));
     fire();
     await settle();
+    expect(removed).toHaveBeenCalledWith('error', expect.any(Function));
+    expect(removed).toHaveBeenCalledWith('unhandledrejection', expect.any(Function));
     expect(() => reportLandingCrash(new Error('after failure'))).not.toThrow();
+    // Nothing is held or retried for the rest of the page load
+    const retry = start();
+    retry.fire();
+    await settle();
+    expect(retry.load).not.toHaveBeenCalled();
   });
 
   it('starts once, however often main.tsx is evaluated', async () => {

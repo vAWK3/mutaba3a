@@ -53,8 +53,14 @@ function onError(event: ErrorEvent) {
   if (!reporter && event.error != null) hold({ source: 'global', error: event.error });
 }
 
+/** A rejection with no reason carries nothing to act on either. */
 function onRejection(event: PromiseRejectionEvent) {
-  if (!reporter) hold({ source: 'global', error: event.reason });
+  if (!reporter && event.reason != null) hold({ source: 'global', error: event.reason });
+}
+
+function stopListening() {
+  window.removeEventListener('error', onError);
+  window.removeEventListener('unhandledrejection', onRejection);
 }
 
 function replay(target: LandingReporter) {
@@ -78,8 +84,10 @@ function load(loader: () => Promise<LandingSentryModule>) {
       replay(reporter);
     })
     .catch(() => {
-      // An ad blocker, a flaky network or a stale tab after a deploy: report nothing, never throw
+      // An ad blocker, a flaky network or a stale tab after a deploy: report nothing, never throw,
+      // and hold nothing more for the rest of this page load
       held = [];
+      stopListening();
     });
 }
 
@@ -102,10 +110,7 @@ export function reportLandingCrash(error: unknown, componentStack?: string): voi
 }
 
 export function resetLandingErrorReportingForTests(): void {
-  if (started) {
-    window.removeEventListener('error', onError);
-    window.removeEventListener('unhandledrejection', onRejection);
-  }
+  if (started) stopListening();
   started = false;
   reporter = null;
   held = [];

@@ -476,6 +476,9 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
     /^\/download(\/|$)/,  // /download/* never gets SPA
     /^\/api\//,           // future-proofing for API routes
   ],
+  // The service worker carries no source map: vite-plugin-pwa would emit sw.js.map whenever the
+  // landing's maps are "hidden" for the Sentry upload, and no map may ship (MUT-150 review)
+  sourcemap: false,
   // Limit what files get precached
   globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
   // Share cards are for crawlers, never shown in the app (MUT-104)

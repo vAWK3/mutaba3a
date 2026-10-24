@@ -215,8 +215,9 @@ function checkSentry(): string[] {
   const web = 'dist-web';
   if (wanted(web) && existsSync(web)) {
     const read = (path: string) => (existsSync(join(web, path)) ? readFileSync(join(web, path), 'utf8') : '');
-    const js = files(web).filter((file) => file.endsWith('.js')).map((file) => relative(web, file).split(sep).join('/'));
-    for (const path of sentryOutsideLandingChunks(js, read)) problems.push(`${web}/${path}: the Sentry SDK is outside the landing's lazy chunks; the local app loads this file (ADR-024)`);
+    // Every text file, not only .js: an SDK marker inlined into index.html must fail too (MUT-150 review)
+    const shipped = files(web).map((file) => relative(web, file).split(sep).join('/'));
+    for (const path of sentryOutsideLandingChunks(shipped, read)) problems.push(`${web}/${path}: the Sentry SDK is outside the landing's lazy chunks; the local app loads this file (ADR-024)`);
     for (const path of sentryPrecached(read('sw.js'), read)) {
       problems.push(`${web}/${path}: the service worker precaches Sentry, so it would be stored on every local-app device (add it to SENTRY_PRECACHE_IGNORES)`);
     }
