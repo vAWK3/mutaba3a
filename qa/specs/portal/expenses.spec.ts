@@ -405,7 +405,8 @@ test('The vendor field suggests saved vendors: a new one is kept as typed, and p
     await drawer.getByLabel('Amount').fill('30');
     await vendor.fill('yel');
     await expect(drawer.getByRole('option', { name: 'Yellow Cab', exact: true })).toBeVisible();
-    expect(api.last('GET', /^\/v1\/vendors$/)?.query.get('q')).toBe('yel');
+    // The box asks once typing pauses (the recent list may show it first).
+    await expect.poll(() => api.last('GET', /^\/v1\/vendors$/)?.query.get('q')).toBe('yel');
   });
 
   await step('Pick it: Vendor is filled and Category prefilled with Travel', async () => {
