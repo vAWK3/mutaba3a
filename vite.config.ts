@@ -670,6 +670,8 @@ export default defineConfig(({ mode }) => {
       },
     }),
   ],
+  // Dev server only (MUT-150): pre-bundle the landing's SDK up front, or its first lazy load reloads the page
+  ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { optimizeDeps: { include: ["@sentry/browser"] } } : {}),
   clearScreen: false,
   server: {
     port: 5173,

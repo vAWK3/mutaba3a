@@ -575,6 +575,11 @@ describe('vite.config', () => {
         expect(define?.__LANDING_SENTRY_ENABLED__).toBe('true');
         expect(define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(DSN));
         expect(chunks('web')[SENTRY_CHUNK]).toEqual(['@sentry/browser']);
+        // Dev server only: pre-bundled up front, so its first lazy load doesn't reload the page and lose the error
+        expect(resolve('web').optimizeDeps?.include).toEqual(['@sentry/browser']);
+      });
+      withEnv(QUIET, () => {
+        expect(resolve('web').optimizeDeps).toBeUndefined();
       });
     });
 
