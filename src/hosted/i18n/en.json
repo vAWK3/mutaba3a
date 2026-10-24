@@ -181,6 +181,18 @@
       "account": "Account",
       "language": "Language"
     },
+    "you": {
+      "title": "You",
+      "parts": {
+        "profiles": "Profiles",
+        "account": "Account",
+        "app": "App"
+      },
+      "groups": {
+        "preferences": "Preferences",
+        "more": "More"
+      }
+    },
     "states": {
       "unreachable": {
         "title": "Can't reach MTB3A right now",

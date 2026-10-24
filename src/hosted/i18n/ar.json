@@ -185,6 +185,18 @@
       "account": "الحساب",
       "language": "اللغة"
     },
+    "you": {
+      "title": "أنت",
+      "parts": {
+        "profiles": "الملفات",
+        "account": "الحساب",
+        "app": "التطبيق"
+      },
+      "groups": {
+        "preferences": "التفضيلات",
+        "more": "المزيد"
+      }
+    },
     "states": {
       "unreachable": {
         "title": "تعذّر الوصول إلى متابعة الآن",

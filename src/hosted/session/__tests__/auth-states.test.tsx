@@ -311,10 +311,10 @@ describe('S13 / E2 sign out', () => {
   it('keeps the person in place with a toast when DELETE fails', async () => {
     signedIn({ 'DELETE /v1/sessions/current': () => Promise.reject(new TypeError('offline')) });
     const { user, router } = renderPortal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('button', { name: /Account/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await user.click(await screen.findByRole('button', { name: /^Sign out/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't sign out. Check your connection and try again.");
-    expect(locationOf(router)).toBe(`/p/${ORG_A}`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account`);
   });
 
   it('clears the cache, broadcasts and lands on the signed-out note', async () => {
@@ -331,8 +331,8 @@ describe('S13 / E2 sign out', () => {
       },
     });
     const { user, router, queryClient } = renderPortal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('button', { name: /Account/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await user.click(await screen.findByRole('button', { name: /^Sign out/ }));
     expect(await screen.findByText("You've signed out.")).toBeInTheDocument();
     expect(locationOf(router)).toBe('/sign-in?reason=signed_out');
     expect(queryClient.getQueryCache().findAll({ queryKey: ['p'] })).toHaveLength(0);

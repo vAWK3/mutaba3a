@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Navigate, Outlet, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
+import { Navigate, Outlet, useLocation, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
@@ -8,6 +8,7 @@ import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
 import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
 import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
 import { HostedShell } from '../shell/HostedShell';
+import { isYouPath } from '../shell/youRoutes';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
 import { useLostAccess } from './lostAccess';
@@ -126,6 +127,7 @@ function NoProfiles() {
  */
 export function ProfileLayout({ profileId }: { profileId: string }) {
   const me = useMe();
+  const onYouPage = isYouPath(useLocation().pathname);
   const { profiles } = me;
   const profile = profiles.find((candidate) => candidate.id === profileId);
   const open = useLostAccess((s) => s.open);
@@ -144,7 +146,9 @@ export function ProfileLayout({ profileId }: { profileId: string }) {
   }
   // MUT-361: a LOCKED profile is one full page (Subscribe, Download my records); a read-only or failing one keeps its
   // pages under a banner that says why.
-  const locked = billingGateOf(me, profile) === 'locked';
+  // MUT-425 (eng E1, D7): the You page stays reachable on a locked profile, under its banner: Billing, Sign out and
+  // the other profiles are exactly what a locked person needs.
+  const locked = billingGateOf(me, profile) === 'locked' && !onYouPage;
   return (
     <ProfileProvider profile={profile}>
       <HostedShell profile={profile}>

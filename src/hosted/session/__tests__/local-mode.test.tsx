@@ -64,10 +64,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function openAccountMenu(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('button', { name: /Account/ }));
-  return screen.getByRole('menu', { name: 'Account' });
+/** MUT-425: the account menu became You › Account; the avatar link in the sidebar opens it. Returns the page. */
+async function openAccount(user: ReturnType<typeof renderPortal>['user']) {
+  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+  await screen.findByRole('navigation', { name: 'You' });
+  return screen.getByRole('main');
 }
+
+const youRows = (page: HTMLElement) => [...page.querySelectorAll('.hp-you-row')].map((row) => row.textContent);
 
 describe('first visit (AC1)', () => {
   it('asks the server once, then opens the app on this device: no sign-in, no further requests', async () => {
@@ -113,7 +117,7 @@ describe('the shell signed out', () => {
   it('shows "On this device", never the placeholder email', async () => {
     stubApi({});
     renderPortal(`/p/${ORG_A}`);
-    const account = await screen.findByRole('button', { name: /Account/ });
+    const account = await screen.findByRole('link', { name: /^Account:/ });
     expect(account).toHaveTextContent('On this device');
     expect(account).not.toHaveTextContent('local@device.invalid');
   });
@@ -121,17 +125,28 @@ describe('the shell signed out', () => {
   it('offers Sign in and Your data, and nothing that needs an account or a phone', async () => {
     stubApi({});
     const { user } = renderPortal(`/p/${ORG_A}`);
-    const menu = await openAccountMenu(user);
-    const items = [...menu.querySelectorAll('[role^="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(['Sign in', 'Your data']);
-    expect(within(menu).queryByText(/Sign out|Change password|iPhone|Android|Malafat/)).toBeNull();
+    const page = await openAccount(user);
+    expect(youRows(page)).toEqual(['Sign in', 'Your dataDownload my records']);
+    expect(within(page).getByRole('heading', { level: 1 })).toHaveTextContent('On this device');
+    expect(within(page).queryByText(/Sign out|Change password|Billing|iPhone|Android|Malafat|local@device.invalid/)).toBeNull();
+  });
+
+  it('You › App has Language and the terms only: no usage switch, no Malafat, no phone apps (MUT-425)', async () => {
+    vi.stubGlobal('__TERMS_URL__', 'https://mutaba3a.example/terms');
+    stubApi({});
+    const { user } = renderPortal(`/p/${ORG_A}`);
+    const page = await openAccount(user);
+    await user.click(within(page).getByRole('link', { name: 'App' }));
+    await within(page).findByRole('group', { name: 'Language' });
+    expect(youRows(page)).toEqual(['LanguageENعربي', expect.stringMatching(/^Terms of service/)]);
+    expect(within(page).queryByRole('switch')).toBeNull();
   });
 
   it('Sign in opens the sign-in form instead of bouncing back to the app', async () => {
     const server = stubApi({});
     const { user, router } = renderPortal(`/p/${ORG_A}`);
-    const menu = await openAccountMenu(user);
-    await user.click(within(menu).getByRole('menuitem', { name: 'Sign in' }));
+    const page = await openAccount(user);
+    await user.click(within(page).getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByLabelText('Email')).toBeInTheDocument();
     expect(locationOf(router)).toBe('/sign-in');
     // No bounce (no /v1/me). The one request is the server's public doors (MUT-368 D1): the person chose the server.
@@ -146,13 +161,15 @@ describe('the shell signed out', () => {
     expect(links).toEqual(['Overview', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions']);
   });
 
-  it('drops the "Hosted" chip and the old local-app note from the profile switcher', async () => {
+  it('drops the "Hosted" chip and the old local-app note from You › Profiles', async () => {
     stubApi({});
     const { user } = renderPortal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('button', { name: /Switch profile/ }));
-    const menu = screen.getByRole('menu', { name: 'Switch profile' });
-    expect(within(menu).queryByText('Hosted')).toBeNull();
-    expect(within(menu).queryByText(/stay in the MTB3A app on your device/)).toBeNull();
+    await user.click(await screen.findByRole('link', { name: /Switch profile/ }));
+    const page = await screen.findByRole('main');
+    await within(page).findByRole('button', { name: /Personal/ });
+    expect(screen.queryByText('Hosted')).toBeNull();
+    expect(screen.queryByText(/stay in the MTB3A app on your device/)).toBeNull();
+    expect(youRows(page)).toEqual(['✓Personal' + 'Your built-in profile', '+ New profile', 'Manage profiles']);
   });
 
   it('shows no Malafat suggestion even on an owned business profile (AC5)', async () => {
@@ -160,8 +177,10 @@ describe('the shell signed out', () => {
     useLocalRoutes({ 'GET /v1/me': () => ok({ ...localMe, profiles: [business] }) });
     stubApi({});
     const { user, container } = renderPortal(`/p/${ORG_A}`);
-    const menu = await openAccountMenu(user);
-    expect(within(menu).queryByText(/Malafat/)).toBeNull();
+    const page = await openAccount(user);
+    await user.click(within(page).getByRole('link', { name: 'App' }));
+    await within(page).findByRole('group', { name: 'Language' });
+    expect(within(page).queryByText(/Malafat/)).toBeNull();
     expect(container.textContent).not.toMatch(/Malafat/);
   });
 
@@ -281,12 +300,12 @@ describe('moving between modes', () => {
     setMode('local');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
     const { queryClient } = renderPortal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('button', { name: /Account/ })).toHaveTextContent('On this device');
+    expect(await screen.findByRole('link', { name: /^Account:/ })).toHaveTextContent('On this device');
     queryClient.setQueryData(['p', 'device-profile', 'payments'], { items: [] });
 
     otherTabSets('remote');
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Account/ })).toHaveTextContent('Nour Haddad'));
+    await waitFor(() => expect(screen.getByRole('link', { name: /^Account:/ })).toHaveTextContent('Nour Haddad'));
     expect(queryClient.getQueryData(['p', 'device-profile', 'payments'])).toBeUndefined();
   });
 
@@ -294,11 +313,11 @@ describe('moving between modes', () => {
     setMode('remote');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
     renderPortal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('button', { name: /Account/ })).toHaveTextContent('Nour Haddad');
+    expect(await screen.findByRole('link', { name: /^Account:/ })).toHaveTextContent('Nour Haddad');
 
     otherTabSets('local');
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Account/ })).toHaveTextContent('On this device'));
+    await waitFor(() => expect(screen.getByRole('link', { name: /^Account:/ })).toHaveTextContent('On this device'));
     expect(screen.queryByText('Nour Haddad')).toBeNull();
   });
 
@@ -332,9 +351,9 @@ describe('moving between modes', () => {
     setMode('remote');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()), 'DELETE /v1/sessions/current': () => new Response(null, { status: 204 }) });
     const { user } = renderPortal(`/p/${ORG_A}`);
-    const menu = await openAccountMenu(user);
+    const page = await openAccount(user);
 
-    await user.click(within(menu).getByRole('menuitem', { name: 'Sign out' }));
+    await user.click(within(page).getByRole('button', { name: 'Sign out' }));
 
     await waitFor(() => expect(localStorage.getItem(MODE_KEY)).toBe('local'));
   });
@@ -346,8 +365,8 @@ describe('Your data (D2)', () => {
   async function openYourData() {
     stubApi({});
     const rendered = renderPortal(`/p/${ORG_A}`);
-    const menu = await openAccountMenu(rendered.user);
-    await rendered.user.click(within(menu).getByRole('menuitem', { name: 'Your data' }));
+    const page = await openAccount(rendered.user);
+    await rendered.user.click(within(page).getByRole('button', { name: /^Your data/ }));
     await screen.findByRole('dialog');
     return rendered;
   }

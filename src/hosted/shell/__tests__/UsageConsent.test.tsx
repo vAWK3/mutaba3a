@@ -40,9 +40,11 @@ const USER_ID = me().user.id;
 const captured = () => sdk.capture.mock.calls.map(([event]) => event);
 const region = () => screen.queryByRole('region', { name: 'Share anonymous usage?' });
 
-async function openMenu(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('button', { name: /Account/ }));
-  return screen.getByRole('menu', { name: 'Account' });
+/** MUT-425: the switch lives on You › App (was the account menu); the avatar link opens You › Account. */
+async function openApp(user: ReturnType<typeof renderPortal>['user']) {
+  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+  await user.click(await screen.findByRole('link', { name: 'App' }));
+  await screen.findByRole('group', { name: 'Language' });
 }
 
 beforeEach(() => {
@@ -79,7 +81,7 @@ describe('Usage prompt (MUT-155)', () => {
     expect(region()).toBeNull();
     unmount();
     renderPortal(`/p/${ORG_A}`);
-    await screen.findByRole('button', { name: /Account/ });
+    await screen.findByRole('link', { name: /^Account:/ });
     expect(region()).toBeNull();
     expect(sdk.init).not.toHaveBeenCalled();
   });
@@ -87,9 +89,9 @@ describe('Usage prompt (MUT-155)', () => {
   it('shows nothing at all when the build has no key', async () => {
     build.key = '';
     const { user } = renderPortal(`/p/${ORG_A}`);
-    const menu = await openMenu(user);
+    await openApp(user);
     expect(region()).toBeNull();
-    expect(within(menu).queryByRole('menuitemcheckbox', { name: 'Share anonymous usage' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Share anonymous usage' })).toBeNull();
   });
 
   it('reads in Arabic for an Arabic reader', async () => {
@@ -100,12 +102,13 @@ describe('Usage prompt (MUT-155)', () => {
   });
 });
 
-describe('Account menu toggle (MUT-155)', () => {
+describe('You › App toggle (MUT-155, MUT-425)', () => {
   it('reflects the choice and turns it off with one last note', async () => {
     localStorage.setItem(USAGE_RECORD_KEY, JSON.stringify({ owner: USER_ID, choice: 'on' }));
     const { user } = renderPortal(`/p/${ORG_A}`);
     await waitFor(() => expect(captured()).toContain('portal_opened'));
-    const toggle = within(await openMenu(user)).getByRole('menuitemcheckbox', { name: 'Share anonymous usage' });
+    await openApp(user);
+    const toggle = screen.getByRole('switch', { name: 'Share anonymous usage' });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     await user.click(toggle);
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
@@ -114,10 +117,11 @@ describe('Account menu toggle (MUT-155)', () => {
     expect(JSON.parse(localStorage.getItem(USAGE_RECORD_KEY)!)).toEqual({ owner: USER_ID, choice: 'off' });
   });
 
-  it('turns it on from the menu, saying so', async () => {
+  it('turns it on from You › App, saying so', async () => {
     localStorage.setItem(USAGE_RECORD_KEY, JSON.stringify({ owner: USER_ID, choice: 'off' }));
     const { user } = renderPortal(`/p/${ORG_A}`);
-    const toggle = within(await openMenu(user)).getByRole('menuitemcheckbox', { name: 'Share anonymous usage' });
+    await openApp(user);
+    const toggle = screen.getByRole('switch', { name: 'Share anonymous usage' });
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     await user.click(toggle);
     await waitFor(() => expect(sdk.capture).toHaveBeenCalledWith('analytics_opted_in', { prompt: 'settings' }));
@@ -131,7 +135,8 @@ describe('Sign-out (MUT-155, README rule 6)', () => {
     localStorage.setItem('ph_phc_test_posthog', '{"distinct_id":"x"}');
     const { user } = renderPortal(`/p/${ORG_A}`);
     await waitFor(() => expect(captured()).toEqual(['portal_opened']));
-    await user.click(within(await openMenu(user)).getByRole('menuitem', { name: 'Sign out' }));
+    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await user.click(await screen.findByRole('button', { name: /^Sign out/ }));
     await waitFor(() => expect(localStorage.getItem(USAGE_RECORD_KEY)).toBeNull());
     expect(localStorage.getItem('ph_phc_test_posthog')).toBeNull();
     expect(captured()).toEqual(['portal_opened']);

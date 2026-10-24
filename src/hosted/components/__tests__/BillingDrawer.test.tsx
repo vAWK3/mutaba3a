@@ -49,13 +49,13 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('Billing drawer: the status view (DR1)', () => {
-  it('opens from the account menu through the URL: trial status first, then Subscribe, then both prices and the rules', async () => {
+  it('opens from You › Account (MUT-425) through the URL: trial status first, then Subscribe, then both prices and the rules', async () => {
     const { user, router } = portal(`/p/${ORG_B}`);
-    await user.click(await screen.findByRole('button', { name: /Account/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Billing' }));
+    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await user.click(await screen.findByRole('button', { name: /^Billing/ }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true`);
+    expect(locationOf(router)).toBe(`/p/${ORG_B}/you/account?billing=true`);
     expect(within(dialog).getByText('Free trial')).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: '9 days left in your free trial' })).toHaveFocus();
     expect(within(dialog).getByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
