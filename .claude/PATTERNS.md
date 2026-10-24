@@ -2717,3 +2717,21 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - The memory store mirrors it by scanning its maps.
 - **First instance:** `signupReviews.decline`.
 
+
+## Patterns added by MUT-368 (2026-10-24, ADR-179)
+
+### Pattern: The server names the doors a page may show
+- A public, read-only endpoint (`GET /v1/self-service`) says which self-service actions this server can really complete, derived from its configuration.
+- The page shows a door only when it is open, and treats no answer as closed. A build flag would drift from the server; showing every door would leave dead ones while mail is off.
+- **First instance:** sign-in's "Forgot your password?" / "Create an account".
+
+### Pattern: A third-party widget in QA is a page-routed stand-in on the real origin
+- QA never calls a third party. The spec answers the widget's script URL (and the frame it mounts) with `page.route`, on the third party's own origin.
+- The page's real CSP still decides whether the script and frame may load, and the stand-in mimics the vendor's published test keys (pass, fail).
+- The live check of the real widget is an operator step at go-live (TD-216).
+- **First instance:** `qa/support/turnstile.ts`.
+
+### Pattern: A live-API QA app serves the built portal itself
+- When a flow needs real mail, real tokens or an operator action, the QA app runs the API with test adapters (the memory mailer, fixture checkers, test secrets) on a per-launch database. The API serves `vite build --mode hosted` from `PORTAL_DIST_DIR`, so production's CSP and hashed assets are what the specs see.
+- Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`) so per-IP budgets don't add up.
+- **First instance:** `qa/support/selfservice-live.mjs` (the `portal-selfservice` app).

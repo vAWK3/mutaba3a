@@ -4851,3 +4851,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A business domain gives unlimited instant trials (TD-213).
 - The hourly sweep is in process (TD-215).
 
+## ADR-179: The Portal Shows Only the Self-Service Doors the Server Opens; Turnstile Loads Only on Them; QA Runs Them on a Live API Without Cloudflare (MUT-368)
+
+**Status:** Accepted for the build (2026-10-24, MUT-368, unattended run on Basel's "go"). Decisions D1–D17 (no D10) in `.claude/designs/mut-368-portal-signup-recover.md` §4 are **pending Basel's confirmation**. This builds ADR-159's pages on ADR-175 and ADR-178.
+
+**Context:** the server can mail signup and recovery links and holds webmail signups for review. The portal had no pages for them, and its bundle rules banned their words. Production mail is off until Basel's go-live, so a door shown today would only fail.
+
+**Decision:**
+1. **The server names its doors.** `GET /v1/self-service` (public, no account information) returns `{signup, recovery}`. A door is open only where the server really mails links: a mailer other than noop and a Turnstile secret; signup also needs `SELF_SIGNUP_ENABLED`. Sign-in, /signup, /recover and dead setup links read it. An outage reads as both closed.
+2. **Two pages, one form.** `/signup` and `/recover` share `EmailLinkForm`: an email, the bot check, one button, then one "Check your email" screen for every address. Refusals stay inline and keep the email. "Send again" goes back to the form after the 60 s budget, because a new link needs a fresh single-use token.
+3. **Turnstile loads only on those two forms.** It uses explicit render with the form's action (`signup`/`recover`), the page's language and flexible size. `PORTAL_CSP` names `https://challenges.cloudflare.com` in `script-src` and `frame-src` only. A press made before the check finishes waits for its token; the page never sends without one. The site key is a build value with the always-pass test key as default, and `deploy.sh` refuses a test or missing key once mail is on.
+4. **Under review is a screen, never a sign-in.** It shows after a SIGNUP redeem answering `PENDING_REVIEW`, or after sign-in's 403 `ACCOUNT_UNDER_REVIEW` (the right password only). Sign out ends a session someone already has on the browser.
+5. **A dead link names its purpose to its holder**, so the page offers /signup or /recover instead of "ask the person who set up your account".
+6. **QA runs on a live API without Cloudflare**, in its own app (`portal-selfservice`):
+   - the API serves the built portal under the real CSP, from a per-launch DB, with the memory mailer and the fixture domains;
+   - Turnstile is a page-routed stand-in that mounts a `challenges.cloudflare.com` frame;
+   - each test sends its own client address.
+
+**Consequences:**
+- Merging changes nothing a person sees in production until mail goes live: both doors stay closed and sign-in reads as today.
+- The go-live adds the Turnstile site key to `deploy.env` (before-release.md).
+- The real widget is first seen at go-live (TD-216).
+- The doors follow configuration, not mail health (TD-217).
+- The ticket's QA paths moved from `qa/features/portal/` to `qa/features/portal-selfservice/`.

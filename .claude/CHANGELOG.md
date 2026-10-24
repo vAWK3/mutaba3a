@@ -28,7 +28,42 @@
 
 ---
 
-## [Unreleased] - 2026-10-23 — Business email signs up at once; webmail and unverified domains wait for the operator (MUT-367, ADR-178)
+## [Unreleased] - 2026-10-24 — The portal's "Create an account", "Forgot your password?" and the under-review screen (MUT-368, ADR-179)
+
+**Why:** MUT-366/367 built the server's signup, recovery and review queue; this gives them pages, the first user-visible step of the self-service portal run (epic MUT-322).
+
+### Added
+- **The portal's self-service screens:**
+  - `/signup`: an email, Cloudflare Turnstile, then "Check your email"; "Send again" after 60 s, with the email kept.
+  - `/recover`: the same "If that address has an account…" screen for every address.
+  - Both are en/ar, Arabic by default and RTL, and fit at 375 px. Every refusal keeps the typed email: a throwaway or mail-less domain (under the field), a refused check, a limit (minutes, or hours for the day budget), unreachable. While signup is closed the page says "Accounts are by request for now" and links the landing's request form.
+- **`GET /v1/self-service`** (public) returns `{signup, recovery}`: a door shows only where the server really mails links (a mailer other than noop and a Turnstile secret). Sign-in shows "Forgot your password?" and "Create an account" from it; with mail off it keeps today's "ask the person who set up your account" line.
+- **Under review:** the right password on a `PENDING_REVIEW` account (sign-in's 403, or the SIGNUP redeem's `status`) shows "We're reviewing your account. We'll email you within 2 working days.", with the support address and Sign out.
+- **`/setup` for SIGNUP links:**
+  - "Finish creating your account", with an optional name, the currency (ILS) and the time zone (the browser's, with Change), all sent with the redeem (TD-211 resolved).
+  - First run lands on the personal profile's Home (`firstRunPath`, MUT-418's seam).
+  - A dead link offers "Send a new link" (/signup or /recover) where the server can mail one. The check now names a dead link's `purpose`.
+- **Turnstile:**
+  - `loadTurnstile` / `useTurnstile` / `TurnstileWidget`: explicit render, the form's action, the page's language, flexible size, one script per page, only on the two forms.
+  - Pressing Continue before the check finishes waits for the token.
+  - A check that can't run offers Try again and the support address.
+- **`__TURNSTILE_SITE_KEY__`** comes from `MUTABA3A_TURNSTILE_SITE_KEY` (deploy.env, Makefile). It defaults to Cloudflare's always-pass test key; a value shaped like a secret fails the build. `deploy.sh`'s `guard_turnstile_site_key` refuses a missing or test key once `mailer = "resend"`.
+- **QA:** a `portal-selfservice` release-QA app (`qa/support/selfservice-live.mjs`).
+  - It builds the portal and runs the API on :8791 against a per-launch DB on `mutaba3a-test-pg`, with the memory mailer and the fixture domain checker, serving the built portal under the real CSP.
+  - Turnstile is a page-routed stand-in for Cloudflare's test keys (`qa/support/turnstile.ts`).
+  - 15 features and 17 recorded tests, all passing. Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`).
+
+### Changed
+- `PORTAL_CSP`: `script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com`.
+- `HOSTED_RULES` allows "sign up", "create an account", "forgot" and "reset password" (and إنشاء حساب, نسيت, إعادة تعيين) on purpose. "invite" and دعوة stay banned. `https://challenges.cloudflare.com` joins the hosted origin allowlist.
+- `AuthLayout` is shared by every signed-out page. `TimezoneChoice` is shared by New profile and signup. `DEFAULT_HOSTED_CURRENCY` moves to `format/currencies.ts`.
+- API `1.58.0-mut368`.
+
+### Fixed
+- `vite build --mode hosted` (and so `test:bundles` and deploy.sh's portal build) failed on main. `@node-rs/argon2`'s browser entry needs an optional WASM package npm doesn't install. The portal build now aliases it to a stub that throws: hashing only runs on the server.
+- `src/hosted/local/__tests__/no-network.test.ts` failed on main once its fixed FX date aged past `MAX_RATE_AGE_DAYS`. Its date is now relative to today.
+
+ webmail and unverified domains wait for the operator (MUT-367, ADR-178)
 
 **Why:** ADR-159 decision 2 (Basel, 2026-10-20, reconfirmed 2026-10-23): disposable addresses are refused, verified business domains sign up instantly, and webmail or unverifiable domains wait for the operator's approval.
 

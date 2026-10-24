@@ -1289,7 +1289,8 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 |---|---|---|
 | Secret `mutaba3a-api-turnstile-secret` | `infrastructure/terraform/email.tf` | Exists, empty. Mounted as `TURNSTILE_SECRET` with `mailer = "resend"`; the server refuses to start in production with mail on and no secret, or with a Cloudflare test secret |
 | `SELF_SIGNUP_ENABLED` | var `self_signup_enabled` (needs `mailer = "resend"`) | `false`: signup is 404, recovery works |
-| Turnstile widget | Cloudflare dashboard (Barmajiyat account), site key in the portal build (MUT-368) | Not created; outside production the portal uses the test site key `1x00000000000000000000AA` |
+| Turnstile widget | Cloudflare dashboard (Barmajiyat account); its **site** key goes in `deploy.env` as `MUTABA3A_TURNSTILE_SITE_KEY` (MUT-368) | Not created. Builds carry the test site key `1x00000000000000000000AA` until it is set; `deploy.sh` refuses that once `mailer = "resend"` |
+| The portal's doors | `GET /v1/self-service` (MUT-368, ADR-179) | `{signup:false, recovery:false}` while `mailer = "noop"`: sign-in shows no "Forgot your password?" or "Create an account"; they appear with mail (recovery) and at GA (signup) |
 
 Before the release that sets `mailer = "resend"`: in Cloudflare › Turnstile, add a widget for the portal host (`npm run hosts -- get portalOrigin`), mode **Managed**, and add its **secret key** without a shell-history entry:
 ```bash
