@@ -2799,6 +2799,41 @@ export const ExpenseSummarySchema = z
   })
   .openapi('ExpenseSummary');
 
+// ---- MUT-175: activity summary (portal Reports) -------------------------------
+
+export const ACTIVITY_BUCKETS = ['day', 'month'] as const;
+/** The longest range one activity request may cover (Year plus a straddling week). */
+export const ACTIVITY_RANGE_MAX_MONTHS = 13;
+
+export const ActivitySummaryQuerySchema = z.object({
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the first of this month in the organization timezone' }),
+  to: IsoDateSchema.optional().openapi({ description: `Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within ${ACTIVITY_RANGE_MAX_MONTHS} months of it (422 RANGE_TOO_LONG)` }),
+  bucket: z.enum(ACTIVITY_BUCKETS).default('day').openapi({ description: 'One bucket per day, or per calendar month (starting on the 1st)' }),
+});
+const currencyFlow = { currency: CurrencySchema, received: AmountSchema, spent: AmountSchema };
+const currencyActivity = z.object({
+  ...currencyFlow,
+  byCategory: z.array(z.object({ categoryId: uuid.nullable(), ...expenseBucket })),
+  byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })).openapi({ description: 'Received per client, largest first; null = no client, last' }),
+});
+const daysToPaid = { median: z.number().int(), n: z.number().int() };
+export const ActivitySummarySchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    bucket: z.enum(ACTIVITY_BUCKETS),
+    asOf: IsoDateSchema.openapi({ description: "The organization's today" }),
+    dataSince: IsoDateSchema.nullable().openapi({ description: 'The earliest POSTED payment or expense in the read window (the 12 months ending with to); null when none' }),
+    earlierData: z.boolean().openapi({ description: 'Whether payments or expenses exist before the read window' }),
+    buckets: z.array(z.object({ start: IsoDateSchema, currencies: z.array(z.object(currencyFlow)) })).openapi({ description: 'Zero-filled across from–to; every bucket lists every currency of the period' }),
+    currencies: z.array(currencyActivity),
+    history: z.array(z.object({ month: IsoMonthSchema, currencies: z.array(currencyActivity) })).openapi({ description: 'The 12 calendar months ending with to’s month, whole months' }),
+    daysToPaid: z
+      .object({ overall: z.object(daysToPaid).nullable(), byCustomer: z.array(z.object({ customerId: uuid, ...daysToPaid })) })
+      .openapi({ description: 'Median days from an Owed entry’s date to its last payment, over fully settled entries paid in the read window; null (or no row) below 3 entries' }),
+  })
+  .openapi('ActivitySummary');
+
 // ---- MUT-267: expense groups (ADR-094) -----------------------------------------
 
 const groupName = z.string().trim().max(GROUP_NAME_MAX);

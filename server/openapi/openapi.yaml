@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.64.0-mut369
+  version: 1.65.0-mut175
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4784,6 +4784,244 @@ components:
               description: Calendar date in the organization timezone, YYYY-MM-DD
           required:
             - asOf
+    ActivitySummary:
+      type: object
+      properties:
+        from:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        bucket:
+          type: string
+          enum:
+            - day
+            - month
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The organization's today
+        dataSince:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The earliest POSTED payment or expense in the read window (the 12 months ending with to); null when none
+        earlierData:
+          type: boolean
+          description: Whether payments or expenses exist before the read window
+        buckets:
+          type: array
+          items:
+            type: object
+            properties:
+              start:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              currencies:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    currency:
+                      $ref: "#/components/schemas/Currency"
+                    received:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    spent:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  required:
+                    - currency
+                    - received
+                    - spent
+            required:
+              - start
+              - currencies
+          description: Zero-filled across from–to; every bucket lists every currency of the period
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              received:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              spent:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              byCategory:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    categoryId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - categoryId
+                    - total
+                    - count
+              byCustomer:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    customerId:
+                      type: string
+                      nullable: true
+                      format: uuid
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - customerId
+                    - total
+                    - count
+                description: Received per client, largest first; null = no client, last
+            required:
+              - currency
+              - received
+              - spent
+              - byCategory
+              - byCustomer
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+                description: Calendar month, YYYY-MM
+              currencies:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    currency:
+                      $ref: "#/components/schemas/Currency"
+                    received:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    spent:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    byCategory:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          categoryId:
+                            type: string
+                            nullable: true
+                            format: uuid
+                          total:
+                            type: string
+                            pattern: ^-?\d+(\.\d+)?$
+                            description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                          count:
+                            type: integer
+                        required:
+                          - categoryId
+                          - total
+                          - count
+                    byCustomer:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          customerId:
+                            type: string
+                            nullable: true
+                            format: uuid
+                          total:
+                            type: string
+                            pattern: ^-?\d+(\.\d+)?$
+                            description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                          count:
+                            type: integer
+                        required:
+                          - customerId
+                          - total
+                          - count
+                      description: Received per client, largest first; null = no client, last
+                  required:
+                    - currency
+                    - received
+                    - spent
+                    - byCategory
+                    - byCustomer
+            required:
+              - month
+              - currencies
+          description: The 12 calendar months ending with to’s month, whole months
+        daysToPaid:
+          type: object
+          properties:
+            overall:
+              type: object
+              nullable: true
+              properties:
+                median:
+                  type: integer
+                n:
+                  type: integer
+              required:
+                - median
+                - n
+            byCustomer:
+              type: array
+              items:
+                type: object
+                properties:
+                  customerId:
+                    type: string
+                    format: uuid
+                  median:
+                    type: integer
+                  n:
+                    type: integer
+                required:
+                  - customerId
+                  - median
+                  - n
+          required:
+            - overall
+            - byCustomer
+          description: Median days from an Owed entry’s date to its last payment, over fully settled entries paid in the read window; null (or no row) below 3 entries
+      required:
+        - from
+        - to
+        - bucket
+        - asOf
+        - dataSince
+        - earlierData
+        - buckets
+        - currencies
+        - history
+        - daysToPaid
     CreateUploadResponse:
       type: object
       properties:
@@ -12463,6 +12701,74 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/activity:
+    get:
+      tags:
+        - Summaries
+      summary: Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)
+      description: MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window is the 12 calendar months ending with `to`, so `history` and `dataSince` come from the same rows; `daysToPaid` is the median over fully settled Owed entries whose last payment falls in that window, null below 3.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the first of this month in the organization timezone
+          required: false
+          description: Inclusive; defaults to the first of this month in the organization timezone
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within 13 months of it (422 RANGE_TOO_LONG)
+          required: false
+          description: Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within 13 months of it (422 RANGE_TOO_LONG)
+          name: to
+          in: query
+        - schema:
+            type: string
+            enum:
+              - day
+              - month
+            default: day
+            description: One bucket per day, or per calendar month (starting on the 1st)
+          required: false
+          description: One bucket per day, or per calendar month (starting on the 1st)
+          name: bucket
+          in: query
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivitySummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
           content:
             application/json:
               schema:

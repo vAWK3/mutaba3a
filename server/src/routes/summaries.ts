@@ -1,16 +1,21 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
-import { todayFor } from '../agreements/compose.js';
+import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
+import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
-import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AgreementRecord, ExpenseRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
-import { CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
+import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
+import { historyStart, summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
+
+/** MUT-175: Reports reads a hosted profile's expenses too, so like /v1/summaries/expenses it is session-only. */
+const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 
 /** /v1/summaries — the figures Malafat renders (M6 brief §2). Computed on read; nothing is materialized. */
 export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
@@ -141,6 +146,51 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const receivables = await listAll((cursor) => store.receivables.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
       const figures = await projectSummary(organization, project, receivables, today);
       return c.json({ ...projectWire(project, figures), asOf: today }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/summaries/activity',
+      tags: ['Summaries'],
+      summary: 'Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)',
+      description:
+        'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window is the 12 calendar months ending with `to`, so `history` and `dataSince` come from the same rows; `daysToPaid` is the median over fully settled Owed entries whose last payment falls in that window, null below 3.',
+      security: SESSION_ONLY,
+      middleware: [requireScope('summaries:read'), requireScope('expenses:read')] as const,
+      request: { query: ActivitySummaryQuerySchema },
+      responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ActivitySummarySchema } } }, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = sessionAuth(c);
+      const q = c.req.valid('query');
+      const today = todayFor(organization, c.get('now')());
+      const from = q.from ?? `${monthOf(today)}-01`;
+      const to = q.to ?? endOfMonth(today);
+      const bucket = q.bucket;
+      if (compareIsoDates(from, to) > 0) throw validationError('END_BEFORE_START', '`to` is before `from`', { field: 'to' });
+      if (compareIsoDates(to, addDays(`${addMonths(monthOf(from), ACTIVITY_RANGE_MAX_MONTHS)}-01`, -1)) > 0) {
+        throw validationError('RANGE_TOO_LONG', `A range covers at most ${ACTIVITY_RANGE_MAX_MONTHS} months`, { field: 'to', maxMonths: ACTIVITY_RANGE_MAX_MONTHS });
+      }
+      const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
+      const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED', receivedAfter: start, receivedBefore: to }, { limit: 200, cursor }));
+      // Expenses page on their own cursor shape (occurredOn first), so they walk here rather than through listAll
+      const expenses: ExpenseRecord[] = [];
+      let cursor = null;
+      do {
+        const page = await store.expenses.list(organization.id, { from: start, to }, { limit: 200, cursor });
+        expenses.push(...page.items);
+        cursor = page.nextCursor;
+      } while (cursor);
+      const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
+      const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
+      const before = addDays(start, -1);
+      const earlierData =
+        (await store.payments.list(organization.id, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null })).items.length > 0 ||
+        (await store.expenses.list(organization.id, { to: before }, { limit: 1, cursor: null })).items.length > 0;
+      const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
+      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary }, 200);
     },
   );
 
