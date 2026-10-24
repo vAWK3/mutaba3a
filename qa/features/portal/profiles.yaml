@@ -47,6 +47,7 @@ features:
     tier: secondary
     paths:
       - src/hosted/components/ProfileCreateDrawer.tsx
+      - src/hosted/components/TimezoneChoice.tsx
       - src/hosted/format/timezones.ts
     steps:
       - Choose + New profile in the switcher and create it empty
