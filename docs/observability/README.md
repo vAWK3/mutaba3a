@@ -15,7 +15,7 @@ contain. MUT-147 set it up. The surface stories wire it in:
 | Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher; pre-roll and post-roll crashes (MUT-148: live once `sentry_enabled`) |
 | Hosted portal (`--mode hosted`) | `mutaba3a-web` (made by hand, imported) | Crashes, uncaught errors, unhandled rejections |
 | Landing pages (`/`, `/download`, `/privacy`, `/terms`, lazy chunks only) | `mutaba3a-landing` | Crashes, uncaught errors, unhandled rejections; no user context, at most 5 per page load. MUT-150: live once Netlify's production context has the DSN |
-| Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes, and replies the app couldn't read (type and endpoint only). MUT-151: live in the first store release built with a DSN. The Share Extension, widgets and Siri intents send nothing (MUT-395) |
+| Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes, and replies the app couldn't read (type and endpoint only). MUT-151: live in the first store release built with a DSN. The Share Extension, widgets and Siri intents report their own crashes through a Swift port of the scrubber, with no user (MUT-395, merged; their first real event is checked on the simulator and at MUT-413's release) |
 
 **Never:** the local web app (`/app`) or desktop. They send nothing, ever (ADR-024, ADR-090).
 
