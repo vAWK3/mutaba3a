@@ -24,6 +24,9 @@ import configFn, {
   sentryDsn,
   sentryEnvironment,
   sentryRelease,
+  landingSentryRelease,
+  SENTRY_CHUNK,
+  SENTRY_PRECACHE_IGNORES,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -506,9 +509,12 @@ describe('vite.config', () => {
       });
     });
 
-    it.each(['web', 'desktop'])('gives the %s build no Sentry define at all (AC1)', (mode) => {
+    it.each(['web', 'desktop'])("never gives the portal's DSN to the %s build (AC1)", (mode) => {
       withEnv({ ...QUIET, MUTABA3A_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
-        expect(Object.keys(resolve(mode).define ?? {}).filter((key) => key.includes('SENTRY'))).toEqual([]);
+        const define = resolve(mode).define ?? {};
+        expect(Object.keys(define).filter((key) => key.startsWith('__SENTRY'))).toEqual([]);
+        expect(define.__LANDING_SENTRY_ENABLED__).toBe('false');
+        expect(define.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(''));
         expect(pluginNames(resolve(mode).plugins)).not.toContain('sentry-vite-plugin');
       });
     });
@@ -526,6 +532,107 @@ describe('vite.config', () => {
           expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
         });
       }
+    });
+  });
+
+  describe('landing Sentry (MUT-150, ADR-091)', () => {
+    const HOST = new URL(SENTRY_INGEST_ORIGIN).host;
+    const DSN = `https://fedcba9876543210fedcba9876543210@${HOST}/4512250374062161`;
+    const QUIET = {
+      MUTABA3A_LANDING_SENTRY_DSN: '',
+      MUTABA3A_SENTRY_DSN: '',
+      SENTRY_AUTH_TOKEN: '',
+      COMMIT_REF: '',
+      CONTEXT: '',
+    };
+    const withEnv = <T,>(env: Record<string, string>, run: () => T): T => {
+      for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+      try {
+        return run();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    };
+    const chunks = (mode: string) => {
+      const output = resolve(mode).build?.rollupOptions?.output;
+      return (Array.isArray(output) ? output[0] : output)?.manualChunks as Record<string, string[]>;
+    };
+
+    it('compiles reporting out of a web build without a DSN: no SDK chunk, no plugin, no maps (eng O2)', () => {
+      withEnv(QUIET, () => {
+        const config = resolve('web');
+        expect(config.define?.__LANDING_SENTRY_ENABLED__).toBe('false');
+        expect(config.define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(''));
+        expect(chunks('web')).not.toHaveProperty(SENTRY_CHUNK);
+        expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
+        expect(config.build?.sourcemap ?? false).toBe(false);
+      });
+    });
+
+    it('turns the landing on in a web build with a DSN, its SDK in a named chunk', () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN }, () => {
+        const define = resolve('web').define;
+        expect(define?.__LANDING_SENTRY_ENABLED__).toBe('true');
+        expect(define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(DSN));
+        expect(chunks('web')[SENTRY_CHUNK]).toEqual(['@sentry/browser']);
+      });
+    });
+
+    it('never gives the desktop build the landing DSN, its chunk or the plugin (eng C1)', () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test', CONTEXT: 'production' }, () => {
+        const config = resolve('desktop');
+        expect(config.define?.__LANDING_SENTRY_ENABLED__).toBe('false');
+        expect(config.define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(''));
+        expect(chunks('desktop')).not.toHaveProperty(SENTRY_CHUNK);
+        expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
+      });
+    });
+
+    it("refuses a landing DSN off the org's EU ingest host, failing the build", () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN.replace('.de.', '.') }, () => {
+        expect(() => resolve('web')).toThrow(/MUTABA3A_LANDING_SENTRY_DSN/);
+      });
+    });
+
+    it("names the release after the landing and Netlify's commit, the app version otherwise", () => {
+      expect(landingSentryRelease(undefined)).toBe(`mutaba3a-landing@${pkg.version}`);
+      expect(landingSentryRelease('')).toBe(`mutaba3a-landing@${pkg.version}`);
+      expect(landingSentryRelease('4e7854cd0123456789abcdef0123456789abcdef')).toBe(`mutaba3a-landing@${pkg.version}+4e7854c`);
+      expect(() => landingSentryRelease('not a sha')).toThrow(/COMMIT_REF/);
+    });
+
+    it("files events under Netlify's deploy context", () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, CONTEXT: 'production', SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        expect(resolve('web').define?.__LANDING_SENTRY_ENVIRONMENT__).toBe(JSON.stringify('production'));
+      });
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN }, () => {
+        expect(resolve('web').define?.__LANDING_SENTRY_ENVIRONMENT__).toBe(JSON.stringify('development'));
+      });
+    });
+
+    it('uploads hidden source maps to mutaba3a-landing only with a DSN and a token (AC5)', () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        const config = resolve('web');
+        expect(config.build?.sourcemap).toBe('hidden');
+        expect(pluginNames(config.plugins)).toContain('sentry-vite-plugin');
+      });
+      withEnv({ ...QUIET, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        expect(pluginNames(resolve('web').plugins)).not.toContain('sentry-vite-plugin');
+      });
+    });
+
+    it('fails a Netlify production build that has a DSN but no upload token (unreadable stacks never ship quietly)', () => {
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, CONTEXT: 'production' }, () => {
+        expect(() => resolve('web')).toThrow(/SENTRY_AUTH_TOKEN/);
+      });
+      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, CONTEXT: 'deploy-preview' }, () => {
+        expect(() => resolve('web')).not.toThrow();
+      });
+    });
+
+    it('keeps the SDK chunks out of the service worker precache, so the local app never stores them', () => {
+      expect(PWA_WORKBOX?.globIgnores).toEqual(expect.arrayContaining(SENTRY_PRECACHE_IGNORES));
+      expect(SENTRY_PRECACHE_IGNORES).toEqual([`assets/${SENTRY_CHUNK}-*.js`, 'assets/landingSentry-*.js']);
     });
   });
 

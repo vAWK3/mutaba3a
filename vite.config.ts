@@ -115,23 +115,25 @@ export function turnstileSiteKey(override: string | undefined): string {
   return override;
 }
 
-/** The Sentry org and project the portal reports to, and where its source maps go (MUT-149, ADR-091). */
+/** The Sentry org and projects the browser surfaces report to, and where their source maps go (MUT-149/150, ADR-091). */
 const SENTRY_ORG = "barmajiyat-ltd";
 const SENTRY_PORTAL_PROJECT = "mutaba3a-web";
+const SENTRY_LANDING_PROJECT = "mutaba3a-landing";
 const SENTRY_EU_API = "https://de.sentry.io";
 const SENTRY_HOSTED_MAPS = "dist-hosted/**/*.map";
+const SENTRY_WEB_MAPS = "dist-web/**/*.map";
 
 /**
- * The portal's Sentry DSN (MUT-149 D3): "" when MUTABA3A_SENTRY_DSN is unset,
- * which compiles crash reporting out of the portal. Only a DSN on the org's EU
- * ingest host is accepted, the one origin PORTAL_CSP allows, so the build
- * fails rather than ship reports the browser would block.
+ * A surface's Sentry DSN (MUT-149 D3): "" when unset, which compiles crash
+ * reporting out of that build. Only a DSN on the org's EU ingest host is
+ * accepted, the one origin PORTAL_CSP and check-bundles allow, so the build
+ * fails rather than ship reports that would be blocked or leave the EU.
  */
-export function sentryDsn(override: string | undefined): string {
+export function sentryDsn(override: string | undefined, name = "MUTABA3A_SENTRY_DSN"): string {
   if (override === undefined || override === "") return "";
   const host = new URL(SENTRY_INGEST_ORIGIN).host.replace(/\./g, "\\.");
   if (!new RegExp(`^https://[0-9a-f]{32}@${host}/\\d+$`).test(override)) {
-    throw new Error(`MUTABA3A_SENTRY_DSN must be a DSN on ${SENTRY_INGEST_ORIGIN} (the EU ingest host PORTAL_CSP allows)`);
+    throw new Error(`${name} must be a DSN on ${SENTRY_INGEST_ORIGIN} (the org's EU ingest host)`);
   }
   return override;
 }
@@ -143,19 +145,57 @@ export function sentryRelease(override: string | undefined): string {
   return override;
 }
 
-/** The environment events are filed under (deploy.sh ENVIRONMENT); development otherwise. */
-export function sentryEnvironment(override: string | undefined): string {
+/** `mutaba3a-landing@<app version>+<short sha>` from Netlify's COMMIT_REF (MUT-150); the app version otherwise. */
+export function landingSentryRelease(commitRef: string | undefined): string {
+  if (commitRef === undefined || commitRef === "") return `mutaba3a-landing@${pkg.version}`;
+  if (!/^[0-9a-f]{7,40}$/.test(commitRef)) throw new Error("COMMIT_REF must be a git commit sha");
+  return `mutaba3a-landing@${pkg.version}+${commitRef.slice(0, 7)}`;
+}
+
+/** The environment events are filed under (deploy.sh ENVIRONMENT, Netlify CONTEXT); development otherwise. */
+export function sentryEnvironment(override: string | undefined, name = "MUTABA3A_SENTRY_ENVIRONMENT"): string {
   if (override === undefined || override === "") return "development";
-  if (!/^[a-z0-9-]{1,64}$/.test(override)) throw new Error("MUTABA3A_SENTRY_ENVIRONMENT must be lowercase letters, digits or dashes");
+  if (!/^[a-z0-9-]{1,64}$/.test(override)) throw new Error(`${name} must be lowercase letters, digits or dashes`);
   return override;
 }
 
+interface SentryBuildTarget {
+  project: string;
+  dsn: string;
+  release: string;
+  mapsGlob: string;
+  authToken: string | undefined;
+}
+
 /**
- * The hosted build's crash reporting (MUT-149 D3, D6): the defines, and, when
- * a DSN and an upload token are both set, hidden source maps uploaded to
- * Sentry and then deleted, so no map is ever served. The token is read here
+ * One browser surface's source maps (MUT-149 D6, MUT-150 eng D4): when a DSN
+ * and an upload token are both set, hidden maps are uploaded to the surface's
+ * project and then deleted, so no map is ever served. The token is read here
  * only, never defined into the bundle.
  */
+function sentrySourceMaps(target: SentryBuildTarget): { sourcemap: "hidden" | false; plugins: PluginOption[] } {
+  if (!target.dsn || !target.authToken) return { sourcemap: false, plugins: [] };
+  return {
+    sourcemap: "hidden",
+    plugins: [
+      sentryVitePlugin({
+        org: SENTRY_ORG,
+        project: target.project,
+        url: SENTRY_EU_API,
+        authToken: target.authToken,
+        telemetry: false,
+        release: { name: target.release, inject: false },
+        sourcemaps: { filesToDeleteAfterUpload: [target.mapsGlob] },
+        // A failed upload (revoked token, wrong scope) fails the build: the plugin only logs it otherwise
+        errorHandler: (error) => {
+          throw error;
+        },
+      }),
+    ],
+  };
+}
+
+/** The hosted build's crash reporting (MUT-149 D3, D6): the defines and the source maps. */
 function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
   const dsn = sentryDsn(env.MUTABA3A_SENTRY_DSN);
   const release = sentryRelease(env.MUTABA3A_SENTRY_RELEASE);
@@ -165,27 +205,32 @@ function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>;
     __SENTRY_RELEASE__: JSON.stringify(release),
     __SENTRY_ENVIRONMENT__: JSON.stringify(sentryEnvironment(env.MUTABA3A_SENTRY_ENVIRONMENT)),
   };
-  const authToken = env.SENTRY_AUTH_TOKEN;
-  if (!dsn || !authToken) return { define, sourcemap: false, plugins: [] };
-  return {
-    define,
-    sourcemap: "hidden",
-    plugins: [
-      sentryVitePlugin({
-        org: SENTRY_ORG,
-        project: SENTRY_PORTAL_PROJECT,
-        url: SENTRY_EU_API,
-        authToken,
-        telemetry: false,
-        release: { name: release, inject: false },
-        sourcemaps: { filesToDeleteAfterUpload: [SENTRY_HOSTED_MAPS] },
-        // A failed upload (revoked token, wrong scope) fails the build: the plugin only logs it otherwise
-        errorHandler: (error) => {
-          throw error;
-        },
-      }),
-    ],
+  const maps = sentrySourceMaps({ project: SENTRY_PORTAL_PROJECT, dsn, release, mapsGlob: SENTRY_HOSTED_MAPS, authToken: env.SENTRY_AUTH_TOKEN });
+  return { define, ...maps };
+}
+
+/**
+ * The landing's error reports (MUT-150, ADR-091): the web build only, and only
+ * with MUTABA3A_LANDING_SENTRY_DSN, set in Netlify's production context. The
+ * desktop build always gets the "off" defines, so the gate folds away and no
+ * SDK chunk is emitted. A Netlify production build with a DSN but no upload
+ * token fails: readable stacks are part of the feature, not optional.
+ */
+function landingSentry(env: NodeJS.ProcessEnv, buildMode: "web" | "desktop"): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
+  const dsn = buildMode === "web" ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
+  // Release and environment are read only by the SDK chunk, which a build without a DSN never emits
+  const release = dsn ? landingSentryRelease(env.COMMIT_REF) : "";
+  const define = {
+    __LANDING_SENTRY_ENABLED__: JSON.stringify(dsn !== ""),
+    __LANDING_SENTRY_DSN__: JSON.stringify(dsn),
+    __LANDING_SENTRY_RELEASE__: JSON.stringify(release),
+    __LANDING_SENTRY_ENVIRONMENT__: JSON.stringify(dsn ? sentryEnvironment(env.CONTEXT, "CONTEXT") : ""),
   };
+  if (dsn && env.CONTEXT === "production" && !env.SENTRY_AUTH_TOKEN) {
+    throw new Error("SENTRY_AUTH_TOKEN must be set in Netlify's production context when MUTABA3A_LANDING_SENTRY_DSN is (source maps)");
+  }
+  const maps = sentrySourceMaps({ project: SENTRY_LANDING_PROJECT, dsn, release, mapsGlob: SENTRY_WEB_MAPS, authToken: env.SENTRY_AUTH_TOKEN });
+  return { define, ...maps };
 }
 
 /** The portal origin the web build links to; a bad MUTABA3A_PORTAL_URL fails the build (MUT-187). */
@@ -412,6 +457,17 @@ export const POSTHOG_CHUNK = "vendor-posthog";
  */
 export const POSTHOG_PRECACHE_IGNORES = [`assets/${POSTHOG_CHUNK}-*.js`, "assets/posthogConfig-*.js"];
 
+/** The web build's chunk for @sentry/browser (MUT-150): named only when the landing DSN is set. */
+export const SENTRY_CHUNK = "vendor-sentry";
+
+/**
+ * The landing's error-report chunks are never precached (MUT-150, as MUT-154
+ * F1 for PostHog): the service worker installs for everyone who opens the
+ * local app, which must never store the Sentry SDK (ADR-024). check-bundles
+ * fails if any precached file carries it.
+ */
+export const SENTRY_PRECACHE_IGNORES = [`assets/${SENTRY_CHUNK}-*.js`, "assets/landingSentry-*.js"];
+
 export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   navigateFallback: "/index.html",
   // Only serve SPA shell for /app/* routes
@@ -425,7 +481,7 @@ export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
   // Share cards are for crawlers, never shown in the app (MUT-104)
   // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
   // The landing's PostHog chunks are fetched only on the landing, never stored for the local app (MUT-154)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, ...POSTHOG_PRECACHE_IGNORES],
+  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, ...POSTHOG_PRECACHE_IGNORES, ...SENTRY_PRECACHE_IGNORES],
   runtimeCaching: [
     {
       urlPattern: ({ request }) => request.destination === "font",
@@ -581,6 +637,7 @@ export default defineConfig(({ mode }) => {
   // Check both Tauri env vars AND the --mode flag
   const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY || mode === "desktop";
   const buildMode = isTauri ? "desktop" : "web";
+  const sentry = landingSentry(process.env, buildMode);
 
   return {
     base: isTauri ? "./" : "/",
@@ -591,10 +648,13 @@ export default defineConfig(({ mode }) => {
       __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
       // The landing's cookieless visit counts (MUT-154, ADR-090); the local app and desktop never use it
       __POSTHOG_KEY__: JSON.stringify(buildMode === "web" ? posthogKey(process.env.MUTABA3A_POSTHOG_KEY) : ""),
+      // The landing's error reports (MUT-150); desktop always gets the "off" values
+      ...sentry.define,
     },
   plugins: [
     react(),
     ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), domainMoveRedirects(), hostedOfferDevRoute()] : []),
+    ...sentry.plugins,
     VitePWA({
       disable: isTauri, // Disable PWA for desktop builds
       registerType: "autoUpdate",
@@ -642,6 +702,8 @@ export default defineConfig(({ mode }) => {
   build: {
     target: "esnext",
     outDir: isTauri ? "dist-desktop" : "dist-web",
+    // Maps only for the upload, and no sourceMappingURL comment (MUT-150 AC5); off without a DSN and token
+    ...(sentry.sourcemap ? { sourcemap: sentry.sourcemap } : {}),
     rollupOptions: {
       output: {
         manualChunks: {
@@ -652,6 +714,8 @@ export default defineConfig(({ mode }) => {
           "vendor-db": ["dexie"],
           // Desktop never imports posthog-js; naming it there would emit the chunk anyway
           ...(isTauri ? {} : { [POSTHOG_CHUNK]: ["posthog-js"] }),
+          // Named only when the landing reports: naming it would emit the chunk even unimported (eng O2)
+          ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { [SENTRY_CHUNK]: ["@sentry/browser"] } : {}),
         },
       },
     },
