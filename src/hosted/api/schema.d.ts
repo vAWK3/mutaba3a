@@ -619,6 +619,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close your account (MUT-333)
+         * @description Starts 30 days of grace, then the account and every profile it created are deleted (a business profile shared with a co-owner passes to them; firms and Malafat profiles keep the records, anonymized). Paying Stripe subscriptions end at their period end; past-due ones are cancelled now. Every other session, web and phone, is signed out; this one stays, but until the account is kept it reaches only GET /v1/me, DELETE /v1/me/closure and sign-out (403 ACCOUNT_CLOSING). A wrong password counts toward the sign-in lockout.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CloseAccountRequest"];
+                };
+            };
+            responses: {
+                /** @description Closing */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CloseAccountResponse"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG (wrong password, or the account is locked), ACCOUNT_CLOSING, CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe could not be reached; nothing changed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: the account has a Stripe customer and this server has no Stripe */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Keep your account (MUT-333)
+         * @description Ends a closing within its 30 days: nothing was deleted, and the Stripe subscriptions the closing set to end are turned back on. `billingNeedsAttention` is true when one could not be (open Billing). Idempotent: an account that is not closing answers the same.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Kept */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["KeepAccountResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account-setup/check": {
         parameters: {
             query?: never;
@@ -14156,6 +14267,124 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/accounts/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hourly hard delete of closed accounts (Cloud Scheduler)
+         * @description Deletes every account whose 30 days of grace have run out: its Stripe customers, every profile it created (a business profile with a co-owner passes to them instead), its records and its files, and every row naming the person; its records on profiles it belonged to stay, anonymized. At most 25 accounts a run, about 200 s; `incomplete` means the next run continues. A person Stripe fails for is retried next run. Answers counts only; always 200 once it ran.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountPurgeSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/accounts/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the hard delete of closed accounts now, or see what it would do
+         * @description Deletes every account whose 30 days of grace have run out: its Stripe customers, every profile it created (a business profile with a co-owner passes to them instead), its records and its files, and every row naming the person; its records on profiles it belonged to stay, anonymized. At most 25 accounts a run, about 200 s; `incomplete` means the next run continues. A person Stripe fails for is retried next run. One row per due account. `dryRun` claims, deletes and calls nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountPurgeRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountPurgeRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/email/resend/webhook": {
         parameters: {
             query?: never;
@@ -14279,6 +14508,7 @@ export interface components {
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
                 trialPrompt: components["schemas"]["TrialPrompt"];
                 status: components["schemas"]["UserStatus"];
+                closure: components["schemas"]["AccountClosure"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -14317,6 +14547,15 @@ export interface components {
         };
         /** @enum {string} */
         UserStatus: "ACTIVE" | "DISABLED" | "PENDING_REVIEW";
+        AccountClosure: {
+            /** Format: date-time */
+            requestedAt: string;
+            /**
+             * Format: date-time
+             * @description From this instant the account no longer signs in; the hourly job deletes it within the hour
+             */
+            deleteAfter: string;
+        } | null;
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -14381,7 +14620,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -14416,6 +14655,21 @@ export interface components {
         NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
+        };
+        CloseAccountResponse: {
+            closure: components["schemas"]["AccountClosure"];
+            /** @description Stripe subscriptions set to end at their period end (Keep my account turns them back on) */
+            subscriptionsEnded: number;
+            /** @description Past-due or unpaid subscriptions cancelled at once */
+            subscriptionsCancelled: number;
+        };
+        CloseAccountRequest: {
+            /** @description The account password, typed again */
+            password: string;
+        };
+        KeepAccountResponse: {
+            /** @description A subscription the closing ended could not be turned back on: open Billing */
+            billingNeedsAttention: boolean;
         };
         SetupLinkCheckResponse: {
             /** @enum {string} */
@@ -15378,8 +15632,11 @@ export interface components {
             /** Format: uuid */
             projectId: string | null;
             notes: string | null;
-            /** Format: uuid */
-            createdByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            createdByUserId: string | null;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -15455,8 +15712,11 @@ export interface components {
             profileId: string;
             /** Format: date-time */
             createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            createdByUserId: string | null;
             expense: components["schemas"]["Expense"] & {
                 /** @description READY receipts attached */
                 receiptCount: number;
@@ -15494,8 +15754,11 @@ export interface components {
             profileId: string;
             /** Format: date-time */
             createdAt: string;
-            /** Format: uuid */
-            createdByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            createdByUserId: string | null;
             conversion: components["schemas"]["Conversion"];
         };
         Conversion: {
@@ -15510,8 +15773,11 @@ export interface components {
             toAmount: string;
             toCurrency: components["schemas"]["Currency"];
             notes: string | null;
-            /** Format: uuid */
-            createdByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            createdByUserId: string | null;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -16088,8 +16354,11 @@ export interface components {
             /** Format: date-time */
             approvedAt: string | null;
             version: number;
-            /** Format: uuid */
-            uploadedByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            uploadedByUserId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -16347,8 +16616,11 @@ export interface components {
                 count: number;
             }[];
             memberCount: number;
-            /** Format: uuid */
-            createdByUserId: string;
+            /**
+             * Format: uuid
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             */
+            createdByUserId: string | null;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -17085,6 +17357,49 @@ export interface components {
             outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
         };
         TrialMailRequest: {
+            dryRun: boolean;
+        };
+        AccountPurgeSummary: {
+            dryRun: boolean;
+            /** @description Accounts in their 30 days of grace or due */
+            closing: number;
+            /** @description Accounts whose grace has run out */
+            due: number;
+            /** @description Deleted by this run (in a dry run, would be) */
+            purged: number;
+            /** @description Due but left for the next run: Stripe failed or is not configured */
+            skipped: number;
+            failed: number;
+            /** @description Deleted profiles' bucket prefixes emptied by this run */
+            storagePrefixesEmptied: number;
+            /** @description Bucket prefixes still waiting to be emptied */
+            storagePending: number;
+            /** @description The time budget or the per-run cap ran out; the next run continues */
+            incomplete: boolean;
+        };
+        AccountPurgeRun: {
+            summary: components["schemas"]["AccountPurgeSummary"];
+            rows: components["schemas"]["AccountPurgeRow"][];
+        };
+        AccountPurgeRow: {
+            /** Format: uuid */
+            userId: string;
+            /** @enum {string} */
+            outcome: "purged" | "would-purge" | "skipped" | "failed";
+            /** @enum {string|null} */
+            reason: "stripe-failed" | "stripe-unavailable" | "not-due" | "error" | null;
+            deleteProfileIds: string[];
+            transfers: {
+                /** Format: uuid */
+                organizationId: string;
+                /** Format: uuid */
+                toUserId: string;
+            }[];
+            leaveProfileIds: string[];
+            /** @description Stripe customers deleted (in a dry run, mirrored ones found) */
+            stripeCustomers: number;
+        };
+        AccountPurgeRequest: {
             dryRun: boolean;
         };
         EmailWebhookResponse: {

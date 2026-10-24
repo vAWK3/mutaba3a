@@ -354,6 +354,8 @@
 .hp-menu-item:hover, .hp-menu-item:focus-visible { background: var(--surface-2); outline: none; }
 /* Android "coming soon" (MUT-261): named, not actionable — no hover/focus highlight. */
 .hp-menu-item--soon, .hp-menu-item--soon:hover, .hp-menu-item--soon:focus-visible { color: var(--muted); cursor: default; background: transparent; }
+/* MUT-333: Close my account, set apart as the one menu item that ends the account */
+.hp-menu-item--danger { color: var(--error); }
 
 /* ---------- Pages ---------- */
 
@@ -831,3 +833,13 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-carry-over-report summary { cursor: pointer; font-weight: var(--weight-medium); }
 .hp-carry-over-report ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1-5); }
 .hp-carry-over-report li { display: flex; justify-content: space-between; gap: var(--space-3); }
+
+/* MUT-333: the Close my account drawer. Logical properties only, so RTL needs nothing more; nothing wider than the
+   drawer at 375 px (the address wraps anywhere). */
+.hp-close-account { display: grid; gap: var(--space-4); }
+.hp-close-account section { display: grid; gap: var(--space-2); }
+.hp-close-account .hp-section-title { margin: 0; }
+.hp-close-list { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
+.hp-close-download { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.hp-close-download p { margin: 0; flex: 1 1 12rem; }
+.hp-close-who { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }

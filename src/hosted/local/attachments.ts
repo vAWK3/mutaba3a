@@ -38,6 +38,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     this.staged.add(key);
   }
 
+  /** The interface's, for MUT-333's hard delete; local mode never registers it. Staged like `remove`. */
+  async removePrefix(prefix: string): Promise<void> {
+    for (const key of await this.blobs.keys()) if (key.startsWith(`${prefix}/`)) this.staged.add(key);
+  }
+
   /** The interface's, for the hosted export (MUT-325); local mode never registers those routes. */
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const file = await this.blobs.get(key);
@@ -86,6 +91,11 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
 
   async remove(key: string): Promise<void> {
     this.stored.delete(key);
+  }
+
+  /** The interface's, for MUT-333's hard delete; the carry-over never calls it. */
+  async removePrefix(prefix: string): Promise<void> {
+    for (const key of [...this.stored.keys()]) if (key.startsWith(`${prefix}/`)) this.stored.delete(key);
   }
 
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {

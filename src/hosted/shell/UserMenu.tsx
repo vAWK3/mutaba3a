@@ -56,6 +56,11 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
     accountDrawers.openBilling();
   }
 
+  function openCloseAccount() {
+    close(false);
+    accountDrawers.openCloseAccount();
+  }
+
   function goToSignIn() {
     close(false);
     void navigate({ to: '/sign-in' });
@@ -116,6 +121,10 @@ export function UserMenu({ profile = null }: { profile?: HostedProfile | null })
               <MalafatMenuItems profile={profile} />
               {/* MUT-155: the anonymous-usage switch; no telemetry signed out (brief §10) */}
               <UsageMenuItem />
+              {/* MUT-333: the last account item, set apart: it can't be undone after 30 days */}
+              <button type="button" role="menuitem" className="hp-menu-item hp-menu-item--danger press" onClick={openCloseAccount}>
+                {t('hosted.closeAccount.menu')}
+              </button>
             </>
           )}
           {/* MUT-324: the terms, in either mode; before the app downloads, which stay last */}

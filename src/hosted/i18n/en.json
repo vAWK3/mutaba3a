@@ -79,6 +79,35 @@
         "wrongCurrent": "Current password is wrong."
       }
     },
+    "closeAccount": {
+      "menu": "Close my account",
+      "title": "Close my account",
+      "lead": "Your account and everything in it will be deleted 30 days from now.",
+      "deletesHeading": "Deleted",
+      "deletesProfiles": "These profiles, with every record and receipt in them: {names}.",
+      "deletesSessions": "Your sign-ins on the web and on your phones. You'll stay signed in here only to keep your account.",
+      "deletesSubscription": "Any subscription you pay for ends at the end of the period you paid for. You won't be charged again.",
+      "staysHeading": "Kept",
+      "passesOn": "{profile} passes to {people}, with everything in it.",
+      "leaves": "{profile} keeps the records you added, without your name. Only your access ends.",
+      "downloadLead": "Want a copy first? Download your records before you close.",
+      "download": "Download my records",
+      "grace": "For 30 days you can sign in and keep your account. After that it can't be recovered, and the copies in our backups expire two weeks later.",
+      "closingAs": "Closing {email}",
+      "password": "Your password",
+      "passwordHint": "Type your password to confirm.",
+      "submit": "Close my account",
+      "submitting": "Closing…",
+      "wrongPassword": "That password is wrong.",
+      "stripeDown": "We couldn't reach our payment provider, so nothing changed. Try again in a minute.",
+      "closingTitle": "Your account is closing",
+      "closingBody": "We'll delete your account and its records on {date}.",
+      "closingNothingYet": "Nothing has been deleted yet. Until then you can keep your account.",
+      "keep": "Keep my account",
+      "keeping": "Keeping…",
+      "kept": "Your account stays open.",
+      "keptBilling": "Your account stays open. Your subscription is still set to end: open Billing to keep it."
+    },
     "setup": {
       "checking": "Checking your link",
       "title": {

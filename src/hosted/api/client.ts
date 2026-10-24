@@ -400,6 +400,10 @@ export const api = {
   signOut: () => request<void>('DELETE', '/v1/sessions/current'),
   /** MUT-237: revokes every other session, web and device; this one stays signed in. */
   changePassword: (body: Schemas['ChangePasswordRequest']) => request<void>('POST', '/v1/me/password', { body }),
+  /** MUT-333: starts 30 days of grace; every other session is signed out, this one sees only the closing page. */
+  closeAccount: (body: Schemas['CloseAccountRequest']) => request<Schemas['CloseAccountResponse']>('POST', '/v1/me/closure', { body }),
+  /** MUT-333: Keep my account, within the grace. Idempotent. */
+  keepAccount: () => request<Schemas['KeepAccountResponse']>('DELETE', '/v1/me/closure'),
   /** MUT-235/236: the setup-link token travels in the body only, never in a URL. */
   checkSetupLink: (token: string, signal?: AbortSignal) =>
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
