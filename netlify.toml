@@ -1,6 +1,8 @@
 [build]
   publish = "dist-web"
-  command = "npm run build:web"
+  # MUT-150 (TD-084): the bundle guard runs on every Netlify build, so the landing's
+  # Sentry chunks can never reach the local app's files or its service worker
+  command = "npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web"
 
 # Stable download URLs - redirect to GitHub Releases latest artifacts
 [[redirects]]

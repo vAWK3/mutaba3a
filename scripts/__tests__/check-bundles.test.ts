@@ -27,7 +27,13 @@ import {
   sentryLeaks,
   sentrySecrets,
   sourceMaps,
+  LANDING_SENTRY_CHUNK,
+  PATTERN_SCOPED_ORIGINS,
+  sentryOutsideLandingChunks,
+  sentryPrecached,
 } from '../bundle-rules';
+import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-ingest';
+import { SENTRY_CHUNK } from '../../vite.config';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import reviewed from '../bundle-origins.json';
@@ -399,5 +405,58 @@ describe('Sentry stays in the portal lazy chunk (MUT-149, AC1, AC4, AC8)', () =>
 
   it("reads a DSN's host as its origin, never its public key", () => {
     expect([...extractOrigins('const d="https://0123456789abcdef0123456789abcdef@o1.ingest.de.sentry.io/2"')]).toEqual(['https://o1.ingest.de.sentry.io']);
+  });
+});
+
+describe('Sentry on the landing stays in its lazy chunks (MUT-150, ADR-024)', () => {
+  const files: Record<string, string> = {
+    'index.html': '<script type="module" crossorigin src="/assets/index-a1.js"></script>',
+    'assets/index-a1.js': 'import"./vendor-react-b2.js";const s=()=>import("./landingSentry-c3.js");',
+    'assets/vendor-react-b2.js': 'export const j=1;',
+    'assets/landingSentry-c3.js': `import"./vendor-sentry-d4.js";const d="https://0123@${new URL(SENTRY_INGEST_ORIGIN).host}/3";`,
+    'assets/vendor-sentry-d4.js': 'const c=globalThis.__SENTRY__;const n="sentry.javascript.browser";const h="https://docs.sentry.io/x";',
+  };
+  const paths = Object.keys(files).filter((path) => path.endsWith('.js'));
+  const reader = (all: Record<string, string>) => (path: string) => all[path] ?? '';
+
+  it.each([`assets/${SENTRY_CHUNK}-Ab_12.js`, 'assets/landingSentry-c3.js'])('knows %s as a landing Sentry chunk', (path) => {
+    expect(LANDING_SENTRY_CHUNK.test(path)).toBe(true);
+  });
+
+  it.each(['assets/index-a1.js', 'assets/LandingPage-e5.js', 'assets/portalSentry-c3.js', 'assets/landingSentry-c3.js.map', 'landingSentry-c3.js'])(
+    'does not take %s for one',
+    (path) => {
+      expect(LANDING_SENTRY_CHUNK.test(path)).toBe(false);
+    },
+  );
+
+  it('passes when the SDK lives only in the landing chunks, out of the entry graph', () => {
+    expect(sentryOutsideLandingChunks(paths, reader(files))).toEqual([]);
+    expect(sentryInEntryGraph(files['index.html'], reader(files))).toEqual([]);
+  });
+
+  it('fails on the SDK in any other dist-web file: the local app shares them', () => {
+    const leaky = { ...files, 'assets/vendor-react-b2.js': 'const n="sentry.javascript.browser";' };
+    expect(sentryOutsideLandingChunks(paths, reader(leaky))).toEqual(['assets/vendor-react-b2.js']);
+  });
+
+  it('names each precached file that carries Sentry, so the local app never stores it', () => {
+    const sw = 'precacheAndRoute([{url:"index.html",revision:"1"},{url:"assets/index-a1.js",revision:null},{url:"assets/vendor-sentry-d4.js",revision:null}])';
+    expect(sentryPrecached(sw, reader(files))).toEqual(['assets/vendor-sentry-d4.js']);
+    expect(sentryPrecached(sw.replace(',{url:"assets/vendor-sentry-d4.js",revision:null}', ''), reader(files))).toEqual([]);
+  });
+
+  it('allows the ingest host and the SDK\'s docs link inside the landing chunks only (eng O1)', () => {
+    const sentryOrigins = [SENTRY_INGEST_ORIGIN, 'https://docs.sentry.io'];
+    expect(originsNeedingReview('assets/landingSentry-c3.js', sentryOrigins)).toEqual([]);
+    expect(originsNeedingReview(`assets/${SENTRY_CHUNK}-d4.js`, sentryOrigins)).toEqual([]);
+    expect(originsNeedingReview('assets/index-a1.js', sentryOrigins)).toEqual(sentryOrigins);
+    expect(originsNeedingReview('assets/landingSentry-c3.js', ['https://evil.example'])).toEqual(['https://evil.example']);
+  });
+
+  it('keeps those origins off the local bundle-wide allowlist', () => {
+    expect(PATTERN_SCOPED_ORIGINS.flatMap((scope) => scope.origins)).toEqual([SENTRY_INGEST_ORIGIN, 'https://docs.sentry.io']);
+    expect(reviewed.local).not.toContain(SENTRY_INGEST_ORIGIN);
+    expect(reviewed.local).not.toContain('https://docs.sentry.io');
   });
 });
