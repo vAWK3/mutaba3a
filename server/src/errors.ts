@@ -44,6 +44,8 @@ export const ERROR_CODES = {
    * DELETE /v1/me/closure (keep the account) and sign-out. `details`: { deleteAfter }. Never for an API key.
    */
   ACCOUNT_CLOSING: 403,
+  /** MUT-333 (R18): a profile the person created has other members and no co-owner; closing would delete their work. */
+  ACCOUNT_CLOSE_BLOCKED: 409,
   /**
    * MUT-361 (ADR-181): a session asked a READ_ONLY or LOCKED profile (or a person whose profiles all are) for something
    * its plan no longer allows. `details`: { profileId (null for a person-level refusal), state READ_ONLY|LOCKED,

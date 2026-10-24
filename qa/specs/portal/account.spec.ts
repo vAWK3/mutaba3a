@@ -99,6 +99,8 @@ test('You › App ends with Get the app: the iPhone and Android links name the p
 const PHONE = { width: 375, height: 812 };
 const PARTNER = { userId: '11111111-1111-4111-8111-111111111111', name: 'Lina Saleh', email: 'lina@studio.ps', creator: false };
 const ME_OWNER = { userId: '99999999-9999-4999-8999-999999999999', name: 'Nour Haddad', email: 'nour@office.ps', creator: true };
+/** Names in a sentence are bidi-isolated (FSI…PDI). */
+const iso = (text: string) => `\u2068${text}\u2069`;
 const closingProfiles = () => [
   office(OFFICE_A, 'Nour Studio'),
   { ...office(OFFICE_B, 'Haddad & Saleh'), owners: [ME_OWNER, PARTNER] },
@@ -124,9 +126,9 @@ test('Close my account from You › Account, with the password; the closing page
   });
 
   await step('Read what is deleted and what is kept, and that Download my records is offered first', async () => {
-    await expect(dialog.getByText('These profiles, with every record and receipt in them: Nour Studio.')).toBeVisible();
-    await expect(dialog.getByText('Haddad & Saleh passes to Lina Saleh, with everything in it.')).toBeVisible();
-    await expect(dialog.getByText('Haddad & Partners keeps the records you added, without your name. Only your access ends.')).toBeVisible();
+    await expect(dialog.getByText(`These profiles, with every record and receipt in them: ${iso('Nour Studio')}.`)).toBeVisible();
+    await expect(dialog.getByText(`${iso('Haddad & Saleh')} passes to ${iso('Lina Saleh')}, with everything in it.`)).toBeVisible();
+    await expect(dialog.getByText(`${iso('Haddad & Partners')} keeps the records you added, without your name. Only your access ends.`)).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Download my records' })).toBeVisible();
   });
 
@@ -195,7 +197,7 @@ test('Close my account and the closing page read right to left in Arabic on a 37
     const address = dialog.getByText('nour@office.ps', { exact: true });
     await expect(address).toBeVisible();
     expect(await address.evaluate((el) => el.closest('bdi')?.getAttribute('dir'))).toBe('ltr');
-    await expect(dialog.getByText('ينتقل Haddad & Saleh إلى Lina Saleh مع كل ما فيه.')).toBeVisible();
+    await expect(dialog.getByText(`ينتقل ${iso('Haddad & Saleh')} إلى ${iso('Lina Saleh')} مع كل ما فيه.`)).toBeVisible();
     expect(await noSideScroll()).toBe(true);
   });
 

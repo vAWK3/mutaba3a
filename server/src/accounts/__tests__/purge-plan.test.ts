@@ -43,12 +43,12 @@ describe('transferTargetOf (R10)', () => {
 describe('decidePurge (D6, R10)', () => {
   it('deletes the personal profile and a business profile nobody else owns', () => {
     const decision = decidePurge(ME, [personal, business('p-solo')], () => []);
-    expect(decision).toEqual({ deleteProfileIds: ['p-personal', 'p-solo'], transfers: [], leaveProfileIds: [] });
+    expect(decision).toEqual({ deleteProfileIds: ['p-personal', 'p-solo'], transfers: [], leaveProfileIds: [], blockedProfileIds: [] });
   });
 
   it('never deletes a business profile with a co-owner: it passes to them', () => {
     const decision = decidePurge(ME, [business('p-shared')], (id) => (id === 'p-shared' ? [candidate('partner')] : []));
-    expect(decision).toEqual({ deleteProfileIds: [], transfers: [{ organizationId: 'p-shared', toUserId: 'partner' }], leaveProfileIds: [] });
+    expect(decision).toEqual({ deleteProfileIds: [], transfers: [{ organizationId: 'p-shared', toUserId: 'partner' }], leaveProfileIds: [], blockedProfileIds: [] });
   });
 
   it('deletes the personal profile even with another member, since it is never co-owned', () => {
@@ -60,13 +60,13 @@ describe('decidePurge (D6, R10)', () => {
     const decision = decidePurge(ME, [firm('p-firm'), someoneElses('p-theirs')], () => {
       throw new Error('never asked about a profile the person did not create');
     });
-    expect(decision).toEqual({ deleteProfileIds: [], transfers: [], leaveProfileIds: ['p-firm', 'p-theirs'] });
+    expect(decision).toEqual({ deleteProfileIds: [], transfers: [], leaveProfileIds: ['p-firm', 'p-theirs'], blockedProfileIds: [] });
   });
 });
 
 describe('purgeAuditRows (D8)', () => {
   it('writes a tombstone on every surviving profile and a transfer row, naming no email or name', () => {
-    const rows = purgeAuditRows(ME, { deleteProfileIds: ['p-gone'], transfers: [{ organizationId: 'p-shared', toUserId: 'partner' }], leaveProfileIds: ['p-firm'] });
+    const rows = purgeAuditRows(ME, { deleteProfileIds: ['p-gone'], transfers: [{ organizationId: 'p-shared', toUserId: 'partner' }], leaveProfileIds: ['p-firm'], blockedProfileIds: [] });
     expect(rows.map((r) => [r.organizationId, r.action])).toEqual([
       ['p-shared', 'organization.owner_transferred'],
       ['p-firm', 'user.deleted'],

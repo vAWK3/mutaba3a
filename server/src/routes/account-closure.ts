@@ -9,7 +9,8 @@ import type { Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { StateConflict } from '../repositories/memory.js';
-import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import { decidePurge, type PurgeCandidate } from '../accounts/purge-plan.js';
 import { CloseAccountRequestSchema, CloseAccountResponseSchema, ErrorEnvelopeSchema, KeepAccountResponseSchema } from '../schemas.js';
 import { signInLinkOf } from './account-setup.js';
 
@@ -18,9 +19,10 @@ import { signInLinkOf } from './account-setup.js';
  * X-Mutaba3a-Profile), `open` in the lapse gate (a locked person can close), for a cookie and a device session alike.
  *
  *   POST /v1/me/closure {password}
- *     password ─► Stripe: expire open checkouts, end paying subscriptions at the period end, cancel failing ones now
- *              ─► closure + other sessions revoked (one transaction) ─► mail "deleted on <date>"
- *     A Stripe failure reverts what this close changed in Stripe: 502, nothing changed (R6).
+ *     password ─► no created profile others belong to without a co-owner (else 409 ACCOUNT_CLOSE_BLOCKED, R18)
+ *              ─► Stripe: end paying subscriptions at the period end (undoable; a failure reverts it: 502, R6/R20)
+ *              ─► closure + other sessions revoked (one transaction)
+ *              ─► Stripe: cancel failing subscriptions now, expire open checkouts (after the commit, R20) ─► mail
  *   DELETE /v1/me/closure
  *     closure cleared (only before the deadline and the purge's claim) ─► the subscriptions it ended turned back on
  */
@@ -59,6 +61,7 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       responses: {
         200: { description: 'Closing', content: { 'application/json': { schema: CloseAccountResponseSchema } } },
         403: errorResponse('CURRENT_PASSWORD_WRONG (wrong password, or the account is locked), ACCOUNT_CLOSING, CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
+        409: errorResponse('ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them'),
         422: errorResponse('VALIDATION_FAILED'),
         502: errorResponse('STRIPE_UNAVAILABLE: Stripe could not be reached; nothing changed'),
         503: errorResponse('BILLING_NOT_CONFIGURED: the account has a Stripe customer and this server has no Stripe'),
@@ -70,22 +73,25 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       const now = c.get('now')();
       await verifyCurrentPassword(options, user, password, now, c.get('requestId'));
 
+      // R18: a profile they created that others belong to, with no co-owner, would take those people's work with it.
+      const blocked = await blockingProfilesOf(store, user.id);
+      if (blocked.length > 0) {
+        throw new ApiError('ACCOUNT_CLOSE_BLOCKED', 'A profile you created has other members and no co-owner: add a co-owner or remove them first', { profiles: blocked });
+      }
+
       const customers = await customersOf(store, stripe, user);
       if (customers.length > 0 && !stripe) throw new ApiError('BILLING_NOT_CONFIGURED', 'This account has a Stripe subscription and Stripe is not configured on this server');
+      // R20: first only what can be undone (end at the period end); a failure reverts it and nothing changed.
       const ended: string[] = [];
-      let cancelled = 0;
+      const cancelLater: string[] = [];
       try {
         for (const customer of customers) {
-          await stripe!.expireOpenCheckouts(customer);
           const actions = subscriptionActionsAtClose(await stripe!.liveSubscriptionsOf(customer));
           for (const id of actions.endAtPeriodEnd) {
             await stripe!.setCancelAtPeriodEnd(id, true);
             ended.push(id);
           }
-          for (const id of actions.cancelNow) {
-            await stripe!.cancelNow(id);
-            cancelled++;
-          }
+          cancelLater.push(...actions.cancelNow);
         }
       } catch (err) {
         await restartSubscriptions(stripe, ended, logger, user.id);
@@ -104,13 +110,22 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
           audit: await personAudit(store, user.id, 'user.close_requested', c.get('requestId')),
         });
       } catch (err) {
+        if (err instanceof StateConflict && err.reason === 'ALREADY_CLOSING') {
+          // R21: a second close lost the race; the first one's closure owns the subscriptions it recorded.
+          const existing = (await store.users.getById(user.id))?.closure;
+          await restartSubscriptions(stripe, ended.filter((id) => !existing?.endedSubscriptionIds.includes(id)), logger, user.id);
+          throw closingRefusal(existing ?? { deleteAfter: closureDeadline(now) });
+        }
         await restartSubscriptions(stripe, ended, logger, user.id);
-        if (err instanceof StateConflict && err.reason === 'ALREADY_CLOSING') throw closingRefusal((await store.users.getById(user.id))?.closure ?? { deleteAfter: closureDeadline(now) });
         if (err instanceof StateConflict) throw new ApiError('SESSION_EXPIRED', 'This session ended; sign in again');
         throw err;
       }
       const closure = closed?.closure;
       if (!closed || !closure) throw new ApiError('SESSION_EXPIRED', 'This session ended; sign in again');
+
+      // R20: what can't be undone runs only once the closing is committed: failing subscriptions cancelled now (R7),
+      // open checkouts expired (R5). A failure here is the operator's, never the person's answer.
+      const cancelled = await afterCommit(stripe, customers, cancelLater, logger, user.id);
 
       // After the commit, and never able to change this answer (the password notice's rule).
       try {
@@ -166,6 +181,47 @@ async function customersOf(store: LedgerStore, stripe: AccountStripeGateway | nu
     throw Object.assign(new ApiError('STRIPE_UNAVAILABLE', 'Stripe could not be reached, so your account was not closed. Try again in a minute'), { cause: err });
   }) : [];
   return [...new Set([...(mirrored ? [mirrored] : []), ...found])];
+}
+
+/** R20: after the commit; returns how many failing subscriptions were cancelled. */
+async function afterCommit(stripe: AccountStripeGateway | null, customers: readonly string[], cancelNow: readonly string[], logger: Logger, userId: string): Promise<number> {
+  if (!stripe) return 0;
+  let cancelled = 0;
+  for (const id of cancelNow) {
+    try {
+      await stripe.cancelNow(id);
+      cancelled++;
+    } catch (err) {
+      logger.error({ err, userId, subscriptionId: id }, 'account closure needs the operator: a past-due subscription could not be cancelled');
+    }
+  }
+  for (const customer of customers) {
+    try {
+      await stripe.expireOpenCheckouts(customer);
+    } catch (err) {
+      logger.error({ err, userId, customer }, 'account closure needs the operator: open checkouts could not be expired');
+    }
+  }
+  return cancelled;
+}
+
+/** R18: the person's created profiles that others belong to with no co-owner to pass them to (purge-plan.ts). */
+async function blockingProfilesOf(store: LedgerStore, userId: string): Promise<Array<{ id: string; name: string }>> {
+  const memberships = await store.memberships.listByUser(userId);
+  const profiles = (await Promise.all(memberships.map((m) => store.organizations.getById(m.organizationId)))).filter((o): o is Organization => o !== null);
+  const others = new Map<string, PurgeCandidate[]>();
+  for (const profile of profiles) {
+    if (profile.ownerUserId !== userId && profile.personalOwnerUserId !== userId) continue;
+    const members = (await store.memberships.listByOrganization(profile.id)).filter((m) => m.userId !== userId);
+    const candidates: PurgeCandidate[] = [];
+    for (const m of members) {
+      const person = await store.users.getById(m.userId);
+      if (person) candidates.push({ userId: m.userId, role: m.role, status: person.status, deleteAfter: person.closure?.deleteAfter ?? null, membershipCreatedAt: m.createdAt });
+    }
+    others.set(profile.id, candidates);
+  }
+  const { blockedProfileIds } = decidePurge(userId, profiles, (id) => others.get(id) ?? []);
+  return profiles.filter((p) => blockedProfileIds.includes(p.id)).map((p) => ({ id: p.id, name: p.name }));
 }
 
 /** Turns back on what a close ended (R6 compensation, and Keep my account). Returns how many could not be. */

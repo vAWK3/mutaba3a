@@ -210,6 +210,34 @@ export function describeLedgerStoreAccountClosureContract(name: string, makeStor
       expect(await store.users.getById(partner.user.id)).not.toBeNull();
     });
 
+    it('never purges a profile the person created that others belong to with no co-owner (R18): nothing is written', async () => {
+      const store = await makeStore();
+      const { user, session, personalOrganization } = await person(store);
+      const bookkeeper = await person(store);
+      const owned = await business(store, user.id);
+      await store.organizations.setFirm(owned.id, { enabled: true, ownerUserIds: [] }, T0, { actorId: null, requestId: null });
+      expect((await store.memberships.grant(bookkeeper.user.id, owned.id, T0)).membership.role).toBe('BOOKKEEPER');
+      await expense(store, owned.id, bookkeeper.user.id);
+      await close(store, user, session.id);
+      expect((await store.accountPurge.planOf(user.id))?.blockedProfileIds).toEqual([owned.id]);
+      await store.accountPurge.claim(user.id, DUE);
+      await expect(store.accountPurge.purge(user.id, DUE)).rejects.toBeInstanceOf(StateConflict);
+      expect(await store.users.getById(user.id)).not.toBeNull();
+      expect(await store.organizations.getById(owned.id)).not.toBeNull();
+      expect(await store.organizations.getById(personalOrganization.id)).not.toBeNull();
+    });
+
+    it('saveAccount onlyIfExists never creates an account (R12), and still updates one that exists', async () => {
+      const store = await makeStore();
+      const { user } = await person(store);
+      const customer = `cus_${unique()}`;
+      await expect(store.billing.saveAccount({ onlyIfExists: true, stripeCustomerId: customer, userId: null, country: null, currency: 'ILS', at: T0, linkAudit: [] })).rejects.toMatchObject({ reason: 'GONE' });
+      expect(await store.billing.getAccount(customer)).toBeNull();
+      await store.billing.saveAccount({ stripeCustomerId: customer, userId: user.id, country: 'IL', currency: 'ILS', at: T0, linkAudit: [] });
+      const updated = await store.billing.saveAccount({ onlyIfExists: true, stripeCustomerId: customer, userId: null, country: 'JO', currency: 'ILS', at: plus(DAY), linkAudit: [] });
+      expect(updated.account).toMatchObject({ userId: user.id, country: 'JO' });
+    });
+
     it('empties the storage queue one profile at a time', async () => {
       const store = await makeStore();
       const { user, session } = await person(store);

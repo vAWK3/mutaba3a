@@ -48,7 +48,7 @@ describe('runAccountPurge (MUT-333)', () => {
 
     const { summary, rows } = await run({ dryRun: true });
     expect(summary).toMatchObject({ dryRun: true, due: 1, purged: 1, skipped: 0, failed: 0, storagePrefixesEmptied: 0 });
-    expect(rows).toEqual([{ userId: user.id, outcome: 'would-purge', reason: null, deleteProfileIds: [personalId], transfers: [], leaveProfileIds: [], stripeCustomers: 0 }]);
+    expect(rows).toEqual([{ userId: user.id, outcome: 'would-purge', reason: null, deleteProfileIds: [personalId], transfers: [], leaveProfileIds: [], blockedProfileIds: [], stripeCustomers: 0 }]);
     expect(await store.users.getById(user.id)).not.toBeNull();
     expect((await store.users.getById(user.id))?.closure?.purgeStartedAt).toBeNull();
     expect(stripe.calls).toEqual([]);
@@ -129,6 +129,24 @@ describe('runAccountPurge (MUT-333)', () => {
     let ticks = 0;
     const timed = await runOther({ budgetMs: 1, elapsedMs: () => ticks++ });
     expect(timed.summary).toMatchObject({ purged: 1, incomplete: true });
+  });
+
+  it('skips an account whose created profile others belong to, before touching Stripe (R18)', async () => {
+    const { store, stripe, run } = world();
+    const { user } = await closingPerson(store);
+    const { user: bookkeeper } = await store.users.create({ email: `bk${++seq}@studio.ps`, displayName: 'Omar', passwordHash: null, locale: 'en', personal: { name: 'P', slug: `p-${randomUUID()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: T0 });
+    const created = await store.organizations.createOwned(user.id, { name: 'Firm', slug: `f-${randomUUID()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: T0 }, 6, { actorId: user.id, requestId: null });
+    if (created.kind !== 'created') throw new Error('cap');
+    await store.organizations.setFirm(created.organization.id, { enabled: true, ownerUserIds: [] }, T0, { actorId: null, requestId: null });
+    await store.memberships.grant(bookkeeper.id, created.organization.id, T0);
+    stripe.customer('cus_A', { email: user.email, userId: user.id });
+
+    const { rows } = await run();
+    expect(rows[0]).toMatchObject({ outcome: 'skipped', reason: 'has-members', blockedProfileIds: [created.organization.id] });
+    expect(stripe.customers.get('cus_A')?.deleted).toBe(false);
+    expect(await store.users.getById(user.id)).not.toBeNull();
+    const dry = await run({ dryRun: true });
+    expect(dry.rows[0]).toMatchObject({ outcome: 'skipped', reason: 'has-members' });
   });
 
   it('one person’s failure never stops the run', async () => {

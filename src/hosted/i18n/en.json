@@ -87,7 +87,7 @@
       "deletesHeading": "Deleted",
       "deletesProfiles": "These profiles, with every record and receipt in them: {names}.",
       "deletesSessions": "Your sign-ins on the web and on your phones. You'll stay signed in here only to keep your account.",
-      "deletesSubscription": "Any subscription you pay for ends at the end of the period you paid for. You won't be charged again.",
+      "deletesSubscription": "Any subscription you pay for is cancelled: it won't renew, and it ends for good when your account is deleted.",
       "staysHeading": "Kept",
       "passesOn": "{profile} passes to {people}, with everything in it.",
       "leaves": "{profile} keeps the records you added, without your name. Only your access ends.",
@@ -107,7 +107,9 @@
       "keep": "Keep my account",
       "keeping": "Keeping…",
       "kept": "Your account stays open.",
-      "keptBilling": "Your account stays open. Your subscription is still set to end: open Billing to keep it."
+      "keptBilling": "Your account stays open. Your subscription is still set to end: open Billing to keep it.",
+      "billingMissing": "Your subscription can't be ended from here right now, so nothing changed. Write to us and we'll close your account.",
+      "blocked": "{profiles} has other people working in it and no co-owner. Make one of them a co-owner, or remove them, before you close your account."
     },
     "setup": {
       "checking": "Checking your link",

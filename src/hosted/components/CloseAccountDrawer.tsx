@@ -16,13 +16,15 @@ import { Drawer } from './Drawer';
  */
 
 const FORM_ID = 'hosted-close-account-form';
-type Banner = 'wrongPassword' | 'stripeDown' | 'unreachable';
+type Banner = { kind: 'wrongPassword' | 'stripeDown' | 'billingMissing' | 'unreachable' } | { kind: 'blocked'; profiles: string[] };
 
 export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => void; onDownload: () => void }) {
   const t = useT();
   const { language } = useLanguage();
   const me = useMe();
-  const list = (names: string[]) => new Intl.ListFormat(getLocale(language), { type: 'conjunction' }).format(names);
+  // Names and addresses are isolated (FSI…PDI), so a Latin name keeps its order inside an Arabic sentence.
+  const isolate = (text: string) => `\u2068${text}\u2069`;
+  const list = (names: string[]) => new Intl.ListFormat(getLocale(language), { type: 'conjunction' }).format(names.map(isolate));
   const queryClient = useQueryClient();
   const ids = useId();
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -47,12 +49,17 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
     } catch (error) {
       setPending(false);
       if (error instanceof ApiError && error.code === 'CURRENT_PASSWORD_WRONG') {
-        setBanner('wrongPassword');
+        setBanner({ kind: 'wrongPassword' });
         passwordRef.current?.focus();
-      } else if (error instanceof ApiError && (error.code === 'STRIPE_UNAVAILABLE' || error.code === 'BILLING_NOT_CONFIGURED')) {
-        setBanner('stripeDown');
+      } else if (error instanceof ApiError && error.code === 'ACCOUNT_CLOSE_BLOCKED') {
+        const named = (error.details as { profiles?: Array<{ name?: unknown }> } | null)?.profiles ?? [];
+        setBanner({ kind: 'blocked', profiles: named.map((p) => String(p.name ?? '')) });
+      } else if (error instanceof ApiError && error.code === 'STRIPE_UNAVAILABLE') {
+        setBanner({ kind: 'stripeDown' });
+      } else if (error instanceof ApiError && error.code === 'BILLING_NOT_CONFIGURED') {
+        setBanner({ kind: 'billingMissing' });
       } else {
-        setBanner('unreachable');
+        setBanner({ kind: 'unreachable' });
       }
     }
   }
@@ -82,7 +89,11 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
         {banner && (
           <div className="hp-banner hp-banner-error" role="alert" id={bannerId}>
             <AlertIcon />
-            <span>{t(banner === 'unreachable' ? 'hosted.auth.unreachable' : `hosted.closeAccount.${banner}`)}</span>
+            <span>
+              {banner.kind === 'blocked'
+                ? t('hosted.closeAccount.blocked', { profiles: list(banner.profiles) })
+                : t(banner.kind === 'unreachable' ? 'hosted.auth.unreachable' : `hosted.closeAccount.${banner.kind}`)}
+            </span>
           </div>
         )}
         <p className="hp-setup-lead">{t('hosted.closeAccount.lead')}</p>
@@ -105,10 +116,10 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
             </h3>
             <ul className="hp-close-list">
               {impact.passesOn.map(({ profile, people }) => (
-                <li key={profile}>{t('hosted.closeAccount.passesOn', { profile, people: list(people) })}</li>
+                <li key={profile}>{t('hosted.closeAccount.passesOn', { profile: isolate(profile), people: list(people) })}</li>
               ))}
               {impact.leaves.map((profile) => (
-                <li key={profile}>{t('hosted.closeAccount.leaves', { profile })}</li>
+                <li key={profile}>{t('hosted.closeAccount.leaves', { profile: isolate(profile) })}</li>
               ))}
             </ul>
           </section>

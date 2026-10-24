@@ -8,6 +8,8 @@ import { closeAccountImpactOf, closingDayLabel } from '../../data/closeAccount';
  * AuthGate shows while the account is closing.
  */
 const ME_ID = '99999999-9999-4999-8999-999999999999';
+/** Names in a sentence are bidi-isolated (FSI…PDI). */
+const iso = (text: string) => `\u2068${text}\u2069`;
 const DELETE_AFTER = '2026-12-01T09:00:00.000Z';
 const closing = { requestedAt: '2026-11-01T09:00:00.000Z', deleteAfter: DELETE_AFTER };
 
@@ -60,9 +62,9 @@ describe('Close my account drawer (MUT-333)', () => {
   it('says what goes and what stays for each profile, and whose account it is', async () => {
     portal(`/p/${ORG_A}?closeAccount=true`);
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
-    expect(within(dialog).getByText('These profiles, with every record and receipt in them: Personal.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Haddad Studio passes to Lina Saleh, with everything in it.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Haddad & Partners keeps the records you added, without your name. Only your access ends.')).toBeInTheDocument();
+    expect(within(dialog).getByText(`These profiles, with every record and receipt in them: ${iso('Personal')}.`)).toBeInTheDocument();
+    expect(within(dialog).getByText(`${iso('Haddad Studio')} passes to ${iso('Lina Saleh')}, with everything in it.`)).toBeInTheDocument();
+    expect(within(dialog).getByText(`${iso('Haddad & Partners')} keeps the records you added, without your name. Only your access ends.`)).toBeInTheDocument();
     expect(within(dialog).getByText('nour@firm.ps')).toBeInTheDocument();
   });
 
@@ -88,6 +90,24 @@ describe('Close my account drawer (MUT-333)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Close my account' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('That password is wrong.');
     expect(within(dialog).getByLabelText('Your password')).toHaveValue('not it at all');
+  });
+
+  it('names the profiles that block a close (R18)', async () => {
+    const { user } = portal(`/p/${ORG_A}?closeAccount=true`, {
+      'POST /v1/me/closure': () => fail(409, 'ACCOUNT_CLOSE_BLOCKED', { profiles: [{ id: ORG_B, name: 'Haddad Studio' }] }),
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
+    await user.type(within(dialog).getByLabelText('Your password'), 'the password');
+    await user.click(within(dialog).getByRole('button', { name: 'Close my account' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(`${iso('Haddad Studio')} has other people working in it and no co-owner.`);
+  });
+
+  it('when Stripe isn’t configured, says to write to us', async () => {
+    const { user } = portal(`/p/${ORG_A}?closeAccount=true`, { 'POST /v1/me/closure': () => fail(503, 'BILLING_NOT_CONFIGURED') });
+    const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
+    await user.type(within(dialog).getByLabelText('Your password'), 'the password');
+    await user.click(within(dialog).getByRole('button', { name: 'Close my account' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent("Your subscription can't be ended from here right now, so nothing changed.");
   });
 
   it('when Stripe can’t be reached, says nothing changed', async () => {

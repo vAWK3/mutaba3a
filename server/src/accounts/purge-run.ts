@@ -2,6 +2,7 @@ import { profileStoragePrefix } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import type { AccountStripeGateway } from '../billing/stripe/account-gateway.js';
 import type { Logger } from '../logger.js';
+import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 
 /**
@@ -22,7 +23,7 @@ export const MAX_PURGES_PER_RUN = 25;
 const STORAGE_DRAIN_LIMIT = 100;
 
 export type PurgeRowOutcome = 'purged' | 'would-purge' | 'skipped' | 'failed';
-export type PurgeSkipReason = 'stripe-failed' | 'stripe-unavailable' | 'not-due' | 'error';
+export type PurgeSkipReason = 'stripe-failed' | 'stripe-unavailable' | 'not-due' | 'has-members' | 'error';
 
 export interface PurgeRunRow {
   userId: string;
@@ -31,6 +32,8 @@ export interface PurgeRunRow {
   deleteProfileIds: string[];
   transfers: Array<{ organizationId: string; toUserId: string }>;
   leaveProfileIds: string[];
+  /** R18: profiles the person created that others still belong to, with no co-owner: the account waits. */
+  blockedProfileIds: string[];
   stripeCustomers: number;
 }
 
@@ -98,7 +101,8 @@ export async function runAccountPurge(options: PurgeRunOptions): Promise<{ summa
 async function planRow({ store }: PurgeRunOptions, person: UserRecord): Promise<PurgeRunRow> {
   const plan = await store.accountPurge.planOf(person.id);
   if (!plan) return emptyRow(person.id, 'skipped', 'not-due');
-  return { userId: person.id, outcome: 'would-purge', reason: null, deleteProfileIds: plan.deleteProfileIds, transfers: plan.transfers, leaveProfileIds: plan.leaveProfileIds, stripeCustomers: plan.stripeCustomerIds.length };
+  if (plan.blockedProfileIds.length > 0) return { ...emptyRow(person.id, 'skipped', 'has-members'), blockedProfileIds: plan.blockedProfileIds };
+  return { userId: person.id, outcome: 'would-purge', reason: null, deleteProfileIds: plan.deleteProfileIds, transfers: plan.transfers, leaveProfileIds: plan.leaveProfileIds, blockedProfileIds: [], stripeCustomers: plan.stripeCustomerIds.length };
 }
 
 async function purgeOne(options: PurgeRunOptions, person: UserRecord): Promise<PurgeRunRow> {
@@ -108,6 +112,11 @@ async function purgeOne(options: PurgeRunOptions, person: UserRecord): Promise<P
     if (!claimed) return emptyRow(person.id, 'skipped', 'not-due');
 
     const plan = await store.accountPurge.planOf(person.id);
+    // R18: checked before Stripe, so a blocked account keeps its customer until the operator settles it.
+    if (plan && plan.blockedProfileIds.length > 0) {
+      logger.error({ userId: person.id, reason: 'has-members', profiles: plan.blockedProfileIds }, NEEDS_OPERATOR);
+      return { ...emptyRow(person.id, 'skipped', 'has-members'), blockedProfileIds: plan.blockedProfileIds };
+    }
     let customers = plan?.stripeCustomerIds ?? [];
     if (stripe) {
       try {
@@ -126,8 +135,12 @@ async function purgeOne(options: PurgeRunOptions, person: UserRecord): Promise<P
     // Another run got there first: nothing left of the person to delete.
     if (!outcome) return emptyRow(person.id, 'skipped', 'not-due');
     logger.info({ userId: person.id, deleted: outcome.deleteProfileIds.length, transferred: outcome.transfers.length, left: outcome.leaveProfileIds.length }, 'account purged');
-    return { userId: person.id, outcome: 'purged', reason: null, deleteProfileIds: outcome.deleteProfileIds, transfers: outcome.transfers, leaveProfileIds: outcome.leaveProfileIds, stripeCustomers: customers.length };
+    return { userId: person.id, outcome: 'purged', reason: null, deleteProfileIds: outcome.deleteProfileIds, transfers: outcome.transfers, leaveProfileIds: outcome.leaveProfileIds, blockedProfileIds: [], stripeCustomers: customers.length };
   } catch (err) {
+    if (err instanceof StateConflict && err.reason === 'PROFILE_HAS_MEMBERS') {
+      logger.error({ userId: person.id, reason: 'has-members' }, NEEDS_OPERATOR);
+      return emptyRow(person.id, 'skipped', 'has-members');
+    }
     logger.error({ err, userId: person.id, reason: 'error' }, NEEDS_OPERATOR);
     return emptyRow(person.id, 'failed', 'error');
   }
@@ -158,5 +171,5 @@ async function emptyPrefixes({ store, storage, logger }: PurgeRunOptions, organi
 }
 
 function emptyRow(userId: string, outcome: PurgeRowOutcome, reason: PurgeSkipReason): PurgeRunRow {
-  return { userId, outcome, reason, deleteProfileIds: [], transfers: [], leaveProfileIds: [], stripeCustomers: 0 };
+  return { userId, outcome, reason, deleteProfileIds: [], transfers: [], leaveProfileIds: [], blockedProfileIds: [], stripeCustomers: 0 };
 }

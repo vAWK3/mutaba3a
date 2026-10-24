@@ -2077,6 +2077,7 @@ export class PrismaLedgerStore implements LedgerStore {
             // then reads what the other one wrote, so nothing is decided (or written back) from a stale read.
             await tx.$queryRaw`SELECT id FROM billing_accounts WHERE "stripeCustomerId" = ${input.stripeCustomerId} FOR UPDATE`;
             const existing = await tx.billingAccount.findUnique({ where: { stripeCustomerId: input.stripeCustomerId } });
+            if (!existing && input.onlyIfExists) throw new StateConflict('billing_account', 'GONE');
             let userId = existing?.userId ?? null;
             let conflict: SaveBillingAccountConflict | null = null;
             if (input.userId !== null && input.userId !== userId) {
@@ -2191,7 +2192,11 @@ export class PrismaLedgerStore implements LedgerStore {
         if (!locked?.purgeStartedAt) return null;
         // R12: a webhook saving this person's billing account waits here, and finds it gone afterwards.
         await tx.$queryRaw`SELECT id FROM billing_accounts WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        // R19: the profiles they created, in id order (removeOwner's lock), so a co-owner leaving can't race the transfer.
+        await tx.$queryRaw`SELECT id FROM organizations WHERE "ownerUserId" = ${userId}::uuid OR "personalOwnerUserId" = ${userId}::uuid ORDER BY id FOR NO KEY UPDATE`;
         const decision = await purgeDecisionIn(tx, userId);
+        // R18: never with other people's work in it; the transaction writes nothing.
+        if (decision.blockedProfileIds.length > 0) throw new StateConflict('account', 'PROFILE_HAS_MEMBERS');
         for (const { organizationId, toUserId } of decision.transfers) {
           await tx.organization.update({ where: { id: organizationId }, data: { ownerUserId: toUserId, updatedAt: at } });
         }

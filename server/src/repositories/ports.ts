@@ -1835,6 +1835,11 @@ export interface LinkBillingAccountInput {
 }
 
 export interface SaveBillingAccountInput {
+  /**
+   * MUT-333 (R12): only update an account that already exists; StateConflict('billing_account', 'GONE') otherwise. The
+   * sync sets it for a deleted Stripe customer, so a late webhook can't recreate an account the hard delete removed.
+   */
+  onlyIfExists?: boolean;
   stripeCustomerId: string;
   /** Fills an empty link only (MUT-360 D5): null keeps the existing link, and a different person is a conflict, never a relink. */
   userId: string | null;

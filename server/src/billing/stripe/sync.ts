@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import type { Logger } from '../../logger.js';
 import { ownedProfilesOf, profileOwnerOf } from '../../personal-profile.js';
 import type { AuditEventInput, BillingSyncSource, LedgerStore, SaveBillingAccountConflict, SaveBillingSubscriptionOutcome } from '../../repositories/ports.js';
+import { StateConflict } from '../../repositories/memory.js';
 import { BUSINESS_TAX_NUMBER_KEY } from '../checkout.js';
 import type { CheckoutGateway } from './checkout-gateway.js';
 import { StripeGatewayError, type Fetched, type StripeGateway } from './gateway.js';
@@ -197,14 +198,22 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
 
     const candidate = customer ? (context.linkHint ?? customer.metadata?.['mutaba3a_user_id'] ?? null) : null;
     const linking = await linkAudit(candidate, stripeCustomerId, context.requestId);
-    const saved = await store.billing.saveAccount({
-      stripeCustomerId,
-      userId: candidate,
-      country: customer?.address?.country ?? null,
-      currency: mirror.ok.currency,
-      at: now(),
-      linkAudit: linking.rows,
-    });
+    let saved;
+    try {
+      saved = await store.billing.saveAccount({
+        // MUT-333 (R12): a deleted customer's account is updated, never created again after the hard delete removed it.
+        onlyIfExists: !customer,
+        stripeCustomerId,
+        userId: candidate,
+        country: customer?.address?.country ?? null,
+        currency: mirror.ok.currency,
+        at: now(),
+        linkAudit: linking.rows,
+      });
+    } catch (err) {
+      if (err instanceof StateConflict && err.reason === 'GONE') return { subscriptionId: sub.id, outcome: 'skipped', codes, reachesNobody: true, blocked: false };
+      throw err;
+    }
     if (saved.conflict) codes.push(saved.conflict);
 
     const payer = saved.account.userId;

@@ -1166,10 +1166,11 @@ export const AccountPurgeRowSchema = z
   .object({
     userId: z.string().uuid(),
     outcome: z.enum(['purged', 'would-purge', 'skipped', 'failed']),
-    reason: z.enum(['stripe-failed', 'stripe-unavailable', 'not-due', 'error']).nullable(),
+    reason: z.enum(['stripe-failed', 'stripe-unavailable', 'not-due', 'has-members', 'error']).nullable(),
     deleteProfileIds: z.array(z.string().uuid()),
     transfers: z.array(z.object({ organizationId: z.string().uuid(), toUserId: z.string().uuid() })),
     leaveProfileIds: z.array(z.string().uuid()),
+    blockedProfileIds: z.array(z.string().uuid()).openapi({ description: 'Profiles the person created that others still belong to, with no co-owner: the account waits (has-members)' }),
     stripeCustomers: z.number().int().openapi({ description: 'Stripe customers deleted (in a dry run, mirrored ones found)' }),
   })
   .openapi('AccountPurgeRow');

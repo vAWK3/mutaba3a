@@ -7,7 +7,7 @@ info:
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -534,6 +534,7 @@ components:
                 - ACCOUNT_UNDER_REVIEW
                 - CURRENT_PASSWORD_WRONG
                 - ACCOUNT_CLOSING
+                - ACCOUNT_CLOSE_BLOCKED
                 - SUBSCRIPTION_LAPSED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -7840,6 +7841,7 @@ components:
             - stripe-failed
             - stripe-unavailable
             - not-due
+            - has-members
             - error
             - null
         deleteProfileIds:
@@ -7866,6 +7868,12 @@ components:
           items:
             type: string
             format: uuid
+        blockedProfileIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: "Profiles the person created that others still belong to, with no co-owner: the account waits (has-members)"
         stripeCustomers:
           type: integer
           description: Stripe customers deleted (in a dry run, mirrored ones found)
@@ -7876,6 +7884,7 @@ components:
         - deleteProfileIds
         - transfers
         - leaveProfileIds
+        - blockedProfileIds
         - stripeCustomers
     AccountPurgeRequest:
       type: object
@@ -8242,6 +8251,12 @@ paths:
                 $ref: "#/components/schemas/CloseAccountResponse"
         "403":
           description: CURRENT_PASSWORD_WRONG (wrong password, or the account is locked), ACCOUNT_CLOSING, CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them"
           content:
             application/json:
               schema:

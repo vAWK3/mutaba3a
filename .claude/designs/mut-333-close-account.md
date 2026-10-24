@@ -150,6 +150,15 @@ Unattended run: every recommendation taken. Outside voice: native Plan subagent 
 - **R16 (Low) —** Trial-mail candidates exclude closing people; the portal's query client re-reads `/v1/me` on 403 `ACCOUNT_CLOSING` too (`queryClient.ts:24`); the mail's date is that of `deleteAfter + 1 h` (the job's worst lag) in the person's zone.
 - **R17 (Low) — Kept as decided:** `email_suppressions` keep the address (D9, Basel to confirm against AC4's wording); future non-owner members of an owned profile (MUT-305 staff) lose only their membership — the classification test fails if MUT-305 adds a table this purge doesn't know.
 
+**qa-reconcile code review (2026-10-24, independent reviewer) — R18–R24, pending Basel:**
+- **R18 (P1) — A profile the person created that others belong to with no co-owner is never deleted with their work** (an owned Business profile with firm features on gives new members BOOKKEEPER, not OWNER, so there is no transfer target). Close refuses with **409 `ACCOUNT_CLOSE_BLOCKED`** `{ profiles }`; the purge skips such an account (`has-members`, alerted) before touching Stripe, and the store purge refuses too. *Alternative not taken:* promote a bookkeeper to owner, or detach the profile as an operator firm.
+- **R19** — the Prisma purge locks the person's created profiles (id order, `removeOwner`'s lock) before deciding transfers.
+- **R20** — close first does only what can be undone (cancel-at-period-end), commits, and then cancels past-due subscriptions and expires open checkouts; failures there are logged for the operator and never change the answer. Supersedes the "expire first" order of R5/R6.
+- **R21** — a second close that loses the race turns back on only subscriptions the winning closure didn't record.
+- **R22** — the drawer's subscription line no longer promises "the end of the period you paid for" (the hard delete cancels at once); it says the subscription won't renew and ends when the account is deleted.
+- **R23** — profile and people names inside drawer sentences are bidi-isolated (FSI/PDI); `BILLING_NOT_CONFIGURED` and `ACCOUNT_CLOSE_BLOCKED` get their own messages.
+- **R24** — `saveAccount` takes `onlyIfExists` (R12 as planned, now built): a webhook for a deleted customer never recreates a purged account. The per-person text scans of `audit_events`/`idempotency_keys` inside the purge are accepted at pilot volume (TD-240).
+
 Schema additions from R1/R13: `users.purgeStartedAt`, `users.purgeLastTriedAt` (nullable), table `storage_purges (organizationId uuid PK, queuedAt)` (no FK: the profile is gone).
 
 Business / product impact
@@ -167,4 +176,4 @@ Business / product impact
 VERDICT: ready to build with R1–R17 applied; every D and R is pending Basel's confirmation.
 
 **UNRESOLVED DECISIONS:**
-- D1–D20 and R1–R17 await Basel's confirmation (unattended run; recommended options taken).
+- D1–D20 and R1–R24 await Basel's confirmation (unattended run; recommended options taken).

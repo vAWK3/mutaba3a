@@ -181,6 +181,34 @@ describe('POST /v1/me/closure (MUT-333)', () => {
     expect((await me(h, auth)).user.closure).toBeNull();
   });
 
+  it('refuses with 409 ACCOUNT_CLOSE_BLOCKED while a profile they created has other members and no co-owner (R18)', async () => {
+    const h = harness();
+    const p = await person(h);
+    const other = await person(h);
+    const created = await h.store.organizations.createOwned(p.userId, { name: 'Nour Firm', slug: `f-${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: T0 }, 6, { actorId: p.userId, requestId: null });
+    if (created.kind !== 'created') throw new Error('cap');
+    await h.store.organizations.setFirm(created.organization.id, { enabled: true, ownerUserIds: [] }, T0, { actorId: null, requestId: null });
+    await h.store.memberships.grant(other.userId, created.organization.id, T0);
+    const { auth } = await deviceSession(h, p);
+    const res = await close(h, auth, p.password);
+    expect(res.status).toBe(409);
+    expect(await read(res)).toMatchObject({ error: { code: 'ACCOUNT_CLOSE_BLOCKED', details: { profiles: [{ id: created.organization.id, name: 'Nour Firm' }] } } });
+    expect((await me(h, auth)).user.closure).toBeNull();
+  });
+
+  it('cancels a failing subscription only after the closing commits, and a failure there never changes the answer (R20)', async () => {
+    const h = harness();
+    const p = await person(h);
+    h.accountStripe.customer('cus_A', { email: p.email, userId: p.userId }, 1).subscription('sub_late', 'cus_A', 'past_due');
+    h.accountStripe.failOn('cancelNow');
+    const { auth } = await deviceSession(h, p);
+    const res = await close(h, auth, p.password);
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ subscriptionsEnded: 0, subscriptionsCancelled: 0 });
+    expect((await me(h, auth)).user.closure).not.toBeNull();
+    expect(h.accountStripe.customers.get('cus_A')?.openCheckouts).toBe(0);
+  });
+
   it('refuses with 503 when the person has a Stripe customer and the server has no Stripe; anyone else closes', async () => {
     const h = harness({ stripe: null });
     const payer = await person(h);
@@ -265,7 +293,7 @@ describe('the hard delete doors (MUT-333 D11)', () => {
 
     const dry = await read(await h.app.request('/admin/v1/accounts/purge', json({ dryRun: true }, ADMIN)));
     expect(dry.summary).toMatchObject({ dryRun: true, due: 1, purged: 1 });
-    expect(dry.rows).toEqual([{ userId: p.userId, outcome: 'would-purge', reason: null, deleteProfileIds: [p.personalId], transfers: [], leaveProfileIds: [], stripeCustomers: 0 }]);
+    expect(dry.rows).toEqual([{ userId: p.userId, outcome: 'would-purge', reason: null, deleteProfileIds: [p.personalId], transfers: [], leaveProfileIds: [], blockedProfileIds: [], stripeCustomers: 0 }]);
     expect(await h.store.users.getById(p.userId)).not.toBeNull();
 
     const res = await h.app.request('/jobs/v1/accounts/purge', { method: 'POST', headers: JOB });

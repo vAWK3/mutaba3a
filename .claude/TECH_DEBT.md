@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-240: The hard delete scans `audit_events` and `idempotency_keys` as text, once per person
+**Status**: Accepted (pilot volume)
+**Ticket**: MUT-333 (R24)
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: To clear audit details and stored replays that name the person (R3), the purge runs `metadata::text LIKE` and `"responseBody"::text LIKE` over the whole tables inside its 120 s transaction, which holds the user and billing locks. Fine at today's size; slow once `audit_events` is large.
+**Fix**: Scope the scans to the profiles the person belonged to, or do one scan per run for every purged id.
+
 ### TD-237: Co-owners get no notice when a closing partner's subscription covered their shared profile
 **Status**: Open
 **Ticket**: MUT-333 (R11)

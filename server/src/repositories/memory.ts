@@ -2253,6 +2253,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const u = this.people.get(userId);
       if (!u?.closure?.purgeStartedAt) return null;
       const decision = this.purgeDecisionFor(userId);
+      // R18: never with other people's work in it; nothing is written.
+      if (decision.blockedProfileIds.length > 0) throw new StateConflict('account', 'PROFILE_HAS_MEMBERS');
       const deleted = new Set(decision.deleteProfileIds);
       for (const { organizationId, toUserId } of decision.transfers) Object.assign(this.orgs.get(organizationId)!, { ownerUserId: toUserId });
       // D8 / MUT-324 review: every acceptance the person ever recorded goes, wherever it was written.
@@ -2532,6 +2534,7 @@ export class MemoryLedgerStore implements LedgerStore {
     saveAccount: async (input) => {
       const accounts = [...this.billingAccounts.values()];
       const existing = accounts.find((a) => a.stripeCustomerId === input.stripeCustomerId);
+      if (!existing && input.onlyIfExists) throw new StateConflict('billing_account', 'GONE');
       let userId = existing?.userId ?? null;
       let conflict: SaveBillingAccountConflict | null = null;
       if (input.userId !== null && input.userId !== userId) {
