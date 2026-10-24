@@ -4,6 +4,7 @@ import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { getContext } from 'hono/context-storage';
 import { contentDisposition } from './rules.js';
 import type { AttachmentStorage, SignedUrl, StoredObject } from './storage.js';
 
@@ -55,6 +56,15 @@ export interface LocalAttachmentStorageOptions {
 }
 
 export const LOCAL_ATTACHMENTS_PATH = '/dev/attachments';
+
+/**
+ * The origin of the request being handled (Hono's context storage, installed in app.ts), for signed URLs. Behind
+ * vite's /dev proxy the Host header is the portal's, so the portal gets its own origin back. Signing outside a
+ * request is a programming error here: there is no origin to point at.
+ */
+export function requestOrigin(): string {
+  return new URL(getContext().req.url).origin;
+}
 const TMP = '.tmp';
 
 export class LocalAttachmentStorage implements AttachmentStorage {
