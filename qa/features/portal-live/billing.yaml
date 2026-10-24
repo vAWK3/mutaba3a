@@ -83,7 +83,7 @@ features:
       - Go back to Home
     expect:
       - The first sign-in lands on "Your 14-day free trial has started" with its end date, "You won't be charged until <date>. Cancel any time before then.", Add a card now (recommended) and Not now (AC1)
-      - The Subscribe step shows ₪49.00 and "Your free trial continues: the first charge is on <date>"; Stripe's page shows the free days first and asks a person for no tax number
+      - 'The Subscribe step shows ₪49.00 and "Your free trial continues: the first charge is on <date>"; Stripe''s page shows the free days first and asks a person for no tax number'
       - Back in the portal, "You're subscribed. Thank you." and "Card added. Your first charge is on <trial end>"; Stripe holds a trialing subscription whose trial_end is the trial end, and /v1/me says ACTIVE paid by Stripe (AC2)
       - Home shows neither the step nor the trial banner again
   - id: trial-banner
