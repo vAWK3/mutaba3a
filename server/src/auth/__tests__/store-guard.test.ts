@@ -103,6 +103,7 @@ describe('STORE_ACCESS', () => {
       'billing.saveAccount',
       'billing.saveSubscription',
       'billing.setTrialStart',
+      'billing.trialMailCandidates',
       // MUT-359: the mail send log and suppression list, reached only by the mailer and the Resend webhook (unguarded store).
       'email.claimDelivery',
       'email.finishDelivery',

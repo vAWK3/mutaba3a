@@ -52,6 +52,9 @@ const vars = {
   'account-ready': { signInLink: 'https://portal.example.test/' },
   'account-declined': { supportAddress: 'help@example.test' },
   'review-digest': { pending: 2, command: 'npm run signups:review' },
+  'trial-ending-soon': { daysLeft: 3, subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
+  'trial-ended': { subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', exportLink: 'https://portal.example.test/?yourData=true' },
+  'trial-locking-soon': { daysLeft: 1, subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', exportLink: 'https://portal.example.test/?yourData=true' },
 } as const;
 let seq = 0;
 const signup = (to: string) => ({ to, template: 'finish-signup' as const, locale: 'en' as const, vars: vars['finish-signup'], idempotencyKey: `signup-${++seq}` });

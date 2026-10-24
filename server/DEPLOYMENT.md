@@ -1323,6 +1323,17 @@ At GA (after billing and account closing are live), set `self_signup_enabled = t
 
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
 
+#### Trial reminders (MUT-419, ADR-184)
+
+A daily Cloud Scheduler job (`mutaba3a-trial-mail`, 10:00 Asia/Jerusalem) posts to `/jobs/v1/billing/trial-mail` with the job token. Terraform creates it only when `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled` are all on. Each person in days 11–30 of an unpaid trial gets the mail for their stage once: the trial ends within 3 days (Add a card), it ended (read-only: Subscribe, Download my records), the account locks within 3 days. People with a card, a grant, Malafat, a firm or any profile that isn't their own TRIAL one get nothing (the portal's banners still show). A second run the same day sends nothing new.
+
+```bash
+npm --prefix server run billing:trial-mail -- --dry-run --url "$URL"   # who would get what today, and why others are skipped
+npm --prefix server run billing:trial-mail -- --url "$URL"             # send today's now (the same run as the job)
+```
+- Call it by the service's public URL (or set `PORTAL_ORIGIN`): in production a real run whose links would point at localhost is refused (409 `LINK_ORIGIN_LOOPBACK`).
+- `Stopped at its time budget` means the run hit 200 s; run it again or let tomorrow's job continue.
+
 #### Business email and the signup review queue (MUT-367, ADR-178)
 
 **The screen.** Every signup address is screened before any link is mailed:

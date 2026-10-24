@@ -1851,11 +1851,24 @@ export type SaveBillingSubscriptionOutcome = 'created' | 'changed' | 'unchanged'
  * MUT-358: billing state. Reads are a signed-in person's (`/v1/me`, store guard `sessionOnly`); writes are the
  * operator's and, from MUT-360, the Stripe webhook's (both on the unguarded store).
  */
+/** MUT-419: one person the trial-mail run considers. */
+export interface TrialMailCandidate {
+  userId: string;
+  email: string;
+  locale: UserLocale;
+  trialStartedAt: Date;
+}
+
 export interface BillingRepository {
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
   /** MUT-331's signup sets it at email verification. Null for an unknown user. */
   setTrialStart(userId: string, at: Date): Promise<{ trialStartedAt: Date } | null>;
+  /**
+   * MUT-419: ACTIVE people whose trial started in `(startedAfter, startedUpTo]`, oldest trial first: who the daily
+   * trial-mail run looks at. PENDING_REVIEW people have no trial until approval; DISABLED people are never mailed.
+   */
+  trialMailCandidates(window: { startedAfter: Date; startedUpTo: Date }): Promise<TrialMailCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

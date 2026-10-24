@@ -137,6 +137,8 @@ const app = createApp({
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
   billingGate: config.BILLING_GATE,
+  // MUT-419 (R11): a production operator run never mails links to a local address.
+  trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
   passwordHasher: createArgon2Hasher({
     memoryKiB: config.ARGON2_MEMORY_KIB,
     timeCost: config.ARGON2_TIME_COST,

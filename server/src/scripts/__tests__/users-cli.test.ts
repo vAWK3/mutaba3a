@@ -8,6 +8,8 @@ import { sessionDigest } from '../../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../../auth/users.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
+import { createMailer } from '../../email/mailer.js';
+import { MemoryMailTransport } from '../../email/transports/memory.js';
 import { CURRENT_TERMS } from '../../legal.js';
 import { runUsersCommand } from '../users.js';
 
@@ -18,8 +20,8 @@ const PEPPER = 'cli-session-pepper-with-at-least-32-chars';
 /** MUT-235: the printed setup links — https even though the CLI called the API over http (only loopback keeps http). */
 const links = (out: string[]) => out.filter((l) => /^https:\/\/mutaba3a\.test\/setup#[A-Za-z0-9_-]{43}$/.test(l));
 
-function harness(extra: Partial<AppDependencies> = {}) {
-  const store = new MemoryLedgerStore();
+function harness(extra: Partial<AppDependencies> & { store?: MemoryLedgerStore } = {}) {
+  const store = extra.store ?? new MemoryLedgerStore();
   const app = createApp({
     store,
     logger: pino({ level: 'silent' }),
@@ -392,6 +394,39 @@ describe('billing verbs (MUT-358)', () => {
     h.out.length = 0;
     expect(await h.run(['billing-uncovered'])).toBe(0);
     expect(h.out).toEqual(['Nobody active is held read-only or locked.']);
+  });
+
+  it('billing-trial-mail --dry-run lists who would get what and mails nothing (MUT-419)', async () => {
+    const stripe = new FakeStripeGateway(() => new Date());
+    const outbox = new MemoryMailTransport();
+    const store = new MemoryLedgerStore();
+    const mailer = createMailer({ transport: outbox, store, logger: pino({ level: 'silent' }), now: () => new Date(), fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
+    const h = harness({ store, mailer, stripe: { webhookGateway: stripe, reconcileGateway: stripe }, billingGate: true });
+    const user = await person(h, 'nour@studio.ps');
+    await h.store.billing.setTrialStart(user.id, new Date(Date.now() - 20 * 24 * 3_600_000));
+
+    expect(await h.run(['billing-trial-mail', '--dry-run'])).toBe(0);
+    expect(h.out).toContain('would send  ended  nour@studio.ps');
+    expect(h.out.at(-1)).toBe('Dry run: 1 would be mailed; skipped 0 paying, 0 covered, 0 with other profiles, 0 suppressed, 0 gate off.');
+    expect(outbox.list()).toHaveLength(0);
+  });
+
+  it('billing-trial-mail sends, then reports the same day as already sent (MUT-419)', async () => {
+    const stripe = new FakeStripeGateway(() => new Date());
+    const outbox = new MemoryMailTransport();
+    const store = new MemoryLedgerStore();
+    const mailer = createMailer({ transport: outbox, store, logger: pino({ level: 'silent' }), now: () => new Date(), fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
+    const h = harness({ store, mailer, stripe: { webhookGateway: stripe, reconcileGateway: stripe }, billingGate: true });
+    const user = await person(h, 'omar@studio.ps');
+    await h.store.billing.setTrialStart(user.id, new Date(Date.now() - 12 * 24 * 3_600_000));
+
+    expect(await h.run(['billing-trial-mail'])).toBe(0);
+    expect(h.out).toContain('sent  ending-soon  omar@studio.ps');
+    expect(h.out.at(-1)).toBe('Sent 1, already sent 0, not sent 0; skipped 0 paying, 0 covered, 0 with other profiles, 0 suppressed, 0 gate off.');
+    h.out.length = 0;
+    expect(await h.run(['billing-trial-mail'])).toBe(0);
+    expect(h.out).toContain('duplicate  ending-soon  omar@studio.ps');
+    expect(outbox.list({ to: 'omar@studio.ps' })).toHaveLength(1);
   });
 
   it('billing-status flags nobody while every country is open to consumers (MUT-418)', async () => {

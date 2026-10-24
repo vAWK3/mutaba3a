@@ -2301,6 +2301,14 @@ export class MemoryLedgerStore implements LedgerStore {
       this.trialStarts.set(userId, at);
       return { trialStartedAt: at };
     },
+    trialMailCandidates: async ({ startedAfter, startedUpTo }) =>
+      [...this.trialStarts]
+        .flatMap(([userId, trialStartedAt]) => {
+          const person = this.people.get(userId);
+          const inWindow = trialStartedAt > startedAfter && trialStartedAt <= startedUpTo;
+          return person && person.status === 'ACTIVE' && inWindow ? [{ userId, email: person.email, locale: person.locale, trialStartedAt }] : [];
+        })
+        .sort((a, b) => a.trialStartedAt.getTime() - b.trialStartedAt.getTime() || a.userId.localeCompare(b.userId)),
     createGrant: async (input) => {
       if ((input.userId === null) === (input.organizationId === null)) throw new StateConflict('entitlement_grant', 'ONE_TARGET');
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');

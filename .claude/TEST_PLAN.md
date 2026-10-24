@@ -3615,6 +3615,17 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
+## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `billing/__tests__/trial-mail.test.ts` (22): stage table + daily-run rounding (R3); a 33-day daily walk sends exactly three mails in order (A1); same day twice → duplicate (A2); skips paying (trialing, active, lapsed), covered (user grant, own profile's org grant, Malafat), suppressed, other-profiles (operator firm, covered firm); PENDING_REVIEW/DISABLED/no trial absent; en/ar (A3); dry run; mail off then on; gate off; time budget on its own clock | `npm --prefix server test` |
+| Templates | `email/__tests__/templates.test.ts`: the three new ids in the per-template table (en/ar, RTL, only passed links, no amount/currency/date), "within N days" + Arabic day agreement, links per mail (A3) | same |
+| Server routes | `__tests__/routes-trial-mail.test.ts` (9): job counts only, A2 over HTTP, token checks, 503 without Stripe, gate off, PORTAL_ORIGIN links; admin dry run/real run, loopback refusal; `scripts/__tests__/users-cli.test.ts` (2): `billing-trial-mail [--dry-run]` | same |
+| Store contract | `store-contract-billing.ts` `trialMailCandidates` (window bounds, ACTIVE only, order), memory + Prisma | `npm --prefix server run test:db` |
+| Terraform | `tests/trial_mail.tftest.hcl` (4): no job by default, without Stripe, with the gate off; one daily job with the token when all on | `terraform init -backend=false && terraform test` |
+| Release-QA | None: server only, no screen. The acceptance criteria are proven by the tests above (brief §8) | — |
+
 ## MUT-418 — Trial start step, Home trial banner, consumers everywhere (2026-10-24, ADR-180)
 
 | Layer | Tests | Command |

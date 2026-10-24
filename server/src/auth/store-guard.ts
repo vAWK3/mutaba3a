@@ -277,6 +277,8 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-362: Settings › Billing reads the person's own account; the route passes the session's user, never a parameter.
     summaryOf: 'sessionOnly',
     setTrialStart: 'operator',
+    // MUT-419: the daily trial-mail run (the job and the operator), on the unguarded store.
+    trialMailCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',

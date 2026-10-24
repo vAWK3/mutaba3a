@@ -497,6 +497,44 @@ export const StripeReconcileSummarySchema = z
   })
   .openapi('StripeReconcileSummary');
 
+// ---- MUT-419: the trial reminders' run ------------------------------------------
+
+export const TrialMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'People in a reminder window' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'Already mailed for this stage' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: mail off, capped, provider failure, refused or suppressed' }),
+    skipped: z.object({
+      paying: z.number().int().openapi({ description: 'A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed' }),
+      covered: z.number().int(),
+      otherProfiles: z.number().int(),
+      suppressed: z.number().int(),
+      gateOff: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('TrialMailSummary');
+
+export const TrialMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stage: z.enum(['ending-soon', 'ended', 'locking-soon']),
+    daysLeft: z.number().int().nullable().openapi({ description: 'Whole days to the deadline the mail names, rounded up; null for `ended`' }),
+    action: z.enum(['send', 'skip']),
+    skip: z.enum(['paying', 'covered', 'other-profiles', 'suppressed', 'gate-off']).nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer; null on a skip or a dry run" }),
+  })
+  .openapi('TrialMailRow');
+
+export const TrialMailRunSchema = z.object({ summary: TrialMailSummarySchema, rows: z.array(TrialMailRowSchema) }).openapi('TrialMailRun');
+
+export const TrialMailRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('TrialMailRequest');
+
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');

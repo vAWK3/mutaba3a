@@ -4965,3 +4965,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The typeahead reads at most 250 name rows per keystroke; profiles with huge vendor lists get prefix/contains hits but fuzzy only among the recent 50 (TD-225).
 - API 1.62.0-mut254 (additive: `Expense.vendorId`, `vendorDetails`, `GET /v1/vendors`).
 
+---
+
+## ADR-184: Trial Reminder Mails Are Daily Stage Windows, Sent Only Where the Trial Alone Decides the Account (MUT-419)
+
+**Status:** Accepted for the build (2026-10-24, MUT-419, unattended run on Basel's "go"). Decisions D1–D16 and review amendments R1–R12 in `.claude/designs/mut-419-trial-emails.md` are **pending Basel's confirmation**. Builds on ADR-159 §5 (the mailer), ADR-160 D3 (the timeline), ADR-165 (the `/jobs` door) and ADR-181 (the gate).
+
+**Context:** ADR-160's trial ends at day 14 (read-only) and locks at day 30 whether or not the person opens the portal; nothing told someone who stayed away.
+
+**Decision:**
+1. **Three stages, each a window** from `trialTimelineOf`: `ending-soon` (endsAt − 3 d ≤ now < endsAt), `ended` (endsAt ≤ now < lockAt − 3 d), `locking-soon` (lockAt − 3 d ≤ now < lockAt). Only the current stage is sent, so a missed day catches up and a stale stage is never sent (D1). Each is sent once: key `trial:<userId>:<stage>` in the mailer's send log (D3).
+2. **"Within N days"**, N = whole days left rounded up (1–3): a deadline mail never promises more time than there is (D2, R7). No amount, price or date.
+3. **Who:** ACTIVE people with a trial start in the window, and only when every profile they belong to is their own and resolves source TRIAL, so the trial alone decides their standing (`personStanding`) and "your account is read-only / locks" is exactly what the gate does (R4). Otherwise: `paying` (a Stripe subscription, a card on file included), `covered` (Malafat, operator grant), `other-profiles`; plus `suppressed`, and `gate-off` when `BILLING_GATE` is off (R5).
+4. **Doors** like MUT-360's reconcile: `POST /jobs/v1/billing/trial-mail` (Cloud Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (operator, `dryRun`, rows). Both 503 without Stripe (R6). A real production run refuses loopback links (R11). One person at a time, 200 s budget, then `incomplete` (R1).
+5. **Scheduler:** Cloud Scheduler (not an in-process timer, TD-215's lesson), daily 10:00 Asia/Jerusalem, created only with mail, Stripe and the gate all on (D7, D8). The job token now also triggers customer mail; a leaked token can only re-run idempotent mail (D15).
+6. Trial mails are outside the per-recipient cap (D11).
+
+**Consequences:**
+- Someone in a firm or with mixed coverage gets no mail; the portal's per-profile banners (ADR-181) still tell them.
+- A permanently rejected send retries daily within its window (R12, TD-223).
+- API 1.63.0-mut419.
+

@@ -30,6 +30,7 @@ record the date where the item says.
   - with the production admin token, run `npm --prefix server run billing:uncovered -- --url "$URL"`: it must print "Nobody active is held read-only or locked." For each person it lists with source `NONE`, run `billing:grant` (pilot-runbook §1.5), then run it again. If it can't be made empty in time, set `billing_gate_enabled = false` in `production.tfvars` for that release and turn it on in the next.
   - **Before self-signup opens** (`self_signup_enabled = true`): the phone build carrying MUT-364 (it reads the refusal) is live in both stores and the minimum build is raised to it (D11). Released phones treat 402 as retryable: a refused capture waits in their outbox and lands once the person subscribes, so nothing is lost, but they show a generic error until then.
   - Delete this item and record the date on MUT-361.
+- MUT-419's trial reminders are merged: the release adds `POST /jobs/v1/billing/trial-mail` and `POST /admin/v1/billing/trial-mail` (API 1.63.0-mut419). Inert until mail, Stripe and the gate are all on (Terraform creates the `mutaba3a-trial-mail` Scheduler job only then). **In the release that turns mail on with Stripe:** run `npm --prefix server run billing:trial-mail -- --dry-run --url "$URL"` once and check who it would mail; with `PORTAL_ORIGIN` unset the links use the URL you call, so call the public one. Basel confirms the mail wording (en/ar, `server/src/email/templates/copy.ts`, D2/D14 in the plan). Delete this item and record the date on MUT-419.
 
 ## web
 
