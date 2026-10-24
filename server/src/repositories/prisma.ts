@@ -1833,6 +1833,14 @@ export class PrismaLedgerStore implements LedgerStore {
       const { count } = await this.prisma.user.updateMany({ where: { id: userId }, data: { trialStartedAt: at } });
       return count === 0 ? null : { trialStartedAt: at };
     },
+    trialMailCandidates: async ({ startedAfter, startedUpTo }) => {
+      const people = await this.prisma.user.findMany({
+        where: { status: 'ACTIVE', trialStartedAt: { gt: startedAfter, lte: startedUpTo } },
+        select: { id: true, email: true, locale: true, trialStartedAt: true },
+        orderBy: [{ trialStartedAt: 'asc' }, { id: 'asc' }],
+      });
+      return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, trialStartedAt: p.trialStartedAt! }));
+    },
     createGrant: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {

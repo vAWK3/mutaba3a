@@ -7,6 +7,8 @@ import { renderMail } from '../templates/index.js';
  * links the caller passes is fetched or linked, and no mail ever carries an amount, a currency or a date.
  */
 const LINK = 'https://portal.example.test/setup#tok_ABC123def';
+const SUBSCRIBE = 'https://portal.example.test/?billing=true&step=subscribe';
+const EXPORT = 'https://portal.example.test/?yourData=true';
 const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'finish-signup': { link: LINK, validHours: 24 },
   'account-exists': { signInLink: 'https://portal.example.test/', recoverLink: 'https://portal.example.test/recover' },
@@ -17,6 +19,9 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'account-ready': { signInLink: 'https://portal.example.test/' },
   'account-declined': { supportAddress: 'help@example.test' },
   'review-digest': { pending: 3, command: 'npm --prefix server run signups:review' },
+  'trial-ending-soon': { daysLeft: 3, subscribeLink: SUBSCRIBE },
+  'trial-ended': { subscribeLink: SUBSCRIBE, exportLink: EXPORT },
+  'trial-locking-soon': { daysLeft: 2, subscribeLink: SUBSCRIBE, exportLink: EXPORT },
 };
 /** Numbers a template may print, from its own count vars; anything else numeric is a defect. */
 const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
@@ -24,6 +29,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'reset-password': ['1'],
   'finish-setup': ['72'],
   'review-digest': ['3'],
+  'trial-ending-soon': ['3'],
+  'trial-locking-soon': ['2'],
 };
 const LINKS_OF = (vars: object): string[] => Object.values(vars).filter((v): v is string => typeof v === 'string' && /^https?:\/\//.test(v));
 const CURRENCY = /\b(USD|ILS|NIS|EUR|GBP|JOD|AED|SAR|QAR|KWD|BHD|OMR|EGP)\b|[₪$€£]|شيكل|دولار|دينار|درهم|ريال/;
@@ -65,7 +72,8 @@ describe.each(TEMPLATE_IDS)('template %s', (id) => {
     for (const link of LINKS_OF(vars)) {
       for (const mail of [en, ar]) {
         expect(mail.text).toContain(link);
-        expect(mail.html).toContain(`<bdi dir="ltr">${link}</bdi>`);
+        // The HTML part escapes the link (`&` → `&amp;`); a mail client shows and copies it unescaped.
+        expect(mail.html).toContain(`<bdi dir="ltr">${link.replace(/&/g, '&amp;')}</bdi>`);
       }
     }
   });
@@ -124,5 +132,33 @@ describe('templates', () => {
   it('wrap the operator command and the support address left-to-right inside Arabic', () => {
     expect(renderMail('review-digest', 'ar', SAMPLE['review-digest']).html).toContain('<bdi dir="ltr">npm --prefix server run signups:review</bdi>');
     expect(renderMail('account-declined', 'ar', SAMPLE['account-declined']).html).toContain('<bdi dir="ltr">help@example.test</bdi>');
+  });
+
+  it('MUT-419: say "within" N days, never "in" N days, and agree Arabic day counts with their number', () => {
+    const ending = (n: number, locale: 'en' | 'ar') => renderMail('trial-ending-soon', locale, { daysLeft: n, subscribeLink: SUBSCRIBE });
+    const locking = (n: number, locale: 'en' | 'ar') => renderMail('trial-locking-soon', locale, { daysLeft: n, subscribeLink: SUBSCRIBE, exportLink: EXPORT });
+    expect(ending(3, 'en').subject).toBe('Your MTB3A free trial ends within 3 days');
+    expect(ending(1, 'en').subject).toBe('Your MTB3A free trial ends within 1 day');
+    expect(locking(2, 'en').subject).toBe('Your MTB3A account locks within 2 days');
+    expect(ending(1, 'ar').subject).toContain('خلال يوم واحد');
+    expect(ending(2, 'ar').subject).toContain('خلال يومين');
+    expect(ending(3, 'ar').subject).toContain('خلال 3 أيام');
+    expect(locking(3, 'ar').subject).toContain('خلال 3 أيام');
+  });
+
+  it("MUT-419: send each trial mail's actions to the portal: Add a card / Subscribe, and Download my records after the trial", () => {
+    const ending = renderMail('trial-ending-soon', 'en', SAMPLE['trial-ending-soon']);
+    expect(ending.html).toContain(`href="${SUBSCRIBE.replace(/&/g, '&amp;')}"`);
+    expect(ending.text).toContain('Add a card:');
+    expect(ending.html).not.toContain('yourData');
+    for (const id of ['trial-ended', 'trial-locking-soon'] as const) {
+      for (const locale of ['en', 'ar'] as const) {
+        const mail = renderMail(id, locale, SAMPLE[id] as never);
+        expect(mail.text).toContain(SUBSCRIBE);
+        expect(mail.text).toContain(EXPORT);
+      }
+    }
+    expect(renderMail('trial-ended', 'ar', SAMPLE['trial-ended']).text).toContain('نزّل سجلاتي');
+    expect(renderMail('trial-ended', 'en', SAMPLE['trial-ended']).subject).toBe('Your MTB3A account is read-only');
   });
 });

@@ -22,6 +22,19 @@ function arHours(n: number): string {
   return `${n} ساعة`;
 }
 
+/** "1 day", "3 days". */
+function enDays(n: number): string {
+  return n === 1 ? '1 day' : `${n} days`;
+}
+
+/** Arabic counted noun: يوم واحد / يومين / 3–10 أيام / 11+ يومًا. */
+function arDays(n: number): string {
+  if (n === 1) return 'يوم واحد';
+  if (n === 2) return 'يومين';
+  if (n >= 3 && n <= 10) return `${n} أيام`;
+  return `${n} يومًا`;
+}
+
 const IGNORE: Record<UserLocale, string> = {
   en: "If you didn't ask for this, you can ignore this email. Nothing changes until the link is used.",
   ar: 'إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة. لن يتغير شيء ما لم يُستخدم الرابط.',
@@ -192,6 +205,80 @@ const reviewDigest: Copy<'review-digest'> = {
   }),
 };
 
+/**
+ * MUT-419: the trial reminders (ADR-160 D3: 14 days free, read-only to day 30, then locked). Only to people whose
+ * standing the trial alone decides, so "your account" is exactly what the gate does. The portal's words: "free trial",
+ * "read-only", "Subscribe", "Download my records" (hosted.billing.gate.*). No amount, price or date (ADR-159 §5); the
+ * count of days is a count, always "within" so it never promises more time than there is (D2).
+ */
+const NOTHING_DELETED: Record<UserLocale, string> = {
+  en: 'Nothing is deleted.',
+  ar: 'لا يُحذف أي شيء.',
+};
+
+const trialEndingSoon: Copy<'trial-ending-soon'> = {
+  en: ({ daysLeft, subscribeLink }) => ({
+    subject: `Your MTB3A free trial ends within ${enDays(daysLeft)}`,
+    intro: [
+      [`Your MTB3A free trial ends within ${enDays(daysLeft)}.`],
+      ["After that your account becomes read-only: you can still see and download everything, but you can't add or change anything until you subscribe."],
+      ['Add a card now so nothing stops.'],
+    ],
+    action: { label: 'Add a card', href: subscribeLink },
+  }),
+  ar: ({ daysLeft, subscribeLink }) => ({
+    subject: `تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}`,
+    intro: [
+      [`تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}.`],
+      ['بعدها يصبح حسابك للقراءة فقط: يمكنك رؤية كل شيء وتنزيله، لكن لا يمكنك إضافة أي شيء أو تعديله إلى أن تشترك.'],
+      ['أضف بطاقة الآن كي لا يتوقف شيء.'],
+    ],
+    action: { label: 'أضف بطاقة', href: subscribeLink },
+  }),
+};
+
+const trialEnded: Copy<'trial-ended'> = {
+  en: ({ subscribeLink, exportLink }) => ({
+    subject: 'Your MTB3A account is read-only',
+    intro: [
+      ['Your free trial has ended, so your MTB3A account is now read-only.'],
+      [`Your records are safe: you can see and download all of them. Subscribe to keep adding them. ${NOTHING_DELETED.en}`],
+    ],
+    action: { label: 'Subscribe', href: subscribeLink },
+    secondary: { label: 'Download my records', href: exportLink },
+  }),
+  ar: ({ subscribeLink, exportLink }) => ({
+    subject: 'حسابك في متابعة للقراءة فقط',
+    intro: [
+      ['انتهت تجربتك المجانية، لذلك أصبح حسابك في متابعة للقراءة فقط.'],
+      [`سجلاتك محفوظة: يمكنك رؤيتها كلها وتنزيلها. اشترك لتواصل إضافتها. ${NOTHING_DELETED.ar}`],
+    ],
+    action: { label: 'اشترك', href: subscribeLink },
+    secondary: { label: 'نزّل سجلاتي', href: exportLink },
+  }),
+};
+
+const trialLockingSoon: Copy<'trial-locking-soon'> = {
+  en: ({ daysLeft, subscribeLink, exportLink }) => ({
+    subject: `Your MTB3A account locks within ${enDays(daysLeft)}`,
+    intro: [
+      [`Your MTB3A account locks within ${enDays(daysLeft)}. After that you can only subscribe or download your records.`],
+      [`You can still download all your records, now or after the lock. ${NOTHING_DELETED.en}`],
+    ],
+    action: { label: 'Subscribe', href: subscribeLink },
+    secondary: { label: 'Download my records', href: exportLink },
+  }),
+  ar: ({ daysLeft, subscribeLink, exportLink }) => ({
+    subject: `يُقفَل حسابك في متابعة خلال ${arDays(daysLeft)}`,
+    intro: [
+      [`يُقفَل حسابك في متابعة خلال ${arDays(daysLeft)}. بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.`],
+      [`ما زال بإمكانك تنزيل كل سجلاتك، الآن أو بعد الإقفال. ${NOTHING_DELETED.ar}`],
+    ],
+    action: { label: 'اشترك', href: subscribeLink },
+    secondary: { label: 'نزّل سجلاتي', href: exportLink },
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -202,4 +289,7 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'account-ready': accountReady,
   'account-declined': accountDeclined,
   'review-digest': reviewDigest,
+  'trial-ending-soon': trialEndingSoon,
+  'trial-ended': trialEnded,
+  'trial-locking-soon': trialLockingSoon,
 };

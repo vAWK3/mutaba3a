@@ -349,6 +349,33 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect((await store.billing.summaryOf(other.id)).account?.stripeCustomerId).toBe(others);
       expect(await store.billing.summaryOf(randomUUID())).toEqual({ account: null, subscriptions: [], trialStartedAt: null });
     });
+
+    it('trialMailCandidates lists ACTIVE people whose trial started inside the window, oldest first (MUT-419)', async () => {
+      const store = await makeStore();
+      const start = (day: number) => new Date(Date.UTC(2026, 10, day, 8, 0, 0));
+      const make = async (day: number | null, status: 'ACTIVE' | 'DISABLED' | 'PENDING_REVIEW' = 'ACTIVE', locale: 'ar' | 'en' = 'en') => {
+        const { user } = await store.users.create({ ...userInput(), locale });
+        if (day !== null) await store.billing.setTrialStart(user.id, start(day));
+        if (status !== 'ACTIVE') await store.users.setStatus(user.id, status, at(2));
+        return user;
+      };
+      const tooEarly = await make(2);
+      const firstIn = await make(3, 'ACTIVE', 'ar');
+      const lastIn = await make(9);
+      const tooLate = await make(10);
+      const disabled = await make(5, 'DISABLED');
+      const pending = await make(5, 'PENDING_REVIEW');
+      const never = await make(null);
+
+      // (after, upTo]: the window's lower bound is open, its upper bound closed.
+      const rows = await store.billing.trialMailCandidates({ startedAfter: start(2), startedUpTo: start(9) });
+      const ours = new Set([tooEarly, firstIn, lastIn, tooLate, disabled, pending, never].map((u) => u.id));
+      const mine = rows.filter((r) => ours.has(r.userId));
+      expect(mine).toEqual([
+        { userId: firstIn.id, email: firstIn.email, locale: 'ar', trialStartedAt: start(3) },
+        { userId: lastIn.id, email: lastIn.email, locale: 'en', trialStartedAt: start(9) },
+      ]);
+    });
   });
 }
 
