@@ -97,7 +97,7 @@ describe('the new address: /carry-over/receive', () => {
     expect(backend.prepareCarryOver).toHaveBeenCalledWith('free-app-backup', blob, expect.objectContaining({ labels: { noClient: 'No client', defaultBusiness: 'My business' } }));
     expect(screen.getByTestId('carry-over-counts')).toHaveTextContent('Clients3');
     expect(screen.getByTestId('carry-over-totals')).toHaveTextContent('Still owed');
-    expect(screen.getByTestId('carry-over-not-carried')).toHaveTextContent('Records the rules refused (DATE_INVALID)');
+    expect(screen.getByTestId('carry-over-not-carried')).toHaveTextContent('Records the rules refused (\u2066DATE_INVALID\u2069)');
     expect(screen.queryByTestId('carry-over-existing')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: 'Save on this device' }));
@@ -132,11 +132,53 @@ describe('the new address: /carry-over/receive', () => {
     await user.click(screen.getByRole('button', { name: "Download what's here first" }));
     await waitFor(() => expect(backend.exportRecords).toHaveBeenCalledTimes(1));
 
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000);
     await user.click(screen.getByRole('button', { name: 'Replace with the carried records' }));
-    expect(screen.getByTestId('carry-over-replace-confirm')).toBeInTheDocument();
+    expect(screen.getByTestId('carry-over-replace-confirm')).toHaveAttribute('role', 'alert');
     expect(apply).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Replace with the carried records' }));
+    // The second click of a double-click is not the confirm.
+    await user.click(screen.getByRole('button', { name: 'Yes, replace everything' }));
+    expect(apply).not.toHaveBeenCalled();
+    clock.mockReturnValue(5_000);
+    await user.click(screen.getByRole('button', { name: 'Yes, replace everything' }));
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    clock.mockRestore();
+  });
+
+  it('a download of what\'s here that fails keeps the checked summary, and says so', async () => {
+    backend.exportRecords.mockRejectedValueOnce(new Error('quota'));
+    backend.prepareCarryOver.mockResolvedValue(pending({ deviceRecordCount: 3 }));
+    const { opener, user } = openFrom('web');
+    await waitFor(() => expect(opener.posted).toHaveLength(1));
+    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    await user.click(await screen.findByRole('button', { name: "Download what's here first" }));
+    expect(await screen.findByTestId('carry-over-download-failed')).toHaveTextContent("The download didn't work.");
+    expect(screen.getByRole('button', { name: 'Replace with the carried records' })).toBeInTheDocument();
+    expect(opener.posted).toHaveLength(1);
+  });
+
+  it('cancel after the replace question tells the old app, and changes nothing here', async () => {
+    const apply = vi.fn(() => Promise.resolve());
+    backend.prepareCarryOver.mockResolvedValue(pending({ deviceRecordCount: 3, apply }));
+    const { opener, user } = openFrom('web');
+    await waitFor(() => expect(opener.posted).toHaveLength(1));
+    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    await user.click(await screen.findByRole('button', { name: 'Replace with the carried records' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('a save that fails never tells the old app it is done; it tells it the carry-over failed', async () => {
+    backend.prepareCarryOver.mockResolvedValue(pending({ apply: vi.fn(() => Promise.reject(new Error('quota'))) }));
+    const { opener, user } = openFrom('web');
+    await waitFor(() => expect(opener.posted).toHaveLength(1));
+    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+    expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'save-failed');
+    const types = opener.posted.map((m) => (m.data as { type: string }).type);
+    expect(types).not.toContain('mtb3a.carry-over.done');
+    expect(types.at(-1)).toBe('mtb3a.carry-over.failed');
   });
 
   it('signed in, says the records go to this browser\'s signed-out space (E3)', async () => {
@@ -167,6 +209,19 @@ describe('the new address: /carry-over/receive', () => {
     deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
     expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'failed');
     expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument();
+    // The old page hears at once, and offers its own file.
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
+  });
+
+  it('a chosen file from a newer app is refused as too new', async () => {
+    backend.readRecordsFile.mockRejectedValue(new LocalRecordsFileRefused('too-new'));
+    renderPortal('/carry-over/receive');
+    const input = (await screen.findByTestId('carry-over-file')) as HTMLInputElement;
+    act(() => {
+      Object.defineProperty(input, 'files', { value: [new File(['{}'], 'backup.json')], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'too-new');
   });
 
   it('opened on its own, offers the file and reads it the way the hand-off does', async () => {
@@ -211,6 +266,39 @@ describe('the old address: /carry-over', () => {
     await waitFor(() => expect(popup.posted[0]).toEqual({ targetOrigin: NEW_PORTAL, data: expect.objectContaining({ kind: 'records-file' }) }));
     deliver({ type: 'mtb3a.carry-over.done', v: 1, counts: {}, totals: {} }, NEW_PORTAL, popup);
     await waitFor(() => expect(leaveTo).toHaveBeenCalledWith(`${NEW_PORTAL}/`));
+    open.mockRestore();
+  });
+
+  it('when this browser\'s records can\'t be counted, offers the move instead of sending the person away', async () => {
+    countRecordsOnThisDevice.mockRejectedValue(new Error('idb blocked'));
+    renderPortal('/carry-over?next=%2F');
+    expect(await screen.findByRole('button', { name: 'Carry my records over' })).toBeEnabled();
+    expect(leaveTo).not.toHaveBeenCalled();
+  });
+
+  it('a cancel on the new address brings the offer back', async () => {
+    countRecordsOnThisDevice.mockResolvedValue(4);
+    const popup = fakeWindow();
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const { user } = renderPortal('/carry-over?next=%2F');
+    await user.click(await screen.findByRole('button', { name: 'Carry my records over' }));
+    deliver({ type: 'mtb3a.carry-over.ready', v: 1 }, NEW_PORTAL, popup);
+    deliver({ type: 'mtb3a.carry-over.declined', v: 1 }, NEW_PORTAL, popup);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Carry my records over' })).toBeEnabled());
+    expect(leaveTo).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it('when the new address could not check the records, says so and offers the file', async () => {
+    countRecordsOnThisDevice.mockResolvedValue(4);
+    const popup = fakeWindow();
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const { user } = renderPortal('/carry-over?next=%2F');
+    await user.click(await screen.findByRole('button', { name: 'Carry my records over' }));
+    deliver({ type: 'mtb3a.carry-over.ready', v: 1 }, NEW_PORTAL, popup);
+    deliver({ type: 'mtb3a.carry-over.failed', v: 1 }, NEW_PORTAL, popup);
+    expect(await screen.findByRole('alert')).toHaveTextContent("The new address couldn't check or save your records");
+    expect(screen.getByRole('button', { name: 'Download my records file' })).toBeInTheDocument();
     open.mockRestore();
   });
 

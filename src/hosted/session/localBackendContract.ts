@@ -48,7 +48,8 @@ export interface CarryOverSummary {
 }
 
 /** Which old page sent a carry-over: the free web app sends its own backup, the old portal address its records file. */
-export type CarryOverPayloadKind = 'free-app-backup' | 'records-file';
+/** The two payloads the carry-over hands over: the protocol's own kinds. */
+export type CarryOverPayloadKind = import('../../lib/carryOver/protocol').CarryOverKind;
 
 export interface CarryOverPrepareOptions {
   /** The names the carry-over has to make up, in the person's language. */

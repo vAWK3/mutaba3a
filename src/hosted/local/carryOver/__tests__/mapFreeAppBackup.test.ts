@@ -196,6 +196,19 @@ describe('what has no home (T-U8)', () => {
     });
   });
 
+  it("lists the receipts of an expense that didn't come over, with it", () => {
+    const plan = map({
+      businessProfiles: [business('b1')],
+      expenses: [expense('e1', 'b1', { currency: 'GBP' }), expense('e2', 'b1', { amountMinor: 0 })],
+      receipts: [
+        { id: 'rc1', profileId: 'b1', expenseId: 'e1', fileName: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 3, data: 'AAA' },
+        { id: 'rc2', profileId: 'b1', expenseId: 'e2', fileName: 'b.pdf', mimeType: 'application/pdf', sizeBytes: 3, data: 'AAA' },
+      ],
+    });
+    expect(opsOf(plan, 'receipt')).toEqual([]);
+    expect(Object.fromEntries(plan.report.notCarried.map((l) => [l.code, l.count]))).toEqual({ currency: 1, amount: 1, 'parent-not-carried': 2 });
+  });
+
   it('never carries a deleted row and never lists one', () => {
     const plan = map({ businessProfiles: [business('b1')], transactions: [income('t1', 'b1', { deletedAt: 'x' })], expenses: [expense('e1', 'b1', { deletedAt: 'x' })] });
     expect(plan.ops.filter((op) => op.op !== 'profile')).toEqual([]);

@@ -12,9 +12,10 @@
     "waiting": "Finish on the new page that opened…",
     "installedLead": "You opened MTB3A from your home screen. Download your records file, then open {address} in your browser and choose Your data › Restore from file.",
     "fallback": "The new page couldn't be reached. Download your records file, then open {address} and choose Your data › Restore from file.",
+    "failed": "The new address couldn't check or save your records, so nothing was carried. Download your records file, then open {address} and choose Your data › Restore from file.",
     "declined": "Nothing was carried over. Your records are still here.",
     "done": "Your records are on the new address.",
-    "arrived": "Arrived: {clients} clients, {income} income entries, {expenses} expenses.",
+    "arrived": "Arrived: clients {clients}, income entries {income}, expenses {expenses}.",
     "openNew": "Open the new address",
     "banner": "Your records were carried to {address} on {date}. Changes you make here won't follow.",
     "carryAgain": "Carry over again"

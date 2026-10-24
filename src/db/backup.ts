@@ -15,9 +15,11 @@ export interface BackupData {
 }
 
 /**
- * Serialize all database tables to a JSON-serializable object.
+ * Serialize all database tables to a JSON-serializable object. A table that
+ * can't be read comes out empty, unless `strict`: the carry-over (MUT-291)
+ * must never send an empty table for one it couldn't read, and mark it carried.
  */
-export async function serializeAllTables(): Promise<BackupData> {
+export async function serializeAllTables(options: { strict?: boolean } = {}): Promise<BackupData> {
   const tables: Record<string, unknown[]> = {};
 
   const tableNames = db.tables.map(t => t.name);
@@ -25,7 +27,8 @@ export async function serializeAllTables(): Promise<BackupData> {
   for (const name of tableNames) {
     try {
       tables[name] = await db.table(name).toArray();
-    } catch {
+    } catch (error) {
+      if (options.strict) throw error;
       tables[name] = [];
     }
   }

@@ -3,7 +3,7 @@ import { getLocale, useLanguage } from '../../lib/i18n/core';
 /**
  * Over every page of the free app once its records were carried (MUT-291 D1):
  * where they went, when, and that changes made here won't follow. Nothing
- * stops an edit here (TD-222); the banner makes it plain, and Carry over again
+ * stops an edit here (TD-227); the banner makes it plain, and Carry over again
  * sends the latest records.
  */
 export function CarriedBanner({ portalOrigin, carriedOverAt, onCarryAgain }: { portalOrigin: string; carriedOverAt: string; onCarryAgain: () => void }) {

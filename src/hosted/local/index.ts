@@ -102,7 +102,7 @@ async function boot(): Promise<LocalBackend> {
       exportedFromAccountAt: decoded.fromAccount ? decoded.snapshot.savedAt : null,
       deviceRecordCount: countRecords(store.snapshot().maps),
       // MUT-291: the old address's records arrive as its own records file; the summary names what it holds.
-      ...(carryOver ? { carryOver: { counts: { ...countsOf(decoded.snapshot.maps) }, totals: totalsByCurrency(snapshotTotals(decoded.snapshot.maps)), changed: [], notCarried: [], jodEntries: 0 } } : {}),
+      ...(carryOver ? { carryOver: { counts: { ...countsOf(decoded.snapshot.maps) }, totals: totalsByCurrency(snapshotTotals(decoded.snapshot.maps)), changed: [], notCarried: decoded.missing.length > 0 ? [{ code: 'receipt-file-unreadable', count: decoded.missing.length }] : [], jodEntries: 0 } } : {}),
       apply: async () => {
         // Unpacked only now, outside the lock; the lock covers just the add, save and sweep (restore.ts).
         const { files, missing } = await decoded.readFiles();
@@ -237,10 +237,11 @@ export const bootLocalBackend: BootLocalBackend = () => {
 
 /** The parsed JSON when `file` is the old web app's backup (MUT-291), else null: a records zip or file goes the usual way. */
 async function freeAppBackupIn(file: Blob): Promise<unknown> {
-  const bytes = new Uint8Array(await readBytes(file));
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return null; // a zip
+  // Two bytes say whether it's a zip, without reading a large records file twice.
+  const magic = new Uint8Array(await readBytes(file.slice(0, 2)));
+  if (magic[0] === 0x50 && magic[1] === 0x4b) return null; // a zip
   try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(await readBytes(file)));
     return looksLikeFreeAppBackup(parsed) ? parsed : null;
   } catch {
     return null;
@@ -250,5 +251,7 @@ async function freeAppBackupIn(file: Blob): Promise<unknown> {
 /** MUT-291: this origin's signed-out records, counted from disk without booting a session or writing anything. */
 export async function countRecordsOnThisDevice(): Promise<number> {
   const loaded = await new IndexedDbPersistence().load();
+  // Records this build can't read are still records: the caller offers the move rather than leaving them.
+  if (loaded.kind === 'too-new') throw new LocalRecordsFileRefused('too-new');
   return loaded.kind === 'ok' ? countRecords(loaded.snapshot.maps) : 0;
 }

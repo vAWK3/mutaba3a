@@ -4906,7 +4906,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - `/` keeps the drawer keys, so mails (MUT-419) and the lapse gate (MUT-361) can link `/?billing=true&step=subscribe`.
 - The privacy sentence for the new usage notes waits on Basel (TD-219); the Flutter contract copy lags (TD-218).
 
-## ADR-181: The Carry-Over Maps the Old Web App's Backup on the New Address, Replays It Through a Throwaway Local App, and Lands It Through Restore (MUT-291)
+## ADR-184: The Carry-Over Maps the Old Web App's Backup on the New Address, Replays It Through a Throwaway Local App, and Lands It Through Restore (MUT-291)
 
 **Status:** Accepted (2026-10-24, MUT-291). Owner decisions D1–D4 and D10, and eng review D1–D9, are Basel's (`.claude/designs/mut-291-carry-over.md` §4, §11). Builds on ADR-097 (local mode), ADR-155 (the staged domain move) and ADR-156/MUT-287 (the records file and Restore).
 
@@ -4943,4 +4943,16 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The free app's production build gates `/app` from stage `live` on. Its dev server doesn't, unless `MUTABA3A_CARRY_OVER` says so; `off` turns it off on a build.
 - Archived clients and projects arrive active (signed out, the archive routes are read-only).
 - 20,000 records replay in 4.3 s in Node (T-P1), with no Web Worker.
-- The old app still accepts edits after a carry-over (TD-222), until MUT-292.
+- The old app still accepts edits after a carry-over (TD-227), until MUT-292.
+
+**Amendment 1 (2026-10-24, MUT-291 /qa-reconcile review):**
+- **v1 answers `done`, `declined` or `failed`.** The receiver sends `failed` whenever the records arrived but couldn't be checked or saved: too large, a refused or failed check, a save that didn't finish. The old page then offers its file at once, and never marks the records carried. The sender takes an answer only after `ready`.
+- **The old app reads its backup strictly for the carry-over** (`serializeAllTables({ strict: true })`). A table it can't read fails the carry-over; it is never sent as an empty table and marked carried. The Back up download keeps the lenient read.
+- **Amounts use the server's formatter** (`formatMoney`), so a records file with a currency the API has retired (MUT-388) still restores. `server/src/money` joins the local backend's allowlist.
+- **Release builds trust only https origins**, each exactly as a browser reports it. Loopback origins are for the QA dev servers only.
+- **Failure paths:**
+  - A read failure on the old address offers the move instead of leaving (never stranded).
+  - A receipt file that won't decode is listed, not fatal.
+  - A receipt the rules refuse at complete is deleted again.
+- **The replay gives the page back every 40 ms** through a MessageChannel, not every 200 ops on a timer: hidden tabs clamp timers.
+- **Still open:** TD-229 (the gate sees only rows the mapper carried), TD-230 (the legacy origins have no end date), TD-231 (sender and receiver versions must ship in order).

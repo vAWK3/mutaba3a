@@ -99,7 +99,8 @@ function ReportList({ title, lines, prefix, testId }: { title: string; lines: Ca
       <ul>
         {lines.map((line) => (
           <li key={`${line.code}:${line.reason ?? ''}`} data-code={line.code}>
-            <span>{t(`${prefix}.${line.code}`, { reason: line.reason ?? '' })}</span> <bdi className="hp-chip">{line.count}</bdi>
+            {/* The API's reason is a left-to-right code: isolated, so an Arabic sentence around it keeps its order. */}
+            <span>{t(`${prefix}.${line.code}`, { reason: line.reason ? `\u2066${line.reason}\u2069` : '' })}</span> <bdi className="hp-chip">{line.count}</bdi>
           </li>
         ))}
       </ul>

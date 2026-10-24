@@ -169,6 +169,74 @@ describe('startCarryOverSend (the old page)', () => {
     bus.deliver({ type: 'mtb3a.carry-over.declined', v: 1 }, PORTAL, popup);
     await expect(outcome).resolves.toEqual({ status: 'declined' });
   });
+
+  it('falls back at once when the new address could not check or save the records', async () => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    const outcome = startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: async () => new Blob(['{}']), open: () => popup, listen: bus.listen });
+    bus.deliver(ready, PORTAL, popup);
+    bus.deliver({ type: 'mtb3a.carry-over.failed', v: 1 }, PORTAL, popup);
+    await expect(outcome).resolves.toEqual({ status: 'fallback', reason: 'failed' });
+  });
+
+  it('falls back as soon as the popup closes, even before ready', async () => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    const outcome = startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: async () => new Blob(['{}']), open: () => popup, listen: bus.listen });
+    popup.closed = true;
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(outcome).resolves.toEqual({ status: 'fallback', reason: 'closed' });
+    expect(bus.size()).toBe(0);
+  });
+
+  it.each([
+    ['done', done],
+    ['declined', { type: 'mtb3a.carry-over.declined', v: 1 }],
+    ['failed', { type: 'mtb3a.carry-over.failed', v: 1 }],
+  ])('ignores %s before ready: it can only answer records this page sent', async (_label, message) => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    let settled = false;
+    void startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: async () => new Blob(['{}']), open: () => popup, listen: bus.listen }).then(() => (settled = true));
+    bus.deliver(message, PORTAL, popup);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    expect(popup.posted).toEqual([]);
+  });
+
+  it('sends the records once, even when the new page says ready twice (it was reloaded)', async () => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    void startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: async () => new Blob(['{}']), open: () => popup, listen: bus.listen });
+    bus.deliver(ready, PORTAL, popup);
+    bus.deliver(ready, PORTAL, popup);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(popup.posted).toHaveLength(1);
+  });
+
+  it('after ready, an answer from another origin or window is ignored', async () => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    let settled = false;
+    void startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: async () => new Blob(['{}']), open: () => popup, listen: bus.listen }).then(() => (settled = true));
+    bus.deliver(ready, PORTAL, popup);
+    bus.deliver(done, 'https://evil.example', popup);
+    bus.deliver(done, PORTAL, fakeWindow());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+  });
+
+  it('falls back when the records can\'t be read after ready arrived, and sends nothing', async () => {
+    const popup = fakeWindow();
+    const bus = messageBus();
+    let fail: (error: Error) => void = () => undefined;
+    const reading = new Promise<Blob>((_resolve, reject) => (fail = reject));
+    const outcome = startCarryOverSend({ portalOrigin: PORTAL, source: 'web', read: () => reading, open: () => popup, listen: bus.listen });
+    bus.deliver(ready, PORTAL, popup);
+    fail(new Error('quota'));
+    await expect(outcome).resolves.toEqual({ status: 'fallback', reason: 'read-failed' });
+    expect(popup.posted).toEqual([]);
+  });
 });
 
 describe('awaitCarryOverPayload (the new address)', () => {
@@ -190,6 +258,8 @@ describe('awaitCarryOverPayload (the new address)', () => {
     expect(opener.posted[1]).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.done', v: 1, counts: { clients: 1 }, totals: {} } });
     result.reply.declined();
     expect(opener.posted[2]).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
+    result.reply.failed();
+    expect(opener.posted[3]).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
   });
 
   it.each([
@@ -213,6 +283,48 @@ describe('awaitCarryOverPayload (the new address)', () => {
     const huge = { size: CARRY_OVER_MAX_BYTES + 1 } as Blob;
     bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'free-app-backup', payload: huge }, OLD_WEB, opener);
     await expect(outcome).resolves.toEqual({ status: 'file-only', reason: 'too-large' });
+    // The old page hears at once, instead of waiting until the person closes this one.
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
+  });
+
+  describe('from the old portal address', () => {
+    it('says ready on the old portal\'s origin and takes only its records file', async () => {
+      const opener = fakeWindow();
+      const bus = messageBus();
+      const outcome = awaitCarryOverPayload({ sources: SOURCES, from: 'portal', opener, listen: bus.listen });
+      expect(opener.posted).toEqual([{ data: ready, targetOrigin: OLD_PORTAL }]);
+      bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'free-app-backup', payload: new Blob(['{}']) }, OLD_PORTAL, opener);
+      bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'records-file', payload: new Blob(['{}']) }, OLD_WEB, opener);
+      bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'records-file', payload: new Blob(['{}']) }, OLD_PORTAL, fakeWindow());
+      let settled = false;
+      void outcome.then(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(false);
+      const blob = new Blob(['zip']);
+      bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'records-file', payload: blob }, OLD_PORTAL, opener);
+      await expect(outcome).resolves.toMatchObject({ status: 'payload', source: 'portal', kind: 'records-file', payload: blob });
+    });
+
+    it('refuses one over the size cap, and tells the old page', async () => {
+      const opener = fakeWindow();
+      const bus = messageBus();
+      const outcome = awaitCarryOverPayload({ sources: SOURCES, from: 'portal', opener, listen: bus.listen });
+      bus.deliver({ type: 'mtb3a.carry-over.payload', v: 1, kind: 'records-file', payload: { size: CARRY_OVER_MAX_BYTES + 1 } as Blob }, OLD_PORTAL, opener);
+      await expect(outcome).resolves.toEqual({ status: 'file-only', reason: 'too-large' });
+      expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
+    });
+
+    it('times out, and notices the old page closing, the same way', async () => {
+      const bus = messageBus();
+      const slow = awaitCarryOverPayload({ sources: SOURCES, from: 'portal', opener: fakeWindow(), listen: bus.listen });
+      await vi.advanceTimersByTimeAsync(RECEIVER_PAYLOAD_TIMEOUT_MS);
+      await expect(slow).resolves.toEqual({ status: 'file-only', reason: 'timeout' });
+      const opener = fakeWindow();
+      const closing = awaitCarryOverPayload({ sources: SOURCES, from: 'portal', opener, listen: messageBus().listen });
+      opener.closed = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(closing).resolves.toEqual({ status: 'file-only', reason: 'opener-closed' });
+    });
   });
 
   it.each([

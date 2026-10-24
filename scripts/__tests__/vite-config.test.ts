@@ -175,8 +175,18 @@ describe('vite.config', () => {
       ['plain http off the loopback', { web: 'http://evil.example', portalOrigin: 'http://127.0.0.1:5178' }],
       ['a path', { web: 'https://old.example/app', portalOrigin: 'https://app.example' }],
       ['no portal origin', { web: 'https://old.example' }],
+      ['credentials before the host', { web: 'https://x@old.example', portalOrigin: 'https://app.example' }],
+      ['a query', { web: 'https://old.example?', portalOrigin: 'https://app.example' }],
+      ['an upper-case host', { web: 'https://Old.example', portalOrigin: 'https://app.example' }],
+      ['the default port spelled out', { web: 'https://old.example:443', portalOrigin: 'https://app.example' }],
     ])('refuses an override with %s', (_label, value) => {
       expect(() => carryOverBuild(hosts({}), JSON.stringify(value))).toThrow(/MUTABA3A_CARRY_OVER/);
+    });
+
+    it('a release build never trusts the loopback, even when the variable leaks into it', () => {
+      const override = JSON.stringify({ web: 'http://127.0.0.1:5183', portalOrigin: 'http://127.0.0.1:5188' });
+      expect(() => carryOverBuild(hosts({}), override, { release: true })).toThrow(/MUTABA3A_CARRY_OVER/);
+      expect(carryOverBuild(hosts({}), JSON.stringify({ web: 'https://old.example', portalOrigin: 'https://app.example' }), { release: true }).portalOrigin).toBe('https://app.example');
     });
   });
 

@@ -106,7 +106,7 @@ test('The old web app\'s records arrive on the new address with the same totals,
   await step('Back in the old app: the records are on the new address; keep using it, under the banner', async () => {
     await page.bringToFront();
     await expect(page.getByText('Your records are on the new address.')).toBeVisible();
-    await expect(page.getByTestId('carry-over-arrived')).toContainText('Arrived: 1 clients, 2 income entries, 1 expenses.');
+    await expect(page.getByTestId('carry-over-arrived')).toContainText('Arrived: clients 1, income entries 2, expenses 1.');
     await page.getByRole('button', { name: 'Keep using the old app for now' }).click();
     await expect(page.getByTestId('carry-over-banner')).toContainText("Changes you make here won't follow.");
   });
@@ -206,7 +206,9 @@ test('Carrying into a device that already has records warns, offers a download f
   await step('Replace: it asks once more, then replaces', async () => {
     await receiver.getByRole('button', { name: 'Replace with the carried records' }).click();
     await expect(receiver.getByTestId('carry-over-replace-confirm')).toBeVisible();
-    await receiver.getByRole('button', { name: 'Replace with the carried records' }).click();
+    // A person reads the question first; a click this soon after the first is a double-click and doesn't count (D3).
+    await receiver.waitForTimeout(700);
+    await receiver.getByRole('button', { name: 'Yes, replace everything' }).click();
     await expect(receiver.getByRole('heading', { name: 'Your records are here.' })).toBeVisible();
   });
 
@@ -214,6 +216,7 @@ test('Carrying into a device that already has records warns, offers a download f
     await receiver.getByRole('button', { name: 'Open MTB3A' }).click();
     await expect(receiver.getByRole('navigation', { name: 'Sections' })).toBeVisible();
     await receiver.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await expect(receiver.getByRole('table', { name: 'Payments' })).toContainText('100.00');
     await expect(receiver.getByText('99.00')).toHaveCount(0);
   });
 });

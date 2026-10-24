@@ -1,5 +1,5 @@
 /**
- * The carry-over hand-off (MUT-291 §3.2, ADR-181): an old page opens
+ * The carry-over hand-off (MUT-291 §3.2, ADR-184): an old page opens
  * the new portal's /carry-over/receive in a popup and posts this browser's records
  * to it. Shared by both senders (the free app, src/pages/carryOver; the run.app
  * portal, src/hosted/pages/carry-over) and the receiver, so it lives in src/lib
@@ -27,7 +27,7 @@ const CLOSED_POLL_MS = 500;
 /** Well above a free-app backup with receipts; a bigger message is refused before it is read. */
 export const CARRY_OVER_MAX_BYTES = 200 * 1024 * 1024;
 
-const TYPE = { ready: 'mtb3a.carry-over.ready', payload: 'mtb3a.carry-over.payload', done: 'mtb3a.carry-over.done', declined: 'mtb3a.carry-over.declined' } as const;
+const TYPE = { ready: 'mtb3a.carry-over.ready', payload: 'mtb3a.carry-over.payload', done: 'mtb3a.carry-over.done', declined: 'mtb3a.carry-over.declined', failed: 'mtb3a.carry-over.failed' } as const;
 const VERSION = 1;
 
 /** What the new address reports once the records are saved: counts per kind and totals per currency, as decimal strings. */
@@ -70,7 +70,8 @@ function messageOf(data: unknown, type: string): Record<string, unknown> | null 
 export type SendOutcome =
   | ({ status: 'done' } & CarryOverResult)
   | { status: 'declined' }
-  | { status: 'fallback'; reason: 'blocked' | 'no-ready' | 'closed' | 'read-failed' };
+  /** `failed`: the new address got the records but couldn't check or save them; nothing was carried. */
+  | { status: 'fallback'; reason: 'blocked' | 'no-ready' | 'closed' | 'read-failed' | 'failed' };
 
 export interface SendOptions {
   portalOrigin: string;
@@ -86,7 +87,7 @@ export interface SendOptions {
  * anything (R2: Safari and Firefox drop the click's permission across an
  * `await`, and block the popup), reads the records while the popup loads, and
  * sends them once both are ready. It resolves when the new address reports
- * done or declined, or with the reason to fall back to the file.
+ * done, declined or failed, or with the reason to fall back to the file.
  */
 export function startCarryOverSend(options: SendOptions): Promise<SendOutcome> {
   const { portalOrigin, source, read, open = defaultOpen, listen = listenOnWindow } = options;
@@ -117,9 +118,12 @@ export function startCarryOverSend(options: SendOptions): Promise<SendOutcome> {
         );
         return;
       }
+      // Only an answer to the records this page sent: never before ready.
+      if (!isReady) return;
       const done = messageOf(event.data, TYPE.done);
       if (done) finish({ status: 'done', counts: (done.counts ?? {}) as CarryOverResult['counts'], totals: (done.totals ?? {}) as CarryOverResult['totals'] });
       else if (messageOf(event.data, TYPE.declined)) finish({ status: 'declined' });
+      else if (messageOf(event.data, TYPE.failed)) finish({ status: 'fallback', reason: 'failed' });
     });
 
     reading.catch(() => finish({ status: 'fallback', reason: 'read-failed' }));
@@ -140,6 +144,8 @@ function defaultOpen(url: string, target: string): CarryOverWindow | null {
 export interface CarryOverReply {
   done(result: CarryOverResult): void;
   declined(): void;
+  /** The records arrived but couldn't be checked or saved: the old page offers its file at once. */
+  failed(): void;
 }
 
 export type ReceiveOutcome =
@@ -170,6 +176,7 @@ export function awaitCarryOverPayload(options: ReceiveOptions): Promise<ReceiveO
   const reply: CarryOverReply = {
     done: (result) => opener.postMessage({ type: TYPE.done, v: VERSION, ...result }, origin),
     declined: () => opener.postMessage({ type: TYPE.declined, v: VERSION }, origin),
+    failed: () => opener.postMessage({ type: TYPE.failed, v: VERSION }, origin),
   };
 
   return new Promise<ReceiveOutcome>((resolve) => {
@@ -189,7 +196,10 @@ export function awaitCarryOverPayload(options: ReceiveOptions): Promise<ReceiveO
       if (!message || message.kind !== KIND_FOR_SOURCE[source]) return;
       const payload = message.payload as Blob | undefined;
       if (!payload || typeof payload.size !== 'number') return;
-      if (payload.size > CARRY_OVER_MAX_BYTES) finish({ status: 'file-only', reason: 'too-large' });
+      if (payload.size > CARRY_OVER_MAX_BYTES) {
+        reply.failed();
+        finish({ status: 'file-only', reason: 'too-large' });
+      }
       else finish({ status: 'payload', source, kind: KIND_FOR_SOURCE[source], payload, reply });
     });
 

@@ -39,10 +39,10 @@ export interface ReplayOptions {
   /** The new profiles' timezone (the browser's). */
   timezone: string;
   locale: 'ar' | 'en';
-  /** Ops between two yields to the browser (R5). */
-  yieldEvery?: number;
   onProgress?: (done: number, total: number) => void;
   yieldToBrowser?: () => Promise<void>;
+  /** Milliseconds, for the time slices (`performance.now` unless a test sets it). */
+  clock?: () => number;
 }
 
 export interface ReplayResult {
@@ -57,7 +57,8 @@ export interface ReplayResult {
   request: (method: string, path: string, profileId?: string) => Promise<Response>;
 }
 
-export const REPLAY_YIELD_EVERY = 200;
+/** The longest the replay holds the page before it gives it back (R5): a time slice, since one op can cost a lot more on a phone. */
+export const REPLAY_SLICE_MS = 40;
 
 /** Links a record can lose and still arrive (it is then counted as changed). */
 const OPTIONAL_LINKS: Partial<Record<CarryOp['op'], ReadonlyArray<'category' | 'project' | 'customer'>>> = {
@@ -66,10 +67,20 @@ const OPTIONAL_LINKS: Partial<Record<CarryOp['op'], ReadonlyArray<'category' | '
   received: ['customer', 'project'],
 };
 
-const defaultYield = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** A message to itself, not a timer: a background tab clamps timers to a second or more, and messages it doesn't. */
+export function yieldToBrowser(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
+}
 
 export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOptions): Promise<ReplayResult> {
-  const { now, timezone, locale, yieldEvery = REPLAY_YIELD_EVERY, onProgress, yieldToBrowser = defaultYield } = options;
+  const { now, timezone, locale, onProgress, yieldToBrowser: giveBack = yieldToBrowser, clock = () => performance.now() } = options;
   const store = new MemoryLedgerStore();
   const attachments = new MemoryAttachmentStorage();
   const { token } = await mintLocalSession(store, now, locale);
@@ -91,21 +102,29 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
     return app.fetch(new Request(`http://localhost${path}`, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }));
   };
 
-  /** The created row's id; a 4xx is recorded and answers null; a 5xx stops everything. */
-  const created = async (response: Response): Promise<{ id: string; body: Record<string, unknown> } | null> => {
+  /**
+   * The created row's id (`idOf` reads it where the route's answer isn't the row itself); a 4xx is recorded and
+   * answers null; a 5xx, or a 2xx without an id, stops everything.
+   */
+  const created = async (response: Response, idOf: (body: Record<string, unknown>) => unknown = (body) => body.id): Promise<{ id: string; body: Record<string, unknown> } | null> => {
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     const outcome = outcomeOf(response.status, body);
     if (outcome.kind === 'refused') {
       refused.set(outcome.reason, (refused.get(outcome.reason) ?? 0) + 1);
       return null;
     }
-    return { id: String(body.id ?? ''), body };
+    const id = idOf(body);
+    if (typeof id !== 'string' || id === '') throw new CarryOverAborted(response.status, 'no-id');
+    return { id, body };
   };
 
+  let unreadableReceipts = 0;
+  let sliceStart = clock();
   for (const [index, op] of plan.ops.entries()) {
-    if (index > 0 && index % yieldEvery === 0) {
+    if (clock() - sliceStart >= REPLAY_SLICE_MS) {
       onProgress?.(index, plan.ops.length);
-      await yieldToBrowser();
+      await giveBack();
+      sliceStart = clock();
     }
     const resolved = resolveLinks(op, ids);
     if (!resolved) {
@@ -145,7 +164,7 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
         result = await created(await send('POST', '/v1/income', profileId, compact({ kind: 'received', amount: amount(op.amountMinor, op.currency), currency: op.currency, occurredOn: op.occurredOn, customerId: resolved.links.customer, projectId: resolved.links.project, notes: op.notes }), key));
         break;
       case 'settle':
-        result = await created(await send('POST', `/v1/receivables/${ref(op.owed)}/settle`, profileId, { amount: amount(op.amountMinor, op.currency), paidAt: op.paidAt }, key));
+        result = await created(await send('POST', `/v1/receivables/${ref(op.owed)}/settle`, profileId, { amount: amount(op.amountMinor, op.currency), paidAt: op.paidAt }, key), (body) => (body.payment as { id?: unknown } | undefined)?.id);
         break;
       case 'expense':
         result = await created(await send('POST', '/v1/expenses', profileId, compact({ occurredOn: op.occurredOn, amount: amount(op.amountMinor, op.currency), currency: op.currency, title: op.title, vendor: op.vendor, categoryId: resolved.links.category, customerId: resolved.links.customer, projectId: resolved.links.project, notes: op.notes }), key));
@@ -169,7 +188,7 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
   return {
     snapshot: { formatVersion: LOCAL_FORMAT_VERSION, savedAt: now(), maps },
     files: attachments.filesFor(backedUpKeys(maps)),
-    report: withReplayLines(plan.report, refused, parentMissing, linksDropped),
+    report: withReplayLines(plan.report, refused, parentMissing, linksDropped, unreadableReceipts),
     carried,
     profileIds,
     request: (method, path, profileId) => send(method, path, profileId),
@@ -187,16 +206,32 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
     return byName;
   }
 
-  /** The routes' own three steps: sign an upload, put the bytes where the URL says, complete. */
+  /**
+   * The routes' own three steps: sign an upload, put the bytes where the URL says, complete. A file that won't decode
+   * is listed, not fatal; its size is the decoded bytes', so the complete step checks the real file. A receipt the
+   * rules refuse at complete is deleted again, so no half-uploaded row is saved.
+   */
   async function uploadReceipt(op: Extract<CarryOp, { op: 'receipt' }>, expenseId: string, profileId: string): Promise<{ id: string } | null> {
-    const started = await created(await send('POST', `/v1/expenses/${expenseId}/receipts`, profileId, { filename: op.fileName, mimeType: op.mimeType, sizeBytes: op.sizeBytes }));
+    let bytes: ArrayBuffer;
+    try {
+      bytes = base64Bytes(op.data);
+    } catch {
+      unreadableReceipts++;
+      return null;
+    }
+    // Held once, as bytes: the backup's text copy isn't needed after this (the totals never read it).
+    op.data = '';
+    const started = await created(await send('POST', `/v1/expenses/${expenseId}/receipts`, profileId, { filename: op.fileName, mimeType: op.mimeType, sizeBytes: bytes.byteLength }), (body) => (body.receipt as { id?: unknown } | undefined)?.id);
     if (!started) return null;
-    const receipt = started.body.receipt as { id: string } | undefined;
     const upload = started.body.upload as { url: string } | undefined;
-    if (!receipt || !upload) throw new CarryOverAborted(500, 'receipt-upload-shape');
-    attachments.put(localBlobKey(upload.url), { type: op.mimeType, bytes: base64Bytes(op.data) });
-    const completed = await created(await send('POST', `/v1/expenses/${expenseId}/receipts/${receipt.id}/complete`, profileId, {}));
-    return completed ? { id: receipt.id } : null;
+    if (!upload) throw new CarryOverAborted(500, 'receipt-upload-shape');
+    attachments.put(localBlobKey(upload.url), { type: op.mimeType, bytes });
+    const path = `/v1/expenses/${expenseId}/receipts/${started.id}`;
+    const completed = await created(await send('POST', `${path}/complete`, profileId, {}), () => started.id);
+    if (completed) return { id: started.id };
+    const removed = await send('DELETE', path, profileId);
+    if (removed.status >= 500) throw new CarryOverAborted(removed.status, 'receipt-delete');
+    return null;
   }
 }
 
@@ -224,9 +259,10 @@ export function outcomeOf(status: number, body: Record<string, unknown>): { kind
   return { kind: 'created' };
 }
 
-function withReplayLines(report: CarryOverReport, refused: ReadonlyMap<string, number>, parentMissing: number, linksDropped: number): CarryOverReport {
+function withReplayLines(report: CarryOverReport, refused: ReadonlyMap<string, number>, parentMissing: number, linksDropped: number, unreadableReceipts: number): CarryOverReport {
   const notCarried: Array<ReportLine<NotCarriedCode>> = [...report.notCarried, ...[...refused].map(([reason, count]) => ({ code: 'refused' as const, count, reason }))];
   if (parentMissing > 0) notCarried.push({ code: 'parent-not-carried', count: parentMissing });
+  if (unreadableReceipts > 0) notCarried.push({ code: 'receipt-file-unreadable', count: unreadableReceipts });
   const changed: Array<ReportLine<ChangeCode>> = [...report.changed];
   if (linksDropped > 0) changed.push({ code: 'link-dropped', count: linksDropped });
   return { ...report, changed, notCarried };

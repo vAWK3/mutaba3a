@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkCarriedTotals, prepareFromBackup, CarryOverCheckFailed } from '../index';
+import { checkCarriedTotals, prepareFromBackup } from '../index';
 import { mapFreeAppBackup, type CarryOverPlan } from '../mapFreeAppBackup';
 import { CarryOverAborted, idempotencyKeyOf, outcomeOf, replayCarryOver } from '../replay';
 import { snapshotTotals, totalsByCurrency } from '../totals';
@@ -47,6 +47,35 @@ describe('replayCarryOver', () => {
     expect(checkCarriedTotals(backup, plan, result)).toEqual([]);
   });
 
+  it('lists a receipt whose file won\'t decode, and carries everything else', async () => {
+    const backup = freeAppBackup({
+      businessProfiles: [business('b1')],
+      expenses: [expense('e1', 'b1')],
+      receipts: [
+        { id: 'bad', profileId: 'b1', expenseId: 'e1', fileName: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 3, data: '%%%not base64%%%' },
+        // The backup's size is wrong; the decoded bytes are what's uploaded and checked.
+        { id: 'good', profileId: 'b1', expenseId: 'e1', fileName: 'b.pdf', mimeType: 'application/pdf', sizeBytes: 999, data: btoa('PDF') },
+      ],
+    });
+    const result = await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), OPTIONS);
+    expect(result.report.notCarried).toEqual([{ code: 'receipt-file-unreadable', count: 1 }]);
+    expect(result.snapshot.maps.exps.size).toBe(1);
+    expect(result.files).toHaveLength(1);
+    expect([...result.snapshot.maps.expReceipts.values()].map((r) => r.status)).toEqual(['READY']);
+  });
+
+  it('a receipt the rules refuse leaves no half-uploaded row behind', async () => {
+    const backup = freeAppBackup({
+      businessProfiles: [business('b1')],
+      expenses: [expense('e1', 'b1')],
+      receipts: [{ id: 'txt', profileId: 'b1', expenseId: 'e1', fileName: 'a.txt', mimeType: 'text/plain', sizeBytes: 3, data: btoa('TXT') }],
+    });
+    const result = await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), OPTIONS);
+    expect(result.report.notCarried).toEqual([expect.objectContaining({ code: 'refused', count: 1 })]);
+    expect([...result.snapshot.maps.expReceipts.values()].filter((r) => !r.deletedAt)).toEqual([]);
+    expect(result.files).toEqual([]);
+  });
+
   it('lists a record a route refuses, with the reason, and whatever needed it (T-U12)', async () => {
     const backup = freeAppBackup({ businessProfiles: [business('b1')], clients: [client('c1', 'b1')], transactions: [income('old', 'b1', { clientId: 'c1', occurredAt: '2001-01-01' })], paymentRecords: [payment('r1', 'old', 100, '2001-01-02')] });
     const result = await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), OPTIONS);
@@ -77,9 +106,19 @@ describe('replayCarryOver', () => {
     const backup = freeAppBackup({ businessProfiles: [business('b1')], expenses: Array.from({ length: 450 }, (_, i) => expense(`e${i}`, 'b1')) });
     const progress: Array<[number, number]> = [];
     let yields = 0;
-    await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), { ...OPTIONS, onProgress: (done, total) => progress.push([done, total]), yieldToBrowser: async () => void yields++ });
-    expect(yields).toBe(2); // after 200 and 400 of the 451 ops
+    let ms = 0;
+    // Each read of the clock is 10 ms later: a slice fits a few ops, then the page gets its turn.
+    await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), { ...OPTIONS, onProgress: (done, total) => progress.push([done, total]), yieldToBrowser: async () => void yields++, clock: () => (ms += 10) });
+    expect(yields).toBeGreaterThan(50);
     expect(progress.at(-1)).toEqual([451, 451]);
+    expect(progress.every(([done], i) => i === 0 || done >= progress[i - 1]![0])).toBe(true);
+  });
+
+  it('holds the page for no slice at all when the work is quick', async () => {
+    const backup = freeAppBackup({ businessProfiles: [business('b1')], expenses: [expense('e1', 'b1')] });
+    let yields = 0;
+    await replayCarryOver(mapFreeAppBackup(backup, OPTIONS), { ...OPTIONS, yieldToBrowser: async () => void yields++, clock: () => 0 });
+    expect(yields).toBe(0);
   });
 });
 
@@ -121,11 +160,6 @@ describe('the totals gate (T-I2, E4)', () => {
       USD: { paid: '0.00', outstanding: '0.00', expenses: '1.99', convertedOut: '100.00', convertedIn: '0.00' },
     });
     expect(prepared.report.jodEntries).toBe(1);
-  });
-
-  it('CarryOverCheckFailed carries what differed', () => {
-    const error = new CarryOverCheckFailed([{ profile: 'p', currency: 'ILS', field: 'paid', expected: 1n, actual: 0n }]);
-    expect(error.mismatches).toHaveLength(1);
   });
 
   it('totalsByCurrency adds profiles together', async () => {

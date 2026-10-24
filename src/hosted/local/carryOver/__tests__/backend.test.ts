@@ -1,6 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CarryOverPrepareOptions, LocalBackend } from '../../../session/localBackendContract.js';
+import { FREE_APP_BACKUP_MAX_VERSION } from '../freeAppBackup';
 import { business, client, freeAppBackup, income, payment } from './helpers/freeAppFixture';
 
 /**
@@ -87,5 +88,11 @@ describe('the local backend and the carry-over', () => {
   it('refuses a payload that is not the old app\'s backup', async () => {
     const { page } = await openPage();
     await expect(page.prepareCarryOver('free-app-backup', new Blob(['not json']), OPTIONS)).rejects.toMatchObject({ reason: 'not-a-records-file' });
+  }, PAGE_LOAD_TIMEOUT_MS);
+
+  it('refuses a backup from a newer free app as too new, not as a broken file', async () => {
+    const { page } = await openPage();
+    const newer = new Blob([JSON.stringify({ version: FREE_APP_BACKUP_MAX_VERSION + 1, timestamp: 'x', tables: { clients: [] } })]);
+    await expect(page.prepareCarryOver('free-app-backup', newer, OPTIONS)).rejects.toMatchObject({ reason: 'too-new' });
   }, PAGE_LOAD_TIMEOUT_MS);
 });

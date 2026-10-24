@@ -3,10 +3,11 @@ import { Button } from '../../components/ui/Button';
 import { getRepositories } from '../../db';
 import { carryOverBuild } from '../../lib/carryOver/build';
 import { leaveTo } from '../../lib/carryOver/leave';
-import { startCarryOverSend, type CarryOverResult } from '../../lib/carryOver/protocol';
+import { RECEIVE_PATH, startCarryOverSend, type CarryOverResult } from '../../lib/carryOver/protocol';
 import { useLanguage } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import { backUpNow } from '../../utils/backupDownload';
+import { BootSplash } from '../../components/brand/BootSplash';
 import { CarriedBanner } from './CarriedBanner';
 import './carryOver.css';
 
@@ -29,7 +30,7 @@ import './carryOver.css';
 
 const LATER_KEY = 'mtb3a-carry-over-later';
 
-type Gate = { kind: 'checking' } | { kind: 'app'; carriedOverAt: string | null } | { kind: 'screen' };
+type Gate = { kind: 'checking' } | { kind: 'app'; carriedOverAt: string | null } | { kind: 'screen'; carriedOverAt: string | null };
 
 function isInstalledApp(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
@@ -56,13 +57,14 @@ export function CarryOverGate({ children }: { children: ReactNode }) {
       .then(([current, count]) => {
         if (current.carriedOverAt) setGate({ kind: 'app', carriedOverAt: current.carriedOverAt });
         else if (count === 0) leaveTo(portalOrigin);
-        else setGate(laterThisTab() ? { kind: 'app', carriedOverAt: null } : { kind: 'screen' });
+        else setGate(laterThisTab() ? { kind: 'app', carriedOverAt: null } : { kind: 'screen', carriedOverAt: null });
       })
       // A device whose records can't be read is never locked out of them.
       .catch(() => setGate({ kind: 'app', carriedOverAt: null }));
   }, [portalOrigin]);
 
-  if (gate.kind === 'checking') return null;
+  // The same splash index.html paints, so the hand-off from HTML changes nothing on screen.
+  if (gate.kind === 'checking') return <BootSplash />;
   if (gate.kind === 'screen' && portalOrigin) {
     return (
       <CarryOverScreen
@@ -73,21 +75,26 @@ export function CarryOverGate({ children }: { children: ReactNode }) {
           } catch {
             // Storage blocked: this tab still opens the app; the next load asks again.
           }
-          setGate({ kind: 'app', carriedOverAt: null });
+          // Carried before (Carry over again, then Keep using): the banner stays.
+          setGate({ kind: 'app', carriedOverAt: gate.carriedOverAt });
         }}
         onCarried={(carriedOverAt) => setGate({ kind: 'app', carriedOverAt })}
       />
     );
   }
-  return (
-    <>
-      {gate.kind === 'app' && gate.carriedOverAt && portalOrigin && <CarriedBanner portalOrigin={portalOrigin} carriedOverAt={gate.carriedOverAt} onCarryAgain={() => setGate({ kind: 'screen' })} />}
-      {children}
-    </>
-  );
+  if (gate.kind === 'app' && gate.carriedOverAt && portalOrigin) {
+    const carriedOverAt = gate.carriedOverAt;
+    return (
+      <div className="carry-over-carried">
+        <CarriedBanner portalOrigin={portalOrigin} carriedOverAt={carriedOverAt} onCarryAgain={() => setGate({ kind: 'screen', carriedOverAt })} />
+        {children}
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
-type Phase = { kind: 'offer'; declined: boolean } | { kind: 'sending' } | { kind: 'done'; result: CarryOverResult; carriedOverAt: string } | { kind: 'fallback' };
+type Phase = { kind: 'offer'; declined: boolean } | { kind: 'sending' } | { kind: 'done'; result: CarryOverResult; carriedOverAt: string } | { kind: 'fallback'; failed: boolean };
 
 function CarryOverScreen({ portalOrigin, onLater, onCarried }: { portalOrigin: string; onLater: () => void; onCarried: (carriedOverAt: string) => void }) {
   const { t } = useLanguage();
@@ -105,13 +112,18 @@ function CarryOverScreen({ portalOrigin, onLater, onCarried }: { portalOrigin: s
   function carry() {
     setPhase({ kind: 'sending' });
     // From the click itself: the popup opens before anything is awaited (R2).
-    void startCarryOverSend({ portalOrigin, source: 'web', read: async () => new Blob([JSON.stringify(await dataset.serializeBackup())], { type: 'application/json' }) }).then(async (outcome) => {
+    // Strict: a table that can't be read fails the carry-over instead of arriving empty.
+    void startCarryOverSend({ portalOrigin, source: 'web', read: async () => new Blob([JSON.stringify(await dataset.serializeBackup({ strict: true }))], { type: 'application/json' }) }).then(async (outcome) => {
       if (outcome.status === 'done') {
         const carriedOverAt = new Date().toISOString();
-        await settings.update({ carriedOverAt });
+        try {
+          await settings.update({ carriedOverAt });
+        } catch {
+          // The records are on the new address either way; this device just asks again next time.
+        }
         setPhase({ kind: 'done', result: outcome, carriedOverAt });
       } else if (outcome.status === 'declined') setPhase({ kind: 'offer', declined: true });
-      else setPhase({ kind: 'fallback' });
+      else setPhase({ kind: 'fallback', failed: outcome.reason === 'failed' });
     });
   }
 
@@ -126,7 +138,7 @@ function CarryOverScreen({ portalOrigin, onLater, onCarried }: { portalOrigin: s
         {phase.kind === 'sending' && <p role="status">{t('carryOver.waiting')}</p>}
         {phase.kind === 'fallback' && (
           <p role="alert" className="carry-over-alert">
-            {t('carryOver.fallback', { address })}
+            {t(phase.failed ? 'carryOver.failed' : 'carryOver.fallback', { address })}
           </p>
         )}
         {phase.kind === 'done' && (
@@ -157,7 +169,7 @@ function CarryOverScreen({ portalOrigin, onLater, onCarried }: { portalOrigin: s
                 {t('carryOver.download')}
               </Button>
               {(installed || phase.kind === 'fallback') && (
-                <a className="btn btn-secondary btn-md" href={`${portalOrigin}/carry-over/receive`}>
+                <a className="btn btn-secondary btn-md" href={`${portalOrigin}${RECEIVE_PATH}`}>
                   {t('carryOver.openNew')}
                 </a>
               )}

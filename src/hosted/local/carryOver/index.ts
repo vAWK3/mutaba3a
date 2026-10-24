@@ -1,9 +1,9 @@
 import type { LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
 import type { StoredFile } from '../blobStore.js';
 import type { StoredSnapshot } from '../migrations/index.js';
-import { parseFreeAppBackup, type FreeAppBackup } from './freeAppBackup';
+import type { FreeAppBackup } from './freeAppBackup';
 import { mapFreeAppBackup, type CarryOverReport, type MapOptions } from './mapFreeAppBackup';
-import { replayCarryOver, type ReplayOptions, type ReplayResult } from './replay';
+import { replayCarryOver, yieldToBrowser, type ReplayOptions, type ReplayResult } from './replay';
 import { bigintToDecimal } from './money';
 import { byProfileId, compareTotals, freeAppTotals, snapshotTotals, totalsByCurrency, type TotalsMismatch } from './totals';
 
@@ -45,13 +45,14 @@ export class CarryOverCheckFailed extends Error {
 
 export type PrepareOptions = Pick<ReplayOptions, 'now' | 'locale' | 'onProgress' | 'yieldToBrowser'> & MapOptions;
 
-export async function prepareFreeAppCarryOver(text: string, options: PrepareOptions): Promise<PreparedCarryOver> {
-  return prepareFromBackup(parseFreeAppBackup(text), options);
-}
-
 export async function prepareFromBackup(backup: FreeAppBackup, options: PrepareOptions): Promise<PreparedCarryOver> {
+  // The page gets its turn between the phases too, not only inside the replay (R5).
+  const giveBack = options.yieldToBrowser ?? yieldToBrowser;
+  await giveBack();
   const plan = mapFreeAppBackup(backup, { timezone: options.timezone, labels: options.labels });
+  await giveBack();
   const result = await replayCarryOver(plan, options);
+  await giveBack();
   const mismatches = [...checkCarriedTotals(backup, plan, result), ...(await crossCheckOutstanding(result))];
   if (mismatches.length > 0) throw new CarryOverCheckFailed(mismatches);
   return { snapshot: result.snapshot, files: result.files, report: result.report, counts: countsOf(result.snapshot.maps), totals: totalsByCurrency(snapshotTotals(result.snapshot.maps)) };
@@ -68,7 +69,7 @@ async function crossCheckOutstanding(result: ReplayResult): Promise<TotalsMismat
   for (const profileId of result.profileIds.values()) {
     const response = await result.request('GET', '/v1/summaries/organization', profileId);
     if (!response.ok) {
-      mismatches.push({ profile: profileId, currency: '*', field: 'outstanding', expected: 0n, actual: -1n });
+      mismatches.push({ profile: profileId, currency: '*', field: 'outstanding', expected: 0n, actual: null, reported: `HTTP ${response.status}` });
       continue;
     }
     const summary = (await response.json()) as { asOf: string; currencies: Array<{ currency: string; outstanding: string }> };
@@ -77,7 +78,7 @@ async function crossCheckOutstanding(result: ReplayResult): Promise<TotalsMismat
     for (const currency of currencies) {
       const fromRecords = bigintToDecimal(records.get(currency)?.outstanding ?? 0n, currency);
       const fromSummary = summary.currencies.find((c) => c.currency === currency)?.outstanding ?? bigintToDecimal(0n, currency);
-      if (fromRecords !== fromSummary) mismatches.push({ profile: profileId, currency, field: 'outstanding', expected: records.get(currency)?.outstanding ?? 0n, actual: -1n });
+      if (fromRecords !== fromSummary) mismatches.push({ profile: profileId, currency, field: 'outstanding', expected: records.get(currency)?.outstanding ?? 0n, actual: null, reported: fromSummary });
     }
   }
   return mismatches;

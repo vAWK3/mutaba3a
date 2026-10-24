@@ -1,7 +1,7 @@
 import type { LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
 import { bigintToDecimal } from './money';
 import type { FreeAppBackup } from './freeAppBackup';
-import { paymentsOf, sourceKey, type CarryOverPlan } from './mapFreeAppBackup';
+import { groupBy, paymentsOf, sourceKey, type CarryOverPlan } from './mapFreeAppBackup';
 
 /**
  * The carry-over's totals gate (MUT-291 §3.4, R3, E4). Two sides, never
@@ -45,7 +45,8 @@ export function freeAppTotals(backup: FreeAppBackup, plan: CarryOverPlan, carrie
   const tx = new Map(transactions.map((t) => [t.id, t]));
   const expense = new Map(expenses.map((e) => [e.id, e]));
   const paymentAmount = new Map<string, number>();
-  for (const t of transactions) if (t.kind === 'income') for (const p of paymentsOf(t, paymentRecords)) paymentAmount.set(sourceKey(p.source), p.amountMinor);
+  const records = groupBy(paymentRecords, (r) => r.transactionId);
+  for (const t of transactions) if (t.kind === 'income') for (const p of paymentsOf(t, records.get(t.id) ?? [])) paymentAmount.set(sourceKey(p.source), p.amountMinor);
 
   const totals: Totals = new Map();
   const counted = new Set<string>();
@@ -110,7 +111,10 @@ export interface TotalsMismatch {
   currency: string;
   field: keyof CurrencyTotals;
   expected: bigint;
-  actual: bigint;
+  /** What the records hold; null when the figure came from the summary route (see `reported`). */
+  actual: bigint | null;
+  /** The summary route's own figure, as it answered (or its HTTP status when it didn't). */
+  reported?: string;
 }
 
 /** Every figure that differs; a currency or profile with nothing but zeros on one side counts as zero. */

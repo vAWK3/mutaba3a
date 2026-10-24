@@ -732,7 +732,7 @@ keep working only while it is claimed. Apple's CDN caches the AASA for up to abo
 
 ### Step 6: redirect the old hosts (`stage: "redirect"`)
 
-**Only after the carry-over (MUT-291, ADR-181) has shipped and been checked.** Before that, a
+**Only after the carry-over (MUT-291, ADR-184) has shipped and been checked.** Before that, a
 redirect strands signed-out local-mode records on run.app. In order:
 
 1. `make release server`: ships the receiver (`/carry-over/receive` on the new host) and the old

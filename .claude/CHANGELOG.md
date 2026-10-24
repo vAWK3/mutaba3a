@@ -28,7 +28,51 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-181)
+## [Unreleased] - 2026-10-24 — MUT-291 review fixes: the carry-over fails loudly, never quietly (ADR-184 amendment 1)
+
+**Why:** `/qa-reconcile` ran ten reviewers on the branch. Their findings:
+- One unreadable table could arrive empty and still be marked carried.
+- The old page waited forever when the new one failed.
+- An ordinary Restore failed on a retired currency.
+- A few loops were quadratic on large backups.
+
+### Fixed
+- **The free app reads its backup strictly for the carry-over** (`src/db/backup.ts`): a table it can't read fails the carry-over instead of arriving empty.
+- **The new address answers `failed`** (`src/lib/carryOver/protocol.ts`, `ReceivePage.tsx`). This covers a refused or failed check, a payload that's too large, or a save that didn't finish. Both old pages then offer the file with their own message, and nothing is marked carried. Answers count only after `ready`.
+- **Restore with a retired currency** (AED, SAR, QAR, BHD, OMR) works again with carry-over options: `bigintToDecimal` is the server's `formatMoney`.
+- **Receiving:**
+  - A failed "Download what's here first" keeps the checked summary.
+  - A failed save says so (`save-failed`).
+  - Replace asks with "Yes, replace everything", announced, and ignores the second click of a double-click.
+- **Old address, old app and replay:**
+  - The old address offers the move when its records can't be counted, instead of leaving.
+  - The old app no longer hangs when it can't note the carry-over.
+  - It keeps the banner after Carry over again, then Keep using.
+  - Receipts of an expense that didn't come are listed.
+  - A receipt file that won't decode is listed, not fatal.
+  - A receipt refused at complete is deleted again.
+  - A settle's id comes from `payment.id`.
+  - The records file's summary lists missing receipt files.
+- **Speed and layout:**
+  - Payment records, receipts and project currencies are grouped once (they were O(n×m)).
+  - One date formatter per timezone.
+  - The replay yields every 40 ms through a MessageChannel, and between phases.
+  - A zip is sniffed from two bytes.
+  - The carried banner no longer pushes the 100vh shell below the fold.
+  - The carry-over pages use the sign-in card's h1.
+  - The warning notes are body size.
+- **Origins and copy:**
+  - Carry-over origins must be canonical, and release builds refuse loopback origins.
+  - Copy: English "Arrived" without broken plurals; Arabic title «انتقلت متابعة إلى عنوان جديد» and «مؤقتًا»; one "Download my records file" label on both old pages; an API reason isolated inside its sentence.
+
+### Technical
+- MUT-291 moves to ADR-184 and TD-226/227/228. ADR-181 and TD-221/222 are MUT-361's, and ADR-182/183 and TD-223..225 are claimed by MUT-419 and MUT-254.
+- New TD-229 (the gate sees only carried rows), TD-230 (the legacy origins have no end date), TD-231 (release order).
+- Removed: `prepareFreeAppCarryOver`, `ReplayOptions.yieldEvery`, `CARRIED_EXPONENT` and its drift test. Added: `recordsFileName` shared by three downloads; `CHANGE_CODES` / `NOT_CARRIED_CODES`.
+
+---
+
+## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-184)
 
 **Why:** the free web app's records live in its own browser origin and the new address can't read them (MUT-284). Stage `redirect` needs the old address's `/carry-over` page. Plan, decisions D1–D10 and the eng review: `.claude/designs/mut-291-carry-over.md`.
 

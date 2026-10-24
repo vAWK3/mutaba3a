@@ -36,51 +36,59 @@ const INCOME_NOTES_MAX = 2000;
 const CATEGORY_NAME_MAX = 60;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-export type ChangeCode =
-  | 'business-archived-carried'
-  | 'business-created'
-  | 'business-details-dropped'
-  | 'business-name-shortened'
-  | 'unscoped-assigned'
-  | 'client-email-dropped'
-  | 'client-details-shortened'
-  | 'client-archive-dropped'
-  | 'project-archive-dropped'
-  | 'project-no-client'
-  | 'project-details-dropped'
-  | 'owed-no-client'
-  | 'project-currency-dropped'
-  | 'due-date-moved'
-  | 'paid-before-entry-moved'
-  | 'owed-notes-dropped'
-  | 'payment-notes-dropped'
-  | 'income-category-dropped'
-  | 'review-flag-dropped'
-  | 'expense-project-dropped'
-  | 'text-shortened'
+/** Every ChangeCode, so a test can hold each to its copy in both languages. */
+export const CHANGE_CODES = [
+  'business-archived-carried',
+  'business-created',
+  'business-details-dropped',
+  'business-name-shortened',
+  'unscoped-assigned',
+  'client-email-dropped',
+  'client-details-shortened',
+  'client-archive-dropped',
+  'project-archive-dropped',
+  'project-no-client',
+  'project-details-dropped',
+  'owed-no-client',
+  'project-currency-dropped',
+  'due-date-moved',
+  'paid-before-entry-moved',
+  'owed-notes-dropped',
+  'payment-notes-dropped',
+  'income-category-dropped',
+  'review-flag-dropped',
+  'expense-project-dropped',
+  'text-shortened',
   /** Added by the replay: a link the record can do without (a category, a project) didn't arrive. */
-  | 'link-dropped';
+  'link-dropped',
+] as const;
+export type ChangeCode = (typeof CHANGE_CODES)[number];
 
-export type NotCarriedCode =
-  | 'business-over-cap'
-  | 'record-of-business-over-cap'
-  | 'archived-entry'
-  | 'currency'
-  | 'amount'
-  | 'conversion-incomplete'
-  | 'conversion-same-currency'
-  | 'receipt-unattached'
-  | 'vendors'
-  | 'recurring-rules'
-  | 'recurring-occurrences'
-  | 'documents'
-  | 'engagements'
-  | 'month-close'
-  | 'malformed'
+/** Every NotCarriedCode, so a test can hold each to its copy in both languages. */
+export const NOT_CARRIED_CODES = [
+  'business-over-cap',
+  'record-of-business-over-cap',
+  'archived-entry',
+  'currency',
+  'amount',
+  'conversion-incomplete',
+  'conversion-same-currency',
+  'receipt-unattached',
+  'vendors',
+  'recurring-rules',
+  'recurring-occurrences',
+  'documents',
+  'engagements',
+  'month-close',
+  'malformed',
   /** Added by the replay: a route refused the record (the line carries the API's reason). */
-  | 'refused'
+  'refused',
   /** Added by the replay: the record it belongs to was not carried. */
-  | 'parent-not-carried';
+  'parent-not-carried',
+  /** A receipt whose file is missing from a records file, or won't decode from the old app's backup. */
+  'receipt-file-unreadable',
+] as const;
+export type NotCarriedCode = (typeof NOT_CARRIED_CODES)[number];
 
 export interface ReportLine<C extends string> {
   code: C;
@@ -180,11 +188,29 @@ class Mapper {
   private readonly projects = new Map<string, { ref: string; profile: string; customer: string; currency: CarriedCurrency; clientId: string | null }>();
   private readonly noClient = new Map<string, string>();
   private readonly categories = new Map<string, string>();
+  /** Expenses (table `expenses`) that got an op: only their receipts are carried. */
+  private readonly carriedExpenses = new Set<string>();
+
+  // Built once: looking these up per row is quadratic on a large backup.
+  private readonly receiptsByExpense: Map<string, FreeAppBackup['tables']['receipts']>;
+  private readonly currenciesByProject: Map<string, string[]>;
 
   constructor(
     private readonly backup: FreeAppBackup,
     private readonly options: MapOptions,
-  ) {}
+  ) {
+    const { receipts, transactions, expenses } = backup.tables;
+    this.receiptsByExpense = groupBy(receipts, (r) => r.expenseId);
+    this.currenciesByProject = new Map();
+    const used = (projectId: string | undefined, currency: string) => {
+      if (!projectId) return;
+      const list = this.currenciesByProject.get(projectId);
+      if (list) list.push(currency);
+      else this.currenciesByProject.set(projectId, [currency]);
+    };
+    for (const t of transactions) if (t.kind === 'income' && !t.deletedAt && !t.archivedAt) used(t.projectId, t.currency);
+    for (const e of expenses) if (!e.deletedAt) used(e.projectId, e.currency);
+  }
 
   run(): CarryOverPlan {
     this.mapProfiles();
@@ -305,10 +331,7 @@ class Mapper {
 
   /** D4: a project holds one currency; the one most of its entries use, else its profile's. */
   private projectCurrency(project: FreeAppProject, profile: string): CarriedCurrency {
-    const used = [
-      ...this.backup.tables.transactions.filter((t) => t.projectId === project.id && t.kind === 'income' && !t.deletedAt && !t.archivedAt).map((t) => t.currency),
-      ...this.backup.tables.expenses.filter((e) => e.projectId === project.id && !e.deletedAt).map((e) => e.currency),
-    ];
+    const used = this.currenciesByProject.get(project.id) ?? [];
     return majority(used.map(asCurrency).filter((c): c is CarriedCurrency => c !== null)) ?? this.profileCurrency.get(profile) ?? 'ILS';
   }
 
@@ -463,7 +486,10 @@ class Mapper {
       ...(project ? { project: project.ref } : {}),
       ...(row.notes ? { notes: this.shorten(row.notes, NOTES_MAX, 'text-shortened') } : {}),
     });
-    if (table === 'expenses') this.mapReceiptsOf(row.id, ref, profile);
+    if (table === 'expenses') {
+      this.carriedExpenses.add(row.id);
+      this.mapReceiptsOf(row.id, ref, profile);
+    }
   }
 
   /** One category op per profile and name (case-insensitive); replay.ts finds a preset of that name before creating one. */
@@ -479,7 +505,7 @@ class Mapper {
   }
 
   private mapReceiptsOf(expenseId: string, expenseRef: string, profile: string): void {
-    for (const receipt of this.backup.tables.receipts.filter((r) => r.expenseId === expenseId)) {
+    for (const receipt of this.receiptsByExpense.get(expenseId) ?? []) {
       this.ops.push({ op: 'receipt', ref: `receipt:${receipt.id}`, source: { table: 'receipts', id: receipt.id }, profile, expense: expenseRef, fileName: receipt.fileName.slice(0, NAME_MAX), mimeType: receipt.mimeType, sizeBytes: receipt.sizeBytes, data: receipt.data });
     }
   }
@@ -518,8 +544,10 @@ class Mapper {
 
   private countTheRest(): void {
     const { tables, counted, malformed } = this.backup;
-    const carriedExpenses = new Set(tables.expenses.filter((e) => !e.deletedAt).map((e) => e.id));
-    this.add('receipt-unattached', tables.receipts.filter((r) => !r.expenseId || !carriedExpenses.has(r.expenseId)).length);
+    const liveExpenses = new Set(tables.expenses.filter((e) => !e.deletedAt).map((e) => e.id));
+    this.add('receipt-unattached', tables.receipts.filter((r) => !r.expenseId || !liveExpenses.has(r.expenseId)).length);
+    // An expense that is there but wasn't carried (its currency, amount or business): its receipts stay with it.
+    this.add('parent-not-carried', tables.receipts.filter((r) => r.expenseId && liveExpenses.has(r.expenseId) && !this.carriedExpenses.has(r.expenseId)).length);
     this.add('vendors', tables.vendors.length);
     this.add('recurring-rules', counted.recurringRules);
     this.add('recurring-occurrences', counted.recurringOccurrences);
@@ -617,9 +645,15 @@ function majority<T>(values: T[]): T | null {
   return best;
 }
 
-function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
+export function groupBy<T>(items: readonly T[], key: (item: T) => string | undefined): Map<string, T[]> {
   const groups = new Map<string, T[]>();
-  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item]);
+  for (const item of items) {
+    const k = key(item);
+    if (k === undefined) continue;
+    let group = groups.get(k);
+    if (!group) groups.set(k, (group = []));
+    group.push(item);
+  }
   return groups;
 }
 
@@ -630,6 +664,15 @@ export function localDate(value: string, timezone: string): string {
   if (DATE_ONLY.test(value)) return value;
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return value.slice(0, 10);
+  return dayFormat(timezone).format(instant);
+}
+
+const DAY_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+/** One formatter per timezone: building one costs far more than formatting with it, and a carry-over formats every date. */
+function dayFormat(timezone: string): Intl.DateTimeFormat {
+  let format = DAY_FORMATS.get(timezone);
   // en-CA formats a date as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
+  if (!format) DAY_FORMATS.set(timezone, (format = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' })));
+  return format;
 }

@@ -1206,18 +1206,21 @@
           "other": "This device already has {count} records. Saving replaces them."
         },
         "downloadFirst": "Download what's here first",
+        "downloadFailed": "The download didn't work. Nothing was changed; try again before you replace.",
         "save": "Save on this device",
         "replace": "Replace with the carried records",
         "replaceConfirm": "Replace everything on this device with the carried records?",
+        "replaceYes": "Yes, replace everything",
         "signedIn": "You're signed in. These records will be saved in this browser's signed-out space. Sign out to see them.",
         "saving": "Saving…",
         "done": "Your records are here.",
         "open": "Open MTB3A",
         "fileTitle": "Bring your records from a file",
-        "fileLead": "In the old app, choose Download my records file. Then choose that file here.",
+        "fileLead": "On the old page, choose Download my records file. Then choose that file here.",
         "fileClosed": "The old page closed. Choose your records file instead.",
         "choose": "Choose file",
         "failed": "We couldn't check your records, so nothing was changed. Download your records file from the old app and choose it here.",
+        "saveFailed": "Saving didn't finish. Choose your records file to try again.",
         "cancelled": "Nothing was saved. Your records are still on the old page."
       },
       "changed": {
@@ -1261,15 +1264,17 @@
         "month-close": "Month-close marks",
         "malformed": "Records the old app saved in a form that can't be read",
         "refused": "Records the rules refused ({reason})",
-        "parent-not-carried": "Records whose client, entry or expense didn't come over"
+        "parent-not-carried": "Records whose client, entry or expense didn't come over",
+        "receipt-file-unreadable": "Receipt files that were missing or couldn't be read"
       },
       "send": {
         "title": "Your records are moving",
         "lead": "MTB3A has a new address. The records in this browser stay here until you carry them over.",
         "carry": "Carry my records over",
-        "download": "Download my records",
+        "download": "Download my records file",
         "waiting": "Finish on the new page that opened…",
-        "fallback": "The new page couldn't be reached. Download your records, then open the new address and choose Your data › Restore from file.",
+        "fallback": "The new page couldn't be reached. Download your records file, then open the new address and choose Your data › Restore from file.",
+        "failed": "The new address couldn't check or save your records, so nothing was carried. Download your records file, then open the new address and choose Your data › Restore from file.",
         "openNew": "Open the new address",
         "done": "Your records are on the new address."
       },

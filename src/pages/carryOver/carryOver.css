@@ -43,7 +43,18 @@
 
 .carry-over-note {
   color: var(--text-secondary);
-  font-size: var(--text-label);
+}
+
+/* Carried: the banner sits above the app, and the shell takes what's left of the viewport instead of all of it. */
+.carry-over-carried {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.carry-over-carried .app-shell {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 
 .carry-over-banner {
@@ -55,5 +66,4 @@
   padding: var(--space-2) var(--space-4);
   background: var(--accent-subtle);
   border-block-end: var(--space-px) solid var(--border);
-  font-size: var(--text-label);
 }

@@ -7,7 +7,7 @@ import { useLanguage } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { localBackend } from '../../api/client';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
-import { saveBlobAs } from '../../data/download';
+import { recordsFileName, saveBlobAs } from '../../data/download';
 import { isRecordsFileRefused, type CarryOverPrepareOptions, type PendingRestore } from '../../session/localBackendContract';
 import { currentMode } from '../../session/mode';
 import { useRestoredHome } from '../../session/restoredHome';
@@ -25,12 +25,12 @@ import { CarryOverDetails } from './CarryOverDetails';
  * browser's signed-out space, and the page says so (E3, D10).
  */
 
-type FileReason = 'no-opener' | 'unknown-source' | 'timeout' | 'opener-closed' | 'too-large' | 'failed' | 'declined' | 'not-a-file' | 'too-new';
+type FileReason = 'no-opener' | 'unknown-source' | 'timeout' | 'opener-closed' | 'too-large' | 'failed' | 'save-failed' | 'declined' | 'not-a-file' | 'too-new';
 
 type Phase =
   | { kind: 'waiting' }
   | { kind: 'checking'; done: number; total: number }
-  | { kind: 'summary'; pending: PendingRestore; reply: CarryOverReply | null; fromOldAddress: boolean; confirming: boolean }
+  | { kind: 'summary'; pending: PendingRestore; reply: CarryOverReply | null; fromOldAddress: boolean; confirming: boolean; downloadFailed?: boolean }
   | { kind: 'saving' }
   | { kind: 'done' }
   | { kind: 'file'; reason: FileReason };
@@ -64,6 +64,7 @@ export function ReceivePage() {
         const pending = await (await localBackend()).prepareCarryOver(outcome.kind, outcome.payload, options());
         setPhase({ kind: 'summary', pending, reply: outcome.reply, fromOldAddress: outcome.source === 'portal', confirming: false });
       } catch (error) {
+        outcome.reply.failed();
         setPhase({ kind: 'file', reason: reasonFor(error) });
       }
     });
@@ -89,18 +90,22 @@ export function ReceivePage() {
     try {
       await pending.apply();
     } catch {
-      setPhase({ kind: 'file', reason: 'failed' });
+      // Never done: the old page would mark its records as carried.
+      reply?.failed();
+      setPhase({ kind: 'file', reason: 'save-failed' });
       return;
     }
     if (reply && pending.carryOver) reply.done({ counts: pending.carryOver.counts, totals: pending.carryOver.totals });
     setPhase({ kind: 'done' });
   }
 
-  async function downloadExisting() {
+  /** The checked summary stays: a failed download changes nothing. */
+  async function downloadExisting(summary: Extract<Phase, { kind: 'summary' }>) {
     try {
-      saveBlobAs(await (await localBackend()).exportRecords(), `mtb3a-records-${new Date().toISOString().slice(0, 10)}.zip`);
+      saveBlobAs(await (await localBackend()).exportRecords(), recordsFileName(new Date()));
+      setPhase({ ...summary, downloadFailed: false });
     } catch {
-      setPhase({ kind: 'file', reason: 'failed' });
+      setPhase({ ...summary, downloadFailed: true });
     }
   }
 
@@ -112,6 +117,7 @@ export function ReceivePage() {
   return (
     <AuthLayout>
       <div className="hp-card hp-carry-over" data-testid="carry-over-receive" data-phase={phase.kind}>
+        {(phase.kind === 'waiting' || phase.kind === 'checking' || phase.kind === 'saving') && <h1>{t('hosted.carryOver.send.title')}</h1>}
         {phase.kind === 'waiting' && <p role="status">{t('hosted.carryOver.receive.waiting')}</p>}
         {phase.kind === 'checking' && <p role="status">{phase.total > 0 ? t('hosted.carryOver.receive.checking', { done: phase.done, total: phase.total }) : t('hosted.carryOver.receive.waiting')}</p>}
         {phase.kind === 'saving' && <p role="status">{t('hosted.carryOver.receive.saving')}</p>}
@@ -120,12 +126,12 @@ export function ReceivePage() {
             phase={phase}
             onSave={() => (phase.pending.deviceRecordCount > 0 && !phase.confirming ? setPhase({ ...phase, confirming: true }) : void save(phase.pending, phase.reply))}
             onCancel={() => cancel(phase.reply)}
-            onDownloadExisting={() => void downloadExisting()}
+            onDownloadExisting={() => void downloadExisting(phase)}
           />
         )}
         {phase.kind === 'done' && (
           <>
-            <h2>{t('hosted.carryOver.receive.done')}</h2>
+            <h1>{t('hosted.carryOver.receive.done')}</h1>
             <div className="hp-empty-actions">
               <Button onClick={() => void restoredHome().then((to) => navigate({ to, replace: true }))}>{t('hosted.carryOver.receive.open')}</Button>
             </div>
@@ -133,7 +139,7 @@ export function ReceivePage() {
         )}
         {phase.kind === 'file' && (
           <>
-            <h2>{t('hosted.carryOver.receive.fileTitle')}</h2>
+            <h1>{t('hosted.carryOver.receive.fileTitle')}</h1>
             <FileReasonNote reason={phase.reason} />
             <p>{t('hosted.carryOver.receive.fileLead')}</p>
             <div className="hp-empty-actions">
@@ -156,14 +162,23 @@ export function ReceivePage() {
   );
 }
 
+/** A second click this soon after the first is the same double-click, not a confirm (D3). */
+const CONFIRM_GUARD_MS = 600;
+
 function Summary({ phase, onSave, onCancel, onDownloadExisting }: { phase: Extract<Phase, { kind: 'summary' }>; onSave: () => void; onCancel: () => void; onDownloadExisting: () => void }) {
   const { t } = useLanguage();
   const tp = useTp();
-  const { pending, fromOldAddress, confirming } = phase;
+  const { pending, fromOldAddress, confirming, downloadFailed } = phase;
   const existing = pending.deviceRecordCount;
+  const askedAt = useRef(0);
+  const saveClicked = () => {
+    if (existing > 0 && !confirming) askedAt.current = Date.now();
+    else if (existing > 0 && Date.now() - askedAt.current < CONFIRM_GUARD_MS) return;
+    onSave();
+  };
   return (
     <>
-      <h2>{t(fromOldAddress ? 'hosted.carryOver.receive.titleOldAddress' : 'hosted.carryOver.receive.titleFreeApp')}</h2>
+      <h1>{t(fromOldAddress ? 'hosted.carryOver.receive.titleOldAddress' : 'hosted.carryOver.receive.titleFreeApp')}</h1>
       <p>{t('hosted.carryOver.receive.lead')}</p>
       {pending.carryOver && <CarryOverDetails summary={pending.carryOver} />}
       {currentMode() === 'remote' && (
@@ -178,15 +193,25 @@ function Summary({ phase, onSave, onCancel, onDownloadExisting }: { phase: Extra
           <span>{tp('hosted.carryOver.receive.existing', existing)}</span>
         </div>
       )}
-      {confirming && <p data-testid="carry-over-replace-confirm">{t('hosted.carryOver.receive.replaceConfirm')}</p>}
+      {downloadFailed && (
+        <div className="hp-banner hp-banner-error" role="alert" data-testid="carry-over-download-failed">
+          <AlertIcon />
+          <span>{t('hosted.carryOver.receive.downloadFailed')}</span>
+        </div>
+      )}
+      {confirming && (
+        <p role="alert" data-testid="carry-over-replace-confirm">
+          {t('hosted.carryOver.receive.replaceConfirm')}
+        </p>
+      )}
       <div className="hp-empty-actions">
         {existing > 0 && (
           <Button variant="secondary" onClick={onDownloadExisting}>
             {t('hosted.carryOver.receive.downloadFirst')}
           </Button>
         )}
-        <Button variant={existing > 0 ? 'danger' : 'primary'} onClick={onSave}>
-          {t(existing > 0 ? 'hosted.carryOver.receive.replace' : 'hosted.carryOver.receive.save')}
+        <Button variant={existing > 0 ? 'danger' : 'primary'} onClick={saveClicked}>
+          {t(existing === 0 ? 'hosted.carryOver.receive.save' : confirming ? 'hosted.carryOver.receive.replaceYes' : 'hosted.carryOver.receive.replace')}
         </Button>
         <Button variant="secondary" onClick={onCancel}>
           {t('common.cancel')}
@@ -202,6 +227,7 @@ function FileReasonNote({ reason }: { reason: FileReason }) {
     timeout: 'hosted.carryOver.receive.fileClosed',
     'opener-closed': 'hosted.carryOver.receive.fileClosed',
     failed: 'hosted.carryOver.receive.failed',
+    'save-failed': 'hosted.carryOver.receive.saveFailed',
     'too-large': 'hosted.carryOver.receive.failed',
     declined: 'hosted.carryOver.receive.cancelled',
     'not-a-file': 'hosted.local.data.notAFile',

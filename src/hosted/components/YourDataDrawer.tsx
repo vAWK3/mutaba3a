@@ -5,7 +5,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { formatDay } from '../format/dates';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
-import { saveBlobAs } from '../data/download';
+import { recordsFileName, saveBlobAs } from '../data/download';
 import { useRestoredHome } from '../session/restoredHome';
 import { isRecordsFileRefused, type PendingRestore } from '../session/localBackendContract';
 import { CarryOverDetails } from '../pages/carry-over/CarryOverDetails';
@@ -27,10 +27,6 @@ type Problem = 'notAFile' | 'tooNew' | 'failed';
 function problemFor(error: unknown): Problem {
   if (isRecordsFileRefused(error)) return error.reason === 'too-new' ? 'tooNew' : error.reason === 'carry-over-failed' ? 'failed' : 'notAFile';
   return 'failed';
-}
-
-function recordsFileName(today: Date): string {
-  return `mtb3a-records-${today.toISOString().slice(0, 10)}.zip`;
 }
 
 export function YourDataDrawer({ onClose }: { onClose: () => void }) {

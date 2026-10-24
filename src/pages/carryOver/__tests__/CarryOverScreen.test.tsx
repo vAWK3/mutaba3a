@@ -53,8 +53,17 @@ beforeEach(async () => {
 
 afterEach(() => {
   delete (globalThis as { __CARRY_OVER__?: unknown }).__CARRY_OVER__;
+  // Here, not in the Arabic test: a failure there would leave Arabic on for every test after it.
+  localStorage.clear();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
+
+type Popup = { posted: Array<{ data: unknown; targetOrigin: string }>; closed: boolean; postMessage(data: unknown, targetOrigin: string): void; focus(): void };
+
+function popupWindow(): Popup {
+  return { posted: [], closed: false, postMessage(data, targetOrigin) { this.posted.push({ data, targetOrigin }); }, focus: () => undefined };
+}
 
 describe('the free app\'s carry-over gate', () => {
   it('before stage live it is not there at all', async () => {
@@ -98,7 +107,7 @@ describe('the free app\'s carry-over gate', () => {
     expect(JSON.parse(await sent.payload.text())).toMatchObject({ version: 24, tables: { clients: [expect.objectContaining({ id: 'c1' })] } });
 
     deliver({ type: 'mtb3a.carry-over.done', v: 1, counts: { clients: 1, income: 1, expenses: 0 }, totals: {} }, PORTAL, popup);
-    expect(await screen.findByTestId('carry-over-arrived')).toHaveTextContent('Arrived: 1 clients, 1 income entries, 0 expenses.');
+    expect(await screen.findByTestId('carry-over-arrived')).toHaveTextContent('Arrived: clients 1, income entries 1, expenses 0.');
     expect((await settingsRepo.get()).carriedOverAt).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Keep using the old app for now' }));
@@ -135,10 +144,75 @@ describe('the free app\'s carry-over gate', () => {
     chooseLanguage('ar');
     await withRecords();
     gate();
-    expect(await screen.findByRole('heading', { name: 'لمتابعة عنوان جديد' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'انتقلت متابعة إلى عنوان جديد' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'انقل سجلاتي' })).toBeInTheDocument();
     expect(document.documentElement.dir).toBe('rtl');
-    localStorage.clear();
+  });
+
+  it('when this browser\'s records can\'t be read, opens the app: never locked out', async () => {
+    vi.spyOn(settingsRepo, 'get').mockRejectedValue(new Error('idb blocked'));
+    gate();
+    expect(await screen.findByText('the old app')).toBeInTheDocument();
+    expect(leaveTo).not.toHaveBeenCalled();
+  });
+
+  it('Keep using the old app this tab opens the app straight away next time in the same tab', async () => {
+    await withRecords();
+    sessionStorage.setItem('mtb3a-carry-over-later', '1');
+    gate();
+    expect(await screen.findByText('the old app')).toBeInTheDocument();
+    expect(screen.queryByTestId('carry-over-screen')).toBeNull();
+  });
+
+  it('a cancel on the new address brings the offer back, and nothing is marked carried', async () => {
+    await withRecords();
+    const popup = popupWindow();
+    vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const user = userEvent.setup();
+    gate();
+    await user.click(await screen.findByRole('button', { name: 'Carry my records over' }));
+    deliver({ type: 'mtb3a.carry-over.ready', v: 1 }, PORTAL, popup);
+    deliver({ type: 'mtb3a.carry-over.declined', v: 1 }, PORTAL, popup);
+    expect(await screen.findByText('Nothing was carried over. Your records are still here.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Carry my records over' })).toBeEnabled();
+    expect((await settingsRepo.get()).carriedOverAt).toBeUndefined();
+  });
+
+  it('when the new address could not check the records, says so and leads with the file', async () => {
+    await withRecords();
+    const popup = popupWindow();
+    vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    const user = userEvent.setup();
+    gate();
+    await user.click(await screen.findByRole('button', { name: 'Carry my records over' }));
+    deliver({ type: 'mtb3a.carry-over.ready', v: 1 }, PORTAL, popup);
+    deliver({ type: 'mtb3a.carry-over.failed', v: 1 }, PORTAL, popup);
+    expect(await screen.findByRole('alert')).toHaveTextContent("The new address couldn't check or save your records");
+    expect((await settingsRepo.get()).carriedOverAt).toBeUndefined();
+  });
+
+  it('done, even when this device can\'t note it, shows the records arrived instead of hanging', async () => {
+    await withRecords();
+    const popup = popupWindow();
+    vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window);
+    vi.spyOn(settingsRepo, 'update').mockRejectedValue(new Error('quota'));
+    const user = userEvent.setup();
+    gate();
+    await user.click(await screen.findByRole('button', { name: 'Carry my records over' }));
+    deliver({ type: 'mtb3a.carry-over.ready', v: 1 }, PORTAL, popup);
+    await waitFor(() => expect(popup.posted).toHaveLength(1));
+    deliver({ type: 'mtb3a.carry-over.done', v: 1, counts: {}, totals: {} }, PORTAL, popup);
+    expect(await screen.findByText('Your records are on the new address.')).toBeInTheDocument();
+  });
+
+  it('after Carry over again, Keep using keeps the banner: changes here still won\'t follow', async () => {
+    await withRecords();
+    await settingsRepo.update({ carriedOverAt: '2026-10-24T10:00:00.000Z' });
+    const user = userEvent.setup();
+    gate();
+    await user.click(await screen.findByRole('button', { name: 'Carry over again' }));
+    await user.click(screen.getByRole('button', { name: 'Keep using the old app for now' }));
+    expect(screen.getByTestId('carry-over-banner')).toBeInTheDocument();
   });
 
   it('opened from the home screen, leads with the file and never tries the popup (R7)', async () => {

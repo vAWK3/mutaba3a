@@ -800,7 +800,10 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 
 /* MUT-291: the carry-over's two pages and its summary (also inside Your data › Restore). */
 .hp-carry-over { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--space-6); max-width: 640px; width: 100%; }
-.hp-carry-over h2 { font-size: var(--text-title, var(--text-body)); margin: 0; }
+.hp-carry-over h1 { font-family: var(--font-heading); font-size: var(--text-headline); font-weight: var(--weight-bold); margin: 0; }
+[dir="rtl"] .hp-carry-over h1 { font-family: var(--font-heading-ar); }
+/* The column's gap sets the rhythm; a banner's own margin would add to it. */
+.hp-carry-over .hp-banner, .hp-carry-over-details .hp-banner { margin: 0; }
 .hp-carry-over p { margin: 0; }
 .hp-carry-over-details { display: flex; flex-direction: column; gap: var(--space-3); }
 .hp-carry-over-counts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); margin: 0; }

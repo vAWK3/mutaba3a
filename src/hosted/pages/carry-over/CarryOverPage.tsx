@@ -6,7 +6,7 @@ import { startCarryOverSend } from '../../../lib/carryOver/protocol';
 import { useLanguage } from '../../../lib/i18n/core';
 import { localBackend, localRecordCount } from '../../api/client';
 import { AlertIcon } from '../../components/Icons';
-import { saveBlobAs } from '../../data/download';
+import { recordsFileName, saveBlobAs } from '../../data/download';
 import { safeNext } from '../../session/safeNext';
 import { AuthLayout } from '../auth/AuthLayout';
 import { CheckingSession } from '../auth/BootScreens';
@@ -21,7 +21,7 @@ import { leaveTo } from '../../../lib/carryOver/leave';
  * itself it only goes on to `next`.
  */
 
-type Phase = { kind: 'checking' } | { kind: 'offer' } | { kind: 'sending' } | { kind: 'done' } | { kind: 'fallback' };
+type Phase = { kind: 'checking' } | { kind: 'offer' } | { kind: 'sending' } | { kind: 'done' } | { kind: 'fallback'; failed: boolean };
 
 /** `next`, kept on this origin and never back here. */
 function nextPath(raw: unknown): string {
@@ -44,9 +44,11 @@ export function CarryOverPage() {
       leaveTo(next);
       return;
     }
-    void localRecordCount()
-      .catch(() => 0)
-      .then((count) => (count > 0 ? setPhase({ kind: 'offer' }) : leaveTo(newAddress)));
+    // A count that fails offers the move: this page is the only way back to records left here (never stranded).
+    void localRecordCount().then(
+      (count) => (count > 0 ? setPhase({ kind: 'offer' }) : leaveTo(newAddress)),
+      () => setPhase({ kind: 'offer' }),
+    );
     // Once per page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -60,12 +62,12 @@ export function CarryOverPage() {
         setPhase({ kind: 'done' });
         leaveTo(newAddress);
       } else if (outcome.status === 'declined') setPhase({ kind: 'offer' });
-      else setPhase({ kind: 'fallback' });
+      else setPhase({ kind: 'fallback', failed: outcome.reason === 'failed' });
     });
   }
 
   async function download() {
-    saveBlobAs(await (await localBackend()).exportRecords(), `mtb3a-records-${new Date().toISOString().slice(0, 10)}.zip`);
+    saveBlobAs(await (await localBackend()).exportRecords(), recordsFileName(new Date()));
   }
 
   if (phase.kind === 'checking') return <CheckingSession />;
@@ -73,14 +75,14 @@ export function CarryOverPage() {
   return (
     <AuthLayout>
       <div className="hp-card hp-carry-over" data-testid="carry-over-send" data-phase={phase.kind}>
-        <h2>{t('hosted.carryOver.send.title')}</h2>
+        <h1>{t('hosted.carryOver.send.title')}</h1>
         <p>{t('hosted.carryOver.send.lead')}</p>
         {phase.kind === 'sending' && <p role="status">{t('hosted.carryOver.send.waiting')}</p>}
         {phase.kind === 'done' && <p role="status">{t('hosted.carryOver.send.done')}</p>}
         {phase.kind === 'fallback' && (
           <div className="hp-banner hp-banner-error" role="alert">
             <AlertIcon />
-            <span>{t('hosted.carryOver.send.fallback')}</span>
+            <span>{t(phase.failed ? 'hosted.carryOver.send.failed' : 'hosted.carryOver.send.fallback')}</span>
           </div>
         )}
         <div className="hp-empty-actions">
