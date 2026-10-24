@@ -1,16 +1,16 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
-import { todayFor, validationError } from '../agreements/compose.js';
+import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
-import type { AgreementRecord, ExpenseRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AgreementRecord, ExpenseCursor, ExpenseRecord, FeeProposalRecord, PageCursor, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
-import { historyStart, summarizeActivity } from '../summaries/activity.js';
+import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
@@ -156,7 +156,7 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Summaries'],
       summary: 'Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)',
       description:
-        'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window is the 12 calendar months ending with `to`, so `history` and `dataSince` come from the same rows; `daysToPaid` is the median over fully settled Owed entries whose last payment falls in that window, null below 3.',
+        'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.',
       security: SESSION_ONLY,
       middleware: [requireScope('summaries:read'), requireScope('expenses:read')] as const,
       request: { query: ActivitySummaryQuerySchema },
@@ -166,29 +166,27 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = sessionAuth(c);
       const q = c.req.valid('query');
       const today = todayFor(organization, c.get('now')());
-      const from = q.from ?? `${monthOf(today)}-01`;
-      const to = q.to ?? endOfMonth(today);
+      // Review: the shape regex lets 2026-02-30 or 9999-12-31 through; refuse them before any date arithmetic
+      const from = q.from ? activityDate(q.from, today, 'from') : `${monthOf(today)}-01`;
+      const to = q.to ? activityDate(q.to, today, 'to') : endOfMonth(today);
       const bucket = q.bucket;
       if (compareIsoDates(from, to) > 0) throw validationError('END_BEFORE_START', '`to` is before `from`', { field: 'to' });
       if (compareIsoDates(to, addDays(`${addMonths(monthOf(from), ACTIVITY_RANGE_MAX_MONTHS)}-01`, -1)) > 0) {
-        throw validationError('RANGE_TOO_LONG', `A range covers at most ${ACTIVITY_RANGE_MAX_MONTHS} months`, { field: 'to', maxMonths: ACTIVITY_RANGE_MAX_MONTHS });
+        throw validationError('RANGE_TOO_LONG', `A range covers at most the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month`, { field: 'to', maxMonths: ACTIVITY_RANGE_MAX_MONTHS });
       }
+      // The read window: from (or the 12 months ending with to's month, if earlier) through the end of to's month
       const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
-      const payments = await listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED', receivedAfter: start, receivedBefore: to }, { limit: 200, cursor }));
-      // Expenses page on their own cursor shape (occurredOn first), so they walk here rather than through listAll
-      const expenses: ExpenseRecord[] = [];
-      let cursor = null;
-      do {
-        const page = await store.expenses.list(organization.id, { from: start, to }, { limit: 200, cursor });
-        expenses.push(...page.items);
-        cursor = page.nextCursor;
-      } while (cursor);
+      const end = historyEnd(to);
+      const before = addDays(start, -1);
+      const [payments, expenses, paidEarlier, spentEarlier] = await Promise.all([
+        listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED', receivedAfter: start, receivedBefore: end }, { limit: 200, cursor })),
+        listAll<ExpenseRecord, ExpenseCursor>((cursor) => store.expenses.list(organization.id, { from: start, to: end }, { limit: 200, cursor })),
+        store.payments.list(organization.id, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null }),
+        store.expenses.list(organization.id, { to: before }, { limit: 1, cursor: null }),
+      ]);
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
-      const before = addDays(start, -1);
-      const earlierData =
-        (await store.payments.list(organization.id, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null })).items.length > 0 ||
-        (await store.expenses.list(organization.id, { to: before }, { limit: 1, cursor: null })).items.length > 0;
+      const earlierData = paidEarlier.items.length > 0 || spentEarlier.items.length > 0;
       const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
       return c.json({ from, to, bucket, asOf: today, earlierData, ...summary }, 200);
     },
@@ -241,10 +239,23 @@ function projectWire(project: ProjectRecord, view: ProjectView) {
   };
 }
 
-/** Walks every page of a keyset-paginated list. */
-export async function listAll<T>(fetchPage: (cursor: { createdAt: Date; id: string } | null) => Promise<{ items: T[]; nextCursor: { createdAt: Date; id: string } | null }>): Promise<T[]> {
+/**
+ * MUT-175: a Reports date — a real calendar date (422 DATE_INVALID), no further back than the money-date floor plus
+ * one year (a Year view may start before the floor day) and no further ahead than the money-date ceiling.
+ */
+function activityDate(value: string, today: string, field: 'from' | 'to'): string {
+  const date = assertIsoDate(value, field);
+  if (compareIsoDates(date, addDays(today, -DAYS_IN_PAST_LIMIT - DAYS_IN_YEAR)) < 0) throw validationError('DATE_INVALID', `${field} is too far in the past`, { field, bound: 'past' satisfies DateBound });
+  if (compareIsoDates(date, addDays(today, DAYS_IN_FUTURE_LIMIT)) > 0) throw validationError('DATE_INVALID', `${field} is too far ahead`, { field, bound: 'future' satisfies DateBound });
+  return date;
+}
+
+const DAYS_IN_YEAR = 366;
+
+/** Walks every page of a keyset-paginated list, whatever its cursor's shape. */
+export async function listAll<T, C = PageCursor>(fetchPage: (cursor: C | null) => Promise<{ items: T[]; nextCursor: C | null }>): Promise<T[]> {
   const all: T[] = [];
-  let cursor: { createdAt: Date; id: string } | null = null;
+  let cursor: C | null = null;
   for (let i = 0; i < 1000; i += 1) {
     const page = await fetchPage(cursor);
     all.push(...page.items);

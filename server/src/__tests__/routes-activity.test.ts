@@ -47,7 +47,7 @@ async function setup(now = '2026-10-20T09:00:00Z') {
   const income = async (body: Record<string, unknown>) => read(await app.request('/v1/income', json({ currency: 'ILS', ...body }, { ...as(), ...idem() })));
   const expense = async (body: Record<string, unknown>) => read(await app.request('/v1/expenses', json({ currency: 'ILS', ...body }, { ...as(), ...idem() })));
   const settle = async (receivableId: string, paidAt: string) => app.request(`/v1/receivables/${receivableId}/settle`, json({ paidAt }, { ...as(), ...idem() }));
-  return { app, store, clock, org, keyAuth: { authorization: `Bearer ${key.secret}`, 'x-mutaba3a-profile': org.id }, as, get, customer, income, expense, settle };
+  return { app, store, clock, org, personal, userId: created.user.id as string, keyAuth: { authorization: `Bearer ${key.secret}`, 'x-mutaba3a-profile': org.id }, as, get, customer, income, expense, settle };
 }
 
 describe('GET /v1/summaries/activity', () => {
@@ -83,7 +83,7 @@ describe('GET /v1/summaries/activity', () => {
       expect((await s.settle(owed.id, paidAt!)).status).toBe(201);
     }
     const body = await read(await s.get('from=2026-10-01&to=2026-10-31'));
-    expect(body.daysToPaid).toEqual({ overall: { median: 12, n: 3 }, byCustomer: [{ customerId: client, median: 12, n: 3 }] });
+    expect(body.daysToPaid).toEqual({ overall: { median: 12, n: 3 }, byCustomer: [{ customerId: client, median: 12, n: 3 }], samples: [10, 12, 14] });
   });
 
   it('buckets by month and says when older records exist before the read window', async () => {
@@ -117,6 +117,47 @@ describe('GET /v1/summaries/activity', () => {
     expect((await read(long)).error.details).toMatchObject({ reason: 'RANGE_TOO_LONG' });
     expect((await s.get('from=2025-01-01&to=2026-01-31')).status).toBe(200);
     expect((await s.get('from=2026-10-01&to=2026-10-31&bucket=week')).status).toBe(422);
+  });
+
+  it('refuses an impossible date and a year beyond the money-date bounds with 422 DATE_INVALID (review)', async () => {
+    const s = await setup();
+    for (const query of ['from=2026-02-30&to=2026-03-10', 'from=2026-10-01&to=9999-12-31', 'from=0001-01-01&to=0001-01-31']) {
+      const res = await s.get(query);
+      expect(res.status, query).toBe(422);
+      expect((await read(res)).error.details, query).toMatchObject({ reason: 'DATE_INVALID' });
+    }
+  });
+
+  it('defaults to this month by day, and returns each counted entry’s days as samples', async () => {
+    const s = await setup();
+    const client = await s.customer('Haddad');
+    for (const paidAt of ['2026-10-03', '2026-10-05', '2026-10-15']) {
+      const owed = await s.income({ kind: 'owed', amount: '10.00', occurredOn: '2026-10-01', customerId: client, title: 'Work' });
+      await s.settle(owed.id, paidAt);
+    }
+    const body = await read(await s.get(''));
+    expect(body).toMatchObject({ from: '2026-10-01', to: '2026-10-31', bucket: 'day' });
+    expect(body.daysToPaid.samples).toEqual([2, 4, 14]);
+  });
+
+  it('reads every page: 201 expenses and 201 payments all count', async () => {
+    const s = await setup();
+    for (let i = 0; i < 201; i++) {
+      await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-02', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: s.userId }, s.clock.now);
+      await s.store.payments.capture({ organizationId: s.personal, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn: '2026-10-02', method: 'CASH', notes: null, createdByUserId: s.userId, captureSource: null, requestId: null }, s.clock.now);
+    }
+    const body = await read(await s.get('from=2026-10-01&to=2026-10-31'));
+    expect(body.currencies[0]).toMatchObject({ received: '201.00', spent: '201.00' });
+    expect(body.history.at(-1).currencies[0]).toMatchObject({ received: '201.00', spent: '201.00' });
+  });
+
+  it('says earlier data exists from a payment just before the read window, not one on its first day', async () => {
+    const on = await setup();
+    await on.income({ kind: 'received', amount: '1.00', occurredOn: '2025-11-01' });
+    expect((await read(await on.get('from=2026-10-01&to=2026-10-31'))).earlierData).toBe(false);
+    const before = await setup();
+    await before.income({ kind: 'received', amount: '1.00', occurredOn: '2025-10-31' });
+    expect((await read(await before.get('from=2026-10-01&to=2026-10-31'))).earlierData).toBe(true);
   });
 
   it('is session-only: Malafat’s key is refused', async () => {

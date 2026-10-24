@@ -6836,14 +6836,14 @@ export interface paths {
         };
         /**
          * Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)
-         * @description MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window is the 12 calendar months ending with `to`, so `history` and `dataSince` come from the same rows; `daysToPaid` is the median over fully settled Owed entries whose last payment falls in that window, null below 3.
+         * @description MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.
          */
         get: {
             parameters: {
                 query?: {
-                    /** @description Inclusive; defaults to the first of this month in the organization timezone */
+                    /** @description Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID) */
                     from?: string;
-                    /** @description Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within 13 months of it (422 RANGE_TOO_LONG) */
+                    /** @description Inclusive; defaults to the last of this month; a real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG) */
                     to?: string;
                     /** @description One bucket per day, or per calendar month (starting on the 1st) */
                     bucket?: "day" | "month";
@@ -16065,9 +16065,9 @@ export interface components {
             bucket: "day" | "month";
             /** @description The organization's today */
             asOf: string;
-            /** @description The earliest POSTED payment or expense in the read window (the 12 months ending with to); null when none */
+            /** @description The earliest POSTED payment or expense in the read window: from (or the first of the 12 months ending with to’s month, if earlier) through the last day of to’s month; null when none */
             dataSince: string | null;
-            /** @description Whether payments or expenses exist before the read window */
+            /** @description Whether payments or expenses exist before the read window starts */
             earlierData: boolean;
             /** @description Zero-filled across from–to; every bucket lists every currency of the period */
             buckets: {
@@ -16103,7 +16103,7 @@ export interface components {
                     count: number;
                 }[];
             }[];
-            /** @description The 12 calendar months ending with to’s month, whole months */
+            /** @description The 12 calendar months ending with to’s month, whole months (rows after to in its month count here, not in the period) */
             history: {
                 /** @description Calendar month, YYYY-MM */
                 month: string;
@@ -16130,7 +16130,7 @@ export interface components {
                     }[];
                 }[];
             }[];
-            /** @description Median days from an Owed entry’s date to its last payment, over fully settled entries paid in the read window; null (or no row) below 3 entries */
+            /** @description Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries */
             daysToPaid: {
                 overall: {
                     median: number;
@@ -16142,6 +16142,8 @@ export interface components {
                     median: number;
                     n: number;
                 }[];
+                /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
+                samples: number[];
             };
         };
         CreateUploadResponse: {

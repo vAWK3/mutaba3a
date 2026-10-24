@@ -2823,8 +2823,8 @@ export const ACTIVITY_BUCKETS = ['day', 'month'] as const;
 export const ACTIVITY_RANGE_MAX_MONTHS = 13;
 
 export const ActivitySummaryQuerySchema = z.object({
-  from: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the first of this month in the organization timezone' }),
-  to: IsoDateSchema.optional().openapi({ description: `Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within ${ACTIVITY_RANGE_MAX_MONTHS} months of it (422 RANGE_TOO_LONG)` }),
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID)' }),
+  to: IsoDateSchema.optional().openapi({ description: `Inclusive; defaults to the last of this month; a real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month (422 RANGE_TOO_LONG)` }),
   bucket: z.enum(ACTIVITY_BUCKETS).default('day').openapi({ description: 'One bucket per day, or per calendar month (starting on the 1st)' }),
 });
 const currencyFlow = { currency: CurrencySchema, received: AmountSchema, spent: AmountSchema };
@@ -2840,14 +2840,18 @@ export const ActivitySummarySchema = z
     to: IsoDateSchema,
     bucket: z.enum(ACTIVITY_BUCKETS),
     asOf: IsoDateSchema.openapi({ description: "The organization's today" }),
-    dataSince: IsoDateSchema.nullable().openapi({ description: 'The earliest POSTED payment or expense in the read window (the 12 months ending with to); null when none' }),
-    earlierData: z.boolean().openapi({ description: 'Whether payments or expenses exist before the read window' }),
+    dataSince: IsoDateSchema.nullable().openapi({ description: 'The earliest POSTED payment or expense in the read window: from (or the first of the 12 months ending with to’s month, if earlier) through the last day of to’s month; null when none' }),
+    earlierData: z.boolean().openapi({ description: 'Whether payments or expenses exist before the read window starts' }),
     buckets: z.array(z.object({ start: IsoDateSchema, currencies: z.array(z.object(currencyFlow)) })).openapi({ description: 'Zero-filled across from–to; every bucket lists every currency of the period' }),
     currencies: z.array(currencyActivity),
-    history: z.array(z.object({ month: IsoMonthSchema, currencies: z.array(currencyActivity) })).openapi({ description: 'The 12 calendar months ending with to’s month, whole months' }),
+    history: z.array(z.object({ month: IsoMonthSchema, currencies: z.array(currencyActivity) })).openapi({ description: 'The 12 calendar months ending with to’s month, whole months (rows after to in its month count here, not in the period)' }),
     daysToPaid: z
-      .object({ overall: z.object(daysToPaid).nullable(), byCustomer: z.array(z.object({ customerId: uuid, ...daysToPaid })) })
-      .openapi({ description: 'Median days from an Owed entry’s date to its last payment, over fully settled entries paid in the read window; null (or no row) below 3 entries' }),
+      .object({
+        overall: z.object(daysToPaid).nullable(),
+        byCustomer: z.array(z.object({ customerId: uuid, ...daysToPaid })),
+        samples: z.array(z.number().int()).openapi({ description: 'Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median' }),
+      })
+      .openapi({ description: 'Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries' }),
   })
   .openapi('ActivitySummary');
 

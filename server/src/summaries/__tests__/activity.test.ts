@@ -12,7 +12,7 @@ type Rec = ActivityInput['receivables'][number];
 
 const pay = (receivedOn: string, amountMinor: bigint, extra: Partial<Pay> = {}): Pay => ({ id: id(), currency: 'ILS', amountMinor, receivedOn, customerId: 'c1', status: 'POSTED', ...extra });
 const exp = (occurredOn: string, amountMinor: bigint, extra: Partial<Exp> = {}): Exp => ({ currency: 'ILS', amountMinor, occurredOn, categoryId: 'food', customerId: null, ...extra });
-const rec = (postingDate: string, extra: Partial<Rec> = {}): Rec => ({ id: id(), customerId: 'c1', postingDate, status: 'SETTLED', ...extra });
+const rec = (postingDate: string, extra: Partial<Rec> = {}): Rec => ({ id: id(), customerId: 'c1', postingDate, status: 'SETTLED', grossMinor: 100n, paidMinor: 100n, ...extra });
 
 function input(extra: Partial<ActivityInput>): ActivityInput {
   return { payments: [], expenses: [], allocations: [], receivables: [], from: '2026-10-01', to: '2026-10-31', bucket: 'day', ...extra };
@@ -161,5 +161,27 @@ describe('summarizeActivity — days to get paid (D2: median over fully settled 
     const out = run([settled('2026-09-01', '2026-09-03', 'c1'), settled('2026-09-01', '2026-09-05', 'c1'), settled('2026-09-01', '2026-09-30', 'c1'), settled('2026-09-01', '2026-09-02', 'c2')]);
     expect(out.daysToPaid.byCustomer).toEqual([{ customerId: 'c1', median: 4, n: 3 }]);
     expect(out.daysToPaid.overall).toEqual({ median: 3, n: 4 });
+  });
+
+  it('never counts an entry closed by a credit as paid in full (review)', () => {
+    const credited = settled('2026-09-01', '2026-09-02');
+    credited.r.paidMinor = 10n;
+    const out = run([credited, settled('2026-09-01', '2026-09-11'), settled('2026-09-01', '2026-09-13'), settled('2026-09-01', '2026-09-15')]);
+    expect(out.daysToPaid.overall).toEqual({ median: 12, n: 3 });
+  });
+
+  it('returns every counted entry’s days, sorted, so profiles can be combined into one true median (D2, review)', () => {
+    const out = run([settled('2026-09-01', '2026-09-15'), settled('2026-09-01', '2026-09-02'), settled('2026-09-01', '2026-09-03')]);
+    expect(out.daysToPaid.samples).toEqual([1, 2, 14]);
+    expect(run([]).daysToPaid.samples).toEqual([]);
+  });
+});
+
+describe('summarizeActivity — reading rows past the period', () => {
+  it('counts the whole of to’s month in the history, but only from–to in the period and its buckets', () => {
+    const out = summarizeActivity(input({ from: '2026-10-05', to: '2026-10-11', payments: [pay('2026-10-08', 100n), pay('2026-10-20', 900n)] }));
+    expect(out.currencies[0]).toMatchObject({ received: '1.00' });
+    expect(out.buckets.flatMap((b) => b.currencies.map((c) => c.received))).toEqual(['0.00', '0.00', '0.00', '1.00', '0.00', '0.00', '0.00']);
+    expect(out.history.at(-1)!.currencies[0]).toMatchObject({ received: '10.00' });
   });
 });
