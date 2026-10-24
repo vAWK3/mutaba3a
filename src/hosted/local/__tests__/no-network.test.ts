@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, localBackend } from '../../api/client';
 import { setMode } from '../../session/mode';
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * AC4 (MUT-286): signed out, the portal makes no `/v1` request. Driven through
  * the portal's own typed client (`api`), exactly as the views call it, with
@@ -127,14 +129,17 @@ describe('signed out: no network (AC4)', () => {
   });
 
   it('sends exactly one request for reference rates, to the public snapshot, with no credentials (D3, the one named exception)', async () => {
+    // Relative to today: the server's cache refuses a snapshot older than MAX_RATE_AGE_DAYS, so a fixed date goes stale.
+    const fetchedAt = new Date();
+    const rateDate = new Date(fetchedAt.getTime() - ONE_DAY_MS).toISOString().slice(0, 10);
     fetchSpy.mockImplementationOnce(
-      async () => new Response(JSON.stringify({ rateDate: '2026-10-17', perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: '2026-10-19T08:00:00.000Z', source: 'live' }), { status: 200 }) as never,
+      async () => new Response(JSON.stringify({ rateDate, perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: fetchedAt.toISOString(), source: 'live' }), { status: 200 }) as never,
     );
 
     const ils = await api.fxRates('ILS');
     await api.fxRates('USD');
 
-    expect(ils.rateDate).toBe('2026-10-17');
+    expect(ils.rateDate).toBe(rateDate);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('/v1/public/fx-rates');
