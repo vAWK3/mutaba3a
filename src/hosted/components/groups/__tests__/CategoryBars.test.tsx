@@ -33,4 +33,24 @@ describe('CategoryBars', () => {
     await userEvent.click(screen.getByRole('button', { name: /Rent/ }));
     expect(onSelect).toHaveBeenLastCalledWith(undefined);
   });
+
+  /** MUT-175 D5/DR23: pins today's rows before CategoryBars gains `meta` and plain rows. */
+  it('renders each row as a toggle button with name, amount and share, its fill at the share', () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
+    const rows = [
+      { key: 'rent', name: 'Rent', total: '30.000', count: 2, share: 60 },
+      { key: 'none', name: 'Uncategorized', total: '20.000', count: 1, share: 40 },
+    ];
+    render(
+      <HostedLanguageProvider>
+        <CategoryBars rows={rows} currency="JOD" onSelect={vi.fn()} reducedMotion />
+      </HostedLanguageProvider>,
+    );
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]!.querySelector('.hp-catbar-name')).toHaveTextContent('Rent');
+    expect(buttons[0]!.querySelector('.hp-catbar-amount')).toHaveTextContent(/30\.000.*· 60%/);
+    expect([...document.querySelectorAll<HTMLElement>('.hp-catbar-fill')].map((f) => f.style.transform)).toEqual(['scaleX(0.6)', 'scaleX(0.4)']);
+    expect(document.querySelector('.hp-catbar-meta')).toBeNull();
+  });
 });
