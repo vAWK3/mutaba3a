@@ -136,6 +136,12 @@ export interface Settings {
    */
   lastBackupAt?: string;
   /**
+   * When this device's records were carried to the new address (MUT-291, ISO). Set only once the new address
+   * reported them saved; its absence is the default, so older rows need no migration. The app then says, on every
+   * page, that changes made here won't follow.
+   */
+  carriedOverAt?: string;
+  /**
    * Malafat suggestions in the web app (MUT-190, ADR-078): `off` is the Settings
    * switch, `dismissed` the moments the person retired for good. Optional, so
    * older rows and backups read as "on, nothing dismissed".

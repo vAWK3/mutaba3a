@@ -3615,7 +3615,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
-## MUT-369 — Landing signup CTA, portal `?lang`, privacy-policy draft (2026-10-24, ADR-185)
+## MUT-369 — Landing signup CTA, portal `?lang`, privacy-policy draft (2026-10-24, ADR-186)
 
 | Layer | Tests | Command |
 |---|---|---|
@@ -3647,6 +3647,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal unit | `data/__tests__/trialPrompt.test.ts`, `session/__tests__/firstRun.test.ts`, `data/__tests__/billingView.test.ts` (activeTrial, `isSellable`, consumers everywhere), local `migrations.test.ts` (4 → 5) + fingerprint | `npm run test:run` |
 | Portal integration | `components/__tests__/TrialWelcome.test.tsx`: step (open, Not now, close, Add a card → Subscribe by replace, open-soon, never for answered/paid/<48 h, Arabic, no reopen after /setup's link), banner (Add a card, hide, last 3 days, gone when paid, no card when unsellable), `/` keeps drawer keys | same |
 | Release-QA | `portal-live.billing.trial-start` (core), `.trial-banner`, `.consumer-everywhere`, and the amount updates in `.subscribe`, `.subscribe-usd`, `.rtl-375`; `portal-selfservice.signup.*` pass through the step's open-soon variant | `release-qa run --attach --only portal-live.billing` (env: `node qa/support/billing-live.mjs`) |
+
+## MUT-291 — the carry-over from the old web app and the old address (2026-10-24, ADR-185)
+- Unit: `src/lib/carryOver/__tests__/protocol.test.ts` (23); `src/hosted/local/carryOver/__tests__/mapFreeAppBackup.test.ts` (34); `replay.test.ts` (rate limit, refusals, progress, gate); `src/hosted/local/__tests__/createLocalApp.test.ts` (rate-limit option); `scripts/__tests__/vite-config.test.ts` (carry-over origins); `src/hosted/local/carryOver/__tests__/money.test.ts` (retired currencies), `totalsGate.test.ts` (E4 refuses through `prepareFromBackup`); `src/hosted/pages/carry-over/__tests__/carryOverCopy.test.ts` (every report code has copy in both languages); `src/db/__tests__/backup.test.ts` (strict read); `src/db/__tests__/carryOverBackupVersion.test.ts`, `datasetCountRecords.test.ts`.
+- Integration: `src/db/__tests__/carryOver.integration.test.ts` (T-I1 the free app's own demo + CSV data, T-I5 twice); `src/hosted/local/carryOver/__tests__/backend.test.ts` (T-I3, T-I4 through the real local backend).
+- UI: `src/hosted/pages/carry-over/__tests__/carryOverPages.test.tsx` (11); `src/pages/carryOver/__tests__/CarryOverScreen.test.tsx` (7); `local-mode.test.tsx` (Restore reads the old backup).
+- Guards: `server/src/__tests__/legacy-redirect.test.ts` (no COOP on either page); `scripts/__tests__/netlify-no-coop.test.ts`; `scripts/__tests__/check-bundles.test.ts` (the carry-over code under HOSTED_RULES and LOCAL_RULES); `npm run test:bundles` passes.
+- Perf (off by default): `replay.perf.test.ts`, `CARRY_OVER_PERF=1`: 20,000 records, 4.3 s, heap +149 MB.
+- Release QA: app `carry-over`, `qa/features/carry-over/carry-over.yaml`, 7 features, `qa/specs/carry-over/carry-over.spec.ts` 7/7 passing (2026-10-24).
+- Not covered: a real cross-host run (run.app or netlify.app to app.mtb3a.com) on a real browser: the operator's day-7 check (plan §6). Real iOS standalone: stubbed in QA.
 
 ## MUT-396 — local-disk attachment storage for the dev server (2026-10-24)
 

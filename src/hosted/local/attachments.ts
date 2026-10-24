@@ -1,7 +1,7 @@
 import type { AttachmentStorage, SignedUrl, StoredObject } from '../../../server/src/attachments/storage.js';
 import type { LocalSnapshotMaps } from '../../../server/src/repositories/memory.js';
 import { localBlobUrl } from '../session/localBackendContract.js';
-import { readBytes, type IndexedDbBlobStore } from './blobStore.js';
+import { readBytes, type IndexedDbBlobStore, type StoredFile } from './blobStore.js';
 
 /**
  * The server's `AttachmentStorage`, on this device (MUT-287, brief §6). The
@@ -60,6 +60,59 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 
   discardRemovals(): void {
     this.staged.clear();
+  }
+}
+
+/**
+ * The same storage, in memory, for the carry-over's throwaway local app
+ * (MUT-291 §3.7): the replay uploads each old receipt through the real routes,
+ * and the files end up here until `applyRestore` writes them with the records.
+ */
+export class MemoryAttachmentStorage implements AttachmentStorage {
+  private readonly stored = new Map<string, StoredFile>();
+
+  async signUpload(key: string, input: { mimeType: string; sizeBytes: number; ttlSeconds: number; now: Date }): Promise<SignedUrl & { headers: Record<string, string> }> {
+    return { url: localBlobUrl(key), expiresAt: expiry(input), headers: { 'Content-Type': input.mimeType } };
+  }
+
+  async signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }): Promise<SignedUrl> {
+    return { url: localBlobUrl(key), expiresAt: expiry(input) };
+  }
+
+  async head(key: string): Promise<StoredObject | null> {
+    const file = this.stored.get(key);
+    return file ? { sizeBytes: file.bytes.byteLength, contentType: file.type || null } : null;
+  }
+
+  async remove(key: string): Promise<void> {
+    this.stored.delete(key);
+  }
+
+  async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
+    const file = this.stored.get(key);
+    if (!file) return null;
+    const bytes = new Uint8Array(file.bytes);
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+  }
+
+  /** What the portal's local branch does with a signed `local-blob:` upload. */
+  put(key: string, file: StoredFile): void {
+    this.stored.set(key, file);
+  }
+
+  /** The files for `keys` (the snapshot's backed-up receipts), as `applyRestore` takes them. */
+  filesFor(keys: Iterable<string>): Array<{ key: string } & StoredFile> {
+    const files: Array<{ key: string } & StoredFile> = [];
+    for (const key of keys) {
+      const file = this.stored.get(key);
+      if (file) files.push({ key, ...file });
+    }
+    return files;
   }
 }
 

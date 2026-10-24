@@ -2729,7 +2729,7 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - A public, read-only endpoint (`GET /v1/self-service`) says which self-service actions this server can really complete, derived from its configuration.
 - The page shows a door only when it is open, and treats no answer as closed. A build flag would drift from the server; showing every door would leave dead ones while mail is off.
 - **First instance:** sign-in's "Forgot your password?" / "Create an account".
-- **Second instance (MUT-369, ADR-185):** the landing, on another origin, reads the same endpoint (CORS-simple GET, `Access-Control-Allow-Origin: *` on that route only) to show "Create an account". Keep the request free of custom headers, or the browser preflights and the door reads closed.
+- **Second instance (MUT-369, ADR-186):** the landing, on another origin, reads the same endpoint (CORS-simple GET, `Access-Control-Allow-Origin: *` on that route only) to show "Create an account". Keep the request free of custom headers, or the browser preflights and the door reads closed.
 
 ### Pattern: A link names its language; the target reads it once and never stores it
 - `?lang=en|ar` on a link (`/privacy`, `/terms`, the portal's `/signup`) is the language of the page the person came from. `linkedLanguageOf` reads it; a legal page uses it for the text only, and the portal (MUT-369) starts in it, takes it off the address before the router starts (`takeLinkedLanguage`), and never stores it, so a reload keeps the person's own switch.
@@ -2744,6 +2744,14 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - When a flow needs real mail, real tokens or an operator action, the QA app runs the API with test adapters (the memory mailer, fixture checkers, test secrets) on a per-launch database. The API serves `vite build --mode hosted` from `PORTAL_DIST_DIR`, so production's CSP and hashed assets are what the specs see.
 - Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`) so per-IP budgets don't add up.
 - **First instance:** `qa/support/selfservice-live.mjs` (the `portal-selfservice` app).
+
+## Patterns added by MUT-291 (2026-10-24, ADR-185)
+
+### Pattern: Replay untrusted records through the server's own routes in a throwaway app, then land them in one write
+Imported data is never written field by field into the live store. It is mapped to requests and sent through `createLocalApp` over a fresh `MemoryLedgerStore`, with no persistence and no rate limit, so every route rule checks it. Its snapshot is then checked against the source and written once with `applyRestore`. A 4xx is the record's answer and gets listed; a 5xx aborts.
+
+### Pattern: A cross-origin hand-off is a popup opened from the click, with origins baked at build time
+`window.open` runs synchronously in the click handler (Safari and Firefox drop the permission across an await), without `noopener`. Both sides check `event.origin` and `event.source` against build-time origins, never against a URL parameter, and each side has its own timeout. Neither page may send COOP `same-origin`; a test pins that.
 
 ### Pattern: A plan-dependent write is refused once, at the door, and the portal only mirrors it (MUT-361)
 - The server decides in one pure module (`server/src/billing/gate.ts`) applied once in `authenticate()`, before any route work: method + endpoint class, never per route. Every organization-independent endpoint is classified in one table, and a test fails on an unclassified one.

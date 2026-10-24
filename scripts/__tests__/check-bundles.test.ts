@@ -35,7 +35,7 @@ import {
 } from '../bundle-rules';
 import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-ingest';
 import { SENTRY_CHUNK } from '../../vite.config';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import reviewed from '../bundle-origins.json';
 import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
@@ -105,6 +105,31 @@ describe('hosted bundle rules', () => {
 
   it('reports the matched text and the rule', () => {
     expect(findForbidden('xx Invite someone xx', HOSTED_RULES)).toEqual([{ rule: 'invite', match: 'Invite' }]);
+  });
+});
+
+/**
+ * MUT-291 (R4): the carry-over's code, as the bundles will carry it. Comments are stripped (minification drops
+ * them); every string and name stays. The portal's half must not say the old database's name; the free app's
+ * half and the shared protocol go into the web bundle, so they must carry nothing of the portal. `test:bundles`
+ * then checks the built output too.
+ */
+describe('the carry-over code (MUT-291)', () => {
+  const sourcesIn = (dir: string) =>
+    readdirSync(resolve(__dirname, '..', '..', dir))
+      .filter((name) => /\.tsx?$/.test(name) && !name.endsWith('.test.ts') && !name.endsWith('.test.tsx'))
+      .map((name) => ({ name: `${dir}/${name}`, code: readFileSync(resolve(__dirname, '..', '..', dir, name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '') }));
+
+  it.each([...sourcesIn('src/hosted/local/carryOver'), ...sourcesIn('src/hosted/pages/carry-over')])('$name passes the portal\'s rules', ({ code }) => {
+    expect(findForbidden(code, HOSTED_RULES)).toEqual([]);
+  });
+
+  it.each([...sourcesIn('src/pages/carryOver'), ...sourcesIn('src/lib/carryOver')])('$name passes the free app\'s rules', ({ code }) => {
+    expect(findForbidden(code, LOCAL_RULES)).toEqual([]);
+  });
+
+  it('would catch the old database\'s name in the portal\'s half', () => {
+    expect(findForbidden('throw new Error("not a Dexie backup")', HOSTED_RULES).map((f) => f.rule)).toEqual(['Dexie']);
   });
 });
 

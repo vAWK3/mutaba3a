@@ -23,6 +23,11 @@ export const localFiles = {
  */
 const OBJECT_URL_RELEASE_MS = 60_000;
 
+/** The records file's name, the same wherever it is downloaded (Your data, and both carry-over pages). */
+export function recordsFileName(today: Date): string {
+  return `mtb3a-records-${today.toISOString().slice(0, 10)}.zip`;
+}
+
 /**
  * Saves a Blob as a file named `filename`: a hidden `<a download>` on a
  * temporary object URL, clicked from the document and released later. Never a

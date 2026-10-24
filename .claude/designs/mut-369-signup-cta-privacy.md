@@ -74,7 +74,7 @@ them over the open page too.
 `Access-Control-Allow-Credentials`. The body is two public booleans that say nothing about any account, and without
 credentials the browser sends no cookie. An allow-list was weighed: the landing has several hosts during the domain
 move (mtb3a.com, www, the legacy netlify host, deploy previews), and listing them buys nothing for a public boolean.
-Every other route still sends no CORS header (test). API **1.64.0-mut369**, ADR-185.
+Every other route still sends no CORS header (test). API **1.64.0-mut369**, ADR-186.
 
 ### 3.3 The portal honours `?lang` (D5)
 
@@ -248,7 +248,7 @@ preflight → closed (D17 guards it). 0 critical gaps.
 
 - Plan vs code: no gap, no scope creep. Drift from the ticket text, deliberate: D1 (runtime doors read instead of a build value).
 - Gates (Node 22): root lint (0 errors, 2 pre-existing warnings), typecheck, `test:run` 447 files / 6292 tests, `build`, `test:bundles`; server typecheck, lint, `openapi:check`, `test` 3656 passed (DB suites skipped without Postgres; no DB change). `release-qa lint`: no errors, no new unmapped files.
-- Whole landing + legal areas run: 21 pass; 12 failures in 8 features predate MUT-369 (TD-229). One real regression found and fixed: `web.legal.privacy-error-reports` expected "Mutaba3a" in the English policy.
+- Whole landing + legal areas run: 21 pass; 12 failures in 8 features predate MUT-369 (TD-235). One real regression found and fixed: `web.legal.privacy-error-reports` expected "Mutaba3a" in the English policy.
 
 ## GSTACK REVIEW REPORT
 

@@ -19,5 +19,7 @@ declare const __HOSTED_OFFER_URL__: string;
 declare const __TERMS_URL__: string;
 /** MUT-368: the portal's Turnstile site key (public); Cloudflare's always-pass test key outside production. */
 declare const __TURNSTILE_SITE_KEY__: string;
+/** MUT-291: the carry-over's origins (vite.config.ts carryOverBuild); read through src/lib/carryOver/build.ts, absent in Vitest. */
+declare const __CARRY_OVER__: { sources: { web?: string; portal?: string }; portalOrigin: string | null };
 /** The PostHog project ingest key (ADR-090): "" when unset and always "" in the desktop build; absent in Vitest. */
 declare const __POSTHOG_KEY__: string;

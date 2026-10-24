@@ -93,6 +93,8 @@ const LOCAL_SERVER_ALLOWLIST = [
   'auth/store-guard',
   'fx-rates',
   'logger',
+  // MUT-291: the carry-over formats amounts as the routes do (already in the chunk through them); pure, no I/O
+  'money',
   'personal-profile',
   'rate-limit',
   // MUT-325: the records file's text and the device person's address, shared with the hosted export
