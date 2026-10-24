@@ -39,6 +39,7 @@ export type OrganizationSummary = Schemas['OrganizationSummary'];
 export type CurrencySummary = Schemas['CurrencySummary'];
 export type CustomerSummaryRow = Schemas['CustomerSummaryRow'];
 export type CustomerSummary = Schemas['CustomerSummary'];
+export type ActivitySummary = Schemas['ActivitySummary'];
 export type ProjectSummary = Schemas['ProjectSummary'];
 export type ItemStatus = Schemas['ItemStatus'];
 export type CustomerSummaryStatus = Schemas['CustomerSummaryStatus'];
@@ -477,6 +478,10 @@ export const api = {
 
   expenseSummary: (profileId: string, query: Query<'/v1/summaries/expenses'>) =>
     request<Get<'/v1/summaries/expenses'>>('GET', '/v1/summaries/expenses', { profileId, query }),
+
+  // MUT-175: Reports — what came in and went out over a period, with a 12-month history.
+  activitySummary: (profileId: string, query: Query<'/v1/summaries/activity'>) =>
+    request<Get<'/v1/summaries/activity'>>('GET', '/v1/summaries/activity', { profileId, query }),
 
   // Receipts: start has no Idempotency-Key, like M6's attachment-upload start — a repeat
   // leaves an unlisted PENDING row rather than replaying (mut-42-hosted-expenses.md §10).
