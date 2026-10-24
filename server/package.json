@@ -51,6 +51,7 @@
     "billing:unlinked": "tsx src/scripts/users.ts billing-unlinked",
     "billing:reconcile": "tsx src/scripts/users.ts billing-reconcile",
     "billing:status": "tsx src/scripts/users.ts billing-status",
+    "billing:uncovered": "tsx src/scripts/users.ts billing-uncovered",
     "smoke": "tsx src/scripts/smoke.ts",
     "sentry:smoke": "tsx src/scripts/sentry-smoke.ts",
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",

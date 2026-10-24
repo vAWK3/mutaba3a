@@ -117,6 +117,12 @@ export interface AppDependencies {
    * review. Absent or false = no /v1/receipts* routes, and a deleted expense takes its receipts with it (pre-MUT-255).
    */
   receiptsLibrary?: boolean;
+  /**
+   * MUT-361 (ADR-181): enforce the lapse gate (billing/gate.ts) on session requests. Production passes BILLING_GATE (on
+   * by default). Absent = off, so a suite that signs in people with no billing coverage tests what it means to test;
+   * the gate's own suites turn it on.
+   */
+  billingGate?: boolean;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -207,7 +213,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.59.0-mut418';
+export const API_VERSION = '1.60.0-mut361';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -218,7 +224,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -468,6 +474,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         'Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session\'s own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today\'s read-only behaviour on all of it (403 READ_ONLY_PROFILE) except what MUT-61 opens below.',
         '',
         'Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile\'s rules as `income`.',
+        '',
+        'Lapse gate (MUT-361, ADR-181): each hosted profile is entitled per GET /v1/me `billing.state`. On a READ_ONLY profile a session (cookie or device) may only read: any other method answers 402 SUBSCRIPTION_LAPSED with details { profileId, state, source, until }. A LOCKED profile answers only GET /v1/records-export and its receipts. The person-level routes (the inbox, GET /v1/entries, POST /v1/profiles) follow `billingStanding`, the best state across the person\'s profiles; GET /v1/entries leaves LOCKED profiles out. Identity (/v1/me*, sessions, password, terms), /v1/billing/* and leaving a profile stay open in every state. An API key is never gated, and nothing is ever deleted.',
         '',
         'Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization\'s today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.',
         '',

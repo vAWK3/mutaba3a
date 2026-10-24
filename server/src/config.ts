@@ -95,6 +95,12 @@ const envSchema = z.object({
    */
   RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-361 (ADR-181 D7): the lapse gate — a READ_ONLY profile refuses session writes and a LOCKED one everything but
+   * the records export (billing/gate.ts). On unless exactly "false": the operator's kill switch, e.g. while a pilot user
+   * found by `npm run billing:uncovered` still waits for a grant, or until the phone build that reads the refusal ships.
+   */
+  BILLING_GATE: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+  /**
    * MUT-360: Stripe (Secret Manager, mounted only once stripe_enabled is applied). A restricted key, read-only on
    * billing objects except, from MUT-362 (eng review D2), Write on Customers, Checkout Sessions and Customer portal;
    * both or neither — unset, the webhook, reconcile and billing sessions answer 503. A live key only where

@@ -13,7 +13,7 @@
  *   6 TRIAL     ended, nobody ever paid                 → READ_ONLY until day 30, then LOCKED
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
  *
- * Nothing enforces this yet: MUT-361 adds the gate.
+ * MUT-361 enforces it at the door (billing/gate.ts, ADR-181).
  */
 
 export type BillingTier = 'FREELANCER' | 'FIRM';
@@ -37,6 +37,23 @@ export const TRIAL_LOCK_DAYS = 30;
  */
 export const PERIOD_GRACE_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface TrialTimeline {
+  startedAt: Date;
+  /** Day 14: the trial ends and the person's own profiles go read-only (unless something else covers them). */
+  endsAt: Date;
+  /** Day 30: a person who never paid is locked out, except Subscribe and Download my records. */
+  lockAt: Date;
+}
+
+/**
+ * MUT-361: the trial's dates from `User.trialStartedAt`. With `resolveEntitlement` (source TRIAL: ACTIVE, READ_ONLY,
+ * LOCKED) this is what a trial reminder needs (MUT-419: day 11, the end, day 27). One rule, so the mails, Settings ›
+ * Billing and the gate can't disagree about a date.
+ */
+export function trialTimelineOf(startedAt: Date): TrialTimeline {
+  return { startedAt, endsAt: addDays(startedAt, TRIAL_DAYS), lockAt: addDays(startedAt, TRIAL_LOCK_DAYS) };
+}
 
 export interface ProfileFacts {
   organizationId: string;
@@ -93,7 +110,7 @@ export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, n
   if (covering) return { state: coveringState(covering)!, source: 'STRIPE', tier: covering.tier, until: covering.currentPeriodEnd };
 
   const trialStartedAt = profile.ownerUserId ? (facts.trialStarts.get(profile.ownerUserId) ?? null) : null;
-  const trialEnd = trialStartedAt && addDays(trialStartedAt, TRIAL_DAYS);
+  const trialEnd = trialStartedAt && trialTimelineOf(trialStartedAt).endsAt;
   if (trialEnd && now < trialEnd) return { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnd };
 
   const lapsed = bestSubscription(subscriptions.filter((s) => LAPSED_STATUSES.has(s.status) || (coveringState(s) !== undefined && periodOver(s, now))));
@@ -101,7 +118,7 @@ export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, n
 
   const everPaid = subscriptions.some((s) => !NEVER_PAID_STATUSES.has(s.status));
   if (trialStartedAt && !everPaid) {
-    const lockAt = addDays(trialStartedAt, TRIAL_LOCK_DAYS);
+    const { lockAt } = trialTimelineOf(trialStartedAt);
     return now < lockAt
       ? { state: 'READ_ONLY', source: 'TRIAL', tier: 'FREELANCER', until: lockAt }
       : { state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null };

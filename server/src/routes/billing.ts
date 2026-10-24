@@ -16,7 +16,7 @@ import {
   type PersonBilling,
 } from '../billing/checkout.js';
 import { entitlementsFor } from '../billing/coverage.js';
-import { TRIAL_DAYS, TRIAL_LOCK_DAYS } from '../billing/entitlement.js';
+import { trialTimelineOf } from '../billing/entitlement.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
 import { ApiError } from '../errors.js';
@@ -55,7 +55,6 @@ export interface BillingRouteOptions {
 }
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
-const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 /** Refusals Stripe will repeat however often it's asked: the operator's to fix, so never "try again". */
 const PERMANENT_STRIPE_ERRORS: ReadonlySet<string> = new Set(['StripeInvalidRequestError', 'StripePermissionError', 'StripeAuthenticationError', 'StripeIdempotencyError']);
@@ -141,7 +140,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
       if (refusal) throw refusalError(refusal);
 
-      const trialEndsAt = summary.trialStartedAt ? new Date(summary.trialStartedAt.getTime() + TRIAL_DAYS * DAY_MS) : null;
+      const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
       const catalog = await viaStripe(() => catalogOf(checkout), user, null, options.logger);
       const plan = planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt }, person, options.countries, catalog);
       if (!plan.ok) throw refusalError(plan.code);
@@ -338,8 +337,8 @@ function countriesView(countries: BillingCountries) {
 }
 
 function trialView(startedAt: Date) {
-  const at = (days: number) => new Date(startedAt.getTime() + days * DAY_MS).toISOString();
-  return { startedAt: startedAt.toISOString(), endsAt: at(TRIAL_DAYS), lockAt: at(TRIAL_LOCK_DAYS) };
+  const { endsAt, lockAt } = trialTimelineOf(startedAt);
+  return { startedAt: startedAt.toISOString(), endsAt: endsAt.toISOString(), lockAt: lockAt.toISOString() };
 }
 
 function amountsOf(pair: Catalog['ILS']) {

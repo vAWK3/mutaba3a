@@ -7,6 +7,7 @@ import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
+import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
 import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
@@ -58,6 +59,10 @@ export type AppEnv = {
     storeGuard: StoreGuard;
     /** Set by the If-Match middleware on PATCH routes. */
     expectedVersion: number;
+    /** MUT-361: whether the lapse gate is enforced on this server (app-shell.ts, from BILLING_GATE). */
+    billingGate: boolean;
+    /** MUT-361: on a person-level route, the person's LOCKED profiles, which a cross-profile read leaves out. */
+    lockedProfileIds: ReadonlySet<string>;
   };
 };
 
@@ -197,10 +202,15 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
 async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, endpoint: string | null, options: AuthenticateOptions): Promise<void> {
   c.set('identity', identity);
   let profileWriter: ProfileWriter = null;
+  // MUT-361 (ADR-181): the lapse gate, before any route work. An unmatched route (null endpoint) is never gated: its 404 answers.
+  const gated = c.get('billingGate') === true;
   if (endpoint && !options.organizationIndependent.has(endpoint)) {
     const auth = await selectProfile(c, identity, options.store);
     c.set('auth', auth);
     profileWriter = auth.writerOfRecord;
+    if (gated) await gateSelectedProfile(c, auth, endpoint, options.store);
+  } else if (endpoint && gated) {
+    await gatePersonLevel(c, identity, endpoint, options.store);
   }
   c.set('storeGuard', principalStoreGuard('session', profileWriter));
 }

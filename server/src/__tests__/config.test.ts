@@ -98,6 +98,12 @@ describe('loadConfig — custom-domain front door (MUT-326)', () => {
 });
 
 describe('loadConfig — receipts library switch (MUT-389)', () => {
+  it('enforces the lapse gate unless BILLING_GATE is exactly "false" (MUT-361 D7 kill switch)', () => {
+    expect(loadConfig(base).BILLING_GATE).toBe(true);
+    expect(loadConfig({ ...base, BILLING_GATE: 'true' }).BILLING_GATE).toBe(true);
+    expect(loadConfig({ ...base, BILLING_GATE: 'false' }).BILLING_GATE).toBe(false);
+  });
+
   it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
     expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);

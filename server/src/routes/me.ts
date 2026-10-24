@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
-import { entitlementsFor, serializeEntitlement } from '../billing/coverage.js';
+import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
+import { personStanding } from '../billing/gate.js';
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
@@ -38,7 +39,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate')), 200),
   );
 
   return app;
@@ -47,16 +48,12 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
 /**
  * Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape.
  * `terms` is null where no terms apply (MUT-324: the portal's signed-out mode). `billingAt` is null there too
- * (MUT-358), and every profile's `billing` is then null; otherwise it is the request's clock.
+ * (MUT-358), and every profile's `billing` is then null; otherwise it is the request's clock. MUT-361:
+ * `billingStanding` is the lapse gate's verdict on the person (gate.ts), null wherever the gate is off.
  */
-export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null) {
-  const loaded = [];
-  for (const membership of await store.memberships.listByUser(user.id)) {
-    const organization = await store.organizations.getById(membership.organizationId);
-    if (!organization) continue;
-    const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
-    loaded.push({ organization, membership, malafatConnected: malafat?.status === 'CONNECTED' });
-  }
+export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false) {
+  // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
+  const loaded = await memberProfilesForBilling(store, user.id);
   // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
   // D1): likewise one owners read for every profile the caller owns; the two are independent, so they run together.
   const ownedIds = loaded.filter(({ organization, membership }) => ownsProfile(organization, user.id, membership.role)).map(({ organization }) => organization.id);
@@ -80,6 +77,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },
     currencies: [...SUPPORTED_CURRENCIES],
     terms: termsNow,
+    billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
   };
 }
 
