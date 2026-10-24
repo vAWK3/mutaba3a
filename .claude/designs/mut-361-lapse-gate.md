@@ -117,7 +117,7 @@ Pure view model in `src/hosted/data/trialPrompt.ts` (the MUT-418 seam): `TrialNo
   account menu but drops the section nav. Subscribe (`openBilling('subscribe')`, which `/?billing=true&step=subscribe`
   also reaches) and Download my records (`openYourData()`, MUT-325's drawer, export open server-side).
 - A stale page: the query client's MutationCache/QueryCache `onError` refetches `/v1/me` on `SUBSCRIPTION_LAPSED`,
-  so the gate, banner or locked screen take over; the drawer's own error mapping shows the read-only message.
+  so the gate, banner or locked screen take over; each drawer's error mapper shows the read-only message (R6).
 - i18n en/ar under `hosted.billing.gate.*`; RTL via logical properties; 375 px checked in QA.
 
 ## 4. Decisions (all pending Basel's confirmation)
@@ -128,12 +128,36 @@ Pure view model in `src/hosted/data/trialPrompt.ts` (the MUT-418 seam): `TrialNo
 - D3 One code, `details.state` READ_ONLY|LOCKED; `until` instead of the ticket's `since`.
 - D4 Person-level routes (inbox, entries feed, New profile) follow the person's best standing; the entries feed drops
   LOCKED profiles.
-- D5 In READ_ONLY every non-safe method is a write, POST previews included (they only lead to writes).
+- D5 In READ_ONLY every non-safe method is a write (no exceptions; every POST preview route is API-key-only anyway).
 - D6 Leaving a co-owned profile or removing a co-owner stays open in every state.
 - D7 `BILLING_GATE` env, default on, as the operator's kill switch; createApp defaults off for tests.
 - D8 Read-only drawers open for viewing with fields disabled; Add buttons are hidden, not disabled (fewer dead controls).
 - D9 LOCKED keeps the profile switcher and account menu, so a person with another covered profile can move to it.
 - D10 GRACE gets a banner on every page of the profile, like READ_ONLY (the ticket names it).
+- D11 (review R1) Released phones map 402 to a retryable `serverError`: their outbox keeps a refused capture and
+  retries it, so it lands once the person subscribes (nothing lost). The API release that carries the gate goes out
+  with or after the phone build carrying MUT-364, with the minimum build raised; until then `BILLING_GATE=false`.
+  Operator step in before-release.md.
+- D12 (review R5) `/v1/me` publishes the person's standing (`billingStanding: 'open'|'read-only'|'locked'|null`),
+  computed by `gate.ts`, so the portal and the phone never re-derive it; the per-profile gate is `billing.state`.
+
+## 4b. Eng review amendments (2026-10-24, folded in; all pending Basel)
+
+- R1 (P1) 402 on released phones → D11 (release sequencing, kill switch until MUT-364 ships).
+- R2 (P2) Locked screen: Subscribe only when `coveredProfileIds` has the profile (a co-owner's payment doesn't cover a
+  shared profile, TD-193); otherwise "ask the profile's owner" + Download my records.
+- R3 (P2) No blanket `<fieldset disabled>` over a drawer body: it would disable receipt Download (a read). Each write
+  drawer wraps only its form fields in `ReadOnlyFields`; `ReceiptUploader` gets `readOnly` (Download stays, Upload and
+  Delete go); the `Drawer` drops the footer and shows the note.
+- R4 (P3) URL-opened create drawers (`?newExpense`, `?newConversion`, `?newGroup`, `?newProfile`) don't open when the
+  gate (or standing, for New profile) says no; the list checks the gate where it reads the key.
+- R5 (P3) → D12 (`billingStanding` on /v1/me).
+- R6 (P3) Every portal error mapper (`expenseApiErrors`, `conversionApiErrors`, `incomeApiErrors`, `profileApiErrors`,
+  group drawers) maps `SUBSCRIPTION_LAPSED` to the read-only message; the query client refetches `/v1/me`.
+- R7 (P3) The membership loader shared by `/v1/me` and the gate reads organizations and integrations in parallel
+  (one tick, batched by Prisma), and standing is computed once per request.
+- R8 (P3) An unmatched route (null endpoint) is never gated, so its 404 answers; pinned by a test.
+- R9 (P3) D5's preview example removed.
 
 ## 5. Tests (TDD)
 
@@ -189,3 +213,18 @@ Docs: ADR-181, TD as needed, CHANGELOG, SYSTEM_OVERVIEW, COMPONENT_REGISTRY, PAT
 - Unblocks MUT-364 (phone screens on the same codes) and MUT-419 (mails on the same stage).
 - Risk is a wrong lockout of a pilot user: covered by the pre-billing grants, `billing:uncovered` before release and
   the `BILLING_GATE=false` kill switch; nothing is ever deleted.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | not run | n/a |
+| Outside Review | native Claude subagent (Codex not installed) | Independent 2nd opinion | 1 | completed (native fallback) | 9 findings, all folded in (R1..R9) |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 9 issues, 0 critical gaps; all resolved in the plan (pending Basel) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | not run | n/a |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | not run | n/a |
+
+- **OUTSIDE COVERAGE:** Codex CLI not installed; a native Claude subagent reviewed the plan against the code (not an external model).
+- **VERDICT:** ENG reviewed; findings folded into the plan as R1..R9 and D11..D12, pending Basel's confirmation (unattended run).
+
+NO UNRESOLVED DECISIONS
