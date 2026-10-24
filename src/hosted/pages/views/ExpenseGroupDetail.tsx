@@ -41,7 +41,7 @@ import { useExpenseCategories } from '../../data/expenseQueries';
 import type { GroupDetailSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay, todayInZone } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useProfile, useWriteGate } from '../../session/me';
 import { PageHeader } from './shared';
 import { useGroupRange } from './ExpenseGroupsList';
 

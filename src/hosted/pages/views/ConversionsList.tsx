@@ -13,7 +13,7 @@ import { useConversions } from '../../data/conversionQueries';
 import { useAnchoredList } from '../../data/anchoredList';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useProfile, useWriteGate } from '../../session/me';
 import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 
@@ -54,6 +54,8 @@ export interface ConversionsListProps {
 
 export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   const profile = useProfile();
+  // MUT-361: a read-only profile lists and opens conversions, but offers nothing to log, change or delete.
+  const { writable } = useWriteGate();
   const { t, language } = useLanguage();
   const list = useConversions(profile.id, filters);
 
@@ -85,11 +87,11 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   const afterDelete = (id: string) =>
     setFilters({ ...filters, newConversion: undefined, conversion: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
-  const recordButton = (
+  const recordButton = writable ? (
     <Button variant="primary" size="sm" onClick={openNew}>
       {t('hosted.conversions.record')}
     </Button>
-  );
+  ) : null;
 
   return (
     <>
@@ -127,9 +129,9 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
         )}
       </QueryView>
       <SavedNotice kind="conversion" message={t('hosted.savedFlash.conversionSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={list.isError} preset={saveFeedbackPreset(profile)} />
-      {filters.newConversion && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
+      {filters.newConversion && writable && <ConversionDrawer profileId={profile.id} timezone={profile.timezone} onClose={closeDrawer} />}
       {filters.conversion && (
-        <ConversionDrawer key={filters.conversion} profileId={profile.id} mode="edit" conversionId={filters.conversion} timezone={profile.timezone} onClose={closeDrawer} onDeleted={afterDelete} />
+        <ConversionDrawer key={filters.conversion} profileId={profile.id} mode="edit" conversionId={filters.conversion} timezone={profile.timezone} onClose={closeDrawer} onDeleted={afterDelete} readOnly={!writable} />
       )}
     </>
   );

@@ -14,7 +14,7 @@ import { useExpenseGroups } from '../../data/expenseGroupQueries';
 import type { GroupsPageSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay, todayInZone } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useProfile, useWriteGate } from '../../session/me';
 import { PageHeader } from './shared';
 
 /**
@@ -55,6 +55,7 @@ export interface ExpenseGroupsListProps {
 
 export function ExpenseGroupsList({ search, setSearch }: ExpenseGroupsListProps) {
   const profile = useProfile();
+  const { writable } = useWriteGate();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const showToast = useToast();
@@ -68,11 +69,12 @@ export function ExpenseGroupsList({ search, setSearch }: ExpenseGroupsListProps)
   );
 
   const openNew = () => setSearch({ ...search, newGroup: true });
-  const newButton = (
+  // MUT-361: a read-only profile shows its groups, with nothing to start (a `?newGroup` link included).
+  const newButton = writable ? (
     <Button variant="primary" size="sm" onClick={openNew}>
       {t('hosted.groups.new')}
     </Button>
-  );
+  ) : null;
 
   return (
     <>
@@ -93,7 +95,7 @@ export function ExpenseGroupsList({ search, setSearch }: ExpenseGroupsListProps)
           </ul>
         )}
       </QueryView>
-      {search.newGroup && (
+      {search.newGroup && writable && (
         <GroupDrawer
           profileId={profile.id}
           today={today}

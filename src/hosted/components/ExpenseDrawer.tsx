@@ -16,7 +16,7 @@ import { ProjectPicker } from './ProjectPicker';
 import { useMatterCascade } from './useMatterCascade';
 import { usePendingPicks } from './usePendingPicks';
 import { ReceiptUploader } from './ReceiptUploader';
-import { Drawer } from './Drawer';
+import { Drawer, ReadOnlyFields } from './Drawer';
 import { applyExpenseApiError } from './expenseApiErrors';
 import { moneyDateCeiling, todayInZone, todayLocalISO } from '../format/dates';
 import { useAttemptKey } from '../data/attemptKey';
@@ -83,9 +83,11 @@ export interface ExpenseDrawerProps {
   onDeleted?: (expenseId: string) => void;
   /** The client field offers "Add client: «name»" (`canAddClient(profile)`, MUT-286). */
   canAddClient?: boolean;
+  /** MUT-361: the profile is read-only (lapse gate): the expense opens to be read, with nothing to save or delete. */
+  readOnly?: boolean;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -230,6 +232,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       title={mode === 'edit' ? t('hosted.expenses.drawer.editTitle') : t('hosted.expenses.drawer.newTitle')}
       onClose={onClose}
       closeLabel={t('common.close')}
+      readOnly={readOnly}
       footer={
         <>
           <div className="drawer-footer-left">
@@ -253,91 +256,93 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
           date's ten-year max (MUT-392) would otherwise block Save with no message the drawer can show. */}
       <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
-        <ExpenseFormFields
-          control={control}
-          dateMax={moneyDateCeiling(timezone ? todayInZone(timezone) : todayLocalISO())}
-          errors={formState.errors}
-          categories={categories ?? []}
-          currencyOptions={HOSTED_CURRENCIES}
-          currencyDisabled={mode === 'edit'}
-          amountInputMode="decimalText"
-          labels={labels}
-          vendorField={
-            <>
-              <label className="form-label" htmlFor="hosted-expense-vendor">
-                {t('hosted.expenses.drawer.vendor')}
-              </label>
-              <Controller
-                name="vendor"
-                control={control}
-                render={({ field }) => (
-                  <input
-                    id="hosted-expense-vendor"
-                    type="text"
-                    className="input"
-                    placeholder={t('hosted.expenses.drawer.vendorPlaceholder')}
-                    {...field}
-                  />
-                )}
-              />
-            </>
-          }
-          clientField={
-            <>
-              <label className="form-label" htmlFor="hosted-expense-client">
-                {t('hosted.expenses.drawer.client')}
-              </label>
-              <Controller
-                name="clientId"
-                control={control}
-                render={({ field }) => (
-                  <ClientPicker
-                    id="hosted-expense-client"
-                    profileId={profileId}
-                    value={field.value || ''}
-                    onChange={field.onChange}
-                    placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
-                    canCreate={canAddClient}
-                    flashSignal={clientFlash}
-                    onCreatingChange={picks.track}
-                  />
-                )}
-              />
-              {formState.errors.clientId && <p className="form-error">{formState.errors.clientId.message}</p>}
-            </>
-          }
-          projectField={
-            <>
-              <label className="form-label" htmlFor="hosted-expense-matter">
-                {t('hosted.expenses.drawer.matter')}
-              </label>
-              <Controller
-                name="projectId"
-                control={control}
-                render={({ field }) => (
-                  <ProjectPicker
-                    id="hosted-expense-matter"
-                    profileId={profileId}
-                    customerId={selectedClientId || undefined}
-                    value={field.value || ''}
-                    onChange={field.onChange}
-                    placeholder={t('hosted.expenses.drawer.matterPlaceholder')}
-                    canCreate={canAddClient}
-                    currency={selectedCurrency}
-                    onCreatingChange={picks.track}
-                  />
-                )}
-              />
-              {formState.errors.projectId && <p className="form-error">{formState.errors.projectId.message}</p>}
-            </>
-          }
-        />
+        <ReadOnlyFields readOnly={readOnly}>
+          <ExpenseFormFields
+            control={control}
+            dateMax={moneyDateCeiling(timezone ? todayInZone(timezone) : todayLocalISO())}
+            errors={formState.errors}
+            categories={categories ?? []}
+            currencyOptions={HOSTED_CURRENCIES}
+            currencyDisabled={mode === 'edit'}
+            amountInputMode="decimalText"
+            labels={labels}
+            vendorField={
+              <>
+                <label className="form-label" htmlFor="hosted-expense-vendor">
+                  {t('hosted.expenses.drawer.vendor')}
+                </label>
+                <Controller
+                  name="vendor"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      id="hosted-expense-vendor"
+                      type="text"
+                      className="input"
+                      placeholder={t('hosted.expenses.drawer.vendorPlaceholder')}
+                      {...field}
+                    />
+                  )}
+                />
+              </>
+            }
+            clientField={
+              <>
+                <label className="form-label" htmlFor="hosted-expense-client">
+                  {t('hosted.expenses.drawer.client')}
+                </label>
+                <Controller
+                  name="clientId"
+                  control={control}
+                  render={({ field }) => (
+                    <ClientPicker
+                      id="hosted-expense-client"
+                      profileId={profileId}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      placeholder={t('hosted.expenses.drawer.clientPlaceholder')}
+                      canCreate={canAddClient}
+                      flashSignal={clientFlash}
+                      onCreatingChange={picks.track}
+                    />
+                  )}
+                />
+                {formState.errors.clientId && <p className="form-error">{formState.errors.clientId.message}</p>}
+              </>
+            }
+            projectField={
+              <>
+                <label className="form-label" htmlFor="hosted-expense-matter">
+                  {t('hosted.expenses.drawer.matter')}
+                </label>
+                <Controller
+                  name="projectId"
+                  control={control}
+                  render={({ field }) => (
+                    <ProjectPicker
+                      id="hosted-expense-matter"
+                      profileId={profileId}
+                      customerId={selectedClientId || undefined}
+                      value={field.value || ''}
+                      onChange={field.onChange}
+                      placeholder={t('hosted.expenses.drawer.matterPlaceholder')}
+                      canCreate={canAddClient}
+                      currency={selectedCurrency}
+                      onCreatingChange={picks.track}
+                    />
+                  )}
+                />
+                {formState.errors.projectId && <p className="form-error">{formState.errors.projectId.message}</p>}
+              </>
+            }
+          />
+        </ReadOnlyFields>
       </form>
       {mode === 'edit' && existingExpense && (
-        <ReceiptUploader profileId={profileId} expenseId={existingExpense.id} receipts={existingExpense.receipts} />
+        <ReceiptUploader profileId={profileId} expenseId={existingExpense.id} receipts={existingExpense.receipts} readOnly={readOnly} />
       )}
       {/* MUT-268 (11A): the groups this expense is in, and Add to group… */}
-      {mode === 'edit' && existingExpense && <InGroupsLine profileId={profileId} expense={existingExpense} />}
+      {mode === 'edit' && existingExpense && <InGroupsLine profileId={profileId} expense={existingExpense} readOnly={readOnly} />}
     </Drawer>
   );
 }

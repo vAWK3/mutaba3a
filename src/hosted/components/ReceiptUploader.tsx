@@ -20,9 +20,11 @@ export interface ReceiptUploaderProps {
   profileId: string;
   expenseId: string;
   receipts: ExpenseReceipt[];
+  /** MUT-361: a read-only profile (lapse gate) keeps Download, a read; Add and Delete are gone. */
+  readOnly?: boolean;
 }
 
-export function ReceiptUploader({ profileId, expenseId, receipts }: ReceiptUploaderProps) {
+export function ReceiptUploader({ profileId, expenseId, receipts, readOnly = false }: ReceiptUploaderProps) {
   const { t } = useLanguage();
   const showToast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,6 +35,9 @@ export function ReceiptUploader({ profileId, expenseId, receipts }: ReceiptUploa
 
   const readyCount = receipts.filter((r) => r.status === 'READY').length;
   const atCap = readyCount >= MAX_READY_RECEIPTS;
+
+  // MUT-361: nothing to read and nothing allowed to add.
+  if (readOnly && readyCount === 0) return null;
 
   const handleFile = async (file: File) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -89,40 +94,46 @@ export function ReceiptUploader({ profileId, expenseId, receipts }: ReceiptUploa
                 >
                   {t(preparing === receipt.id ? 'hosted.expenses.drawer.receipts.preparing' : 'hosted.expenses.drawer.receipts.download')}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteReceipt.isPending}
-                  onClick={() => void handleDelete(receipt)}
-                >
-                  {t('common.delete')}
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={deleteReceipt.isPending}
+                    onClick={() => void handleDelete(receipt)}
+                  >
+                    {t('common.delete')}
+                  </Button>
+                )}
               </li>
             ))}
         </ul>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPTED_TYPES.join(',')}
-        style={{ display: 'none' }}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = '';
-          if (file) void handleFile(file);
-        }}
-      />
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        disabled={atCap || addReceipt.isPending}
-        onClick={() => inputRef.current?.click()}
-      >
-        {t(addReceipt.isPending ? 'hosted.expenses.drawer.receipts.uploading' : 'hosted.expenses.drawer.receipts.add')}
-      </Button>
-      {atCap && <p className="hp-muted">{t('hosted.expenses.drawer.receipts.atCap')}</p>}
+      {!readOnly && (
+        <>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED_TYPES.join(',')}
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void handleFile(file);
+            }}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={atCap || addReceipt.isPending}
+            onClick={() => inputRef.current?.click()}
+          >
+            {t(addReceipt.isPending ? 'hosted.expenses.drawer.receipts.uploading' : 'hosted.expenses.drawer.receipts.add')}
+          </Button>
+        </>
+      )}
+      {!readOnly && atCap && <p className="hp-muted">{t('hosted.expenses.drawer.receipts.atCap')}</p>}
     </div>
   );
 }
