@@ -16,9 +16,10 @@ export function YouLinks({ profile, position }: { profile: HostedProfile | null;
   const t = useT();
   const me = useMe();
   const local = useIsLocalMode();
-  const { pathname } = useLocation();
-  const current = parseYouSearch(useSearch({ strict: false }) as Record<string, unknown>);
-  const from = isYouPath(pathname) ? current.from : sectionOf(pathname);
+  // Only the pathname and `from`: the shell re-renders on neither a filter change nor a drawer key (review)
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const keptFrom = useSearch({ strict: false, select: (search) => parseYouSearch(search as Record<string, unknown>).from });
+  const from = isYouPath(pathname) ? keptFrom : sectionOf(pathname);
   const search = from ? { from } : {};
   const profileId = profile?.id ?? null;
 
@@ -28,6 +29,8 @@ export function YouLinks({ profile, position }: { profile: HostedProfile | null;
       <Link
         to={youPath(profileId, 'profiles')}
         search={search}
+        // Exact: on You › Account the avatar link is the current one, not both (review)
+        activeOptions={{ exact: true, includeSearch: false }}
         className="hp-you-link-profile press"
         aria-label={profile ? `${t('hosted.shell.switcher.label')}: ${profile.name}` : t('hosted.shell.switcher.label')}
       >

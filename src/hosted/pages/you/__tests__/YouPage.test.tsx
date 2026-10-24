@@ -84,8 +84,8 @@ describe('the You page (MUT-425)', () => {
     });
 
     it('the open profile goes back to its section the same way, never through history', async () => {
-      const back = vi.spyOn(window.history, 'back');
       const { user, router } = portal(`/p/${ORG_B}/you?from=clients`);
+      const back = vi.spyOn(router.history, 'back');
       await user.click(await screen.findByRole('button', { name: /Nour Studio/ }));
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/clients`));
       expect(back).not.toHaveBeenCalled();
@@ -111,6 +111,9 @@ describe('the You page (MUT-425)', () => {
       // On the You page they pass the kept section on (outside voice O1)
       await user.click(screen.getByRole('link', { name: /Account: Nour Haddad/ }));
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/you/account?from=payments`));
+      // One current page in the sidebar: the avatar's, not the profile name's too (review)
+      expect(screen.getByRole('link', { name: /Account: Nour Haddad/ })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Switch profile: Nour Studio' })).not.toHaveAttribute('aria-current');
     });
   });
 

@@ -13,7 +13,8 @@ import { AlertIcon, LockIcon } from './Icons';
 
 /**
  * MUT-361 (ADR-181): what the portal shows when the open profile's plan isn't running. `LapseBanner` sits above every
- * page of the profile: a failed payment (GRACE) or read-only. `LockedScreen` replaces the page on a LOCKED profile:
+ * page of the profile: a failed payment (GRACE) or read-only, and on the You page only, LOCKED (MUT-425). `LockedScreen`
+ * replaces every other page on a LOCKED profile:
  * Subscribe and Download my records, nothing else (the server refuses the rest anyway). Both offer Subscribe only
  * where a payment of this person's would cover the profile (`coveredProfileIds`, TD-193): anyone else is told to
  * ask the profile's creator. Every action opens a drawer the shell already has: Billing, or Your data.

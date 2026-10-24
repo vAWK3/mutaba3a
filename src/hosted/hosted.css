@@ -329,8 +329,6 @@
   cursor: pointer;
 }
 .hp-menu-item:hover, .hp-menu-item:focus-visible { background: var(--surface-2); outline: none; }
-/* Android "coming soon" (MUT-261): named, not actionable — no hover/focus highlight. */
-.hp-menu-item--soon, .hp-menu-item--soon:hover, .hp-menu-item--soon:focus-visible { color: var(--muted); cursor: default; background: transparent; }
 
 /* ---------- Pages ---------- */
 
@@ -533,10 +531,6 @@
 [role='switch'][aria-checked='true'] .hp-you-switch::after { inset-inline-start: 16px; }
 .hp-you-foot { margin: 0 0 var(--space-4); padding-inline: var(--space-1); font-size: var(--text-label); color: var(--muted); }
 
-/* SectionTabs drawn as a segmented pill (the You page's Profiles · Account · App). */
-.hp-section-tabs--segmented { display: flex; gap: var(--space-0-5); padding: var(--space-0-5); margin: 0 0 var(--space-5); border: 0; border-radius: var(--radius-lg); background: var(--surface-3); }
-.hp-section-tabs--segmented .hp-section-tab { flex: 1; min-width: 0; text-align: center; padding: var(--space-1-5) var(--space-2); margin: 0; border: 0; border-radius: var(--radius-md); font-size: var(--text-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-section-tabs--segmented .hp-section-tab.hp-section-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
 
 /* Small text-button links inside drawers (Change, Reload, back to the list). */
 .hp-link-button { font: inherit; font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--accent-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -611,6 +605,17 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-section-tab:hover { color: var(--text); }
 .hp-section-tab.hp-section-tab-on { color: var(--text); border-bottom-color: var(--m-primary-hover); }
 .hp-section-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-xs); }
+/* SectionTabs drawn as a segmented pill (the You page's Profiles · Account · App, MUT-425). After the base rules
+   above: same specificity, so the order is what keeps the pill free of their underline, negative margin and radius. */
+.hp-section-tabs--segmented { display: flex; gap: var(--space-0-5); padding: var(--space-0-5); margin: 0 0 var(--space-5); border: 0; border-radius: var(--radius-lg); background: var(--surface-3); }
+.hp-section-tabs--segmented .hp-section-tab { flex: 1; min-width: 0; text-align: center; padding: var(--space-1-5) var(--space-2); margin: 0; border: 0; border-radius: var(--radius-md); font-size: var(--text-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-section-tabs--segmented .hp-section-tab.hp-section-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-section-tabs--segmented .hp-section-tab:focus-visible { border-radius: var(--radius-md); }
+/* A 44px target on touch screens: the pill's tabs and the phone top bar's avatar link (MUT-425 review). */
+@media (pointer: coarse) {
+  .hp-section-tabs--segmented .hp-section-tab { min-height: 44px; display: grid; place-items: center; }
+  .hp-you-link-account { min-height: 44px; min-width: 44px; justify-content: center; }
+}
 
 .hp-toast-action { margin-inline-start: auto; white-space: nowrap; }
 

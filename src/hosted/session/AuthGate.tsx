@@ -127,7 +127,8 @@ function NoProfiles() {
  */
 export function ProfileLayout({ profileId }: { profileId: string }) {
   const me = useMe();
-  const onYouPage = isYouPath(useLocation().pathname);
+  // A boolean select: ProfileLayout re-renders when the person enters or leaves the You page, not on every search change
+  const onYouPage = useLocation({ select: (location) => isYouPath(location.pathname) });
   const { profiles } = me;
   const profile = profiles.find((candidate) => candidate.id === profileId);
   const open = useLostAccess((s) => s.open);
