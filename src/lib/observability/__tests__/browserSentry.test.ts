@@ -21,6 +21,8 @@ describe('browserSentryOptions (ADR-091, MUT-149 D4)', () => {
       replaysOnErrorSampleRate: 0,
       profileSessionSampleRate: 0,
       defaultIntegrations: false,
+      // MUT-150 review: the SDK's drop-count envelopes skip beforeSend, so they are off too
+      sendClientReports: false,
     });
   });
 

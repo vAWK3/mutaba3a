@@ -210,8 +210,8 @@ state, and `deploy.sh` never touches it. The rules are in
    it set, `make release server` stops unless the upload token is there too (step 3). Before
    that release, `terraform -chdir=server/infrastructure/sentry plan` must show no
    `allowed_domains` change on `mutaba3a-web` (it must already list `https://app.mtb3a.com`);
-   if it does, apply it first, or Sentry refuses every portal report. Landing waits for
-   MUT-150. Then `unset SENTRY_ADMIN_TOKEN`.
+   if it does, apply it first, or Sentry refuses every portal report. The landing's
+   (`mutaba3a-landing`) goes to Netlify (step 9). Then `unset SENTRY_ADMIN_TOKEN`.
 7. **Clean up the two hand-made projects.** Sentry gave each an automatic key with no rate
    limit and a default alert rule; Terraform can't remove either (it only sets `default_key
    = false` at creation). In `mutaba3a-web` and `mutaba3a-flutter`:
@@ -247,6 +247,24 @@ state, and `deploy.sh` never touches it. The rules are in
 
    From then on `deploy.sh` refuses a release whose `production.tfvars` lacks `sentry_enabled = true`
    (it would delete the DSN secret). `SKIP_SENTRY_GUARD=1` only to turn reports off on purpose.
+
+9. **Turn the landing's reports on (MUT-150).** Once, before the first release that carries them:
+   - Dry run locally with the real values, so the release isn't the first run of the upload
+     and the guard (eng O3):
+
+     ```bash
+     CONTEXT=production MUTABA3A_LANDING_SENTRY_DSN='<landing DSN>' SENTRY_AUTH_TOKEN='<sntrys_ upload token>' \
+       npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web
+     ```
+
+   - Netlify › Site configuration › Environment variables, **Production context only**:
+     `MUTABA3A_LANDING_SENTRY_DSN` = the landing DSN, and `SENTRY_AUTH_TOKEN` = the upload token
+     (Keychain `release-kit` / `barmajiyat/SENTRY_AUTH_TOKEN`), marked **Contains secret values**.
+   - `make release web`. On the live `/`, run `setTimeout(() => { throw new Error('MUT-150 smoke') })`
+     in the console: the issue appears in `mutaba3a-landing` with a readable stack. Then open
+     `/app` and check the network tab sends nothing to `sentry.io`.
+   - If Sentry is down when a web release must ship (the upload would fail the build), remove
+     `MUTABA3A_LANDING_SENTRY_DSN` from the production context, redeploy, and restore it after.
 
 A new portal or landing origin (the custom domain, MUT-112) goes into
 `portal_origins` / `landing_origins` followed by `terraform apply`. Until

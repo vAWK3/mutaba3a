@@ -106,6 +106,24 @@ describe('portal lint guards', () => {
       30_000,
     );
 
+    it('lets the landing lazy chunk load the SDK (MUT-150)', async () => {
+      expect(await rulesFor("import * as Sentry from '@sentry/browser';\nexport const x = Sentry;\n", 'src/pages/landing/observability/landingSentry.ts')).not.toContain(RULE);
+    }, 30_000);
+
+    it.each([['src/components/__probe__.tsx'], ['src/pages/__probe__.tsx'], ['src/lib/__probe__.ts']])(
+      'keeps the landing error reports out of the local app: %s may not import them (MUT-150 review, ADR-024)',
+      async (path) => {
+        const code = "import { reportLandingCrash } from '../pages/landing/observability/landingErrorReporting';\nexport const x = reportLandingCrash;\n";
+        expect(await rulesFor(code, path)).toContain('no-restricted-imports');
+      },
+      30_000,
+    );
+
+    it('lets main.tsx start the website error reports', async () => {
+      const code = "// eslint-disable-next-line no-restricted-imports -- the one place the website's error reports start (MUT-150)\nimport { startLandingErrorReporting } from './pages/landing/observability/landingErrorReporting';\nexport const x = startLandingErrorReporting;\n";
+      expect(await rulesFor(code, 'src/main.tsx')).not.toContain('no-restricted-imports');
+    }, 30_000);
+
     it('lets the portal lazy chunk load the SDK', async () => {
       expect(await rulesFor("import * as Sentry from '@sentry/browser';\nexport const x = Sentry;\n", 'src/hosted/observability/portalSentry.ts')).not.toContain(RULE);
     }, 30_000);

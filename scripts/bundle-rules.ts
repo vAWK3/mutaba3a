@@ -6,6 +6,7 @@
  */
 import { dirname, join, resolve, sep } from 'node:path';
 import { CIMD_CLIENT_ID } from '../src/services/oauth/oauth-client';
+import { SENTRY_INGEST_ORIGIN } from '../server/src/observability/sentry-ingest';
 
 export interface Rule {
   name: string;
@@ -84,9 +85,28 @@ export const FILE_SCOPED_ORIGINS: Readonly<Record<string, readonly string[]>> = 
   '.well-known/oauth-client.json': [new URL(CIMD_CLIENT_ID).origin],
 };
 
+/** The landing's lazy error-report chunks in dist-web (MUT-150): the SDK's own and the one that starts it. */
+export const LANDING_SENTRY_CHUNK = /^assets\/(?:vendor-sentry|landingSentry)-[A-Za-z0-9_-]+\.js$/;
+
+/**
+ * Origins only files matching a pattern may name (MUT-150 eng O1). Hashed chunk
+ * names can't be listed path by path. The landing's Sentry chunks send to the
+ * org's ingest host and carry the SDK's docs link; the rest of dist-web, which
+ * the local app shares, may name neither.
+ */
+export const PATTERN_SCOPED_ORIGINS: ReadonlyArray<{ pattern: RegExp; origins: readonly string[] }> = [
+  { pattern: LANDING_SENTRY_CHUNK, origins: [SENTRY_INGEST_ORIGIN, 'https://docs.sentry.io'] },
+];
+
 /** The origins in `file` (a dist-relative path) that still need the bundle-wide allowlist. */
-export function originsNeedingReview(file: string, origins: Iterable<string>, scoped: Readonly<Record<string, readonly string[]>> = FILE_SCOPED_ORIGINS): string[] {
-  const allowedHere = new Set((scoped[file] ?? []).map((o) => o.toLowerCase()));
+export function originsNeedingReview(
+  file: string,
+  origins: Iterable<string>,
+  scoped: Readonly<Record<string, readonly string[]>> = FILE_SCOPED_ORIGINS,
+  patterns: ReadonlyArray<{ pattern: RegExp; origins: readonly string[] }> = PATTERN_SCOPED_ORIGINS,
+): string[] {
+  const byPattern = patterns.filter((scope) => scope.pattern.test(file)).flatMap((scope) => scope.origins);
+  const allowedHere = new Set([...(scoped[file] ?? []), ...byPattern].map((o) => o.toLowerCase()));
   return [...origins].filter((origin) => !allowedHere.has(origin.toLowerCase()));
 }
 
@@ -333,9 +353,31 @@ export function posthogPrecached(sw: string, read: (path: string) => string): st
  */
 export const SENTRY_MARKER = /__SENTRY__|sentry\.javascript|\bsentry_key\b|ingest\.de\.sentry\.io/;
 
-/** True when a local build (web, desktop) file carries the SDK: only the portal reports crashes (AC1). */
+/** True when a local build (web, desktop) file carries the SDK: only the portal and the landing's chunks may (AC1). */
 export function sentryLeaks(text: string): boolean {
   return SENTRY_MARKER.test(text);
+}
+
+/** The landing's Sentry chunks in a dist-web listing: `test:bundles` builds with the QA DSN and requires them (review D1). */
+export function landingSentryChunks(paths: readonly string[]): string[] {
+  return paths.filter((path) => LANDING_SENTRY_CHUNK.test(path));
+}
+
+/**
+ * dist-web files that carry the SDK outside the landing's lazy chunks (MUT-150):
+ * the local app loads the rest of dist-web, and never the SDK (ADR-024). Empty when clean.
+ */
+export function sentryOutsideLandingChunks(paths: readonly string[], read: (path: string) => string): string[] {
+  return paths.filter((path) => !LANDING_SENTRY_CHUNK.test(path) && sentryLeaks(read(path)));
+}
+
+/**
+ * The precached files that carry the SDK (MUT-150): the service worker installs
+ * for everyone who opens the local app, so a hit means Sentry would be stored on
+ * their device. Empty when clean.
+ */
+export function sentryPrecached(sw: string, read: (path: string) => string): string[] {
+  return precachedUrls(sw).filter((path) => SENTRY_MARKER.test(read(path)));
 }
 
 /**

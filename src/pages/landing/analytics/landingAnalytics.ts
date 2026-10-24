@@ -3,6 +3,7 @@ import type { PostHogConfig } from 'posthog-js';
 import { APP_VERSION } from '../../../lib/appVersion';
 import { POSTHOG_KEY } from '../../../lib/analytics/posthogKey';
 import { HOSTED_OFFER_URL } from '../../../content/download-config';
+import { afterLoadIdle } from '../afterLoadIdle';
 
 /**
  * The landing pages' cookieless visit counts (MUT-154, ADR-090, D1). Only the
@@ -100,31 +101,9 @@ export function resetLandingAnalyticsForTests() {
 }
 
 /** Waits for the page to finish loading (fonts and the hero first), then for idle, then starts counting. */
-const FALLBACK_IDLE_MS = 1500;
-
-/** Runs `run` once the browser is idle; returns the cancel. */
-function whenIdle(run: () => void): () => void {
-  if (typeof window.requestIdleCallback === 'function') {
-    const id = window.requestIdleCallback(run, { timeout: FALLBACK_IDLE_MS });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = window.setTimeout(run, FALLBACK_IDLE_MS);
-  return () => window.clearTimeout(id);
-}
-
 export function useLandingAnalytics() {
   useEffect(() => {
     if (!POSTHOG_KEY) return;
-    const run = () => void startLandingAnalytics();
-    if (document.readyState === 'complete') return whenIdle(run);
-    let cancelIdle: (() => void) | null = null;
-    const onLoad = () => {
-      cancelIdle = whenIdle(run);
-    };
-    window.addEventListener('load', onLoad, { once: true });
-    return () => {
-      window.removeEventListener('load', onLoad);
-      cancelIdle?.();
-    };
+    return afterLoadIdle(() => void startLandingAnalytics());
   }, []);
 }

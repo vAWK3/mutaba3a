@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { StrictMode, lazy, Suspense } from "react";
+import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
@@ -16,12 +16,14 @@ import { router } from "./router";
 import { initDatabase } from "./db";
 import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
-import { LandingProviders } from "./pages/landing/LandingProviders";
+// The one place outside the website's pages that may import its error reports (MUT-150, ADR-024)
+// eslint-disable-next-line no-restricted-imports
+import { LANDING_SENTRY_ENABLED, startLandingErrorReporting } from "./pages/landing/observability/landingErrorReporting";
+import { LandingShell } from "./pages/landing/LandingShell";
 import { HOSTED_OFFER_URL } from "./content/download-config";
-import { marketingPath } from "./pages/landing/marketingPath";
+import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-import { BootSplash } from "./components/brand/BootSplash";
 import "./components/ui/ErrorBoundary.css";
 import { handleVersionChange } from "./lib/platform";
 import { APP_VERSION } from "./lib/appVersion";
@@ -73,51 +75,34 @@ const TermsPage =
 
 const queryClient = createAppQueryClient();
 
+// The website's error reports (MUT-150, ADR-091): website pages only, started
+// before React renders so a crash at start-up is kept (eng O5). The local
+// app's routes never start it (ADR-024), and desktop never builds it.
+if (__BUILD_MODE__ === "web") startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED });
+
 function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
     const path = marketingPath(window.location.pathname);
+    // The one list of website pages (MUT-150 eng D7): error reports start and send only on these
+    const route = landingRoute(window.location.pathname);
 
-    if (path === "/" && LandingPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <LandingPage />
-          </Suspense>
-        </LandingProviders>
-      );
+    if (route === "/" && LandingPage) {
+      return <LandingShell><LandingPage /></LandingShell>;
     }
 
-    if (path === "/download" && DownloadPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <DownloadPage />
-          </Suspense>
-        </LandingProviders>
-      );
+    if (route === "/download" && DownloadPage) {
+      return <LandingShell><DownloadPage /></LandingShell>;
     }
 
-    if (path === "/privacy" && PrivacyPolicyPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <PrivacyPolicyPage search={window.location.search} />
-          </Suspense>
-        </LandingProviders>
-      );
+    if (route === "/privacy" && PrivacyPolicyPage) {
+      return <LandingShell><PrivacyPolicyPage search={window.location.search} /></LandingShell>;
     }
 
     // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen;
     // ?lang is the language the portal records for the reader
-    if ((path === "/terms" || path.startsWith("/terms/")) && TermsPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <TermsPage path={path} search={window.location.search} />
-          </Suspense>
-        </LandingProviders>
-      );
+    if ((route === "/terms" || route === "/terms/:version") && TermsPage) {
+      return <LandingShell><TermsPage path={path} search={window.location.search} /></LandingShell>;
     }
 
     // /hosted is retired (the free-vs-hosted comparison): hosted is now the only
