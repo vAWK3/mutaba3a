@@ -28,6 +28,19 @@
 
 ---
 
+## [web 0.2.0 / api 0.6.0] - 2026-10-24 — Release prep
+
+**Why:** release web + server from main without MUT-175/MUT-333 (still in progress).
+
+### Changed
+- `release-notes.json`: 0.2.0 (en + ar): the carry-over to mtb3a.com, the website's own crash screen, the privacy policy's signup and mail sections.
+- `docs/operations/before-release.md`: Basel approved MUT-369's privacy policy on 2026-10-24 (item removed; MUT-418's TD-219 sentence approved with it). MUT-361 ships with the gate off (`billing_gate_enabled = false`, gitignored `production.tfvars`): `billing:uncovered` only exists from this release; the item now says how to turn it on.
+
+### Fixed
+- `scripts/preflight.sh`: the Netlify check accepts a build command that continues after `npm run build:web` (MUT-150 appended the bundle guard), so `make release web` no longer fails its preflight on every run.
+
+---
+
 ## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-187)
 
 **Why:** epic MUT-423 (Basel's round 4 variation 3): one calm page with room to grow instead of two popovers, nothing lost from either.
