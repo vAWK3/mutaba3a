@@ -5,8 +5,11 @@ import { applyTrialPromptAction } from '../billing/trial-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
+import { isDueForPurge } from '../accounts/closure.js';
+import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
 import type {
   AccountClosureRecord,
+  AccountPurgeRepository,
   BillingAccountRecord,
   BillingRepository,
   EmailRepository,
@@ -2221,6 +2224,134 @@ export class MemoryLedgerStore implements LedgerStore {
   };
 
   // MUT-367 (ADR-178): the review queue. Each method runs without an await: the stand-in for Prisma's transaction and lock.
+  /** MUT-333 (R1): deleted profiles' bucket prefixes waiting to be emptied; outside the snapshot like the billing maps. */
+  private readonly storagePurges = new Map<string, Date>();
+
+  readonly accountPurge: AccountPurgeRepository = {
+    listDue: async (at, limit) =>
+      [...this.people.values()]
+        .filter((u) => isDueForPurge(u.closure, at))
+        .sort((a, b) => (a.closure!.purgeLastTriedAt?.getTime() ?? -Infinity) - (b.closure!.purgeLastTriedAt?.getTime() ?? -Infinity) || a.closure!.deleteAfter.getTime() - b.closure!.deleteAfter.getTime())
+        .slice(0, limit)
+        .map((u) => ({ ...u })),
+    countClosing: async (at) => {
+      const closing = [...this.people.values()].filter((u) => u.closure);
+      return { closing: closing.length, due: closing.filter((u) => isDueForPurge(u.closure, at)).length };
+    },
+    claim: async (userId, at) => {
+      const u = this.people.get(userId);
+      if (!u?.closure || !isDueForPurge(u.closure, at)) return null;
+      u.closure = { ...u.closure, purgeStartedAt: u.closure.purgeStartedAt ?? at, purgeLastTriedAt: at };
+      return { ...u };
+    },
+    planOf: async (userId) => {
+      const u = this.people.get(userId);
+      if (!u) return null;
+      return { userId, ...this.purgeDecisionFor(userId), stripeCustomerIds: [...this.billingAccounts.values()].filter((a) => a.userId === userId).map((a) => a.stripeCustomerId) };
+    },
+    purge: async (userId, at) => {
+      const u = this.people.get(userId);
+      if (!u?.closure?.purgeStartedAt) return null;
+      const decision = this.purgeDecisionFor(userId);
+      const deleted = new Set(decision.deleteProfileIds);
+      for (const { organizationId, toUserId } of decision.transfers) Object.assign(this.orgs.get(organizationId)!, { ownerUserId: toUserId });
+      // D8 / MUT-324 review: every acceptance the person ever recorded goes, wherever it was written.
+      this.dropEvents((e) => (e.action === 'user.terms_accepted' && e.actorId === userId) || deleted.has(e.organizationId));
+      this.dropProfiles(deleted);
+      for (const id of deleted) this.storagePurges.set(id, at);
+      const auditRowsScrubbed = this.anonymize(userId);
+      for (const event of purgeAuditRows(userId, decision)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      this.dropPerson(u);
+      return { ...decision, auditRowsScrubbed };
+    },
+    listStoragePurges: async (limit) =>
+      [...this.storagePurges]
+        .sort((a, b) => a[1].getTime() - b[1].getTime() || a[0].localeCompare(b[0]))
+        .slice(0, limit)
+        .map(([id]) => id),
+    finishStoragePurge: async (organizationId) => {
+      this.storagePurges.delete(organizationId);
+    },
+  };
+
+  /** MUT-333: the shared rule (accounts/purge-plan.ts) over this store's own rows. */
+  private purgeDecisionFor(userId: string) {
+    const ids = new Set([...this.members.values()].filter((m) => m.userId === userId).map((m) => m.organizationId));
+    for (const o of this.orgs.values()) if (o.ownerUserId === userId || o.personalOwnerUserId === userId) ids.add(o.id);
+    const profiles = [...ids].map((id) => this.orgs.get(id)).filter((o): o is Organization => o !== undefined);
+    const othersOf = (organizationId: string): PurgeCandidate[] =>
+      [...this.members.values()]
+        .filter((m) => m.organizationId === organizationId && m.userId !== userId)
+        .flatMap((m) => {
+          const person = this.people.get(m.userId);
+          return person ? [{ userId: m.userId, role: m.role, status: person.status, deleteAfter: person.closure?.deleteAfter ?? null, membershipCreatedAt: m.createdAt }] : [];
+        });
+    return decidePurge(userId, profiles, othersOf);
+  }
+
+  private dropEvents(drop: (event: AuditEventRecord) => boolean): void {
+    for (let i = this.events.length - 1; i >= 0; i--) if (drop(this.events[i]!)) this.events.splice(i, 1);
+  }
+
+  /** Every row of the deleted profiles, in every map that holds a profile's rows. */
+  private dropProfiles(deleted: ReadonlySet<string>): void {
+    const inDeleted = (row: { organizationId: string }) => deleted.has(row.organizationId);
+    const maps: Array<Map<string, { organizationId: string }>> = [
+      this.keys, this.ints, this.idem, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps,
+      this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.members, this.exps, this.expCats, this.expReceipts,
+      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames,
+    ];
+    for (const map of maps) for (const [key, row] of map) if (inDeleted(row)) map.delete(key);
+    for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
+    // SET NULL, as in Postgres: a subscription is the payer's, and the payer's own are deleted with their account.
+    for (const sub of this.billingSubs.values()) if (sub.organizationId !== null && deleted.has(sub.organizationId)) sub.organizationId = null;
+    for (const key of this.counters.keys()) if (deleted.has(key.slice(0, key.indexOf(':')))) this.counters.delete(key);
+    for (const id of deleted) this.orgs.delete(id);
+  }
+
+  /** D7, R3: on every profile that survives, the person's records lose their name and the audit loses its details. */
+  private anonymize(userId: string): number {
+    for (const e of this.exps.values()) if (e.createdByUserId === userId) e.createdByUserId = null;
+    for (const r of this.expReceipts.values()) {
+      if (r.uploadedByUserId === userId) r.uploadedByUserId = null;
+      if (r.approvedByUserId === userId) r.approvedByUserId = null;
+    }
+    for (const c of this.convs.values()) if (c.createdByUserId === userId) c.createdByUserId = null;
+    for (const g of this.expGroups.values()) if (g.createdByUserId === userId) g.createdByUserId = null;
+    for (const p of this.pays.values()) if (p.createdByUserId === userId) p.createdByUserId = null;
+    for (const r of this.recs.values()) if (r.createdByUserId === userId) r.createdByUserId = null;
+    for (const o of this.orgs.values()) if (o.firmRequestedByUserId === userId) o.firmRequestedByUserId = null;
+    for (const [key, row] of this.idem) if (mentions(row.responseBody, userId)) this.idem.delete(key);
+    let scrubbed = 0;
+    for (const e of this.events) {
+      if ((e.actorId === userId || e.entityId === userId || mentions(e.metadata, userId)) && e.metadata !== undefined) {
+        delete e.metadata;
+        scrubbed++;
+      }
+    }
+    return scrubbed;
+  }
+
+  /** Every row that is the person's own, then the person (D9, R4). */
+  private dropPerson(person: UserRecord): void {
+    const id = person.id;
+    for (const [key, m] of this.members) if (m.userId === id) this.members.delete(key);
+    for (const [key, s] of this.sessionsById) if (s.userId === id) this.sessionsById.delete(key);
+    for (const [key, link] of this.setupLinks) if (('userId' in link && link.userId === id) || (link.purpose === 'SIGNUP' && 'email' in link && link.email === person.email)) this.setupLinks.delete(key);
+    for (const [key, entry] of this.inbox) if (entry.userId === id) this.inbox.delete(key);
+    for (const [key, claim] of this.userIdem) if (claim.userId === id) this.userIdem.delete(key);
+    for (const [key, acceptance] of this.termsAcceptances) if (acceptance.userId === id) this.termsAcceptances.delete(key);
+    for (const [key, grant] of this.grants) if (grant.userId === id) this.grants.delete(key);
+    for (const [key, account] of this.billingAccounts) {
+      if (account.userId !== id) continue;
+      for (const [subKey, sub] of this.billingSubs) if (sub.billingAccountId === account.id) this.billingSubs.delete(subKey);
+      this.billingAccounts.delete(key);
+    }
+    for (const [key, review] of this.reviews) if (review.userId === id) this.reviews.delete(key);
+    this.trialStarts.delete(id);
+    this.people.delete(id);
+  }
+
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = [...this.reviews.values()]
@@ -2899,4 +3030,10 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 
 function cloneReview(review: SignupReviewRecord): SignupReviewRecord {
   return { ...review, reasons: [...review.reasons] };
+}
+
+/** MUT-333 (R3): whether a JSON value names this id anywhere (a uuid can't occur by accident). */
+function mentions(value: unknown, id: string): boolean {
+  if (value === null || value === undefined) return false;
+  return JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)).includes(id);
 }

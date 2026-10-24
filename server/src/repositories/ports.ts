@@ -1,3 +1,4 @@
+import type { PurgeDecision } from '../accounts/purge-plan.js';
 import type { ApiKeyEnvironment } from '../auth/api-key.js';
 import type { KeyScope } from '../auth/scopes.js';
 import type { SessionKind } from '../auth/sessions.js';
@@ -2006,6 +2007,44 @@ export interface EmailRepository {
   pruneDeliveries(before: Date): Promise<number>;
 }
 
+// ---- MUT-333: the hard delete of a closed account (ADR-188) ----------------------------------------------------
+
+/** What the purge would do now (the operator's dry run), from the same rules the purge applies. */
+export interface PurgePlan extends PurgeDecision {
+  userId: string;
+  /** The Stripe customers the mirror links to this person (the run also looks for others by metadata, R5). */
+  stripeCustomerIds: string[];
+}
+
+/** What a purge did. */
+export interface PurgeOutcome extends PurgeDecision {
+  /** Audit rows on surviving profiles whose metadata was cleared because it named the person (R3). */
+  auditRowsScrubbed: number;
+}
+
+export interface AccountPurgeRepository {
+  /** Accounts whose grace has run out (both columns agree, D19), least recently tried first (R13), at most `limit`. */
+  listDue(at: Date, limit: number): Promise<UserRecord[]>;
+  /** How many accounts are closing, and how many of those are due. */
+  countClosing(at: Date): Promise<{ closing: number; due: number }>;
+  /**
+   * R1: under the user-row lock, stamps purgeStartedAt (kept from an earlier attempt) and purgeLastTriedAt. Null when
+   * the account doesn't exist or isn't due: nothing written. After a claim, `users.cancelClosure` always answers null.
+   */
+  claim(userId: string, at: Date): Promise<UserRecord | null>;
+  /** The decision the purge would take now, without writing. Null for an unknown user. */
+  planOf(userId: string): Promise<PurgePlan | null>;
+  /**
+   * The hard delete, in one transaction under the user-row lock: transfers (D6), anonymizes (D7), scrubs and
+   * tombstones the audit (D8, R3), deletes the person's profiles and every row naming them, queues the deleted
+   * profiles' bucket prefixes (R1) and deletes the user. Null (nothing written) unless the account is claimed.
+   */
+  purge(userId: string, at: Date): Promise<PurgeOutcome | null>;
+  /** R1: deleted profiles whose bucket prefix still waits to be emptied, oldest first. */
+  listStoragePurges(limit: number): Promise<string[]>;
+  finishStoragePurge(organizationId: string): Promise<void>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -2052,6 +2091,8 @@ export interface LedgerStore {
   email: EmailRepository;
   /** MUT-367: the operator's signup review queue; operator-only below the routes (the SIGNUP redeem writes rows itself). */
   signupReviews: SignupReviewRepository;
+  /** MUT-333: the hard delete of closed accounts (operator only: the hourly job and the admin route). */
+  accountPurge: AccountPurgeRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

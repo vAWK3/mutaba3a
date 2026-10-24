@@ -9,6 +9,9 @@ import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
+import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS } from './prisma-purge-tables.js';
+import { GRACE_MS, isDueForPurge } from '../accounts/closure.js';
+import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } from '../accounts/purge-plan.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
@@ -18,6 +21,7 @@ import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
+  AccountPurgeRepository,
   VendorRecord,
   VendorNameRecord,
   VendorRepository,
@@ -2149,6 +2153,87 @@ export class PrismaLedgerStore implements LedgerStore {
    * one instance (TD-017). A concurrent claim of the same key loses on the unique keyDigest and is a duplicate.
    */
   // MUT-367 (ADR-178): the operator's signup review queue.
+  readonly accountPurge: AccountPurgeRepository = {
+    listDue: async (at, limit) => {
+      const rows = await this.prisma.user.findMany({
+        where: { deleteAfter: { lte: at }, closeRequestedAt: { lte: new Date(at.getTime() - GRACE_MS) } },
+        orderBy: [{ purgeLastTriedAt: { sort: 'asc', nulls: 'first' } }, { deleteAfter: 'asc' }, { id: 'asc' }],
+        take: limit,
+      });
+      return rows.map(toUser).filter((u) => isDueForPurge(u.closure, at));
+    },
+    countClosing: async (at) => {
+      const [closing, due] = await Promise.all([
+        this.prisma.user.count({ where: { deleteAfter: { not: null } } }),
+        this.prisma.user.count({ where: { deleteAfter: { lte: at }, closeRequestedAt: { lte: new Date(at.getTime() - GRACE_MS) } } }),
+      ]);
+      return { closing, due };
+    },
+    // R1: the same row lock requestClosure and cancelClosure take, so a claim and a cancel can never both win.
+    claim: (userId, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!locked) return null;
+        const person = toUser(await tx.user.findUniqueOrThrow({ where: { id: userId } }));
+        if (!person.closure || !isDueForPurge(person.closure, at)) return null;
+        return toUser(await tx.user.update({ where: { id: userId }, data: { purgeStartedAt: person.closure.purgeStartedAt ?? at, purgeLastTriedAt: at } }));
+      }),
+    planOf: async (userId) => {
+      const person = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+      if (!person) return null;
+      const [decision, accounts] = await Promise.all([purgeDecisionIn(this.prisma, userId), this.prisma.billingAccount.findMany({ where: { userId }, select: { stripeCustomerId: true } })]);
+      return { userId, ...decision, stripeCustomerIds: accounts.map((a) => a.stripeCustomerId) };
+    },
+    purge: (userId, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ purgeStartedAt: Date | null; email: string }>>`SELECT "purgeStartedAt", email FROM users WHERE id = ${userId}::uuid FOR UPDATE`;
+        if (!locked?.purgeStartedAt) return null;
+        // R12: a webhook saving this person's billing account waits here, and finds it gone afterwards.
+        await tx.$queryRaw`SELECT id FROM billing_accounts WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        const decision = await purgeDecisionIn(tx, userId);
+        for (const { organizationId, toUserId } of decision.transfers) {
+          await tx.organization.update({ where: { id: organizationId }, data: { ownerUserId: toUserId, updatedAt: at } });
+        }
+        // D8 / MUT-324 review: every acceptance the person ever recorded goes, wherever it was written.
+        await tx.auditEvent.deleteMany({ where: { action: 'user.terms_accepted', actorId: userId } });
+        const deleted = decision.deleteProfileIds;
+        if (deleted.length > 0) {
+          for (const table of PURGE_PROFILE_TABLES) await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "organizationId" = ANY($1::uuid[])`, deleted);
+          await tx.organization.deleteMany({ where: { id: { in: deleted } } });
+          await tx.storagePurge.createMany({ data: deleted.map((organizationId) => ({ organizationId, queuedAt: at })), skipDuplicates: true });
+        }
+        // D7: on every profile that survives, the person's records lose their name (SET NULL would do most of it; done
+        // explicitly so the memory store and Postgres agree, and so the unkeyed receivables column is covered).
+        for (const column of [...Object.entries(PURGE_USER_COLUMNS).filter(([, rule]) => rule === 'anonymize').map(([c]) => c), ...PURGE_UNKEYED_USER_COLUMNS]) {
+          const [table, field] = column.split('.') as [string, string];
+          await tx.$executeRawUnsafe(`UPDATE "${table}" SET "${field}" = NULL WHERE "${field}" = $1::uuid`, userId);
+        }
+        // R3: a stored replay or an audit row that names the person loses that detail; the action and time stay.
+        const needle = `%${userId}%`;
+        await tx.$executeRaw`DELETE FROM idempotency_keys WHERE "responseBody"::text LIKE ${needle}`;
+        const auditRowsScrubbed = await tx.$executeRaw`UPDATE audit_events SET metadata = NULL WHERE metadata IS NOT NULL AND ("actorId" = ${userId} OR "entityId" = ${userId} OR metadata::text LIKE ${needle})`;
+        const tombstones = purgeAuditRows(userId, decision);
+        if (tombstones.length > 0) await tx.auditEvent.createMany({ data: auditRows(tombstones, at) });
+        // D9, R4: the person's own rows, then the person.
+        await tx.membership.deleteMany({ where: { userId } });
+        await tx.session.deleteMany({ where: { userId } });
+        await tx.accountSetupToken.deleteMany({ where: { OR: [{ userId }, { purpose: 'SIGNUP', email: locked.email }] } });
+        await tx.inboxEntry.deleteMany({ where: { userId } });
+        await tx.userIdempotencyKey.deleteMany({ where: { userId } });
+        await tx.entitlementGrant.deleteMany({ where: { userId } });
+        await tx.billingSubscription.deleteMany({ where: { billingAccount: { userId } } });
+        await tx.billingAccount.deleteMany({ where: { userId } });
+        await tx.signupReview.deleteMany({ where: { userId } });
+        await tx.user.delete({ where: { id: userId } });
+        return { ...decision, auditRowsScrubbed };
+      }, PURGE_TX_OPTIONS),
+    listStoragePurges: async (limit) =>
+      (await this.prisma.storagePurge.findMany({ orderBy: [{ queuedAt: 'asc' }, { organizationId: 'asc' }], take: limit, select: { organizationId: true } })).map((r) => r.organizationId),
+    finishStoragePurge: async (organizationId) => {
+      await this.prisma.storagePurge.deleteMany({ where: { organizationId } });
+    },
+  };
+
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = await this.prisma.signupReview.findMany({
@@ -2634,6 +2719,27 @@ function entityTypeWhere(filter: AuditFilter): { entityType?: Prisma.StringFilte
 
 type PrismaApiKey = Prisma.ApiKeyGetPayload<Record<string, never>>;
 type Tx = Prisma.TransactionClient;
+
+/** R13: a big account's delete outlasts Prisma's 5 s default; the run's own 200 s budget still bounds it. */
+const PURGE_TX_OPTIONS = { timeout: 120_000, maxWait: 10_000 } as const;
+
+/** MUT-333: the shared rule (accounts/purge-plan.ts) over the rows Postgres holds now. */
+async function purgeDecisionIn(db: Tx | PrismaClient, userId: string): Promise<PurgeDecision> {
+  const profiles = await db.organization.findMany({
+    where: { OR: [{ memberships: { some: { userId } } }, { ownerUserId: userId }, { personalOwnerUserId: userId }] },
+    select: { id: true, ownerUserId: true, personalOwnerUserId: true, profileType: true },
+  });
+  const created = profiles.filter((p) => p.ownerUserId === userId || p.personalOwnerUserId === userId).map((p) => p.id);
+  const others = await db.membership.findMany({
+    where: { organizationId: { in: created }, userId: { not: userId } },
+    select: { organizationId: true, userId: true, role: true, createdAt: true, user: { select: { status: true, deleteAfter: true } } },
+  });
+  const othersOf = (organizationId: string): PurgeCandidate[] =>
+    others
+      .filter((m) => m.organizationId === organizationId)
+      .map((m) => ({ userId: m.userId, role: m.role, status: m.user.status, deleteAfter: m.user.deleteAfter, membershipCreatedAt: m.createdAt }));
+  return decidePurge(userId, profiles, othersOf);
+}
 
 /**
  * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order) and reports
