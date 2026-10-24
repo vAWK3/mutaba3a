@@ -1,3 +1,5 @@
+import { dirname, isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ARGON2_MINIMUMS } from './auth/users.js';
 import { isUnownedDomain } from './email/ports.js';
@@ -34,6 +36,14 @@ const envSchema = z.object({
   /** Private GCS bucket for attachments (M6). Absent = attachments routes answer 503 ATTACHMENTS_NOT_CONFIGURED. */
   ATTACHMENTS_BUCKET: z.string().min(3).optional(),
   ATTACHMENTS_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+  /**
+   * MUT-396: where attachment bytes live. Unset = GCS when ATTACHMENTS_BUCKET is set, else none (503). `local` keeps
+   * them on disk under ATTACHMENTS_DIR and serves their signed URLs at /dev/attachments: for the dev server and local
+   * QA only, refused in production and staging.
+   */
+  ATTACHMENTS_DRIVER: z.enum(['gcs', 'local']).optional(),
+  /** MUT-396: the local driver's folder; relative paths are resolved against the server package, not the cwd. */
+  ATTACHMENTS_DIR: z.string().min(1).default('.data/attachments'),
   /** MUT-228: the ECB reference-rate provider's `latest` endpoint, how long a snapshot is fresh, and how long to wait for it. */
   FX_RATES_URL: z
     .string()
@@ -189,6 +199,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError(`Invalid configuration:\n${lines.join('\n')}`);
   }
   const config = parsed.data;
+  const attachments = attachmentsConfig(config);
   const setKeys = APP_ASSOCIATION_KEYS.filter((key) => config[key] !== undefined);
   if (setKeys.length > 0 && setKeys.length < APP_ASSOCIATION_KEYS.length) {
     const missing = APP_ASSOCIATION_KEYS.filter((key) => !setKeys.includes(key));
@@ -227,7 +238,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       throw new ConfigError(`Invalid configuration:\n  ${recommended}: must be >= ${min} (${target} < ${floor})`);
     }
   }
-  return { ...config, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
+  return { ...config, ...attachments, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
 }
 
 /** MUT-367 (D3): the fixture would let anyone choose their own verdict, so production always asks DNS and RDAP. */
@@ -255,6 +266,25 @@ function turnstileSecret(config: z.infer<typeof envSchema>): string | undefined 
     throw new ConfigError('Invalid configuration:\n  TURNSTILE_SECRET: signup and recovery mail links, so a server that sends mail needs the Turnstile secret');
   }
   return secret ?? (production ? undefined : TURNSTILE_TEST_SECRETS.pass);
+}
+
+/** The server package directory (config.ts sits in src/ or dist/, one level below it). */
+const SERVER_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * MUT-396: the storage refusals. The local driver serves files to anyone holding a URL from a server whose secret
+ * is the session pepper, with no CMEK or lifecycle rules: never on a deployed service.
+ */
+function attachmentsConfig(config: z.infer<typeof envSchema>): { ATTACHMENTS_DIR: string } {
+  const refuse = (why: string): never => {
+    throw new ConfigError(`Invalid configuration:\n  ATTACHMENTS_DRIVER: ${why}`);
+  };
+  if (config.ATTACHMENTS_DRIVER === 'local') {
+    if (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') refuse(`local storage is for the dev server and local QA only, never ${config.NODE_ENV}`);
+    if (config.ATTACHMENTS_BUCKET) refuse('local with ATTACHMENTS_BUCKET set is ambiguous; unset one of them');
+  }
+  if (config.ATTACHMENTS_DRIVER === 'gcs' && !config.ATTACHMENTS_BUCKET) refuse('gcs needs ATTACHMENTS_BUCKET');
+  return { ATTACHMENTS_DIR: isAbsolute(config.ATTACHMENTS_DIR) ? config.ATTACHMENTS_DIR : resolve(SERVER_DIR, config.ATTACHMENTS_DIR) };
 }
 
 /** MUT-359: the mail refusals (ticket, D7, D14, D18, D20) and the caps' defaults. */

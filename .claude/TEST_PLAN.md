@@ -3625,3 +3625,12 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal unit | `data/__tests__/trialPrompt.test.ts`, `session/__tests__/firstRun.test.ts`, `data/__tests__/billingView.test.ts` (activeTrial, `isSellable`, consumers everywhere), local `migrations.test.ts` (4 → 5) + fingerprint | `npm run test:run` |
 | Portal integration | `components/__tests__/TrialWelcome.test.tsx`: step (open, Not now, close, Add a card → Subscribe by replace, open-soon, never for answered/paid/<48 h, Arabic, no reopen after /setup's link), banner (Add a card, hide, last 3 days, gone when paid, no card when unsellable), `/` keeps drawer keys | same |
 | Release-QA | `portal-live.billing.trial-start` (core), `.trial-banner`, `.consumer-everywhere`, and the amount updates in `.subscribe`, `.subscribe-usd`, `.rtl-375`; `portal-selfservice.signup.*` pass through the step's open-soon variant | `release-qa run --attach --only portal-live.billing` (env: `node qa/support/billing-live.mjs`) |
+
+## MUT-396 — local-disk attachment storage for the dev server (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `attachments/__tests__/local-storage.test.ts`: round trip, signed download, expiry on the injected clock, tampered/foreign-secret tokens, action binding, Content-Type, Content-Length and streamed size caps, aborted upload, concurrent PUTs, key traversal, idempotent remove, missing download | `npm --prefix server test` |
+| Server routes | `__tests__/routes-dev-attachments.test.ts`: expense receipt and library receipt start → PUT → complete → download same bytes on a frozen clock; complete before bytes and an oversized PUT; expiry on the app clock; the probe; not mounted without the driver; never the portal fallback | same |
+| Config | `__tests__/config.test.ts`: default dir under server/, local in development/test, refused in production and staging, local + bucket, gcs without bucket | same |
+| Release-QA (phone) | `ios.privacy.receipt-cleanup` without its stand-in, asserting READY and the downloaded bytes (lands after MUT-124); Flutter `qa.config.mjs` checks `GET /dev/attachments` | `release-qa release --only ios.privacy.receipt-cleanup --wait` (mutaba3a-flutter) |

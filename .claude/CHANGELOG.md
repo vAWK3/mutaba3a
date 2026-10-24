@@ -42,6 +42,20 @@
 
 ### Changed
 - `GET /v1/entries` leaves LOCKED profiles out. `buildMe`'s membership reads are batched (shared with the gate). API `1.60.0-mut361`.
+## [Unreleased] - 2026-10-24 — The dev server can keep receipts on local disk, so receipt flows run end to end in local QA (MUT-396)
+
+### Added
+- `ATTACHMENTS_DRIVER=local` (+ `ATTACHMENTS_DIR`): `LocalAttachmentStorage` stores attachment bytes on disk and hands out HMAC-signed URLs served by `PUT`/`GET /dev/attachments/:token` (key, action, expiry, content type and size cap, like a GCS V4 signature; expiry on the app clock; URLs on the request's origin). `GET /dev/attachments` answers `{driver: "local"}` for Flutter QA's env check. Not in OpenAPI; no API version change.
+- Vite's hosted dev server proxies `/dev` next to `/v1`, so the portal reaches those URLs same-origin (PORTAL_CSP `connect-src 'self'`).
+
+### Changed
+- Config refuses the local driver in production and staging, local together with `ATTACHMENTS_BUCKET`, and `gcs` without a bucket. The portal fallback never serves `/dev/*`.
+
+### Why
+- Every receipt and attachment route answered 503 against `localhost:8787`, so no phone or portal QA flow could attach, list or open a receipt (MUT-258/260 need it). Production storage is untouched.
+
+### Files
+- `server/src/attachments/local-storage.ts`, `server/src/routes/dev-attachments.ts`, `server/src/app.ts`, `server/src/index.ts`, `server/src/config.ts`, `server/.env.example`, `vite.config.ts`, `.gitignore`; tests `attachments/__tests__/local-storage.test.ts`, `__tests__/routes-dev-attachments.test.ts`, `__tests__/config.test.ts`.
 
 ## [Unreleased] - 2026-10-24 — The website's pages report errors to Sentry; the free web app never does (MUT-150, ADR-091 am.12)
 
