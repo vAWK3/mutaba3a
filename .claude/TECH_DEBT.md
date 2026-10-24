@@ -23,7 +23,7 @@
 **Ticket**: found by MUT-369's qa-reconcile (not caused by it)
 **Added**: 2026-10-24
 **Priority**: Medium (the landing's release-QA can't go green)
-**Impact**: Since the hosted-only landing rewrite (7914685a), `web.landing.hosted`, `hosted-375`, `hosted-slash`, `get-it-paid` and `phone` read copy keys that no longer exist (`landing.getIt.paid`, `landing.hostedOffer.*`) or a /hosted page that now redirects; `web.landing.malafat` fails axe `link-in-text-block` on the request form's notice links; `web.landing.375` finds the wordmark clipped at 375 px; `web.legal.terms-manifest` reads JSON the dev server answers with HTML. All fail the same way without MUT-369's changes.
+**Impact**: Since the hosted-only landing rewrite (7914685a), `web.landing.hosted`, `hosted-375`, `hosted-slash`, `get-it-paid` and `phone` read copy keys that no longer exist (`landing.getIt.paid`, `landing.hostedOffer.*`) or a /hosted page that now redirects; `web.landing.malafat` fails axe `link-in-text-block` on the request form's notice links; `web.landing.375` finds the wordmark clipped at 375 px; `web.legal.terms-manifest` reads JSON the dev server answers with HTML. The causes predate MUT-369: the missing keys and the /hosted redirect are on main, and the other three touch code MUT-369 didn't change (checked by reading, not by a run on main).
 **Fix**: Rewrite or retire those flows against the hosted-only page (and fix the notice links' underline and the 375 wordmark), or mark the retired features removed in `qa/features/web/landing.yaml`.
 
 ### TD-227: The landing's "Create an account" isn't counted
