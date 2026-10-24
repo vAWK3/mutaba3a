@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal Shell Concepts</title>
+<style>
+:root {
+  --bg: #f5f5f3;
+  --paper: #ffffff;
+  --well: #f2f2f0;
+  --ink: #1d1d1f;
+  --ink-2: #6e6e73;
+  --ink-3: #a1a1a6;
+  --hair: rgba(0, 0, 0, .08);
+  --accent: #0e6b58;
+  --late: #b4441b;
+  --p0: #0e6b58;
+  --p1: #3b5bdb;
+  --p2: #9c4dcc;
+  --glass: rgba(255, 255, 255, .74);
+  --glass-edge: rgba(255, 255, 255, .7);
+  --lift: 0 8px 30px rgba(0, 0, 0, .10), 0 1px 3px rgba(0, 0, 0, .06);
+  --frame-shadow: 0 30px 60px -30px rgba(0, 0, 0, .25), 0 0 0 1px rgba(0, 0, 0, .06);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f10; --paper: #1c1c1e; --well: #2c2c2e; --ink: #f5f5f7; --ink-2: #a1a1a6; --ink-3: #6e6e73;
+    --hair: rgba(255, 255, 255, .1); --accent: #5ccfb2; --late: #ff9f6e; --p0: #5ccfb2; --p1: #7d95ff; --p2: #c792ea;
+    --glass: rgba(44, 44, 46, .74); --glass-edge: rgba(255, 255, 255, .12);
+    --lift: 0 8px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+    --frame-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .08);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0f10; --paper: #1c1c1e; --well: #2c2c2e; --ink: #f5f5f7; --ink-2: #a1a1a6; --ink-3: #6e6e73;
+  --hair: rgba(255, 255, 255, .1); --accent: #5ccfb2; --late: #ff9f6e; --p0: #5ccfb2; --p1: #7d95ff; --p2: #c792ea;
+  --glass: rgba(44, 44, 46, .74); --glass-edge: rgba(255, 255, 255, .12);
+  --lift: 0 8px 30px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+  --frame-shadow: 0 30px 60px -30px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 100%/1.5 system-ui, -apple-system, "SF Pro Text", "Geeza Pro", "Noto Sans Arabic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 56px 16px 120px; }
+
+/* ---------- document ---------- */
+.eyebrow { font-size: .8rem; color: var(--ink-3); margin: 0 0 10px; }
+h1.doc { font-size: clamp(2rem, 4.5vw, 3rem); line-height: 1.05; letter-spacing: -.025em; margin: 0; font-weight: 700; }
+.lede { font-size: 1.125rem; color: var(--ink-2); max-width: 720px; margin: 16px 0 0; letter-spacing: -.005em; }
+.lede b { color: var(--ink); font-weight: 600; }
+.toggles { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--well); }
+.seg button { padding: 6px 16px; border-radius: 999px; font-size: .875rem; color: var(--ink-2); transition: background .2s, color .2s; }
+.seg button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+
+.common { margin-top: 64px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; max-width: 1000px; }
+.common h3 { font-size: 1rem; margin: 0 0 4px; letter-spacing: -.01em; }
+.common p { margin: 0; color: var(--ink-2); font-size: .9375rem; }
+@media (max-width: 860px) { .common { grid-template-columns: 1fr; gap: 16px; } }
+
+.concept { margin-top: 112px; }
+.concept .num { font-size: .875rem; color: var(--ink-3); margin-bottom: 6px; }
+.concept h2 { font-size: 1.75rem; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+.concept .idea { color: var(--ink-2); max-width: 680px; margin: 0 0 8px; font-size: 1.0625rem; }
+.concept .try { color: var(--ink-3); font-size: .875rem; margin: 0 0 32px; }
+.stage { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; }
+.desk-wrap { flex: 1 1 620px; min-width: 0; overflow-x: auto; padding: 4px 4px 40px; margin: -4px; }
+.phone-wrap { flex: 0 0 auto; margin-inline: auto; padding-bottom: 40px; }
+.verdict { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; max-width: 900px; }
+.verdict h3 { font-size: .8125rem; font-weight: 600; color: var(--ink-3); margin: 0 0 4px; }
+.verdict p { margin: 0; font-size: .9375rem; }
+@media (max-width: 700px) { .verdict { grid-template-columns: 1fr; gap: 16px; } }
+
+.close { margin-top: 112px; }
+.close h2 { font-size: 1.75rem; letter-spacing: -.02em; margin: 0 0 6px; }
+.close > p { color: var(--ink-2); margin: 0 0 24px; max-width: 720px; }
+.table-wrap { overflow-x: auto; border-radius: 16px; background: var(--paper); }
+table.where { width: 100%; border-collapse: collapse; font-size: .875rem; min-width: 760px; }
+.where th, .where td { text-align: start; padding: 11px 16px; vertical-align: top; }
+.where thead th { font-size: .75rem; font-weight: 600; color: var(--ink-3); border-bottom: 1px solid var(--hair); }
+.where tbody tr + tr td, .where tbody tr + tr th { border-top: 1px solid var(--hair); }
+.where tbody th { font-weight: 500; width: 22%; }
+.where td { color: var(--ink-2); }
+.where tr.group th { font-size: .75rem; font-weight: 600; color: var(--ink-3); padding-top: 18px; }
+.lean { margin-top: 32px; font-size: 1.125rem; letter-spacing: -.005em; max-width: 780px; }
+.lean b { color: var(--accent); }
+
+/* ---------- frames ---------- */
+.frame { position: relative; overflow: hidden; background: var(--paper); box-shadow: var(--frame-shadow); font-size: 15px; line-height: 1.4; }
+.desk { min-width: 820px; height: 640px; border-radius: 14px; }
+.desk .dots { position: absolute; top: 14px; inset-inline-start: 16px; display: flex; gap: 7px; z-index: 5; }
+.desk .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--well); }
+.phone { width: 300px; height: 632px; border-radius: 44px; box-shadow: var(--frame-shadow), 0 0 0 9px var(--ink); margin: 9px; }
+.screen { position: absolute; inset: 0; overflow: hidden; }
+.scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.col { max-width: 560px; margin: 0 auto; padding: 0 28px; }
+.phone .col { padding: 0 20px; }
+.desk .body { padding-top: 112px; padding-bottom: 60px; }
+.phone .body { padding-top: 64px; padding-bottom: 110px; }
+
+.press { transition: transform .1s ease-out, background-color .15s; }
+.press:active { transform: scale(.97); }
+
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--lift), inset 0 1px 0 var(--glass-edge);
+}
+.edge-top { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 76px); mask-image: linear-gradient(to bottom, transparent 0, #000 76px); }
+.phone .edge-top { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 52px, #000 calc(100% - 90px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 52px, #000 calc(100% - 90px), transparent 100%); }
+
+.circle { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); }
+.circle:hover { background: var(--well); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600; background: var(--well); color: var(--ink); flex: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.ico { width: 18px; height: 18px; flex: none; }
+.ico path, .ico circle { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ico.sm { width: 14px; height: 14px; }
+[dir="rtl"] .flip { transform: scaleX(-1); }
+
+/* ---------- page content ---------- */
+.back { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-size: 15px; margin: 0 0 18px; margin-inline-start: -4px; }
+.meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--ink-2); font-size: 13px; }
+.meta .sep { color: var(--ink-3); }
+.meta > button, .meta > .anchor > button { display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 2px 4px; margin: -2px -4px; }
+.meta > button:hover, .meta > .anchor > button:hover { background: var(--well); color: var(--ink); }
+.title { font-size: 34px; font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin: 0 0 4px; }
+.phone .title { font-size: 28px; }
+.hero { font-size: 60px; font-weight: 700; letter-spacing: -.035em; line-height: 1; font-variant-numeric: tabular-nums; margin: 14px 0 8px; }
+.phone .hero { font-size: 44px; }
+.sub { color: var(--ink-2); margin: 0; font-size: 15px; }
+.sub .late { color: var(--late); }
+.notice { font-size: 13px; color: var(--ink-2); margin: 0 0 14px; }
+.notice a { color: var(--accent); text-decoration: none; }
+.gap { height: 40px; }
+.phone .gap { height: 28px; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li + li .row { border-top: 1px solid var(--hair); }
+.row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 0; text-align: start; }
+button.row:hover .who b { color: var(--accent); }
+.row .who { flex: 1; min-width: 0; }
+.row .who b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .15s; }
+.row .who small { display: block; color: var(--ink-3); font-size: 13px; }
+.row .who small.late { color: var(--late); }
+.row .amt { font-variant-numeric: tabular-nums; }
+.row .chev { color: var(--ink-3); }
+.deeper { margin-top: 28px; background: var(--well); border-radius: 12px; padding: 0 16px; }
+.deeper .row { padding: 12px 0; }
+.deeper .row .who b { font-weight: 400; }
+
+/* ---------- pill and island ---------- */
+.tabs { display: inline-flex; align-items: center; padding: 4px; border-radius: 999px; gap: 2px; }
+.tabs > button { padding: 7px 16px; border-radius: 999px; font-size: 14px; color: var(--ink-2); white-space: nowrap; transition: color .2s, background-color .25s var(--ease); }
+.tabs > button:hover { color: var(--ink); }
+.tabs > button.on { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, .1); }
+.phone .tabs > button { padding: 8px 10px; font-size: 13px; }
+.top-center { position: absolute; top: 42px; left: 50%; translate: -50% 0; z-index: 4; }
+.bottom-center { position: absolute; bottom: 22px; left: 50%; translate: -50% 0; z-index: 4; display: flex; gap: 8px; align-items: center; }
+.corner { position: absolute; top: 42px; z-index: 4; display: flex; gap: 6px; align-items: center; }
+.phone .corner { top: 14px; }
+.corner.start { inset-inline-start: 24px; }
+.corner.end { inset-inline-end: 24px; }
+.phone .corner.start { inset-inline-start: 14px; }
+.phone .corner.end { inset-inline-end: 14px; }
+
+.island { border-radius: 999px; padding: 4px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: background-color .25s var(--ease), color .25s; }
+.island.named { padding-inline: 14px 4px; font-size: 14px; font-weight: 500; }
+.island.on { background: var(--ink); color: var(--paper); }
+.island.on .avatar { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--ring, var(--accent)); }
+.ring { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ring, var(--accent)); }
+.island.split { padding: 4px; gap: 0; }
+.island.split .half { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 10px 6px 12px; font-size: 14px; font-weight: 500; transition: background-color .2s; }
+[dir="rtl"] .island.split .half { padding: 6px 12px 6px 10px; }
+.island.split .half:hover { background: rgba(0, 0, 0, .05); }
+.island.split .half .ico { color: var(--ink-3); }
+.island.split .vdiv { width: 1px; height: 20px; background: var(--hair); margin: 0 4px; }
+.island.split .me { border-radius: 50%; padding: 0; }
+.island.split .me.on .avatar { background: var(--ink); color: var(--paper); }
+.top-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; border-radius: 999px; padding: 6px 10px; white-space: nowrap; }
+.top-name:hover { background: var(--well); }
+.top-name .ico { color: var(--ink-3); }
+
+/* ---------- short menu ---------- */
+.anchor { position: relative; }
+.pop { position: absolute; top: calc(100% + 8px); z-index: 8; width: 280px; border-radius: 16px; padding: 6px; animation: popIn .22s var(--ease); background: var(--paper); box-shadow: var(--lift), 0 0 0 1px var(--hair); font-size: 15px; line-height: 1.4; color: var(--ink); }
+.pop.start { inset-inline-start: 0; transform-origin: top left; }
+.pop.end { inset-inline-end: 0; transform-origin: top right; }
+[dir="rtl"] .pop.start { transform-origin: top right; }
+[dir="rtl"] .pop.end { transform-origin: top left; }
+.phone .pop { width: 262px; }
+@keyframes popIn { from { opacity: 0; transform: scale(.94) translateY(-4px); } }
+
+.m-group { padding: 4px 0; }
+.m-group + .m-group { border-top: 1px solid var(--hair); }
+.m-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; text-align: start; font-size: 14.5px; }
+button.m-item:hover { background: var(--well); }
+.m-item .txt { flex: 1; min-width: 0; }
+.m-item .txt span { display: block; }
+.m-item .txt small { display: block; color: var(--ink-3); font-size: 12px; line-height: 1.35; }
+.m-item .check { width: 16px; color: var(--accent); flex: none; }
+.m-item .tail { color: var(--ink-3); display: inline-flex; align-items: center; gap: 2px; font-size: 13px; }
+.m-item.link { color: var(--accent); }
+.m-item.danger { color: var(--late); }
+.m-foot { font-size: 12px; color: var(--ink-3); padding: 6px 10px 8px; line-height: 1.4; margin: 0; }
+.mini-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--paper); }
+.mini-seg span { padding: 3px 9px; border-radius: 6px; font-size: 12px; color: var(--ink-2); }
+.mini-seg span.on { background: var(--ink); color: var(--paper); }
+.switch { width: 34px; height: 20px; border-radius: 999px; background: var(--accent); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; inset-inline-end: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); }
+
+/* ---------- the You page ---------- */
+.you-head { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.you-head .avatar { width: 56px; height: 56px; font-size: 18px; }
+.you-head .title { margin: 0; }
+.you-head small { color: var(--ink-3); font-size: 14px; }
+.phone .you-head .avatar { width: 46px; height: 46px; font-size: 15px; }
+.groups .label { font-size: 13px; color: var(--ink-3); margin: 0 0 6px; padding-inline-start: 12px; }
+.groups .box { background: var(--well); border-radius: 14px; padding: 2px 4px; margin-bottom: 24px; }
+.groups .box .m-item + .m-item { border-top: 1px solid var(--hair); border-radius: 0; }
+.groups .box button.m-item:hover { background: transparent; color: var(--accent); }
+.groups .box .m-foot { border-top: 1px solid var(--hair); padding-top: 8px; }
+.you-seg { display: flex; padding: 3px; border-radius: 10px; background: var(--well); margin-bottom: 24px; }
+.you-seg button { flex: 1; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
+.you-seg button.on { background: var(--paper); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+
+/* ---------- motion ---------- */
+[dir="ltr"] { --s: 1; }
+[dir="rtl"] { --s: -1; }
+.v-fwd { animation: inFwd .42s var(--ease); }
+.v-back { animation: inBack .42s var(--ease); }
+.v-fade { animation: fadeIn .22s ease-out; }
+/* the You page arrives from the island's side and leaves back toward it */
+.v-island { animation: fromIsland .44s var(--ease); transform-origin: top right; }
+[dir="rtl"] .v-island { transform-origin: top left; }
+.phone .v-island { transform-origin: bottom right; }
+[dir="rtl"] .phone .v-island { transform-origin: bottom left; }
+@keyframes inFwd { from { opacity: 0; transform: translateX(calc(32px * var(--s))); } }
+@keyframes inBack { from { opacity: 0; transform: translateX(calc(-32px * var(--s))); } }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes fromIsland { from { opacity: 0; transform: scale(.94) translateX(calc(24px * var(--s))); } }
+@media (prefers-reduced-motion: reduce) {
+  .v-fwd, .v-back, .v-island, .pop { animation: fadeIn .2s ease-out; }
+  .press:active { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background: var(--paper); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Mutaba3a portal · shell brainstorm, round 4 · 24 Oct 2026</p>
+  <h1 class="doc">The island opens your page.</h1>
+  <p class="lede">Variation 2's island stays as the way in, and everything behind it moves to a dedicated <b>You</b> page instead of a long menu. The one thing that shouldn't need a whole page is <b>switching profiles</b>, which people do often and quickly. These three variations differ in where that quick switch lives.</p>
+  <div class="toggles">
+    <div class="seg" role="group" aria-label="Wireframe language">
+      <button type="button" data-lang="en" aria-pressed="true">English</button>
+      <button type="button" data-lang="ar" aria-pressed="false">العربية</button>
+    </div>
+    <div class="seg" role="group" aria-label="Session">
+      <button type="button" data-mode="signed" aria-pressed="true">Signed in</button>
+      <button type="button" data-mode="local" aria-pressed="false">Signed out, on this device</button>
+    </div>
+  </div>
+
+  <div class="common">
+    <div><h3>Same in all three</h3><p>Four tabs in the pill. The island shows the profile's name and your avatar, ringed in the profile's colour.</p></div>
+    <div><h3>The You page</h3><p>A real route (<code>/p/:id/you</code>). It grows out of the island, which stays lit while you're there. Any tab, or Back, takes you out the way you came.</p></div>
+    <div><h3>Menus stay short</h3><p>The only menu is the profile list: three profiles and a "Manage" link. Everything else is a row on the page that opens today's drawers.</p></div>
+  </div>
+
+  <section class="concept">
+    <div class="num">1</div>
+    <h2>Island → page, switch above the figure</h2>
+    <p class="idea">Press the island and the You page opens. To change books without leaving the page you're on, use the small <em>Sader Studio ⌄ · October ⌄</em> line above every figure, which drops a short profiles-only menu.</p>
+    <p class="try">Press the island, then a tab to leave. Then press "Sader Studio ⌄" above the figure.</p>
+    <div class="stage">
+      <div class="desk-wrap"><div class="frame desk"><div class="dots"><i></i><i></i><i></i></div><div class="screen" id="A-desk"></div></div></div>
+      <div class="phone-wrap"><div class="frame phone"><div class="screen" id="A-phone"></div></div></div>
+    </div>
+    <div class="verdict">
+      <div><h3>Why</h3><p>One door for "me", and the profile switch sits right next to the numbers it changes. The island is a single button with a single meaning.</p></div>
+      <div><h3>Trade-off</h3><p>The profile's name appears twice on screen (island and line), and the switch can't be found from a page without that line, such as a client detail page.</p></div>
+    </div>
+  </section>
+
+  <section class="concept">
+    <div class="num">2</div>
+    <h2>Split island: name switches, avatar opens</h2>
+    <p class="idea">The island has two halves. <em>● Sader Studio ⌄</em> drops the short profiles menu, and the avatar opens the You page. The page itself carries no extra line: the island is the one place for both. On the phone, the name sits at the top and the avatar circle sits beside the tab bar.</p>
+    <p class="try">Press the name half, then the avatar half. Switch profiles and watch the ring and name change.</p>
+    <div class="stage">
+      <div class="desk-wrap"><div class="frame desk"><div class="dots"><i></i><i></i><i></i></div><div class="screen" id="B-desk"></div></div></div>
+      <div class="phone-wrap"><div class="frame phone"><div class="screen" id="B-phone"></div></div></div>
+    </div>
+    <div class="verdict">
+      <div><h3>Why</h3><p>Switching is one tap from every screen, client details included. The page body stays clean, and the island answers both "which books?" and "who am I?" in one object.</p></div>
+      <div><h3>Trade-off</h3><p>Two targets in one capsule have to read as two. That needs a clear divider and the chevron on the name half.</p></div>
+    </div>
+  </section>
+
+  <section class="concept">
+    <div class="num">3</div>
+    <h2>Island → page in three short parts</h2>
+    <p class="idea">The island opens the You page, but the page is split into <em>Profiles · Account · App</em> with a segmented control, so no part is ever long. It opens on Profiles, so switching books is one press on the island plus one on a profile. There's no extra menu anywhere.</p>
+    <p class="try">Press the island, switch profile on the first part, then try Account and App.</p>
+    <div class="stage">
+      <div class="desk-wrap"><div class="frame desk"><div class="dots"><i></i><i></i><i></i></div><div class="screen" id="C-desk"></div></div></div>
+      <div class="phone-wrap"><div class="frame phone"><div class="screen" id="C-phone"></div></div></div>
+    </div>
+    <div class="verdict">
+      <div><h3>Why</h3><p>No menus at all, one way in, and each part fits on a phone screen without scrolling. Each part can be deep-linked (<code>/you/account</code>).</p></div>
+      <div><h3>Trade-off</h3><p>Switching profile takes two presses and a page change. Fine for monthly visitors, slower for firms that switch all day.</p></div>
+    </div>
+  </section>
+
+  <section class="close">
+    <h2>Nothing lost: where each thing goes</h2>
+    <p>Every item from today's profile switcher, account menu and shell. Signed out on this device, the account part shrinks to Sign in, Your data and Terms (toggle at the top).</p>
+    <div class="table-wrap">
+      <table class="where">
+        <thead><tr><th>Today</th><th>1 · Switch above the figure</th><th>2 · Split island</th><th>3 · Page in parts</th></tr></thead>
+        <tbody>
+          <tr class="group"><th colspan="4">Profile switcher</th></tr>
+          <tr><th>Switch profile (keeps the section)</th><td>"Sader Studio ⌄" line, and You › Profiles</td><td>Name half of the island, and You › Profiles</td><td>You › Profiles (the page opens there)</td></tr>
+          <tr><th>Kind, Hosted, shared cue</th><td colspan="3">Second line under each profile, in the menu and on the page</td></tr>
+          <tr><th>+ New profile (cap of 6, says why)</th><td>You › Profiles</td><td>You › Profiles</td><td>You › Profiles</td></tr>
+          <tr><th>Manage profiles</th><td colspan="3">"Manage" at the end of the short menu, and You › Profiles</td></tr>
+          <tr><th>Local-profiles note</th><td colspan="3">Under the profile list on the You page</td></tr>
+          <tr class="group"><th colspan="4">Account menu (all on the You page)</th></tr>
+          <tr><th>Name and email (or "On this device")</th><td colspan="3">Page header, beside the large avatar</td></tr>
+          <tr><th>Billing (trial status), Your data, Change password</th><td>You › Account</td><td>You › Account</td><td>Account part</td></tr>
+          <tr><th>Sign out (signed out: Sign in)</th><td>End of the page, set apart</td><td>End of the page, set apart</td><td>End of the Account part</td></tr>
+          <tr><th>Language, anonymous usage</th><td>You › Preferences</td><td>You › Preferences</td><td>App part</td></tr>
+          <tr><th>Malafat, Terms, phone app links</th><td>You › More</td><td>You › More</td><td>App part</td></tr>
+          <tr class="group"><th colspan="4">Shell</th></tr>
+          <tr><th>Trial banner</th><td colspan="3">One quiet line above the figure on Owed, and on Billing</td></tr>
+          <tr><th>Usage prompt</th><td colspan="3">Unchanged: a one-time prompt; it can become a toast above the tabs</td></tr>
+          <tr><th>Drawers (profile, password, data, billing)</th><td colspan="3">Unchanged: the same URL keys and drawers, opened from rows on the You page</td></tr>
+          <tr><th>Search (new)</th><td colspan="3">A circle in the corner opposite the island</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="lean"><b>My lean: 2, the split island.</b> It keeps the thing you do often (switch books) one tap away on every screen, including client details, and moves the thing you do rarely (account settings) to a calm page with room to grow. The page body never carries chrome. If two targets in one capsule test poorly, 1 is the fallback with the same You page.</p>
+  </section>
+</div>
+
+<script>
+const DESTS = ['owed', 'paid', 'spent', 'clients'];
+const PROFILE_COLORS = ['var(--p0)', 'var(--p1)', 'var(--p2)'];
+
+const T = {
+  en: {
+    dest: { owed: 'Owed', paid: 'Paid', spent: 'Spent', clients: 'Clients' },
+    hero: { owed: '₪18,400', paid: '₪6,200', spent: '₪2,150', clients: '24' },
+    sub: { owed: 'owed to you', paid: 'paid to you in October', spent: 'spent in October', clients: 'clients' },
+    note: { owed: '₪4,100 of it is late.', clients: '5 owe you.' },
+    names: ['Al-Quds Clinic', 'Haddad & Sons', 'Lina Design', 'Karmel Dental', 'Yafa Bakery'],
+    owed: [['₪4,100', '12 days late', 1], ['₪6,300', 'due in 5 days'], ['₪3,900', 'due in 18 days'], ['₪2,800', 'due 30 Nov'], ['₪1,300', 'due 4 Dec']],
+    paid: [[3, '₪2,400', '21 Oct'], [2, '₪1,800', '14 Oct'], [1, '₪1,200', '6 Oct'], [4, '₪800', '2 Oct']],
+    spent: [['Rent', '₪1,200', '1 Oct'], ['Software', '₪430', '9 Oct'], ['Travel', '₪320', '17 Oct'], ['Supplies', '₪200', '20 Oct']],
+    deeper: { paid: 'Currency conversions', spent: 'Groups', client: 'Documents' },
+    owes: 'owes you', fee: 'Fee · September', payment: 'Payment · August', paidWord: 'paid', period: 'October', search: 'Search',
+    trial: 'Trial · 9 days left.', trialCta: 'Choose a plan',
+    profiles: [['Sader Studio', 'Business · yours'], ['Haddad Firm', 'Business · shared by Rami Haddad'], ['Basel', 'Personal']],
+    hosted: 'Hosted',
+    p: {
+      you: 'You', profiles: 'Profiles', newProfile: 'New profile', manage: 'Manage profiles', manageShort: 'Manage', cap: '3 of 6 used',
+      localFoot: 'Your local profiles stay in the MTB3A app on your device. They aren’t shown here and never leave it.',
+      name: 'Basel Sader', email: 'basel@sader.studio', onDevice: 'On this device',
+      account: 'Account', prefs: 'Preferences', more: 'More', app: 'App', language: 'Language',
+      billing: 'Billing', billingSub: 'Trial · 9 days left', data: 'Your data', dataSub: 'Download my records',
+      password: 'Change password', malafat: 'Malafat', malafatSub: 'Books for your firm', usage: 'Share anonymous usage',
+      terms: 'Terms', phoneApp: 'Get the phone app', phoneAppSub: 'App Store · Google Play', signOut: 'Sign out', signIn: 'Sign in',
+    },
+  },
+  ar: {
+    dest: { owed: 'المستحق', paid: 'المدفوع', spent: 'المصروف', clients: 'العملاء' },
+    hero: { owed: '₪18,400', paid: '₪6,200', spent: '₪2,150', clients: '24' },
+    sub: { owed: 'مستحق لك', paid: 'دُفع لك في أكتوبر', spent: 'صُرف في أكتوبر', clients: 'عميلًا' },
+    note: { owed: '₪4,100 منها متأخرة.', clients: '5 منهم عليهم مستحقات.' },
+    names: ['عيادة القدس', 'حداد وأولاده', 'لينا للتصميم', 'كرمل لطب الأسنان', 'مخبز يافا'],
+    owed: [['₪4,100', 'متأخرة 12 يومًا', 1], ['₪6,300', 'تستحق خلال 5 أيام'], ['₪3,900', 'تستحق خلال 18 يومًا'], ['₪2,800', 'تستحق 30 نوفمبر'], ['₪1,300', 'تستحق 4 ديسمبر']],
+    paid: [[3, '₪2,400', '21 أكتوبر'], [2, '₪1,800', '14 أكتوبر'], [1, '₪1,200', '6 أكتوبر'], [4, '₪800', '2 أكتوبر']],
+    spent: [['إيجار', '₪1,200', '1 أكتوبر'], ['برمجيات', '₪430', '9 أكتوبر'], ['سفر', '₪320', '17 أكتوبر'], ['مستلزمات', '₪200', '20 أكتوبر']],
+    deeper: { paid: 'تحويلات العملات', spent: 'المجموعات', client: 'المستندات' },
+    owes: 'مستحق عليه', fee: 'أتعاب · سبتمبر', payment: 'دفعة · أغسطس', paidWord: 'مدفوعة', period: 'أكتوبر', search: 'بحث',
+    trial: 'تجربة · بقي 9 أيام.', trialCta: 'اختر خطة',
+    profiles: [['استوديو صادر', 'تجاري · لك'], ['مكتب حداد', 'تجاري · يشاركه رامي حداد'], ['باسل', 'شخصي']],
+    hosted: 'مستضاف',
+    p: {
+      you: 'أنت', profiles: 'الملفات', newProfile: 'ملف جديد', manage: 'إدارة الملفات', manageShort: 'إدارة', cap: 'استُخدم 3 من 6',
+      localFoot: 'ملفاتك المحلية تبقى في تطبيق متابعة على جهازك، ولا تظهر هنا ولا تغادره.',
+      name: 'باسل صادر', email: 'basel@sader.studio', onDevice: 'على هذا الجهاز',
+      account: 'الحساب', prefs: 'التفضيلات', more: 'المزيد', app: 'التطبيق', language: 'اللغة',
+      billing: 'الفوترة', billingSub: 'تجربة · بقي 9 أيام', data: 'بياناتك', dataSub: 'تنزيل سجلاتي',
+      password: 'تغيير كلمة المرور', malafat: 'ملفات', malafatSub: 'دفاتر مكتبك', usage: 'مشاركة استخدام مجهول الهوية',
+      terms: 'الشروط', phoneApp: 'احصل على تطبيق الهاتف', phoneAppSub: 'App Store · Google Play', signOut: 'تسجيل الخروج', signIn: 'تسجيل الدخول',
+    },
+  },
+};
+
+const ICON = {
+  search: '<circle cx="9" cy="9" r="5.5"/><path d="m13 13 4 4"/>',
+  down: '<path d="m5 8 5 5 5-5"/>',
+  back: '<path d="M12.5 4.5 7 10l5.5 5.5"/>',
+  next: '<path d="m7.5 4.5 5.5 5.5-5.5 5.5"/>',
+  check: '<path d="m4.5 10.5 3.5 3.5 7.5-8"/>',
+  person: '<circle cx="10" cy="7" r="3"/><path d="M4.5 16.5c.8-2.8 3-4.3 5.5-4.3s4.7 1.5 5.5 4.3"/>',
+};
+const icon = (k, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 20 20" aria-hidden="true">${ICON[k]}</svg>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const fresh = () => ({ dest: 'owed', client: null, you: false, part: 'profiles', open: null, profile: 0, anim: '' });
+const st = { lang: 'en', mode: 'signed', A: fresh(), B: fresh(), C: fresh() };
+const t = () => T[st.lang];
+const local = () => st.mode === 'local';
+const initials = () => (local() ? icon('person', 'sm') : st.lang === 'ar' ? 'ب' : 'BS');
+const chev = () => `<span class="chev">${icon('next', 'sm flip')}</span>`;
+
+/* ---------- money pages ---------- */
+function row(c, { name, sub, late, amt, client }) {
+  const inner = `<span class="who"><b>${esc(name)}</b>${sub ? `<small${late ? ' class="late"' : ''}>${esc(sub)}</small>` : ''}</span><span class="amt"><bdi>${amt}</bdi></span>`;
+  if (client === undefined) return `<li><div class="row">${inner}</div></li>`;
+  return `<li><button type="button" class="row press" data-client="${c}|${client}">${inner}${chev()}</button></li>`;
+}
+
+function deeper(label, count) {
+  return `<div class="deeper"><button type="button" class="row press"><span class="who"><b>${esc(label)}</b></span><span class="amt" style="color:var(--ink-3)">${count}</span>${chev()}</button></div>`;
+}
+
+/** Variation 1 only: the quick profile switch above every figure. */
+function meta(c) {
+  const L = t();
+  const period = `<button type="button">${esc(L.period)} ${icon('down', 'sm')}</button>`;
+  if (c !== 'A') return `<div class="meta">${period}</div>`;
+  const s = st[c];
+  const name = `<button type="button" data-open="${c}|quick" aria-haspopup="menu" aria-expanded="${s.open === 'quick'}"><span class="dot" style="background:${PROFILE_COLORS[s.profile]}"></span>${esc(L.profiles[s.profile][0])} ${icon('down', 'sm')}</button>`;
+  const pop = s.open === 'quick' ? shortMenu(c, 'start') : '';
+  return `<div class="meta"><span class="anchor">${name}${pop}</span><span class="sep">·</span>${period}</div>`;
+}
+
+function destBody(c, dest) {
+  const L = t();
+  const note = L.note[dest] ? ` <span class="${dest === 'owed' ? 'late' : ''}">${esc(L.note[dest])}</span>` : '';
+  const trial = dest === 'owed' && !local() ? `<p class="notice">${esc(L.trial)} <a href="#" onclick="return false">${esc(L.trialCta)}</a></p>` : '';
+  const head = `${trial}${meta(c)}<div class="hero"><bdi>${L.hero[dest]}</bdi></div><p class="sub">${esc(L.sub[dest])}${note}</p><div class="gap"></div>`;
+  let rows = '';
+  let more = '';
+  if (dest === 'owed') rows = L.owed.map(([amt, sub, late], i) => row(c, { name: L.names[i], sub, late, amt, client: i })).join('');
+  if (dest === 'clients') rows = L.names.map((name, i) => row(c, { name, sub: `${L.owes} ${L.owed[i][0]}`, amt: '', client: i })).join('');
+  if (dest === 'paid') {
+    rows = L.paid.map(([ci, amt, sub]) => row(c, { name: L.names[ci], sub, amt })).join('');
+    more = deeper(L.deeper.paid, 2);
+  }
+  if (dest === 'spent') {
+    rows = L.spent.map(([name, amt, sub]) => row(c, { name, sub, amt })).join('');
+    more = deeper(L.deeper.spent, 3);
+  }
+  return `${head}<ul class="list">${rows}</ul>${more}`;
+}
+
+function clientBody(c, i) {
+  const L = t();
+  const [amt, due, late] = L.owed[i];
+  return `<h1 class="title">${esc(L.names[i])}</h1>`
+    + `<div class="hero"><bdi>${amt}</bdi></div><p class="sub">${esc(L.owes)}</p><div class="gap"></div>`
+    + `<ul class="list">${row(c, { name: L.fee, sub: due, late, amt })}${row(c, { name: L.payment, sub: L.paidWord, amt: '₪2,000' })}</ul>`
+    + deeper(L.deeper.client, 3);
+}
+
+/* ---------- profile + account items ---------- */
+function item({ label, sub, check, tail, cls = '', data = '' }) {
+  const lead = check === undefined ? '' : `<span class="check">${check ? icon('check', 'sm') : ''}</span>`;
+  return `<button type="button" class="m-item press ${cls}" ${data}>${lead}<span class="txt"><span>${esc(label)}</span>${sub ? `<small>${sub}</small>` : ''}</span>${tail || ''}</button>`;
+}
+
+function profileItems(c) {
+  const L = t();
+  return L.profiles.map(([name, kind], i) => item({
+    label: name,
+    sub: `${local() ? '' : `${esc(L.hosted)} · `}${esc(kind)}`,
+    check: st[c].profile === i,
+    tail: `<span class="dot" style="background:${PROFILE_COLORS[i]}"></span>`,
+    data: `data-profile="${c}|${i}" role="menuitemradio" aria-checked="${st[c].profile === i}"`,
+  })).join('');
+}
+
+/** The one menu left: just the profiles, and a way to the full list. */
+function shortMenu(c, side) {
+  const P = t().p;
+  const manage = item({ label: P.manageShort, cls: 'link', tail: `<span class="tail">${icon('next', 'sm flip')}</span>`, data: `data-goyou="${c}|profiles"` });
+  return `<div class="pop ${side}" role="menu"><div class="m-group">${profileItems(c)}</div><div class="m-group">${manage}</div></div>`;
+}
+
+const box = (label, html) => `${label ? `<p class="label">${esc(label)}</p>` : ''}<div class="box">${html}</div>`;
+
+function sections(c) {
+  const P = t().p;
+  const lang = `<div class="m-item"><span class="txt"><span>${esc(P.language)}</span></span><span class="mini-seg"><span class="${st.lang === 'ar' ? 'on' : ''}">العربية</span><span class="${st.lang === 'en' ? 'on' : ''}">English</span></span></div>`;
+  const profiles = box(P.profiles, profileItems(c) + item({ label: `+ ${P.newProfile}`, sub: esc(P.cap) }) + item({ label: P.manage }) + (local() ? '' : `<p class="m-foot">${esc(P.localFoot)}</p>`));
+  if (local()) {
+    return {
+      profiles,
+      account: box(P.account, item({ label: P.signIn, cls: 'link' }) + item({ label: P.data, sub: esc(P.dataSub) })),
+      app: box(P.prefs, lang) + box(P.more, item({ label: P.terms })),
+    };
+  }
+  return {
+    profiles,
+    account: box(P.account, item({ label: P.billing, sub: esc(P.billingSub) }) + item({ label: P.data, sub: esc(P.dataSub) }) + item({ label: P.password })),
+    app: box(P.prefs, lang + `<div class="m-item"><span class="txt"><span>${esc(P.usage)}</span></span><span class="switch"></span></div>`)
+      + box(P.more, item({ label: P.malafat, sub: esc(P.malafatSub) }) + item({ label: P.terms }) + item({ label: P.phoneApp, sub: P.phoneAppSub })),
+    signOut: box('', item({ label: P.signOut, cls: 'danger' })),
+  };
+}
+
+function youHead() {
+  const P = t().p;
+  return `<div class="you-head"><span class="avatar">${initials()}</span><div><h1 class="title">${esc(local() ? P.onDevice : P.name)}</h1>${local() ? '' : `<small dir="ltr">${P.email}</small>`}</div></div>`;
+}
+
+function youPage(c) {
+  const P = t().p;
+  const s = st[c];
+  const parts = sections(c);
+  if (c !== 'C') {
+    return `<div class="groups">${youHead()}${parts.profiles}${parts.account}${parts.app}${parts.signOut || ''}</div>`;
+  }
+  const keys = [['profiles', P.profiles], ['account', P.account], ['app', P.app]];
+  const seg = `<div class="you-seg" role="tablist">${keys.map(([k, label]) => `<button type="button" role="tab" aria-selected="${s.part === k}" class="${s.part === k ? 'on' : ''}" data-part="${c}|${k}">${esc(label)}</button>`).join('')}</div>`;
+  const body = s.part === 'account' ? parts.account + (parts.signOut || '') : parts[s.part];
+  return `<div class="groups">${youHead()}${seg}<div class="v-fade" data-part-body>${body}</div></div>`;
+}
+
+/* ---------- shell ---------- */
+function tabButtons(c) {
+  const L = t();
+  const s = st[c];
+  return DESTS.map((d) => `<button type="button" class="press ${!s.you && s.dest === d ? 'on' : ''}" data-dest="${c}|${d}">${esc(L.dest[d])}</button>`).join('');
+}
+
+const searchBtn = () => `<button type="button" class="circle press" aria-label="${esc(t().search)}">${icon('search')}</button>`;
+
+function mainBody(c) {
+  const L = t();
+  const s = st[c];
+  if (s.you) return youPage(c);
+  if (s.client === null) return destBody(c, s.dest);
+  return `<button type="button" class="back press" data-back="${c}">${icon('back', 'flip')}${esc(L.dest[s.dest])}</button>${clientBody(c, s.client)}`;
+}
+
+const scrollBody = (c) => `<div class="scroll edge-top"><div class="col body v-${st[c].anim || 'none'}">${mainBody(c)}</div></div>`;
+
+/** The island from round 3 · 2: profile name + avatar ringed in the profile's colour; lit while on the You page. */
+function wholeIsland(c, phone) {
+  const L = t();
+  const s = st[c];
+  const ring = `style="--ring:${PROFILE_COLORS[s.profile]}"`;
+  const label = `aria-label="${esc(L.p.you)}" aria-current="${s.you ? 'page' : 'false'}"`;
+  if (phone) return `<button type="button" class="island glass press ${s.you ? 'on' : ''}" data-you="${c}" ${label}><span class="avatar ring" ${ring}>${initials()}</span></button>`;
+  return `<button type="button" class="island named glass press ${s.you ? 'on' : ''}" data-you="${c}" ${label}>${esc(L.profiles[s.profile][0])}<span class="avatar ring" ${ring}>${initials()}</span></button>`;
+}
+
+function renderWhole(c, phone) {
+  if (phone) {
+    return `<div class="corner end">${searchBtn()}</div><nav class="bottom-center"><span class="tabs glass">${tabButtons(c)}</span>${wholeIsland(c, true)}</nav>${scrollBody(c)}`;
+  }
+  return `<nav class="top-center"><span class="tabs glass">${tabButtons(c)}</span></nav><div class="corner start">${searchBtn()}</div><div class="corner end">${wholeIsland(c, false)}</div>${scrollBody(c)}`;
+}
+
+/* 2 · split island */
+function renderB(phone) {
+  const L = t();
+  const s = st.B;
+  const ring = `style="--ring:${PROFILE_COLORS[s.profile]}"`;
+  const nameBtn = (cls) => `<button type="button" class="${cls} press" data-open="B|split" aria-haspopup="menu" aria-expanded="${s.open === 'split'}"><span class="dot" style="background:${PROFILE_COLORS[s.profile]}"></span>${esc(L.profiles[s.profile][0])}${icon('down', 'sm')}</button>`;
+  const me = (cls) => `<button type="button" class="${cls} press ${s.you ? 'on' : ''}" data-you="B" aria-label="${esc(L.p.you)}" aria-current="${s.you ? 'page' : 'false'}"><span class="avatar ring" ${ring}>${initials()}</span></button>`;
+  if (phone) {
+    const pop = s.open === 'split' ? shortMenu('B', 'start') : '';
+    return `<div class="corner start"><span class="anchor">${nameBtn('top-name')}${pop}</span></div><div class="corner end">${searchBtn()}</div>`
+      + `<nav class="bottom-center"><span class="tabs glass">${tabButtons('B')}</span>${me(`island glass ${s.you ? 'on' : ''}`)}</nav>${scrollBody('B')}`;
+  }
+  const pop = s.open === 'split' ? shortMenu('B', 'end') : '';
+  return `<nav class="top-center"><span class="tabs glass">${tabButtons('B')}</span></nav><div class="corner start">${searchBtn()}</div>`
+    + `<div class="corner end"><span class="anchor"><span class="island split glass">${nameBtn('half')}<span class="vdiv"></span>${me('me')}</span>${pop}</span></div>${scrollBody('B')}`;
+}
+
+const RENDER = { A: (p) => renderWhole('A', p), B: renderB, C: (p) => renderWhole('C', p) };
+
+function renderConcept(c) {
+  const dir = st.lang === 'ar' ? 'rtl' : 'ltr';
+  for (const [suffix, phone] of [['desk', false], ['phone', true]]) {
+    const el = document.getElementById(`${c}-${suffix}`);
+    el.setAttribute('dir', dir);
+    el.setAttribute('lang', st.lang);
+    el.innerHTML = RENDER[c](phone);
+  }
+  st[c].anim = '';
+}
+
+function renderAll() {
+  ['A', 'B', 'C'].forEach(renderConcept);
+  document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === st.lang)));
+  document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === st.mode)));
+}
+
+function closeAll(except) {
+  ['A', 'B', 'C'].forEach((c) => {
+    if (c !== except && st[c].open) { st[c].open = null; renderConcept(c); }
+  });
+}
+
+function openYou(c, part) {
+  Object.assign(st[c], { you: true, part: part || 'profiles', open: null, anim: 'island' });
+  renderConcept(c);
+}
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-lang],[data-mode],[data-dest],[data-client],[data-back],[data-open],[data-profile],[data-you],[data-goyou],[data-part]');
+  if (!el) {
+    if (!e.target.closest('.pop')) closeAll();
+    return;
+  }
+  const d = el.dataset;
+  if (d.lang) { st.lang = d.lang; renderAll(); return; }
+  if (d.mode) { st.mode = d.mode; renderAll(); return; }
+  if (d.open) {
+    const [c, what] = d.open.split('|');
+    closeAll(c);
+    st[c].open = st[c].open === what ? null : what;
+    renderConcept(c);
+    return;
+  }
+  if (d.you) {
+    const c = d.you;
+    closeAll();
+    if (st[c].you) Object.assign(st[c], { you: false, anim: 'back' });
+    else return openYou(c);
+    renderConcept(c);
+    return;
+  }
+  if (d.goyou) { const [c, part] = d.goyou.split('|'); return openYou(c, part); }
+  if (d.part) { const [c, part] = d.part.split('|'); st[c].part = part; renderConcept(c); return; }
+  if (d.profile) {
+    const [c, i] = d.profile.split('|');
+    // switching keeps the section, never the record; on the You page you stay put
+    Object.assign(st[c], { profile: Number(i), open: null, client: null, anim: st[c].you ? '' : 'fade' });
+    renderConcept(c);
+    return;
+  }
+  if (d.dest) {
+    const [c, dest] = d.dest.split('|');
+    closeAll();
+    const s = st[c];
+    const wasYou = s.you;
+    if (!wasYou && s.dest === dest && s.client === null) return;
+    Object.assign(s, { dest, client: null, you: false, open: null, anim: wasYou ? 'back' : 'fade' });
+    renderConcept(c);
+    return;
+  }
+  if (d.client) {
+    const [c, i] = d.client.split('|');
+    Object.assign(st[c], { client: Number(i), open: null, anim: 'fwd' });
+    renderConcept(c);
+    return;
+  }
+  if (d.back) { Object.assign(st[d.back], { client: null, anim: 'back' }); renderConcept(d.back); }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>
