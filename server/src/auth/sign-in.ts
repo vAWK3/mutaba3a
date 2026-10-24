@@ -6,6 +6,8 @@ import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/por
 import type { AppEnv } from './middleware.js';
 import { generateDeviceSessionToken, generateSessionToken, sessionDigest, type SessionKind, type SignInThrottle } from './sessions.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from './users.js';
+import { verifyAssertion, type WebauthnConfig } from './webauthn.js';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 /**
  * The credential-verification core shared by the portal's cookie sign-in
@@ -87,6 +89,52 @@ export async function signIn(
   return issueSession(c, deps, user, { sessionKind, method: 'password' }, lifetime);
 }
 
+export interface PasskeySignInDeps extends SignInDeps {
+  webauthn: WebauthnConfig;
+}
+
+/**
+ * MUT-115 (ADR-189): sign in with a passkey, cookie or device. The same core as the password: one 401
+ * INVALID_CREDENTIALS for every refusal, the same throttle and lockout (A3: a failed assertion counts on the person's
+ * email key, shared with wrong passwords), the same PENDING_REVIEW 403 and closed-account rule, and a session bound
+ * to the person's current password hash (D6), so an operator --lock, a disable or a racing password change wins.
+ *
+ * An unknown credential or a used/expired challenge has no person to count against: only the IP limiter applies.
+ */
+export async function signInWithPasskey(
+  c: Context<AppEnv>,
+  deps: PasskeySignInDeps,
+  presented: { challengeId: string; response: AuthenticationResponseJSON },
+  sessionKind: SessionKind,
+  lifetime: SignInLifetime,
+): Promise<SignInResult> {
+  const { store, throttle, webauthn } = deps;
+  const now = c.get('now')();
+  const challenge = await store.passkeys.consumeChallenge(presented.challengeId, 'authentication', null, now);
+  if (!challenge) throw invalidCredentials();
+  const passkey = await store.passkeys.findByCredentialId(presented.response.id);
+  const user = passkey ? await store.users.getById(passkey.userId) : null;
+  if (!passkey || !user) throw invalidCredentials();
+
+  const key = normalizeEmail(user.email);
+  const locked = isLocked(throttle, key, user, now);
+  const outcome = await verifyAssertion(webauthn, presented.response, challenge.challenge, passkey);
+  const verified = outcome.kind === 'verified';
+  const audit: SignInAudit = { sessionKind, method: 'passkey', passkeyId: passkey.id };
+
+  if (verified && !locked && user.status === 'PENDING_REVIEW') throw underReview();
+  if (verified && isAccountGone(user.closure, now)) throw invalidCredentials();
+  if (outcome.kind === 'counter-regressed') await auditToMembers(c, store, user, 'user.passkey_counter_regressed', audit);
+  if (!verified || locked || user.status !== 'ACTIVE' || user.passwordHash === null) {
+    if (!locked) await recordSignInFailure(c, deps, key, user, audit);
+    throw invalidCredentials();
+  }
+
+  throttle.clear(key);
+  await store.passkeys.recordUse(passkey.id, outcome.signCount, now);
+  return issueSession(c, deps, user, audit, lifetime);
+}
+
 /** The one refusal every sign-in answers, whatever went wrong (ADR-037 decision 4). */
 export function invalidCredentials(): ApiError {
   return new ApiError('INVALID_CREDENTIALS', 'That email and password do not match');
@@ -142,6 +190,7 @@ export async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: U
       absoluteExpiresAt,
       userAgent: c.req.header('user-agent')?.slice(0, USER_AGENT_MAX) ?? null,
       verifiedPasswordHash: user.passwordHash,
+      ...(audit.passkeyId === undefined ? {} : { passkeyId: audit.passkeyId }),
     });
   } catch (err) {
     if (err instanceof StateConflict) throw invalidCredentials();
@@ -161,7 +210,7 @@ async function auditToMembers(
   c: Context<AppEnv>,
   store: LedgerStore,
   user: UserRecord,
-  action: 'user.signed_in' | 'user.locked_out',
+  action: 'user.signed_in' | 'user.locked_out' | 'user.passkey_counter_regressed',
   audit: SignInAudit,
 ): Promise<void> {
   for (const m of await store.memberships.listByUser(user.id)) {

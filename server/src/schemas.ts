@@ -1179,6 +1179,107 @@ export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySche
 
 export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
 
+// ---- MUT-115: passkeys (ADR-189) ------------------------------------------------------
+// The WebAuthn JSON shapes are the W3C Level 3 serializations (PublicKeyCredential.toJSON / parse*OptionsFromJSON),
+// passed straight to @simplewebauthn/browser on the portal and the `passkeys` package on iOS. Only the fields the
+// server reads are named; the rest passes through.
+
+const Base64UrlSchema = z.string().min(1).max(16_384).regex(/^[A-Za-z0-9_-]+$/, 'base64url');
+const TransportsSchema = z.array(z.string().max(32)).max(10);
+const CredentialDescriptorSchema = z.object({ id: z.string(), type: z.literal('public-key'), transports: TransportsSchema.optional() });
+
+export const PasskeyCreationOptionsSchema = z
+  .looseObject({
+    challenge: z.string(),
+    rp: z.object({ id: z.string().optional(), name: z.string() }),
+    user: z.object({ id: z.string(), name: z.string(), displayName: z.string() }),
+    pubKeyCredParams: z.array(z.object({ type: z.literal('public-key'), alg: z.number().int() })),
+    timeout: z.number().int().optional(),
+    excludeCredentials: z.array(CredentialDescriptorSchema).optional(),
+    authenticatorSelection: z.record(z.string(), z.unknown()).optional(),
+    attestation: z.string().optional(),
+  })
+  .openapi('PasskeyCreationOptions');
+
+export const PasskeyRequestOptionsSchema = z
+  .looseObject({
+    challenge: z.string(),
+    rpId: z.string().optional(),
+    timeout: z.number().int().optional(),
+    allowCredentials: z.array(CredentialDescriptorSchema).optional(),
+    userVerification: z.string().optional(),
+  })
+  .openapi('PasskeyRequestOptions');
+
+export const PasskeyCreationChallengeSchema = z
+  .object({ challengeId: z.string().uuid(), publicKey: PasskeyCreationOptionsSchema })
+  .openapi('PasskeyCreationChallenge');
+
+export const PasskeySignInChallengeSchema = z
+  .object({ challengeId: z.string().uuid(), publicKey: PasskeyRequestOptionsSchema })
+  .openapi('PasskeySignInChallenge');
+
+const StepUpPasswordSchema = z
+  .string()
+  .min(1)
+  .max(PRESENTED_PASSWORD_MAX_LENGTH)
+  .optional()
+  .openapi({ description: 'Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise)' });
+
+export const PasskeyCreationOptionsRequestSchema = z.object({ currentPassword: StepUpPasswordSchema }).strict().openapi('PasskeyCreationOptionsRequest');
+
+export const PasskeyRegistrationResponseSchema = z
+  .looseObject({
+    id: Base64UrlSchema,
+    rawId: Base64UrlSchema,
+    type: z.literal('public-key'),
+    response: z.looseObject({ clientDataJSON: Base64UrlSchema, attestationObject: Base64UrlSchema, transports: TransportsSchema.optional() }),
+    clientExtensionResults: z.record(z.string(), z.unknown()),
+    authenticatorAttachment: z.string().optional(),
+  })
+  .openapi('PasskeyRegistrationResponse');
+
+export const PasskeyAuthenticationResponseSchema = z
+  .looseObject({
+    id: Base64UrlSchema,
+    rawId: Base64UrlSchema,
+    type: z.literal('public-key'),
+    response: z.looseObject({ clientDataJSON: Base64UrlSchema, authenticatorData: Base64UrlSchema, signature: Base64UrlSchema, userHandle: Base64UrlSchema.optional() }),
+    clientExtensionResults: z.record(z.string(), z.unknown()),
+    authenticatorAttachment: z.string().optional(),
+  })
+  .openapi('PasskeyAuthenticationResponse');
+
+export const AddPasskeyRequestSchema = z
+  .object({ challengeId: z.string().uuid(), response: PasskeyRegistrationResponseSchema, currentPassword: StepUpPasswordSchema })
+  .strict()
+  .openapi('AddPasskeyRequest');
+
+export const PasskeySignInRequestSchema = z
+  .object({ challengeId: z.string().uuid(), response: PasskeyAuthenticationResponseSchema })
+  .strict()
+  .openapi('PasskeySignInRequest');
+
+export const PasskeySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().openapi({ description: 'Named from its provider (AAGUID) or the device it was added from; renamable. Shown with dir="auto".' }),
+    createdAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime().nullable(),
+    deviceType: z.enum(['singleDevice', 'multiDevice']).openapi({ description: 'multiDevice = synced (e.g. iCloud Keychain)' }),
+    backedUp: z.boolean(),
+  })
+  .openapi('Passkey');
+
+export const PasskeyListSchema = z
+  .object({ items: z.array(PasskeySchema), limit: z.number().int().openapi({ description: 'The most passkeys a person may hold (409 PASSKEY_LIMIT past it)' }) })
+  .openapi('PasskeyList');
+
+export const RenamePasskeyRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(64) })
+  .strict()
+  .openapi('RenamePasskeyRequest');
+
 // ---- Milestone 2: customers, projects, import --------------------------------
 
 export const ProviderSchema = z.enum(['MALAFAT']).openapi('Provider');
