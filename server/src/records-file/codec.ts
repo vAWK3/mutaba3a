@@ -15,6 +15,8 @@ export const RECORDS_FILE_KIND = 'mutaba3a-local-records';
 export const SNAPSHOT_FIELDS: readonly (keyof LocalSnapshotMaps)[] = [
   'orgs', 'ints', 'custs', 'projs', 'refs', 'rates', 'agrs', 'insts', 'charges', 'recs', 'supps', 'versions', 'files', 'pays',
   'allocs', 'credits', 'counters', 'props', 'people', 'members', 'exps', 'expCats', 'expReceipts', 'convs', 'expGroups', 'groupMarks', 'inbox',
+  // MUT-254 (format 6)
+  'vendors', 'vendorNames',
 ];
 
 /**

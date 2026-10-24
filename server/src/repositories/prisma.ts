@@ -3,6 +3,8 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
+import { isAutomaticOtherCategory, registrationKey, vendorNameKey } from '../vendors/keys.js';
+import { bestVendorSuggestions } from './memory.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
@@ -16,6 +18,9 @@ import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
+  VendorRecord,
+  VendorNameRecord,
+  VendorRepository,
   SaveBillingAccountConflict,
   BillingRepository,
   EmailRepository,
@@ -1672,6 +1677,100 @@ export class PrismaLedgerStore implements LedgerStore {
       ),
   };
 
+  /** MUT-254: one retry of the whole resolve on a unique violation (a concurrent create took the name or number first). */
+  private async vendorWrite<T>(write: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await translate(write);
+      } catch (err) {
+        if (attempt === 0 && err instanceof UniqueViolation) continue;
+        throw err;
+      }
+    }
+  }
+
+  readonly vendors: VendorRepository = {
+    resolve: (input, at) => {
+      const nameKey = vendorNameKey(input.name);
+      if (!nameKey) return Promise.resolve(null);
+      const regKey = registrationKey(input.registrationNo);
+      const org = input.organizationId;
+      const name = input.name.trim();
+      const phone = input.phone?.trim() || null;
+      const email = input.email?.trim() || null;
+      // A P2002 aborts the Postgres transaction, so nothing reads after a failed insert: vendorWrite retries the whole
+      // transaction, and the retry finds the row the other writer committed.
+      return this.vendorWrite(() =>
+        this.prisma.$transaction(async (tx) => {
+          const fill = async (id: string) => {
+            if (phone) await tx.vendor.updateMany({ where: { id, phone: null }, data: { phone, updatedAt: at } });
+            if (email) await tx.vendor.updateMany({ where: { id, email: null }, data: { email, updatedAt: at } });
+          };
+          const nameOwner = await tx.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId: org, nameKey } } });
+          const byReg = regKey ? await tx.vendor.findUnique({ where: { organizationId_registrationKey: { organizationId: org, registrationKey: regKey } } }) : null;
+          if (byReg) {
+            // The typed name becomes an alias unless some vendor (this one or another) already has it.
+            if (!nameOwner) await tx.vendorName.create({ data: { organizationId: org, vendorId: byReg.id, name, nameKey, createdAt: at } });
+            await fill(byReg.id);
+            return toVendor(await tx.vendor.findUniqueOrThrow({ where: { id: byReg.id } }));
+          }
+          if (nameOwner) {
+            // Fill a missing number, never overwrite one (no merge, decision V1).
+            if (regKey) await tx.vendor.updateMany({ where: { id: nameOwner.vendorId, registrationKey: null }, data: { registrationNo: input.registrationNo!.trim(), registrationKey: regKey, updatedAt: at } });
+            await fill(nameOwner.vendorId);
+            return toVendor(await tx.vendor.findUniqueOrThrow({ where: { id: nameOwner.vendorId } }));
+          }
+          const vendor = await tx.vendor.create({
+            data: { organizationId: org, canonicalName: name, registrationNo: regKey ? input.registrationNo!.trim() : null, registrationKey: regKey, phone, email, lastUsedAt: at, createdAt: at, updatedAt: at },
+          });
+          await tx.vendorName.create({ data: { organizationId: org, vendorId: vendor.id, name, nameKey, createdAt: at } });
+          return toVendor(vendor);
+        }),
+      );
+    },
+    touch: (organizationId, vendorId, change, at) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          let lastCategoryId: string | undefined;
+          if (change.categoryId) {
+            // The category first (KEY SHARE, as the foreign key would take it), then the vendor row: the order a profile
+            // type change locks in (categories, then vendors), so the two can't deadlock.
+            const [category] = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT id::text, name FROM expense_categories WHERE id = ${change.categoryId}::uuid AND "organizationId" = ${organizationId}::uuid FOR KEY SHARE`;
+            if (category && !isAutomaticOtherCategory(category.name)) lastCategoryId = category.id;
+          }
+          await tx.vendor.updateMany({ where: { id: vendorId, organizationId }, data: { lastUsedAt: at, ...(lastCategoryId ? { lastCategoryId } : {}) } });
+        }),
+      ),
+    getById: async (organizationId, id) => {
+      const row = await this.prisma.vendor.findFirst({ where: { id, organizationId } });
+      return row ? toVendor(row) : null;
+    },
+    search: async (organizationId, query, limit) => {
+      const queryKey = vendorNameKey(query);
+      if (!queryKey) {
+        const recent = await this.prisma.vendor.findMany({ where: { organizationId }, orderBy: [{ lastUsedAt: 'desc' }, { id: 'asc' }], take: limit });
+        return recent.map((v) => ({ vendor: toVendor(v), matchedName: v.canonicalName, score: 1 }));
+      }
+      // One path (A16): names whose key contains the query (a prefix is a contains), plus every name of the 50 most
+      // recently used vendors, so near-misses still get a fuzzy score. Scored in JS by the same ranking as memory.
+      const [matching, recent] = await Promise.all([
+        this.prisma.vendorName.findMany({ where: { organizationId, nameKey: { contains: queryKey } }, include: { vendor: true }, take: 200 }),
+        this.prisma.vendor.findMany({ where: { organizationId }, orderBy: [{ lastUsedAt: 'desc' }, { id: 'asc' }], take: 50, include: { names: true } }),
+      ]);
+      const vendors = new Map<string, VendorRecord>();
+      const names: VendorNameRecord[] = [];
+      for (const n of matching) {
+        vendors.set(n.vendorId, toVendor(n.vendor));
+        names.push(toVendorName(n));
+      }
+      for (const v of recent) {
+        vendors.set(v.id, toVendor(v));
+        for (const n of v.names) names.push(toVendorName(n));
+      }
+      return bestVendorSuggestions(names, (id) => vendors.get(id), queryKey, limit);
+    },
+  };
+
   readonly expenseReceipts: ExpenseReceiptRepository = {
     create: async (input, at) =>
       toExpenseReceipt(
@@ -2300,6 +2399,10 @@ async function replaceCategories(tx: Tx, organizationId: string, preset: readonl
     SELECT id::text, "categoryId"::text FROM expenses WHERE "organizationId" = ${organizationId}::uuid AND "categoryId" IS NOT NULL ORDER BY id FOR NO KEY UPDATE`;
   const categories = await tx.$queryRaw<Array<{ id: string; name: string; color: string | null; archivedAt: Date | null }>>`
     SELECT id::text, name, color, "archivedAt" FROM expense_categories WHERE "organizationId" = ${organizationId}::uuid ORDER BY "createdAt", id FOR UPDATE`;
+  // MUT-254: then the vendors pointing at those categories (categories before vendors, as vendors.touch locks), cleared
+  // explicitly so the delete's ON DELETE SET NULL has nothing left to lock.
+  await tx.$queryRaw`SELECT id FROM vendors WHERE "organizationId" = ${organizationId}::uuid AND "lastCategoryId" IS NOT NULL ORDER BY id FOR NO KEY UPDATE`;
+  await tx.vendor.updateMany({ where: { organizationId, lastCategoryId: { not: null } }, data: { lastCategoryId: null } });
   const impact = await typeChangeImpactOf(tx, organizationId);
   await tx.expense.updateMany({ where: { organizationId, categoryId: { not: null } }, data: { categoryId: null, version: { increment: 1 }, updatedAt: at } });
   await tx.expenseCategory.deleteMany({ where: { organizationId } });
@@ -2320,6 +2423,17 @@ async function replaceCategories(tx: Tx, organizationId: string, preset: readonl
  * inbox-entry delete commit or roll back together.
  */
 /** The row as the port types it: the two JSON columns carry `ReceiptSuggestion` / `ApprovedReceiptFields` (validated on the way in). */
+/** MUT-254: the stored `registrationKey` is an index column, not part of the record. */
+function toVendor(row: Prisma.VendorGetPayload<object>): VendorRecord {
+  const { registrationKey: _key, ...record } = row;
+  void _key;
+  return record;
+}
+
+function toVendorName(row: Prisma.VendorNameGetPayload<object>): VendorNameRecord {
+  return { id: row.id, organizationId: row.organizationId, vendorId: row.vendorId, name: row.name, nameKey: row.nameKey, createdAt: row.createdAt };
+}
+
 function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): ExpenseReceiptRecord {
   return { ...row, suggested: row.suggested as unknown as ReceiptSuggestion | null, approved: row.approved as unknown as ApprovedReceiptFields | null };
 }
@@ -2332,10 +2446,6 @@ function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: 
   return translate(() => tx.expense.create({ data: { ...input, createdAt: at, updatedAt: at } }));
 }
 
-/**
- * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
- * waits here and then reads FILED; null when it may be filed (live, READY, To review, on this profile).
- */
 /**
  * MUT-389/397: the expense row lock receipt writes decide under. NO KEY UPDATE (DECISIONS.md:1961) queues filings,
  * completions and a delete behind each other but not an insert that only references the expense. Re-read under the
@@ -2357,6 +2467,10 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 const RECEIPT_LOCK_TIMEOUT = '8s';
 const RECEIPT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
 
+/**
+ * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
+ * waits here and then reads FILED; null when it may be filed (live, READY, To review, on this profile).
+ */
 async function lockToReviewReceipt(tx: Tx, organizationId: string, receiptId: string): Promise<{ kind: 'not_found' | 'already_filed' | 'not_ready' } | null> {
   const [locked] = await tx.$queryRaw<Array<{ status: string; filingStatus: string; deletedAt: Date | null }>>`SELECT "status", "filingStatus", "deletedAt" FROM "expense_receipts" WHERE "id" = ${receiptId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
   if (!locked || locked.deletedAt) return { kind: 'not_found' };

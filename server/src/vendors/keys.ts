@@ -4,7 +4,18 @@
  * suggestions (`scoreVendorName`). Pure functions, shared by the Prisma and memory stores.
  */
 
-const TASHKEEL_AND_TATWEEL = /[ؐ-ًؚ-ٰٟۖ-ۭـ]/g;
+import { categoryNameKey } from '../expenses/names.js';
+
+/**
+ * The profile's automatic "Other" category (the presets' last entry, in English or Arabic): the phone files an
+ * expense there when nothing was picked, so it never becomes a vendor's default (MUT-254 A3).
+ */
+const AUTOMATIC_OTHER_NAME_KEYS = new Set(['other', 'أخرى']);
+export function isAutomaticOtherCategory(name: string): boolean {
+  return AUTOMATIC_OTHER_NAME_KEYS.has(categoryNameKey(name));
+}
+
+const TASHKEEL_AND_TATWEEL = /[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g;
 // ASCII punctuation the local web normaliser strips, plus Arabic punctuation and guillemets.
 const PUNCTUATION = /[.,;:!?'"()[\]{}@#$%^*+=<>\\|`~،؛؟«»״׳]/g;
 // Matched after punctuation is gone, so dotted forms (ش.م.م, בע"מ) arrive without their dots.
