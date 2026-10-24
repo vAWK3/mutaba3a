@@ -2725,7 +2725,24 @@ export const ListReceiptsQuerySchema = z.object({
   to: IsoDateSchema.optional().openapi({ description: 'Inclusive, on the upload day (receivedOn)' }),
 });
 
-export const ReceiptPageSchema = z.object({ items: z.array(ExpenseReceiptSchema), nextCursor: z.string().nullable() }).openapi('ReceiptPage');
+/** MUT-258: what a library row shows of the expense a FILED receipt sits on. */
+export const LinkedExpenseSummarySchema = z
+  .object({
+    vendor: z.string().nullable(),
+    title: z.string().nullable(),
+    /** The original amount, in `currency`, formatted as `Expense.amount` is. */
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    occurredOn: IsoDateSchema,
+    categoryId: uuid.nullable(),
+  })
+  .openapi('LinkedExpenseSummary');
+
+export const ReceiptListItemSchema = ExpenseReceiptSchema.extend({
+  expense: LinkedExpenseSummarySchema.nullable().openapi({ description: "MUT-258: a FILED receipt's live expense; null To review, and null when that expense was deleted" }),
+}).openapi('ReceiptListItem');
+
+export const ReceiptPageSchema = z.object({ items: z.array(ReceiptListItemSchema), nextCursor: z.string().nullable() }).openapi('ReceiptPage');
 
 export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
 

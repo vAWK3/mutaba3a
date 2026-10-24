@@ -3694,3 +3694,11 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Component (real router) | `pages/you/__tests__/YouPage.test.tsx` (parts, rows → drawer keys, cap and lapse New profile, `?from=` across tabs and drawers, open profile never history Back, locked banner, profile-less `/you`); `YouApp.terms`, `YouApp.malafat`, `AppDownloadRows`; local-mode signed-out You › Account and You › App | same |
 | Regression contract (eng D5) | menu tests migrated: views (switcher entries), local-mode, auth-states sign-out, UsageConsent, LapseGate, pressFeedback, the four account/profile drawers, MalafatPortal | same |
 | Release-QA | `portal.you.{drawers,signed-out,phone-rtl,locked}`; `portal.shell.switch-profile` and the 10 migrated areas | `release-qa run --attach --app portal --only portal.you` |
+
+## MUT-258 — receipt library rows carry their expense (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Store contract | `store-contract-receipts.ts`: a FILED row's expense summary, none To review, none after the expense is deleted (memory + Prisma) | `npm --prefix server test` + `test:db` |
+| Routes | `routes-receipts.test.ts`: the serialized `expense` (formatted amount) on a filed row, null on a To-review one | `npm --prefix server test` |
+
