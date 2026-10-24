@@ -630,10 +630,19 @@ describe('vite.config', () => {
       withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, CONTEXT: 'production' }, () => {
         expect(() => resolve('web')).toThrow(/SENTRY_AUTH_TOKEN/);
       });
-      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, CONTEXT: 'deploy-preview' }, () => {
-        expect(() => resolve('web')).not.toThrow();
-      });
     });
+
+    it.each(['deploy-preview', 'branch-deploy', 'dev'])(
+      'compiles reporting out of a Netlify %s build even with the DSN set: only production reports (review D4)',
+      (context) => {
+        withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test', CONTEXT: context }, () => {
+          const config = resolve('web');
+          expect(config.define?.__LANDING_SENTRY_ENABLED__).toBe('false');
+          expect(config.define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(''));
+          expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
+        });
+      },
+    );
 
     it("never gives the service worker a source map, even when the build's maps are hidden for the upload (MUT-150 review)", () => {
       // vite-plugin-pwa turns workbox.sourcemap on for a "hidden" build unless it is set

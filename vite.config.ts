@@ -211,13 +211,16 @@ function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>;
 
 /**
  * The landing's error reports (MUT-150, ADR-091): the web build only, and only
- * with MUTABA3A_LANDING_SENTRY_DSN, set in Netlify's production context. The
- * desktop build always gets the "off" defines, so the gate folds away and no
+ * with MUTABA3A_LANDING_SENTRY_DSN, in Netlify's production context (any other
+ * Netlify context compiles it out). The desktop build always gets the "off" defines, so the gate folds away and no
  * SDK chunk is emitted. A Netlify production build with a DSN but no upload
  * token fails: readable stacks are part of the feature, not optional.
  */
 function landingSentry(env: NodeJS.ProcessEnv, buildMode: "web" | "desktop"): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
-  const dsn = buildMode === "web" ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
+  // On Netlify only the production context reports (review D4): a DSN set for every context by mistake
+  // must not send deploy previews' errors to the production project or spend the shared quota
+  const reportingContext = env.CONTEXT === undefined || env.CONTEXT === "" || env.CONTEXT === "production";
+  const dsn = buildMode === "web" && reportingContext ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
   // Release and environment are read only by the SDK chunk, which a build without a DSN never emits
   const release = dsn ? landingSentryRelease(env.COMMIT_REF) : "";
   const define = {
