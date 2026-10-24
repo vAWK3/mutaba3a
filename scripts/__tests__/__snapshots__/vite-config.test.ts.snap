@@ -35,6 +35,10 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""desktop"",
+    "__LANDING_SENTRY_DSN__": """",
+    "__LANDING_SENTRY_ENABLED__": "false",
+    "__LANDING_SENTRY_ENVIRONMENT__": """",
+    "__LANDING_SENTRY_RELEASE__": """",
     "__PORTAL_URL__": """",
     "__POSTHOG_KEY__": """",
   },
@@ -116,6 +120,10 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
+    "__LANDING_SENTRY_DSN__": """",
+    "__LANDING_SENTRY_ENABLED__": "false",
+    "__LANDING_SENTRY_ENVIRONMENT__": """",
+    "__LANDING_SENTRY_RELEASE__": """",
     "__PORTAL_URL__": "<config/hosts.json portalOrigin>",
     "__POSTHOG_KEY__": """",
   },

@@ -1,0 +1,67 @@
+app: web
+area: error-reports
+title: The website's error reports (Sentry), and the free web app sending none
+tier: secondary
+paths:
+  - src/pages/landing/observability/**
+  - src/pages/landing/afterLoadIdle.ts
+  - src/pages/landing/marketingPath.ts
+  - src/lib/observability/**
+features:
+  - id: landing-crash-reported
+    title: An error on the home page sends one report with the landing surface, the route, the language and no account (MUT-150)
+    tier: secondary
+    legacy: [MUT-150]
+    paths:
+      - src/main.tsx
+    steps:
+      - Open the home page in English
+      - Something on the page throws an error nobody catches
+    expect:
+      - Exactly one report reaches Sentry, tagged landing, route /, English
+      - It carries no user, and the page address has no query string
+  - id: landing-crash-reported-ar
+    title: An error on the Arabic privacy page is reported with the Arabic language (MUT-150)
+    tier: tertiary
+    legacy: [MUT-150]
+    steps:
+      - Open the privacy policy in Arabic
+      - Something on the page throws an error nobody catches
+    expect:
+      - One report, tagged Arabic and route /privacy
+  - id: download-and-terms-covered
+    title: Errors on the download page and on a frozen terms version are reported; the version never appears in the route (MUT-150)
+    tier: tertiary
+    legacy: [MUT-150]
+    steps:
+      - Open the download page; something throws
+      - Open /terms/2026-10-19; something throws
+    expect:
+      - One report with route /download, then one with route /terms/:version
+  - id: app-routes-silent
+    title: The free web app never sends an error report, even when reached from the website (MUT-150, ADR-024)
+    tier: core
+    legacy: [MUT-150]
+    paths:
+      - src/main.tsx
+      - src/pages/download/DownloadPage.tsx
+    steps:
+      - Open the download page and wait until its error reporting has loaded
+      - With error reporting live, the page moves to /app without reloading, and something throws there
+      - Follow the link back to the web app and log an income
+      - Something in the app throws an error nobody catches
+      - Open the app directly in a new tab, and something throws there too
+    expect:
+      - Not one request reaches Sentry
+      - The app never loads Sentry's code at all
+  - id: landing-crash-screen
+    title: A website page that can't load shows its own screen in the visitor's language and reports once (MUT-150)
+    tier: secondary
+    legacy: [MUT-150]
+    paths:
+      - src/pages/landing/observability/LandingCrashScreen.tsx
+    steps:
+      - Open the home page while its code can't be downloaded
+    expect:
+      - The website's crash screen shows in Arabic, with a reload button and nothing about "your data"
+      - One report reaches Sentry, tagged landing and route /

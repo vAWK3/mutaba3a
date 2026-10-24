@@ -28,7 +28,7 @@
     "test:tz": "TZ=America/New_York vitest run",
     "hosts": "tsx scripts/hosts.ts",
     "domain:plan": "tsx scripts/hosts.ts plan",
-    "test:bundles": "vite build --mode web && vite build --mode desktop && vite build --mode hosted && tsx scripts/check-bundles.ts",
+    "test:bundles": "MUTABA3A_LANDING_SENTRY_DSN=https://00000000000000000000000000000000@o4512029835526144.ingest.de.sentry.io/1 vite build --mode web && vite build --mode desktop && vite build --mode hosted && tsx scripts/check-bundles.ts --expect-landing-sentry",
     "hosted:types": "openapi-typescript server/openapi/openapi.yaml -o src/hosted/api/schema.d.ts",
     "hosted:types:check": "tsx scripts/check-hosted-types.ts",
     "i18n:check": "tsx scripts/check-i18n-keys.ts",

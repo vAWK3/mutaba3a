@@ -2170,6 +2170,15 @@ Since MUT-325 its Restore confirm also says when the file came from an account (
 ### LastResortBoundary — `src/hosted/observability/LastResortBoundary.tsx` (new, MUT-149)
 **Purpose**: the portal's outermost boundary in `main.tsx`, above every provider: reuses `ErrorBoundary` with a static Arabic-then-English screen read straight from the dictionaries, and reports through the crash gate. Tests: `observability/__tests__/LastResortBoundary.test.tsx`.
 
+### LandingCrashScreen — `src/pages/landing/observability/LandingCrashScreen.tsx` (new, MUT-150)
+**Purpose**: what a website page shows when it crashes: `landing.crash` copy in the visitor's language, one Reload, never the error's text and nothing about "your data". Reuses `ErrorBoundary`'s `.error-boundary-*` styles, which `main.tsx` always loads. Rendered as the `fallback` of the landing's `ErrorBoundary` (`LandingShell` in `main.tsx`), whose `onError` reports the crash. Tests: `observability/__tests__/LandingCrashScreen.test.tsx`.
+
+### landingRoute — `src/pages/landing/marketingPath.ts` (new, MUT-150)
+**Purpose**: the one list of website pages: `'/' | '/download' | '/privacy' | '/terms' | '/terms/:version' | null`. `main.tsx` renders from it, and the landing's error reports start, send and tag their route from it. Add or retire a website page here.
+
+### afterLoadIdle — `src/pages/landing/afterLoadIdle.ts` (moved, MUT-150)
+**Purpose**: runs a callback after the page has loaded, then once the browser is idle (1.5 s fallback); returns the cancel. The first-paint rule for the landing's lazy SDKs: PostHog (`useLandingAnalytics`) and Sentry (the landing gate).
+
 ### browserSentryOptions — `src/lib/observability/browserSentry.ts` (new, MUT-149)
 **Purpose**: Sentry init options for a browser surface (`portal`, `landing`): the ADR-091 contract's SDK options, `dataCollection` off, and `beforeSend`/`beforeBreadcrumb` through MUT-148's `scrubEvent`; takes the surface's `dropEvent` and lazy `tags`. Types-only SDK import. Tests: `src/lib/observability/__tests__/browserSentry.test.ts`.
 

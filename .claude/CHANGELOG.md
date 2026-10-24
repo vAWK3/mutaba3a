@@ -43,6 +43,26 @@
 ### Changed
 - `GET /v1/entries` leaves LOCKED profiles out. `buildMe`'s membership reads are batched (shared with the gate). API `1.60.0-mut361`.
 
+## [Unreleased] - 2026-10-24 — The website's pages report errors to Sentry; the free web app never does (MUT-150, ADR-091 am.12)
+
+**Why:** epic MUT-146 wants every production error seen. The landing (`/`, `/download`, `/privacy`, `/terms`) shares `dist-web` with the local-first app, which promises no telemetry (ADR-024), so the website reports and the app provably doesn't.
+
+### Added
+- **Landing error reports** (`src/pages/landing/observability/`): a gate in the web entry, started by `main.tsx` before React renders on website pages only, and the lazy `landingSentry` chunk loaded after load + idle. Early-error queue (10), send-time "still a website page" guard, at most 5 reports per page load, no user, route template tag.
+- **`LandingCrashScreen`**: a website page that crashes shows its own screen in the visitor's language (`landing.crash.*`, en + ar) and reports once.
+- **`landingRoute()`** (`marketingPath.ts`): the one list of website pages, used by `main.tsx` and the reports. **`afterLoadIdle`**: the first-paint wait, shared by PostHog and Sentry.
+- **Build:** `MUTABA3A_LANDING_SENTRY_DSN` (Netlify production context), release `mutaba3a-landing@<version>+<sha>`, hidden source maps uploaded to `mutaba3a-landing`; a production build with a DSN and no token fails. No DSN: no Sentry file in dist-web at all.
+- **QA:** `web.error-reports.{landing-crash-reported, landing-crash-reported-ar, download-and-terms-covered, app-routes-silent (core), landing-crash-screen}`.
+
+### Changed
+- **Privacy policy (en + ar):** the website sends error reports when a page crashes or hits an error, with no account; the free web app never does. Updated October 24, 2026.
+- **check-bundles:** dist-web may carry Sentry only in the landing's lazy, never-precached chunks; the ingest host and `docs.sentry.io` are allowed there only (`PATTERN_SCOPED_ORIGINS`). Netlify now runs `check-bundles --dist dist-web` (TD-084, landing).
+- **vite.config:** the portal and landing share `sentrySourceMaps`; the dev server pre-bundles `@sentry/browser` when the landing DSN is set.
+- **ESLint:** only `landingSentry.ts` may load the SDK on the landing; landing observability imports only the contract and scrubber from the server.
+
+### Files
+`src/main.tsx`, `src/pages/landing/{marketingPath,afterLoadIdle}.ts`, `src/pages/landing/observability/*`, `src/pages/landing/analytics/landingAnalytics.ts`, `src/lib/i18n/translations/{en,ar}/landing.json`, `vite.config.ts`, `scripts/{bundle-rules,check-bundles}.ts`, `scripts/bundle-origins.json`, `netlify.toml`, `eslint.config.js`, `qa/**`, docs (ADR-091 am.12, README, DEPLOYMENT §1.5 step 9, before-release, INFRA, TD-084).
+
 ## [Unreleased] - 2026-10-24 — "Your 14-day free trial has started", a card recommended and skippable; consumers everywhere; GA sandbox prices (MUT-418, ADR-180)
 
 **Why:** Basel's sellable portal is "sign up → onboarding → 14-day trial → card optional but recommended". MUT-362 already kept the trial when a card is added during it, but nothing asked. Basel also decided anyone may subscribe as an individual, in every country (comment 12451).

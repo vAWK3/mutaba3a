@@ -58,6 +58,18 @@
   justify-content: center;
 }
 
+/* The website's crash screen (MUT-150): the whole page, so its title is an h1 that looks like the h2 above */
+.landing-crash h1 {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-headline);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.landing-crash .btn {
+  min-height: 44px;
+}
+
 /* Inline error for smaller sections */
 .inline-error-fallback {
   display: flex;
