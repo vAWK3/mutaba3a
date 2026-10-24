@@ -4,6 +4,7 @@ import { personalProfileFor } from '../personal-profile.js';
 import type { UserLocale } from '../repositories/ports.js';
 import { runScript } from '../observability/reporter.js';
 import { createScriptReporter } from '../observability/sentry-node.js';
+import { backfillVendors } from './backfill-vendors.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 
 /**
@@ -136,6 +137,10 @@ if (isMain) {
       console.log(`post-roll: ${personal.created.length} personal profile(s) backfilled, ${personal.skipped.length} skipped`);
       const stamped = await repairPersonalOwnership(db);
       console.log(`post-roll: ${stamped} personal profile(s) stamped owned + PERSONAL`);
+      // MUT-254: expenses the old revision wrote (or re-wrote) during the roll get their vendor link.
+      // Linked rows only when touched in the last week (a roll and a short rollback); unlinked ones always.
+      const vendors = await backfillVendors(db, { relinkSince: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) });
+      console.log(`post-roll: vendors — ${vendors.linked} expense(s) linked, ${vendors.relinked} re-linked, ${vendors.unlinked} unlinked, ${vendors.defaultsSet} default categories set`);
     } finally {
       await db.$disconnect();
     }

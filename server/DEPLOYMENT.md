@@ -308,7 +308,12 @@ What you will see, and what to answer:
    shipped with no backfill). Normally prints `post-roll: 0 captured payment(s)
    re-marked origin CAPTURE` and `post-roll: 0 personal profile(s) backfilled,
    0 skipped`; the proxy stops. A `still has no personal profile` warning names
-   a user to provision by hand.
+   a user to provision by hand. Since MUT-254 it also links expenses to their
+   vendors (`post-roll: vendors — N expense(s) linked, …`): the first deploy
+   with the vendors migration links every existing expense; later runs link
+   only what the old revision wrote during the roll (normally 0). The same
+   step by hand: `DATABASE_URL=… npm run backfill:vendors -- --dry`, then
+   without `--dry`.
 8. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
 
 Repeat runs are the same command; plan 2 shows no changes and the service
@@ -1318,7 +1323,7 @@ At GA (after billing and account closing are live), set `self_signup_enabled = t
 
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
 
-#### Trial reminders (MUT-419, ADR-182)
+#### Trial reminders (MUT-419, ADR-184)
 
 A daily Cloud Scheduler job (`mutaba3a-trial-mail`, 10:00 Asia/Jerusalem) posts to `/jobs/v1/billing/trial-mail` with the job token. Terraform creates it only when `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled` are all on. Each person in days 11–30 of an unpaid trial gets the mail for their stage once: the trial ends within 3 days (Add a card), it ended (read-only: Subscribe, Download my records), the account locks within 3 days. People with a card, a grant, Malafat, a firm or any profile that isn't their own TRIAL one get nothing (the portal's banners still show). A second run the same day sends nothing new.
 

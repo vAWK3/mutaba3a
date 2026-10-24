@@ -79,8 +79,28 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(5);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, trialPrompt: null })));
+  });
+
+  it('5 → 6 (MUT-254): expenses arrive with no vendor, and the vendor maps start empty', async () => {
+    const store = new MemoryLedgerStore();
+    const { user, personalOrganization: personal } = await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.expenses.create({ organizationId: personal.id, occurredOn: '2026-10-01', amountMinor: 1_000n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, AT);
+    const { maps } = store.snapshot();
+    const exps = new Map([...maps.exps].map(([id, e]) => [id, Object.fromEntries(Object.entries(e).filter(([field]) => field !== 'vendorId'))]));
+    const older: Partial<StoredSnapshot['maps']> = { ...maps };
+    delete older.vendors;
+    delete older.vendorNames;
+    const before = { formatVersion: 5, stateVersion: 2, savedAt: AT, maps: { ...older, exps } } as unknown as StoredSnapshot;
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(6);
+    expect([...after.maps.exps.values()]).toEqual([...before.maps.exps.values()].map((e) => ({ ...e, vendorId: null })));
+    expect(after.maps.vendors.size).toBe(0);
+    expect(after.maps.vendorNames.size).toBe(0);
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
   it("leaves the snapshot it was given untouched", async () => {

@@ -115,7 +115,7 @@ the portal host, not the Cloud Run URL, wherever `PORTAL_ORIGIN` is set.
   small (people in days 11–30 of a trial). R1: the run stops starting sends after 200 s of elapsed time (measured by
   its own monotonic clock, not the business clock, outside voice R9) and reports `incomplete: true`.
 - **D15** (outside voice R10) The job token now also triggers customer mail. A leaked token can only re-run idempotent
-  mail; main.tf's comment and ADR-182 say so.
+  mail; main.tf's comment and ADR-184 say so.
 - **D16** (outside voice R11) A real operator run refuses (409 `LINK_ORIGIN_LOOPBACK`) when its links would point at a
   loopback origin (no `PORTAL_ORIGIN`, called through a local proxy) in production. Dry runs still answer.
 
@@ -200,7 +200,7 @@ What a person sees, for a reviewer:
 
 - Reuse: `trialTimelineOf`, `resolveEntitlement`/`entitlementsFor`, `memberProfilesForBilling`, `createMailer`,
   `setupLinkOrigin`, `jobAuth`, the reconcile's door pattern, the users CLI.
-- Impact: additive. No migration (reads `users.trialStartedAt`). API version 1.61.0-mut419 (two new operator/job
+- Impact: additive. No migration (reads `users.trialStartedAt`). API version 1.63.0-mut419 (two new operator/job
   routes; nothing on `/v1`). Off in production until `mailer = "resend"` (the job isn't created).
 - Cost: one `users` read a day, then per candidate 3–4 small reads (memberships, organizations, integrations, billing
   facts). Candidates are only people in days 11–30 of an unpaid trial. Mail volume ≤ 3 per trial person. Cloud
@@ -209,13 +209,13 @@ What a person sees, for a reviewer:
 
 ## 10. Decisions (all pending Basel's confirmation)
 
-D1–D14 above. ADR-182 records the trial-mail rule (stages as windows, trial-decides-the-account eligibility, Cloud Scheduler, the
+D1–D14 above. ADR-184 records the trial-mail rule (stages as windows, trial-decides-the-account eligibility, Cloud Scheduler, the
 job token's wider reach).
 
 ## 11. Tech debt
 
 - TD-223: no alert on the trial-mail job's failed attempts (the reconcile has one); the mailer logs each failed send.
-- TD-224: the candidate read and the per-person reads are N+1 (fine for a daily run over trial people; batch them if
+- TD-226: the candidate read and the per-person reads are N+1 (fine for a daily run over trial people; batch them if
   trials grow to thousands).
 
 ## 12. Business / product impact
@@ -276,7 +276,7 @@ REALITY: pr-count pass one branch, merged locally (run rules), no PR
 
 Architecture: findings 2, 3. Code quality: no issues found (one rule module, one door module, no new pattern beyond
 MUT-360's). Tests: findings 4, 5. Performance: finding 1; the per-candidate reads are N+1 (4 small reads each) over
-people in days 11-30 of an unpaid trial only [estimated: tens at pilot scale], TD-224.
+people in days 11-30 of an unpaid trial only [estimated: tens at pilot scale], TD-226.
 
 ### Test coverage diagram
 
@@ -343,7 +343,7 @@ Basel**):
 | R7 | Medium | Rounding up overstates time left | **Accepted**: "within N days" wording (D2) |
 | R8 | Low-Med | Store guard and store contract tests missing from the file list | **Accepted** (§6) |
 | R9 | Low | Budget test vs the fixed business clock | **Accepted**: separate elapsed-time source (D12) |
-| R10 | Low | The job token's reach grows | **Accepted**: comment + ADR-182 (D15) |
+| R10 | Low | The job token's reach grows | **Accepted**: comment + ADR-184 (D15) |
 | R11 | Low | A loopback-proxied operator run would mail localhost links in bulk | **Accepted**: refuse a real run in production when links would be loopback (D16) |
 | R12 | Low | A `rejected` send (Resend 4xx) retries daily and warns | **Rejected for now**: plain-address validation and bounce suppression catch nearly all of these first; noted under TD-223 |
 

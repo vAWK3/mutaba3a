@@ -2444,6 +2444,20 @@ const expenseNotes = z.string().max(4000);
 const categoryName = z.string().trim().min(1).max(60);
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, '#rrggbb');
 
+/**
+ * MUT-254: what else is known about the vendor typed in `vendor` (a receipt reader's values, MUT-257). Used only to
+ * match the vendor (the registration number first) and to fill what it lacks; never stored on the expense.
+ */
+export const VendorDetailsSchema = z
+  .object({
+    registrationNo: z.string().trim().min(1).max(40).optional(),
+    phone: z.string().trim().min(1).max(40).optional(),
+    email: z.string().trim().email().max(200).optional(),
+  })
+  .strict()
+  .openapi('VendorDetails');
+export type VendorDetails = z.infer<typeof VendorDetailsSchema>;
+
 export const ExpenseSchema = z
   .object({
     id: uuid,
@@ -2453,6 +2467,8 @@ export const ExpenseSchema = z
     currency: CurrencySchema,
     title: z.string().nullable(),
     vendor: z.string().nullable(),
+    /** MUT-254: the profile's vendor `vendor` resolved to (exact match, created on first sight); null when none. */
+    vendorId: uuid.nullable(),
     categoryId: uuid.nullable(),
     /** The client this expense is for, if any. Null = the firm's own (or, on a personal profile, personal) spending. */
     customerId: uuid.nullable(),
@@ -2522,6 +2538,31 @@ export const ExpenseReceiptSchema = z
 export const ExpenseDetailSchema = ExpenseSchema.extend({ receipts: z.array(ExpenseReceiptSchema) }).openapi('ExpenseDetail');
 export const ExpensePageSchema = z.object({ items: z.array(ExpenseSchema), nextCursor: z.string().nullable() }).openapi('ExpensePage');
 
+/** MUT-254: GET /v1/vendors, the vendor typeahead. */
+export const ListVendorsQuerySchema = z.object({
+  q: z.string().max(200).optional().openapi({ description: 'What was typed so far. Empty or absent: the most recently used vendors.' }),
+  limit: z.coerce.number().int().min(1).max(25).default(10).openapi({ description: '1–25.' }),
+});
+
+export const VendorSuggestionSchema = z
+  .object({
+    id: uuid,
+    /** The vendor's own name: its first spelling. */
+    name: z.string(),
+    /** The name of it that matched the query best: `name` or one of its aliases. */
+    matchedName: z.string(),
+    registrationNo: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    /** The typed text saves as this vendor: its key is exactly one of the vendor's names (the server's exact match). A client offers no "new vendor" then. */
+    exact: z.boolean(),
+    /** The category the profile last filed this vendor under (never the automatic Other); a client prefills it only when none is chosen yet. */
+    lastCategoryId: uuid.nullable(),
+  })
+  .openapi('VendorSuggestion');
+
+export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSuggestionSchema) }).openapi('VendorSuggestionList');
+
 export const CreateExpenseRequestSchema = z
   .object({
     occurredOn: ExpenseMoneyDateSchema,
@@ -2529,6 +2570,7 @@ export const CreateExpenseRequestSchema = z
     currency: CurrencySchema,
     title: expenseText.optional(),
     vendor: expenseText.optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     categoryId: uuid.optional(),
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
@@ -2562,6 +2604,7 @@ export const UpdateExpenseRequestSchema = z
     currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     categoryId: uuid.nullable().optional(),
     customerId: uuid.nullable().optional(),
     projectId: uuid.nullable().optional(),
@@ -2903,6 +2946,7 @@ export const FileAsExpenseRequestSchema = z
   .object({
     categoryId: uuid.optional(),
     vendor: expenseText.optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     title: expenseText.optional(),
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),

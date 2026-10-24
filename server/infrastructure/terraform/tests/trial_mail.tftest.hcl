@@ -1,4 +1,4 @@
-# MUT-419 (ADR-182): the daily trial-reminder job exists only with mail, Stripe and the lapse gate all on, and calls
+# MUT-419 (ADR-184): the daily trial-reminder job exists only with mail, Stripe and the lapse gate all on, and calls
 # /jobs/v1/billing/trial-mail with the job token at 10:00 Jerusalem time. Providers are mocked:
 #   terraform init -backend=false && terraform test
 

@@ -108,10 +108,10 @@ describe('MUT-42 carries MUT-39’s expense criteria', () => {
     const { h, a } = await setup();
     const doc = (await read(await h.app.request('/openapi.json'))) as { paths: Record<string, Record<string, unknown>> };
     const ops = Object.entries(doc.paths)
-      .filter(([path]) => /^\/v1\/(expenses|expense-categories|summaries\/expenses)/.test(path))
+      .filter(([path]) => /^\/v1\/(expenses|expense-categories|vendors|summaries\/expenses)/.test(path))
       .flatMap(([path, item]) => ['get', 'post', 'patch', 'delete'].filter((m) => item[m]).map((m) => [m.toUpperCase(), path] as const));
-    // MUT-339 added GET /v1/expenses/streak.
-    expect(ops).toHaveLength(14);
+    // MUT-339 added GET /v1/expenses/streak, MUT-254 GET /v1/vendors.
+    expect(ops).toHaveLength(15);
     for (const [method, path] of ops) {
       const res = await h.app.request(path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-0000000000aa'), { method, headers: { ...a.auth, 'content-type': 'application/json', ...idem(), 'if-match': '1' }, ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }) });
       expect(res.status, `${method} ${path}`).toBe(403);
@@ -132,6 +132,7 @@ describe('POST /v1/expenses', () => {
       currency: 'ILS',
       title: 'Court fee',
       vendor: 'Magistrate court',
+      vendorId: expect.any(String),
       categoryId: null,
       customerId: a.customer.id,
       projectId: a.project.id,
@@ -592,6 +593,33 @@ describe('expense receipts', () => {
     for (let i = 0; i < 10; i++) await uploadReceipt(h, p.as(a.org.id), e.id);
     const eleventh = await h.app.request(`/v1/expenses/${e.id}/receipts`, json({ filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10 }, p.as(a.org.id)));
     expect((await read(eleventh)).error.details.reason).toBe('TOO_MANY_RECEIPTS');
+  });
+
+  it('refuses at completion a receipt that would be the eleventh, though its upload started with room (MUT-397)', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({}));
+    for (let i = 0; i < 9; i++) await uploadReceipt(h, p.as(a.org.id), e.id);
+    const start = async () => read(await h.app.request(`/v1/expenses/${e.id}/receipts`, json({ filename: 'r.png', mimeType: 'image/png', sizeBytes: 10 }, p.as(a.org.id))));
+    const [first, second] = [await start(), await start()];
+    const complete = async (id: string) => {
+      h.storage.put(`org/${a.org.id}/expense-receipts/${id}`, { sizeBytes: 10, contentType: 'image/png' });
+      return h.app.request(`/v1/expenses/${e.id}/receipts/${id}/complete`, { method: 'POST', headers: p.as(a.org.id) });
+    };
+    expect((await complete(first.receipt.id)).status).toBe(200);
+    const refused = await complete(second.receipt.id);
+    expect(refused.status).toBe(422);
+    expect((await read(refused)).error.details.reason).toBe('TOO_MANY_RECEIPTS');
+    // Idempotent once READY, also at the cap.
+    expect((await complete(first.receipt.id)).status).toBe(200);
+  });
+
+  it('answers 404 when the expense was deleted between the upload start and the completion (MUT-397)', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({}));
+    const started = await read(await h.app.request(`/v1/expenses/${e.id}/receipts`, json({ filename: 'r.png', mimeType: 'image/png', sizeBytes: 10 }, p.as(a.org.id))));
+    h.storage.put(`org/${a.org.id}/expense-receipts/${started.receipt.id}`, { sizeBytes: 10, contentType: 'image/png' });
+    expect((await h.app.request(`/v1/expenses/${e.id}`, { method: 'DELETE', headers: p.as(a.org.id) })).status).toBeLessThan(300);
+    expect((await h.app.request(`/v1/expenses/${e.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: p.as(a.org.id) })).status).toBe(404);
   });
 
   it('answers 503 when the deployment has no bucket', async () => {

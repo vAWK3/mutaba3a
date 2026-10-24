@@ -807,7 +807,7 @@ resource "google_cloud_scheduler_job" "stripe_reconcile" {
   depends_on = [google_project_service.apis]
 }
 
-# MUT-419 (ADR-182, D7/D8): the daily trial reminders (ending within 3 days, read-only, locking within 3 days). At
+# MUT-419 (ADR-184, D7/D8): the daily trial reminders (ending within 3 days, read-only, locking within 3 days). At
 # 10:00 Jerusalem time, a waking hour. Only with mail on, Stripe on (every mail links to Subscribe) and the lapse gate
 # on (the mails announce what it does). The run stops itself at about 200 s and answers 200 with `incomplete`; the
 # next day continues. A second run the same day sends nothing new, so the retries are safe. The job token now also

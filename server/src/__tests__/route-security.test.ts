@@ -43,6 +43,8 @@ const EXPENSE_OPERATIONS = [
   'GET /v1/expense-groups/{groupId}',
   'PATCH /v1/expense-groups/{groupId}',
   'DELETE /v1/expense-groups/{groupId}',
+  // MUT-254 (ADR-183): the vendor typeahead belongs to the expenses domain.
+  'GET /v1/vendors',
   'PUT /v1/expense-groups/{groupId}/expenses/{expenseId}',
   'DELETE /v1/expense-groups/{groupId}/expenses/{expenseId}',
   'GET /v1/expense-groups/{groupId}/summary',

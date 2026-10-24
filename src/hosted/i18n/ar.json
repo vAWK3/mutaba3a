@@ -419,6 +419,8 @@
         "titlePlaceholder": "ما كان الغرض منه؟",
         "vendor": "المورّد",
         "vendorPlaceholder": "اسم الجهة أو المورّد",
+        "vendorNew": "مورّد جديد",
+        "vendorAlias": "يطابق «{name}»",
         "client": "العميل",
         "clientPlaceholder": "ابحث عن عميل",
         "matter": "القضية",

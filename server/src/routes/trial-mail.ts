@@ -9,7 +9,7 @@ import type { LedgerStore } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, TrialMailRequestSchema, TrialMailRunSchema, TrialMailSummarySchema } from '../schemas.js';
 
 /**
- * MUT-419 (ADR-182): the two doors to the daily trial-mail run (billing/trial-mail.ts), like MUT-360's reconcile.
+ * MUT-419 (ADR-184): the two doors to the daily trial-mail run (billing/trial-mail.ts), like MUT-360's reconcile.
  *
  *   POST /jobs/v1/billing/trial-mail    Cloud Scheduler, daily, X-Job-Token: counts only, no address in its logs
  *   POST /admin/v1/billing/trial-mail   the operator (`npm run billing:trial-mail [-- --dry-run]`): counts and rows

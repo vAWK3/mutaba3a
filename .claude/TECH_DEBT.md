@@ -26,7 +26,7 @@
 **Impact**: Each profile-scoped session request runs one `billing.factsFor`; the phone's inbox count and Recent polls also load the person's memberships and integrations.
 **Fix**: Cache a person's entitlements for a few seconds per instance (invalidated by the Stripe webhook and grant writes), or carry them on the session row.
 
-### TD-224: The trial-mail run reads each candidate one at a time
+### TD-226: The trial-mail run reads each candidate one at a time
 **Status**: Open
 **Ticket**: MUT-419
 **Added**: 2026-10-24
@@ -42,6 +42,22 @@
 **Impact**: The reconcile's failed attempts page; the trial-mail job's don't (a missed day catches up inside the window). A Resend 4xx for one address is re-claimed by the mailer every day of its window (up to 13 for `ended`), and each logs `mail provider failed`, which `email.tf`'s WARNING alert matches.
 **Also (code review, 2026-10-24):** the key `trial:<userId>:<stage>` ignores the trial start, so an operator who restarts a trial (`setTrialStart`) within 30 days of a stage's mail gets no repeat of that stage; a send the mailer recorded UNCERTAIN (a timeout Resend actually accepted) can go out again on the next day's run; under sustained overload the oldest-first order drops the newest trials (the 3-day ending-soon window) first.
 **Fix**: Add the job to `monitoring.tf`'s Scheduler alert; treat a `rejected` trial send as final (or suppress the address); put the trial start in the key if trials are ever restarted.
+
+### TD-224: Typo and one-off vendors stay in the typeahead (no vendor page, merge or delete)
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A17)
+**Added**: 2026-10-24
+**Priority**: Low (suggestions only; saving still matches exactly)
+**Impact**: Every typed vendor is saved, so "Supr Deal" next to "Super Deal" both show up as suggestions, and an expense keeps whichever it was saved under.
+**Fix**: A vendors page per profile: rename, merge (re-point expenses and names), delete unused.
+
+### TD-225: The vendor typeahead's fuzzy matches only see the 50 most recently used vendors
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A16)
+**Added**: 2026-10-24
+**Priority**: Low (prefix and contains hits come from SQL across all names)
+**Impact**: A near-miss spelling of a vendor not used recently isn't suggested in a profile with more than 50 vendors.
+**Fix**: A trigram index (`pg_trgm`) on `vendor_names.nameKey` and a similarity prefilter in SQL.
 
 ### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
 **Status**: Open

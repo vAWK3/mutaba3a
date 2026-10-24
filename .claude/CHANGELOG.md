@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-182)
+## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-184)
 
 **Why:** ADR-160 D3's trial runs out whether or not the person opens the portal. Someone who never signs in got no warning before losing write access or before the lock.
 
@@ -41,10 +41,37 @@
 - Terraform `google_cloud_scheduler_job.trial_mail`, daily 10:00 Asia/Jerusalem, only with `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled`; `tests/trial_mail.tftest.hcl`.
 
 ### Changed
-- API `1.61.0-mut419`; `src/hosted/api/schema.d.ts` regenerated.
+- API `1.63.0-mut419`; `src/hosted/api/schema.d.ts` regenerated.
 
 ---
 
+## [Unreleased] - 2026-10-24 — Vendors are remembered per profile and suggested as you type (MUT-254, ADR-183)
+
+### Added
+- `vendors` and `vendor_names` tables and `expenses.vendorId` (migration `20261024190000_mut254_vendors`, additive). Every expense writer (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) links the typed vendor: exact match on the registration number, then the normalised name or an alias (Arabic letter forms, diacritics, punctuation and legal suffixes folded); a new name creates the vendor. Optional `vendorDetails { registrationNo, phone, email }` help the match and fill what a vendor lacks.
+- `GET /v1/vendors?q=&limit=`: the session-only typeahead (prefix, contains, then near-miss spellings; most recently used when empty). Malafat's key is refused.
+- A vendor remembers its last category (never the automatic Other) only after a write succeeded.
+- `npm run backfill:vendors` (`--dry`), also run by post-roll on every deploy.
+- **Portal:** the expense drawer's Vendor field suggests saved vendors, keeps typed text as a new one, and prefills the vendor's last category into an empty Category. en/ar. QA `portal.expenses.vendor-typeahead`.
+
+### Changed
+- `Expense` gains `vendorId`. Local-mode snapshot format 6 (vendors maps; 5 → 6 migration), records export carries vendors and names. API `1.62.0-mut254`.
+
+### Files
+- `server/prisma/{schema.prisma,migrations/20261024190000_mut254_vendors}`, `server/src/vendors/keys.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/expenses/compose.ts`, `server/src/routes/{expenses,inbox,receipts,vendors,portal-routes}.ts`, `server/src/scripts/{backfill-vendors,post-roll}.ts`, `src/hosted/components/{VendorPicker,ExpenseDrawer}.tsx`, `src/hosted/local/migrations/index.ts`, `qa/support/portalApi.ts`.
+
+---
+
+## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
+
+### Fixed
+- The MUT-44 receipt completion (`POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete`) checks the 10-receipt cap and marks the receipt READY under the expense row lock (`expenseReceipts.completeOnExpense`, memory and Prisma), the lock MUT-389's filing takes. Two completions, or a completion and a filing, at 9 now end at exactly 10; the loser gets 422 `TOO_MANY_RECEIPTS` and keeps its state. Same routes, same answers; no migration, no API change.
+
+### Changed
+- ADR-167 "Extended by MUT-389": the known gap is resolved; the lock order and the PENDING `expenseId` invariant are written down. Filing, completion and expense delete share one 15 s transaction budget, and the expense lock sets `lock_timeout` 8 s so a pathological wait frees its connection instead of hanging (it still answers as an error, as before: no new response codes). The forced-overlap helpers moved to `repositories/__tests__/expense-lock-harness.ts` and count queued sessions transitively.
+
+### Files
+- `server/src/repositories/{ports,prisma,memory}.ts`, `server/src/auth/store-guard.ts`, `server/src/routes/expenses.ts`, `.claude/DECISIONS.md`; tests `store-contract-receipts.ts`, `store-prisma-receipt-complete-lock.test.ts`, `store-prisma-receipt-file-lock.test.ts`, `expense-lock-harness.ts`, `routes-expenses.test.ts`.
 ## [Unreleased] - 2026-10-24 — The lapse gate: read-only and locked accounts on the server and the portal (MUT-361, ADR-181)
 
 **Why:** ADR-160 D3 makes the trial real only if it ends: 14 days free, then read-only with export, then locked from day 30 (Subscribe and Download my records), nothing deleted; a payer who lapses stays read-only for good. `/v1/me` reported these states, but nothing enforced them.

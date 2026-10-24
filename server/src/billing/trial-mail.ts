@@ -8,7 +8,7 @@ import { entitlementsFor, memberProfilesForBilling } from './coverage.js';
 import { trialTimelineOf, TRIAL_DAYS, TRIAL_LOCK_DAYS, type Entitlement } from './entitlement.js';
 
 /**
- * MUT-419 (ADR-160 D3, ADR-182): the trial reminders. Once a day (Cloud Scheduler, `POST /jobs/v1/billing/trial-mail`,
+ * MUT-419 (ADR-160 D3, ADR-184): the trial reminders. Once a day (Cloud Scheduler, `POST /jobs/v1/billing/trial-mail`,
  * or the operator's `npm --prefix server run billing:trial-mail`) every person in days 11–30 of an unpaid trial gets
  * the mail for the stage they are in now:
  *

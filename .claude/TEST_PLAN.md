@@ -3615,7 +3615,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
-## MUT-419 — Trial reminder mails (2026-10-24, ADR-182)
+## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
 
 | Layer | Tests | Command |
 |---|---|---|
@@ -3645,3 +3645,25 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Server routes | `__tests__/routes-dev-attachments.test.ts`: expense receipt and library receipt start → PUT → complete → download same bytes on a frozen clock; complete before bytes and an oversized PUT; expiry on the app clock; the probe; not mounted without the driver; never the portal fallback | same |
 | Config | `__tests__/config.test.ts`: default dir under server/, local in development/test, refused in production and staging, local + bucket, gcs without bucket | same |
 | Release-QA (phone) | `ios.privacy.receipt-cleanup` without its stand-in, asserting READY and the downloaded bytes (lands after MUT-124); Flutter `qa.config.mjs` checks `GET /dev/attachments` | `release-qa release --only ios.privacy.receipt-cleanup --wait` (mutaba3a-flutter) |
+
+## MUT-397 — receipt completion under the expense lock (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Store contract | `store-contract-receipts.ts` `completeOnExpense`: completes, already_ready, receipt_not_found (other expense, deleted), expense_not_found (other profile, missing, deleted with unlink and remove), cap with pending uploads not counted, two concurrent completions (Prisma) | `npm --prefix server test` + `test:db` |
+| Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
+| Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |
+
+## MUT-254 — vendors (2026-10-24, ADR-183)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `vendors/__tests__/keys.test.ts`: case, spacing, ASCII and Arabic punctuation, Arabic letter forms, tashkeel/tatweel, legal suffixes (Latin, Hebrew, Arabic), leading "the" only, never empty, registration digits (Arabic-Indic, Extended), scorer order | `npm --prefix server test` |
+| Store contract | `store-contract-vendors.ts` (memory + Prisma): one vendor per name however written, per profile; Arabic folding; blank → none; number first with alias; no merge; fill never overwrites; concurrent first sightings → one; touch (Other, other profile's category, null, no version bump); type change clears defaults; search ranking and recent; expense link through update | `test` + `test:db` |
+| Prisma | `store-prisma-vendor-lock-order.test.ts` (touch waits on the category before the vendor row); `store-records-export-parity.test.ts` (vendors, vendorNames) | `test:db` (private DB) |
+| Routes | `routes-vendors.test.ts`: four writers link, alias via vendorDetails, PATCH re-link/unlink/leave, refused writes move no default, Other skipped, typeahead in ar/he/Latin, recent, isolation, limit, Malafat's key 403 | `npm --prefix server test` |
+| Backfill | `scripts/__tests__/backfill-vendors.test.ts`: --dry writes nothing; oldest-first canonical name, last-used, default not Other, no version bump, idempotent; re-link and unlink of old-revision rows | `test:db` |
+| Local mode | `migrations.test.ts` 5 → 6, `format-fingerprint.test.ts` (vendors, vendorNames, exps.vendorId) | `npx vitest run src/hosted/local` |
+| Portal | `VendorPicker.test.tsx` (recent, free text kept on Enter, alias hint, Arabic q); `ExpenseDrawer.test.tsx` (prefill only into an empty category) | `npx vitest run src/hosted` |
+| Release-QA | `portal.expenses.vendor-typeahead` (new vendor kept, suggestion, prefill, POST body); `portal.expenses.create`, `.edit-receipts` still green | `release-qa release --only portal.expenses` |
+

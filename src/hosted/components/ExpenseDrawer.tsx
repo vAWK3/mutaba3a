@@ -12,6 +12,7 @@ import { expenseKey, useCreateExpense, useDeleteExpense, useExpense, useExpenseC
 import { useToast } from './Toast';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ClientPicker } from './ClientPicker';
+import { VendorPicker } from './VendorPicker';
 import { ProjectPicker } from './ProjectPicker';
 import { useMatterCascade } from './useMatterCascade';
 import { usePendingPicks } from './usePendingPicks';
@@ -29,9 +30,8 @@ import { InGroupsLine } from './groups/InGroupsLine';
 /**
  * The hosted portal's expense capture (MUT-44). Builds on
  * `components/expenses/ExpenseFormFields` — amount/currency/date/title/
- * category/notes — with its own vendor (plain text; no server-side vendor
- * directory exists for hosted profiles), client and project pickers
- * (read-only directories, no create-new), and its own CreateExpense/
+ * category/notes — with its own vendor field (free text with the profile's
+ * vendors as suggestions, MUT-254), client and project pickers, and its own CreateExpense/
  * UpdateExpense/DeleteExpense wiring. See mut-44-expense-capture.md §3/§6a.
  */
 
@@ -107,7 +107,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     resolver: zodResolver(hostedExpenseSchema),
     defaultValues: emptyValues(timezone),
   });
-  const { control, handleSubmit, reset, setError, formState } = form;
+  const { control, handleSubmit, reset, setError, formState, getValues, setValue } = form;
   const [selectedClientId, selectedCurrency] = useWatch({ control, name: ['clientId', 'currency'] });
   const clientFlash = useMatterCascade(form, profileId, 'clientId');
   const picks = usePendingPicks();
@@ -276,12 +276,19 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                   name="vendor"
                   control={control}
                   render={({ field }) => (
-                    <input
+                    <VendorPicker
                       id="hosted-expense-vendor"
-                      type="text"
-                      className="input"
+                      profileId={profileId}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      onPick={(vendor) => {
+                        // The vendor's last category, only into an empty field and never an archived one (MUT-254).
+                        const category = categories?.find((c) => c.id === vendor.lastCategoryId);
+                        if (!getValues('categoryId') && category && !category.archived) setValue('categoryId', category.id, { shouldDirty: true });
+                      }}
                       placeholder={t('hosted.expenses.drawer.vendorPlaceholder')}
-                      {...field}
+                      disabled={readOnly}
                     />
                   )}
                 />

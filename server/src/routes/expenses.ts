@@ -7,7 +7,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
 import { computeStreak, loggedAtOf } from '../expenses/streak.js';
@@ -183,9 +183,11 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { organization, user } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const input = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      const prepared = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      const input = await withResolvedVendor(store, organization.id, prepared, body.vendorDetails, now);
       // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
       const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));
+      await touchExpenseVendor(store, expense, now);
       await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn: input.occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       return c.json(serializeExpense(expense), 201);
     },
@@ -211,10 +213,13 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       // amount is parsed in the row's current currency, which a newer version may have changed (JOD → USD would make a
       // stale "13.456" look like a bad amount). The store's version check below still covers a write after this read.
       if (existing.version !== c.get('expectedVersion')) throw versionMismatch(existing.version);
-      const patch = expensePatch(existing, todayFor(organization, c.get('now')()), body);
+      const now = c.get('now')();
+      const checked = expensePatch(existing, todayFor(organization, now), body);
       const links = requestedLinks(existing, body);
-      if (links) Object.assign(patch, await resolveLinks(store, organization.id, links));
-      if (patch.categoryId && patch.categoryId !== existing.categoryId) await assertCategoryChoosable(store, organization.id, patch.categoryId);
+      if (links) Object.assign(checked, await resolveLinks(store, organization.id, links));
+      if (checked.categoryId && checked.categoryId !== existing.categoryId) await assertCategoryChoosable(store, organization.id, checked.categoryId);
+      // MUT-254: last, after every check (A2); only a sent `vendor` re-links.
+      const patch = await withResolvedVendor(store, organization.id, checked, body.vendorDetails, now);
       // MUT-272: a currency move rewrites the amount too, so the audit keeps both sides of it. Built before the
       // write, so nothing that can throw runs after it commits.
       const money = (minor: bigint, currency: string) => formatMoney({ minor, currency: currency as Currency });
@@ -222,9 +227,10 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         patch.currency !== undefined && patch.currency !== existing.currency
           ? { currency: { from: existing.currency, to: patch.currency }, amount: { from: money(existing.amountMinor, existing.currency), to: money(patch.amountMinor!, patch.currency) } }
           : {};
-      const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, c.get('now')()));
+      const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, now));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
+      if (body.vendor !== undefined || body.categoryId !== undefined) await touchExpenseVendor(store, result.record, now);
       await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version, ...currencyMove });
       return c.json(serializeExpense(result.record), 200);
     },
@@ -306,12 +312,15 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { expenseId, receiptId } = c.req.valid('param');
       const receipt = await mustGetReceipt(organization.id, expenseId, receiptId);
       if (receipt.status === 'READY') return c.json(serializeExpenseReceipt(receipt), 200);
+      // Storage first, outside any transaction: no network I/O under a database lock.
       await verifyUploadedObject(s, receipt);
-      await assertRoomForReceipt(organization.id, expenseId);
-      const ready = await store.expenseReceipts.complete(organization.id, receipt.id, c.get('now')());
-      if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
-      await audit(c, 'expense_receipt.added', 'expense_receipt', ready.id, { expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes });
-      return c.json(serializeExpenseReceipt(ready), 200);
+      // MUT-397: the room check and the flip to READY happen under the expense lock, the same one filing takes.
+      const result = await store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE }, c.get('now')());
+      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
+      if (result.kind === 'receipt_not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
+      if (result.kind === 'too_many_receipts') throw tooManyReceipts();
+      if (result.kind === 'completed') await audit(c, 'expense_receipt.added', 'expense_receipt', result.receipt.id, { expenseId, filename: result.receipt.filename, sizeBytes: result.receipt.sizeBytes });
+      return c.json(serializeExpenseReceipt(result.receipt), 200);
     },
   );
 
@@ -392,6 +401,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     },
   );
 
+  /** Advisory, for the upload start only: completion re-checks under the expense lock (completeOnExpense, MUT-397). */
   async function assertRoomForReceipt(organizationId: string, expenseId: string): Promise<void> {
     if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
   }
