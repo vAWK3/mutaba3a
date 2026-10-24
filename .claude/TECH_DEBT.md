@@ -44,7 +44,7 @@
 
 ### TD-229: The totals gate checks only the rows the mapper carried
 **Status**: Open
-**Ticket**: MUT-291 (E4, /qa-reconcile review)
+**Ticket**: MUT-291 (E4, /qa-reconcile review); fix in MUT-428
 **Added**: 2026-10-24
 **Priority**: Medium (no silent loss: every dropped row is listed by kind and count, but not by amount)
 **Impact**: E4 proves the replay made exactly what the mapper sent. Rows the mapper or the rules left out are listed under Not carried with a count, never with an amount. Examples: a currency MTB3A doesn't support, a business over the cap, an archived entry, a settle the date floor refused. Someone can't see that, say, ₪1,200 of what was paid didn't come.

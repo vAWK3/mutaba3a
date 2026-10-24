@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import { renderPortal, stubApi } from '../../../__tests__/harness';
 import { LocalRecordsFileRefused, type CarryOverSummary, type PendingRestore } from '../../../session/localBackendContract';
-import { setMode } from '../../../session/mode';
+import { MODE_KEY, setMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 
 /**
@@ -179,6 +179,22 @@ describe('the new address: /carry-over/receive', () => {
     const types = opener.posted.map((m) => (m.data as { type: string }).type);
     expect(types).not.toContain('mtb3a.carry-over.done');
     expect(types.at(-1)).toBe('mtb3a.carry-over.failed');
+  });
+
+  it('stays on the summary when another tab of the new address changes the mode (the old tab landing there)', async () => {
+    backend.prepareCarryOver.mockResolvedValue(pending());
+    const { opener, router } = openFrom('web');
+    await waitFor(() => expect(opener.posted).toHaveLength(1));
+    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    expect(await screen.findByRole('button', { name: 'Save on this device' })).toBeInTheDocument();
+    act(() => {
+      const oldValue = localStorage.getItem(MODE_KEY);
+      localStorage.setItem(MODE_KEY, 'remote');
+      window.dispatchEvent(new StorageEvent('storage', { key: MODE_KEY, oldValue, newValue: 'remote' }));
+    });
+    await act(async () => undefined);
+    expect(router.state.location.pathname).toBe('/carry-over/receive');
+    expect(screen.getByRole('button', { name: 'Save on this device' })).toBeInTheDocument();
   });
 
   it('signed in, says the records go to this browser\'s signed-out space (E3)', async () => {

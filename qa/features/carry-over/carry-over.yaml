@@ -10,6 +10,8 @@ paths:
   - src/hosted/local/carryOver/**
   - src/hosted/pages/carry-over/CarryOverDetails.tsx
   - src/hosted/pages/carry-over/ReceivePage.tsx
+  # Another tab's mode change must leave the carry-over pages where they are.
+  - src/hosted/session/SessionBridge.tsx
 features:
   - id: free-app
     title: The old web app's records arrive on the new address with the same totals, and the summary lists what didn't come

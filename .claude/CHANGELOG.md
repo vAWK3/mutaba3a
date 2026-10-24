@@ -53,6 +53,7 @@
   - A receipt refused at complete is deleted again.
   - A settle's id comes from `payment.id`.
   - The records file's summary lists missing receipt files.
+  - Another tab's mode change no longer pulls the receiver to Overview (`SessionBridge.tsx`). The old tab lands on the new address right after `done`; release-QA caught it.
 - **Speed and layout:**
   - Payment records, receipts and project currencies are grouped once (they were O(n×m)).
   - One date formatter per timezone.
