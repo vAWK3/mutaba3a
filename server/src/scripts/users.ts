@@ -23,6 +23,7 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
  *   npm run signups:review                                      (MUT-367: self-service signups waiting for review)
  *   npm run signups:review -- --approve rana@gmail.com          (opens the account, starts its trial, mails them)
  *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
+ *   npm run billing:trial-mail [-- --dry-run]                   (MUT-419: today's trial reminders, or who they would mail)
  *
  * MUT-300 (ADR-099): `firm-enable` turns firm features on in place. An owned
  * Business profile stays its owner's, who becomes OWNER; an operator firm
@@ -48,7 +49,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'signup-reviews'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -80,6 +81,9 @@ const USAGE = [
   '  billing-reconcile  (MUT-360: re-read every Stripe subscription now, as the nightly job does)',
   '  billing-status   --email <email> | --user-id <uuid>   (their Stripe mirror, and each profile with and without grants)',
   '  billing-uncovered  (MUT-361: profiles the lapse gate holds read-only or locked, with their active people; run before turning BILLING_GATE on)',
+  '  billing-trial-mail [--dry-run]   (MUT-419: npm run billing:trial-mail; the daily job does the same)',
+  '          mails each person in days 11-30 of an unpaid trial the reminder for their stage, once per stage;',
+  '          --dry-run: lists who would get what (and why others are skipped), and mails nothing',
   '  signup-reviews [--approve <email> | --decline <email>]   (MUT-367: npm run signups:review)',
   '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
   '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
@@ -128,6 +132,7 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         active: { type: 'boolean' },
         approve: { type: 'string' },
         decline: { type: 'string' },
+        'dry-run': { type: 'boolean' },
       },
     }).values;
   } catch (e) {
@@ -371,6 +376,17 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     }
   },
   // MUT-361 (comment 12278): before the gate goes live, nobody active may be held by it by mistake.
+  'billing-trial-mail': async ({ client, flag, out }) => {
+    const dryRun = flag('dry-run');
+    type Row = { email: string; stage: string; action: 'send' | 'skip'; skip: string | null; outcome: string | null };
+    type Summary = { due: number; sent: number; duplicate: number; notSent: number; incomplete: boolean; skipped: { paying: number; covered: number; otherProfiles: number; suppressed: number; gateOff: number } };
+    const { summary: s, rows } = await client.call<{ summary: Summary; rows: Row[] }>('POST', '/admin/v1/billing/trial-mail', { dryRun });
+    for (const r of rows) out(`${r.action === 'skip' ? `skip (${r.skip})` : dryRun ? 'would send' : r.outcome}  ${r.stage}  ${r.email}`);
+    const k = s.skipped;
+    const skipped = `skipped ${k.paying} paying, ${k.covered} covered, ${k.otherProfiles} with other profiles, ${k.suppressed} suppressed, ${k.gateOff} gate off.`;
+    if (s.incomplete) out('Stopped at its time budget; run it again to continue.');
+    out(dryRun ? `Dry run: ${s.due} would be mailed; ${skipped}` : `Sent ${s.sent}, already sent ${s.duplicate}, not sent ${s.notSent}; ${skipped}`);
+  },
   'billing-uncovered': async ({ client, out }) => {
     const { profiles } = await client.call<{ profiles: { organizationId: string; name: string; billing: { state: string; source: string; until: string | null }; people: { userId: string; email: string }[] }[] }>('GET', '/admin/v1/billing/uncovered');
     if (profiles.length === 0) return out('Nobody active is held read-only or locked.');
