@@ -473,6 +473,19 @@ describe('GET /v1/self-service (MUT-368, D1)', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
   });
+
+  it('MUT-369 (D2): any site may read the doors, never with credentials, so the landing can ask', async () => {
+    const res = await harness({ mailsLinks: true }).app.request('/v1/self-service', { headers: { origin: 'https://landing.example' } });
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+    expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+  });
+
+  it('MUT-369 (D2): only the doors are readable cross-site; signup and recovery stay same-origin', async () => {
+    const h = harness({ signupEnabled: true, mailsLinks: true });
+    for (const res of [await signup(h, address()), await recover(h, address())]) {
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
+    }
+  });
 });
 
 describe('a dead link names its purpose to its holder (MUT-368, D2)', () => {
