@@ -3706,7 +3706,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Native crashes** skip the Dart scrubber. A project-level Advanced Data Scrubbing rule on `mutaba3a-flutter` is their second layer (INFRA §1).
 - **ApiErrors.** Only `serverError` with status 0 (an unreadable reply) or 5xx is reported. Repositories catch errors into `Result`, so unreadable replies are reported explicitly at each site, by endpoint and error type only, never the error's text.
 - **User.** The account's internal id. The store answers therefore say crash data is **linked to identity** (App Store) and add **User IDs** (Play).
-- **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395).
+- **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395). Superseded by amendment 13.
 
 **Amendment 11 (the portal, MUT-149, 2026-10-23)**: the hosted portal reports to `mutaba3a-web`. Design and Basel's answers: `.claude/designs/mut-149-portal-sentry.md` (eng D1–D6, design D3–D8).
 - **Signed in only.** `src/hosted/observability/errorReporting.ts` is in the entry and imports no SDK. It loads `portalSentry.ts`, a lazy chunk and the one portal file that imports `@sentry/browser`, only in `remote` mode (ADR-097 §10). Until the chunk arrives it holds up to 10 window errors, rejections and boundary reports, then replays them (eng R1); signing out stops the SDK and drops them. A build without `MUTABA3A_SENTRY_DSN` compiles the chunk out. Every event is also dropped at send time unless the mode, read live from storage, is still `remote` (review: another tab's sign-out may not reach the gate when a crash screen has replaced the router).
@@ -3733,6 +3733,14 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Bundle guard on Netlify.** `netlify.toml` runs `check-bundles --dist dist-web` after the build (TD-084 for the landing). dist-web may carry the SDK only in `vendor-sentry-*` / `landingSentry-*`, never from the entry graph, never precached (`SENTRY_PRECACHE_IGNORES`), and the ingest host and `docs.sentry.io` are allowed in those chunks only (`PATTERN_SCOPED_ORIGINS`, eng O1).
 - **No landing CSP.** The landing serves none (checked live 2026-10-24), so MUT-150's CSP criterion is N/A; a landing CSP would be its own ticket.
 - **Privacy copy.** "Our website sends a report when one of its pages crashes or hits an error…" (eng D8: not "fails to load", which it mostly can't report).
+
+**Amendment 13 (the iOS extensions, MUT-395, 2026-10-24)**: the Share Extension, widgets and Siri intents report to `mutaba3a-flutter`. Design and Basel's answers: mutaba3a-flutter `.claude/designs/mut-395-extension-sentry.md` (D1–D6).
+- **Own SDK, same version.** sentry-cocoa 8.58.4 (the app's pod version) over SPM, the static `Sentry` product, through the local package `ios/CaptureReporting`, linked into the three extensions and never Runner (D1).
+- **Same contract, in Swift.** `CaptureScrub` is a line-for-line port of the app's `event_scrubber.dart`, run by `swift test` against the same pinned contract copy (all 11 fixtures, parity, sha256). `beforeSend` clears the user (D3), tags `surface=capture-app` and `route=share-extension|widgets|intents`, scrubs, and rebuilds the event through `SentryEventDecoder` (SPI); a scrub that can't complete sends the MUT-151 D14 minimal report, never the original.
+- **Off by default.** A Run Script phase writes `SentryDSN` into each extension's Info.plist only when the build carries `MUTABA3A_SENTRY_DSN` (Flutter's DART_DEFINES): debug and `SENTRY=off` builds report nothing. Sessions, app-hang, watchdog, performance and network tracking are off; the crash handler is on, and a crash is sent on that extension's next start.
+- **Store and privacy.** Each extension's privacy manifest declares crash and diagnostic data, not linked. The store answers (MUT-151) already declare crash data, and the privacy sentence "The iPhone and Android apps send a report when the app crashes…" covers the app's own extensions, so no copy changes.
+- **Symbols.** The iOS lane uploads gym's dSYM zip (the extensions' dSYMs) after the existing upload; first exercised on MUT-413's release.
+- **Open.** The widget memory budget (D2: under 20 MB peak with Sentry on, else widgets are excluded) and the forced-crash proof per extension (D6) wait for a simulator session with Basel's taps.
 
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
