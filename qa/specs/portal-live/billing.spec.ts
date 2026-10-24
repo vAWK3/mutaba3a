@@ -181,7 +181,8 @@ test('Billing in Arabic on a 375 px phone', { tag: '@portal-live.billing.rtl-375
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
   await step('Open the Subscribe step and choose Israel, for a business', async () => {
-    await page.getByRole('button', { name: 'اشترك' }).click();
+    // MUT-361: a provisioned person with no grant is read-only, so the page's banner has its own Subscribe too.
+    await page.getByRole('dialog', { name: 'الاشتراك' }).getByRole('button', { name: 'اشترك' }).click();
     const form = page.getByRole('dialog', { name: 'الاشتراك في المستقل' });
     await form.getByRole('combobox', { name: 'بلد عنوان الفوترة' }).selectOption('IL');
     await form.getByRole('radio', { name: /لعمل تجاري/ }).check();
