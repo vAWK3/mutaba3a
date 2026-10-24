@@ -158,7 +158,7 @@ const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disa
  * still 404 as JSON, never silently serve the SPA shell to an Apple/Google
  * crawler.
  */
-const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/', '/dev/'];
+const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/', '/dev/attachments/'];
 const PORTAL_EXCLUDED_EXACT = new Set([
   '/health',
   '/ready',

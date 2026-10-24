@@ -6,10 +6,9 @@ import { shutdownAndFlush } from './observability/reporter.js';
 import { apiRelease, createSentryReporter, serverPackageVersion } from './observability/sentry-node.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 import { PrismaLedgerStore } from './repositories/prisma.js';
-import { createHmac } from 'node:crypto';
 import { GcsAttachmentStorage } from './attachments/storage.js';
 import { LocalAttachmentStorage, requestOrigin } from './attachments/local-storage.js';
-import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
+import { SIGN_IN_POLICY, SignInThrottle, sessionDigest } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
 import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
@@ -121,7 +120,7 @@ const localAttachments =
   config.ATTACHMENTS_DRIVER === 'local'
     ? new LocalAttachmentStorage({
         dir: config.ATTACHMENTS_DIR,
-        secret: createHmac('sha256', config.SESSION_TOKEN_PEPPER).update('mut-396-local-attachments-v1').digest('hex'),
+        secret: sessionDigest(config.SESSION_TOKEN_PEPPER, 'mut-396-local-attachments-v1'),
         origin: requestOrigin,
       })
     : null;

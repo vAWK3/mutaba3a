@@ -40,7 +40,8 @@ export function devAttachmentRoutes(storage: LocalAttachmentStorage): Hono<AppEn
 
   app.get(`${LOCAL_ATTACHMENTS_PATH}/:token`, async (c) => {
     try {
-      const file = await storage.openDownload(c.req.param('token'), c.get('now')());
+      // Hono routes HEAD here too: answer from the file's handle without opening a stream.
+      const file = await storage.openDownload(c.req.param('token'), c.get('now')(), { withBody: c.req.method !== 'HEAD' });
       return new Response(file.body, {
         status: 200,
         headers: {

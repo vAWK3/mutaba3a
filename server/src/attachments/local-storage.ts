@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -131,13 +131,26 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     }
   }
 
-  /** GET /dev/attachments/:token: the stored bytes, the token's type and the download filename. */
-  async openDownload(token: string, now: Date): Promise<{ body: ReadableStream<Uint8Array>; mimeType: string; contentDisposition: string; sizeBytes: number }> {
+  /**
+   * GET /dev/attachments/:token: the stored bytes, the token's type and the download filename. The file is opened
+   * first and its size read from that handle, so a remove or re-upload in between can't send a 200 with the wrong
+   * length; the stream owns the handle from then on. `withBody: false` (HEAD) answers from the handle and closes it.
+   */
+  async openDownload(token: string, now: Date, options: { withBody?: boolean } = {}): Promise<{ body: ReadableStream<Uint8Array> | null; mimeType: string; contentDisposition: string; sizeBytes: number }> {
     const claims = this.verify(token, 'get', now);
-    const object = await this.head(claims.k);
-    const body = object ? await this.read(claims.k) : null;
-    if (!object || !body) throw new LocalStorageError(404, 'No such object');
-    return { body, mimeType: claims.m, contentDisposition: contentDisposition(claims.f), sizeBytes: object.sizeBytes };
+    const handle = await open(this.pathOf(claims.k), 'r').catch(() => null);
+    if (!handle) throw new LocalStorageError(404, 'No such object');
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      await handle.close();
+      throw new LocalStorageError(404, 'No such object');
+    }
+    const meta = { mimeType: claims.m, contentDisposition: contentDisposition(claims.f), sizeBytes: info.size };
+    if (options.withBody === false) {
+      await handle.close();
+      return { body: null, ...meta };
+    }
+    return { body: Readable.toWeb(handle.createReadStream()) as ReadableStream<Uint8Array>, ...meta };
   }
 
   private url(claims: Claims): string {

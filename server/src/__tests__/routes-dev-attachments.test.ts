@@ -122,3 +122,17 @@ describe('local receipt storage end to end (MUT-396 AC1)', () => {
     expect(await res.text()).toContain('Malformed');
   });
 });
+
+describe('local downloads (MUT-396 review)', () => {
+  it('HEAD answers the headers without a body', async () => {
+    const { app, as } = await setup();
+    const started = await read(await app.request('/v1/receipts/uploads', json({ filename: 'r.png', mimeType: 'image/png', sizeBytes: PNG.length }, { ...as, ...idem() })));
+    await put(app, started.upload);
+    await app.request(`/v1/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as });
+    const download = await read(await app.request(`/v1/receipts/${started.receipt.id}/download`, { headers: as }));
+    const res = await app.request(new URL(download.url).pathname, { method: 'HEAD' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-length')).toBe(String(PNG.length));
+    expect((await res.arrayBuffer()).byteLength).toBe(0);
+  });
+});
