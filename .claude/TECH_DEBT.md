@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-221: CSV-imported JOD amounts can't be told apart, so the carry-over only warns
+**Status**: Open
+**Ticket**: MUT-291 (plan §3.3, TD-112)
+**Added**: 2026-10-24
+**Priority**: Low (JOD only, CSV imports only)
+**Impact**: The free app's CSV import stored JOD income and expenses as `parseFloat × 100`, 10× too small (TD-112), and nothing on the row marks a CSV import. The carry-over carries them as they are and shows one warning with the count.
+**Fix**: None possible from the data. A person who knows can correct them after the carry-over.
+
+### TD-222: After a carry-over, the old web app still accepts edits
+**Status**: Open
+**Ticket**: MUT-291 (D1)
+**Added**: 2026-10-24
+**Priority**: Low (the banner says changes won't follow; MUT-292 retires the app)
+**Impact**: Someone who carries over and keeps using the old app (D1 allows it) makes records that only reach the new address if they carry over again, which replaces what's there.
+**Fix**: MUT-292 retires the app at least 90 days after the bridge ships.
+
+### TD-223: The carry-over QA app can reload a page once on a cold dependency cache
+**Status**: Open
+**Ticket**: MUT-291 (QA)
+**Added**: 2026-10-24
+**Priority**: Low (QA only; a retry passes)
+**Impact**: Each of the three dev servers (qa/support/carry-over.vite.ts) has its own Vite cache, but a cold cache still optimises lazily imported dependencies on first use and reloads the page once. The project's Playwright warm-up is off, so a first run in a fresh QA worktree can need its retry.
+**Fix**: Pre-bundle the lazy local chunk's dependencies (`optimizeDeps.include`) in the carry-over wrapper, or turn the warm-up on for this app.
+
 ### TD-220: "For a business" proves nothing where Stripe has no tax-ID type (outside IL/JO)
 **Status**: Open
 **Ticket**: MUT-418 (D10, code review)

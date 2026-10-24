@@ -282,12 +282,26 @@ Commands: `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run buil
 
 - **TD-221:** CSV-imported JOD rows can't be told apart (TD-112), so the carry-over only warns.
 - **TD-222:** after a carry-over the old app still accepts edits. The banner says they won't follow, but nothing stops it. MUT-292 ends this.
+- **TD-223:** the carry-over QA app can reload a page once on a cold dependency cache (§12).
 
 ## 10. Cost, privacy, i18n
 
 - **Cost.** No server work and no new network calls. The lazy local chunk already loads on the receiver. A free-app backup with receipts is held in memory once on each side. There's no telemetry signed out (ADR-097 §10), so no counts.
 - **Privacy.** Records go browser-to-browser on one device: no server, no URL parameters. The receiver validates every record (zod, then the server's own routes) before showing anything, and writes only on the person's confirm.
 - **i18n.** New keys exist in both apps' `ar` and `en` dictionaries, Arabic first, with ICU plurals for the counts. Amounts are plain `<bdi>` (ADR-101). RTL layouts are checked in QA at 375 px.
+
+## Build notes (2026-10-24, `feature/mut-291-carry-over`)
+
+Built to §3–§11, with these departures, each found while building:
+
+- **The protocol and `leaveTo` live in `src/lib/carryOver/`, not `src/hosted/carryOver/`.** The free app and the portal both import them, and `src/lib` is the tree both may reach.
+- **Archived clients and projects arrive active, never archived.** Signed out, the archive routes answer `403 READ_ONLY_PROFILE` (probed). The summary lists them as changed (`client-archive-dropped`, `project-archive-dropped`), and there are no archive ops.
+- **The old app's done state shows what arrived** (the new address's counts), not both sides' figures side by side. The totals gate (E4) already holds them equal before anything is saved.
+- **The replay's in-page requests use `http://localhost`**, the loopback origin the portal bundle is already reviewed for; `http://local` failed `test:bundles`.
+- **The web dev server leaves the gate off** unless `MUTABA3A_CARRY_OVER` turns it on, so the app's own QA still opens the app. `off` turns it off on a build.
+- **QA's three dev servers each get their own Vite cache** (`qa/support/carry-over.vite.ts`). Sharing one, they reloaded each other's pages mid-test. TD-223 is now the cold-cache reload that remains (the hostname-trick TD was dropped by R6).
+- **T-P1:** 20,000 records in 4.3 s, heap +149 MB (Node). No Web Worker (R5).
+- **Not verified:** a real cross-host run, which is the operator's day-7 check (§6 step 3, `server/DEPLOYMENT.md` §5a step 6), and iOS standalone on a device (stubbed in QA).
 
 ## 11. Eng review (plan-eng-review, 2026-10-24, interactive)
 

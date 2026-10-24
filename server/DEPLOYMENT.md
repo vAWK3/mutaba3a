@@ -732,8 +732,17 @@ keep working only while it is claimed. Apple's CDN caches the AASA for up to abo
 
 ### Step 6: redirect the old hosts (`stage: "redirect"`)
 
-**Only after the carry-over (MUT-112/MUT-291, design §7) has shipped.** Before that, a
-redirect strands signed-out local-mode records on run.app.
+**Only after the carry-over (MUT-291, ADR-181) has shipped and been checked.** Before that, a
+redirect strands signed-out local-mode records on run.app. In order:
+
+1. `make release server`: ships the receiver (`/carry-over/receive` on the new host) and the old
+   host's `/carry-over` page. Both are inert until someone opens them.
+2. `make release web`: ships the free web app's carry-over screen. From now on, every visit to
+   `netlify.app/app` with records offers the move (MUT-291 D1).
+3. **Day-7 check (operator):** in one real browser holding free-app records, carry them to the
+   live new host and compare the summary's totals with the old app's own screens. Do the same
+   from run.app signed out, if you have local records there.
+4. Then this step.
 
 In `config/hosts.json`, set `"stage": "redirect"`, commit, then:
 
@@ -749,6 +758,9 @@ make release server
   browser on.
 - **Never redirected on run.app:** the API (`/v1/*`), `/admin/*`, the association files,
   `/health`, `/ready`, `/assets/*`, static files and writes.
+- **Then, in the next phone release (Flutter repo):** drop `MUTABA3A_LEGACY_LINK_HOST` (xcconfig,
+  entitlements, the Android manifest and `asset_statements`, the guard test). Not before: until the
+  redirect is live, run.app links still exist and the phone opens them.
 
 Check it:
 

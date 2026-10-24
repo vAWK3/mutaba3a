@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-181)
+
+**Why:** the free web app's records live in its own browser origin and the new address can't read them (MUT-284). Stage `redirect` needs the old address's `/carry-over` page. Plan, decisions D1–D10 and the eng review: `.claude/designs/mut-291-carry-over.md`.
+
+### Added
+- **The free web app's carry-over screen** (`src/pages/carryOver/`): from stage `live`, every visit offers Carry my records over, Download my records file, and Keep using the old app for now. An empty browser goes straight to the new address. Once carried, a banner says changes won't follow (`Settings.carriedOverAt`).
+- **`/carry-over/receive`** (portal) takes the old app's backup or the old address's records file. It shows counts, totals per currency, what changed and what didn't come, plus the JOD warning, and replaces after D3's confirm. **`/carry-over`** (portal, the old address) offers the move or goes straight on.
+- **Your data › Restore reads the old web app's backup file** (E5).
+- `src/hosted/local/carryOver/`: `parseFreeAppBackup`, `mapFreeAppBackup`, `replayCarryOver`, the totals gate (`freeAppTotals`, `snapshotTotals`), `prepareFromBackup`. Plus `src/lib/carryOver/protocol.ts`, `build.ts` and `leave.ts`.
+- Local backend: `prepareCarryOver`, `countRecordsOnThisDevice`, `PendingRestore.deviceRecordCount`/`carryOver`. `createLocalApp` takes `rateLimitPerMinute` (Infinity = none). Also `MemoryAttachmentStorage` and `datasetRepo.countRecords`.
+- Build: `__CARRY_OVER__` in both builds from `config/hosts.json`. It's off before stage `live` and in the web dev server; `MUTABA3A_CARRY_OVER` sets QA origins, or `off`.
+- Release QA: the `carry-over` app (three loopback origins), 7 features, 7 specs passing.
+
+### Technical
+- Tests:
+  - mapping (T-U1–T-U11), replay and the gate (T-U12, T-I2);
+  - the real free app's data carried and restored with equal totals (T-I1), twice (T-I5);
+  - the real local backend (T-I3, T-I4), the protocol (T-U13, T-U20, T-U21);
+  - both portal pages and the free app's gate (T-U15, T-U16, T-U23);
+  - no COOP (server and Netlify), the bundle rules over the carry-over code (T-U22);
+  - T-P1 timing: 20,000 records in 4.3 s.
+- `restoredHome` moves out of `YourDataDrawer` into `src/hosted/session/restoredHome.ts`.
+
 ## [Unreleased] - 2026-10-24 — The website's pages report errors to Sentry; the free web app never does (MUT-150, ADR-091 am.12)
 
 **Why:** epic MUT-146 wants every production error seen. The landing (`/`, `/download`, `/privacy`, `/terms`) shares `dist-web` with the local-first app, which promises no telemetry (ADR-024), so the website reports and the app provably doesn't.

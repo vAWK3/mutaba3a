@@ -4905,3 +4905,42 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
 - `/` keeps the drawer keys, so mails (MUT-419) and the lapse gate (MUT-361) can link `/?billing=true&step=subscribe`.
 - The privacy sentence for the new usage notes waits on Basel (TD-219); the Flutter contract copy lags (TD-218).
+
+## ADR-181: The Carry-Over Maps the Old Web App's Backup on the New Address, Replays It Through a Throwaway Local App, and Lands It Through Restore (MUT-291)
+
+**Status:** Accepted (2026-10-24, MUT-291). Owner decisions D1–D4 and D10, and eng review D1–D9, are Basel's (`.claude/designs/mut-291-carry-over.md` §4, §11). Builds on ADR-097 (local mode), ADR-155 (the staged domain move) and ADR-156/MUT-287 (the records file and Restore).
+
+**Context:** the free web app's records live in IndexedDB on `mutaba3a.netlify.app`, and the run.app portal's signed-out records on run.app. The new address can read neither. Stage `redirect` needs the run.app `/carry-over` page the server already sends visits to.
+
+**Decision:**
+1. **One receiver, two senders.** `/carry-over/receive` on the new address takes the free app's own backup (`serializeAllTables`) from the old web origin, or the old address's records file from the old portal origin. Each origin may send only its own kind.
+2. **The mapping runs on the receiving side (E1).** `LOCAL_RULES` forbid portal code in `dist-web`, so the old app sends only what it already makes. The mapping lives in `src/hosted/local/carryOver`, which MUT-292 keeps. Nothing in the portal says "Dexie" (R4).
+3. **A throwaway local app, then one Restore (E2).** The backup is mapped to ordered ops and replayed through `createLocalApp` over a fresh in-memory store:
+   - every server rule runs on every record;
+   - no rate limit (R1), and nothing persisted;
+   - a 4xx is listed with the API's reason, with its dependants;
+   - a 5xx aborts.
+
+   The snapshot and its receipt files then land with `applyRestore`, all or nothing.
+4. **A totals gate (E4, R3).** The free app's own rows that arrived must equal the replayed records per profile and currency, and outstanding must equal the organization summary. Otherwise nothing is offered.
+5. **The hand-off protocol** (`src/lib/carryOver/protocol.ts`):
+   - a popup opened from the click before any await (R2);
+   - origins baked from `config/hosts.json` (`__CARRY_OVER__`), never read from the URL;
+   - `event.origin` and `event.source` checked, no `'*'`;
+   - a 10 s ready timeout on the sender; a 20 s payload timeout and an opener-closed check on the receiver (R8);
+   - no COOP on either page, pinned by tests.
+6. **The file is the fallback, and a door of its own (E5).** Your data › Restore and the receive page both read the free app's backup file. An installed home-screen app leads with it (R7).
+7. **Owner rules:**
+   - D1: the old app offers the move on every visit, allows staying, and shows a banner once carried;
+   - D2: each business becomes a Business profile, at most five;
+   - D3: existing records are replaced after a warning, a download-first and a second confirm;
+   - D4: "No client" for Owed with no client, and a project is dropped on a currency mismatch;
+   - D10: signed in, the records go to the browser's signed-out space, and the page says so.
+
+**Alternatives considered:** mapping in the old app (refused by `LOCAL_RULES`); POSTs into the live local store (O(n²) saves, half-written on failure); merging snapshots; an iframe (`frame-ancestors 'none'`); a URL-carried payload (too large).
+
+**Consequences:**
+- The free app's production build gates `/app` from stage `live` on. Its dev server doesn't, unless `MUTABA3A_CARRY_OVER` says so; `off` turns it off on a build.
+- Archived clients and projects arrive active (signed out, the archive routes are read-only).
+- 20,000 records replay in 4.3 s in Node (T-P1), with no Web Worker.
+- The old app still accepts edits after a carry-over (TD-222), until MUT-292.
