@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.60.0-mut361
+  version: 1.61.0-mut419
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -522,6 +522,7 @@ components:
                 - CONFLICT
                 - OPERATION_IN_PROGRESS
                 - RECONCILE_RUNNING
+                - LINK_ORIGIN_LOOPBACK
                 - TERMS_VERSION_STALE
                 - SETUP_LINK_UNUSABLE
                 - VALIDATION_FAILED
@@ -7501,6 +7502,136 @@ components:
         - unlinked
         - errors
         - pruned
+    TrialMailSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        checked:
+          type: integer
+          description: People in a reminder window
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: Already mailed for this stage
+        notSent:
+          type: integer
+          description: "Due but not sent: mail off, capped, provider failure, refused or suppressed"
+        skipped:
+          type: object
+          properties:
+            paying:
+              type: integer
+            covered:
+              type: integer
+            otherProfiles:
+              type: integer
+            suppressed:
+              type: integer
+            gateOff:
+              type: integer
+          required:
+            - paying
+            - covered
+            - otherProfiles
+            - suppressed
+            - gateOff
+        incomplete:
+          type: boolean
+          description: The time budget ran out; the next run continues
+      required:
+        - dryRun
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - skipped
+        - incomplete
+    TrialMailRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/TrialMailSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrialMailRow"
+      required:
+        - summary
+        - rows
+    TrialMailRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        stage:
+          type: string
+          enum:
+            - ending-soon
+            - ended
+            - locking-soon
+        daysLeft:
+          type: integer
+          nullable: true
+          description: Whole days to the deadline the mail names, rounded up; null for `ended`
+        action:
+          type: string
+          enum:
+            - send
+            - skip
+        skip:
+          type: string
+          nullable: true
+          enum:
+            - paying
+            - covered
+            - other-profiles
+            - suppressed
+            - gate-off
+            - null
+        outcome:
+          type: string
+          nullable: true
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+            - null
+          description: The mailer's answer; null on a skip or a dry run
+      required:
+        - userId
+        - email
+        - locale
+        - stage
+        - daysLeft
+        - action
+        - skip
+        - outcome
+    TrialMailRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+      required:
+        - dryRun
+      additionalProperties: false
     EmailWebhookResponse:
       type: object
       properties:
@@ -17094,6 +17225,78 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "502":
           description: "RECONCILE_FAILED: Stripe could not be listed; `details` is the run summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/trial-mail:
+    post:
+      tags:
+        - Billing
+      summary: Daily trial reminders (Cloud Scheduler)
+      description: "Mails each person in days 11–30 of an unpaid trial the reminder for the stage they are in: the trial ends within 3 days, it has ended (read-only), the account locks within 3 days. Each stage once per person; a second run the same day sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialMailSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/trial-mail:
+    post:
+      tags:
+        - Admin
+      summary: Run the trial reminders now, or see who they would mail
+      description: "The same run as the daily job, for the operator, with one row per person in a reminder window: their stage, and whether they are mailed or why not (paying, covered, other-profiles, suppressed, gate-off). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialMailRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
           content:
             application/json:
               schema:
