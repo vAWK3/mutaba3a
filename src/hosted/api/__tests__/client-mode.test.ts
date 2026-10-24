@@ -16,6 +16,8 @@ vi.mock('@mut/local-backend', () => ({ bootLocalBackend: () => boot() }));
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const ME = { user: { id: 'u' }, profiles: [] };
 
+type Api = Awaited<ReturnType<typeof freshClient>>['api'];
+
 async function freshClient() {
   vi.resetModules();
   return import('../client');
@@ -80,6 +82,26 @@ describe('request() by mode', () => {
     await api.checkSetupLink('token');
 
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('/v1/account-setup/check');
+  });
+
+  // MUT-368: the self-service doors and both requests are the server's, whatever the mode; the in-page backend
+  // has no mailer, so answering them locally would tell a person "check your email" for a mail that never leaves.
+  it.each([
+    ['local', 'doors', (api: Api) => api.selfService(), 'GET', '/v1/self-service'],
+    ['local', 'signup', (api: Api) => api.signup({ email: 'a@b.ps', locale: 'ar', turnstileToken: 't' }), 'POST', '/v1/signups'],
+    ['local', 'recovery', (api: Api) => api.recoverAccount({ email: 'a@b.ps', locale: 'ar', turnstileToken: 't' }), 'POST', '/v1/account-recovery'],
+    ['probe', 'signup', (api: Api) => api.signup({ email: 'a@b.ps', locale: 'en', turnstileToken: 't' }), 'POST', '/v1/signups'],
+  ] as const)('%s: the %s request goes straight to the server, with no probe first', async (mode, _name, call, method, path) => {
+    const { api } = await freshClient();
+    if (mode === 'local') setMode('local');
+    fetchSpy.mockResolvedValue(json(202, { status: 'sent' }));
+
+    await call(api);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(path);
+    expect(fetchSpy.mock.calls[0]?.[1]?.method).toBe(method);
+    expect(boot).not.toHaveBeenCalled();
   });
 
   // `freshClient()` loads a new mode module too, which starts at production's default (`probe`), not the test

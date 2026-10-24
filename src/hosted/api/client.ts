@@ -71,6 +71,12 @@ export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
 export type UpdateProfileResponse = Schemas['UpdateProfileResponse'];
 export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
+/** MUT-368: which self-service doors the server opens. */
+export type SelfServiceDoors = Schemas['SelfServiceDoors'];
+export type SignupRequest = Schemas['SignupRequest'];
+export type AccountRecoveryRequest = Schemas['AccountRecoveryRequest'];
+/** MUT-368: the redeem's answer; `status` PENDING_REVIEW is a signup waiting for the operator (MUT-367). */
+export type SetupLinkRedeemed = Schemas['SetupLinkRedeemResponse'];
 export type BillingOverview = Schemas['BillingOverview'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
@@ -131,6 +137,22 @@ export function apiErrorReason(error: ApiError): string | undefined {
 }
 
 /**
+ * Which request fields a 422 VALIDATION_FAILED names (MUT-368, review P1-2): the validator's issues (`details` is
+ * their list, each with a `path`) or a route's own `details.fields`. Empty when it names none.
+ */
+export function apiErrorFields(error: ApiError): string[] {
+  const details = error.details as unknown;
+  if (Array.isArray(details)) {
+    return details.flatMap((issue) => {
+      const head = (issue as { path?: unknown } | null)?.path;
+      return Array.isArray(head) && typeof head[0] === 'string' ? [head[0]] : [];
+    });
+  }
+  const fields = (details as { fields?: unknown } | null)?.fields;
+  return Array.isArray(fields) ? fields.filter((field): field is string => typeof field === 'string') : [];
+}
+
+/**
  * MUT-227: which end of a date range a DATE_INVALID crossed. 'past' is the server's ten-year floor; undefined from
  * an older server or a malformed date.
  */
@@ -171,8 +193,11 @@ interface RequestOptions {
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
-/** Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). */
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup)(\/|\?|$)/;
+/**
+ * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
+ * self-service doors, signup and recovery (MUT-368): the in-page backend has no mailer to send their links.
+ */
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery)(\/|\?|$)/;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
@@ -370,7 +395,14 @@ export const api = {
   checkSetupLink: (token: string, signal?: AbortSignal) =>
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
   redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>
-    request<OkJson<'/v1/account-setup', 'post'>>('POST', '/v1/account-setup', { body, signal }),
+    request<SetupLinkRedeemed>('POST', '/v1/account-setup', { body, signal }),
+  /** MUT-368: which self-service doors this server opens (public; says nothing about any account). */
+  selfService: (signal?: AbortSignal) => request<SelfServiceDoors>('GET', '/v1/self-service', { signal }),
+  /** MUT-366/368: always 202 {status:"sent"} for an address, whatever exists; 404 while signup is closed. */
+  signup: (body: SignupRequest, signal?: AbortSignal) => request<Schemas['SelfServiceAccepted']>('POST', '/v1/signups', { body, signal }),
+  /** MUT-366/368: always 202 {status:"sent"}; mails a link only to an account that can use one. */
+  recoverAccount: (body: AccountRecoveryRequest, signal?: AbortSignal) =>
+    request<Schemas['SelfServiceAccepted']>('POST', '/v1/account-recovery', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
