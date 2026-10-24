@@ -4,6 +4,7 @@ import { ThemeProvider } from '../lib/theme';
 import { PortalTitle } from './components/Brand';
 import { ToastProvider } from './components/Toast';
 import { HostedLanguageProvider } from './i18n/HostedLanguageProvider';
+import type { Language } from '../lib/i18n/types';
 import type { PortalRouter } from './router';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { ReloadToContinue } from './pages/auth/BootScreens';
@@ -15,10 +16,19 @@ import { reportBoundaryError } from './observability/errorReporting';
  * leaves no figure behind.
  */
 
-export function PortalProviders({ queryClient, router }: { queryClient: QueryClient; router: PortalRouter }) {
+export function PortalProviders({
+  queryClient,
+  router,
+  linkedLanguage = null,
+}: {
+  queryClient: QueryClient;
+  router: PortalRouter;
+  /** The language a link named (`?lang`, MUT-369), read once at start. */
+  linkedLanguage?: Language | null;
+}) {
   return (
     <QueryClientProvider client={queryClient}>
-      <HostedLanguageProvider>
+      <HostedLanguageProvider linkedLanguage={linkedLanguage}>
         <PortalTitle />
         <ThemeProvider>
           <ToastProvider>

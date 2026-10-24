@@ -224,6 +224,12 @@ the opening paragraph, then each live surface's sentence, then the closing parag
 expense", add: ", and when it shows the free trial's reminder to add a card and whether you chose to add one or not";
 in the AR sentence, after «أو مصروفًا أو دفعة»: «، وعند ظهور تذكير التجربة المجانية بإضافة بطاقة وإن اخترت إضافتها أم لا».
 
+**MUT-369: now in the policy, as a draft (D9; pending Basel's approval before any release).** The live
+`landing.privacyPolicy.usageAnalytics` text carries this addition, plus "a payment received" in English (the portal
+sends `payment_recorded`; the English sentence above had omitted it) and, for the trial reminder, "whether it showed
+when you first signed in or on your Home page" (the `prompt` property). The translation files are the source of truth
+from here; this section keeps the history.
+
 **`network.body`.** Add a portal sentence.
 
 - EN: "The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog."

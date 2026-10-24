@@ -11,6 +11,7 @@ import { createPortalQueryClient } from './queryClient';
 import { createPortalRouter, type PortalRouter } from './router';
 import { SENTRY_ENABLED, startErrorReporting } from './observability/errorReporting';
 import { LastResortBoundary } from './observability/LastResortBoundary';
+import { takeLinkedLanguage } from '../lib/i18n/linkLanguage';
 
 /** Entry of the hosted portal build (`vite --mode hosted`, hosted-portal.md §2). */
 
@@ -21,6 +22,8 @@ startErrorReporting({ enabled: SENTRY_ENABLED, currentRouteId: () => started.rou
 const root = document.getElementById('root');
 if (!root) throw new Error('hosted.html has no #root');
 
+// MUT-369: the landing's "Create an account" names its page language; taken off the address before the router reads it
+const linkedLanguage = takeLinkedLanguage();
 const queryClient = createPortalQueryClient();
 const router = createPortalRouter(queryClient);
 started.router = router;
@@ -28,7 +31,7 @@ started.router = router;
 createRoot(root).render(
   <StrictMode>
     <LastResortBoundary>
-      <PortalProviders queryClient={queryClient} router={router} />
+      <PortalProviders queryClient={queryClient} router={router} linkedLanguage={linkedLanguage} />
     </LastResortBoundary>
   </StrictMode>,
 );

@@ -9,15 +9,18 @@ import './HeroSection.css';
 interface HeroSectionProps {
   /** The primary CTA, for the header bar to watch (MUT-77). */
   ctaRef?: Ref<HTMLAnchorElement>;
+  /** MUT-369: the portal's signup page while signup is open; null keeps "Request an account". */
+  signupUrl?: string | null;
 }
 
 /**
  * Hosted-only hero (MUT-? landing rewrite): one account, reached either by
  * requesting one (most visitors) or signing in / getting the phone app (people
- * whose organization already has one). There's no self-serve signup, so the
- * primary action is always "Request an account", never a direct download.
+ * whose organization already has one). While self-service signup is open
+ * (MUT-369) the primary action is "Create an account" on the portal; otherwise
+ * it is "Request an account". Never a direct download.
  */
-export function HeroSection({ ctaRef }: HeroSectionProps) {
+export function HeroSection({ ctaRef, signupUrl = null }: HeroSectionProps) {
   const t = useT();
   const portalUrl = hostedPortalUrl();
   const iosUrl = storeLinkUrl(MOBILE_APP_LINKS.ios, 'mutaba3a-landing');
@@ -35,9 +38,16 @@ export function HeroSection({ ctaRef }: HeroSectionProps) {
             <p className="landing-subheadline-large">{t('landing.hero.subheadline')}</p>
 
             <div className="hero-cta">
-              <a ref={ctaRef} href="#get-it" className="hero-cta-primary">
-                <span className="hero-cta-label">{t('landing.hero.ctaRequest')}</span>
-              </a>
+              {signupUrl ? (
+                <a ref={ctaRef} href={signupUrl} target="_blank" rel="noopener noreferrer" className="hero-cta-primary">
+                  <span className="hero-cta-label">{t('landing.hero.ctaCreate')}</span>
+                  <span className="sr-only"> {t('common.opensInNewTab')}</span>
+                </a>
+              ) : (
+                <a ref={ctaRef} href="#get-it" className="hero-cta-primary">
+                  <span className="hero-cta-label">{t('landing.hero.ctaRequest')}</span>
+                </a>
+              )}
               {portalUrl && (
                 <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="hero-cta-alt">
                   {t('landing.hero.ctaSignIn')}
@@ -56,7 +66,7 @@ export function HeroSection({ ctaRef }: HeroSectionProps) {
                 </a>
               )}
             </div>
-            <p className="hero-cta-note">{t('landing.hero.altNote')}</p>
+            <p className="hero-cta-note">{t(signupUrl ? 'landing.hero.altNoteOpen' : 'landing.hero.altNote')}</p>
           </div>
 
           <div className="hero-visual">

@@ -44,10 +44,11 @@ function persist(key: string, language: Language) {
 
 const AdoptContext = createContext<(locale: Language) => void>(() => {});
 
-export function HostedLanguageProvider({ children }: { children: ReactNode }) {
-  // A choice here, else the last account's locale, else Arabic (MUT-209); never the browser's language
+export function HostedLanguageProvider({ children, linkedLanguage = null }: { children: ReactNode; linkedLanguage?: Language | null }) {
+  // The link's `?lang` (MUT-369 D5: the landing's page language, never stored), else a choice here, else the last
+  // account's locale, else Arabic (MUT-209); never the browser's language
   const [language, setLanguageState] = useState<Language>(
-    () => storedChoice() ?? storedLanguage(PORTAL_ACCOUNT_LOCALE_KEY) ?? DEFAULT_LANGUAGE,
+    () => linkedLanguage ?? storedChoice() ?? storedLanguage(PORTAL_ACCOUNT_LOCALE_KEY) ?? DEFAULT_LANGUAGE,
   );
 
   const choose = useCallback((next: Language) => {

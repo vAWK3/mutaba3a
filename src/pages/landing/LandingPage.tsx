@@ -1,9 +1,10 @@
 import { useRef } from 'react';
 import './LandingPage.css';
-import { useT } from '../../lib/i18n';
+import { useLanguage, useT } from '../../lib/i18n';
 import { useInView } from '../../hooks/useInView';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLandingAnalytics } from './analytics/landingAnalytics';
+import { useSignupUrl } from './signupDoor';
 import {
   LandingHeader,
   HeroSection,
@@ -34,15 +35,18 @@ export function LandingPage() {
   const heroCtaGone = useInView(heroCtaRef, { rootMargin: HERO_CTA_ROOT_MARGIN }) === false;
   useDocumentTitle(t('landing.meta.title'));
   useLandingAnalytics();
+  // MUT-369: null (today's page) until the portal says signup is open; then every way in leads to /signup
+  const { language } = useLanguage();
+  const signupUrl = useSignupUrl(language);
 
   return (
     <div className="landing-page">
       <a href="#main-content" className="landing-skip-link">
         {t('landing.skipToContent')}
       </a>
-      <LandingHeader showCta={heroCtaGone} />
+      <LandingHeader showCta={heroCtaGone} signupUrl={signupUrl} />
       <main id="main-content">
-        <HeroSection ctaRef={heroCtaRef} />
+        <HeroSection ctaRef={heroCtaRef} signupUrl={signupUrl} />
         <ChapterSection
           part="chapter-clients"
           title={t('landing.chapters.clients.title')}
@@ -65,10 +69,10 @@ export function LandingPage() {
           visual={<ProfileSwitcherMock />}
         />
         <PrivacyBand />
-        <GetItSection />
-        <PhoneSection />
+        <GetItSection signupUrl={signupUrl} />
+        <PhoneSection signupUrl={signupUrl} />
         <MalafatSection />
-        <FAQSection />
+        <FAQSection signupUrl={signupUrl} />
       </main>
       <LandingFooter />
     </div>

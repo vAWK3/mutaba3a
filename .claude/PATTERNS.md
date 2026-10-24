@@ -2729,6 +2729,10 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - A public, read-only endpoint (`GET /v1/self-service`) says which self-service actions this server can really complete, derived from its configuration.
 - The page shows a door only when it is open, and treats no answer as closed. A build flag would drift from the server; showing every door would leave dead ones while mail is off.
 - **First instance:** sign-in's "Forgot your password?" / "Create an account".
+- **Second instance (MUT-369, ADR-186):** the landing, on another origin, reads the same endpoint (CORS-simple GET, `Access-Control-Allow-Origin: *` on that route only) to show "Create an account". Keep the request free of custom headers, or the browser preflights and the door reads closed.
+
+### Pattern: A link names its language; the target reads it once and never stores it
+- `?lang=en|ar` on a link (`/privacy`, `/terms`, the portal's `/signup`) is the language of the page the person came from. `linkedLanguageOf` reads it; a legal page uses it for the text only, and the portal (MUT-369) starts in it, takes it off the address before the router starts (`takeLinkedLanguage`), and never stores it, so a reload keeps the person's own switch.
 
 ### Pattern: A third-party widget in QA is a page-routed stand-in on the real origin
 - QA never calls a third party. The spec answers the widget's script URL (and the frame it mounts) with `page.route`, on the third party's own origin.

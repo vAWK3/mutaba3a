@@ -32,7 +32,7 @@ describe('PrivacyPolicyPage', () => {
     expect(intro).toContain('iPhone');
     expect(intro).toContain('Android');
     // MUT-150 review: the website is in scope, since the policy describes what it sends
-    expect(intro).toContain("Mutaba3a's website");
+    expect(intro).toContain("MTB3A's website");
     expect(intro).not.toMatch(/\bMac\b|\bWindows\b/);
   });
 
@@ -105,12 +105,12 @@ describe('PrivacyPolicyPage', () => {
     expect(noTracking).toMatch(/Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks/);
     expect(noTracking).toMatch(/The free apps on Mac, Windows, and in the browser never send them/);
     expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
-    expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports/);
+    expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to MTB3A's servers, to Sentry for error reports/);
     expect(body(/What reaches the network/)).toMatch(/The hosted portal also sends the error reports described under "Error reports" to Sentry/);
     // One sentence for what the website sends, not two "also"s (review D2)
     expect(body(/What reaches the network/)).toMatch(/The website also sends the error reports described under "Error reports" to Sentry and the anonymous visit counts described under "Anonymous usage counts" to PostHog\./);
     // MUT-151's phone and MUT-155's PostHog sentences stay (regression contract)
-    expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
+    expect(body(/What reaches the network/)).toMatch(/hosted portal connects to MTB3A's servers and, if you turned on anonymous usage, to PostHog/);
   });
 
   it('says the same about error reports in Arabic', () => {
@@ -137,7 +137,7 @@ describe('PrivacyPolicyPage', () => {
     expect(usage).toMatch(/turn it off from the account menu/);
     // The portal sentence sits before the closing paragraph
     expect(usage.indexOf('The hosted portal asks you once')).toBeLessThan(usage.indexOf('These counts are used only'));
-    expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
+    expect(body(/What reaches the network/)).toMatch(/hosted portal connects to MTB3A's servers and, if you turned on anonymous usage, to PostHog/);
   });
 
   it('says what the phone apps count, where they are turned off, and that they reach PostHog only if turned on (MUT-157)', () => {
@@ -148,7 +148,7 @@ describe('PrivacyPolicyPage', () => {
     expect(usage).toMatch(/If you turn it off in Settings/);
     expect(usage.indexOf('The iPhone and Android apps ask you once')).toBeLessThan(usage.indexOf('These counts are used only'));
     const network = body(/What reaches the network/);
-    expect(network).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog/);
+    expect(network).toMatch(/The mobile apps connect to MTB3A's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog/);
     expect(network).not.toMatch(/The mobile apps connect only to/);
   });
 
@@ -224,5 +224,79 @@ describe('PrivacyPolicyPage ?lang', () => {
     renderPage('ar', '?lang=fr');
     expect(textOf('سياسة الخصوصية')).not.toHaveAttribute('lang');
     expect(document.body.textContent).not.toMatch(/\blanding\.[a-zA-Z]/);
+  });
+});
+
+/**
+ * MUT-369 (ADR-159 §9): the policy names what self-service signup adds. A draft until Basel approves the wording
+ * (before-release.md); these tests pin what the draft must keep saying.
+ */
+describe('PrivacyPolicyPage self-service signup (MUT-369)', () => {
+  const sectionOf = (name: string | RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+
+  it('adds "When you create an account" and "Emails we send" right after where records live', () => {
+    renderPage('en');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    const records = headings.indexOf('Where your records live');
+    expect(headings.slice(records + 1, records + 3)).toEqual(['When you create an account', 'Emails we send']);
+  });
+
+  it('says what Turnstile receives and never receives, and that the domain lookups send only the domain (DNS, RDAP)', () => {
+    renderPage('en');
+    const create = sectionOf('When you create an account');
+    expect(create).toContain('Cloudflare Turnstile');
+    expect(create).toMatch(/receives your IP address and details about your browser and device, and never what you type/);
+    expect(create).toContain('public DNS records');
+    expect(create).toContain('RDAP');
+    expect(create).toMatch(/Only the domain name is sent in these lookups, never the rest of your address/);
+    expect(create).toMatch(/reviewed by our team before the account opens/);
+    expect(create).toMatch(/24 hours/);
+  });
+
+  it('names Resend, where it sends from and where its records sit, and that mail carries no amounts or tracking', () => {
+    renderPage('en');
+    const email = sectionOf('Emails we send');
+    expect(email).toContain('Resend');
+    expect(email).toContain('EU (Ireland)');
+    expect(email).toContain('in the United States, under its data processing agreement');
+    expect(email).toMatch(/never include amounts or your records/);
+    expect(email).toMatch(/don't track whether you open them or click their links/);
+    expect(email).toMatch(/bounces permanently or you mark it as spam/);
+  });
+
+  it('lists Cloudflare and Resend among those who handle data, and the doors question among what reaches the network', () => {
+    renderPage('en');
+    expect(sectionOf(/Who else handles your data/)).toMatch(/Cloudflare carries the connections .* Resend sends our emails/);
+    const network = sectionOf(/What reaches the network/);
+    expect(network).toMatch(/asks our servers whether sign-up is open/);
+    expect(network).toMatch(/connect to Cloudflare Turnstile/);
+    expect(sectionOf(/iPhone and Android: your account/)).not.toMatch(/no public sign-up/);
+  });
+
+  it("names the portal's trial-reminder notes and payments in the usage counts (MUT-418 TD-219, D9)", () => {
+    renderPage('en');
+    const usage = sectionOf(/Anonymous usage counts/);
+    expect(usage).toMatch(/an income, an expense or a payment received, and when it shows the free trial's reminder to add a card and whether you chose to add one or not/);
+  });
+
+  it('names the product MTB3A throughout the English text (MUT-400 D4: this is the next real revision)', () => {
+    renderPage('en');
+    expect(document.querySelector('main')?.textContent).not.toContain('Mutaba3a');
+  });
+
+  it('says the same in Arabic', () => {
+    renderPage('ar');
+    const create = sectionOf('عند إنشاء حساب');
+    expect(create).toContain('Cloudflare Turnstile');
+    expect(create).toContain('RDAP');
+    expect(create).toContain('لا يُرسَل في عمليات البحث هذه إلا اسم النطاق');
+    const email = sectionOf('الرسائل التي نرسلها');
+    expect(email).toContain('Resend');
+    expect(email).toContain('الاتحاد الأوروبي (أيرلندا)');
+    expect(email).toContain('في الولايات المتحدة');
+    expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('Cloudflare');
+    expect(sectionOf('ما يصل إلى الشبكة')).toContain('إن كان التسجيل مفتوحًا');
+    expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('وعند ظهور تذكير التجربة المجانية بإضافة بطاقة');
+    expect(sectionOf(/iPhone وAndroid: حسابك/)).not.toContain('لا يوجد تسجيل عام');
   });
 });

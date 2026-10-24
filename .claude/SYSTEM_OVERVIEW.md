@@ -341,6 +341,7 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
 - The portal's self-service pages (MUT-368, ADR-179):
   - `/signup` and `/recover`: an email and a Cloudflare Turnstile check, then one "Check your email" for every address.
   - Sign-in's "Forgot your password?" and "Create an account" show only where `GET /v1/self-service` says the server mails links.
+  - The landing reads the same endpoint (MUT-369, ADR-186; CORS `*` on that route only): while signup is open its CTAs say "Create an account" and open `<portal>/signup?lang=<page language>`; the portal starts in that language and takes `?lang` off the address. Closed is the pilot page with the request form.
   - `/setup` finishes a SIGNUP with a name, a currency and a time zone, and lands on the personal profile.
   - A pending signup sees "We're reviewing your account" at setup and at every sign-in until approved.
   - QA runs them on a live API in the `portal-selfservice` release-QA app.

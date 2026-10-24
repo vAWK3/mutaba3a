@@ -18,6 +18,29 @@
 
 ## Open Debt
 
+### TD-235: Eight landing and legal release-QA flows still test the retired /hosted page and free tier
+**Status**: Open
+**Ticket**: found by MUT-369's qa-reconcile (not caused by it)
+**Added**: 2026-10-24
+**Priority**: Medium (the landing's release-QA can't go green)
+**Impact**: Since the hosted-only landing rewrite (7914685a), `web.landing.hosted`, `hosted-375`, `hosted-slash`, `get-it-paid` and `phone` read copy keys that no longer exist (`landing.getIt.paid`, `landing.hostedOffer.*`) or a /hosted page that now redirects; `web.landing.malafat` fails axe `link-in-text-block` on the request form's notice links; `web.landing.375` finds the wordmark clipped at 375 px; `web.legal.terms-manifest` reads JSON the dev server answers with HTML. The causes predate MUT-369: the missing keys and the /hosted redirect are on main, and the other three touch code MUT-369 didn't change (checked by reading, not by a run on main).
+**Fix**: Rewrite or retire those flows against the hosted-only page (and fix the notice links' underline and the 375 wordmark), or mark the retired features removed in `qa/features/web/landing.yaml`.
+
+### TD-233: The landing's "Create an account" isn't counted
+**Status**: Open
+**Ticket**: MUT-369 (D7)
+**Added**: 2026-10-24
+**Priority**: Low (until GA; then it is the funnel's first step)
+**Impact**: `ctaForHref` counts store, web-app, /hosted and Malafat links only; the portal signup link (like Sign in) is uncounted, so GA can't see how many visitors press it.
+**Fix**: Add a `signup` value to `landing_cta_clicked.cta` (events contract minor bump, copy to the Flutter fixture per TD-218) and match the portal origin's `/signup` in `ctaForHref`.
+
+### TD-234: The privacy policy doesn't name Stripe
+**Status**: Open
+**Ticket**: MUT-369 (D13); billing MUT-362/418
+**Added**: 2026-10-24
+**Priority**: High before the first live charge
+**Impact**: Self-service billing sends card and billing details to Stripe (Checkout, Customer Portal, Tax), but the policy names no payment processor.
+**Fix**: Basel drafts or approves a Stripe paragraph (what Stripe receives, where, under which terms) and it ships with the release that turns Stripe live.
 ### TD-227: CSV-imported JOD amounts can't be told apart, so the carry-over only warns
 **Status**: Open
 **Ticket**: MUT-291 (plan §3.3, TD-112)
@@ -135,7 +158,7 @@
 **Fix**: In the next Flutter change (MUT-364 or earlier), copy the file and its 2.1.0 hash into the Flutter fixture and its README.
 
 ### TD-219: The privacy policy doesn't yet name the trial-prompt usage notes
-**Status**: Open
+**Status**: In Progress (MUT-369 put the sentence in the policy draft; resolved once Basel approves the wording and it ships)
 **Ticket**: MUT-418 (D16)
 **Added**: 2026-10-24
 **Priority**: Medium (before the release that ships MUT-418's portal)

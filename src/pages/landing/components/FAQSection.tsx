@@ -56,7 +56,10 @@ function FAQItem({ id, question, answer, isOpen, onToggle }: FAQItemProps) {
   );
 }
 
-export function FAQSection() {
+/** The free-plan answer while self-service signup is open (MUT-369). */
+const FREE_PLAN_INDEX = 1;
+
+export function FAQSection({ signupUrl = null }: { signupUrl?: string | null }) {
   const t = useT();
   const { language } = useLanguage();
   const baseId = useId();
@@ -75,10 +78,10 @@ export function FAQSection() {
       const n = i + 1;
       return {
         question: t(`landing.faq.q${n}`),
-        answer: t(`landing.faq.a${n}`, n === FAQ_CURRENCY_INDEX ? { currencies } : undefined),
+        answer: t(n === FREE_PLAN_INDEX && signupUrl ? 'landing.faq.a1Open' : `landing.faq.a${n}`, n === FAQ_CURRENCY_INDEX ? { currencies } : undefined),
       };
     });
-  }, [t, language]);
+  }, [t, language, signupUrl]);
 
   return (
     <section data-part="faq" aria-labelledby="faq-title" className="landing-section landing-faq">

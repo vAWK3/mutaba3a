@@ -107,6 +107,9 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
   const app = new OpenAPIHono<AppEnv>();
 
   // MUT-368 (D1): the doors, before anything else; public, no origin check (a GET changes nothing), never cached.
+  // MUT-369 (D2): readable from any site, so the landing (another origin) can show "Create an account" only while
+  // signup is open. Two public booleans that name no account, and no credentials are allowed, so `*` exposes nothing.
+  // No preflight is answered: the landing's request must stay CORS-simple (a GET with no custom headers, D17).
   app.openapi(
     createRoute({
       method: 'get',
@@ -118,6 +121,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     }),
     (c) => {
       const mails = options.mailsLinks ?? false;
+      c.header('Access-Control-Allow-Origin', '*');
       return c.json({ signup: mails && options.signupEnabled, recovery: mails }, 200);
     },
   );
