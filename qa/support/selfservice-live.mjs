@@ -102,7 +102,7 @@ async function main() {
       dropDatabase();
       rmSync(STATE, { force: true });
       process.exit(code);
-    }, 500).unref();
+    }, 500);
   };
   api.on('exit', (code) => {
     if (!stopping) {

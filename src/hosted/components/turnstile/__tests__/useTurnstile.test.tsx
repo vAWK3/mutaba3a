@@ -88,6 +88,17 @@ describe('useTurnstile', () => {
     expect(box.seen!.status).toBe('failed');
   });
 
+  it('a render Cloudflare refuses, or one that names no widget, is a failed check, never a silent wait (review #4)', async () => {
+    const throwing: TurnstileApi = { render: () => { throw new Error('bad sitekey'); }, reset: vi.fn(), remove: vi.fn() };
+    render(<Probe action="signup" language="en" load={() => Promise.resolve(throwing)} />);
+    await flush();
+    expect(box.seen!.status).toBe('failed');
+    const silent: TurnstileApi = { render: () => undefined, reset: vi.fn(), remove: vi.fn() };
+    render(<Probe action="signup" language="en" load={() => Promise.resolve(silent)} />);
+    await flush();
+    expect(box.seen!.status).toBe('failed');
+  });
+
   it('reset() spends the token: the widget runs again and the form waits for a new one', async () => {
     const fake = fakeTurnstile();
     render(<Probe action="signup" language="en" load={() => Promise.resolve(fake.api)} />);

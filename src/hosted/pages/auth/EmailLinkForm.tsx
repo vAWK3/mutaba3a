@@ -51,6 +51,8 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
   const ids = useId();
   const emailRef = useRef<HTMLInputElement>(null);
   const waiting = useRef(false);
+  /** The address that passed the shape check when Continue was pressed: what a token arriving later sends. */
+  const checkedEmail = useRef('');
 
   const [email, setEmail] = useState(initialEmail);
   const [fieldError, setFieldError] = useState<FieldError | null>(null);
@@ -67,13 +69,17 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
     },
   });
 
+  // Waiting for a check that then failed is not busy: the failure line says so, and Continue works again (review #3).
+  const shown: Phase = phase === 'waiting' && status === 'failed' ? 'idle' : phase;
+  const busy = shown !== 'idle';
+
   function refuse(error: FieldError) {
     setFieldError(error);
     emailRef.current?.focus();
   }
 
   async function deliver(turnstileToken: string) {
-    const address = email.trim();
+    const address = checkedEmail.current;
     setPhase('sending');
     try {
       await send({ email: address, locale, turnstileToken });
@@ -81,7 +87,11 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
       return;
     } catch (error) {
       const failure = selfServiceFailure(error);
-      if (failure.kind === 'closed') onClosed?.();
+      // A 404 means "signup closed" only where the page offers that screen; anywhere else it's an outage.
+      if (failure.kind === 'closed') {
+        if (onClosed) onClosed();
+        else setBanner({ kind: 'unreachable' });
+      }
       else if (failure.kind === 'notAccepted') refuse(failure);
       else if (failure.kind === 'invalidEmail') refuse({ kind: 'emailInvalid' });
       else setBanner(failure);
@@ -93,10 +103,11 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (phase !== 'idle') return;
+    if (busy) return;
     const address = email.trim();
     if (!address) return refuse({ kind: 'emailRequired' });
     if (!EMAIL_SHAPE.test(address)) return refuse({ kind: 'emailInvalid' });
+    checkedEmail.current = address;
     setFieldError(null);
     setBanner(null);
     if (token) return void deliver(token);
@@ -109,7 +120,6 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
   const bannerId = `${ids}-banner`;
   const errorId = `${ids}-email-error`;
   const checkId = `${ids}-check`;
-  const busy = phase !== 'idle';
   const describedBy = [fieldError ? errorId : null, banner ? bannerId : null, status === 'failed' ? checkId : null].filter(Boolean).join(' ') || undefined;
   const wait = banner?.kind === 'rateLimited' ? waitFor(banner.minutes) : null;
 
@@ -142,7 +152,7 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
           spellCheck={false}
           dir="ltr"
           autoFocus
-          readOnly={phase === 'sending'}
+          readOnly={busy}
           value={email}
           aria-invalid={Boolean(fieldError)}
           aria-describedby={describedBy}
@@ -159,7 +169,7 @@ export function EmailLinkForm({ action, title, lead, submitLabel, initialEmail, 
 
       <button type="submit" className="btn btn-primary btn-md hp-block" disabled={busy} aria-busy={busy}>
         {busy && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
-        <span>{phase === 'waiting' ? t('hosted.selfService.checking') : phase === 'sending' ? t('hosted.selfService.sending') : submitLabel}</span>
+        <span>{shown === 'waiting' ? t('hosted.selfService.checking') : shown === 'sending' ? t('hosted.selfService.sending') : submitLabel}</span>
       </button>
       {children}
     </form>

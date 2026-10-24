@@ -49,6 +49,12 @@ describe('/recover', () => {
     expect(view.email).toHaveValue('nour@firm.ps');
   });
 
+  it('a 404 from recovery is an outage, never a silent nothing (review #7)', async () => {
+    const view = await recover('nour@firm.ps', { [RECOVER]: () => fail(404, 'NOT_FOUND') });
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't reach MTB3A");
+    expect(view.email).toHaveValue('nour@firm.ps');
+  });
+
   it('while the server mails no links it says who can help, with no form and no check (D14)', async () => {
     const turnstile = fakeTurnstile();
     stubApi(routes({ [DOORS]: () => ok({ signup: false, recovery: false }) }));

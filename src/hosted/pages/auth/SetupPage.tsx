@@ -11,7 +11,7 @@ import { TimezoneChoice } from '../../components/TimezoneChoice';
 import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES, type HostedCurrency } from '../../format/currencies';
 import { browserTimezone } from '../../format/timezones';
 import { firstRunPath } from '../../session/firstRun';
-import { useSelfServiceDoors } from '../../session/selfServiceDoors';
+import { CLOSED_DOORS, selfServiceQuery } from '../../session/selfServiceDoors';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, ME_TIMEOUT_MS } from '../../session/me';
 import { setMode } from '../../session/mode';
@@ -118,7 +118,10 @@ function newLinkRoute(purpose: Purpose | undefined, doors: { signup: boolean; re
 function SetupNotice({ outcome }: { outcome: Outcome }) {
   const t = useT();
   const navigate = useNavigate();
-  const doors = useSelfServiceDoors();
+  const doorsQuery = useQuery(selfServiceQuery);
+  const doors = doorsQuery.data ?? CLOSED_DOORS;
+  // A dead link that could offer a new one waits for the server's doors, so it never shows the operator's words first.
+  if (outcome.kind === 'refused' && outcome.purpose && doorsQuery.isPending) return <CheckingSession label={t('hosted.setup.checking')} />;
   if (outcome.kind === 'underReview') return <UnderReviewNotice onLeave={() => void navigate({ to: '/sign-in', replace: true })} />;
   const key = outcome.kind === 'refused' ? `hosted.setup.refused.${outcome.state}` : `hosted.setup.${outcome.kind}`;
   const offersSignIn = outcome.kind !== 'refused' || outcome.state === 'used';
@@ -287,7 +290,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
         failure.kind !== 'termsChanged' ? null : failure.current ? { kind: 'version', version: failure.current } : await recheckTermsVersion(token);
       setPhase('idle');
       if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state, purpose });
-      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state });
+      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state, purpose });
       else if (failure.kind === 'policy') refuseInline('rule');
       else if (failure.kind === 'timezone') {
         setZoneOpen(true);

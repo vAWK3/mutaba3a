@@ -61,25 +61,32 @@ export function useTurnstile({ action, language, load = loadTurnstile, onToken }
       (api) => {
         const container = containerRef.current;
         if (!live || !container) return;
-        const id = api.render(container, {
-          sitekey: siteKey(),
-          action,
-          language,
-          theme: 'auto',
-          size: 'flexible',
-          callback: (token) => {
-            update(token, 'ready');
-            if (live) latest.current.onToken?.(token);
-          },
-          // Managed mode fetches a fresh token by itself; until then there is none to send.
-          'expired-callback': () => update(null, 'loading'),
-          'timeout-callback': () => update(null, 'loading'),
-          'error-callback': () => {
-            update(null, 'failed');
-            return true;
-          },
-        });
-        if (id) widget.current = rendered = { api, id };
+        let id: string | undefined;
+        try {
+          id = api.render(container, {
+            sitekey: siteKey(),
+            action,
+            language,
+            theme: 'auto',
+            size: 'flexible',
+            callback: (token) => {
+              update(token, 'ready');
+              if (live) latest.current.onToken?.(token);
+            },
+            // Managed mode fetches a fresh token by itself; until then there is none to send.
+            'expired-callback': () => update(null, 'loading'),
+            'timeout-callback': () => update(null, 'loading'),
+            'error-callback': () => {
+              update(null, 'failed');
+              return true;
+            },
+          });
+        } catch {
+          // A render Cloudflare refuses (a bad parameter, an API change) is a check that can't run, never a silent wait.
+          id = undefined;
+        }
+        if (!id) return update(null, 'failed');
+        widget.current = rendered = { api, id };
       },
       () => update(null, 'failed'),
     );

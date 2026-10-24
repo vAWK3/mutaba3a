@@ -138,6 +138,25 @@ describe('/signup open', () => {
     expect(view.api.count(SIGNUP)).toBe(1);
   });
 
+  it('while it waits for the check the address can’t change, and the address checked is the one sent (review #2)', async () => {
+    const view = await showForm(open(), 'hold');
+    await ask(view, 'rana@studio.example');
+    expect(view.email).toHaveAttribute('readonly');
+    await act(async () => view.turnstile.issue());
+    await screen.findByRole('heading', { name: 'Check your email' });
+    expect(view.api.calls.find((c) => c.url.pathname === '/v1/signups')?.body).toMatchObject({ email: 'rana@studio.example' });
+  });
+
+  it('a check that fails while the press waits frees the button again (review #3)', async () => {
+    const view = await showForm(open(), 'hold');
+    await ask(view, 'rana@studio.example');
+    expect(screen.getByRole('button', { name: "Checking that you're a person…" })).toBeDisabled();
+    await act(async () => void view.turnstile.last()!['error-callback']('600010'));
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+    expect(screen.getByText(/The check that you're a person couldn't run/)).toBeInTheDocument();
+    expect(view.api.count(SIGNUP)).toBe(0);
+  });
+
   it('a check that can’t run says so, offers Try again and the support address, and sends nothing', async () => {
     const view = await showForm(open(), 'fail');
     const message = await screen.findByText(/The check that you're a person couldn't run/);
