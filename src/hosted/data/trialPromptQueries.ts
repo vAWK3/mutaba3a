@@ -20,5 +20,7 @@ export function useAnswerTrialPrompt() {
       write((current) => optimisticTrialPrompt(current, action, new Date()));
     },
     onSuccess: (stored) => write(() => stored),
+    // A /v1/me refetch started during the write could land after it with the old answer: read it again (review).
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ME_KEY }),
   });
 }

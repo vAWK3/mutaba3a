@@ -1046,7 +1046,7 @@
         "countryHint": "Sets the currency: shekels in Israel, dollars elsewhere.",
         "buyer": "You're buying",
         "person": "For yourself",
-        "personNote": "No tax number needed, in any country",
+        "personNote": "No tax number needed",
         "business": "For a business",
         "businessNote": "Your invoices carry its tax number",
         "interval": "Pay",
@@ -1063,7 +1063,8 @@
         "contactUs": "We can't sell to individuals in {country} yet. A business with a tax number can subscribe now, or write to us and we'll tell you when we open.",
         "headsUp": "Next you'll enter your card on Stripe's secure page. It's in English; you'll come back here when you're done.",
         "continue": "Continue to payment",
-        "firstCharge": "Your free trial continues: the first charge is on {date}."
+        "firstCharge": "Your free trial continues: the first charge is on {date}.",
+        "personNoteEverywhere": "No tax number needed, in any country"
       },
       "states": {
         "loadFailed": "Couldn't load your billing. Check your connection and try again.",
@@ -1095,7 +1096,8 @@
         "label": "Your free trial",
         "addCard": "Add a card",
         "hide": "Hide for 3 days",
-        "endsOn": "Ends on {date}. You won't be charged until then."
+        "endsOn": "Ends on {date}. You won't be charged until then.",
+        "endsSoon": "Ends on {date}."
       }
     },
     "selfService": {

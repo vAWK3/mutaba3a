@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-220: "For a business" proves nothing where Stripe has no tax-ID type (outside IL/JO)
+**Status**: Open
+**Ticket**: MUT-418 (D10, code review)
+**Added**: 2026-10-24
+**Priority**: Low (consumers may buy everywhere, so a business that gives nothing is billed as a person would be)
+**Impact**: Checkout sets `tax_id_collection.required: 'if_supported'` for a business outside `customTaxIdCountries`. Where Stripe has no tax-ID type for the country, `if_supported` asks for nothing, so the invoice carries no business number.
+**Fix**: Add the country to `customTaxIdCountries` (our required number field) when a business asks, or show the field to every business where Stripe has no type.
+
 ### TD-218: The Flutter repo's copy of the analytics contract is still 2.0.0
 **Status**: Open
 **Ticket**: MUT-418

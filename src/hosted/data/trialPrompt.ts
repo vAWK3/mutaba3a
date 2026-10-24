@@ -8,7 +8,14 @@ import type { BillingEntitlement, Me, TrialPrompt, TrialPromptAction } from '../
  * MUT-361 seam: `TrialNotice` is a union so the lapse gate can add its read-only and locked notices beside `trial`.
  */
 
-export type TrialNotice = { kind: 'trial'; daysLeft: number; endsAt: string; dismissible: boolean };
+export type TrialNotice = {
+  kind: 'trial';
+  daysLeft: number;
+  endsAt: string;
+  dismissible: boolean;
+  /** A card added now is first charged on the trial's end (≥ 48 h left); otherwise Checkout charges at once. */
+  chargeDeferred: boolean;
+};
 
 /** The banner can't be hidden in the trial's last 3 days (ticket). */
 export const TRIAL_BANNER_LAST_DAYS = 3;
@@ -24,14 +31,22 @@ function runningTrial(me: Me): (BillingEntitlement & { until: string }) | null {
 }
 
 /**
- * The first-run step is due: an active account on a running trial with no card, ≥ 48 h of it left (D3), and the
- * person hasn't answered it on any device (D1). A server without the field counts as nothing answered.
+ * The first-run step's copy is true: a running trial with no card and ≥ 48 h of it left (D3), so "You won't be
+ * charged until <end>" holds. A deep link to `?step=welcome` for anyone else shows Billing's own status instead.
+ */
+export function trialWelcomeApplies(me: Me, now: Date): boolean {
+  const trial = runningTrial(me);
+  return trial !== null && new Date(trial.until).getTime() - now.getTime() >= TRIAL_CARRY_MIN_MS;
+}
+
+/**
+ * The first-run step is due: an active account whose step applies (above), and the person hasn't answered it on any
+ * device (D1). A server without the field counts as nothing answered.
  */
 export function trialWelcomeDue(me: Me, now: Date): boolean {
   if (me.user.status !== undefined && me.user.status !== 'ACTIVE') return false;
   if (me.user.trialPrompt?.welcomedAt) return false;
-  const trial = runningTrial(me);
-  return trial !== null && new Date(trial.until).getTime() - now.getTime() >= TRIAL_CARRY_MIN_MS;
+  return trialWelcomeApplies(me, now);
 }
 
 /** The Home banner: whole days left (rounded up), hidden while snoozed except in the trial's last 3 days. */
@@ -42,7 +57,8 @@ export function trialBannerOf(me: Me, now: Date): TrialNotice | null {
   const dismissible = daysLeft > TRIAL_BANNER_LAST_DAYS;
   const snoozedUntil = me.user.trialPrompt?.bannerSnoozedUntil;
   if (dismissible && snoozedUntil && new Date(snoozedUntil).getTime() > now.getTime()) return null;
-  return { kind: 'trial', daysLeft, endsAt: trial.until, dismissible };
+  const chargeDeferred = new Date(trial.until).getTime() - now.getTime() >= TRIAL_CARRY_MIN_MS;
+  return { kind: 'trial', daysLeft, endsAt: trial.until, dismissible, chargeDeferred };
 }
 
 const SNOOZE_DAYS = 3;

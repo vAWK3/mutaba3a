@@ -133,6 +133,30 @@ describe('the first-run trial step (AC1, AC2, AC4)', () => {
     }
   });
 
+  it('a deep link to the step without a running trial (a card on file, or under 48 h left) shows Billing’s status instead', async () => {
+    for (const billing of [{ ...trial(14), source: 'STRIPE' as const }, trial(1.5)]) {
+      const { unmount, actions } = portal(`/p/${ORG_B}?billing=true&step=welcome`, { billing });
+      const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+      expect(await within(dialog).findByRole('heading', { level: 3 })).not.toHaveTextContent('Your 14-day free trial has started');
+      expect(within(dialog).queryByRole('button', { name: 'Add a card now (recommended)' })).not.toBeInTheDocument();
+      expect(actions()).toEqual([]);
+      unmount();
+    }
+  });
+
+  it('someone first signing in days into the trial reads the days left, not "has started" (review)', async () => {
+    portal(`/p/${ORG_B}`, { billing: trial(9.5), overview: overview({ trial: { startedAt: iso(-4.5), endsAt: iso(9.5), lockAt: iso(25.5) } }) });
+    const dialog = await screen.findByRole('dialog', { name: 'Your free trial' });
+    expect(await within(dialog).findByRole('heading', { name: '10 days left in your free trial' })).toBeInTheDocument();
+  });
+
+  it('inside the last 48 hours the banner only says when the trial ends (a card added now is charged at once)', async () => {
+    portal(`/p/${ORG_B}`, { prompt: { welcomedAt: iso(-1), welcomeAnswer: 'skipped', bannerSnoozedUntil: null }, billing: trial(1.5) });
+    const banner = await screen.findByRole('region', { name: 'Your free trial' });
+    expect(within(banner).getByText(/^Ends on [^.]+\.$/)).toBeInTheDocument();
+    expect(within(banner).queryByText(/won't be charged/)).not.toBeInTheDocument();
+  });
+
   it('opens in Arabic', async () => {
     portal(`/p/${ORG_B}`, { locale: 'ar' });
     const dialog = await screen.findByRole('dialog', { name: 'تجربتك المجانية' });

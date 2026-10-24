@@ -146,7 +146,7 @@ very first sign-in nobody has opted in yet, so the stored answer (D2) is the fun
 - D7 The banner's "Add a card" appears only when the catalog is sellable (one cached `/v1/billing` read).
 - D8 The banner shows on the Overview of any profile the person opens, keyed to their own (personal) trial.
 - D9 `"consumerCountries": "*"` is the "all countries" spelling; arrays still work.
-- D10 The business tax-number field is for "For a business" only, and required there; a person never sees it.
+- D10 The business tax-number field is for "For a business" only, and required there; a person never sees it. (Code review: where Stripe has no tax-ID type outside IL/JO, `if_supported` asks nothing: TD-220.)
 - D11 `GET /v1/billing` adds `countries.consumerEverywhere` (additive) instead of changing `consumer`'s type.
 - D12 Sandbox prices move by lookup-key transfer; MUT-362's ₪39/$10 prices stay in the sandbox, inactive keys.
 - D13 Closing the welcome drawer any way other than "Add a card" counts as "Not now".
@@ -254,6 +254,15 @@ Tests: §6 covers every branch; add the format-5 migration test and the HomeRedi
 Outside voice: unavailable (no codex CLI on this machine); not run.
 
 Failure modes: 0 critical gaps flagged.
+
+## 10. Code review (2026-10-24, /review + an independent adversarial read)
+
+Fixed: a stale or hand-typed `?step=welcome` without a running trial (or under 48 h) now shows Billing's status; the
+step's title follows; the banner's "You won't be charged until then" is gone inside the last 48 h (Checkout charges
+at once there); someone first signing in days into the trial reads "N days left" rather than "has started"; the
+shell's offer is spent whenever the step is on screen (also while billing loads); "No tax number needed, in any
+country" shows only when the server says `consumerEverywhere`; `/v1/me` is re-read after each answer. Recorded:
+TD-220 (a business proves nothing where Stripe has no tax-ID type outside IL/JO).
 
 ## GSTACK REVIEW REPORT
 

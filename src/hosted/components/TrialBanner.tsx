@@ -65,7 +65,10 @@ function TrialNote({ notice }: { notice: TrialNotice }) {
             </>
           )}
         </p>
-        <p className="hp-trial-banner-note">{t('hosted.billing.trialBanner.endsOn', { date: formatInstant(notice.endsAt, language, browserTimezone()) })}</p>
+        {/* Review: inside the last 48 h Checkout charges at once, so the note only says when the trial ends. */}
+        <p className="hp-trial-banner-note">
+          {t(notice.chargeDeferred ? 'hosted.billing.trialBanner.endsOn' : 'hosted.billing.trialBanner.endsSoon', { date: formatInstant(notice.endsAt, language, browserTimezone()) })}
+        </p>
       </div>
       {notice.dismissible && (
         <button type="button" className="hp-link-button hp-trial-banner-hide" onClick={hide}>

@@ -63,7 +63,7 @@ describe('trialWelcomeDue', () => {
 
 describe('trialBannerOf', () => {
   it('shows the whole days left and the trial end while the trial runs with no card', () => {
-    expect(trialBannerOf(me({ billing: trial(13.5) }), NOW)).toEqual({ kind: 'trial', daysLeft: 14, endsAt: inDays(13.5), dismissible: true });
+    expect(trialBannerOf(me({ billing: trial(13.5) }), NOW)).toEqual({ kind: 'trial', daysLeft: 14, endsAt: inDays(13.5), dismissible: true, chargeDeferred: true });
   });
 
   it('is gone once a card or subscription exists (the profile is paid by Stripe), or the trial is over', () => {
@@ -75,6 +75,11 @@ describe('trialBannerOf', () => {
     const snoozed = (until: string) => me({ prompt: { ...EMPTY, bannerSnoozedUntil: until } });
     expect(trialBannerOf(snoozed(inDays(1)), NOW)).toBeNull();
     expect(trialBannerOf(snoozed(inDays(-0.01)), NOW)).toMatchObject({ kind: 'trial', dismissible: true });
+  });
+
+  it('inside the last 48 hours a card added now is charged at once, so the banner says nothing about "not charged" (review)', () => {
+    expect(trialBannerOf(me({ billing: trial(2) }), NOW)).toMatchObject({ chargeDeferred: true });
+    expect(trialBannerOf(me({ billing: trial(1.9) }), NOW)).toMatchObject({ chargeDeferred: false });
   });
 
   it(`can't be hidden in the trial's last ${TRIAL_BANNER_LAST_DAYS} days, and a snooze doesn't hide it there`, () => {

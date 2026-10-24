@@ -14,6 +14,7 @@ import {
   billingViewOf,
   checkoutRouteOf,
   currencyOfCountry,
+  daysLeft,
   firstChargeOf,
   isConfirmed,
   isSellable,
@@ -28,6 +29,7 @@ import { formatDecimal } from '../format/DecimalAmount';
 import { minorToDecimal } from '../format/currencies';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
+import { trialWelcomeApplies } from '../data/trialPrompt';
 import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
 import { ME_KEY, useMe } from '../session/me';
 import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
@@ -46,6 +48,9 @@ import { RadioCards } from './RadioCards';
  */
 
 export type BillingStep = 'subscribe' | 'welcome';
+
+/** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
+const TRIAL_LENGTH_DAYS = 14;
 
 export interface BillingDrawerProps {
   step: BillingStep | undefined;
@@ -70,7 +75,13 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
   const subscribe = useSubscribeForm(billing.data);
   const subscribing = step === 'subscribe' && billing.data !== undefined;
   const welcome = useTrialWelcome(step === 'welcome', billing.data, onStep, onClose);
-  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : step === 'welcome' ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
+  const welcomeTitle = step === 'welcome' && (billing.isPending || welcome.open);
+  // Review: the step is on screen (loading included), so the shell's one offer is spent: closing it while billing
+  // loads never has the shell open it again on this page.
+  useEffect(() => {
+    if (step === 'welcome') takeTrialWelcomeOffer();
+  }, [step]);
+  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : welcomeTitle ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
 
   let body;
   if (billing.isPending) {
@@ -584,7 +595,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
             {
               value: 'person',
               label: t('hosted.billing.subscribe.person'),
-              note: t('hosted.billing.subscribe.personNote'),
+              note: t(billing.countries.consumerEverywhere ? 'hosted.billing.subscribe.personNoteEverywhere' : 'hosted.billing.subscribe.personNote'),
             },
             {
               value: 'business',
@@ -651,7 +662,9 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
 function useTrialWelcome(active: boolean, billing: BillingOverview | undefined, onStep: BillingDrawerProps['onStep'], onClose: () => void) {
   const me = useMe();
   const answer = useAnswerTrialPrompt();
-  const open = active && billing !== undefined;
+  // Review: a hand-typed or stale `?step=welcome` with no running trial (or under 48 h of one) shows the status view,
+  // never "Your 14-day free trial has started".
+  const open = active && billing !== undefined && trialWelcomeApplies(me, new Date());
   const sellable = billing ? isSellable(billing) : false;
   const endsAt = billing?.trial?.endsAt ?? me.profiles.find((p) => p.isPersonalDefault)?.billing?.until ?? null;
   const accept = () => {
@@ -676,14 +689,15 @@ function WelcomeBody({ welcome }: { welcome: TrialWelcome }) {
   const { language } = useLanguage();
   const headline = useRef<HTMLHeadingElement>(null);
   const shown = useRef(false);
+  const tp = useTp();
   const date = welcome.endsAt ? formatInstant(welcome.endsAt, language, browserTimezone()) : '';
+  // Review: someone first signing in days into the trial (an approval that waited) reads the days left, not "has started".
+  const left = welcome.endsAt ? daysLeft(welcome.endsAt, new Date()) : TRIAL_LENGTH_DAYS;
+  const heading = left >= TRIAL_LENGTH_DAYS - 1 ? t('hosted.billing.welcome.headline') : tp('hosted.billing.headline.trialDaysLeft', left);
   useEffect(() => {
     headline.current?.focus();
     if (shown.current) return;
     shown.current = true;
-    // Shown, however it was opened (/setup's first-run link, or the shell): the shell's one offer is spent, so closing
-    // it never has the shell open it again before the answer reaches the cached /v1/me (release-QA finding).
-    takeTrialWelcomeOffer();
     void trackPortal('trial_card_prompt_shown', { prompt: 'first_run' });
   }, []);
   return (
@@ -691,7 +705,7 @@ function WelcomeBody({ welcome }: { welcome: TrialWelcome }) {
       <div className="hp-billing-status">
         <Chip tone="butter" label={t('hosted.billing.chip.trial')} />
         <h3 ref={headline} tabIndex={-1} className="hp-billing-headline">
-          {t('hosted.billing.welcome.headline')}
+          {heading}
         </h3>
         {date && <p>{t('hosted.billing.welcome.endsOn', { date })}</p>}
       </div>
