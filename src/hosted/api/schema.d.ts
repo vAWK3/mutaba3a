@@ -16767,9 +16767,24 @@ export interface components {
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         ReceiptPage: {
-            items: components["schemas"]["ExpenseReceipt"][];
+            items: components["schemas"]["ReceiptListItem"][];
             nextCursor: string | null;
         };
+        ReceiptListItem: components["schemas"]["ExpenseReceipt"] & {
+            expense: components["schemas"]["LinkedExpenseSummary"];
+        };
+        /** @description MUT-258: a FILED receipt's live expense; null To review, and null when that expense was deleted */
+        LinkedExpenseSummary: {
+            vendor: string | null;
+            title: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** Format: uuid */
+            categoryId: string | null;
+        } | null;
         /** @description READY receipts in the library, per filing status */
         ReceiptCounts: {
             toReview: number;

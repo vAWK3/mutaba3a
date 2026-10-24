@@ -2071,7 +2071,12 @@ export class MemoryLedgerStore implements LedgerStore {
             (!page.cursor || r.createdAt < page.cursor.createdAt || (r.createdAt.getTime() === page.cursor.createdAt.getTime() && r.id < page.cursor.id)),
         )
         .sort((a, b) => -compareByCreatedAtThenId(a, b));
-      const items = rows.slice(0, page.limit).map((r) => ({ ...r }));
+      // MUT-258: a FILED row carries its live expense's summary, as Prisma's include does.
+      const items = rows.slice(0, page.limit).map((r) => {
+        const e = r.expenseId ? this.exps.get(r.expenseId) : undefined;
+        const expense = e && !e.deletedAt && e.organizationId === organizationId ? { vendor: e.vendor, title: e.title, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, categoryId: e.categoryId } : null;
+        return { ...r, expense };
+      });
       const last = items[items.length - 1];
       return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
     },
