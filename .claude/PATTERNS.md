@@ -2735,3 +2735,10 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - When a flow needs real mail, real tokens or an operator action, the QA app runs the API with test adapters (the memory mailer, fixture checkers, test secrets) on a per-launch database. The API serves `vite build --mode hosted` from `PORTAL_DIST_DIR`, so production's CSP and hashed assets are what the specs see.
 - Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`) so per-IP budgets don't add up.
 - **First instance:** `qa/support/selfservice-live.mjs` (the `portal-selfservice` app).
+
+### Pattern: A plan-dependent write is refused once, at the door, and the portal only mirrors it (MUT-361)
+- The server decides in one pure module (`server/src/billing/gate.ts`) applied once in `authenticate()`, before any route work: method + endpoint class, never per route. Every organization-independent endpoint is classified in one table, and a test fails on an unclassified one.
+- `/v1/me` publishes the verdict (`billing.state` per profile, `billingStanding` for the person), so clients branch on it instead of re-deriving the rules.
+- In the portal every write affordance takes `writable` (`useWriteGate()`); a write drawer stays openable view-only (`Drawer readOnly` + `ReadOnlyFields`), keeping reads like a receipt's Download. A late refusal re-reads `/v1/me` through the query client's caches.
+- **First instance:** the lapse gate (ADR-181).
+

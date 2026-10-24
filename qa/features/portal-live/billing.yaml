@@ -137,3 +137,23 @@ features:
     expect:
       - Nothing overflows sideways; the headline, chip and buttons read right to left
       - The amount reads ₪49.00 inside Arabic text (<bdi>), and Continue to payment spans the footer (AC4, DR10)
+  # MUT-361 (ADR-181): the lapse gate on the real API: the trial's days moved in the QA database.
+  - id: lapse-gate
+    title: After the trial the API refuses writes and the portal is read-only; from day 30 only Subscribe and the records export answer
+    tier: core
+    paths:
+      - server/src/billing/gate.ts
+      - server/src/auth/billing-gate.ts
+      - server/src/auth/middleware.ts
+      - server/src/billing/coverage.ts
+      - server/src/routes/me.ts
+      - server/src/routes/entries.ts
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/queryClient.ts
+    steps:
+      - Sign up and skip the card
+      - Twenty days later, open Expenses and try to record one anyway
+      - Thirty-one days later, open the portal and download my records
+    expect:
+      - On day 20 the banner says the profile is read-only, there's no Record expense, and the API answers a write with 402 SUBSCRIPTION_LAPSED
+      - On day 31 only "Subscribe or download your records" shows, the API refuses a list read with 402, and Download my records saves the file

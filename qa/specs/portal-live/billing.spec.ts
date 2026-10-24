@@ -310,3 +310,47 @@ test('The Home trial banner in Arabic on a 375 px phone: Not now, hide, the last
     await expect(banner).toHaveCount(0);
   });
 });
+
+test('After the trial the API refuses writes and the portal is read-only; from day 30 only Subscribe and the records export answer', { tag: '@portal-live.billing.lapse-gate' }, async ({ page, step }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, 'en'), PORTAL_LANGUAGE_KEY);
+  const signup = await requestSignup('en', 'lapse');
+  const person = await step('Sign up and skip the card', async () => {
+    const signedUp = await finishSignupInPage(page, signup, 'en');
+    const welcome = page.getByRole('dialog', { name: 'Your free trial' });
+    await welcome.getByRole('button', { name: 'Not now' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    return signedUp;
+  });
+  const origin = new URL(page.url()).origin;
+  const asPerson = { 'x-mutaba3a-profile': person.personalId, origin };
+  const banner = page.getByRole('region', { name: 'Your plan' });
+
+  await step('Twenty days later, open Expenses and try to record one anyway', async () => {
+    setTrialStartedDaysAgo(person.userId, 20);
+    await page.goto(`/p/${person.personalId}/expenses`);
+    await expect(banner.getByText('This profile is read-only')).toBeVisible();
+    await expect(banner.getByText(/the profile locks until you subscribe/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Record expense' })).toHaveCount(0);
+    const refused = await page.request.post('/v1/expenses', {
+      headers: { ...asPerson, 'idempotency-key': crypto.randomUUID() },
+      data: { amount: '12.00', currency: 'ILS', occurredOn: '2026-10-05', title: 'Paper' },
+    });
+    expect(refused.status()).toBe(402);
+    expect((await refused.json()).error).toMatchObject({ code: 'SUBSCRIPTION_LAPSED', details: { profileId: person.personalId, state: 'READ_ONLY', source: 'TRIAL' } });
+  });
+
+  await step('Thirty-one days later, open the portal and download my records', async () => {
+    setTrialStartedDaysAgo(person.userId, 31);
+    await page.goto(`/p/${person.personalId}`);
+    await expect(page.getByRole('heading', { name: 'Subscribe or download your records' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Subscribe' })).toBeVisible();
+    const read = await page.request.get('/v1/expenses', { headers: asPerson });
+    expect(read.status()).toBe(402);
+    expect((await read.json()).error.details.state).toBe('LOCKED');
+    await page.getByRole('button', { name: 'Download my records' }).click();
+    const yourData = page.getByRole('dialog', { name: 'Your data' });
+    const exported = page.waitForResponse((res) => new URL(res.url()).pathname === '/v1/records-export');
+    await yourData.getByRole('button', { name: 'Download my records' }).click();
+    expect((await exported).status()).toBe(200);
+  });
+});
