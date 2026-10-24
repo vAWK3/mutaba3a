@@ -251,7 +251,7 @@ ESLint enforces it (MUT-47, ADR-071).
 
 | Command | Rolls out | How |
 |---------|-----------|-----|
-| `make release web` | the frontend + landing at mutaba3a.app | gates → version prompt → a commit holding only the version files → `git push origin main`; Netlify builds `main` |
+| `make release web` | the landing at mtb3a.com + the free web app at mutaba3a.netlify.app/app | gates → version prompt → a commit holding only the version files → `git push origin main`; Netlify builds `main` |
 | `make release server` | the hosted API + the portal it serves | gates → version prompt → commit + push → `server/scripts/deploy.sh` (image → `prisma migrate deploy` → `terraform apply` → smoke) |
 | `npm run release` | the desktop app (DMG, notarized, GitHub release) | unchanged; `scripts/release.ts` over `deploy.sh` |
 
@@ -421,7 +421,7 @@ Device-to-device sync was retired in MUT-73 (ADR-053).
 4. **Low barrier to entry** ensures adoption
 
 ### Distribution Channels
-- **Direct**: mutaba3a.app website
+- **Direct**: mtb3a.com website
 - **GitHub**: Releases for desktop
 - **Word of mouth**: Privacy/freelance communities
 
@@ -441,7 +441,7 @@ Device-to-device sync was retired in MUT-73 (ADR-053).
 |---------|------|-------|
 | Netlify | $0 | Free tier sufficient |
 | GitHub | $0 | Free for public repos |
-| Domain | ~$12/year | mutaba3a.app |
+| Domain | ~$12/year | mtb3a.com (Namecheap, DNS on Cloudflare) |
 | Code Signing | ~$99/year | Apple Developer (macOS) |
 
 ### Scaling Costs (at 10K+ users)

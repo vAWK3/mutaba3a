@@ -260,7 +260,7 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 1. **On PR**: Netlify creates preview deploy
 2. **On merge to main**: Netlify deploys to production
-3. **URL**: mutaba3a.app/app/
+3. **URL**: mutaba3a.netlify.app/app/ (the landing is at mtb3a.com; `mtb3a.com/app/*` 302s here)
 
 ### Desktop Release (Manual)
 
