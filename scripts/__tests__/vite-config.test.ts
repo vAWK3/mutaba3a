@@ -687,3 +687,11 @@ describe('vite.config', () => {
     });
   });
 });
+
+describe('the portal build never needs argon2 (MUT-368)', () => {
+  it('resolves @node-rs/argon2 to the throwing browser stub in the hosted build only', () => {
+    const alias = resolve('hosted').resolve?.alias as Record<string, string>;
+    expect(alias['@node-rs/argon2']).toMatch(/src\/hosted\/local\/platform\/argon2\.ts$/);
+    expect((resolve('web').resolve?.alias as Record<string, string> | undefined)?.['@node-rs/argon2']).toBeUndefined();
+  });
+});

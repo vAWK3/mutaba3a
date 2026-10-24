@@ -513,6 +513,11 @@ function hostedConfig(): UserConfig {
         "node:async_hooks": fileURLToPath(
           new URL("./src/hosted/local/platform/async-hooks.ts", import.meta.url),
         ),
+        // Imported by the server's app.ts for password hashing, which only ever runs on the server: a stub that throws,
+        // so the build never needs the package's optional WASM browser entry (src/hosted/local/platform/argon2.ts).
+        "@node-rs/argon2": fileURLToPath(
+          new URL("./src/hosted/local/platform/argon2.ts", import.meta.url),
+        ),
         // The portal reaches the lazy local chunk only through this alias
         // (src/hosted/session/localBackendContract.ts).
         "@mut/local-backend": fileURLToPath(
