@@ -15,6 +15,21 @@ paths:
   - src/hosted/data/attemptKey.ts
   - src/hosted/format/currencies.ts
 features:
+  - id: vendor-typeahead
+    title: The vendor field suggests the profile's saved vendors; a new one is kept as typed, and picking one prefills its last category (MUT-254)
+    tier: secondary
+    tickets: [MUT-254]
+    paths:
+      - src/hosted/components/VendorPicker.tsx
+    steps:
+      - Record an expense at a new vendor, Yellow Cab, under Travel
+      - Record another and type "yel" in Vendor
+      - Pick Yellow Cab from the suggestions and save
+    expect:
+      - Typing a new vendor offers "New vendor" and Enter keeps the text as typed
+      - GET /v1/vendors is asked with q=yel and suggests Yellow Cab
+      - Picking it fills Vendor and prefills Category with Travel
+      - POST /v1/expenses gets vendor Yellow Cab and the Travel category
   - id: create
     title: Record an expense; the drawer says what is missing, takes a currency's own decimals (JOD 3), and the expense is listed and filterable
     tier: secondary

@@ -415,6 +415,8 @@
         "titlePlaceholder": "What was it for?",
         "vendor": "Vendor",
         "vendorPlaceholder": "Business or vendor name",
+        "vendorNew": "New vendor",
+        "vendorAlias": "Matched “{name}”",
         "client": "Client",
         "clientPlaceholder": "Search for a client",
         "matter": "Matter",

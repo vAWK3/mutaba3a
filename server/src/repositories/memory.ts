@@ -94,6 +94,11 @@ import type {
   ExpenseReceiptRecord,
   ExpenseReceiptRepository,
   ExpenseRecord,
+  VendorRecord,
+  VendorNameRecord,
+  VendorRepository,
+  ResolveVendorInput,
+  VendorSuggestion,
   ExpenseRepository,
   UpdateExpenseCategoryPatch,
   UpdateConversionPatch,
@@ -149,6 +154,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
 import { todayIn } from '../dates.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
@@ -165,8 +171,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  *   `approvedByUserId` and `version`, and `expenseId` may be null (a To-review receipt).
  * 4 (MUT-366): `people` gained `emailVerifiedAt`.
  * 5 (MUT-418): `people` gained `trialPrompt`.
+ * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 5;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 6;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -205,6 +212,8 @@ export interface LocalSnapshotMaps {
   expGroups: Map<string, ExpenseGroupRecord>;
   groupMarks: Map<string, ExpenseGroupOverrideRecord>;
   inbox: Map<string, InboxEntryRecord>;
+  vendors: Map<string, VendorRecord>;
+  vendorNames: Map<string, VendorNameRecord>;
 }
 
 export interface LocalSnapshot {
@@ -259,6 +268,9 @@ export class MemoryLedgerStore implements LedgerStore {
   /** Keyed `${groupId}:${expenseId}` — the Postgres primary key. */
   private readonly groupMarks = new Map<string, ExpenseGroupOverrideRecord>();
   private readonly inbox = new Map<string, InboxEntryRecord>();
+  /** MUT-254: vendors by id, and their names (canonical + aliases) by id; one name key per organization. */
+  private readonly vendorMap = new Map<string, VendorRecord>();
+  private readonly vendorNames = new Map<string, VendorNameRecord>();
   /**
    * MUT-358 billing state. Deliberately not in snapshot()/restore(), like the terms acceptances: the portal's
    * signed-out mode has no billing (its /v1/me says `billing: null`), and new maps would change the local format.
@@ -404,6 +416,8 @@ export class MemoryLedgerStore implements LedgerStore {
       detail.uncategorized.push({ expenseId: e.id, categoryId: e.categoryId });
       Object.assign(e, { categoryId: null, version: e.version + 1, updatedAt: at });
     }
+    // MUT-254: ON DELETE SET NULL on vendors.lastCategoryId.
+    for (const v of this.vendorMap.values()) if (v.organizationId === organizationId && v.lastCategoryId !== null) v.lastCategoryId = null;
     for (const [key, c] of this.expCats) if (c.organizationId === organizationId) this.expCats.delete(key);
     this.insertPreset(organizationId, preset, at);
     return { impact, detail };
@@ -1682,7 +1696,9 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expenses.organizationId');
       // The Postgres foreign key (MUT-182 R17: a type change can delete a category between a route's check and this insert).
       if (input.categoryId !== null && !this.expCats.has(input.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
-      const record: ExpenseRecord = { id: randomUUID(), ...input, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
+      // Like Postgres' foreign key: existence only. The routes resolve or check the vendor inside the profile.
+      if (input.vendorId && !this.vendorMap.has(input.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
+      const record: ExpenseRecord = { id: randomUUID(), ...input, vendorId: input.vendorId ?? null, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       this.exps.set(record.id, record);
       return { ...record };
     },
@@ -1704,6 +1720,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!e || e.organizationId !== organizationId || e.deletedAt) return { kind: 'not_found' };
       if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
       if (patch.categoryId && !this.expCats.has(patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
+      if (patch.vendorId && !this.vendorMap.has(patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
       Object.assign(e, definedOnly(patch));
       e.version += 1;
       e.updatedAt = at;
@@ -1882,6 +1899,91 @@ export class MemoryLedgerStore implements LedgerStore {
       return { kind: 'updated', record: { ...c } };
     },
   };
+
+  readonly vendors: VendorRepository = {
+    // No await between the reads and the writes: two calls can't interleave (the memory store's stand-in for the
+    // unique index and the retried transaction).
+    resolve: async (input: ResolveVendorInput, at) => {
+      const nameKey = vendorNameKey(input.name);
+      if (!nameKey) return null;
+      const regKey = registrationKey(input.registrationNo);
+      const org = input.organizationId;
+      // Same as Prisma: a filled detail stamps updatedAt, never the version.
+      const fill = (v: VendorRecord) => {
+        if (v.phone === null && input.phone?.trim()) Object.assign(v, { phone: input.phone.trim(), updatedAt: at });
+        if (v.email === null && input.email?.trim()) Object.assign(v, { email: input.email.trim(), updatedAt: at });
+      };
+      const nameOwner = [...this.vendorNames.values()].find((n) => n.organizationId === org && n.nameKey === nameKey);
+      const byReg = regKey ? [...this.vendorMap.values()].find((v) => v.organizationId === org && registrationKey(v.registrationNo) === regKey) : undefined;
+      if (byReg) {
+        if (!nameOwner) this.addVendorName(byReg, input.name.trim(), nameKey, at);
+        fill(byReg);
+        return { ...byReg };
+      }
+      if (nameOwner) {
+        const v = this.vendorMap.get(nameOwner.vendorId)!;
+        if (regKey && v.registrationNo === null) Object.assign(v, { registrationNo: input.registrationNo!.trim(), updatedAt: at });
+        fill(v);
+        return { ...v };
+      }
+      const v: VendorRecord = {
+        id: randomUUID(),
+        organizationId: org,
+        canonicalName: input.name.trim(),
+        registrationNo: regKey ? input.registrationNo!.trim() : null,
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        lastCategoryId: null,
+        lastUsedAt: at,
+        version: 1,
+        createdAt: at,
+        updatedAt: at,
+      };
+      this.vendorMap.set(v.id, v);
+      this.addVendorName(v, v.canonicalName, nameKey, at);
+      return { ...v };
+    },
+    touch: async (organizationId, vendorId, change, at) => {
+      const v = this.vendorMap.get(vendorId);
+      if (!v || v.organizationId !== organizationId) return;
+      const category = change.categoryId ? this.expCats.get(change.categoryId) : undefined;
+      if (category && category.organizationId === organizationId && !isAutomaticOtherCategory(category.name)) v.lastCategoryId = category.id;
+      v.lastUsedAt = at;
+    },
+    getById: async (organizationId, id) => {
+      const v = this.vendorMap.get(id);
+      return v && v.organizationId === organizationId ? { ...v } : null;
+    },
+    search: async (organizationId, query, limit) => {
+      const queryKey = vendorNameKey(query);
+      const own = [...this.vendorMap.values()].filter((v) => v.organizationId === organizationId);
+      if (!queryKey) {
+        return own
+          .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime() || a.id.localeCompare(b.id))
+          .slice(0, limit)
+          .map((v): VendorSuggestion => ({ vendor: { ...v }, matchedName: v.canonicalName, score: 1, exact: false }));
+      }
+      // The Prisma store's one path (A16): names containing the query, plus every name of the 50 most recently used
+      // vendors, so a near-miss is suggested in exactly the same cases here and in Postgres.
+      const recent = new Set(
+        own
+          .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime() || a.id.localeCompare(b.id))
+          .slice(0, RECENT_VENDORS_SCORED)
+          .map((v) => v.id),
+      );
+      return bestVendorSuggestions(
+        [...this.vendorNames.values()].filter((n) => n.organizationId === organizationId && (n.nameKey.includes(queryKey) || recent.has(n.vendorId))),
+        (id) => this.vendorMap.get(id),
+        queryKey,
+        limit,
+      );
+    },
+  };
+
+  private addVendorName(v: VendorRecord, name: string, nameKey: string, at: Date): void {
+    const row: VendorNameRecord = { id: randomUUID(), organizationId: v.organizationId, vendorId: v.id, name, nameKey, createdAt: at };
+    this.vendorNames.set(row.id, row);
+  }
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
     create: async (input: CreateExpenseReceiptInput, at) => {
@@ -2337,7 +2439,7 @@ export class MemoryLedgerStore implements LedgerStore {
     return {
       custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
       pays: m.pays, allocs: m.allocs, credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
-      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames,
     };
   }
 
@@ -2532,6 +2634,8 @@ export class MemoryLedgerStore implements LedgerStore {
         expGroups: this.expGroups,
         groupMarks: this.groupMarks,
         inbox: this.inbox,
+        vendors: this.vendorMap,
+        vendorNames: this.vendorNames,
       },
     };
   }
@@ -2574,6 +2678,8 @@ export class MemoryLedgerStore implements LedgerStore {
     replaceMap(this.expGroups, maps.expGroups);
     replaceMap(this.groupMarks, maps.groupMarks);
     replaceMap(this.inbox, maps.inbox);
+    replaceMap(this.vendorMap, maps.vendors);
+    replaceMap(this.vendorNames, maps.vendorNames);
   }
 }
 
@@ -2586,6 +2692,29 @@ function pageOfMap<T>(map: Map<string, T>, matches: (key: string, row: T) => boo
     return [key, typeof row === 'object' && row !== null ? (structuredClone(row) as T) : row];
   });
   return { entries, nextKey: keys.length > limit ? (page[page.length - 1] ?? null) : null };
+}
+
+/**
+ * MUT-254: the typeahead's ranking, shared by both stores. Scores each candidate name against the query key
+ * (vendors/keys.ts scoreVendorName), keeps the best name per vendor, and orders by score, then most recently used.
+ */
+/** How many of the most recently used vendors a typeahead also scores for near-misses (both stores, A16). */
+export const RECENT_VENDORS_SCORED = 50;
+
+export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendorOf: (id: string) => VendorRecord | undefined, queryKey: string, limit: number): VendorSuggestion[] {
+  const best = new Map<string, VendorSuggestion>();
+  for (const n of names) {
+    const score = scoreVendorName(queryKey, n.nameKey);
+    if (score <= 0) continue;
+    const vendor = vendorOf(n.vendorId);
+    if (!vendor) continue;
+    const exact = n.nameKey === queryKey;
+    const held = best.get(vendor.id);
+    if (!held || (exact && !held.exact) || (exact === held.exact && score > held.score)) best.set(vendor.id, { vendor: { ...vendor }, matchedName: n.name, score, exact });
+  }
+  return [...best.values()]
+    .sort((a, b) => Number(b.exact) - Number(a.exact) || b.score - a.score || b.vendor.lastUsedAt.getTime() - a.vendor.lastUsedAt.getTime() || a.vendor.id.localeCompare(b.vendor.id))
+    .slice(0, limit);
 }
 
 /** `target.clear()` then repopulate from `source` — `target` is a `private readonly` field, so it is mutated in place, never reassigned. */

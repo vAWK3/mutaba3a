@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Vendors are remembered per profile and suggested as you type (MUT-254, ADR-183)
+
+### Added
+- `vendors` and `vendor_names` tables and `expenses.vendorId` (migration `20261024190000_mut254_vendors`, additive). Every expense writer (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) links the typed vendor: exact match on the registration number, then the normalised name or an alias (Arabic letter forms, diacritics, punctuation and legal suffixes folded); a new name creates the vendor. Optional `vendorDetails { registrationNo, phone, email }` help the match and fill what a vendor lacks.
+- `GET /v1/vendors?q=&limit=`: the session-only typeahead (prefix, contains, then near-miss spellings; most recently used when empty). Malafat's key is refused.
+- A vendor remembers its last category (never the automatic Other) only after a write succeeded.
+- `npm run backfill:vendors` (`--dry`), also run by post-roll on every deploy.
+- **Portal:** the expense drawer's Vendor field suggests saved vendors, keeps typed text as a new one, and prefills the vendor's last category into an empty Category. en/ar. QA `portal.expenses.vendor-typeahead`.
+
+### Changed
+- `Expense` gains `vendorId`. Local-mode snapshot format 6 (vendors maps; 5 → 6 migration), records export carries vendors and names. API `1.62.0-mut254`.
+
+### Files
+- `server/prisma/{schema.prisma,migrations/20261024190000_mut254_vendors}`, `server/src/vendors/keys.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/expenses/compose.ts`, `server/src/routes/{expenses,inbox,receipts,vendors,portal-routes}.ts`, `server/src/scripts/{backfill-vendors,post-roll}.ts`, `src/hosted/components/{VendorPicker,ExpenseDrawer}.tsx`, `src/hosted/local/migrations/index.ts`, `qa/support/portalApi.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
 
 ### Fixed

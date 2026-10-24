@@ -201,6 +201,13 @@ export const STORE_ACCESS: StoreAccess = {
     seed: { write: 'expenses' },
     update: { write: 'expenses' },
   },
+  // MUT-254: vendors are expense data — session-only; Malafat's API key never reads or writes them (MUT-298 D1).
+  vendors: {
+    resolve: { write: 'expenses' },
+    touch: { write: 'expenses' },
+    getById: { read: 'expenses' },
+    search: { read: 'expenses' },
+  },
   expenseReceipts: {
     create: { write: 'expenses' },
     setKey: { write: 'expenses' },

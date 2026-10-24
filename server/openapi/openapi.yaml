@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.60.0-mut361
+  version: 1.62.0-mut254
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -3204,6 +3204,10 @@ components:
         vendor:
           type: string
           nullable: true
+        vendorId:
+          type: string
+          nullable: true
+          format: uuid
         categoryId:
           type: string
           nullable: true
@@ -3237,6 +3241,7 @@ components:
         - currency
         - title
         - vendor
+        - vendorId
         - categoryId
         - customerId
         - projectId
@@ -3255,6 +3260,8 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        vendorDetails:
+          $ref: "#/components/schemas/VendorDetails"
         title:
           type: string
           minLength: 1
@@ -3267,6 +3274,23 @@ components:
           format: uuid
           description: With projectId alone, customerId is the project's customer
       additionalProperties: false
+    VendorDetails:
+      type: object
+      properties:
+        registrationNo:
+          type: string
+          minLength: 1
+          maxLength: 40
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 40
+        email:
+          type: string
+          maxLength: 200
+          format: email
+      additionalProperties: false
+      description: "MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`"
     IncomeResponse:
       type: object
       properties:
@@ -5325,6 +5349,8 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        vendorDetails:
+          $ref: "#/components/schemas/VendorDetails"
         categoryId:
           type: string
           format: uuid
@@ -5374,6 +5400,8 @@ components:
           nullable: true
           minLength: 1
           maxLength: 200
+        vendorDetails:
+          $ref: "#/components/schemas/VendorDetails"
         categoryId:
           type: string
           nullable: true
@@ -5578,6 +5606,49 @@ components:
         archived:
           type: boolean
       additionalProperties: false
+    VendorSuggestionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VendorSuggestion"
+      required:
+        - items
+    VendorSuggestion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        matchedName:
+          type: string
+        registrationNo:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        exact:
+          type: boolean
+        lastCategoryId:
+          type: string
+          nullable: true
+          format: uuid
+      required:
+        - id
+        - name
+        - matchedName
+        - registrationNo
+        - phone
+        - email
+        - exact
+        - lastCategoryId
     IncomeCaptureResponse:
       allOf:
         - $ref: "#/components/schemas/IncomeResponse"
@@ -6402,6 +6473,8 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        vendorDetails:
+          $ref: "#/components/schemas/VendorDetails"
         categoryId:
           type: string
           format: uuid
@@ -13462,6 +13535,65 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/vendors:
+    get:
+      tags:
+        - Expenses
+      summary: Vendor suggestions for what was typed (the typeahead)
+      description: "Names (a vendor’s own or an alias) that start with the query rank first, then names that contain it, then near-misses (similar spelling, at least 60%); one row per vendor, best name first. Matching ignores case, spacing, punctuation, Arabic letter forms and diacritics, and a trailing legal suffix (Ltd, Inc, בע״מ, ش.م.م …). Empty q: the most recently used. Suggestions only: saving an expense matches its vendor exactly."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 200
+            description: "What was typed so far. Empty or absent: the most recently used vendors."
+          required: false
+          description: "What was typed so far. Empty or absent: the most recently used vendors."
+          name: q
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 25
+            default: 10
+            description: 1–25.
+          required: false
+          description: 1–25.
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorSuggestionList"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
           content:
             application/json:
               schema:

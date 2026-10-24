@@ -18,6 +18,7 @@ import { profileRoutes } from './profiles.js';
 import { projectRoutes } from './projects.js';
 import { receivableRoutes } from './receivables.js';
 import { summaryRoutes } from './summaries.js';
+import { vendorRoutes } from './vendors.js';
 
 /**
  * Everything the hosted portal (`src/hosted/api/client.ts`) calls, as one
@@ -55,6 +56,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => attachmentRoutes(deps.store, deps.attachments),
   (deps) => expenseRoutes(deps.store, { ...deps.attachments, receiptsLibrary: deps.receiptsLibrary }),
   (deps) => expenseCategoryRoutes(deps.store),
+  (deps) => vendorRoutes(deps.store),
   (deps) => incomeRoutes(deps.store),
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),

@@ -308,7 +308,12 @@ What you will see, and what to answer:
    shipped with no backfill). Normally prints `post-roll: 0 captured payment(s)
    re-marked origin CAPTURE` and `post-roll: 0 personal profile(s) backfilled,
    0 skipped`; the proxy stops. A `still has no personal profile` warning names
-   a user to provision by hand.
+   a user to provision by hand. Since MUT-254 it also links expenses to their
+   vendors (`post-roll: vendors — N expense(s) linked, …`): the first deploy
+   with the vendors migration links every existing expense; later runs link
+   only what the old revision wrote during the roll (normally 0). The same
+   step by hand: `DATABASE_URL=… npm run backfill:vendors -- --dry`, then
+   without `--dry`.
 8. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
 
 Repeat runs are the same command; plan 2 shows no changes and the service

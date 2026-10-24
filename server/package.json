@@ -57,6 +57,7 @@
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",
     "reconcile": "tsx src/scripts/reconcile.ts",
     "backfill:personal-categories": "tsx src/scripts/backfill-personal-expense-categories.ts",
+    "backfill:vendors": "tsx src/scripts/backfill-vendors.ts",
     "post-roll": "tsx src/scripts/post-roll.ts",
     "pre-roll": "tsx src/scripts/pre-roll.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
