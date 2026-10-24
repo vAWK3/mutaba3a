@@ -142,6 +142,28 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
       expect(await store.payments.reverse(a.id, '00000000-0000-4000-8000-000000000000', 'x', at(14))).toBeNull();
     });
 
+    it('lists the allocations of many payments in one read, oldest first, never another organization’s (MUT-175)', async () => {
+      const store = await makeStore();
+      const a = await org(store, 'A');
+      const { c, receivables } = await seed(store, a.id, [100000n, 50000n]);
+      const { payment: first } = await store.payments.create(payment(a.id, c.id, 60000n, [{ receivableId: receivables[0]!.id, amountMinor: 60000n }]), at(10));
+      const { payment: second } = await store.payments.create(payment(a.id, c.id, 90000n, [{ receivableId: receivables[0]!.id, amountMinor: 40000n }, { receivableId: receivables[1]!.id, amountMinor: 50000n }]), at(11));
+      const { payment: none } = await store.payments.create(payment(a.id, c.id, 100n, []), at(12));
+      const both = await store.payments.listAllocationsFor(a.id, [first.id, second.id, none.id]);
+      // One payment's allocations share a createdAt (ties break by id), so only the payments' order is fixed
+      expect(both.map((x) => x.paymentId)).toEqual([first.id, second.id, second.id]);
+      expect(both.map((x) => [x.paymentId, x.receivableId, x.amountMinor])).toEqual(
+        expect.arrayContaining([
+          [first.id, receivables[0]!.id, 60000n],
+          [second.id, receivables[0]!.id, 40000n],
+          [second.id, receivables[1]!.id, 50000n],
+        ]),
+      );
+      expect(await store.payments.listAllocationsFor(a.id, [])).toEqual([]);
+      const other = await org(store, 'B');
+      expect(await store.payments.listAllocationsFor(other.id, [first.id, second.id])).toEqual([]);
+    });
+
     it('credits: append-only rows, credited_minor and status follow, capacity enforced, newest first', async () => {
       const store = await makeStore();
       const a = await org(store, 'A');

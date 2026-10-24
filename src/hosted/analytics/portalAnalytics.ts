@@ -22,7 +22,7 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | TrialCardPromptEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent;
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
 

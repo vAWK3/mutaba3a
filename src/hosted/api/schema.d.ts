@@ -6947,6 +6947,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/summaries/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)
+         * @description MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID) */
+                    from?: string;
+                    /** @description Inclusive; defaults to the last of this month; a real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG) */
+                    to?: string;
+                    /** @description One bucket per day, or per calendar month (starting on the 1st) */
+                    bucket?: "day" | "month";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ActivitySummary"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/attachments/uploads": {
         parameters: {
             query?: never;
@@ -16248,6 +16330,96 @@ export interface components {
         ProjectSummaryResponse: components["schemas"]["ProjectSummary"] & {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             asOf: string;
+        };
+        ActivitySummary: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            from: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            to: string;
+            /** @enum {string} */
+            bucket: "day" | "month";
+            /** @description The organization's today */
+            asOf: string;
+            /** @description The earliest POSTED payment or expense in the read window: from (or the first of the 12 months ending with to’s month, if earlier) through the last day of to’s month; null when none */
+            dataSince: string | null;
+            /** @description Whether payments or expenses exist before the read window starts */
+            earlierData: boolean;
+            /** @description Zero-filled across from–to; every bucket lists every currency of the period */
+            buckets: {
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                start: string;
+                currencies: {
+                    currency: components["schemas"]["Currency"];
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    received: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    spent: string;
+                }[];
+            }[];
+            currencies: {
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                received: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                spent: string;
+                byCategory: {
+                    /** Format: uuid */
+                    categoryId: string | null;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    total: string;
+                    count: number;
+                }[];
+                /** @description Received per client, largest first; null = no client, last */
+                byCustomer: {
+                    /** Format: uuid */
+                    customerId: string | null;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    total: string;
+                    count: number;
+                }[];
+            }[];
+            /** @description The 12 calendar months ending with to’s month, whole months (rows after to in its month count here, not in the period) */
+            history: {
+                /** @description Calendar month, YYYY-MM */
+                month: string;
+                currencies: {
+                    currency: components["schemas"]["Currency"];
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    received: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    spent: string;
+                    byCategory: {
+                        /** Format: uuid */
+                        categoryId: string | null;
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        total: string;
+                        count: number;
+                    }[];
+                    /** @description Received per client, largest first; null = no client, last */
+                    byCustomer: {
+                        /** Format: uuid */
+                        customerId: string | null;
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        total: string;
+                        count: number;
+                    }[];
+                }[];
+            }[];
+            /** @description Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries */
+            daysToPaid: {
+                overall: {
+                    median: number;
+                    n: number;
+                } | null;
+                byCustomer: {
+                    /** Format: uuid */
+                    customerId: string;
+                    median: number;
+                    n: number;
+                }[];
+                /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
+                samples: number[];
+            };
         };
         CreateUploadResponse: {
             attachment: components["schemas"]["Attachment"];

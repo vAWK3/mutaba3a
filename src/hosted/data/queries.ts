@@ -19,7 +19,7 @@ export interface Page<T> {
   nextCursor: string | null;
 }
 
-async function everyPage<T>(load: (cursor: string | undefined) => Promise<Page<T>>): Promise<T[]> {
+export async function everyPage<T>(load: (cursor: string | undefined) => Promise<Page<T>>): Promise<T[]> {
   const items: T[] = [];
   let cursor: string | undefined;
   do {

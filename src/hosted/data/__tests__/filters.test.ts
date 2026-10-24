@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseReports, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -126,5 +126,16 @@ describe('expense groups URL state (MUT-268)', () => {
     expect(parseGroupDetail({ currency: 'JOD', category: R, editGroup: '1', addToGroup: true })).toEqual({ currency: 'JOD', category: R, editGroup: true, addToGroup: true });
     expect(parseGroupDetail({ category: 'none' })).toEqual({ category: 'none' });
     expect(parseGroupDetail({ currency: 'GBP', category: 'rent' })).toEqual({});
+  });
+});
+
+describe('Reports search (MUT-175): one filters object in the URL', () => {
+  it('keeps a valid period, day and the All-profiles scope', () => {
+    expect(parseReports({ period: 'year', at: '2026-03-04', scope: 'all' })).toEqual({ period: 'year', at: '2026-03-04', scope: 'all' });
+  });
+
+  it('drops bad values, and the default scope (one profile) never reaches the URL', () => {
+    expect(parseReports({ period: 'quarter', at: '2026-3-4', scope: 'profile', skip: R })).toEqual({});
+    expect(parseReports({ scope: 'everyone' })).toEqual({});
   });
 });

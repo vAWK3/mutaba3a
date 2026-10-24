@@ -68,6 +68,13 @@ export function addDays(date: IsoDate, days: number): IsoDate {
   return join(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
 }
 
+/** Whole calendar days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetween(from: IsoDate, to: IsoDate): number {
+  const [fy, fm, fd] = split(from);
+  const [ty, tm, td] = split(to);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
+}
+
 export function endOfMonth(date: IsoDate): IsoDate {
   const [y, m] = split(date);
   return join(y, m, daysInMonth(y, m));

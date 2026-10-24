@@ -36,17 +36,23 @@ export function summarizeExpenses(expenses: readonly Summarized[]): ExpenseSumma
   });
 }
 
-function sum(rows: readonly Summarized[]): bigint {
+export function sum(rows: ReadonlyArray<{ amountMinor: bigint }>): bigint {
   return rows.reduce((acc, e) => acc + e.amountMinor, 0n);
 }
 
-/** Groups by key: largest total first, ties by id, the null group last. */
-function breakdown(rows: readonly Summarized[], key: (e: Summarized) => string | null): Array<[string | null, Summarized[]]> {
-  const groups = new Map<string | null, Summarized[]>();
-  for (const e of rows) groups.set(key(e), [...(groups.get(key(e)) ?? []), e]);
-  return [...groups.entries()].sort(([ka, a], [kb, b]) => {
+/** Groups by key: largest total first, ties by id, the null group last. MUT-175 reuses it for received by client. */
+export function breakdown<T extends { amountMinor: bigint }>(rows: readonly T[], key: (row: T) => string | null): Array<[string | null, T[]]> {
+  const groups = new Map<string | null, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    const group = groups.get(k);
+    if (group) group.push(row);
+    else groups.set(k, [row]);
+  }
+  const totals = new Map([...groups].map(([k, group]) => [k, sum(group)]));
+  return [...groups.entries()].sort(([ka], [kb]) => {
     if (ka === null || kb === null) return ka === null ? 1 : -1;
-    const diff = sum(b) - sum(a);
+    const diff = totals.get(kb)! - totals.get(ka)!;
     if (diff !== 0n) return diff > 0n ? 1 : -1;
     return ka < kb ? -1 : 1;
   });

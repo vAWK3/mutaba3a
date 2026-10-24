@@ -158,7 +158,7 @@ describe('the shell signed out', () => {
     renderPortal(`/p/${ORG_A}`);
     const nav = await screen.findByRole('navigation', { name: 'Sections' });
     const links = within(nav).getAllByRole('link').map((link) => link.textContent);
-    expect(links).toEqual(['Overview', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions']);
+    expect(links).toEqual(['Overview', 'Reports', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions']);
   });
 
   it('drops the "Hosted" chip and the old local-app note from You › Profiles', async () => {

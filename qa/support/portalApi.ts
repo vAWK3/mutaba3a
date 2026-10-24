@@ -388,8 +388,93 @@ export interface FakeApiSeed {
   billingStanding?: 'open' | 'read-only' | 'locked' | null;
   /** MUT-361: GET /v1/billing's answer (Settings › Billing, and whether a payment would cover a profile). */
   billing?: Json;
+  /** MUT-175: each profile's money for GET /v1/summaries/activity; a profile not named reads the shared payments and expenses. */
+  reports?: Record<string, StubReportRecords>;
   /** MUT-333: the account is already closing (signing in during the grace): /v1/me carries it. */
   closure?: { requestedAt: string; deleteAfter: string };
+}
+
+/** MUT-175: what one profile's Reports reads. */
+export interface StubReportRecords {
+  payments: StubPayment[];
+  expenses: StubExpense[];
+  /** Each fully paid Owed entry's days (D2): the fake answers the median, n, samples and per-client rows as the server does. */
+  daysToPaid?: { samples: number[]; byCustomer?: Array<{ customerId: string; median: number; n: number }> } | null;
+  /** 403 / 500: the activity request is refused for this profile. */
+  refuse?: 403 | 500;
+}
+
+/** The server's D2 figure from the samples a spec gives: the median with n, null below 3. */
+function daysToPaidOf(given: StubReportRecords['daysToPaid']) {
+  const samples = [...(given?.samples ?? [])].sort((a, b) => a - b);
+  const mid = Math.floor(samples.length / 2);
+  const median = samples.length % 2 === 1 ? samples[mid]! : Math.round((samples[mid - 1]! + samples[mid]!) / 2);
+  return { overall: samples.length >= 3 ? { median, n: samples.length } : null, byCustomer: given?.byCustomer ?? [], samples };
+}
+
+const addMonthTo = (month: string, n: number) => {
+  const d = new Date(`${month}-01T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().slice(0, 7);
+};
+
+/**
+ * GET /v1/summaries/activity in miniature (server/src/summaries/activity.ts):
+ * POSTED payments by receivedOn, expenses by occurredOn, per currency, zero-filled
+ * buckets, the period's categories and clients, and the 12 months ending with `to`'s.
+ * Two-decimal currencies only, like the rest of this fake.
+ */
+export function activitySummary(records: StubReportRecords, from: string, to: string, bucket: 'day' | 'month', asOf: string) {
+  type Row = { on: string; currency: string; minor: number; kind: 'in' | 'out'; customerId: string | null; categoryId: string | null };
+  const rows: Row[] = [
+    ...records.payments.filter((p) => p.status === 'POSTED').map((p) => ({ on: p.receivedOn, currency: p.currency, minor: toMinor(p.amount), kind: 'in' as const, customerId: p.customerId, categoryId: null })),
+    ...records.expenses.map((x) => ({ on: x.occurredOn, currency: x.currency, minor: toMinor(x.amount), kind: 'out' as const, customerId: x.customerId, categoryId: x.categoryId })),
+  ];
+  const sum = (list: Row[], kind: Row['kind']) => toDecimal(list.filter((r) => r.kind === kind).reduce((s, r) => s + r.minor, 0));
+  const grouped = (list: Row[], key: (r: Row) => string | null) => {
+    const map = new Map<string | null, Row[]>();
+    for (const r of list) map.set(key(r), [...(map.get(key(r)) ?? []), r]);
+    return [...map.entries()].sort(([ka, a], [kb, b]) => (ka === null ? 1 : kb === null ? -1 : b.reduce((s, r) => s + r.minor, 0) - a.reduce((s, r) => s + r.minor, 0)));
+  };
+  const block = (list: Row[]) =>
+    [...new Set(list.map((r) => r.currency))].sort().map((currency) => {
+      const own = list.filter((r) => r.currency === currency);
+      return {
+        currency,
+        received: sum(own, 'in'),
+        spent: sum(own, 'out'),
+        byCategory: grouped(own.filter((r) => r.kind === 'out'), (r) => r.categoryId).map(([categoryId, g]) => ({ categoryId, total: sum(g, 'out'), count: g.length })),
+        byCustomer: grouped(own.filter((r) => r.kind === 'in'), (r) => r.customerId).map(([customerId, g]) => ({ customerId, total: sum(g, 'in'), count: g.length })),
+      };
+    });
+  const period = rows.filter((r) => r.on >= from && r.on <= to);
+  const currencies = block(period);
+  const starts: string[] = [];
+  if (bucket === 'day') for (let d = new Date(`${from}T00:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) starts.push(d.toISOString().slice(0, 10));
+  else for (let m = from.slice(0, 7); m <= to.slice(0, 7); m = addMonthTo(m, 1)) starts.push(`${m}-01`);
+  const keyOf = (on: string) => (bucket === 'day' ? on : `${on.slice(0, 7)}-01`);
+  // The server's read window: from (or the first of the 12 months ending with to's month, if earlier) through to's month end
+  const historyFirst = `${addMonthTo(to.slice(0, 7), -11)}-01`;
+  const windowStart = from < historyFirst ? from : historyFirst;
+  const read = rows.filter((r) => r.on >= windowStart && r.on.slice(0, 7) <= to.slice(0, 7));
+  return {
+    from,
+    to,
+    bucket,
+    asOf,
+    dataSince: read.map((r) => r.on).sort()[0] ?? null,
+    earlierData: rows.some((r) => r.on < windowStart),
+    buckets: starts.map((start) => ({
+      start,
+      currencies: currencies.map(({ currency }) => {
+        const day = period.filter((r) => r.currency === currency && keyOf(r.on) === start);
+        return { currency, received: sum(day, 'in'), spent: sum(day, 'out') };
+      }),
+    })),
+    currencies,
+    history: Array.from({ length: 12 }, (_, i) => addMonthTo(to.slice(0, 7), i - 11)).map((month) => ({ month, currencies: block(read.filter((r) => r.on.slice(0, 7) === month)) })),
+    daysToPaid: daysToPaidOf(records.daysToPaid ?? null),
+  };
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -436,10 +521,13 @@ export class FakeApi {
   private termsVersion = QA_TERMS_VERSION;
   /** MUT-373: profiles the person lost access to elsewhere; a request naming one answers 404, as the server does. */
   private readonly gone = new Set<string>();
+  /** MUT-175: per-profile Reports records. */
+  private readonly reports: Record<string, StubReportRecords>;
   /** MUT-333: set while the account is closing; then only Me, Keep my account and sign-out answer (403 ACCOUNT_CLOSING). */
   closure: { requestedAt: string; deleteAfter: string } | null;
 
   constructor(seed: FakeApiSeed) {
+    this.reports = { ...(seed.reports ?? {}) };
     this.signedIn = seed.signedIn ?? true;
     this.billingStanding = seed.billingStanding ?? null;
     this.billingOverview = seed.billing ?? null;
@@ -463,6 +551,23 @@ export class FakeApi {
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
     this.termsAccepted = seed.termsAccepted ?? true;
     this.closure = seed.closure ?? null;
+  }
+
+  /** MUT-175: GET /v1/summaries/activity for the named profile (defaults: this month, by day). */
+  private activityAnswer(profileId: string | undefined, q: (key: string) => string | undefined) {
+    const records = (profileId && this.reports[profileId]) || { payments: this.payments, expenses: this.expenses };
+    if (records.refuse === 403) return json({ error: { code: 'INSUFFICIENT_SCOPE', message: 'No access' } }, 403);
+    if (records.refuse === 500) return json({ error: { code: 'INTERNAL', message: 'Failed' } }, 500);
+    const month = this.today.slice(0, 7);
+    const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    const bucket = q('bucket') === 'month' ? 'month' : 'day';
+    return json(activitySummary(records, q('from') ?? `${month}-01`, q('to') ?? lastDay, bucket, this.today));
+  }
+
+  /** MUT-175: a profile's Reports answers normally again (after a `refuse`). */
+  serveReports(profileId: string) {
+    const records = this.reports[profileId];
+    if (records) this.reports[profileId] = { ...records, refuse: undefined };
   }
 
   /** The setup link changed behind the page's back: a lost answer that committed, a newer link, an expiry. */
@@ -607,6 +712,7 @@ export class FakeApi {
 
     if (resource === 'summaries') {
       if (id === 'organization') return json({ asOf: '2026-10-15', currencies: this.summary });
+      if (id === 'activity') return this.activityAnswer(named, q);
       if (id === 'customers' && sub) return this.customerSummaries.has(sub) ? json(this.customerSummaries.get(sub)) : notFound();
     }
     if (resource === 'customers' && method === 'POST' && !id) {

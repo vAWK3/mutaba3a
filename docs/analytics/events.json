@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -101,6 +101,15 @@
       "description": "MUT-418: the person declined the trial's card prompt: Not now (or closing) on the first-run step, or hiding the Home banner for 3 days.",
       "properties": {
         "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
+      }
+    },
+    "report_viewed": {
+      "emitters": ["portal"],
+      "description": "MUT-175: Reports was opened, or its period or scope changed (debounced 1 s). Never amounts, names or profile ids; signed out never sends.",
+      "properties": {
+        "period": { "type": "enum", "values": ["week", "month", "year"], "description": "The period shown." },
+        "scope": { "type": "enum", "values": ["profile", "all"], "description": "One profile, or All profiles combined." },
+        "stage": { "type": "enum", "values": ["stage_1", "stage_2", "stage_3"], "description": "How much history the report had: stage_1 = no complete month, stage_2 = one, stage_3 = two or more." }
       }
     }
   }
