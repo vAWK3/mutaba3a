@@ -1,0 +1,136 @@
+app: portal-selfservice
+area: signup
+title: Create an account (signup, the business-email screen and the review queue)
+tier: secondary
+# MUT-368 (epic MUT-322, ADR-159, mut-368-portal-signup-recover.md §6): /signup → the mail's link → /setup → Home, on a
+# live dev API with the memory mailer (read through GET /admin/v1/dev-outbox) and the fixture domain checker
+# (business.example and studio.example sign up at once; gmail.com waits for review; mailinator.com is a throwaway
+# service; nomail.example takes no mail). Turnstile is the page-routed stand-in for Cloudflare's test keys.
+paths:
+  - src/hosted/pages/auth/SignupPage.tsx
+  - src/hosted/pages/auth/EmailLinkForm.tsx
+  - src/hosted/pages/auth/CheckEmailNotice.tsx
+  - src/hosted/pages/auth/SignedOutOnly.tsx
+  - src/hosted/pages/auth/selfService.ts
+  - src/hosted/components/turnstile/**
+  - src/hosted/session/selfServiceDoors.ts
+  - server/src/routes/self-service.ts
+  - server/src/auth/self-service.ts
+  - server/src/auth/turnstile.ts
+features:
+  - id: create
+    title: A new person opens /signup in Arabic, asks for a link, opens it, sets a password and lands signed in on their personal profile's Home; the same in English
+    tier: core
+    paths:
+      - src/hosted/session/firstRun.ts
+      - src/hosted/pages/auth/SetupPage.tsx
+      - src/hosted/pages/auth/AuthLayout.tsx
+      - src/hosted/components/TimezoneChoice.tsx
+    steps:
+      - Open /signup with no language chosen
+      - Type a new address on a business domain and press Continue
+      - Open the link in the mail
+      - Type a password, tick the terms and press Create account
+      - Again in English
+    expect:
+      - The page is Arabic, right to left, and says the terms come with the password
+      - '"Check your email" names the address; the mail is in the page''s language'
+      - /setup says "Finish creating your account", with the address read-only and the currency and time zone
+      - The person lands signed in on their personal profile
+  - id: existing-email
+    title: Signing up with an address that already has an account shows the same "Check your email", and the mail says how to sign in instead
+    steps:
+      - Sign up with the address of an account that already exists
+    expect:
+      - The same "Check your email" screen as for a new address
+      - The outbox holds a "you already have an account" mail and no signup link
+  - id: expired-link
+    title: A signup link opened after 24 hours says it has expired and offers a new one from /signup, with no password form
+    steps:
+      - Ask for a link, let it age past 24 hours, and open it
+    expect:
+      - '"This link has expired", with Send a new link leading to /signup'
+      - No password field
+  - id: check-refused
+    title: When the bot check can't run, or the server refuses its token, the page says so and keeps the typed address; nothing is sent while the check failed
+    steps:
+      - Open /signup while the check fails (the always-fail key's behaviour), type an address and press Continue
+      - Open it again with the check passing, and have the server refuse the token once
+    expect:
+      - The widget's failure offers Try again and the support address; no request is sent
+      - The server's refusal reads "The check didn't pass. Try again."
+      - The address stays typed both times
+  - id: disposable
+    title: A throwaway-service address is refused under the field, the address kept, and no mail sent
+    steps:
+      - Sign up with an @mailinator.com address
+    expect:
+      - '"This address is from a throwaway email service. Use one you''ll keep."'
+      - The address stays typed; the outbox has nothing for it
+  - id: no-mail-domain
+    title: An address whose domain takes no mail is refused under the field, the address kept, and no mail sent
+    steps:
+      - Sign up with an @nomail.example address
+    expect:
+      - '"This address can''t receive email. Check it for typos, or use another one."'
+      - The address stays typed; the outbox has nothing for it
+  - id: rate-limited
+    title: Asking again for the same address within a minute, from a fresh page, says to wait a minute and keeps the address
+    steps:
+      - Ask for a link, then open /signup again and ask for the same address within the minute
+    expect:
+      - '"Please wait a minute before asking again."'
+      - The address stays typed
+  - id: closed
+    title: While the server opens no signup, /signup says accounts are by request and links the landing's request form; sign-in shows no Create an account
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+    steps:
+      - Open /signup and /sign-in while the server says signup is closed
+    expect:
+      - '"Accounts are by request for now", with Request an account linking the landing''s /hosted form'
+      - Sign-in shows Forgot your password? but no Create an account
+  - id: business-instant
+    title: An address on a domain that passes the business checks signs up at once and lands on Home
+    steps:
+      - Sign up with an @studio.example address and finish /setup
+    expect:
+      - Signed in straight away on Home, with no review
+  - id: review-webmail
+    title: A webmail signup waits for the operator; sign-in shows the same screen until the operator approves, then lands on Home, in English and Arabic
+    tier: core
+    paths:
+      - src/hosted/pages/auth/UnderReviewNotice.tsx
+      - server/src/routes/admin-signup-reviews.ts
+      - server/src/email/domains/**
+    steps:
+      - Sign up with an @gmail.com address and finish /setup
+      - Sign in with the new password
+      - The operator approves the review
+      - Sign in again
+      - Again in Arabic
+    expect:
+      - After /setup, "We're reviewing your account. We'll email you within 2 working days." with the support address and Sign out
+      - Sign-in shows the same screen
+      - The approval mail arrives, and sign-in lands on Home
+  - id: review-declined
+    title: When the operator declines a waiting signup, the decline mail names the support address and sign-in is refused like any unknown account
+    paths:
+      - src/hosted/pages/auth/UnderReviewNotice.tsx
+      - server/src/routes/admin-signup-reviews.ts
+    steps:
+      - Sign up with an @gmail.com address and finish /setup
+      - The operator declines the review
+      - Sign in with that address and password
+    expect:
+      - The decline mail names the support address
+      - '"That email and password don''t match."'
+  - id: '375'
+    title: At 375 px in Arabic, /signup, "Check your email", /setup and the under-review screen fit with nothing clipped or scrolling sideways
+    paths:
+      - src/hosted/hosted.css
+      - src/hosted/i18n/ar.json
+    steps:
+      - At 375 px in Arabic, go through signup with a webmail address up to the under-review screen
+    expect:
+      - No page scrolls sideways at any step, and the check's box fits inside the card

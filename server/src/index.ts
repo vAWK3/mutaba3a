@@ -88,6 +88,8 @@ const selfService = {
   addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
   addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * 3_600_000),
   signupEnabled: config.SELF_SIGNUP_ENABLED,
+  // MUT-368 (D1): GET /v1/self-service offers a door only where a link can really be mailed.
+  mailsLinks: config.MAILER !== 'noop' && Boolean(config.TURNSTILE_SECRET),
   turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
   floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS, screenMs: DOMAIN_CHECK_BUDGET_MS },
   // MUT-367 (ADR-159 §7a): DNS and RDAP in production (config refuses the fixture there), cached per domain.

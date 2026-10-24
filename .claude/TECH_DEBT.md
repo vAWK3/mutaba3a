@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-216: QA never runs Cloudflare's real Turnstile widget
+**Status**: Open
+**Ticket**: MUT-368 (D11)
+**Added**: 2026-10-24
+**Priority**: Medium (before mail goes live)
+**Impact**: The `portal-selfservice` specs answer `api.js` with a stand-in that mimics Cloudflare's test keys, because QA makes no third-party calls. The CSP, the explicit-render contract and the token flow are exercised, but the real widget's sizing, language and managed challenge are first seen at go-live.
+**Fix**: Before the release that sets `mailer = "resend"`, open /signup and /recover once against a dev server with the real production site key (or Cloudflare's always-pass test key) in both languages and at 375 px, and record it in DEPLOYMENT.md §7.
+
+### TD-217: The doors answer from configuration, not from the mailer's health
+**Status**: Open
+**Ticket**: MUT-368 (D1)
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: `GET /v1/self-service` offers recovery whenever a real mailer and a Turnstile secret are configured. A suspended Resend account, a hit daily cap or an unverified domain still shows "Forgot your password?", and the person waits for a mail that never comes.
+**Fix**: Fold the mailer's recent outcome (cap reached, provider refusing) into `recovery`, or show a banner from the operator's alert channel.
+
 ### TD-213: A business domain gives every address on it an instant trial
 **Status**: Open
 **Ticket**: MUT-367 (eng review, deferred)
@@ -59,7 +75,7 @@
 **Fix**: Cloudflare Email Routing on the apex in the frontdoor stack (`support@`, `dmarc@` → a real inbox), then set `mail_reply_to` and `dmarc_report_address` to them.
 
 ### TD-211: A SIGNUP link opens the setup page with "set up your account" copy
-**Status**: Open
+**Status**: Resolved (2026-10-24, MUT-368: "Finish creating your account", currency, time zone and name sent with the redeem)
 **Ticket**: MUT-366 (seam for MUT-368)
 **Added**: 2026-10-23
 **Priority**: Medium (before signup opens)

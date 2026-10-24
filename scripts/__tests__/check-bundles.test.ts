@@ -69,12 +69,18 @@ describe('hosted bundle rules', () => {
     expect(findForbidden(code, HOSTED_RULES)).not.toEqual([]);
   });
 
-  it.each(['Sign up', 'sign-up', 'Create account', 'Forgot password?', 'Reset password', 'Invite a colleague', 'إنشاء حساب', 'نسيت كلمة المرور', 'إعادة تعيين', 'دعوة'])(
-    'flags the self-service affordance "%s", case-insensitively',
+  // MUT-368 (ADR-159): the portal now has its two self-service doors, so their words are allowed on purpose.
+  it.each(['Sign up', 'path:"/signup"', 'Create an account', 'Forgot your password?', 'Reset your password', 'إنشاء حساب', 'نسيت كلمة المرور؟', 'إعادة تعيين كلمة المرور'])(
+    'allows the signup and recovery copy "%s" (MUT-368)',
     (copy) => {
-      expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
+      expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).toEqual([]);
     },
   );
+
+  // Invites wait for MUT-306: still no invite door in either language.
+  it.each(['Invite a colleague', 'invitation', 'دعوة'])('still flags the invite affordance "%s", case-insensitively', (copy) => {
+    expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
+  });
 
   it('refuses the app\'s profile store and its after-save routes, which the shared flash store must not drag in (MUT-91)', () => {
     expect(findForbidden('persist(s,{name:"mutaba3a-active-profile"})', HOSTED_RULES).map((f) => f.rule)).toEqual(['app profile store']);
@@ -91,7 +97,7 @@ describe('hosted bundle rules', () => {
   });
 
   it('reports the matched text and the rule', () => {
-    expect(findForbidden('xx Forgot password xx', HOSTED_RULES)).toEqual([{ rule: 'forgot', match: 'Forgot' }]);
+    expect(findForbidden('xx Invite someone xx', HOSTED_RULES)).toEqual([{ rule: 'invite', match: 'Invite' }]);
   });
 });
 

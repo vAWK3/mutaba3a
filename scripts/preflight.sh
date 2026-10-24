@@ -429,6 +429,16 @@ if [[ "$MODE" == "server" ]]; then
     fi
     unset CHECK_KEY
   fi
+  # MUT-368 (D6): with mail on, the portal's /signup and /recover need the production Turnstile site key, checked
+  # here (before bump-version) as well as by deploy.sh, so a missing key never leaves a pushed release commit behind.
+  if [[ "$MAILER_SETTING" == "resend" ]]; then
+    if [[ -z "${MUTABA3A_TURNSTILE_SITE_KEY:-}" || "${MUTABA3A_TURNSTILE_SITE_KEY}" =~ ^[123]x ]]; then
+      bad "MUTABA3A_TURNSTILE_SITE_KEY is ${MUTABA3A_TURNSTILE_SITE_KEY:-unset}${MUTABA3A_TURNSTILE_SITE_KEY:+ (a Cloudflare test key)}: with mail on, the portal needs the production widget's site key"
+      hint "put it in deploy.env (server/DEPLOYMENT.md §6f \"Signup and recovery\")"
+    else
+      ok "Turnstile site key set for the portal build"
+    fi
+  fi
   if [[ "${SKIP_MAILER_GUARD:-0}" == "1" ]]; then
     warn "mail release guard skipped (SKIP_MAILER_GUARD=1): this release may switch mail off"
   else

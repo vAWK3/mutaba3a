@@ -337,6 +337,12 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
   - **The screen:** every `POST /v1/signups` address is screened first (`server/src/email/domains/`). Disposable and no-mail addresses are refused (400 `EMAIL_NOT_ACCEPTED`). Webmail and relay addresses, and domains failing DNS/RDAP (MX, apex/www, registered ≥ 90 days), wait for the operator.
   - **The redeem:** a waiting signup opens as `PENDING_REVIEW` with no trial and a `signup_reviews` row. Signing in with its password answers 403 `ACCOUNT_UNDER_REVIEW`; recovery works.
   - **The operator:** `npm --prefix server run signups:review` (`/admin/v1/signup-reviews`) approves (ACTIVE, trial starts) or declines (the empty account is deleted). The operator gets an hourly-at-most digest at `OPERATOR_ALERT_EMAIL`.
+- The portal's self-service pages (MUT-368, ADR-179):
+  - `/signup` and `/recover`: an email and a Cloudflare Turnstile check, then one "Check your email" for every address.
+  - Sign-in's "Forgot your password?" and "Create an account" show only where `GET /v1/self-service` says the server mails links.
+  - `/setup` finishes a SIGNUP with a name, a currency and a time zone, and lands on the personal profile.
+  - A pending signup sees "We're reviewing your account" at setup and at every sign-in until approved.
+  - QA runs them on a live API in the `portal-selfservice` release-QA app.
 - Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
 
 ### Taking your records with you (MUT-325, ADR-156)

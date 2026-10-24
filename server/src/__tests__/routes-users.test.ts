@@ -353,7 +353,7 @@ describe('password reset and status', () => {
     const body = await read(await h.app.request(`/admin/v1/users/${user.id}/setup-link`, send('POST', { validHours: 24 })));
     expect(body.setupLink).toMatchObject({ purpose: 'SETUP', expiresAt: '2026-10-12T09:00:00.000Z' });
     const first = await h.app.request('/v1/account-setup/check', send('POST', { token: setupTokenOf(setupLink.url) }, { origin: 'http://localhost' }));
-    expect(await read(first)).toEqual({ state: 'superseded' });
+    expect(await read(first)).toEqual({ state: 'superseded', purpose: 'SETUP' });
   });
 
   it('with lock, the old password and every session stop working at once (MUT-235 D2)', async () => {

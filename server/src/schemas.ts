@@ -883,7 +883,15 @@ export const SetupLinkCheckResponseSchema = z
       /** MUT-324: the terms version the setup page shows and sends back as `acceptedTermsVersion`. */
       termsVersion: TermsVersionSchema,
     }),
-    z.object({ state: z.enum(['expired', 'used', 'superseded', 'invalid']) }),
+    z.object({
+      state: z.enum(['expired', 'used', 'superseded', 'invalid']),
+      /**
+       * MUT-368 (D2): what a dead link was for, so the page offers the right "Send a new link" (SIGNUP → signup, SETUP
+       * and RESET → recovery). Only the token's holder learns it; absent for `invalid` (no link to name). Additive since
+       * 1.58.0-mut368.
+       */
+      purpose: SetupLinkPurposeSchema.optional(),
+    }),
   ])
   .openapi('SetupLinkCheckResponse');
 
@@ -956,6 +964,19 @@ export const AccountRecoveryRequestSchema = z
 
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');
+
+/**
+ * MUT-368 (D1): which self-service doors this server really opens, so the portal never shows a dead one. Says nothing
+ * about any account. Additive since 1.58.0-mut368.
+ */
+export const SelfServiceDoorsSchema = z
+  .object({
+    /** POST /v1/signups is open: SELF_SIGNUP_ENABLED, on a server that mails links. */
+    signup: z.boolean(),
+    /** POST /v1/account-recovery can mail a link: a mailer other than noop and a Turnstile secret. */
+    recovery: z.boolean(),
+  })
+  .openapi('SelfServiceDoors');
 
 // ---- The operator's signup review queue (MUT-367, ADR-159 §7a) -------------
 

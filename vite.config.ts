@@ -99,6 +99,22 @@ export function posthogKey(override: string | undefined): string {
   return override;
 }
 
+/** Cloudflare's published always-pass Turnstile site key: the default outside production (MUT-368, MUT-197 D4). */
+export const TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA";
+
+/**
+ * The portal's Turnstile site key for /signup and /recover (MUT-368, D6). Unset, it is Cloudflare's always-pass test
+ * key, so dev, tests, QA and test:bundles need nothing; deploy.sh refuses a test key once the server mails links.
+ * Site keys are 24 characters (`0x` + 22); secrets are longer, so a secret pasted here fails the build, never ships.
+ */
+export function turnstileSiteKey(override: string | undefined): string {
+  if (override === undefined || override === "") return TURNSTILE_TEST_SITE_KEY;
+  if (!/^[0-3]x[0-9A-Za-z_-]{22}$/.test(override)) {
+    throw new Error("MUTABA3A_TURNSTILE_SITE_KEY must be a Turnstile site key (0x followed by 22 letters, digits, - or _), never the secret");
+  }
+  return override;
+}
+
 /** The Sentry org and project the portal reports to, and where its source maps go (MUT-149, ADR-091). */
 const SENTRY_ORG = "barmajiyat-ltd";
 const SENTRY_PORTAL_PROJECT = "mutaba3a-web";
@@ -497,6 +513,11 @@ function hostedConfig(): UserConfig {
         "node:async_hooks": fileURLToPath(
           new URL("./src/hosted/local/platform/async-hooks.ts", import.meta.url),
         ),
+        // Imported by the server's app.ts for password hashing, which only ever runs on the server: a stub that throws,
+        // so the build never needs the package's optional WASM browser entry (src/hosted/local/platform/argon2.ts).
+        "@node-rs/argon2": fileURLToPath(
+          new URL("./src/hosted/local/platform/argon2.ts", import.meta.url),
+        ),
         // The portal reaches the lazy local chunk only through this alias
         // (src/hosted/session/localBackendContract.ts).
         "@mut/local-backend": fileURLToPath(
@@ -518,6 +539,8 @@ function hostedConfig(): UserConfig {
       __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
+      // The bot check on /signup and /recover (MUT-368); public, never the secret
+      __TURNSTILE_SITE_KEY__: JSON.stringify(turnstileSiteKey(process.env.MUTABA3A_TURNSTILE_SITE_KEY)),
       // Crash reports, signed in only (MUT-149, ADR-091 am.11); no DSN compiles them out
       ...sentry.define,
     },

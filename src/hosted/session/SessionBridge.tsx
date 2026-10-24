@@ -18,7 +18,8 @@ import { onModeChangedElsewhere, useIsLocalMode } from './mode';
  * invalidating the cache is all it takes (brief §2.5, "two tabs").
  */
 
-const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup']);
+// MUT-368: /signup and /recover too: someone there is mid-way through asking for a link, typed email and all.
+const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup', '/signup', '/recover']);
 
 export function SessionBridge() {
   const queryClient = useQueryClient();

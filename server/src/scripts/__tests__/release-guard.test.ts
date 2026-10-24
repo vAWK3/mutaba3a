@@ -471,3 +471,55 @@ describe('deploy.sh wires the mail guard (MUT-359)', () => {
     expect(wrapper).toMatch(/guard_mailer_release/);
   });
 });
+
+/** MUT-368 (D6): once the server mails links, the portal it ships must carry a real Turnstile site key. */
+function siteKeyGuard(o: { mailer?: string; consoleFails?: boolean; key?: string | undefined }) {
+  const bin = join(dir, 'bin');
+  spawnSync('mkdir', ['-p', bin]);
+  writeFileSync(join(bin, 'terraform'), [
+    '#!/bin/bash',
+    `case "$1" in console) cat >/dev/null; ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `printf '"%s"\\n' '${o.mailer ?? 'noop'}'`} ;; esac`,
+    'exit 0',
+  ].join('\n') + '\n');
+  chmodSync(join(bin, 'terraform'), 0o755);
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_turnstile_site_key -input=false -var-file=production.tfvars -var image_tag=abc && echo PASSED`;
+  const e: NodeJS.ProcessEnv = { ...process.env, MUTABA3A_TURNSTILE_SITE_KEY: o.key, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr };
+}
+
+describe('guard_turnstile_site_key (MUT-368 D6, deploy.sh step 0)', { timeout: 30_000 }, () => {
+  it('lets any key (or none) through while the server mails nothing: the portal offers no door then', () => {
+    expect(siteKeyGuard({ mailer: 'noop' }).out).toMatch(/PASSED/);
+    expect(siteKeyGuard({ mailer: 'noop', key: '1x00000000000000000000AA' }).out).toMatch(/PASSED/);
+  });
+
+  it('takes a real site key once mailer = "resend"', () => {
+    expect(siteKeyGuard({ mailer: 'resend', key: '0x4AAAAAAAB1cDeFgHiJkLmN' }).out).toMatch(/PASSED/);
+  });
+
+  it.each([undefined, '', '1x00000000000000000000AA', '2x00000000000000000000AB', '3x00000000000000000000FF'])(
+    'refuses %j once mailer = "resend": signup and recovery would fail every check',
+    (key) => {
+      const r = siteKeyGuard({ mailer: 'resend', key });
+      expect(r.status).not.toBe(0);
+      expect(r.err).toMatch(/MUTABA3A_TURNSTILE_SITE_KEY/);
+    },
+  );
+
+  it('refuses rather than guess when it cannot read mailer', () => {
+    expect(siteKeyGuard({ consoleFails: true }).err).toMatch(/could not evaluate mailer/);
+    expect(siteKeyGuard({ mailer: 'maybe' }).err).toMatch(/gave 'maybe' for mailer/);
+  });
+});
+
+describe('deploy.sh wires the site-key guard (MUT-368)', () => {
+  it('runs guard_turnstile_site_key before the bootstrap and the portal build', () => {
+    const deploy = readFileSync(DEPLOY, 'utf-8');
+    const at = deploy.indexOf('guard_turnstile_site_key "');
+    expect(at).toBeGreaterThan(-1);
+    expect(at).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    expect(at).toBeLessThan(deploy.indexOf('npm run --silent build:hosted'));
+  });
+});

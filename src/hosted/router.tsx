@@ -3,6 +3,8 @@ import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNaviga
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
+import { SignupPage } from './pages/auth/SignupPage';
+import { RecoverPage } from './pages/auth/RecoverPage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
@@ -85,6 +87,10 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   /** A setup link's page (MUT-236): public like sign-in; the token is the fragment, which `SetupPage` strips. */
   const setupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup', component: SetupPage });
+
+  /** MUT-368: the two self-service doors, public like sign-in; each asks GET /v1/self-service whether it is open. */
+  const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/signup', component: SignupPage });
+  const recoverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/recover', component: RecoverPage });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -209,6 +215,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   const routeTree = rootRoute.addChildren([
     signInRoute,
     setupRoute,
+    signupRoute,
+    recoverRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,

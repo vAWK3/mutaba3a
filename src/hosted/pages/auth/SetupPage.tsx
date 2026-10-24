@@ -4,30 +4,44 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { Button } from '../../../components/ui/Button';
-import { api, ApiError, retryMinutes, type SetupLinkRefusal } from '../../api/client';
-import { LanguageSwitch, Wordmark } from '../../components/Brand';
+import { Select } from '../../../components/ui/Input';
+import { api, ApiError, retryMinutes, type SetupLinkCheck, type SetupLinkRefusal } from '../../api/client';
 import { AlertIcon } from '../../components/Icons';
+import { TimezoneChoice } from '../../components/TimezoneChoice';
+import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES, type HostedCurrency } from '../../format/currencies';
+import { browserTimezone } from '../../format/timezones';
+import { firstRunPath } from '../../session/firstRun';
+import { CLOSED_DOORS, selfServiceQuery } from '../../session/selfServiceDoors';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, ME_TIMEOUT_MS } from '../../session/me';
 import { setMode } from '../../session/mode';
 import { TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
+import { AuthLayout } from './AuthLayout';
 import { CheckingSession } from './BootScreens';
+import { UnderReviewNotice } from './UnderReviewNotice';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 
 /**
- * `/setup#<token>` (MUT-236, mut-236-setup-page.md): the page an operator-issued
- * setup link opens (ADR-088). It reads the token from the fragment and removes
- * it from the address bar at once, checks the link before showing anything,
- * sets the password, then signs in through the one sign-in route. No signup,
- * invite or "forgot" door: a link that can't be used says so and stops.
+ * `/setup#<token>` (MUT-236, mut-236-setup-page.md): the page a setup link opens
+ * (ADR-088): the operator's SETUP and RESET links, and since MUT-366/368 the
+ * mailed SIGNUP and recovery links. It reads the token from the fragment and
+ * removes it from the address bar at once, checks the link before showing
+ * anything, sets the password, then signs in through the one sign-in route.
+ * A SIGNUP link also takes the new account's name, currency and time zone; an
+ * account the operator must review first shows the under-review screen instead
+ * of signing in (MUT-367). A link that can't be used says so, and offers a new
+ * one where the server can mail it.
  */
 
 const SETUP_CHECK_KEY = ['setup-link-check'] as const;
 const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLICY.maxLength };
+/** The server's displayName bound (SetupLinkRedeemRequest, MUT-366). */
+const NAME_MAX_LENGTH = 200;
 
 type Refusal = SetupLinkRefusal | 'missing';
-/** Where the page ends when it doesn't land on Home. */
-type Outcome = { kind: 'refused'; state: Refusal } | { kind: 'usedAfterRetry' } | { kind: 'saved' };
+type Purpose = Extract<SetupLinkCheck, { state: 'valid' }>['purpose'];
+/** Where the page ends when it doesn't land on Home. `purpose`: what a dead link was for, when known (MUT-368 D2). */
+type Outcome = { kind: 'refused'; state: Refusal; purpose?: Purpose } | { kind: 'usedAfterRetry' } | { kind: 'saved' } | { kind: 'underReview' };
 
 /** Every setup request gives up when sign-in's session check does (MUT-207 DR6), so a lost answer surfaces as one. */
 const requestTimeout = () => AbortSignal.timeout(ME_TIMEOUT_MS);
@@ -74,22 +88,15 @@ function SetupLink({ token }: { token: string }) {
   if (outcome) return <SetupNotice outcome={outcome} />;
   if (check.isPending) return <CheckingSession label={t('hosted.setup.checking')} />;
   if (check.error) return <CheckFailed error={check.error} onRetry={() => void check.refetch()} retrying={check.isFetching} />;
-  if (!link) return <SetupNotice outcome={{ kind: 'refused', state: check.data.state === 'valid' ? 'invalid' : check.data.state }} />;
+  if (!link) {
+    const dead = check.data.state === 'valid' ? null : check.data;
+    return <SetupNotice outcome={{ kind: 'refused', state: dead?.state ?? 'invalid', ...(dead?.purpose ? { purpose: dead.purpose } : {}) }} />;
+  }
   return <SetupForm token={token} email={link.email} purpose={link.purpose} termsVersion={link.termsVersion} onOutcome={setOutcome} />;
 }
 
 function SetupLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="hp-signin">
-      <div className="hp-signin-top">
-        <LanguageSwitch />
-      </div>
-      <main className="hp-signin-body">
-        <Wordmark />
-        {children}
-      </main>
-    </div>
-  );
+  return <AuthLayout>{children}</AuthLayout>;
 }
 
 function SignInLink() {
@@ -101,16 +108,36 @@ function SignInLink() {
   );
 }
 
+/** Where a new link for a dead one comes from (MUT-368 D2): signup for a SIGNUP link, recovery for the others. */
+function newLinkRoute(purpose: Purpose | undefined, doors: { signup: boolean; recovery: boolean }): '/signup' | '/recover' | null {
+  if (purpose === 'SIGNUP') return doors.signup ? '/signup' : null;
+  if (purpose === 'SETUP' || purpose === 'RESET') return doors.recovery ? '/recover' : null;
+  return null;
+}
+
 function SetupNotice({ outcome }: { outcome: Outcome }) {
   const t = useT();
+  const navigate = useNavigate();
+  const doorsQuery = useQuery(selfServiceQuery);
+  const doors = doorsQuery.data ?? CLOSED_DOORS;
+  // A dead link that could offer a new one waits for the server's doors, so it never shows the operator's words first.
+  if (outcome.kind === 'refused' && outcome.purpose && doorsQuery.isPending) return <CheckingSession label={t('hosted.setup.checking')} />;
+  if (outcome.kind === 'underReview') return <UnderReviewNotice onLeave={() => void navigate({ to: '/sign-in', replace: true })} />;
   const key = outcome.kind === 'refused' ? `hosted.setup.refused.${outcome.state}` : `hosted.setup.${outcome.kind}`;
   const offersSignIn = outcome.kind !== 'refused' || outcome.state === 'used';
+  // A dead link the person can replace themselves says so, without "ask the person who set up your account".
+  const sendNew = outcome.kind === 'refused' && outcome.state !== 'invalid' && outcome.state !== 'missing' ? newLinkRoute(outcome.purpose, doors) : null;
   return (
     <SetupLayout>
       <section className="hp-card hp-signin-card">
         <h1>{t(`${key}.title`)}</h1>
-        <p className="hp-setup-lead">{t(`${key}.body`)}</p>
+        <p className="hp-setup-lead">{t(sendNew ? `${key}.bodySelf` : `${key}.body`)}</p>
         {offersSignIn && <SignInLink />}
+        {sendNew && (
+          <Link to={sendNew} className={`btn ${offersSignIn ? 'btn-secondary' : 'btn-primary'} btn-md hp-block`}>
+            {t('hosted.setup.sendNew')}
+          </Link>
+        )}
       </section>
     </SetupLayout>
   );
@@ -136,14 +163,20 @@ function CheckFailed({ error, onRetry, retrying }: { error: Error; onRetry: () =
 }
 
 type FieldError = PasswordProblem | 'rule';
+/** A new account's profile (MUT-366/368 D9): sent with a SIGNUP redeem only. */
+interface NewAccount {
+  name: string;
+  currency: HostedCurrency;
+  timezone: string;
+}
 type Banner = { kind: 'rateLimited'; minutes: number } | { kind: 'unreachable' };
 type Phase = 'idle' | 'saving' | 'signingIn';
 
 interface SetupFormProps {
   token: string;
   email: string;
-  /** MUT-366: SIGNUP shows the setup copy until MUT-368 gives it its own (no SIGNUP link exists while signup is off). */
-  purpose: 'SETUP' | 'RESET' | 'SIGNUP';
+  /** MUT-368: SIGNUP has its own copy and asks for the new account's name, currency and time zone. */
+  purpose: Purpose;
   /** MUT-324: the terms version the check named; replaced by the current one if it changes while the page is open. */
   termsVersion: string;
   onOutcome: (outcome: Outcome) => void;
@@ -184,6 +217,12 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const [termsProblem, setTermsProblem] = useState<'required' | 'changed' | null>(null);
   // A tick is for the text read in the page's language, the one recorded: a language switch clears it (review pass 2)
   const [tickedIn, setTickedIn] = useState(language);
+  const signup = purpose === 'SIGNUP';
+  // Read once: the zone the browser reports is the fact row and the default (MUT-183 Issue 10)
+  const [zone] = useState(browserTimezone);
+  const [account, setAccount] = useState<NewAccount>({ name: '', currency: DEFAULT_HOSTED_CURRENCY, timezone: zone });
+  const [zoneOpen, setZoneOpen] = useState(false);
+  const [zoneRefused, setZoneRefused] = useState(false);
   if (language !== tickedIn) {
     setTickedIn(language);
     setAgreed(false);
@@ -195,19 +234,28 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   }
 
   /** The one way to a session (ADR-088): POST /v1/sessions with the password just set. */
-  async function signIn(account: string, otherwise: Outcome) {
+  async function signIn(address: string, otherwise: Outcome) {
     setPhase('signingIn');
     try {
-      const me = await api.signIn({ email: account, password });
+      const me = await api.signIn({ email: address, password });
       setMode('remote');
       // Whoever was signed in on this browser before (or the local person, MUT-286) is not this person.
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
       queryClient.setQueryData(ME_KEY, me);
       adoptAccountLocale(me.user.locale);
-      void navigate({ to: '/', replace: true });
-    } catch {
-      onOutcome(otherwise);
+      // A new account starts on its personal profile (D13; MUT-418's first-run step goes there)
+      void navigate({ to: signup ? firstRunPath(me) : '/', replace: true });
+    } catch (error) {
+      // MUT-367: the password is right but the operator hasn't approved the account yet
+      onOutcome(error instanceof ApiError && error.code === 'ACCOUNT_UNDER_REVIEW' ? { kind: 'underReview' } : otherwise);
     }
+  }
+
+  /** The SIGNUP redeem's new profile (D9); a blank name is left out, so the server uses the address's local part. */
+  function newAccountFields() {
+    if (!signup) return {};
+    const displayName = account.name.trim();
+    return { defaultCurrency: account.currency, timezone: account.timezone, ...(displayName ? { displayName } : {}) };
   }
 
   async function onSubmit(event: FormEvent) {
@@ -226,8 +274,13 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
     setPhase('saving');
     try {
       const termsLocale = language === 'ar' ? 'ar' : 'en';
-      const { email: account } = await api.redeemSetupLink({ token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE }, requestTimeout());
-      await signIn(account, { kind: 'saved' });
+      const redeemed = await api.redeemSetupLink(
+        { token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE, ...newAccountFields() },
+        requestTimeout(),
+      );
+      // MUT-367: an account waiting for review can't sign in yet; say so without trying
+      if (redeemed.status === 'PENDING_REVIEW') return onOutcome({ kind: 'underReview' });
+      await signIn(redeemed.email, { kind: 'saved' });
     } catch (error) {
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
@@ -236,9 +289,13 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       const rechecked: RecheckedTerms | null =
         failure.kind !== 'termsChanged' ? null : failure.current ? { kind: 'version', version: failure.current } : await recheckTermsVersion(token);
       setPhase('idle');
-      if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state });
-      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state });
+      if (failure.kind === 'refused') onOutcome({ kind: 'refused', state: failure.state, purpose });
+      else if (rechecked?.kind === 'refused') onOutcome({ kind: 'refused', state: rechecked.state, purpose });
       else if (failure.kind === 'policy') refuseInline('rule');
+      else if (failure.kind === 'timezone') {
+        setZoneOpen(true);
+        setZoneRefused(true);
+      }
       else if (failure.kind === 'termsChanged') {
         // MUT-324: what was ticked is no longer what would be recorded, so the person reads and ticks again.
         if (rechecked?.kind === 'version') setTermsVersion(rechecked.version);
@@ -257,7 +314,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const errorId = `${ids}-error`;
   const termsErrorId = `${ids}-terms-error`;
   const termsLink = termsHref(language, termsVersion);
-  const variant = purpose === 'RESET' ? 'reset' : 'setup';
+  const variant = purpose === 'RESET' ? 'reset' : signup ? 'signup' : 'setup';
 
   return (
     <SetupLayout>
@@ -286,6 +343,28 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
             value={email}
           />
         </div>
+
+        {signup && (
+          <div className="hp-field">
+            <label htmlFor={`${ids}-name`}>{t('hosted.setup.name')}</label>
+            <input
+              id={`${ids}-name`}
+              className="input"
+              type="text"
+              name="name"
+              autoComplete="name"
+              dir="auto"
+              maxLength={NAME_MAX_LENGTH}
+              readOnly={pending}
+              value={account.name}
+              aria-describedby={`${ids}-name-hint`}
+              onChange={(e) => setAccount((current) => ({ ...current, name: e.target.value }))}
+            />
+            <p className="hp-field-hint" id={`${ids}-name-hint`}>
+              {t('hosted.setup.nameHint')}
+            </p>
+          </div>
+        )}
 
         <div className="hp-field">
           <label htmlFor={`${ids}-password`}>{t('hosted.setup.password')}</label>
@@ -325,6 +404,43 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
           )}
         </div>
 
+        {signup && (
+          <>
+            <div className="hp-field">
+              <label htmlFor={`${ids}-currency`}>{t('hosted.setup.currency')}</label>
+              <Select
+                id={`${ids}-currency`}
+                name="currency"
+                hint={t('hosted.setup.currencyHint')}
+                disabled={pending}
+                value={account.currency}
+                onChange={(e) => setAccount((current) => ({ ...current, currency: e.target.value as HostedCurrency }))}
+              >
+                {HOSTED_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="hp-field">
+              <TimezoneChoice
+                id={`${ids}-timezone`}
+                browserZone={zone}
+                value={account.timezone}
+                onChange={(timezone) => {
+                  setZoneRefused(false);
+                  setAccount((current) => ({ ...current, timezone }));
+                }}
+                open={zoneOpen}
+                onOpen={() => setZoneOpen(true)}
+                invalid={zoneRefused}
+              />
+              {zoneRefused && <p className="hp-field-error">{t('hosted.profiles.errors.timezoneInvalid')}</p>}
+            </div>
+          </>
+        )}
+
         <div className="hp-field">
           <label className="hp-check-row">
             <input
@@ -359,7 +475,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
 
         <button type="submit" className="btn btn-primary btn-md hp-block" disabled={pending} aria-busy={pending}>
           {pending && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
-          <span>{t(phase === 'saving' ? 'hosted.setup.saving' : phase === 'signingIn' ? 'hosted.setup.signingIn' : 'hosted.setup.submit')}</span>
+          <span>{t(phase === 'saving' ? 'hosted.setup.saving' : phase === 'signingIn' ? 'hosted.setup.signingIn' : signup ? 'hosted.setup.submitSignup' : 'hosted.setup.submit')}</span>
         </button>
       </form>
     </SetupLayout>

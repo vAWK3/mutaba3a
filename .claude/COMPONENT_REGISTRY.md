@@ -2259,3 +2259,24 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - **Store:** `store.signupReviews` (list, findByUser, digestFacts, markNotified, approve, decline), operator-only.
 - **Tests:** `server/src/email/__tests__/review-digest.test.ts`, `server/src/__tests__/routes-signup-review.test.ts`, `store-contract-signup-reviews.ts`.
 
+
+### AuthLayout / EmailLinkForm / CheckEmailNotice / UnderReviewNotice / SignedOutOnly — `src/hosted/pages/auth/` (MUT-368, ADR-179)
+- **`AuthLayout`:** the frame of every signed-out page (language switch, wordmark, `<main>`). Sign-in, /setup, /signup, /recover and the under-review screen use it; a new signed-out page does too.
+- **`EmailLinkForm({ action, title, lead, submitLabel, initialEmail, send, onSent, onClosed?, children? })`:** email + Turnstile + one button. It maps refusals through `selfServiceFailure` (`selfService.ts`, pure) and keeps the email. A press before the token waits for it. Reuse it for any public "mail me a link" form.
+- **`CheckEmailNotice({ title, body, sentAt, onSendAgain })`:** the one answer screen, with Send again after `SEND_AGAIN_COOLDOWN_MS`. `SentenceWithEmail` puts an address inside translated text, isolated in `<bdi>`.
+- **`UnderReviewNotice({ onLeave })`:** the under-review screen. Its Sign out ends a real session if one exists, else calls `onLeave`.
+- **`SignedOutOnly`:** sends a signed-in person Home (asks the server only in remote mode).
+- **Tests:** `src/hosted/pages/auth/__tests__/{SignupPage,RecoverPage,SignInPage,SetupPage,selfService}.test.ts(x)`.
+
+### loadTurnstile / useTurnstile / TurnstileWidget — `src/hosted/components/turnstile/` (MUT-368)
+- **`loadTurnstile()`:** Cloudflare's script once per page (explicit render, `onload` hook, 15 s give-up, retried after a failure).
+- **`useTurnstile({ action, language, load?, onToken? })`** returns `{ containerRef, token, status: 'loading'|'ready'|'failed', reset, retry }`. It renders again on an action or language change, and removes the widget on unmount. Call `reset()` after every answer; tokens are single-use.
+- **`TurnstileWidget`:** the reserved box plus the failure line (Try again, support address).
+- **Reuse:** the landing's request form (MUT-197) can reuse the loader and hook.
+- **Tests:** `components/turnstile/__tests__/`. Page tests use `src/hosted/__tests__/turnstile.ts` (`fakeTurnstile('pass'|'hold'|'fail')`).
+
+### TimezoneChoice / useSelfServiceDoors / firstRunPath (MUT-368)
+- **`TimezoneChoice`** (`src/hosted/components/`): a new profile's zone as "<zone> (this browser) · Change", then the full list. Used by New profile and the SIGNUP setup page.
+- **`useSelfServiceDoors()` / `selfServiceQuery`** (`src/hosted/session/selfServiceDoors.ts`): `GET /v1/self-service`, once per page; a failure reads as closed.
+- **`firstRunPath(me)`** (`src/hosted/session/firstRun.ts`): where a new account lands. MUT-418 adds its trial step here.
+- **QA:** `qa/support/{selfservice-live.mjs,selfService.ts,turnstile.ts}` (the `portal-selfservice` app). `stubTurnstile(page, 'pass'|'fail')` answers Cloudflare's script for any spec.

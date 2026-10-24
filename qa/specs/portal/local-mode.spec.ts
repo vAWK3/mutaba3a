@@ -74,7 +74,11 @@ const DOWNLOAD_FAILED = "Couldn't prepare the download. Try again.";
 const PUBLIC_FX = '**/v1/public/fx-rates';
 /** FX_MEMORY_KEY (src/hosted/local/fxSource.ts): the last public snapshot this device read, reused for an hour. */
 const FX_MEMORY_KEY = 'mut-local-fx';
-const PUBLIC_FX_SNAPSHOT = { rateDate: '2026-10-17', perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: '2026-10-19T08:00:00.000Z', source: 'live' };
+// Dated yesterday: the local backend refuses a snapshot older than MAX_RATE_AGE_DAYS, so a fixed date goes stale.
+const RATE_DAY = new Date(Date.now() - 24 * 60 * 60 * 1000);
+const PUBLIC_FX_SNAPSHOT = { rateDate: RATE_DAY.toISOString().slice(0, 10), perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: new Date().toISOString(), source: 'live' };
+/** How the ≈ line names that date in English, e.g. "Oct 17, 2026". */
+const RATE_DAY_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(RATE_DAY);
 
 async function openSection(page: Page, name: string, heading = name) {
   await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name }).click();
@@ -430,14 +434,14 @@ test('Signed out and online, a trip group in two currencies shows the ≈ line; 
     const headline = page.getByRole('group', { name: 'Total spent' });
     await expect(headline).toContainText('$40.00');
     await expect(headline).toContainText('120.00');
-    await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
+    await expect(page.getByText(`at today's ECB rate (${RATE_DAY_LABEL})`, { exact: false })).toBeVisible();
   });
 
   await step('Go offline and reload: the ≈ line stays, from the rates this device remembers', async () => {
     online = false;
     await page.reload();
     await expect(page.getByRole('group', { name: 'Total spent' })).toContainText('$40.00');
-    await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
+    await expect(page.getByText(`at today's ECB rate (${RATE_DAY_LABEL})`, { exact: false })).toBeVisible();
   });
 
   await step('On a device that remembers no rates, offline: the ≈ line hides and the totals stay', async () => {

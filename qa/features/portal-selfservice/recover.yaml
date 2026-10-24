@@ -1,0 +1,47 @@
+app: portal-selfservice
+area: recover
+title: Forgot your password (recovery by email)
+tier: secondary
+# MUT-368 (ADR-159 §4): sign-in's "Forgot your password?" → /recover → the mail's link → /setup, on the live dev API
+# with the memory mailer. Every address gets the same answer; only the outbox differs.
+paths:
+  - src/hosted/pages/auth/RecoverPage.tsx
+  - src/hosted/pages/auth/EmailLinkForm.tsx
+  - src/hosted/pages/auth/CheckEmailNotice.tsx
+  - src/hosted/pages/auth/selfService.ts
+  - src/hosted/components/turnstile/**
+  - src/hosted/session/selfServiceDoors.ts
+  - server/src/routes/self-service.ts
+features:
+  - id: reset
+    title: Forgot your password? mails a reset link; setting a new password signs you in, signs out another browser, and a "password changed" mail arrives
+    tier: core
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - src/hosted/pages/auth/SetupPage.tsx
+    steps:
+      - Sign in on another browser first
+      - On sign-in press Forgot your password?, type your email, pass the check and press Send link
+      - Open the mail's link, type a new password, tick the terms and save
+    expect:
+      - '"Check your email" says a link went to the address if it has an account'
+      - You land signed in with the new password
+      - The other browser is signed out
+      - A "password changed" mail arrives
+  - id: unknown
+    title: Recovering an address with no account shows the same confirmation and sends nothing
+    steps:
+      - Ask for a reset link for an address that has no account
+    expect:
+      - The same "Check your email" screen
+      - The outbox has nothing for that address
+  - id: pending-account
+    title: Recovering an operator-created account that never set a password mails a setup link that sets the first password
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+    steps:
+      - Ask for a reset link for an account the operator created whose setup link was never used
+      - Open the mail's link and set a password
+    expect:
+      - A finish-setup mail arrives, and its page says "Set your password"
+      - Saving signs the person in

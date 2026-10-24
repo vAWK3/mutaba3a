@@ -40,11 +40,13 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/ProfilesManageDrawer.tsx': { ltr: 1, auto: 1 }, // currency code; the profile name (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
-  'src/hosted/components/ProfileCreateDrawer.tsx': { ltr: 2, auto: 1 }, // timezone select and readout; the name input (D)
+  'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
+  'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
   'src/hosted/pages/views/PaymentsList.tsx': { ltr: 1 }, // payment number
   'src/hosted/pages/auth/SignInPage.tsx': { ltr: 2 }, // email, password
-  'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2 }, // account email, password
+  'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)
+  'src/hosted/pages/auth/EmailLinkForm.tsx': { ltr: 1 }, // the email on /signup and /recover (MUT-368)
   'src/hosted/components/ChangePasswordDrawer.tsx': { ltr: 2 }, // passwords
   'src/hosted/components/FilterControls.tsx': { ltr: 1 }, // date input
   'src/pages/landing/components/HostedRequestForm.tsx': { ltr: 2 }, // email, phone

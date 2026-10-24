@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.57.0-mut367
+  version: 1.58.0-mut368
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -619,6 +619,8 @@ components:
                 - used
                 - superseded
                 - invalid
+            purpose:
+              $ref: "#/components/schemas/SetupLinkPurpose"
           required:
             - state
     SetupLinkPurpose:
@@ -679,6 +681,16 @@ components:
       required:
         - token
         - password
+    SelfServiceDoors:
+      type: object
+      properties:
+        signup:
+          type: boolean
+        recovery:
+          type: boolean
+      required:
+        - signup
+        - recovery
     SelfServiceAccepted:
       type: object
       properties:
@@ -7781,6 +7793,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/self-service:
+    get:
+      tags:
+        - Sessions
+      summary: "Which self-service doors this server opens: signup, and recovery by email (says nothing about any account)"
+      security: []
+      responses:
+        "200":
+          description: The doors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelfServiceDoors"
   /v1/signups:
     post:
       tags:

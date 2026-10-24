@@ -30,6 +30,8 @@ const generous = () => new SlidingWindowRateLimiter(1000);
 
 interface HarnessOptions {
   signupEnabled?: boolean;
+  /** MUT-368: whether this server really mails links (a mailer and a Turnstile secret); absent = the default, off. */
+  mailsLinks?: boolean;
   turnstile?: TurnstileVerifier;
   transport?: MailTransport;
   ipLimiter?: RateLimiter;
@@ -56,6 +58,7 @@ function harness(options: HarnessOptions = {}) {
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 30, deviceAbsoluteDays: 180, portalOrigin: PORTAL },
     selfService: {
       signupEnabled: options.signupEnabled ?? true,
+      ...(options.mailsLinks === undefined ? {} : { mailsLinks: options.mailsLinks }),
       turnstile: options.turnstile ?? OK_ONLY,
       ipLimiter: options.ipLimiter ?? generous(),
       addressMinuteLimiter: options.addressMinuteLimiter ?? generous(),
@@ -441,5 +444,57 @@ describe('code review fixes (MUT-366)', () => {
     const s = await timed(() => signup(h, address()));
     expect(s.res.status).toBe(202);
     expect(s.elapsed).toBeGreaterThanOrEqual(FLOORS.signupMs - 2);
+  });
+});
+
+describe('GET /v1/self-service (MUT-368, D1)', () => {
+  const doors = async (h: Harness) => {
+    const res = await h.app.request('/v1/self-service');
+    return { status: res.status, body: (await res.json()) as Loose };
+  };
+
+  it('names which doors this server really opens: signup by its switch, recovery only when it mails links', async () => {
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: true }))).toEqual({ status: 200, body: { signup: true, recovery: true } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: true }))).toEqual({ status: 200, body: { signup: false, recovery: true } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false } });
+  });
+
+  it('a server that mails no links offers neither door, whatever the switch says', async () => {
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false } });
+  });
+
+  it('defaults to both doors closed (absent options are a server with mail off)', async () => {
+    const h = harness({ signupEnabled: false });
+    expect((await doors(h)).body).toEqual({ signup: false, recovery: false });
+  });
+
+  it('needs no credential and no origin, and is never cached', async () => {
+    const res = await harness({ mailsLinks: true }).app.request('/v1/self-service');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('a dead link names its purpose to its holder (MUT-368, D2)', () => {
+  it('a used and a superseded SIGNUP link say SIGNUP; an expired RESET link says RESET; an unknown one says nothing', async () => {
+    let clock = NOW;
+    const h = harness({ extra: { now: () => clock } });
+    const email = address();
+    await signup(h, email);
+    const first = lastMail(h, email).token!;
+    clock = new Date(NOW.getTime() + 120_000);
+    await signup(h, email);
+    const second = lastMail(h, email).token!;
+    expect(await (await check(h, first)).json()).toEqual({ state: 'superseded', purpose: 'SIGNUP' });
+    expect((await redeem(h, second, SIGNUP_PROFILE)).status).toBe(200);
+    expect(await (await check(h, second)).json()).toEqual({ state: 'used', purpose: 'SIGNUP' });
+
+    const p = await provision(h);
+    await recover(h, p.email);
+    const reset = lastMail(h, p.email).token!;
+    clock = new Date(clock.getTime() + 2 * 3_600_000);
+    expect(await (await check(h, reset)).json()).toEqual({ state: 'expired', purpose: 'RESET' });
+
+    expect(await (await check(h, 'x'.repeat(43))).json()).toEqual({ state: 'invalid' });
   });
 });

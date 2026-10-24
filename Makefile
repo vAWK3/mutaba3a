@@ -63,6 +63,8 @@ export IMAGE_TAG PROXY_PORT AUTO_APPROVE
 export MUTABA3A_POSTHOG_KEY
 # MUT-149: and the portal's Sentry DSN. The upload token is not exported here: release-server passes it to deploy.sh only
 export MUTABA3A_SENTRY_DSN
+# MUT-368: the portal's Turnstile site key (public), for build:hosted; deploy.sh refuses a test key once mail is on
+export MUTABA3A_TURNSTILE_SITE_KEY
 # Where release-server finds the source-map upload token when SENTRY_AUTH_TOKEN isn't set (release-kit Keychain rule).
 # Looked up only when the portal has a DSN: with no DSN the build needs no token.
 SENTRY_TOKEN_KEYCHAIN_SERVICE := release-kit

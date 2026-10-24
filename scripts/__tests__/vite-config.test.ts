@@ -18,6 +18,8 @@ import configFn, {
   LEGACY_LANDING_PATHS,
   portalUrl,
   posthogKey,
+  turnstileSiteKey,
+  TURNSTILE_TEST_SITE_KEY,
   scopeServerBufferShim,
   sentryDsn,
   sentryEnvironment,
@@ -374,6 +376,31 @@ describe('vite.config', () => {
     );
   });
 
+  describe('Turnstile site key (MUT-368, D6)', () => {
+    it('is Cloudflare\'s always-pass test key when MUTABA3A_TURNSTILE_SITE_KEY is unset, so dev, tests and QA need nothing', () => {
+      expect(TURNSTILE_TEST_SITE_KEY).toBe('1x00000000000000000000AA');
+      expect(turnstileSiteKey(undefined)).toBe(TURNSTILE_TEST_SITE_KEY);
+      expect(turnstileSiteKey('')).toBe(TURNSTILE_TEST_SITE_KEY);
+    });
+
+    it('takes a real site key, and Cloudflare\'s other test keys', () => {
+      expect(turnstileSiteKey('0x4AAAAAAAB1cDeFgHiJkLmN')).toBe('0x4AAAAAAAB1cDeFgHiJkLmN');
+      expect(turnstileSiteKey('2x00000000000000000000AB')).toBe('2x00000000000000000000AB');
+    });
+
+    it.each(['0x4AAAAAAA', 'sk_live_whatever_0123456789abcdef', '0x4AAAAAAA" + alert(1) + "', '1x0000000000000000000000000000000AA_secret'])(
+      'refuses %j, failing the build (a secret or a broken key must never ship)',
+      (value) => {
+        expect(() => turnstileSiteKey(value)).toThrow(/MUTABA3A_TURNSTILE_SITE_KEY/);
+      },
+    );
+
+    it('is defined for the portal build only', () => {
+      expect(resolve('hosted').define?.__TURNSTILE_SITE_KEY__).toBe(JSON.stringify(TURNSTILE_TEST_SITE_KEY));
+      expect(resolve('web').define).not.toHaveProperty('__TURNSTILE_SITE_KEY__');
+    });
+  });
+
   describe('PostHog key (MUT-154, ADR-090)', () => {
     const KEY = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
 
@@ -658,5 +685,13 @@ describe('vite.config', () => {
       expect(pluginNames(resolve('web').plugins)).not.toContain('mut-scope-server-buffer-shim');
       expect(pluginNames(resolve('desktop').plugins)).not.toContain('mut-scope-server-buffer-shim');
     });
+  });
+});
+
+describe('the portal build never needs argon2 (MUT-368)', () => {
+  it('resolves @node-rs/argon2 to the throwing browser stub in the hosted build only', () => {
+    const alias = resolve('hosted').resolve?.alias as Record<string, string>;
+    expect(alias['@node-rs/argon2']).toMatch(/src\/hosted\/local\/platform\/argon2\.ts$/);
+    expect((resolve('web').resolve?.alias as Record<string, string> | undefined)?.['@node-rs/argon2']).toBeUndefined();
   });
 });

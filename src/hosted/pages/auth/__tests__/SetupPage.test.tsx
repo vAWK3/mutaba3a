@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import { focusManager } from '@tanstack/react-query';
-import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+import { setMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 import { SESSION_CHANNEL, SIGNED_OUT } from '../../../session/channel';
 
@@ -13,12 +14,12 @@ const PASSWORD = 'a long enough passphrase';
 const CHECK = 'POST /v1/account-setup/check';
 const REDEEM = 'POST /v1/account-setup';
 const SIGN_IN = 'POST /v1/sessions';
-/** The ADR-037 bundle rule (auth-states.test.tsx): no self-service account door, in either language. */
+/** While the server opens no self-service door (GET /v1/self-service, MUT-368 D1), these pages show none, in either language. */
 const BANNED = /sign ?up|create account|forgot|reset password|invite|إنشاء حساب|نسيت|إعادة تعيين|دعوة|اشترك/i;
 
 const TERMS_VERSION = '2026-10-19';
 const TERMS_URL = 'https://mutaba3a.example/terms';
-const valid = (overrides: { locale?: 'en' | 'ar'; purpose?: 'SETUP' | 'RESET' } = {}) => () =>
+const valid = (overrides: { locale?: 'en' | 'ar'; purpose?: 'SETUP' | 'RESET' | 'SIGNUP' } = {}) => () =>
   ok({
     state: 'valid',
     email: EMAIL,
@@ -397,5 +398,124 @@ describe('another tab signing out', () => {
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(locationOf(router)).toBe('/setup');
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
+  });
+});
+
+describe('a signup link (MUT-368)', () => {
+  const PERSONAL = profile({ id: ORG_B, name: 'Personal', isPersonalDefault: true, owned: true, type: 'PERSONAL' });
+  const signupRoutes = (extra: Record<string, Handler> = {}) => ({
+    [CHECK]: valid({ purpose: 'SIGNUP' }),
+    [REDEEM]: () => ok({ email: EMAIL, status: 'ACTIVE' }),
+    [SIGN_IN]: () => ok(me([profile(), PERSONAL])),
+    ...extra,
+  });
+
+  async function createAccount(user: ReturnType<typeof renderPortal>['user'], password: HTMLElement) {
+    await user.type(password, PASSWORD);
+    await user.click(screen.getByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+  }
+
+  it('is worded as finishing a new account, and asks for a name (optional), a currency and a time zone', async () => {
+    chooseEnglish();
+    await openForm(signupRoutes());
+    expect(screen.getByRole('heading', { level: 1, name: 'Finish creating your account' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your name (optional)')).toHaveValue('');
+    expect(screen.getByLabelText('Main currency')).toHaveValue('ILS');
+    expect(screen.getByText('Time zone')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+  });
+
+  it('sends the currency and time zone with the redeem, leaves a blank name out, and lands on the personal profile (D9, D13)', async () => {
+    chooseEnglish();
+    const { api, user, router, password } = await openForm(signupRoutes());
+    await createAccount(user, password);
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
+    const body = redeems(api)[0]!.body as Record<string, unknown>;
+    expect(body).toMatchObject({ token: TOKEN, password: PASSWORD, defaultCurrency: 'ILS', timezone: expect.any(String) });
+    expect(body).not.toHaveProperty('displayName');
+  });
+
+  it('sends a typed name trimmed, and the currency picked', async () => {
+    chooseEnglish();
+    const { api, user, password } = await openForm(signupRoutes());
+    await user.type(screen.getByLabelText('Your name (optional)'), '  Rana Saleh  ');
+    await user.selectOptions(screen.getByLabelText('Main currency'), 'USD');
+    await createAccount(user, password);
+    await waitFor(() => expect(redeems(api)).toHaveLength(1));
+    expect(redeems(api)[0]!.body).toMatchObject({ displayName: 'Rana Saleh', defaultCurrency: 'USD' });
+  });
+
+  it('an account waiting for review shows the under-review screen, and never tries to sign in (MUT-367)', async () => {
+    chooseEnglish();
+    const { api, user, password } = await openForm(signupRoutes({ [REDEEM]: () => ok({ email: EMAIL, status: 'PENDING_REVIEW' }) }));
+    await createAccount(user, password);
+    expect(await screen.findByRole('heading', { level: 1, name: "We're reviewing your account" })).toBeInTheDocument();
+    expect(screen.getByText("We'll email you within 2 working days.")).toBeInTheDocument();
+    expect(api.count(SIGN_IN)).toBe(0);
+  });
+
+  it('a sign-in refused as under review shows the same screen', async () => {
+    chooseEnglish();
+    const { user, password } = await openForm(signupRoutes({ [SIGN_IN]: () => fail(403, 'ACCOUNT_UNDER_REVIEW') }));
+    await createAccount(user, password);
+    expect(await screen.findByRole('heading', { level: 1, name: "We're reviewing your account" })).toBeInTheDocument();
+  });
+
+  it('Sign out there ends a session someone already had on this browser (D16)', async () => {
+    chooseEnglish();
+    setMode('remote');
+    const { api, user, password } = await openForm(signupRoutes({ 'GET /v1/me': () => ok(me()), [REDEEM]: () => ok({ email: EMAIL, status: 'PENDING_REVIEW' }), 'DELETE /v1/sessions/current': () => new Response(null, { status: 204 }) }));
+    await createAccount(user, password);
+    await user.click(await screen.findByRole('button', { name: 'Sign out' }));
+    await waitFor(() => expect(api.count('DELETE /v1/sessions/current')).toBe(1));
+  });
+
+  it('a refused time zone is said at the time zone, never as the password rule (review P1-2)', async () => {
+    chooseEnglish();
+    const { user, password } = await openForm(signupRoutes({ [REDEEM]: () => fail(422, 'VALIDATION_FAILED', { fields: ['timezone'] }) }));
+    await createAccount(user, password);
+    expect(await screen.findByText('Choose a valid time zone')).toBeInTheDocument();
+    expect(screen.queryByText('Use at least 12 characters.')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Time zone' })).toHaveAttribute('aria-invalid', 'true');
+  });
+});
+
+describe('a dead link the person can replace (MUT-368 D2)', () => {
+  const doors = (signup: boolean, recovery: boolean) => ({ 'GET /v1/self-service': () => ok({ signup, recovery }) });
+
+  it('an expired signup link offers a new one from /signup, without "ask the person who set up your account"', async () => {
+    chooseEnglish();
+    stubApi(routes({ [CHECK]: () => ok({ state: 'expired', purpose: 'SIGNUP' }), ...doors(true, true) }));
+    const { container } = renderPortal(`/setup#${TOKEN}`);
+    expect(await screen.findByRole('heading', { name: 'This link has expired' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/signup');
+    expect(container.textContent).not.toMatch(/person who set up your account/);
+    expect(screen.queryByLabelText('New password')).toBeNull();
+  });
+
+  it('a used reset link offers sign-in and a new link from /recover', async () => {
+    chooseEnglish();
+    stubApi(routes({ [CHECK]: () => ok({ state: 'used', purpose: 'RESET' }), ...doors(false, true) }));
+    renderPortal(`/setup#${TOKEN}`);
+    expect(await screen.findByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/recover');
+    expect(screen.getByRole('link', { name: 'Go to sign in' })).toHaveAttribute('href', '/sign-in');
+  });
+
+  it('while the server mails no links, an operator link keeps today’s words and offers nothing new', async () => {
+    chooseEnglish();
+    stubApi(routes({ [CHECK]: () => ok({ state: 'expired', purpose: 'SETUP' }), ...doors(false, false) }));
+    renderPortal(`/setup#${TOKEN}`);
+    expect(await screen.findByText(/Ask the person who set up your account for a new link/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Send a new link' })).toBeNull();
+  });
+
+  it('a link that expires while the form is open keeps the purpose the check named', async () => {
+    chooseEnglish();
+    const { user, password } = await openForm({ [CHECK]: valid({ purpose: 'SIGNUP' }), [REDEEM]: unusable('expired'), ...doors(true, true) });
+    await user.type(password, PASSWORD);
+    await user.click(screen.getByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/signup');
   });
 });

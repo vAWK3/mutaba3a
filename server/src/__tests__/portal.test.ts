@@ -101,7 +101,7 @@ describe('portal serving — app association enabled', () => {
       expect(ready.status).toBe(200);
 
       const expectedCsp =
-        "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+        "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
       expect(aasa.headers.get('content-security-policy')).toBe(expectedCsp);
     } finally {
       await rm(distDir, { recursive: true, force: true });
@@ -211,9 +211,10 @@ describe('portal serving — enabled', () => {
     // connect-src includes the GCS signed-URL host: receipt uploads (MUT-44)
     // PUT bytes directly to it via fetch(), which connect-src governs — unlike
     // downloads, which are top-level navigations and need no entry here. MUT-149
-    // adds the Sentry org's EU ingest host, and nothing else (AC5).
+    // adds the Sentry org's EU ingest host, and nothing else (AC5). MUT-368: Cloudflare Turnstile's script and its
+    // challenge frame, on /signup and /recover only, and nothing else.
     const expected =
-      "default-src 'self'; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
+      "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com https://o4512029835526144.ingest.de.sentry.io; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'";
     expect(api.headers.get('content-security-policy')).toBe(expected);
     expect(portalPage.headers.get('content-security-policy')).toBe(expected);
   });

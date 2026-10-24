@@ -11,6 +11,9 @@ export const HOSTED_CURRENCIES = ['USD', 'ILS', 'EUR', 'JOD'] as const satisfies
 
 export type HostedCurrency = (typeof HOSTED_CURRENCIES)[number];
 
+/** A new profile's currency until the person picks another (New profile; the signup setup page, MUT-368 D9). */
+export const DEFAULT_HOSTED_CURRENCY: HostedCurrency = 'ILS';
+
 type MissingFromList = Exclude<Currency, HostedCurrency>;
 // Compile-time only: `true` unless the API has a currency this list lacks.
 const coversEveryCurrency: [MissingFromList] extends [never] ? true : MissingFromList = true;

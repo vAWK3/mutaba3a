@@ -261,3 +261,20 @@ guard_mailer_release() {
   [[ ";${env_names};" == *";RESEND_API_KEY;"* ]] || return 0
   die "this checkout's mailer is ${mailer} (or unset), but ${service} mounts RESEND_API_KEY. This release would stop all mail. Set mailer = \"resend\" (with mail_reply_to and mail_daily_cap) in this checkout's production.tfvars (git doesn't carry it), then release. SKIP_MAILER_GUARD=1 only if you mean this release to turn mail off."
 }
+
+# guard_turnstile_site_key <terraform args…> (MUT-368, D6): once this checkout's mailer is "resend" the server mails
+# signup and recovery links and checks Turnstile with a real secret, so the portal it ships must carry a real site key.
+# Cloudflare's test keys (1x…, 2x…, 3x…) would fail every check there, and a missing one builds the test key in.
+guard_turnstile_site_key() {
+  guard_var_args "$@"
+  local mailer
+  mailer="$(printf 'var.mailer\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+    || die "could not evaluate mailer with terraform console (above); refusing to release on a guess"
+  mailer="$(sed -n '1{s/"//g;p;}' <<<"${mailer}")"
+  [[ "${mailer}" == "resend" || "${mailer}" == "noop" ]] \
+    || die "terraform console gave '${mailer}' for mailer; refusing to release on a guess"
+  [[ "${mailer}" == "resend" ]] || return 0
+  local key="${MUTABA3A_TURNSTILE_SITE_KEY:-}"
+  [[ -n "${key}" && ! "${key}" =~ ^[123]x ]] && return 0
+  die "mailer = \"resend\" mails signup and recovery links, but MUTABA3A_TURNSTILE_SITE_KEY is ${key:-unset}${key:+ (a Cloudflare test key)}. Put the production widget's site key in deploy.env (DEPLOYMENT.md §6f), then release."
+}

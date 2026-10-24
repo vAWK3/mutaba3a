@@ -17,7 +17,7 @@ import type { Logger } from '../logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, UserLocale, UserRecord } from '../repositories/ports.js';
-import { AccountRecoveryRequestSchema, ErrorEnvelopeSchema, SelfServiceAcceptedSchema, SignupRequestSchema } from '../schemas.js';
+import { AccountRecoveryRequestSchema, ErrorEnvelopeSchema, SelfServiceAcceptedSchema, SelfServiceDoorsSchema, SignupRequestSchema } from '../schemas.js';
 import { signInLinkOf } from './account-setup.js';
 
 /**
@@ -34,6 +34,11 @@ import { signInLinkOf } from './account-setup.js';
 export interface SelfServiceOptions {
   /** SELF_SIGNUP_ENABLED. Off: POST /v1/signups answers 404 (recovery is never behind it). */
   signupEnabled: boolean;
+  /**
+   * MUT-368 (D1): this server really mails links: a mailer other than noop and a Turnstile secret. GET /v1/self-service
+   * reports it, so the portal shows no door that can only fail. Absent = false. Recovery itself stays on either way.
+   */
+  mailsLinks?: boolean;
   turnstile: TurnstileVerifier;
   /** Per client address, both routes (D6). */
   ipLimiter: RateLimiter;
@@ -85,6 +90,7 @@ export interface SelfServiceRouteDependencies {
 
 const SIGNUPS_PATH = '/v1/signups';
 const RECOVERY_PATH = '/v1/account-recovery';
+const DOORS_PATH = '/v1/self-service';
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
@@ -99,6 +105,22 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
   let fallbackScreen: DomainScreen | null = null;
   const domainScreen = (): DomainScreen => options.domainScreen ?? (fallbackScreen ??= createDomainScreen({ checker: createFixtureDomainChecker(deps.now), now: deps.now, logger }));
   const app = new OpenAPIHono<AppEnv>();
+
+  // MUT-368 (D1): the doors, before anything else; public, no origin check (a GET changes nothing), never cached.
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: DOORS_PATH,
+      tags: ['Sessions'],
+      summary: 'Which self-service doors this server opens: signup, and recovery by email (says nothing about any account)',
+      security: [],
+      responses: { 200: { description: 'The doors', content: { 'application/json': { schema: SelfServiceDoorsSchema } } } },
+    }),
+    (c) => {
+      const mails = options.mailsLinks ?? false;
+      return c.json({ signup: mails && options.signupEnabled, recovery: mails }, 200);
+    },
+  );
 
   // The switch answers before the body is validated, so a closed signup is a 404 whatever is sent (D10).
   app.use(SIGNUPS_PATH, async (_c, next) => {

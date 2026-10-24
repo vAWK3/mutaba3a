@@ -65,7 +65,10 @@ export default {
       // so its last release is the last `make release server`: api-v<version>.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
+        '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
+        '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -98,6 +101,41 @@ export default {
       ready: 'http://127.0.0.1:5176',
       personas: {},
     },
+    'portal-selfservice': {
+      label: 'Hosted portal: signup, recovery and the review queue on a live API',
+      platform: 'web',
+      // MUT-368 (D11): Create an account, Forgot your password and the under-review screen against a real dev API on
+      // the memory mailer (read through its dev outbox) and the fixture domain checker, serving the BUILT portal so
+      // the real PORTAL_CSP applies. Turnstile is a page-routed stand-in (support/turnstile.ts): QA never contacts
+      // Cloudflare. Needs Docker's mutaba3a-test-pg. Ships with the portal and the API, so it follows their tag.
+      release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
+      watch: [
+        'src/hosted/pages/auth/SignupPage.tsx',
+        'src/hosted/pages/auth/RecoverPage.tsx',
+        'src/hosted/pages/auth/EmailLinkForm.tsx',
+        'src/hosted/pages/auth/CheckEmailNotice.tsx',
+        'src/hosted/pages/auth/UnderReviewNotice.tsx',
+        'src/hosted/pages/auth/SignedOutOnly.tsx',
+        'src/hosted/pages/auth/selfService.ts',
+        'src/hosted/components/turnstile/**',
+        'src/hosted/session/selfServiceDoors.ts',
+        'src/hosted/session/firstRun.ts',
+        'server/src/routes/self-service.ts',
+        'server/src/auth/self-service.ts',
+        'server/src/auth/turnstile.ts',
+        'server/src/routes/admin-signup-reviews.ts',
+        'server/src/email/domains/**',
+        '!src/hosted/**/__tests__/**',
+        '!server/src/**/__tests__/**',
+      ],
+      // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both.
+      baseURL: 'http://127.0.0.1:8791',
+      attachURL: 'http://127.0.0.1:8791',
+      start: { cmd: `${HEAP_CAPPED} node qa/support/selfservice-live.mjs` },
+      // Answers only once the API is up with signup open (not just once something listens).
+      ready: 'http://127.0.0.1:8791/v1/self-service',
+      personas: {},
+    },
   },
 
   env: {
@@ -115,5 +153,8 @@ export default {
     config: 'playwright.config.ts',
     warmup: false, // Vite serves instantly — no first-hit compilation to absorb
     slowMo: 250,
+    // MUT-368: each test sends its own client address, so the live APIs' per-IP budgets (signup and recovery: 10 an
+    // hour; sign-in) never add up across a run. The QA APIs trust one proxy hop; the stubbed apps ignore it.
+    clientIpHeader: 'x-forwarded-for',
   },
 };
