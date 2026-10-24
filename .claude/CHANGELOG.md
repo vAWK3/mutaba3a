@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-186)
+
+**Why:** epic MUT-423 (Basel's round 4 variation 3): one calm page with room to grow instead of two popovers, nothing lost from either.
+
+### Added
+- `/p/:id/you`, `/you/account`, `/you/app` and the profile-less `/you…` (`pages/you/YouPage.tsx`, `YouProfiles`, `YouAccount`, `YouApp`): every item of the old switcher and account menu, each row opening today's drawer by its URL key.
+- `?from=<section>` keeps the section across a profile switch (`shell/youRoutes.ts`); `YouLinks` in the sidebar carries it.
+- `billingRowOf` (trial, else the open profile's lapse state) for the Billing row; a locked profile reaches the page under a locked banner.
+- `components/YouRows.tsx` (row, link, switch, note), `ProfileKindLine` (shared with Manage profiles), `SectionTabs` segmented variant with per-tab `search`.
+- QA `portal.you.{drawers,signed-out,phone-rtl,locked}`; `qa/support/you.ts` (`openYou`, `youRow`), `signedOutServer` moved to `qa/support/portal.ts`.
+
+### Changed
+- `MalafatMenuItems` → `MalafatRows`, `UsageMenuItem` → `UsageSwitchRow`, `AppDownloadMenuItems` → `AppDownloadRows` (rows, not menu items).
+- 11 portal QA specs and the menu unit tests now go through the page; feature `paths` point at the new files.
+
+### Removed
+- `shell/ProfileSwitcher.tsx`, `shell/UserMenu.tsx` and their popover CSS (`usePopover` stays for groups).
+
+### Files
+- `src/hosted/{router.tsx,hosted.css,i18n/*.json}`, `src/hosted/pages/you/**`, `src/hosted/shell/{HostedShell,YouLinks,youRoutes,initials}`, `src/hosted/session/AuthGate.tsx`, `src/hosted/components/{LapseGate,MalafatPortal,SectionTabs,YouRows,ProfileKindLine,ProfilesManageDrawer,UsageSwitchRow,AppDownloadRows}.tsx`, `src/hosted/data/trialPrompt.ts`, `src/styles/__tests__/direction.test.ts`, `qa/**`.
+
 ## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
 
 ### Fixed

@@ -8,7 +8,7 @@ tier: secondary
 paths:
   - src/hosted/analytics/portalAnalytics.ts
   - src/hosted/components/UsagePrompt.tsx
-  - src/hosted/components/UsageMenuItem.tsx
+  - src/hosted/components/UsageSwitchRow.tsx
   - src/lib/analytics/guard.ts
   - src/lib/analytics/posthogConfig.ts
   - src/lib/analytics/contract.ts
@@ -44,11 +44,11 @@ features:
     expect:
       - income_recorded is sent with currency ILS and paid true, and nothing about the amount or the client
   - id: opt-out-last-note
-    title: Turning sharing off in the account menu sends one last note, then nothing, and forgets the random ID
+    title: Turning sharing off on You › App sends one last note, then nothing, and forgets the random ID
     paths:
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouApp.tsx
     steps:
-      - With sharing on, open the account menu and turn off "Share anonymous usage"
+      - With sharing on, open You › App and turn off "Share anonymous usage"
       - Reload the page
     expect:
       - One analytics_opted_out is sent and the switch reads off
@@ -58,7 +58,7 @@ features:
     paths:
       - src/hosted/session/endSession.ts
     steps:
-      - With sharing on, sign out from the account menu
+      - With sharing on, sign out from You › Account
       - Sign in again
     expect:
       - Nothing is sent at sign-out and no PostHog key is left in storage
@@ -67,7 +67,7 @@ features:
     title: Turning sharing off in one tab silences another open tab (MUT-155 review F1)
     steps:
       - Turn sharing on, then open Payments in a second tab
-      - In the first tab, turn off "Share anonymous usage" in the account menu
+      - In the first tab, turn off "Share anonymous usage" on You › App
       - In the second tab, add a received income
     expect:
       - Nothing is sent from the second tab and no PostHog key comes back in its storage

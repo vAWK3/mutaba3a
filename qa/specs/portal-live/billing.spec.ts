@@ -1,5 +1,6 @@
 import { test, expect } from '../../support/qa';
 import { advanceClock, customerOnClock, fillStripeCheckout, finishSignupInPage, payCheckoutByApi, provisionPerson, requestSignup, setTrialStartedDaysAgo, signIn, stripeApi, subscribeByApi } from '../../support/livePortal';
+import { openYou } from '../../support/you';
 
 /**
  * MUT-362 (eng review D8 B): Settings › Billing on a real dev API and Stripe's real sandbox pages, started by
@@ -10,8 +11,9 @@ const DAY_S = 24 * 60 * 60;
 
 async function openBilling(page: import('@playwright/test').Page, personalId: string) {
   await page.goto(`/p/${personalId}`);
-  await page.getByRole('button', { name: /^Account|^الحساب/ }).click();
-  await page.getByRole('menuitem', { name: /^Billing$|^الاشتراك$/ }).click();
+  // MUT-425: Billing is a row on You › Account (was the account menu)
+  await openYou(page, 'account');
+  await page.getByRole('button', { name: /^Billing|^الاشتراك/ }).click();
   return page.getByRole('dialog', { name: /^Billing$|^الاشتراك$/ });
 }
 
@@ -19,7 +21,7 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
   const person = await provisionPerson('en', 'ils');
   await signIn(page, person);
 
-  const drawer = await step('Open Billing from the account menu', async () => openBilling(page, person.personalId));
+  const drawer = await step('Open Billing from You › Account', async () => openBilling(page, person.personalId));
   await step('Read where I stand, the prices and the rules before anything else', async () => {
     await expect(drawer.getByRole('button', { name: 'Subscribe' })).toBeVisible();
     await expect(drawer.getByText('₪49.00')).toBeVisible();

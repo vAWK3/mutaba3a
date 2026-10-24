@@ -1,6 +1,7 @@
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, OFFICE_B, office } from '../../support/portal';
 import { FakeApi, expense } from '../../support/portalApi';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * MUT-362 (design review DR4/DR5): Settings › Billing on a server without Stripe or GA prices. The live sandbox
@@ -30,9 +31,9 @@ test('Before Stripe or the GA prices are set, Billing says subscriptions open so
     }),
   );
 
-  const drawer = await step('Open Billing from the account menu', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Billing' }).click();
+  const drawer = await step('Open Billing from You › Account', async () => {
+    await openYou(page, 'account');
+    await youRow(page, 'Billing').click();
     return page.getByRole('dialog', { name: 'Billing' });
   });
   await step('See the trial first, and that subscriptions open soon', async () => {

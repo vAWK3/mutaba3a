@@ -253,7 +253,7 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), the profile switcher, the user menu (name, language, sign out), and the page. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
+- **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), and the page. Since MUT-425 (ADR-186) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
 - **Routes** (TanStack Router, code-based like `src/router.tsx`; base `/`):
   - `/sign-in`
   - `/setup#<token>` (MUT-236): a setup link's page, public like sign-in; the token is stripped from the address bar on arrival (ADR-088 §8)
@@ -272,7 +272,7 @@ Tests generated from the table (MUT-39):
 - **Filters:** one `FiltersModel` per list view, URL-synced with `replaceState` (house rule). Rows are pre-shaped in `useMemo` before they reach the table. Column definitions are stable.
 - **Data:** `src/hosted/api/`, a ~100-line `fetch` wrapper typed by `openapi-typescript` output generated from `server/openapi/openapi.yaml` and committed. `npm run hosted:types:check` fails on drift, mirroring the server's `openapi:check`. Requests use `credentials: 'same-origin'`. Errors are parsed into the server's envelope.
 
-### 7.2 Profile switcher
+### 7.2 Profile switcher (You › Profiles since MUT-425)
 
 - Each entry shows the profile name, a **"Hosted"** chip, and a one-line source sentence: "Income recorded by Malafat" (`writerOfRecord: 'MALAFAT'`), or "Expenses only" (`null`).
 - A fixed footer line: "Your local profiles stay in the Mutaba3a app on your device. They aren't shown here and never leave it." The user doesn't have to guess the source, and the split between the portal and the desktop app is stated rather than implied.

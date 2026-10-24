@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import JSZip from 'jszip';
 import { test, expect } from '../../support/qa';
-import { MODE_KEY, OFFICE_A, customer, office } from '../../support/portal';
+import { MODE_KEY, OFFICE_A, customer, office, signedOutServer } from '../../support/portal';
 import { FakeApi, payment } from '../../support/portalApi';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * The portal signed out, on this device (MUT-286, ADR-097). Nothing is
@@ -11,26 +12,6 @@ import { FakeApi, payment } from '../../support/portalApi';
  * gives with nobody signed in. Everything else is the real local backend, the
  * server's own routes running in the page over this browser's IndexedDB.
  */
-
-/** PORTAL_LANGUAGE_KEY in src/hosted/i18n/HostedLanguageProvider.tsx */
-const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
-
-interface Server {
-  /** Every /v1 request that reached the "server", as "METHOD /path". */
-  requests: string[];
-}
-
-/** A browser with nobody signed in: the server answers 401 to everything and counts what it was asked. */
-async function signedOutServer(page: Page, language: 'en' | 'ar' | null = 'en'): Promise<Server> {
-  const server: Server = { requests: [] };
-  await page.context().route('**/v1/**', async (route) => {
-    const request = route.request();
-    server.requests.push(`${request.method()} ${new URL(request.url()).pathname}`);
-    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
-  });
-  if (language) await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, language] as const);
-  return server;
-}
 
 async function openPayments(page: Page) {
   await page.goto('/');
@@ -114,13 +95,14 @@ test('A first visit opens the app on this device in Arabic, with no sign-in and 
     await expect(links).toHaveText(['نظرة عامة', 'العملاء', 'المستحقات', 'الدفعات', 'المستندات', 'المصاريف', 'التحويلات']);
   });
 
-  await step('The account menu is this device\'s: Sign in, Your data and the terms, nothing that needs an account', async () => {
-    const account = page.getByRole('button', { name: /^الحساب/ });
-    await expect(account).toContainText('على هذا الجهاز');
-    await account.click();
-    const items = page.getByRole('menu', { name: 'الحساب' }).getByRole('menuitem');
-    // MUT-324: the terms are a link in either mode
-    await expect(items).toHaveText(['تسجيل الدخول', 'بياناتك', 'شروط الخدمة']);
+  await step('You is this device\'s: Sign in and Your data, then Language and the terms, nothing that needs an account', async () => {
+    await expect(page.locator('.hp-you-link-account')).toContainText('على هذا الجهاز');
+    await openYou(page, 'account');
+    const rows = page.getByRole('main').locator('.hp-you-row');
+    await expect(rows).toHaveText(['تسجيل الدخول', /^بياناتك/]);
+    // MUT-324: the terms are a link in either mode; MUT-425: on You › App, beside the language
+    await openYou(page, 'app');
+    await expect(rows).toHaveText([/^اللغة/, /^شروط الخدمة/]);
   });
 
   await step('Only the first-visit check reached the server', async () => {
@@ -299,10 +281,10 @@ test('Download my records, clear the site\'s data, restore the file, and every r
   });
 
   await step('Open Your data and download my records', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Your data').click();
     const downloading = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download my records' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Download my records' }).click();
     const download = await downloading;
     expect(download.suggestedFilename()).toMatch(/^mtb3a-records-\d{4}-\d{2}-\d{2}\.zip$/);
     file = await download.path();
@@ -320,8 +302,8 @@ test('Download my records, clear the site\'s data, restore the file, and every r
   });
 
   await step('Restore the downloaded file and replace: the payment is back', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Your data').click();
     await page.getByTestId('your-data-file').setInputFiles(file);
     const confirm = page.getByRole('alertdialog');
     await expect(confirm).toContainText('Replace everything on this device with the 2 records in this file?');
@@ -368,7 +350,7 @@ test('When a signed-in session ends, the portal offers Sign in or Continue on th
 
   await step('Continue on this device: this device\'s own app, with none of the account\'s figures', async () => {
     await page.getByRole('button', { name: 'Continue on this device' }).click();
-    await expect(page.getByRole('button', { name: /^Account/ })).toContainText('On this device');
+    await expect(page.locator('.hp-you-link-account')).toContainText('On this device');
     await expect(page.getByText('PAY-0001')).toHaveCount(0);
     await expect(page.getByText('Nour Studio')).toHaveCount(0);
   });
@@ -521,10 +503,10 @@ test('Restore an older backup without receipt files: the confirm says which rece
   });
 
   await step('Keep only records.json from the download, as an older .json backup holds no receipt files', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Your data').click();
     const downloading = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download my records' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Download my records' }).click();
     const zip = await JSZip.loadAsync(fs.readFileSync(await (await downloading).path()));
     file = `${await (await downloading).path()}.json`;
     fs.writeFileSync(file, await zip.file('records.json')!.async('string'));
@@ -533,8 +515,8 @@ test('Restore an older backup without receipt files: the confirm says which rece
   await step('Clear this site\'s data and restore that .json', async () => {
     await clearSiteData(page);
     await page.goto('/');
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Your data' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Your data').click();
     await page.getByTestId('your-data-file').setInputFiles(file);
   });
 

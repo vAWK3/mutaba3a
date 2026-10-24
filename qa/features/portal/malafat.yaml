@@ -6,7 +6,7 @@ paths:
   - src/hosted/components/MalafatPortal.tsx
   - src/hosted/data/malafatSuggestions.ts
   - src/hosted/session/malafatMoments.ts
-  - src/hosted/shell/UserMenu.tsx
+  - src/hosted/pages/you/YouApp.tsx
   - src/hosted/pages/views/ClientsPage.tsx
   - src/hosted/pages/views/OverviewPage.tsx
   - src/hosted/components/ProfileCreateDrawer.tsx
@@ -15,16 +15,16 @@ paths:
   - src/content/malafatLinks.ts
 features:
   - id: menu
-    title: The account menu offers Malafat after Sign out on an owned business profile, and its switch turns suggestions off for the account (MUT-191)
+    title: You › App offers Malafat on an owned business profile, and its switch turns suggestions off for the account (MUT-191, MUT-425)
     tier: secondary
     legacy: [MUT-191]
     steps:
       - Sign in and open an owned business profile
-      - Open the account menu
+      - Open You › App
       - Turn "Show Malafat suggestions" off
     expect:
-      - Sign out stays the first item; the Malafat link opens malafat.app's contact page with utm_medium=portal and utm_content=settings in a new tab
-      - The switch reads off, the menu stays open, and the choice is saved through PATCH /v1/me/malafat-suggestions
+      - The Malafat link opens malafat.app's contact page with utm_medium=portal and utm_content=settings in a new tab
+      - The switch reads off in place, and the choice is saved through PATCH /v1/me/malafat-suggestions
   - id: clients
     title: Clients suggests Malafat at ten active clients or with a second business profile, never while searching, and a dismissal is kept (MUT-191)
     tier: secondary
@@ -43,7 +43,7 @@ features:
     tier: secondary
     legacy: [MUT-191]
     steps:
-      - Create a Business profile from the profile switcher
+      - Create a Business profile from You › Profiles
     expect:
       - The new profile's page shows the note, linking with utm_content=business-profile
   - id: none
@@ -52,6 +52,6 @@ features:
     legacy: [MUT-191]
     steps:
       - Sign in as a member of a Malafat-fed firm who also owns two business profiles with twelve clients
-      - Open Clients on an owned office, then the account menu on the firm
+      - Open Clients on an owned office, then You › App on it
     expect:
       - No Malafat card and no Malafat menu item

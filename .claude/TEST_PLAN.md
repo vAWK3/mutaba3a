@@ -3642,3 +3642,12 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Store contract | `store-contract-receipts.ts` `completeOnExpense`: completes, already_ready, receipt_not_found (other expense, deleted), expense_not_found (other profile, missing, deleted with unlink and remove), cap with pending uploads not counted, two concurrent completions (Prisma) | `npm --prefix server test` + `test:db` |
 | Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
 | Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |
+
+## MUT-425 — the You page replaces the switcher and the account menu (2026-10-24, ADR-186)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `shell/__tests__/youRoutes.test.ts` (sectionOf, youPath, isYouPath, parseYouSearch, switchTarget); `data/__tests__/trialPrompt.test.ts` › billingRowOf (trial while snoozed, grace/read-only/locked, payer, no profile) | `npx vitest run src/hosted` |
+| Component (real router) | `pages/you/__tests__/YouPage.test.tsx` (parts, rows → drawer keys, cap and lapse New profile, `?from=` across tabs and drawers, open profile never history Back, locked banner, profile-less `/you`); `YouApp.terms`, `YouApp.malafat`, `AppDownloadRows`; local-mode signed-out You › Account and You › App | same |
+| Regression contract (eng D5) | menu tests migrated: views (switcher entries), local-mode, auth-states sign-out, UsageConsent, LapseGate, pressFeedback, the four account/profile drawers, MalafatPortal | same |
+| Release-QA | `portal.you.{drawers,signed-out,phone-rtl,locked}`; `portal.shell.switch-profile` and the 10 migrated areas | `release-qa run --attach --app portal --only portal.you` |

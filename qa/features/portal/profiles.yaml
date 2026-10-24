@@ -2,10 +2,10 @@ app: portal
 area: profiles
 title: Hosted profiles
 tier: secondary
-# New profile and Manage profiles (MUT-183), the shell's drawers, opened from the switcher.
+# New profile and Manage profiles (MUT-183), the shell's drawers, opened from You › Profiles.
 paths:
   - src/hosted/shell/ProfileDrawers.tsx
-  - src/hosted/shell/ProfileSwitcher.tsx
+  - src/hosted/pages/you/YouProfiles.tsx
   - src/hosted/components/ProfilesManageDrawer.tsx
   - src/hosted/components/ProfileEditForm.tsx
   - src/hosted/components/ProfileTypeCards.tsx
@@ -22,14 +22,14 @@ features:
     title: Edit a profile's name and currency in Manage profiles; a change made elsewhere first is refused with Reload, which loads the latest
     tier: secondary
     steps:
-      - Open Manage profiles from the switcher and choose the open profile
+      - Open Manage profiles from You › Profiles and choose the open profile
       - Meanwhile it is renamed elsewhere; rename it and change the currency, and save
       - Reload, rename and change the currency again, and save
     expect:
       - The list shows the used count, Open now, each kind, and the Malafat firm locked
       - The pane shows Name, Currency and the time zone, and Save waits for a change
       - The stale save (If-Match 1) shows "This profile was changed elsewhere…" with Reload; Reload shows the name it has now
-      - The save sends If-Match 2 with only name and currency; "Profile saved", and the list and switcher show the new name
+      - The save sends If-Match 2 with only name and currency; "Profile saved", and the list and the sidebar show the new name
   - id: type-change
     title: Change a profile's type; the cards say what each seeds, the confirm counts the expenses that lose a category, and the note leads to Expenses
     tier: secondary
@@ -50,7 +50,7 @@ features:
       - src/hosted/components/TimezoneChoice.tsx
       - src/hosted/format/timezones.ts
     steps:
-      - Choose + New profile in the switcher and create it empty
+      - Choose + New profile on You › Profiles and create it empty
       - Name it Home, Personal, JOD, change the zone to Asia/Amman, and create while the server says the cap is reached
       - Open it again and create
     expect:
@@ -62,7 +62,7 @@ features:
     title: At the cap New profile stays focusable but does nothing and says why; a Malafat-fed profile cannot be edited, even from a link
     tier: secondary
     steps:
-      - With six owned profiles, open the switcher and press Enter on New profile
+      - With six owned profiles, open You › Profiles and press Enter on New profile
       - Open Manage profiles
       - Open a link to edit the Malafat-fed profile
     expect:
@@ -93,12 +93,12 @@ features:
       - src/hosted/data/partnerMail.ts
       - src/hosted/data/firmRequestLine.ts
     steps:
-      - Open the switcher on a profile Basel created and shared with you
+      - Open You › Profiles on a profile Basel created and shared with you
       - Open Manage profiles and the shared profile
       - Add a received income on the shared profile
     expect:
-      - The switcher and the list read "Business · Shared with Basel Sader", and the list explains the count ("Profiles shared with you don't count.")
-      - The switcher lists only the shared profile and your own personal profile, never your partner's
+      - You › Profiles and the list read "Business · Shared with Basel Sader", and the list explains the count ("Profiles shared with you don't count.")
+      - You › Profiles lists only the shared profile and your own personal profile, never your partner's
       - The Owners section lists Basel Sader (Created this profile) and you (You); there is no Remove, and Leave sits at its foot
       - The Personal card is disabled with "A shared profile stays Business."
       - The income drawer offers Received and the save is sent for the shared profile
@@ -127,7 +127,7 @@ features:
       - Choose Leave, then Leave Sader & Haddad in the confirm
     expect:
       - The confirm reads "You'll lose access to Sader & Haddad. What you recorded stays." and Save is gone while it is open
-      - The personal profile opens with the toast "You left Sader & Haddad", the drawer is closed, and the switcher no longer lists the shared profile
+      - The personal profile opens with the toast "You left Sader & Haddad", the drawer is closed, and You › Profiles no longer lists the shared profile
   - id: co-owner-removed
     title: Someone removed while working on the shared profile lands on their personal profile with a banner naming it (MUT-373)
     tier: secondary
@@ -153,4 +153,4 @@ features:
       - Rename the shared profile in Manage profiles
     expect:
       - The client, the income, the payment and the expense are each sent for the shared profile
-      - The rename sends PATCH {name} only, says Profile saved, and the switcher shows the new name
+      - The rename sends PATCH {name} only, says Profile saved, and the sidebar shows the new name

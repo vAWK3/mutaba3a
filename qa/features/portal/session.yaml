@@ -26,10 +26,10 @@ features:
     tier: secondary
     paths:
       - src/hosted/session/useSignOut.ts
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouAccount.tsx
       - src/hosted/components/Toast.tsx
     steps:
-      - Sign out from the account menu while offline
+      - Sign out from You › Account while offline
       - Sign out again
       - Open the payments page again
       - Sign in from /sign-in?reason=signed_out&next=<payments>
