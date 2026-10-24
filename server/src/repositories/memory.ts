@@ -1696,7 +1696,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('expenses.organizationId');
       // The Postgres foreign key (MUT-182 R17: a type change can delete a category between a route's check and this insert).
       if (input.categoryId !== null && !this.expCats.has(input.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
-      if (input.vendorId && this.vendorMap.get(input.vendorId)?.organizationId !== input.organizationId) throw new ForeignKeyViolation('expenses_vendorId_fkey');
+      // Like Postgres' foreign key: existence only. The routes resolve or check the vendor inside the profile.
+      if (input.vendorId && !this.vendorMap.has(input.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
       const record: ExpenseRecord = { id: randomUUID(), ...input, vendorId: input.vendorId ?? null, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       this.exps.set(record.id, record);
       return { ...record };
@@ -1719,6 +1720,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!e || e.organizationId !== organizationId || e.deletedAt) return { kind: 'not_found' };
       if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
       if (patch.categoryId && !this.expCats.has(patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
+      if (patch.vendorId && !this.vendorMap.has(patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
       Object.assign(e, definedOnly(patch));
       e.version += 1;
       e.updatedAt = at;
@@ -1906,9 +1908,10 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!nameKey) return null;
       const regKey = registrationKey(input.registrationNo);
       const org = input.organizationId;
+      // Same as Prisma: a filled detail stamps updatedAt, never the version.
       const fill = (v: VendorRecord) => {
-        if (v.phone === null && input.phone) v.phone = input.phone.trim();
-        if (v.email === null && input.email) v.email = input.email.trim();
+        if (v.phone === null && input.phone?.trim()) Object.assign(v, { phone: input.phone.trim(), updatedAt: at });
+        if (v.email === null && input.email?.trim()) Object.assign(v, { email: input.email.trim(), updatedAt: at });
       };
       const nameOwner = [...this.vendorNames.values()].find((n) => n.organizationId === org && n.nameKey === nameKey);
       const byReg = regKey ? [...this.vendorMap.values()].find((v) => v.organizationId === org && registrationKey(v.registrationNo) === regKey) : undefined;
@@ -1919,7 +1922,7 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       if (nameOwner) {
         const v = this.vendorMap.get(nameOwner.vendorId)!;
-        if (regKey && v.registrationNo === null) v.registrationNo = input.registrationNo!.trim();
+        if (regKey && v.registrationNo === null) Object.assign(v, { registrationNo: input.registrationNo!.trim(), updatedAt: at });
         fill(v);
         return { ...v };
       }
