@@ -40,7 +40,7 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
 
   if (notice.kind === 'grace') {
     return (
-      <section className="hp-banner hp-banner-warning hp-lapse-banner" aria-label={t('hosted.billing.gate.label')} role="status">
+      <section className="hp-banner hp-banner-warning hp-lapse-banner" aria-label={t('hosted.billing.gate.label')}>
         <AlertIcon />
         <div className="hp-lapse-banner-body">
           <p className="hp-lapse-banner-title">{t('hosted.billing.gate.graceTitle')}</p>

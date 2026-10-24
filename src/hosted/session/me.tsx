@@ -76,3 +76,8 @@ export function useWriteGate(): { gate: BillingGate; writable: boolean } {
 export function usePersonWritable(): boolean {
   return personStandingOf(useMe()) === 'open';
 }
+
+/** MUT-361: `useWriteGate().writable` for a profile handed in as a prop (a drawer host that may sit outside the provider). */
+export function useWritableFor(profile: Pick<HostedProfile, 'billing'>): boolean {
+  return billingGateOf(useMe(), profile) === 'open';
+}

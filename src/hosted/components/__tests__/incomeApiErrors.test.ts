@@ -104,3 +104,11 @@ describe('income error maps: the remaining routes (MUT-24 §C)', () => {
     expect(mapRedateError(v('AMOUNT_INVALID'), 'payment')).toEqual({ fields: [], toast: 'hosted.income.errors.saveFailed' });
   });
 });
+
+describe('the lapse gate (MUT-361)', () => {
+  it('maps SUBSCRIPTION_LAPSED to the read-only toast, for a capture and a settle alike', () => {
+    const lapsed = new ApiError(402, 'SUBSCRIPTION_LAPSED', 'm', { state: 'READ_ONLY' });
+    expect(mapIncomeError(lapsed, 'received')).toEqual({ fields: [], toast: 'hosted.billing.gate.refused' });
+    expect(mapSettleError(lapsed)).toEqual({ fields: [], toast: 'hosted.billing.gate.refused' });
+  });
+});

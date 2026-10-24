@@ -90,6 +90,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
     sameCurrency: t('hosted.conversions.errors.sameCurrency'),
     conflict: t('hosted.conversions.errors.conflict'),
     network: t('hosted.conversions.errors.network'),
+    lapsed: t('hosted.billing.gate.refused'),
   };
 
   /**

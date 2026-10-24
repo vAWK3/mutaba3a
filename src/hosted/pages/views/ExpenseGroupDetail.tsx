@@ -70,6 +70,7 @@ export interface ExpenseGroupDetailProps {
 
 export function ExpenseGroupDetail({ groupId, search, setSearch }: ExpenseGroupDetailProps) {
   const profile = useProfile();
+  const { writable } = useWriteGate();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -108,7 +109,7 @@ export function ExpenseGroupDetail({ groupId, search, setSearch }: ExpenseGroupD
       <QueryView queries={[group, summary, members]} data={data} notFound={deleted} loading={<DetailSkeleton />}>
         {(loaded) => <GroupBody {...loaded} today={today} search={search} setSearch={setSearch} />}
       </QueryView>
-      {group.data && search.editGroup && (
+      {group.data && search.editGroup && writable && (
         <GroupDrawer
           profileId={profile.id}
           today={today}
@@ -146,6 +147,8 @@ interface GroupBodyProps {
 
 function GroupBody({ group, summary: served, members: servedMembers, today, search, setSearch }: GroupBodyProps) {
   const profile = useProfile();
+  // MUT-361: a read-only profile shows the group, with nothing to add, edit, leave out or put back.
+  const { writable } = useWriteGate();
   const { t, language } = useLanguage();
   const tp = useTp();
   const showToast = useToast();
@@ -305,12 +308,12 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
 
   // ---- States ----
 
-  const actions = <HeaderActions onAdd={() => setSearch({ ...search, addToGroup: true })} onEdit={() => setSearch({ ...search, editGroup: true })} />;
-  const addOutside = (
+  const actions = writable ? <HeaderActions onAdd={() => setSearch({ ...search, addToGroup: true })} onEdit={() => setSearch({ ...search, editGroup: true })} /> : null;
+  const addOutside = writable ? (
     <Button variant="secondary" size="sm" onClick={() => setSearch({ ...search, addToGroup: true })}>
       {t('hosted.groups.detail.addOutside')}
     </Button>
-  );
+  ) : undefined;
   const nothing = rows.members.length === 0;
   let emptyState: ReactNode = null;
   if (nothing && rows.excluded.length > 0) emptyState = <Empty title={t('hosted.groups.detail.states.allOutTitle')} body={t('hosted.groups.detail.states.allOutBody')} />;
@@ -401,6 +404,7 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
         onAct={(verb, row, list) => void act(verb, row, list)}
         motion={motion}
         fallbackFocus={headingRef}
+        readOnly={!writable}
         excludedOpen={nothing}
         excludedError={
           excludedQuery.isError ? (
@@ -419,7 +423,7 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
                 {selectedCategory.name} ×
               </button>
               <span>{tp('hosted.groups.expenses', filtered.length)}</span>
-              {filtered.length > 0 && (
+              {filtered.length > 0 && writable && (
                 <Button variant="secondary" size="sm" onClick={() => void leaveOutAll(filtered, selectedCategory.name)}>
                   {t('hosted.groups.detail.leaveOutAll', { count: filtered.length, category: selectedCategory.name })}
                 </Button>
@@ -440,7 +444,7 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
           },
         }}
       />
-      {search.addToGroup && (
+      {search.addToGroup && writable && (
         <AddToGroupDrawer profileId={profile.id} group={group} memberIds={memberIds} onClose={() => setSearch({ ...search, addToGroup: undefined })} onAdd={addRows} />
       )}
     </>

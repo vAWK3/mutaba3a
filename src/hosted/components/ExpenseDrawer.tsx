@@ -136,6 +136,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     dateTooFar: t('hosted.expenses.errors.dateTooFar'),
     conflict: t('hosted.expenses.errors.conflict'),
     network: t('hosted.expenses.errors.network'),
+    lapsed: t('hosted.billing.gate.refused'),
   };
 
   const labels: ExpenseFormFieldsLabels = {
