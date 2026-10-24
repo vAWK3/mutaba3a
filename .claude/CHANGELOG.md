@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — The docs name mtb3a.com as the landing; MUT-112 closed
+
+**Why:** MUT-112's steps 0–5 are live (front door, stage `live`, the phone release with both hosts). Its close-out was to point the remaining landing-host rows at `mtb3a.com` (Jira comment 12411). Step 6 (stage `redirect`) and dropping the phone's legacy run.app link host move to MUT-291, which step 6 waits on.
+
+### Changed
+- `.claude/SYSTEM_OVERVIEW.md` (release table, distribution, cost table) and `.claude/CI_CD.md` (web deployment URL): the landing is `mtb3a.com`, the free web app stays at `mutaba3a.netlify.app/app`. The OAuth client identity is MUT-387's, not touched here.
+
 ## [Unreleased] - 2026-10-24 — The portal's "Create an account", "Forgot your password?" and the under-review screen (MUT-368, ADR-179)
 
 **Why:** MUT-366/367 built the server's signup, recovery and review queue; this gives them pages, the first user-visible step of the self-service portal run (epic MUT-322).
