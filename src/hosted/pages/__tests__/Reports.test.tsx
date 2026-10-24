@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import type { ActivitySummary, HostedProfile } from '../../api/client';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 
@@ -86,7 +86,7 @@ function activityOf(records: Rec[], url: URL, extra: Partial<ActivitySummary> = 
     })),
     currencies,
     history: months.map((month) => ({ month, currencies: block(records.filter((r) => r.on.slice(0, 7) === month)) })),
-    daysToPaid: { overall: null, byCustomer: [] },
+    daysToPaid: { overall: null, byCustomer: [], samples: [] },
     ...extra,
   };
 }
@@ -156,7 +156,10 @@ describe('Reports: stage 1 (AC2, AC5, B8)', () => {
     expect(within(hero).getAllByText('₪400').length).toBeGreaterThan(0);
     expect(within(hero).getAllByText('₪1,100').length).toBeGreaterThan(0);
     expect(within(hero).getByText('October 2026 · so far')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Owed to you' })).toHaveTextContent('Owed to you now ₪700');
+    // The link's name is what it shows, amount included (review: an aria-label hid it)
+    const owedLink = screen.getByRole('link', { name: /Owed to you now/ });
+    expect(owedLink).toHaveAccessibleName('Owed to you now ₪700');
+    expect(owedLink).toHaveAttribute('aria-description', 'Open Owed to you');
     expect(screen.getByText('Your first monthly recap arrives in November.')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Lately' })).toBeNull();
     expect(document.body.textContent).not.toMatch(/billed/i);
@@ -170,14 +173,20 @@ describe('Reports: stage 1 (AC2, AC5, B8)', () => {
   });
 
   it('draws received and spent per day, the days to come faint, and a selected day’s values', async () => {
-    portal(BASE, { records: { [ORG_A]: thisMonth } });
+    const { user } = portal(BASE, { records: { [ORG_A]: thisMonth } });
     const chart = await screen.findByRole('group', { name: 'Received and spent per day. Arrow keys move between days.' });
     expect(within(chart).getAllByRole('button')).toHaveLength(24);
     expect(chart.querySelectorAll('.hp-daybar-future')).toHaveLength(7);
     // DR26: the selected day defaults to today, its values said once in a live line
     const selected = document.querySelector('.hp-report-selected')!;
-    expect(selected).toHaveAttribute('aria-live', 'polite');
-    expect(selected).toHaveTextContent('Sat, Oct 24 · Received ₪0.00 · Spent ₪0.00');
+    expect(plain(selected)).toBe('Sat, Oct 24 · Received ₪0.00 · Spent ₪0.00');
+    expect(selected).not.toHaveAttribute('aria-live');
+    // Said only when the person picks a bar (review: not on every step)
+    const live = document.querySelector('[aria-live="polite"].sr-only')!;
+    expect(live).toHaveTextContent('');
+    await user.click(within(chart).getByRole('button', { name: /Oct 3/ }));
+    expect(plain(live)).toBe('Sat, Oct 3 · Received ₪1,500.00 · Spent ₪0.00');
+    expect(chart.querySelector('.hp-daybar-today')).toHaveAccessibleName(/Oct 24/);
   });
 });
 
@@ -192,7 +201,7 @@ describe('Reports: stage 3 insights (AC5, D2, DR16)', () => {
   ];
 
   it('lists up to three insights under Lately and opens Year', async () => {
-    portal(BASE, { records: { [ORG_A]: months }, extra: { daysToPaid: { overall: { median: 12, n: 4 }, byCustomer: [{ customerId: CLIENT, median: 12, n: 4 }] } } });
+    portal(BASE, { records: { [ORG_A]: months }, extra: { daysToPaid: { overall: { median: 12, n: 3 }, byCustomer: [{ customerId: CLIENT, median: 12, n: 3 }], samples: [11, 12, 13] } } });
     const lately = await screen.findByRole('heading', { name: 'Lately' });
     const items = within(lately.closest('section')!).getAllByRole('listitem');
     expect(items).toHaveLength(3);
@@ -254,7 +263,7 @@ describe('Reports: All profiles (AC4, AC7, D4, DS1–DS5)', () => {
     await waitFor(() => expect(locationOf(router)).toContain('scope=all'));
     expect(await screen.findByRole('button', { name: 'All 2 profiles' })).toBeInTheDocument();
     expect(screen.getByText(/combined · other currencies at today's rate/)).toBeInTheDocument();
-    expect(await screen.findByText('Of which Personal: ≈ ₪1,500')).toBeInTheDocument();
+    expect(await screen.findByText((_, el) => el?.tagName === 'P' && plain(el) === 'Of which Personal: ≈ ₪1,500')).toBeInTheDocument();
     const hero = screen.getByRole('region', { name: 'Reports' });
     await waitFor(() => expect(within(hero).getAllByText('₪2,000').length).toBeGreaterThan(0));
     const whoPaid = screen.getByRole('region', { name: 'Who paid' });
@@ -311,5 +320,88 @@ describe('Reports in Arabic (AC1, RTL)', () => {
     expect(document.documentElement.getAttribute('dir') ?? document.querySelector('[dir]')?.getAttribute('dir')).toBe('rtl');
     expect(await screen.findByRole('radio', { name: 'شهر' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('button', { name: 'الشهر السابق' })).toBeInTheDocument();
+  });
+});
+
+/** MUT-175 qa-reconcile review: regressions pinned for each finding fixed. */
+describe('Reports: review regressions', () => {
+  const months: Rec[] = [
+    { on: '2026-07-01', kind: 'in', minor: 100000, customerId: CLIENT },
+    { on: '2026-08-04', kind: 'in', minor: 120000, customerId: CLIENT },
+    { on: '2026-08-04', kind: 'out', minor: 10000, categoryId: FOOD },
+    { on: '2026-09-04', kind: 'in', minor: 90000, customerId: CLIENT },
+    { on: '2026-09-04', kind: 'out', minor: 30000, categoryId: FOOD },
+    ...thisMonth,
+  ];
+
+  it('keeps the page, its controls and keyboard focus while the next period loads, dimmed (DR5)', async () => {
+    const { user } = portal(BASE, {
+      records: { [ORG_A]: months },
+      activity: { [ORG_A]: ({ url }) => (url.searchParams.get('from') === '2026-09-01' ? never() : ok(activityOf(months, url))) },
+    });
+    const previous = await screen.findByRole('button', { name: 'Previous month' });
+    await user.click(previous);
+    await waitFor(() => expect(document.querySelector('.hp-report-busy')).not.toBeNull());
+    expect(screen.getByRole('radiogroup', { name: 'Period' })).toBeInTheDocument();
+    expect(document.activeElement).toBe(previous);
+    expect(document.querySelector('.hp-report-skeleton-chart')).toBeNull();
+  });
+
+  it('shows the error card with Retry when this profile’s recent months fail, never a skeleton forever', async () => {
+    portal(`${BASE}?at=2026-09-01`, {
+      records: { [ORG_A]: months },
+      activity: { [ORG_A]: ({ url }) => (url.searchParams.get('from') === '2026-10-01' ? fail(500, 'INTERNAL') : ok(activityOf(months, url))) },
+    });
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('falls back from Year to Month before stage 3, and a tap on the locked Year says when it opens (DR27)', async () => {
+    const { user } = portal(`${BASE}?period=year`, { records: { [ORG_A]: thisMonth } });
+    expect(await screen.findByRole('radio', { name: 'Month' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'Year' }));
+    expect(await screen.findByText('Unlocks in December')).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'Month' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('says nothing was logged in an empty period and goes to the latest month with records (DR6)', async () => {
+    const { user, router } = portal(`${BASE}?at=2026-06-01`, { records: { [ORG_A]: months } });
+    expect(await screen.findByRole('heading', { name: 'Nothing logged in June 2026' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Go to October 2026' }));
+    await waitFor(() => expect(locationOf(router)).toContain('at=2026-10-01'));
+  });
+
+  it('shows the error card when every profile fails in All profiles (DR10)', async () => {
+    portal(`${BASE}?scope=all`, { profiles: [personal, studio], activity: { [ORG_A]: () => fail(500, 'INTERNAL'), [ORG_B]: () => fail(500, 'INTERNAL') } });
+    expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('names a profile the person can’t read and leaves it out, the rest still rendering (AC7)', async () => {
+    portal(`${BASE}?scope=all`, { profiles: [personal, studio], records: { [ORG_A]: thisMonth }, activity: { [ORG_B]: () => fail(403, 'INSUFFICIENT_SCOPE') } });
+    expect(await screen.findByText("Studio isn't included: you can't see its payments")).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Reports' })).getAllByText('₪1,500').length).toBeGreaterThan(0);
+  });
+
+  it('offers no All profiles switch when the other profile can’t read expenses (DR12)', async () => {
+    const blind = profile({ ...studio, access: { payments: 'read-write', expenses: 'none', capture: 'read-write' } });
+    portal(BASE, { profiles: [personal, blind], records: { [ORG_A]: thisMonth } });
+    await screen.findByRole('radiogroup', { name: 'Period' });
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('labels both lists when a rate is missing, instead of silently dropping the other currency (D3)', async () => {
+    const two: Rec[] = [...thisMonth, { on: '2026-10-06', kind: 'out', minor: 5000, currency: 'USD', categoryId: FOOD }];
+    portal(BASE, { records: { [ORG_A]: two }, routes: { 'GET /v1/fx-rates': () => fail(503, 'FX_RATES_UNAVAILABLE') } });
+    const where = await screen.findByRole('region', { name: 'Where it went' }, { timeout: 4000 });
+    expect(within(where).getByText("In ILS only: today's rates aren't available")).toBeInTheDocument();
+  });
+
+  it('remembers what it showed as hashes, never amounts or client ids (DR18, review)', async () => {
+    portal(BASE, { records: { [ORG_A]: months }, extra: { daysToPaid: { overall: { median: 12, n: 3 }, byCustomer: [], samples: [11, 12, 13] } } });
+    await screen.findByRole('heading', { name: 'Lately' });
+    await waitFor(() => expect(localStorage.getItem('mutaba3a-reports-seen')).not.toBeNull());
+    const stored = localStorage.getItem('mutaba3a-reports-seen')!;
+    expect(JSON.parse(stored)[ORG_A].mover.views).toBe(1);
+    expect(stored).not.toContain(CLIENT);
+    expect(stored).not.toMatch(/food|20000/);
   });
 });

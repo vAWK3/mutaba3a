@@ -1430,7 +1430,7 @@
       "combined": {
         "profiles": {
           "zero": "{count} ملف",
-          "one": "ملف واحد",
+          "one": "{count} ملف",
           "two": "الملفين",
           "few": "{count} ملفات",
           "many": "{count} ملفًا",

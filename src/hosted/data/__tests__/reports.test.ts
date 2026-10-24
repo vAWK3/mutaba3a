@@ -95,7 +95,7 @@ function activity(extra: Partial<ActivitySummary>): ActivitySummary {
     buckets: [],
     currencies: [],
     history: [],
-    daysToPaid: { overall: null, byCustomer: [] },
+    daysToPaid: { overall: null, byCustomer: [], samples: [] },
     ...extra,
   };
 }
@@ -120,7 +120,7 @@ describe('combine', () => {
       ],
       currencies: [act('ILS', '100.00', '15.00', { byCategory: [{ categoryId: CAT_A, total: '15.00', count: 2 }], byCustomer: [{ customerId: CLIENT, total: '100.00', count: 1 }] })],
       history: [{ month: '2026-10', currencies: [act('ILS', '100.00', '15.00')] }],
-      daysToPaid: { overall: { median: 10, n: 3 }, byCustomer: [{ customerId: CLIENT, median: 10, n: 3 }] },
+      daysToPaid: { overall: { median: 10, n: 3 }, byCustomer: [{ customerId: CLIENT, median: 10, n: 3 }], samples: [0, 0, 100] },
     }),
     { [CAT_A]: 'Food' },
   );
@@ -135,7 +135,7 @@ describe('combine', () => {
       ],
       currencies: [act('USD', '40.00', '0.00', { byCustomer: [{ customerId: CLIENT, total: '40.00', count: 1 }] }), act('ILS', '0.00', '7.00', { byCategory: [{ categoryId: CAT_B, total: '7.00', count: 1 }] })],
       history: [{ month: '2026-10', currencies: [act('USD', '40.00', '0.00')] }],
-      daysToPaid: { overall: { median: 30, n: 5 }, byCustomer: [] },
+      daysToPaid: { overall: { median: 50, n: 3 }, byCustomer: [], samples: [50, 50, 50] },
     }),
     { [CAT_B]: 'food ' },
   );
@@ -143,8 +143,8 @@ describe('combine', () => {
   it('one profile passes through, with no profile names on its clients', () => {
     const one = combine([personal]);
     expect(one.received).toEqual(new Map([['ILS', 10000]]));
-    expect(one.clients).toEqual([{ key: `p1:${CLIENT}`, name: 'Haddad', profileName: null, amounts: new Map([['ILS', 10000]]), daysToPaid: 10 }]);
-    expect(one.daysToPaid).toBe(10);
+    expect(one.clients).toEqual([{ key: `p1:${CLIENT}`, name: 'Haddad', profileName: null, amounts: new Map([['ILS', 10000]]), daysToPaid: 10, none: false }]);
+    expect(one.daysToPaid).toBe(0);
     expect(one.since).toBe('2026-09-02');
   });
 
@@ -169,9 +169,23 @@ describe('combine', () => {
     ]);
   });
 
-  it('combines days to get paid as the median of each profile’s median weighted by its entries', () => {
-    expect(combine([personal, studio]).daysToPaid).toBe(30);
-    expect(combine([studio, { ...personal, activity: { ...personal.activity, daysToPaid: { overall: { median: 10, n: 9 }, byCustomer: [] } } }]).daysToPaid).toBe(10);
+  it('combines days to get paid as one true median over every profile’s samples, n ≥ 3 combined (D2)', () => {
+    // [0, 0, 100] + [50, 50, 50]: the median of medians said 25; the true median is 50 (review)
+    expect(combine([personal, studio]).daysToPaid).toBe(50);
+    const two = (samples: number[]) => ({ ...studio, activity: { ...studio.activity, daysToPaid: { overall: null, byCustomer: [], samples } } });
+    expect(combine([two([4, 6]), { ...two([5, 9]), profileId: 'p3' }]).daysToPaid).toBe(6);
+    expect(combine([two([4, 6])]).daysToPaid).toBeNull();
+  });
+
+  it('never merges categories whose names are not known, and keys names apart from Uncategorized (review)', () => {
+    const unknown = { ...personal, categoryName: () => null };
+    const both = combine([unknown, { ...studio, categoryName: () => null }]);
+    expect(both.categories.map((c) => [c.key, c.name])).toEqual([
+      [`id:p1:${CAT_A}`, '—'],
+      [`id:p2:${CAT_B}`, '—'],
+    ]);
+    const named = combine([{ ...personal, categoryName: (id: string | null) => (id ? 'None' : 'Uncategorized') }]);
+    expect(named.categories.map((c) => c.key)).toEqual(['name:none']);
   });
 });
 
@@ -199,16 +213,25 @@ describe('shaping for the page (rows arrive already shaped)', () => {
       { start: '2026-10-03', received: new Map([['USD', 500]]), spent: new Map([['ILS', 4000]]) },
     ],
     categories: [
-      { key: '\u0000none', name: 'Uncategorized', uncategorized: true, amounts: new Map([['ILS', 7000]]) },
-      { key: 'food', name: 'Food', uncategorized: false, amounts: new Map([['ILS', 3000]]) },
+      { key: 'no-category', name: 'Uncategorized', uncategorized: true, amounts: new Map([['ILS', 7000]]) },
+      { key: 'name:food', name: 'Food', uncategorized: false, amounts: new Map([['ILS', 3000]]) },
     ],
     clients: [
-      { key: 'p1:none', name: 'No client', profileName: null, amounts: new Map([['ILS', 10000]]), daysToPaid: null },
-      { key: 'p1:c1', name: 'Haddad', profileName: null, amounts: new Map([['ILS', 20000]]), daysToPaid: 6 },
+      { key: 'p1:no-client', name: 'No client', profileName: null, amounts: new Map([['ILS', 10000]]), daysToPaid: null, none: true },
+      { key: 'p1:c1', name: 'Haddad', profileName: null, amounts: new Map([['ILS', 20000]]), daysToPaid: 6, none: false },
     ],
-    history: [{ month: '2026-09', received: new Map([['ILS', 9000]]), spent: new Map(), categories: [], clients: [{ key: 'p1:none', name: 'No client', profileName: null, amounts: new Map([['ILS', 9000]]), daysToPaid: null }] }],
+    history: [{ month: '2026-09', received: new Map([['ILS', 9000]]), spent: new Map(), categories: [], clients: [{ key: 'p1:no-client', name: 'No client', profileName: null, amounts: new Map([['ILS', 9000]]), daysToPaid: null, none: true }] }],
     daysToPaid: null,
   } as unknown as Combined;
+
+  it('draws month buckets to each month’s last day, marking only the months before the first record as “before”', () => {
+    const year = { ...c, since: '2026-02-14', buckets: [{ start: '2026-01-01', received: new Map(), spent: new Map() }, { start: '2026-02-01', received: new Map([['ILS', 100]]), spent: new Map() }] } as unknown as Combined;
+    const { bars } = chartBars(year, ils, 'month');
+    expect(bars.map((b) => [b.key, b.to, b.position])).toEqual([
+      ['2026-01-01', '2026-01-31', 'before'],
+      ['2026-02-01', '2026-02-28', 'in'],
+    ]);
+  });
 
   it('draws one bar per bucket in the unit, days before the first record as “before”, with the tallest of both series as max', () => {
     const { bars, spent, other } = chartBars(c, ils);
@@ -224,18 +247,18 @@ describe('shaping for the page (rows arrive already shaped)', () => {
 
   it('turns rows into shares of the total, largest first, Uncategorized and no client last', () => {
     expect(shareRows(c.categories, ils).map((r) => [r.key, r.total, r.share])).toEqual([
-      ['food', '30.00', 30],
+      ['name:food', '30.00', 30],
       ['none', '70.00', 70],
     ]);
     expect(shareRows(c.clients, ils).map((r) => [r.key, r.share])).toEqual([
       ['p1:c1', 67],
-      ['p1:none', 33],
+      ['p1:no-client', 33],
     ]);
   });
 
   it('makes month points for insights, marking money with no client', () => {
     const [sept] = monthPoints(c, ['2026-09'], ils);
-    expect(sept).toEqual({ month: '2026-09', received: 9000, spent: 0, categories: [], clients: [{ key: 'p1:none', name: 'No client', amount: 9000, none: true }] });
+    expect(sept).toEqual({ month: '2026-09', received: 9000, spent: 0, categories: [], clients: [{ key: 'p1:no-client', name: 'No client', amount: 9000, none: true }] });
     expect(monthPoints(c, ['2026-08'], ils)).toEqual([{ month: '2026-08', received: 0, spent: 0, categories: [], clients: [] }]);
   });
 });

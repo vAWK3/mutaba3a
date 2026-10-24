@@ -1,12 +1,14 @@
 import { useId, useLayoutEffect, useRef, type FocusEvent, type ReactNode } from 'react';
 import { animate } from 'motion';
-import { getLocale, useLanguage } from '../../../lib/i18n/core';
+import { useLanguage } from '../../../lib/i18n/core';
 import { parseAmountToMinor } from '../../../lib/utils';
 import type { Currency } from '../../api/client';
-import { convertMoney, type Money, type Unit } from '../../data/reports';
+import type { ConvertedTotal } from '../../data/expenseGroups';
+import { convertMoney, sumMoney, type Money, type Unit } from '../../data/reports';
 import { minorToDecimal } from '../../format/currencies';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
+import { rateLines } from '../../format/rateLines';
 import { formatWhole } from '../../format/reportFormat';
 import { usePopover } from '../../shell/usePopover';
 
@@ -14,14 +16,14 @@ import { usePopover } from '../../shell/usePopover';
  * Reports' hero (MUT-175, DR2/DR4/DR9/DR21/DR28): Received as the anchor
  * figure, Spent and Kept beside it, all in whole units. With other currencies
  * converted, the figures carry ≈ and open the exact amount per currency with
- * the rate line (B5); with a rate missing, each currency stands on its own
- * line instead (D3). Figures count up on first load and morph after; the
+ * the rate line (B5); with a rate missing, each currency is one headline-size
+ * line instead (D3, DR9). Figures count up on first load and morph after; the
  * moving digits are hidden from screen readers, which read the final value.
+ * Every amount sits in a <bdi> (ADR-101).
  */
 
 const FIRST_COUNT_S = 0.6;
 const MORPH_S = 0.4;
-const RATE_DIGITS = 4;
 /** The brand's spring curve (--m-ease-spring) as a cubic bezier. */
 const SPRING_EASE = [0.2, 0.8, 0.2, 1] as const;
 
@@ -42,10 +44,10 @@ export function CountUp({ minor, currency, reducedMotion }: { minor: number; cur
     return () => controls.stop();
   }, [minor, currency, language, reducedMotion]);
   return (
-    <>
+    <bdi>
       <span ref={digits} className="hp-countup" aria-hidden="true" />
       <span className="sr-only">{formatWhole(minor, currency, language)}</span>
-    </>
+    </bdi>
   );
 }
 
@@ -58,24 +60,37 @@ export interface HeroFiguresProps {
 }
 
 export function HeroFigures({ received, spent, unit, caption, reducedMotion }: HeroFiguresProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const currencies = [...new Set([...received.keys(), ...spent.keys()])].filter((c) => (received.get(c) ?? 0) !== 0 || (spent.get(c) ?? 0) !== 0).sort();
-  const converted = unit.rates ? { received: convertMoney(received, unit.rates), spent: convertMoney(spent, unit.rates) } : null;
-  const approximate = Boolean(converted) && currencies.some((c) => c !== unit.currency);
 
   if (unit.singleCurrency) {
-    // D3 / DR9: a rate is missing, so each currency is its own line
+    // D3 / DR9: a rate is missing, so each currency is its own headline-size line, never a second anchor figure
     return (
       <section className="hp-report-hero" aria-label={t('hosted.reports.title')}>
+        <div className="hp-report-per-currency">
+          {currencies.map((currency) => (
+            <div key={currency} className="hp-report-currency">
+              <span className="hp-report-label">{currency}</span>
+              <span className="hp-report-mid">
+                {t('hosted.reports.hero.received')} <bdi>{formatWhole(received.get(currency) ?? 0, currency, language)}</bdi>
+              </span>
+              <span className="hp-report-note">
+                {t('hosted.reports.hero.spent')} <bdi>{formatWhole(spent.get(currency) ?? 0, currency, language)}</bdi> · {t('hosted.reports.hero.kept')}{' '}
+                <bdi>{formatWhole((received.get(currency) ?? 0) - (spent.get(currency) ?? 0), currency, language)}</bdi>
+              </span>
+            </div>
+          ))}
+        </div>
         <p className="hp-report-caption">{caption}</p>
-        {currencies.map((currency) => (
-          <Figures key={currency} received={received.get(currency) ?? 0} spent={spent.get(currency) ?? 0} currency={currency} approximate={false} reducedMotion={reducedMotion} />
-        ))}
       </section>
     );
   }
 
+  const converted = unit.rates ? { received: convertMoney(received, unit.rates), spent: convertMoney(spent, unit.rates) } : null;
+  const approximate = Boolean(converted) && currencies.some((c) => c !== unit.currency);
   const minorIn = (value: { total: string } | null | undefined, money: Money) => (value ? parseAmountToMinor(value.total, unit.currency) : (money.get(unit.currency) ?? 0));
+  // The rate lines cover every currency in view, received or spent
+  const breakdownTotal = unit.rates ? convertMoney(sumMoney([received, spent]), unit.rates) : null;
   return (
     <section className="hp-report-hero" aria-label={t('hosted.reports.title')}>
       <Figures
@@ -84,7 +99,7 @@ export function HeroFigures({ received, spent, unit, caption, reducedMotion }: H
         currency={unit.currency}
         approximate={approximate}
         reducedMotion={reducedMotion}
-        breakdown={approximate && unit.rates ? { received, spent, currencies, rateDate: unit.rates.rateDate, rates: unit.rates.rates, base: unit.currency } : undefined}
+        breakdown={approximate && breakdownTotal ? { received, spent, currencies, total: breakdownTotal } : undefined}
       />
       <p className="hp-report-caption">{caption}</p>
     </section>
@@ -95,9 +110,8 @@ interface Breakdown {
   received: Money;
   spent: Money;
   currencies: Currency[];
-  rateDate: string;
-  rates: ReadonlyArray<{ currency: Currency; rate: number; derived?: boolean }>;
-  base: Currency;
+  /** The conversion behind the ≈ figure: its rates and their date. */
+  total: ConvertedTotal;
 }
 
 function Figures({ received, spent, currency, approximate, reducedMotion, breakdown }: { received: number; spent: number; currency: Currency; approximate: boolean; reducedMotion: boolean; breakdown?: Breakdown }) {
@@ -141,7 +155,10 @@ function Figures({ received, spent, currency, approximate, reducedMotion, breakd
   );
 }
 
-/** The ≈ figure as a ≥ 44px button: hover, focus or tap opens the exact amounts; Esc or an outside tap closes. */
+/**
+ * The ≈ figure as a ≥ 44px button: hover, keyboard focus or tap opens the exact amounts; Esc, an outside tap or
+ * focus leaving closes them (review: it no longer stays open, or reopens, after Tab).
+ */
 function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; children: ReactNode }) {
   const { t, language } = useLanguage();
   const { open, setOpen, close, buttonRef, panelRef } = usePopover();
@@ -149,15 +166,7 @@ function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; childr
   /** A click closes only what a click opened: on a mouse, hover has already opened it. */
   const openedByClick = useRef(false);
   const panelId = useId();
-  const number = new Intl.NumberFormat(getLocale(language), { maximumFractionDigits: RATE_DIGITS });
-  const rateLines = breakdown.currencies
-    .filter((c) => c !== breakdown.base)
-    .flatMap((c) => {
-      const rate = breakdown.rates.find((r) => r.currency === c);
-      if (!rate) return [];
-      const line = t('hosted.groups.detail.rateLine', { from: c, rate: number.format(1 / rate.rate), to: breakdown.base });
-      return [rate.derived ? `${line} (${t('hosted.groups.detail.peg')})` : line];
-    });
+  const lines = rateLines(breakdown.total.used, breakdown.total.currency, t, language);
   const onFocus = (event: FocusEvent<HTMLButtonElement>) => {
     // Focus coming back from Esc must not reopen what was just closed
     if (closing.current || !event.currentTarget.matches(':focus-visible')) return;
@@ -174,8 +183,14 @@ function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; childr
     openedByClick.current = true;
     setOpen(true);
   };
+  const onBlur = (event: FocusEvent<HTMLSpanElement>) => {
+    if (open && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      openedByClick.current = false;
+      close(false);
+    }
+  };
   return (
-    <span className="hp-report-breakdown" onMouseLeave={() => open && !openedByClick.current && close(false)}>
+    <span className="hp-report-breakdown" onMouseLeave={() => open && !openedByClick.current && close(false)} onBlur={onBlur}>
       <button
         ref={buttonRef}
         type="button"
@@ -216,7 +231,7 @@ function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; childr
               ))}
             </tbody>
           </table>
-          <p className="hp-popover-foot">{[...rateLines, t('hosted.reports.hero.rateFooter', { date: formatDay(breakdown.rateDate, language) })].join(' · ')}</p>
+          <p className="hp-popover-foot">{[...lines, t('hosted.reports.hero.rateFooter', { date: formatDay(breakdown.total.rateDate, language) })].join(' · ')}</p>
         </div>
       )}
     </span>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import type { Period, ReportScope, Stage } from '../data/reports';
 import { trackPortal } from './portalAnalytics';
 
 /**
@@ -10,7 +11,7 @@ import { trackPortal } from './portalAnalytics';
 
 export const REPORT_VIEWED_DEBOUNCE_MS = 1000;
 
-export function useReportViewed(period: 'week' | 'month' | 'year', scope: 'profile' | 'all', stage: 1 | 2 | 3 | null, local: boolean) {
+export function useReportViewed(period: Period, scope: ReportScope, stage: Stage | null, local: boolean) {
   useEffect(() => {
     if (local || stage === null) return;
     const timer = setTimeout(() => void trackPortal('report_viewed', { period, scope, stage: `stage_${stage}` }), REPORT_VIEWED_DEBOUNCE_MS);

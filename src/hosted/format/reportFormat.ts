@@ -66,5 +66,12 @@ export function formatWhole(minor: number, currency: Currency, language: Languag
     formatter = new Intl.NumberFormat(getLocale(language), { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 });
     wholeFormatters.set(key, formatter);
   }
-  return formatter.format(Math.round(minor / 10 ** currencyExponent(currency)));
+  return formatter.format(wholeUnits(minor, currency));
+}
+
+/** Whole units, halves away from zero, and never −0 (review: a 0.40 loss read "-₪0"). */
+export function wholeUnits(minor: number, currency: Currency): number {
+  const units = minor / 10 ** currencyExponent(currency);
+  const rounded = Math.sign(units) * Math.round(Math.abs(units));
+  return rounded === 0 ? 0 : rounded;
 }

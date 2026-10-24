@@ -35,6 +35,8 @@ export interface Insight {
   /** What the insight says, as an id: when it changes, the insight ranks first (DR18). */
   fact: string;
   weight: number;
+  /** The mover's category key and month, for marking its row (review: never parsed out of `fact`). */
+  subject?: { key: string; month: string };
 }
 
 export interface InsightInput {
@@ -97,12 +99,15 @@ function mover(previous: MonthPoint, latest: MonthPoint): Insight | null {
   return {
     id: 'mover',
     parts: [{ key: `insights.mover.${direction}`, values: { category: text(top.name), amount: money(top.after), month: monthValue(latest.month), delta: money(Math.abs(top.delta)), previous: monthValue(previous.month) } }],
-    fact: `${top.key}:${direction}:${latest.month}`,
+    fact: `${top.key}|${direction}|${latest.month}`,
     weight: Math.abs(top.delta),
+    subject: { key: top.key, month: latest.month },
   };
 }
 
 function concentration(recent: readonly MonthPoint[]): Insight | null {
+  // The sentence says "the last 3 months": with fewer complete months it would overstate (review)
+  if (recent.length < RECENT_MONTHS) return null;
   const total = recent.reduce((sum, m) => sum + m.received, 0);
   if (total <= 0) return null;
   const byClient = new Map<string, { name: string; amount: number }>();
@@ -163,13 +168,24 @@ function candidates({ stage, months, daysToPaid: days }: InsightInput): Insight[
   ].filter((i): i is Insight => i !== null);
 }
 
+/** What rotation remembers per insight: a hash of its fact (never an amount or a client id) and the visits it was shown on. */
 export type SeenInsights = Readonly<Record<string, { fact: string; views: number }>>;
+
+/** FNV-1a, 32-bit: enough to tell one fact from the next on this browser; not reversible to the amount it hides. */
+export function factHash(fact: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < fact.length; i++) {
+    hash ^= fact.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
 
 /** DR18: 0 = a changed fact, 1 = fresh, 2 = the same fact seen on enough earlier visits. */
 function tier(insight: Insight, seen: SeenInsights): number {
   const before = seen[insight.id];
   if (!before) return 1;
-  if (before.fact !== insight.fact) return 0;
+  if (before.fact !== factHash(insight.fact)) return 0;
   return before.views >= STALE_AFTER_VIEWS ? 2 : 1;
 }
 
@@ -185,7 +201,8 @@ export function recordViews(seen: SeenInsights, shown: readonly Insight[]): Seen
   const next: Record<string, { fact: string; views: number }> = { ...seen };
   for (const insight of shown) {
     const before = seen[insight.id];
-    next[insight.id] = before && before.fact === insight.fact ? { fact: insight.fact, views: before.views + 1 } : { fact: insight.fact, views: 1 };
+    const fact = factHash(insight.fact);
+    next[insight.id] = before && before.fact === fact ? { fact, views: before.views + 1 } : { fact, views: 1 };
   }
   return next;
 }

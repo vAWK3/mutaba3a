@@ -41,6 +41,7 @@ import { useExpenseCategories } from '../../data/expenseQueries';
 import type { GroupDetailSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay, todayInZone } from '../../format/dates';
+import { rateLines } from '../../format/rateLines';
 import { useProfile, useWriteGate } from '../../session/me';
 import { PageHeader } from './shared';
 import { useGroupRange } from './ExpenseGroupsList';
@@ -55,8 +56,6 @@ import { useGroupRange } from './ExpenseGroupsList';
 
 /** Below this width the page takes its phone layout (21A). */
 const NARROW_QUERY = '(max-width: 759px)';
-/** Fractional digits shown for a "1 JOD = 5.23 ILS" rate. */
-const RATE_DIGITS = 4;
 /** Axis labels: about this many under a chart. */
 const AXIS_LABELS = 8;
 /** How long a day header keeps the jump highlight (row-flash). */
@@ -497,15 +496,11 @@ function useConverted(summary: ExpenseGroupSummary, base: Currency): ReactNode {
   if (!needed || !rates.data) return null;
   const total = convertTotal(summary, rates.data);
   if (!total) return null;
-  const number = new Intl.NumberFormat(getLocale(language), { maximumFractionDigits: RATE_DIGITS });
-  const rateLines = total.used.map(({ currency, rate, derived }) => {
-    const line = t('hosted.groups.detail.rateLine', { from: currency, rate: number.format(1 / rate), to: total.currency });
-    return derived ? `${line} (${t('hosted.groups.detail.peg')})` : line;
-  });
+  const lines = rateLines(total.used, total.currency, t, language);
   const when = total.stale ? t('hosted.groups.detail.convertedStale', { date: formatDay(total.rateDate, language) }) : t('hosted.groups.detail.convertedNote', { date: formatDay(total.rateDate, language) });
   return (
     <p className="hp-converted">
-      ≈ <DecimalAmount value={total.total} currency={total.currency} className="hp-converted-amount" /> <small>{[when, ...rateLines].join(' · ')}</small>
+      ≈ <DecimalAmount value={total.total} currency={total.currency} className="hp-converted-amount" /> <small>{[when, ...lines].join(' · ')}</small>
     </p>
   );
 }

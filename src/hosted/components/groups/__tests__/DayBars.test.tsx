@@ -200,3 +200,28 @@ describe('DayBars — a second series and future days (MUT-175)', () => {
     expect(document.activeElement).toHaveAccessibleName('2026-10-03 in 30000 out 0');
   });
 });
+
+/** MUT-175 (DR13, DR21), opt-in: today's dot and the first-load wave. */
+describe('DayBars — today and the entrance (MUT-175)', () => {
+  const days = [bar('2026-10-01', 120000), bar('2026-10-02', 60000)];
+  const draw = (reducedMotion: boolean) =>
+    render(
+      <div dir="ltr">
+        <DayBars bars={days} label="Days" describe={(b) => b.from} axisLabel={() => null} gapLabel={() => ''} hasOther={() => false} onJump={vi.fn()} reducedMotion={reducedMotion} today={(b) => b.from === '2026-10-02'} enterStagger />
+      </div>,
+    );
+
+  it('marks only today’s bar', () => {
+    draw(true);
+    expect(screen.getByRole('button', { name: '2026-10-02' })).toHaveClass('hp-daybar-today');
+    expect(screen.getByRole('button', { name: '2026-10-01' })).not.toHaveClass('hp-daybar-today');
+  });
+
+  it('grows the bars from zero on first paint, unless motion is reduced', () => {
+    const { unmount } = draw(false);
+    expect([...document.querySelectorAll<HTMLElement>('.hp-daybar-fill')].map((f) => f.style.transform)).toEqual(['scaleY(0)', 'scaleY(0)']);
+    unmount();
+    draw(true);
+    expect([...document.querySelectorAll<HTMLElement>('.hp-daybar-fill')].map((f) => f.style.transform)).toEqual(['scaleY(1)', 'scaleY(0.5)']);
+  });
+});

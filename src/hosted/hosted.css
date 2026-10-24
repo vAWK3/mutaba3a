@@ -705,21 +705,20 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-catbar-meta { margin-inline-start: var(--space-2); color: var(--muted); }
 
 /* ---- MUT-175: Reports ---------------------------------------------------- */
-.hp-report-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-4); }
-.hp-report-controls-end { display: flex; align-items: center; gap: var(--space-1); }
-.hp-segmented { display: inline-flex; padding: var(--space-0-5); border-radius: var(--radius-pill); background: var(--surface-2); }
-.hp-segment { min-height: 44px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-label); cursor: pointer; }
-.hp-segment-on { background: var(--surface); color: var(--text); font-weight: var(--weight-medium); box-shadow: var(--shadow-1); }
-.hp-segment[aria-disabled='true'] { color: var(--muted); cursor: not-allowed; }
-.hp-segment:focus-visible, .hp-step:focus-visible, .hp-switch:focus-visible, .hp-report-approx:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-report-controls-wrap { margin-bottom: var(--space-4); }
+.hp-report-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+/* DR1/DS4: the switch and ‹ › stay at the inline-end, also when the row wraps on a phone (review) */
+.hp-report-controls-end { display: flex; align-items: center; gap: var(--space-1); margin-inline-start: auto; }
+.hp-report-periods .segmented-control-option { min-height: 44px; }
+.hp-report-periods .segmented-control-option[aria-disabled='true'] { color: var(--muted); opacity: 0.6; cursor: not-allowed; }
+.hp-report-hint { min-height: 1.25em; }
+.hp-report-switch { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-2); font-size: var(--text-label); cursor: pointer; }
+.hp-step:focus-visible, .hp-report-approx:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* ‹ › are bidi-mirrored by the browser in Arabic: no CSS flip, or they point backwards (review, verified on video) */
 .hp-step { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font-size: var(--text-headline); cursor: pointer; }
 .hp-step:disabled { opacity: 0.4; cursor: not-allowed; }
-[dir='rtl'] .hp-step-icon { display: inline-block; transform: scaleX(-1); }
-.hp-switch { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-2); border: 0; background: none; color: var(--text); font: inherit; font-size: var(--text-label); cursor: pointer; }
-.hp-switch-track { position: relative; width: 32px; height: 18px; border-radius: var(--radius-pill); background: var(--surface-3); transition: background var(--m-dur-toggle) var(--m-ease-spring); }
-.hp-switch-thumb { position: absolute; inset-block-start: var(--space-0-5); inset-inline-start: var(--space-0-5); width: 14px; height: 14px; border-radius: var(--radius-pill); background: var(--surface); box-shadow: var(--shadow-1); transition: inset-inline-start var(--m-dur-toggle) var(--m-ease-spring); }
-.hp-switch[aria-checked='true'] .hp-switch-track { background: var(--m-primary); }
-.hp-switch[aria-checked='true'] .hp-switch-thumb { inset-inline-start: var(--space-4); }
+/* Text actions on the page are 44px tall to tap (Pass 6 non-negotiables) */
+.hp-report .hp-link-button, .hp-report-actions .hp-link, .hp-teaser .hp-link-button { display: inline-flex; align-items: center; min-height: 44px; }
 /* DR5: the previous answer stays, dimmed, while the next period or scope loads */
 .hp-report { transition: opacity 150ms ease; }
 .hp-report-busy { opacity: 0.6; }
@@ -731,6 +730,10 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-report-approx { min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; text-decoration: underline dotted 1px; text-underline-offset: 6px; }
 .hp-report-pair { display: grid; grid-template-columns: repeat(2, minmax(0, auto)); gap: var(--space-6); }
 .hp-report-mid { font-family: var(--m-font-num); font-size: var(--text-headline); white-space: nowrap; }
+/* DR9: with a rate missing, each currency is one headline-size line on a phone, side by side on desktop */
+.hp-report-per-currency { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
+.hp-report-per-currency .hp-report-currency { display: grid; gap: var(--space-0-5); }
+@media (max-width: 479px) { .hp-report-per-currency { flex-direction: column; } }
 .hp-report-note, .hp-report-caption { margin: var(--space-1) 0 0; font-size: var(--text-label); color: var(--muted); }
 .hp-report-breakdown { position: relative; display: inline-block; }
 .hp-report-breakdown-panel { inset-block-start: calc(100% + var(--space-1)); inset-inline-start: 0; min-width: 260px; }
@@ -742,10 +745,11 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-report-profiles { margin: var(--space-1) 0; padding-inline-start: var(--space-4); font-size: var(--text-label); }
 .hp-report-section { margin-top: var(--space-6); }
 .hp-report-section h2 { margin: 0 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-medium); }
-/* DR20: plain sentences under "Lately", hairlines, no icons or colour */
+/* DR20: plain sentences under "Lately", hairlines, no icons or colour; the key figures in the number face */
 .hp-insights { list-style: none; margin: 0; padding: 0; }
 .hp-insight { padding: var(--space-2) 0; border-bottom: 1px solid var(--divider); }
 .hp-insight:last-child { border-bottom: 0; }
+.hp-insight-figure { font-family: var(--m-font-num); }
 /* DR24: the teaser — dashed, a lock, one sentence */
 .hp-teaser { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-4); padding: var(--space-4); border: 1.5px dashed var(--m-line); border-radius: var(--radius-lg); color: var(--muted); }
 .hp-teaser p { flex: 1; margin: 0; }
@@ -757,16 +761,26 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-daybars-pair .hp-daybar-fill { width: 50%; background: var(--m-mint-ink); }
 .hp-daybars-pair .hp-daybar-fill-2 { background: var(--m-primary); }
 .hp-daybar-future { opacity: 0.4; cursor: default; }
-/* DR25: below 480px, Month overlays spent inside received, one bar per day */
+/* DR13: today's day carries a small dot under the axis */
+.hp-daybar-today::before { content: ''; position: absolute; inset-block-start: calc(100% + var(--space-0-5)); inset-inline-start: 50%; translate: -50% 0; width: 4px; height: 4px; border-radius: var(--radius-pill); background: var(--m-line); }
+[dir='rtl'] .hp-daybar-today::before { translate: 50% 0; }
+/* DR25: below 480px, Month overlays spent inside received, one bar per day. The overlay's edge is drawn on its sides:
+   a top border would scale with the bar's scaleY and vanish on short bars (review). */
 @media (max-width: 479px) {
   .hp-report-chart-dense .hp-daybars-pair .hp-daybar-track { gap: 0; }
   .hp-report-chart-dense .hp-daybars-pair .hp-daybar-fill { width: 100%; }
-  .hp-report-chart-dense .hp-daybars-pair .hp-daybar-fill-2 { position: absolute; inset-block-end: 0; inset-inline-start: 25%; width: 50%; border-top: 2px solid var(--m-canvas); }
+  .hp-report-chart-dense .hp-daybars-pair .hp-daybar-fill-2 { position: absolute; inset-block-end: 0; inset-inline-start: 25%; width: 50%; border-inline: 2px solid var(--m-canvas); }
 }
 .hp-report-selected { min-height: 1.5em; margin: var(--space-2) 0 0; font-size: var(--text-label); color: var(--text-secondary); }
 .hp-report-lists { display: grid; gap: 0 var(--space-6); }
 @media (min-width: 900px) { .hp-report-lists { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .hp-report-actions { display: flex; justify-content: center; gap: var(--space-4); }
+/* DR5: the first-load skeleton has the page's shape — hero, a 168px chart, three rows */
+.hp-report-skeleton { display: grid; gap: var(--space-4); }
+.hp-report-skeleton > span { display: block; border-radius: var(--radius-md); background: var(--surface-2); }
+.hp-report-skeleton-hero { height: 72px; max-width: 320px; }
+.hp-report-skeleton-chart { height: 168px; }
+.hp-report-skeleton-row { height: 20px; }
 
 /* 4A, 22A: members by day, Left out */
 .hp-members { position: relative; overflow: hidden; margin: 0 0 var(--space-5); }

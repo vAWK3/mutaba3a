@@ -469,8 +469,9 @@ export const api = {
   deleteExpense: (profileId: string, expenseId: string) =>
     request<void>('DELETE', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
 
-  expenseCategories: (profileId: string) =>
-    request<Get<'/v1/expense-categories'>>('GET', '/v1/expense-categories', { profileId }),
+  // MUT-175: Reports names archived categories too (`includeArchived: 'true'`)
+  expenseCategories: (profileId: string, query: Query<'/v1/expense-categories'> = {}) =>
+    request<Get<'/v1/expense-categories'>>('GET', '/v1/expense-categories', { profileId, query }),
 
   // MUT-254: the vendor typeahead (suggestions only; saving an expense links its vendor on the server).
   vendors: (profileId: string, query: Query<'/v1/vendors'>) =>

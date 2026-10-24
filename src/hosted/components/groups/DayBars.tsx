@@ -34,12 +34,19 @@ export interface DayBarsProps {
   second?: (bar: Bar) => number;
   /** MUT-175: days after today, drawn faint and never focusable. */
   future?: (bar: Bar) => boolean;
+  /** MUT-175 (DR13): the bar holding today, marked with a dot under the axis. */
+  today?: (bar: Bar) => boolean;
+  /** MUT-175 (DR21): bars grow from 0 on first paint, 12ms apart, ≤ 300ms in all. */
+  enterStagger?: boolean;
 }
 
 /** Bars this close to an end flip their tooltip inward (craft 5). */
 const EDGE_BARS = 3;
+/** DR21's first-load wave. */
+const STAGGER_MS = 12;
+const STAGGER_MAX_MS = 300;
 
-export function DayBars({ bars, label, describe, axisLabel, gapLabel, hasOther, selected, onJump, reducedMotion, second, future }: DayBarsProps) {
+export function DayBars({ bars, label, describe, axisLabel, gapLabel, hasOther, selected, onJump, reducedMotion, second, future, today, enterStagger = false }: DayBarsProps) {
   const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const isFuture = (bar: Bar) => future?.(bar) ?? false;
@@ -84,6 +91,8 @@ export function DayBars({ bars, label, describe, axisLabel, gapLabel, hasOther, 
                 edge={edge}
                 tabbable={index === tabStop}
                 selected={bar.key === selected}
+                isToday={today?.(bar) ?? false}
+                enterDelayMs={enterStagger ? Math.min(index * STAGGER_MS, STAGGER_MAX_MS) : undefined}
                 reducedMotion={reducedMotion}
                 register={(element) => {
                   if (element) buttons.current.set(bar.key, element);
@@ -110,6 +119,8 @@ interface DayBarProps {
   edge: 'start' | 'middle' | 'end';
   tabbable: boolean;
   selected: boolean;
+  isToday: boolean;
+  enterDelayMs: number | undefined;
   reducedMotion: boolean;
   register: (element: HTMLButtonElement | null) => void;
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -117,9 +128,9 @@ interface DayBarProps {
   onJump: () => void;
 }
 
-function DayBar({ bar, second, text, axis, other, edge, tabbable, selected, reducedMotion, register, onKeyDown, onFocus, onJump }: DayBarProps) {
+function DayBar({ bar, second, text, axis, other, edge, tabbable, selected, isToday, enterDelayMs, reducedMotion, register, onKeyDown, onFocus, onJump }: DayBarProps) {
   const fill = useRef<HTMLSpanElement>(null);
-  useSpringScale(fill, bar.max === 0 ? 0 : bar.minor / bar.max, 'y', reducedMotion);
+  useSpringScale(fill, bar.max === 0 ? 0 : bar.minor / bar.max, 'y', reducedMotion, enterDelayMs);
   const classes = [
     'hp-daybar',
     'press',
@@ -127,6 +138,7 @@ function DayBar({ bar, second, text, axis, other, edge, tabbable, selected, redu
     bar.minor === 0 && (second ?? 0) === 0 && 'hp-daybar-zero',
     other && 'hp-daybar-other',
     selected && 'hp-daybar-sel',
+    isToday && 'hp-daybar-today',
     `hp-tip-${edge}`,
   ]
     .filter(Boolean)
@@ -135,7 +147,7 @@ function DayBar({ bar, second, text, axis, other, edge, tabbable, selected, redu
     <button ref={register} type="button" className={classes} tabIndex={tabbable ? 0 : -1} aria-label={text} onKeyDown={onKeyDown} onFocus={onFocus} onClick={onJump}>
       <span className="hp-daybar-track" aria-hidden="true">
         <span ref={fill} className="hp-daybar-fill" />
-        {second !== undefined && <SecondFill bar={bar} minor={second} reducedMotion={reducedMotion} />}
+        {second !== undefined && <SecondFill bar={bar} minor={second} reducedMotion={reducedMotion} enterDelayMs={enterDelayMs} />}
       </span>
       <span className="hp-daybar-tip" aria-hidden="true">
         {text}
@@ -150,9 +162,9 @@ function DayBar({ bar, second, text, axis, other, edge, tabbable, selected, redu
 }
 
 /** MUT-175: the second series' fill, scaled like the first. */
-function SecondFill({ bar, minor, reducedMotion }: { bar: Bar; minor: number; reducedMotion: boolean }) {
+function SecondFill({ bar, minor, reducedMotion, enterDelayMs }: { bar: Bar; minor: number; reducedMotion: boolean; enterDelayMs: number | undefined }) {
   const fill = useRef<HTMLSpanElement>(null);
-  useSpringScale(fill, bar.max === 0 ? 0 : minor / bar.max, 'y', reducedMotion);
+  useSpringScale(fill, bar.max === 0 ? 0 : minor / bar.max, 'y', reducedMotion, enterDelayMs);
   return <span ref={fill} className="hp-daybar-fill hp-daybar-fill-2" />;
 }
 

@@ -69,11 +69,16 @@ export function hasNext(period: Period, at: Day, today: Day, language: Language)
   return stepPeriod(period, at, 1, language) <= today;
 }
 
-/** Previous is offered back to the period holding the first record (always, when older records exist). */
-export function hasPrevious(period: Period, at: Day, since: Day | null, earlier: boolean, language: Language): boolean {
+/**
+ * Previous is offered back to the period holding the first record (when older records exist, back to `floor`, the
+ * earliest day the server reports on: review, an old year answered 422).
+ */
+export function hasPrevious(period: Period, at: Day, since: Day | null, earlier: boolean, language: Language, floor?: Day): boolean {
+  const previous = periodRange(period, stepPeriod(period, at, -1, language), language);
+  if (floor && previous.from < floor) return false;
   if (earlier) return true;
   if (!since) return false;
-  return periodRange(period, stepPeriod(period, at, -1, language), language).to >= since;
+  return previous.to >= since;
 }
 
 /** The first month that counts as complete-able: since's own month if records began by its 7th day, else the next. */
@@ -91,14 +96,24 @@ export function completeMonths(since: Day | null, earlier: boolean, today: Day):
   return window.filter((month) => month >= first);
 }
 
+/** Complete months each stage needs (B3): none, one, two or more. */
+const STAGE_2_MONTHS = 1;
+const STAGE_3_MONTHS = 2;
+export const FULL_STAGE: Stage = 3;
+
 export function stageOf(completeCount: number): Stage {
-  return completeCount >= 2 ? 3 : completeCount === 1 ? 2 : 1;
+  return completeCount >= STAGE_3_MONTHS ? 3 : completeCount >= STAGE_2_MONTHS ? 2 : 1;
 }
 
 /** The month the stage after `stage` begins (B8's teaser), or null at stage 3 or with no records. */
 export function unlockMonth(since: Day | null, stage: Stage): Month | null {
-  if (!since || stage === 3) return null;
+  if (!since || stage === FULL_STAGE) return null;
   return addMonths(firstCountedMonth(since), stage);
+}
+
+/** The month Year opens (DR27): the start of stage 3. */
+export function yearUnlockMonth(since: Day | null): Month | null {
+  return unlockMonth(since, (FULL_STAGE - 1) as Stage);
 }
 
 /** Reports reads payments and expenses; a profile that can see neither is never in the switch (DR12). */
@@ -112,6 +127,14 @@ export type Money = ReadonlyMap<Currency, number>;
 
 function addTo(into: Map<Currency, number>, currency: Currency, amount: string) {
   into.set(currency, (into.get(currency) ?? 0) + parseAmountToMinor(amount, currency));
+}
+
+/** Adds a block's received and spent per currency (the period, a bucket, a month). */
+function addFlows(received: Map<Currency, number>, spent: Map<Currency, number>, currencies: ReadonlyArray<{ currency: Currency; received: string; spent: string }>) {
+  for (const c of currencies) {
+    addTo(received, c.currency, c.received);
+    addTo(spent, c.currency, c.spent);
+  }
 }
 
 function addMoney(into: Map<Currency, number>, money: Money) {
@@ -128,9 +151,13 @@ export interface ProfileBlock {
   profileId: string;
   profileName: string;
   activity: ActivitySummary;
-  categoryName: (categoryId: string | null) => string;
+  /** The category's name, or null while (or if) the profile's names are unknown. */
+  categoryName: (categoryId: string | null) => string | null;
   clientName: (customerId: string | null) => string;
 }
+
+/** Shown for a category whose name is not known (yet). */
+export const UNKNOWN_NAME = '—';
 
 export interface CategoryRowData {
   key: string;
@@ -146,6 +173,8 @@ export interface ClientRowData {
   profileName: string | null;
   amounts: Money;
   daysToPaid: number | null;
+  /** Money received with no client: counted, never named as a top client. */
+  none: boolean;
 }
 
 export interface MonthTotals {
@@ -168,10 +197,22 @@ export interface Combined {
   daysToPaid: number | null;
 }
 
+/** The no-category row's key; named rows are `name:<lowercased name>`, unknown names `id:<profile>:<category>`. */
+export const NO_CATEGORY_KEY = 'no-category';
+/** One client row per (profile, client) (DR30). */
+export const clientKey = (profileId: string, customerId: string | null) => `${profileId}:${customerId ?? 'no-client'}`;
+
 type CurrencyActivity = ActivitySummary['currencies'][number];
 
-/** Categories merge by name across profiles ("Food" is Food everywhere); clients never merge (DR30). */
-const categoryKey = (name: string) => name.trim().toLocaleLowerCase();
+/**
+ * Categories merge by name across profiles ("Food" is Food everywhere); a name
+ * not known yet never merges (review: archived or unloaded names all read "—").
+ * Clients never merge (DR30).
+ */
+function categoryKey(profileId: string, categoryId: string | null, name: string | null): string {
+  if (categoryId === null) return NO_CATEGORY_KEY;
+  return name === null ? `id:${profileId}:${categoryId}` : `name:${name.trim().toLocaleLowerCase()}`;
+}
 
 function categoriesOf(blocks: ReadonlyArray<{ block: ProfileBlock; currencies: CurrencyActivity[] }>): CategoryRowData[] {
   const rows = new Map<string, { name: string; uncategorized: boolean; amounts: Map<Currency, number> }>();
@@ -179,8 +220,8 @@ function categoriesOf(blocks: ReadonlyArray<{ block: ProfileBlock; currencies: C
     for (const c of currencies) {
       for (const cat of c.byCategory) {
         const name = block.categoryName(cat.categoryId);
-        const key = cat.categoryId === null ? '\u0000none' : categoryKey(name);
-        const row = rows.get(key) ?? { name, uncategorized: cat.categoryId === null, amounts: new Map() };
+        const key = categoryKey(block.profileId, cat.categoryId, name);
+        const row = rows.get(key) ?? { name: name ?? UNKNOWN_NAME, uncategorized: cat.categoryId === null, amounts: new Map() };
         addTo(row.amounts, c.currency, cat.total);
         rows.set(key, row);
       }
@@ -195,8 +236,8 @@ function clientsOf(blocks: ReadonlyArray<{ block: ProfileBlock; currencies: Curr
     const days = new Map(block.activity.daysToPaid.byCustomer.map((d) => [d.customerId, d.median]));
     for (const c of currencies) {
       for (const client of c.byCustomer) {
-        const key = `${block.profileId}:${client.customerId ?? 'none'}`;
-        const row = rows.get(key) ?? { key, name: block.clientName(client.customerId), profileName: multi ? block.profileName : null, amounts: new Map(), daysToPaid: client.customerId ? (days.get(client.customerId) ?? null) : null };
+        const key = clientKey(block.profileId, client.customerId);
+        const row = rows.get(key) ?? { key, name: block.clientName(client.customerId), profileName: multi ? block.profileName : null, amounts: new Map(), daysToPaid: client.customerId ? (days.get(client.customerId) ?? null) : null, none: client.customerId === null };
         addTo(row.amounts, c.currency, client.total);
         rows.set(key, row);
       }
@@ -205,21 +246,15 @@ function clientsOf(blocks: ReadonlyArray<{ block: ProfileBlock; currencies: Curr
   return [...rows.values()];
 }
 
-/** The median of each profile's median, weighted by its entries: the closest honest figure without every sample. */
-function weightedMedian(parts: ReadonlyArray<{ median: number; n: number }>): number | null {
-  const total = parts.reduce((sum, p) => sum + p.n, 0);
-  if (total === 0) return null;
-  const sorted = [...parts].sort((a, b) => a.median - b.median);
-  const at = (index: number) => {
-    let seen = 0;
-    for (const p of sorted) {
-      seen += p.n;
-      if (index < seen) return p.median;
-    }
-    return sorted.at(-1)!.median;
-  };
-  const mid = Math.floor(total / 2);
-  return total % 2 === 1 ? at(mid) : Math.round((at(mid - 1) + at(mid)) / 2);
+/** Below this many entries in view, days to get paid is not claimed (D2, the server's own minimum). */
+export const MIN_DAYS_SAMPLES = 3;
+
+/** The median over every profile's samples, n ≥ 3 combined (D2: one true median, Basel's review answer). */
+function medianDays(samples: readonly number[]): number | null {
+  if (samples.length < MIN_DAYS_SAMPLES) return null;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : Math.round((sorted[mid - 1]! + sorted[mid]!) / 2);
 }
 
 export function combine(blocks: readonly ProfileBlock[]): Combined {
@@ -229,16 +264,10 @@ export function combine(blocks: readonly ProfileBlock[]): Combined {
   const buckets = new Map<Day, { received: Map<Currency, number>; spent: Map<Currency, number> }>();
   const months = new Map<Month, Array<{ block: ProfileBlock; currencies: CurrencyActivity[] }>>();
   for (const block of blocks) {
-    for (const c of block.activity.currencies) {
-      addTo(received, c.currency, c.received);
-      addTo(spent, c.currency, c.spent);
-    }
+    addFlows(received, spent, block.activity.currencies);
     for (const b of block.activity.buckets) {
       const into = buckets.get(b.start) ?? { received: new Map(), spent: new Map() };
-      for (const c of b.currencies) {
-        addTo(into.received, c.currency, c.received);
-        addTo(into.spent, c.currency, c.spent);
-      }
+      addFlows(into.received, into.spent, b.currencies);
       buckets.set(b.start, into);
     }
     for (const h of block.activity.history) months.set(h.month, [...(months.get(h.month) ?? []), { block, currencies: h.currencies }]);
@@ -256,13 +285,10 @@ export function combine(blocks: readonly ProfileBlock[]): Combined {
     history: [...months.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([month, parts]) => {
       const r = new Map<Currency, number>();
       const s = new Map<Currency, number>();
-      for (const { currencies } of parts) for (const c of currencies) {
-        addTo(r, c.currency, c.received);
-        addTo(s, c.currency, c.spent);
-      }
+      for (const { currencies } of parts) addFlows(r, s, currencies);
       return { month, received: r, spent: s, categories: categoriesOf(parts), clients: clientsOf(parts, multi) };
     }),
-    daysToPaid: weightedMedian(blocks.map((b) => b.activity.daysToPaid.overall).filter((d): d is { median: number; n: number } => d !== null)),
+    daysToPaid: medianDays(blocks.flatMap((b) => b.activity.daysToPaid.samples ?? [])),
   };
 }
 
@@ -312,8 +338,6 @@ export function convertMoney(money: Money, rates: FxRatesResponse) {
 // ---- Shaping for the page (CLAUDE.md: tables and charts get shaped rows) -----
 
 const PERCENT = 100;
-const NO_CATEGORY_KEY = '\u0000none';
-const isNoClient = (key: string) => key.endsWith(':none');
 
 /** A bucket's last day: the day itself, or its month's last day. */
 function bucketEnd(start: Day, bucket: 'day' | 'month'): Day {
@@ -337,8 +361,8 @@ export function chartBars(c: Combined, unit: Unit, bucket: 'day' | 'month' = 'da
 }
 
 /** List rows as shares of their total in the unit: largest first, Uncategorized and "no client" last. */
-export function shareRows(rows: ReadonlyArray<{ key: string; name: string; amounts: Money }>, unit: Unit): CategoryRow[] {
-  const shaped = rows.map((row) => ({ row, minor: inUnit(row.amounts, unit), last: row.key === NO_CATEGORY_KEY || isNoClient(row.key) })).filter((r) => r.minor > 0);
+export function shareRows(rows: ReadonlyArray<{ key: string; name: string; amounts: Money; none?: boolean }>, unit: Unit): CategoryRow[] {
+  const shaped = rows.map((row) => ({ row, minor: inUnit(row.amounts, unit), last: row.key === NO_CATEGORY_KEY || row.none === true })).filter((r) => r.minor > 0);
   const total = shaped.reduce((sum, r) => sum + r.minor, 0);
   return shaped
     .sort((a, b) => (a.last ? 1 : 0) - (b.last ? 1 : 0) || b.minor - a.minor)
@@ -355,7 +379,7 @@ export function monthPoints(c: Combined, months: readonly Month[], unit: Unit): 
       received: inUnit(h.received, unit),
       spent: inUnit(h.spent, unit),
       categories: h.categories.map((row) => ({ key: row.key, name: row.name, amount: inUnit(row.amounts, unit) })),
-      clients: h.clients.map((row) => ({ key: row.key, name: row.name, amount: inUnit(row.amounts, unit), ...(isNoClient(row.key) ? { none: true } : {}) })),
+      clients: h.clients.map((row) => ({ key: row.key, name: row.name, amount: inUnit(row.amounts, unit), ...(row.none ? { none: true } : {}) })),
     };
   });
 }

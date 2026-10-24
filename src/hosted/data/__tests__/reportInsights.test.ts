@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildInsights, CONCENTRATION_SHARE, recordViews, type MonthPoint } from '../reportInsights';
+import { buildInsights, factHash, recordViews, type MonthPoint } from '../reportInsights';
 
 /** MUT-175: deterministic staged insights (B4 as amended by DR15; DR16–DR19, DR29, D3). */
 
@@ -58,15 +58,23 @@ describe('stage 3 thresholds', () => {
     expect(fresh.find((i) => i.id === 'mover')!.parts[0]!.values.category).toEqual({ kind: 'text', text: 'Travel' });
   });
 
-  it('names client concentration at 35% of the last 3 months’ received, never for “no client”', () => {
-    const at = (share: number) => [month('2026-07', 0, 0), month('2026-08', 0, 0), month('2026-09', 10000, 0, { clients: [client('Haddad', Math.round(10000 * share)), client('Other', 10000 - Math.round(10000 * share))] })];
-    expect(CONCENTRATION_SHARE).toBe(0.35);
-    const shown = buildInsights({ stage: 3, months: at(0.35), daysToPaid: null }).find((i) => i.id === 'concentration');
-    expect(shown!.parts[0]!.values).toEqual({ client: { kind: 'text', text: 'Other' }, percent: { kind: 'percent', value: 65 } });
-    const below = [month('2026-08', 0, 0), month('2026-09', 10000, 0, { clients: [client('A', 3400), client('B', 3300), client('C', 3300)] })];
-    expect(ids(buildInsights({ stage: 3, months: below, daysToPaid: null }))).not.toContain('concentration');
-    const noClient = [month('2026-08', 0, 0), month('2026-09', 10000, 0, { clients: [{ key: 'p1:none', name: 'No client', amount: 9000, none: true }, client('A', 1000)] })];
+  it('names client concentration at exactly 35% of the last 3 months’ received and not just below, never “no client”', () => {
+    const three = (clients: MonthPoint['clients']) => [month('2026-07', 0, 0), month('2026-08', 0, 0), month('2026-09', 10000, 0, { clients })];
+    const at = buildInsights({ stage: 3, months: three([client('A', 3500), client('B', 3250), client('C', 3250)]), daysToPaid: null }).find((i) => i.id === 'concentration');
+    expect(at!.parts[0]!.values).toEqual({ client: { kind: 'text', text: 'A' }, percent: { kind: 'percent', value: 35 } });
+    expect(ids(buildInsights({ stage: 3, months: three([client('A', 3499), client('B', 3251), client('C', 3250)]), daysToPaid: null }))).not.toContain('concentration');
+    const noClient = three([{ key: 'p1:no-client', name: 'No client', amount: 9000, none: true }, client('A', 1000)]);
     expect(ids(buildInsights({ stage: 3, months: noClient, daysToPaid: null }))).not.toContain('concentration');
+  });
+
+  it('says nothing about "the last 3 months" with only 2 complete months (review)', () => {
+    const two = [month('2026-08', 0, 0), month('2026-09', 10000, 0, { clients: [client('A', 9000), client('B', 1000)] })];
+    expect(ids(buildInsights({ stage: 3, months: two, daysToPaid: null }))).not.toContain('concentration');
+  });
+
+  it('carries the mover’s category and month as a field, not inside its fact (review)', () => {
+    const [mover] = buildInsights({ stage: 3, months: [month('2026-08', 0, 10000, { categories: [cat('Travel: flights', 1000)] }), month('2026-09', 0, 10000, { categories: [cat('Travel: flights', 4000)] })], daysToPaid: null });
+    expect(mover!.subject).toEqual({ key: 'travel: flights', month: '2026-09' });
   });
 
   it('days to get paid shows from the server’s median, and the same day has its own sentence', () => {
@@ -115,8 +123,10 @@ describe('ranking (DR29, DR18) and the cap', () => {
   it('records a view per shown insight, restarting the count when its fact changes', () => {
     const [mover] = buildInsights({ stage: 3, months: rich, daysToPaid: null });
     const once = recordViews({}, [mover!]);
-    expect(once).toEqual({ mover: { fact: mover!.fact, views: 1 } });
+    // Stored as a hash: no amount or client id in this browser's storage (review)
+    expect(once).toEqual({ mover: { fact: factHash(mover!.fact), views: 1 } });
+    expect(once.mover!.fact).not.toContain('food');
     expect(recordViews(once, [mover!]).mover!.views).toBe(2);
-    expect(recordViews(once, [{ ...mover!, fact: 'other' }]).mover).toEqual({ fact: 'other', views: 1 });
+    expect(recordViews(once, [{ ...mover!, fact: 'other' }]).mover).toEqual({ fact: factHash('other'), views: 1 });
   });
 });
