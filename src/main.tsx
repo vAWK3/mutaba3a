@@ -18,7 +18,7 @@ import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
 import { HOSTED_OFFER_URL } from "./content/download-config";
-import { marketingPath } from "./pages/landing/marketingPath";
+import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { BootSplash } from "./components/brand/BootSplash";
@@ -77,8 +77,10 @@ function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
     const path = marketingPath(window.location.pathname);
+    // The one list of website pages (MUT-150 eng D7): error reports start and send only on these
+    const route = landingRoute(window.location.pathname);
 
-    if (path === "/" && LandingPage) {
+    if (route === "/" && LandingPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
@@ -88,7 +90,7 @@ function App() {
       );
     }
 
-    if (path === "/download" && DownloadPage) {
+    if (route === "/download" && DownloadPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
@@ -98,7 +100,7 @@ function App() {
       );
     }
 
-    if (path === "/privacy" && PrivacyPolicyPage) {
+    if (route === "/privacy" && PrivacyPolicyPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
@@ -110,7 +112,7 @@ function App() {
 
     // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen;
     // ?lang is the language the portal records for the reader
-    if ((path === "/terms" || path.startsWith("/terms/")) && TermsPage) {
+    if ((route === "/terms" || route === "/terms/:version") && TermsPage) {
       return (
         <LandingProviders>
           <Suspense fallback={<BootSplash />}>
