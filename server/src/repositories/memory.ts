@@ -6,6 +6,7 @@ import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import type {
+  AccountClosureRecord,
   BillingAccountRecord,
   BillingRepository,
   EmailRepository,
@@ -172,8 +173,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 4 (MUT-366): `people` gained `emailVerifiedAt`.
  * 5 (MUT-418): `people` gained `trialPrompt`.
  * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
+ * 7 (MUT-333): `people` gained `closure`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 6;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 7;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -549,6 +551,26 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...u };
     },
+    requestClosure: async (input) => {
+      const u = this.people.get(input.userId);
+      if (!u) return null;
+      if (u.closure) throw new StateConflict('user', 'ALREADY_CLOSING');
+      const kept = this.sessionsById.get(input.exceptSessionId);
+      if (!kept || kept.userId !== u.id || kept.revokedAt) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+      const closure: AccountClosureRecord = { requestedAt: input.at, deleteAfter: input.deleteAfter, endedSubscriptionIds: [...input.endedSubscriptionIds], purgeStartedAt: null, purgeLastTriedAt: null };
+      Object.assign(u, { closure, updatedAt: input.at });
+      this.revokeSessionsOf(u.id, 'account_closing', input.at, input.exceptSessionId);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return { ...u };
+    },
+    cancelClosure: async ({ userId, at, audit }) => {
+      const u = this.people.get(userId);
+      const ended = u?.closure;
+      if (!u || !ended || ended.purgeStartedAt || ended.deleteAfter.getTime() <= at.getTime()) return null;
+      Object.assign(u, { closure: null, updatedAt: at });
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { user: { ...u }, ended };
+    },
   };
 
   readonly sessions: SessionRepository = {
@@ -632,6 +654,7 @@ export class MemoryLedgerStore implements LedgerStore {
       emailVerifiedAt: input.emailVerifiedAt,
       malafatSuggestions: null,
       trialPrompt: null,
+      closure: null,
       createdAt: input.at,
       updatedAt: input.at,
     };

@@ -1227,8 +1227,23 @@ export interface UserRecord {
   malafatSuggestions: MalafatSuggestionsRecord | null;
   /** MUT-418: the person's answers to the trial's card prompt; null until the first one (billing/trial-prompt.ts). */
   trialPrompt: TrialPromptRecord | null;
+  /** MUT-333 (ADR-188): set while the account is closing (30 days' grace, then the hard delete); null otherwise. */
+  closure: AccountClosureRecord | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** MUT-333 (D18): a closing account's state, on the user row. */
+export interface AccountClosureRecord {
+  requestedAt: Date;
+  /** requestedAt + 30 days: from here the account is gone to the person, and the hourly job deletes it. */
+  deleteAfter: Date;
+  /** D1: the Stripe subscriptions the closing set to end at their period end ("Keep my account" turns these back on). */
+  endedSubscriptionIds: string[];
+  /** R1: the hard delete's claim. Once set, the closing can no longer be cancelled. */
+  purgeStartedAt: Date | null;
+  /** R13: the last purge attempt, so failing people go to the back of the queue. */
+  purgeLastTriedAt: Date | null;
 }
 
 /** MUT-418: the first-run step's answer. "Not now" and closing the step are both `skipped` (D13). */
@@ -1325,6 +1340,19 @@ export interface UserRepository {
    * session: another change (or an operator lock) committed first (MUT-238 review).
    */
   changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
+  /**
+   * MUT-333 (ADR-188): the person closes their account. One transaction under the user-row lock: sets the closure,
+   * revokes every other session (web and device; `exceptSessionId` stays live) and appends `audit`. Null for an
+   * unknown user. StateConflict('user', 'ALREADY_CLOSING') and nothing written when the account is already closing;
+   * StateConflict('user', 'CREDENTIAL_CHANGED') when `exceptSessionId` is no longer this person's live session.
+   */
+  requestClosure(input: RequestClosureInput): Promise<UserRecord | null>;
+  /**
+   * MUT-333: "Keep my account". Clears the closure and appends `audit`, under the user-row lock, only while the
+   * deadline is still ahead and the hard delete hasn't claimed the account (R1, R2). Null otherwise (not closing, too
+   * late, or claimed): nothing written. Returns the closure that ended, so the caller can turn its subscriptions back on.
+   */
+  cancelClosure(input: { userId: string; at: Date; audit: AuditEventInput[] }): Promise<{ user: UserRecord; ended: AccountClosureRecord } | null>;
   /** MUT-324: the person's acceptance of the highest terms version they accepted; null if they never accepted any. */
   latestTermsAcceptance(userId: string): Promise<TermsAcceptanceRecord | null>;
   /**
@@ -1379,6 +1407,19 @@ export interface ChangePasswordInput {
   /** This session keeps working; every other session for this user is revoked. Must be the caller's own live session. */
   exceptSessionId: string;
   at: Date;
+  /** Written in the same transaction. */
+  audit: AuditEventInput[];
+}
+
+/** MUT-333: what `users.requestClosure` writes. */
+export interface RequestClosureInput {
+  userId: string;
+  at: Date;
+  deleteAfter: Date;
+  /** D1: the Stripe subscriptions this closing set to end at their period end. */
+  endedSubscriptionIds: string[];
+  /** The closing session stays live, so the person sees the closing page; every other session is revoked. */
+  exceptSessionId: string;
   /** Written in the same transaction. */
   audit: AuditEventInput[];
 }
@@ -2120,7 +2161,8 @@ export interface ExpenseRecord {
   customerId: string | null;
   projectId: string | null;
   notes: string | null;
-  createdByUserId: string;
+  /** MUT-333 (D7): null once the person who entered it has deleted their account. */
+  createdByUserId: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -2297,7 +2339,8 @@ export interface ExpenseGroupRecord {
   /** Null = still going: the window then ends a year after startOn (R6). */
   endOn: IsoDate | null;
   notes: string | null;
-  createdByUserId: string;
+  /** MUT-333 (D7): null once that person has deleted their account. */
+  createdByUserId: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -2358,7 +2401,8 @@ export interface ConversionRecord {
   toAmountMinor: bigint;
   toCurrency: string;
   notes: string | null;
-  createdByUserId: string;
+  /** MUT-333 (D7): null once that person has deleted their account. */
+  createdByUserId: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -2504,7 +2548,8 @@ export interface ExpenseReceiptRecord {
   /** The upload day in the profile's timezone. */
   receivedOn: string;
   storageKey: string;
-  uploadedByUserId: string;
+  /** MUT-333 (D7): null once that person has deleted their account. */
+  uploadedByUserId: string | null;
   suggested: ReceiptSuggestion | null;
   approved: ApprovedReceiptFields | null;
   approvedAt: Date | null;

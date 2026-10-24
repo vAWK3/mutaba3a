@@ -405,6 +405,39 @@ export class PrismaLedgerStore implements LedgerStore {
         if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
         return toUser(user);
       }),
+    // MUT-333: the same row lock the hard delete's claim takes (R1), so a close, a cancel and a claim serialize.
+    requestClosure: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const [person] = await tx.$queryRaw<Array<{ deleteAfter: Date | null }>>`SELECT "deleteAfter" FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+        if (!person) return null;
+        if (person.deleteAfter !== null) throw new StateConflict('user', 'ALREADY_CLOSING');
+        const kept = await tx.session.findFirst({ where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null }, select: { id: true } });
+        if (!kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+        const user = await tx.user.update({
+          where: { id: input.userId },
+          data: { closeRequestedAt: input.at, deleteAfter: input.deleteAfter, closeEndedSubscriptionIds: input.endedSubscriptionIds, purgeStartedAt: null, purgeLastTriedAt: null, updatedAt: input.at },
+        });
+        await tx.session.updateMany({
+          where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
+          data: { revokedAt: input.at, revokedReason: 'account_closing' },
+        });
+        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return toUser(user);
+      }),
+    cancelClosure: ({ userId, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!locked) return null;
+        const before = toUser(await tx.user.findUniqueOrThrow({ where: { id: userId } }));
+        const ended = before.closure;
+        if (!ended || ended.purgeStartedAt || ended.deleteAfter.getTime() <= at.getTime()) return null;
+        const user = await tx.user.update({
+          where: { id: userId },
+          data: { closeRequestedAt: null, deleteAfter: null, closeEndedSubscriptionIds: [], purgeStartedAt: null, purgeLastTriedAt: null, updatedAt: at },
+        });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { user: toUser(user), ended };
+      }),
   };
 
   readonly sessions: SessionRepository = {
@@ -2911,8 +2944,21 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     emailVerifiedAt: row.emailVerifiedAt,
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     trialPrompt: row.trialPrompt === null ? null : resolveTrialPrompt(row.trialPrompt),
+    closure: closureOf(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+/** MUT-333: the CHECK keeps closeRequestedAt and deleteAfter together. */
+function closureOf(row: Prisma.UserGetPayload<object>): UserRecord['closure'] {
+  if (row.closeRequestedAt === null || row.deleteAfter === null) return null;
+  return {
+    requestedAt: row.closeRequestedAt,
+    deleteAfter: row.deleteAfter,
+    endedSubscriptionIds: [...row.closeEndedSubscriptionIds],
+    purgeStartedAt: row.purgeStartedAt,
+    purgeLastTriedAt: row.purgeLastTriedAt,
   };
 }
 

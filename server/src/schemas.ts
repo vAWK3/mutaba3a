@@ -2474,7 +2474,7 @@ export const ExpenseSchema = z
     customerId: uuid.nullable(),
     projectId: uuid.nullable(),
     notes: z.string().nullable(),
-    createdByUserId: uuid,
+    createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -2529,7 +2529,7 @@ export const ExpenseReceiptSchema = z
     approved: ApprovedReceiptFieldsSchema.nullable(),
     approvedAt: z.string().datetime().nullable(),
     version: z.number().int(),
-    uploadedByUserId: uuid,
+    uploadedByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
     createdAt: z.string().datetime(),
     completedAt: z.string().datetime().nullable(),
   })
@@ -2644,7 +2644,7 @@ export const ConversionSchema = z
     toAmount: AmountSchema,
     toCurrency: CurrencySchema,
     notes: z.string().nullable(),
-    createdByUserId: uuid,
+    createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -2819,7 +2819,7 @@ export const ExpenseGroupSchema = z
     /** Members per currency, never summed across currencies (ADR-004). */
     currencies: z.array(currencyTotal),
     memberCount: z.number().int(),
-    createdByUserId: uuid,
+    createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -3007,7 +3007,7 @@ export const EntrySchema = z
     z.object({
       kind: z.literal('expense'),
       ...entryEnvelope,
-      createdByUserId: uuid,
+      createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
       expense: ExpenseSchema.and(z.object({ receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }) })),
     }),
     z.object({
@@ -3032,7 +3032,7 @@ export const EntrySchema = z
     z.object({
       kind: z.literal('conversion'),
       ...entryEnvelope,
-      createdByUserId: uuid,
+      createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.' }),
       conversion: ConversionSchema,
     }),
   ])

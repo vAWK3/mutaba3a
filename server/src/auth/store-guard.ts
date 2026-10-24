@@ -78,6 +78,9 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.
     latestTermsAcceptance: 'read',
     acceptTerms: { write: 'identity' },
+    // MUT-333: closing and keeping one's own account, the same identity-row write as changePassword.
+    requestClosure: { write: 'identity' },
+    cancelClosure: { write: 'identity' },
     // MUT-324 T1: the operator's "who is behind on the terms" list.
     listLatestTermsVersions: 'operator',
   },

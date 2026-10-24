@@ -40,6 +40,11 @@ export const ERROR_CODES = {
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,
   /**
+   * MUT-333 (ADR-188): the account is closing. During the 30 days' grace a session reaches only GET /v1/me,
+   * DELETE /v1/me/closure (keep the account) and sign-out. `details`: { deleteAfter }. Never for an API key.
+   */
+  ACCOUNT_CLOSING: 403,
+  /**
    * MUT-361 (ADR-181): a session asked a READ_ONLY or LOCKED profile (or a person whose profiles all are) for something
    * its plan no longer allows. `details`: { profileId (null for a person-level refusal), state READ_ONLY|LOCKED,
    * source, until (a trial's lock date, else null) }. Never for an API key.
