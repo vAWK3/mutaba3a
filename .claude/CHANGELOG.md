@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — Close my account: 30 days of grace, then an hourly hard delete (MUT-333 web half, ADR-188, API 1.65.0-mut333)
+## [Unreleased] - 2026-10-24 — Close my account: 30 days of grace, then an hourly hard delete (MUT-333 web half, ADR-188, API 1.67.0-mut333)
 
 **Why:** GA needs self-service account deletion (privacy law, App Store 5.1.1(v)); the operator did it by hand. Basel's decisions: 30 days' grace then a hard delete, closing cancels Stripe, terms audit rows purged, records on others' profiles anonymized. D1–D20 and R1–R17 are pending Basel. The phone half is still to build (MUT-371/364 phase).
 
@@ -55,6 +55,16 @@
 
 ### Fixed
 - `scripts/preflight.sh`: the Netlify check accepts a build command that continues after `npm run build:web` (MUT-150 appended the bundle guard), so `make release web` no longer fails its preflight on every run.
+
+---
+
+## [Unreleased] - 2026-10-24 — Receipt library rows carry their expense (MUT-258)
+
+### Added
+- `GET /v1/receipts` items gain `expense: { vendor, title, amount, currency, occurredOn, categoryId } | null`: a FILED receipt's live expense, read in the same query (Prisma `include`, memory mirrors it); null To review and when that expense is deleted. The phone's Receipts list (MUT-258) and the portal gallery (MUT-260) show vendor and amount from it. Session-only like the rest of `/v1/receipts`. API `1.66.0-mut258`.
+
+### Files
+- `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/{schemas,serializers}.ts`, `server/src/routes/receipts.ts`, OpenAPI; tests `store-contract-receipts.ts`, `routes-receipts.test.ts`.
 
 ---
 

@@ -2634,8 +2634,24 @@ export interface ReceiptCursor {
   id: string;
 }
 
+/** MUT-258: what a library row shows of the expense a FILED receipt sits on. */
+export interface LinkedExpenseSummary {
+  vendor: string | null;
+  title: string | null;
+  amountMinor: bigint;
+  currency: string;
+  occurredOn: string;
+  categoryId: string | null;
+}
+
+/**
+ * MUT-258: a library row: the receipt, and for a FILED one its live expense's summary (null To review, and null when
+ * that expense is soft-deleted).
+ */
+export type ReceiptLibraryItem = ExpenseReceiptRecord & { expense: LinkedExpenseSummary | null };
+
 export interface ReceiptPage {
-  items: ExpenseReceiptRecord[];
+  items: ReceiptLibraryItem[];
   nextCursor: ReceiptCursor | null;
 }
 

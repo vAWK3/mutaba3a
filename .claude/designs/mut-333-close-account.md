@@ -4,7 +4,7 @@ Epic MUT-322 (ga-gate). Blockers MUT-373 (co-owners) and MUT-360 (Stripe mirror)
 Scope here: the server and the hosted portal. The phone half (Flutter) is built later, with MUT-371/MUT-364, against the API contract in §7.
 Tracker: Jira · barmajiyat.atlassian.net · MUT via atlassian-barmajiyat · finished web half → **In Review** (web half), phone half stays open on this ticket.
 
-Numbers: **ADR-188**, **TD-237..**, **API 1.65.0-mut333**, migration `20261024210000_mut333_account_closure`.
+Numbers: **ADR-188**, **TD-237..**, **API 1.67.0-mut333**, migration `20261024210000_mut333_account_closure`.
 (ADR-187/TD-236 are MUT-425's, unmerged; ADR-182 is earmarked for MUT-253.)
 
 ## 0. What Basel already decided (binding)
@@ -107,7 +107,7 @@ One indexed query per hour when nobody is due. Purge per person: one Stripe call
 1. **Settings › Close my account** (iOS + Android, en/ar/RTL): explain what goes/stays (same copy as the portal), offer "Download my records" first (the existing export or a link to the portal's Your data), ask for the password, call `POST /v1/me/closure {password}` with the device session. 200 → show the closing screen. 403 `CURRENT_PASSWORD_WRONG` → banner (counts toward lockout). 502 `STRIPE_UNAVAILABLE` → "try again". 429 → wait.
 2. **Closing screen:** when `GET /v1/me` has `user.closure != null`, show only: the deletion date (`closure.deleteAfter`, local date), **Keep my account** → `DELETE /v1/me/closure` (200 `{ billingNeedsAttention }`; true → "turn your subscription back on in Billing" with the portal link), and Sign out (`DELETE /v1/device-sessions/current`).
 3. **403 `ACCOUNT_CLOSING`** on any other call: terminal for the outbox (like 402 `SUBSCRIPTION_LAPSED`, never retried), re-read `/v1/me`, show the closing screen. Other devices are signed out at close (401 → sign-in → closing screen).
-4. Accept **null** `createdByUserId` (expenses, conversions, expense groups, entries feed) and `uploadedByUserId` (receipts) from API 1.65.0-mut333 on.
+4. Accept **null** `createdByUserId` (expenses, conversions, expense groups, entries feed) and `uploadedByUserId` (receipts) from API 1.67.0-mut333 on.
 5. After the deletion the account no longer signs in (401 INVALID_CREDENTIALS); clear local data on 401 as today.
 6. iOS release-QA flow: close → closing screen → keep. Apple 5.1.1(v) is satisfied by step 1 in-app; MUT-371's "Create an account" waits on it.
 
@@ -124,7 +124,7 @@ Server (`npm --prefix server test`, `test:db` on an isolated DB `mutaba3a_mut333
 Portal (`npm run test:run`): `CloseAccountDrawer.test.tsx`, `AccountClosingPage.test.tsx`, UserMenu item, AuthGate ordering.
 
 ## 9. Impact
-- API contract 1.65.0-mut333 (additive except the D7 nullability). Migration is additive + relaxing.
+- API contract 1.67.0-mut333 (additive except the D7 nullability). Migration is additive + relaxing.
 - Operator steps: Stripe key Write on Subscriptions (D14); the purge Scheduler job appears on the next terraform apply; first run with `accounts:purge -- --dry-run`; Basel's privacy wording (D15).
 - i18n: en/ar portal strings + mail copy.
 

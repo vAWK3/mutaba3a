@@ -15643,7 +15643,7 @@ export interface components {
             notes: string | null;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
             version: number;
@@ -15723,7 +15723,7 @@ export interface components {
             createdAt: string;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
             expense: components["schemas"]["Expense"] & {
@@ -15765,7 +15765,7 @@ export interface components {
             createdAt: string;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
             conversion: components["schemas"]["Conversion"];
@@ -15784,7 +15784,7 @@ export interface components {
             notes: string | null;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
             version: number;
@@ -16365,7 +16365,7 @@ export interface components {
             version: number;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             uploadedByUserId: string | null;
             /** Format: date-time */
@@ -16627,7 +16627,7 @@ export interface components {
             memberCount: number;
             /**
              * Format: uuid
-             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
+             * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
             version: number;
@@ -16878,9 +16878,24 @@ export interface components {
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         ReceiptPage: {
-            items: components["schemas"]["ExpenseReceipt"][];
+            items: components["schemas"]["ReceiptListItem"][];
             nextCursor: string | null;
         };
+        ReceiptListItem: components["schemas"]["ExpenseReceipt"] & {
+            expense: components["schemas"]["LinkedExpenseSummary"];
+        };
+        /** @description MUT-258: a FILED receipt's live expense; null To review, and null when that expense was deleted */
+        LinkedExpenseSummary: {
+            vendor: string | null;
+            title: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            /** Format: uuid */
+            categoryId: string | null;
+        } | null;
         /** @description READY receipts in the library, per filing status */
         ReceiptCounts: {
             toReview: number;

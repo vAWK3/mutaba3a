@@ -1869,8 +1869,16 @@ export class PrismaLedgerStore implements LedgerStore {
         },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: page.limit + 1,
+        // MUT-258: the FILED row's expense in the same query (no N+1); a soft-deleted one shows as none.
+        include: { expense: { select: { vendor: true, title: true, amountMinor: true, currency: true, occurredOn: true, categoryId: true, deletedAt: true, organizationId: true } } },
       });
-      const items = rows.slice(0, page.limit).map(toExpenseReceipt);
+      const items = rows.slice(0, page.limit).map(({ expense, ...row }) => ({
+        ...toExpenseReceipt(row),
+        expense:
+          expense && !expense.deletedAt && expense.organizationId === organizationId
+            ? { vendor: expense.vendor, title: expense.title, amountMinor: expense.amountMinor, currency: expense.currency, occurredOn: expense.occurredOn, categoryId: expense.categoryId }
+            : null,
+      }));
       const last = items[items.length - 1];
       return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.createdAt, id: last.id } : null };
     },

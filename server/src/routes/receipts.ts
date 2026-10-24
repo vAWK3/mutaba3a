@@ -30,7 +30,7 @@ import {
   ReceiptSuggestionSchema,
   SignedUploadSchema,
 } from '../schemas.js';
-import { serializeExpense, serializeExpenseReceipt } from '../serializers.js';
+import { serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 /** MUT-255 decision P3: unfinished library uploads one profile may hold from the last day, before a new one is refused. */
@@ -198,7 +198,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
         { ...(q.filingStatus ? { filingStatus: q.filingStatus } : {}), ...(q.from ? { from: q.from } : {}), ...(q.to ? { to: q.to } : {}) },
         { limit: q.limit, cursor: q.cursor ? decodeReceiptCursor(q.cursor) : null },
       );
-      return c.json({ items: page.items.map(serializeExpenseReceipt), nextCursor: page.nextCursor ? encodeReceiptCursor(page.nextCursor) : null }, 200);
+      return c.json({ items: page.items.map(serializeReceiptLibraryItem), nextCursor: page.nextCursor ? encodeReceiptCursor(page.nextCursor) : null }, 200);
     },
   );
 
