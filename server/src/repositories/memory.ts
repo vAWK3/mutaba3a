@@ -2015,6 +2015,25 @@ export class MemoryLedgerStore implements LedgerStore {
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },
+    completeOnExpense: async (params, at) => {
+      // Same order as Prisma: the expense first, so a deleted expense answers expense_not_found even when the delete
+      // removed its receipts too.
+      const expense = await this.expenses.getById(params.organizationId, params.expenseId);
+      if (!expense) return { kind: 'expense_not_found' };
+      // From here to the flip there is no await, so two calls can't interleave between the count and the write
+      // (the memory store's stand-in for the expense lock).
+      const r = this.expReceipts.get(params.receiptId);
+      if (!r || r.organizationId !== params.organizationId || r.expenseId !== expense.id || r.deletedAt) return { kind: 'receipt_not_found' };
+      if (r.status === 'READY') return { kind: 'already_ready', receipt: { ...r } };
+      let held = 0;
+      for (const other of this.expReceipts.values()) {
+        if (other.organizationId === params.organizationId && other.expenseId === expense.id && other.status === 'READY' && !other.deletedAt) held += 1;
+      }
+      if (held >= params.maxReceipts) return { kind: 'too_many_receipts' };
+      r.status = 'READY';
+      r.completedAt = at;
+      return { kind: 'completed', receipt: { ...r } };
+    },
     editRates: async (range) =>
       editRatesOf(
         [...this.expReceipts.values()].flatMap((r) => (r.approved && r.approvedAt && r.approvedAt >= range.from && r.approvedAt < range.to ? [{ suggested: r.suggested, approved: r.approved }] : [])),

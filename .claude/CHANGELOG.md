@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
+
+### Fixed
+- The MUT-44 receipt completion (`POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete`) checks the 10-receipt cap and marks the receipt READY under the expense row lock (`expenseReceipts.completeOnExpense`, memory and Prisma), the lock MUT-389's filing takes. Two completions, or a completion and a filing, at 9 now end at exactly 10; the loser gets 422 `TOO_MANY_RECEIPTS` and keeps its state. Same routes, same answers; no migration, no API change.
+
+### Changed
+- ADR-167 "Extended by MUT-389": the known gap is resolved; the lock order and the PENDING `expenseId` invariant are written down. Filing, completion and expense delete share one 15 s transaction budget, and the expense lock sets `lock_timeout` 8 s so a pathological wait frees its connection instead of hanging (it still answers as an error, as before: no new response codes). The forced-overlap helpers moved to `repositories/__tests__/expense-lock-harness.ts` and count queued sessions transitively.
+
+### Files
+- `server/src/repositories/{ports,prisma,memory}.ts`, `server/src/auth/store-guard.ts`, `server/src/routes/expenses.ts`, `.claude/DECISIONS.md`; tests `store-contract-receipts.ts`, `store-prisma-receipt-complete-lock.test.ts`, `store-prisma-receipt-file-lock.test.ts`, `expense-lock-harness.ts`, `routes-expenses.test.ts`.
 ## [Unreleased] - 2026-10-24 — The lapse gate: read-only and locked accounts on the server and the portal (MUT-361, ADR-181)
 
 **Why:** ADR-160 D3 makes the trial real only if it ends: 14 days free, then read-only with export, then locked from day 30 (Subscribe and Download my records), nothing deleted; a payer who lapses stays read-only for good. `/v1/me` reported these states, but nothing enforced them.

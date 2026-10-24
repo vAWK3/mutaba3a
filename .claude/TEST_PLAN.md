@@ -3634,3 +3634,11 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Server routes | `__tests__/routes-dev-attachments.test.ts`: expense receipt and library receipt start → PUT → complete → download same bytes on a frozen clock; complete before bytes and an oversized PUT; expiry on the app clock; the probe; not mounted without the driver; never the portal fallback | same |
 | Config | `__tests__/config.test.ts`: default dir under server/, local in development/test, refused in production and staging, local + bucket, gcs without bucket | same |
 | Release-QA (phone) | `ios.privacy.receipt-cleanup` without its stand-in, asserting READY and the downloaded bytes (lands after MUT-124); Flutter `qa.config.mjs` checks `GET /dev/attachments` | `release-qa release --only ios.privacy.receipt-cleanup --wait` (mutaba3a-flutter) |
+
+## MUT-397 — receipt completion under the expense lock (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Store contract | `store-contract-receipts.ts` `completeOnExpense`: completes, already_ready, receipt_not_found (other expense, deleted), expense_not_found (other profile, missing, deleted with unlink and remove), cap with pending uploads not counted, two concurrent completions (Prisma) | `npm --prefix server test` + `test:db` |
+| Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
+| Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |

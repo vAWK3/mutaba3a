@@ -331,6 +331,85 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       }
     });
 
+    describe('completeOnExpense (MUT-397): a MUT-44 receipt turns READY under the expense lock', () => {
+      const MAX = 10;
+      /** An expense and a receipt started on it (PENDING_UPLOAD), as POST /v1/expenses/{id}/receipts leaves it. */
+      async function pendingOn(store: LedgerStore, w: Awaited<ReturnType<typeof world>>) {
+        const e = await store.expenses.create(w.expense(), at(1));
+        const r = await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(2));
+        return { e, r };
+      }
+      const fill = async (w: Awaited<ReturnType<typeof world>>, expenseId: string, n: number) => {
+        for (let i = 0; i < n; i += 1) await w.ready({ expenseId }, 3);
+      };
+
+      it('completes a pending receipt on its expense: READY with completedAt', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        const result = await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(5));
+        expect(result).toMatchObject({ kind: 'completed', receipt: { id: r.id, status: 'READY', expenseId: e.id } });
+        expect((await store.expenseReceipts.getById(w.a.id, r.id))?.completedAt).toEqual(at(5));
+      });
+
+      it('answers already_ready for a receipt that is READY, changing nothing', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(5));
+        const again = await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(6));
+        expect(again).toMatchObject({ kind: 'already_ready', receipt: { id: r.id, status: 'READY' } });
+        expect((await store.expenseReceipts.getById(w.a.id, r.id))?.completedAt).toEqual(at(5));
+      });
+
+      it("refuses a receipt on another expense or a deleted one (receipt_not_found), and another profile's or a missing expense (expense_not_found)", async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        const other = await store.expenses.create(w.expense(), at(3));
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: other.id, receiptId: r.id, maxReceipts: MAX }, at(5))).kind).toBe('receipt_not_found');
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.b.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(5))).kind).toBe('expense_not_found');
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: '00000000-0000-4000-8000-000000000000', receiptId: r.id, maxReceipts: MAX }, at(5))).kind).toBe('expense_not_found');
+        await store.expenseReceipts.softDelete(w.a.id, r.id, at(4));
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(5))).kind).toBe('receipt_not_found');
+      });
+
+      it('refuses a deleted expense, checked before the receipt (also when the delete removed its receipts)', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const unlinked = await pendingOn(store, w);
+        await store.expenses.softDelete(w.a.id, unlinked.e.id, at(4), 'unlink');
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: unlinked.e.id, receiptId: unlinked.r.id, maxReceipts: MAX }, at(5))).kind).toBe('expense_not_found');
+        const removed = await pendingOn(store, w);
+        await store.expenses.softDelete(w.a.id, removed.e.id, at(4), 'remove');
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: removed.e.id, receiptId: removed.r.id, maxReceipts: MAX }, at(5))).kind).toBe('expense_not_found');
+      });
+
+      it('refuses at the cap and leaves the receipt PENDING_UPLOAD; unfinished uploads on the expense do not count', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(2)); // another unfinished upload
+        await fill(w, e.id, MAX - 1);
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: r.id, maxReceipts: MAX }, at(5))).kind).toBe('completed');
+        const late = await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(6));
+        expect((await store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: late.id, maxReceipts: MAX }, at(7))).kind).toBe('too_many_receipts');
+        expect(await store.expenseReceipts.getById(w.a.id, late.id)).toMatchObject({ status: 'PENDING_UPLOAD' });
+        expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
+      });
+
+      it('of two concurrent completions at one place left, exactly one wins (expense lock; no interleaving in memory)', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const { e, r } = await pendingOn(store, w);
+        const r2 = await store.expenseReceipts.create(w.upload({ expenseId: e.id }), at(2));
+        await fill(w, e.id, MAX - 1);
+        const results = await Promise.all([r, r2].map((x) => store.expenseReceipts.completeOnExpense({ organizationId: w.a.id, expenseId: e.id, receiptId: x.id, maxReceipts: MAX }, at(5))));
+        expect(results.map((x) => x.kind).sort()).toEqual(['completed', 'too_many_receipts']);
+        expect(await store.expenseReceipts.listByExpense(w.a.id, e.id)).toHaveLength(MAX);
+      });
+    });
+
     it('counts the edit rate per field over approvals in a range, never values', async () => {
       const store = await makeStore();
       const w = await world(store);

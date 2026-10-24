@@ -2478,6 +2478,14 @@ export type FileReceiptResult =
 /** MUT-389: `fileAsExpense`'s refusals, plus the existing expense's own. */
 export type FileOntoExpenseResult = FileReceiptResult | { kind: 'expense_not_found' } | { kind: 'too_many_receipts' };
 
+/** MUT-397: the outcome of completing a MUT-44 receipt on its expense under the expense lock. */
+export type CompleteOnExpenseResult =
+  | { kind: 'completed'; receipt: ExpenseReceiptRecord }
+  | { kind: 'already_ready'; receipt: ExpenseReceiptRecord }
+  | { kind: 'expense_not_found' }
+  | { kind: 'receipt_not_found' }
+  | { kind: 'too_many_receipts' };
+
 export interface ExpenseReceiptRepository {
   /** Created with a placeholder key; the caller derives the real key from the id and `setKey`s it (as M6). */
   create(input: CreateExpenseReceiptInput, at: Date): Promise<ExpenseReceiptRecord>;
@@ -2518,6 +2526,14 @@ export interface ExpenseReceiptRepository {
    * suggestion replaces the stored one, except on a receipt that keeps an earlier approval: that pair stays as approved.
    */
   fileOntoExpense(params: { organizationId: string; receiptId: string; expenseId: string; maxReceipts: number; suggested?: ReceiptSuggestion }): Promise<FileOntoExpenseResult>;
+  /**
+   * MUT-397, one transaction, in this order (the same in every store): lock the expense (live, on this profile), else
+   * `expense_not_found`; lock the receipt only if it sits on that expense (live), else `receipt_not_found`; READY
+   * already is `already_ready`; refuse once the expense holds `maxReceipts` READY receipts; then mark it READY. The
+   * MUT-44 completion goes through here so it and `fileOntoExpense` serialise on the expense and can't overfill it.
+   * Lock order for receipts that sit on an expense: expense first, then receipt (as `expenses.softDelete`).
+   */
+  completeOnExpense(params: { organizationId: string; expenseId: string; receiptId: string; maxReceipts: number }, at: Date): Promise<CompleteOnExpenseResult>;
   /** MUT-255 operator figure, across every profile: receipts approved in `[from, to)`. Counts only. */
   editRates(range: { from: Date; to: Date }): Promise<ReceiptEditRates>;
 }
