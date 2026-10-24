@@ -315,6 +315,8 @@ export interface LegacyImportFile {
 export interface IDatasetRepository {
   /** Every table as plain rows, tagged with the schema version. */
   serializeBackup(): Promise<BackupData>;
+  /** Clients, projects, entries and expenses that aren't deleted: whether the carry-over has anything to carry (MUT-291). */
+  countRecords(): Promise<number>;
   /** Replace everything with a backup; refuses one from a newer schema. */
   restoreBackup(backupJson: string): Promise<{ recordsRestored: number; backupVersion: number }>;
   exportProfile(profileId: string): Promise<ProfileExportRows>;

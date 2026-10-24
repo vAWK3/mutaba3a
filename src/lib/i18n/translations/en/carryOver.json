@@ -1,0 +1,22 @@
+{
+  "carryOver": {
+    "title": "MTB3A has a new address",
+    "lead": {
+      "one": "This browser holds {count} record from this app. Carry it to the new address to keep using it there.",
+      "other": "This browser holds {count} records from this app. Carry them to the new address to keep using them there."
+    },
+    "carry": "Carry my records over",
+    "download": "Download my records file",
+    "later": "Keep using the old app for now",
+    "laterNote": "This app is being retired. Records you add here won't follow unless you carry them over again.",
+    "waiting": "Finish on the new page that opened…",
+    "installedLead": "You opened MTB3A from your home screen. Download your records file, then open {address} in your browser and choose Your data › Restore from file.",
+    "fallback": "The new page couldn't be reached. Download your records file, then open {address} and choose Your data › Restore from file.",
+    "declined": "Nothing was carried over. Your records are still here.",
+    "done": "Your records are on the new address.",
+    "arrived": "Arrived: {clients} clients, {income} income entries, {expenses} expenses.",
+    "openNew": "Open the new address",
+    "banner": "Your records were carried to {address} on {date}. Changes you make here won't follow.",
+    "carryAgain": "Carry over again"
+  }
+}

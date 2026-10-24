@@ -159,6 +159,13 @@ describe('vite.config', () => {
       });
     });
 
+    it('is off in the dev server unless MUTABA3A_CARRY_OVER turns it on, and off whenever it says so', () => {
+      const live = hosts({ domain: 'placeholder.example', stage: 'live' });
+      expect(carryOverBuild(live, undefined, { offByDefault: true })).toEqual({ sources: {}, portalOrigin: null });
+      expect(carryOverBuild(live, 'off')).toEqual({ sources: {}, portalOrigin: null });
+      expect(carryOverBuild(live, JSON.stringify({ portalOrigin: 'http://127.0.0.1:5178' }), { offByDefault: true }).portalOrigin).toBe('http://127.0.0.1:5178');
+    });
+
     it('takes QA\'s loopback origins from MUTABA3A_CARRY_OVER', () => {
       const override = JSON.stringify({ web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177', portalOrigin: 'http://127.0.0.1:5178' });
       expect(carryOverBuild(hosts({}), override)).toEqual({ sources: { web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177' }, portalOrigin: 'http://127.0.0.1:5178' });

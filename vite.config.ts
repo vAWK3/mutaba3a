@@ -260,9 +260,12 @@ function carryOverOrigin(value: unknown): string {
  * The carry-over's origins, baked into both the web and the portal build (MUT-291). From config/hosts.json:
  * off (no sources, no portal) until stage live, then the two legacy origins and the new portal. Origins are never
  * read from a URL at run time. MUTABA3A_CARRY_OVER (JSON `{ web?, portal?, portalOrigin }`) replaces them for QA,
- * whose origins are loopback ports.
+ * whose origins are loopback ports; `off` turns it off (a QA run of the app's own features on a built preview).
  */
-export function carryOverBuild(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "portalOrigin">, override: string | undefined): CarryOverBuild {
+export const CARRY_OVER_OFF: CarryOverBuild = { sources: {}, portalOrigin: null };
+
+export function carryOverBuild(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "portalOrigin">, override: string | undefined, options: { offByDefault?: boolean } = {}): CarryOverBuild {
+  if (override === "off") return CARRY_OVER_OFF;
   if (override !== undefined && override !== "") {
     let parsed: Record<string, unknown>;
     try {
@@ -275,7 +278,7 @@ export function carryOverBuild(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "
       portalOrigin: carryOverOrigin(parsed.portalOrigin),
     };
   }
-  if (!hosts.legacy || (hosts.stage !== "live" && hosts.stage !== "redirect")) return { sources: {}, portalOrigin: null };
+  if (options.offByDefault || !hosts.legacy || (hosts.stage !== "live" && hosts.stage !== "redirect")) return CARRY_OVER_OFF;
   return { sources: { web: hosts.legacy.landingOrigin, portal: hosts.legacy.portalOrigin }, portalOrigin: hosts.portalOrigin };
 }
 
@@ -677,7 +680,7 @@ function hostedConfig(): UserConfig {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   if (mode === "hosted") return hostedConfig();
 
   // Check both Tauri env vars AND the --mode flag
@@ -693,7 +696,8 @@ export default defineConfig(({ mode }) => {
       // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
       __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
       // The carry-over (MUT-291): where the old app sends its records; off in the desktop build
-      __CARRY_OVER__: JSON.stringify(buildMode === "web" ? carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER) : { sources: {}, portalOrigin: null }),
+      // The dev server leaves it off unless MUTABA3A_CARRY_OVER turns it on: the app's own QA must open the app, not the gate
+      __CARRY_OVER__: JSON.stringify(buildMode === "web" ? carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { offByDefault: command !== "build" }) : CARRY_OVER_OFF),
       // The landing's cookieless visit counts (MUT-154, ADR-090); the local app and desktop never use it
       __POSTHOG_KEY__: JSON.stringify(buildMode === "web" ? posthogKey(process.env.MUTABA3A_POSTHOG_KEY) : ""),
       // The landing's error reports (MUT-150); desktop always gets the "off" values

@@ -28,7 +28,7 @@ const backend = {
 const countRecordsOnThisDevice = vi.fn(() => Promise.resolve(0));
 vi.mock('@mut/local-backend', () => ({ bootLocalBackend: () => Promise.resolve(backend), countRecordsOnThisDevice: () => countRecordsOnThisDevice() }));
 const leaveTo = vi.fn();
-vi.mock('../leave', () => ({ leaveTo: (url: string) => leaveTo(url) }));
+vi.mock('../../../../lib/carryOver/leave', () => ({ leaveTo: (url: string) => leaveTo(url) }));
 
 const SUMMARY: CarryOverSummary = {
   counts: { businesses: 1, clients: 3, projects: 0, income: 5, payments: 4, expenses: 2, receipts: 0, conversions: 0 },

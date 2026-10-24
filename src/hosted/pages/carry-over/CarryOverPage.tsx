@@ -10,7 +10,7 @@ import { saveBlobAs } from '../../data/download';
 import { safeNext } from '../../session/safeNext';
 import { AuthLayout } from '../auth/AuthLayout';
 import { CheckingSession } from '../auth/BootScreens';
-import { leaveTo } from './leave';
+import { leaveTo } from '../../../lib/carryOver/leave';
 
 /**
  * `/carry-over?next=…` on the old address (MUT-291 move B, §3.6). At stage

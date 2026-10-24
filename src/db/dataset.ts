@@ -40,6 +40,16 @@ const LEGACY_TABLES = ['clients', 'projects', 'categories', 'transactions', 'fxR
 export const datasetRepo = {
   serializeBackup: serializeAllTables,
 
+  async countRecords(): Promise<number> {
+    const [clients, projects, transactions, expenses] = await Promise.all([
+      db.clients.count(),
+      db.projects.count(),
+      db.transactions.filter((t) => !t.deletedAt).count(),
+      db.expenses.filter((e) => !e.deletedAt).count(),
+    ]);
+    return clients + projects + transactions + expenses;
+  },
+
   restoreBackup: restoreFromBackup,
 
   /**

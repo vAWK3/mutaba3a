@@ -29,6 +29,7 @@ import { handleVersionChange } from "./lib/platform";
 import { APP_VERSION } from "./lib/appVersion";
 import { seedSeenVersion } from "./lib/whatsNew/whatsNewState";
 import { removeRetiredStorageKeys } from "./lib/retiredStorage";
+import { CarryOverGate } from "./pages/carryOver/CarryOverScreen";
 
 // Handle version changes early (clears update caches when app updates)
 // This ensures users who install a new DMG see the correct version.
@@ -119,7 +120,8 @@ function App() {
       {/* Arabic until a person chooses; a language stored by detection doesn't count (MUT-209, ADR-077) */}
       <LanguageProvider defaultLanguage={DEFAULT_LANGUAGE}>
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          {/* MUT-291: once the domain is live, the free web app first offers to carry its records to the new address */}
+          {__BUILD_MODE__ === "web" ? <CarryOverGate><RouterProvider router={router} /></CarryOverGate> : <RouterProvider router={router} />}
           <ToastContainer />
         </QueryClientProvider>
       </LanguageProvider>
