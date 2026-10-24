@@ -166,6 +166,7 @@
       "sections": "الأقسام",
       "nav": {
         "overview": "نظرة عامة",
+        "reports": "التقارير",
         "clients": "العملاء",
         "receivables": "المستحقات",
         "payments": "الدفعات",
@@ -1373,6 +1374,136 @@
       },
       "noClient": "بلا عميل",
       "defaultBusiness": "عملي"
+    },
+    "reports": {
+      "title": "التقارير",
+      "period": {
+        "label": "الفترة",
+        "week": "أسبوع",
+        "month": "شهر",
+        "year": "سنة",
+        "yearLocked": "يُتاح في {month}"
+      },
+      "step": {
+        "previous": {
+          "week": "الأسبوع السابق",
+          "month": "الشهر السابق",
+          "year": "السنة السابقة"
+        },
+        "next": {
+          "week": "الأسبوع التالي",
+          "month": "الشهر التالي",
+          "year": "السنة التالية"
+        }
+      },
+      "scope": {
+        "switch": "كل الملفات"
+      },
+      "hero": {
+        "received": "المستلَم",
+        "spent": "المصروف",
+        "kept": "المتبقي",
+        "keptNegative": "أنفقت أكثر مما دخل",
+        "soFar": "{period} · حتى الآن",
+        "weekRange": "{from} – {to}",
+        "converted": "≈ {amount}",
+        "breakdownOpen": "اعرض المبلغ الدقيق بكل عملة",
+        "breakdownTitle": "المبالغ الدقيقة",
+        "rateFooter": "البنك المركزي الأوروبي · {date} · سعر اليوم"
+      },
+      "owed": {
+        "label": "المستحق لك الآن",
+        "open": "افتح المستحق لك"
+      },
+      "combined": {
+        "profiles": {
+          "zero": "{count} ملف",
+          "one": "ملف واحد",
+          "two": "الملفين",
+          "few": "{count} ملفات",
+          "many": "{count} ملفًا",
+          "other": "{count} ملف"
+        },
+        "line": "مجموع {profiles} · العملات الأخرى بسعر اليوم",
+        "listTitle": "الملفات في هذا التقرير",
+        "share": "منها «{profile}»: ≈ {amount}",
+        "partial": "{loaded} من {total} · تعذّر تحميل «{profile}»",
+        "forbidden": "«{profile}» غير مشمول: لا يمكنك رؤية دفعاته",
+        "retry": "إعادة المحاولة"
+      },
+      "noAccess": {
+        "title": "لا يمكنك رؤية دفعات هذا الملف",
+        "body": "اطلب ذلك من أحد المالكين."
+      },
+      "insights": {
+        "heading": "مؤخرًا",
+        "singleCurrency": "بـ{currency} فقط: أسعار اليوم غير متاحة",
+        "recap": {
+          "base": "في {month}: استلمت {received} وأنفقت {spent}.",
+          "topCategory": "ذهب معظم الإنفاق إلى {category}.",
+          "topClient": "دفع {client} أكثر من غيره."
+        },
+        "mover": {
+          "up": "{category}: {amount} في {month}، أكثر بـ{delta} من {previous}.",
+          "down": "{category}: {amount} في {month}، أقل بـ{delta} من {previous}."
+        },
+        "trend": {
+          "up": "المستلَم في {month}: {amount}، أكثر بـ{delta} من {previous}.",
+          "down": "المستلَم في {month}: {amount}، أقل بـ{delta} من {previous}."
+        },
+        "average": "في آخر 3 أشهر استلمت نحو {amount} شهريًا.",
+        "best": "أفضل شهر لك في السنة الأخيرة كان {month}: استلمت {amount}.",
+        "concentration": "دفع {client} {percent} مما استلمته في آخر 3 أشهر.",
+        "daysToPaid": {
+          "zero": "يسدّد العملاء عادةً كامل المستحق في يوم تسجيله نفسه.",
+          "one": "يسدّد العملاء عادةً كامل المستحق بعد يوم واحد من تسجيله.",
+          "two": "يسدّد العملاء عادةً كامل المستحق بعد يومين من تسجيله.",
+          "few": "يسدّد العملاء عادةً كامل المستحق بعد {count} أيام من تسجيله.",
+          "many": "يسدّد العملاء عادةً كامل المستحق بعد {count} يومًا من تسجيله.",
+          "other": "يسدّد العملاء عادةً كامل المستحق بعد {count} يوم من تسجيله."
+        },
+        "daysToPaidSameDay": "يسدّد العملاء عادةً كامل المستحق في يوم تسجيله نفسه."
+      },
+      "teaser": {
+        "stage1": "يصلك أول ملخص شهري في {month}.",
+        "stage2": "تُتاح الاتجاهات وأفضل أشهرك وسرعة دفع العملاء في {month}.",
+        "scope": "بدأ «{profile}» في {month}، وتُتاح الرؤى في {unlock}.",
+        "seeAll": "اعرض الرؤى عبر كل الملفات"
+      },
+      "firstRun": {
+        "title": "تبدأ تقاريرك مع أول دفعة أو مصروف",
+        "body": "سجّل ما دخل أو ما أنفقت، وتمتلئ هذه الصفحة يومًا بعد يوم."
+      },
+      "empty": {
+        "period": "لا شيء مسجّل في {period}",
+        "goTo": "انتقل إلى {period}"
+      },
+      "loading": "جارٍ تحميل التقارير",
+      "chart": {
+        "days": "يومًا بيوم",
+        "months": "شهرًا بشهر",
+        "labelDays": "المستلَم والمصروف لكل يوم. تنقّل بين الأيام بمفاتيح الأسهم.",
+        "labelMonths": "المستلَم والمصروف لكل شهر. تنقّل بين الأشهر بمفاتيح الأسهم.",
+        "bar": "{date}: المستلَم {received}، المصروف {spent}",
+        "selected": "{date} · المستلَم {received} · المصروف {spent}",
+        "beforeStart": "قبل أن تبدأ"
+      },
+      "lists": {
+        "whereItWent": "أين ذهب المال",
+        "noSpending": "لا مصاريف في {period}",
+        "whoPaid": "من دفع",
+        "noClient": "غير مرتبط بعميل",
+        "typically": {
+          "zero": "عادةً في اليوم نفسه",
+          "one": "عادةً خلال يوم",
+          "two": "عادةً خلال يومين",
+          "few": "عادةً خلال {count} أيام",
+          "many": "عادةً خلال {count} يومًا",
+          "other": "عادةً خلال {count} يوم"
+        },
+        "typicallySameDay": "عادةً في اليوم نفسه",
+        "biggestChange": "أكبر تغيّر"
+      }
     }
   }
 }

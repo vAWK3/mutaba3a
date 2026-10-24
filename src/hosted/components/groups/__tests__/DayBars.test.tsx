@@ -134,6 +134,13 @@ describe('DayBars — single-series contract (MUT-175 D5)', () => {
     expect(fills().map((f) => f.style.transform)).toEqual(['scaleY(0.5)', 'scaleY(0.2)', 'scaleY(0)', 'scaleY(0.4)', 'scaleY(0.1)']);
   });
 
+  it('draws no second fill and marks no future bar for a single-series caller', () => {
+    renderPinned();
+    expect(document.querySelectorAll('.hp-daybar-fill-2')).toHaveLength(0);
+    expect(document.querySelector('.hp-daybars-pair')).toBeNull();
+    expect(document.querySelectorAll('.hp-daybar-future')).toHaveLength(0);
+  });
+
   it('springs rather than jumps when motion is allowed', () => {
     const { rerender } = renderPinned({ reducedMotion: false });
     rerender(
@@ -142,5 +149,54 @@ describe('DayBars — single-series contract (MUT-175 D5)', () => {
       </div>,
     );
     expect(fills()[0]!.style.transform).toBe('scaleY(1)');
+  });
+});
+
+/** MUT-175 (D1, DR13, DR22): Reports' received-and-spent chart, opt-in props only. */
+describe('DayBars — a second series and future days (MUT-175)', () => {
+  const days = [bar('2026-10-01', 120000), bar('2026-10-02', 0), bar('2026-10-03', 30000), bar('2026-10-04', 0)];
+  const spent: Record<string, number> = { '2026-10-01': 60000, '2026-10-02': 0, '2026-10-03': 0, '2026-10-04': 0 };
+
+  function renderPair() {
+    return render(
+      <div dir="ltr">
+        <DayBars
+          bars={days}
+          label="Received and spent per day"
+          describe={(b) => `${b.from} in ${b.minor} out ${spent[b.from]}`}
+          axisLabel={() => null}
+          gapLabel={() => ''}
+          hasOther={() => false}
+          second={(b) => spent[b.from]!}
+          future={(b) => b.from > '2026-10-03'}
+          onJump={vi.fn()}
+          reducedMotion
+        />
+      </div>,
+    );
+  }
+
+  it('draws both fills at their share of the tallest bar, zero only when both are zero', () => {
+    renderPair();
+    expect(document.querySelector('.hp-daybars')).toHaveClass('hp-daybars-pair');
+    const second = [...document.querySelectorAll<HTMLElement>('.hp-daybar-fill-2')].map((f) => f.style.transform);
+    expect(second).toEqual(['scaleY(0.5)', 'scaleY(0)', 'scaleY(0)']);
+    expect(screen.getByRole('button', { name: '2026-10-02 in 0 out 0' })).toHaveClass('hp-daybar-zero');
+    expect(screen.getByRole('button', { name: '2026-10-01 in 120000 out 60000' })).not.toHaveClass('hp-daybar-zero');
+  });
+
+  it('draws future days faint, out of the tab order and the accessibility tree, and the arrows skip them', async () => {
+    renderPair();
+    const future = document.querySelector('.hp-daybar-future');
+    expect(future).toHaveAttribute('aria-hidden', 'true');
+    expect(future?.tagName).toBe('SPAN');
+    expect(future?.querySelector('.hp-daybar-tip')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+    const user = userEvent.setup();
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(document.activeElement).toHaveAccessibleName('2026-10-03 in 30000 out 0');
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toHaveAccessibleName('2026-10-03 in 30000 out 0');
   });
 });
