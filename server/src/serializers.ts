@@ -40,6 +40,7 @@ import type {
   Organization,
   ProfileOwnerEntry,
   ProjectRecord,
+  ReceiptLibraryItem,
   ReceivableRecord,
   RetainerChargeRecord,
   SupplementRecord,
@@ -567,6 +568,17 @@ export function serializeExpense(e: ExpenseRecord) {
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
+  };
+}
+
+/** MUT-258: a library row, with its FILED expense's summary. */
+export function serializeReceiptLibraryItem(r: ReceiptLibraryItem) {
+  const { expense, ...receipt } = r;
+  return {
+    ...serializeExpenseReceipt(receipt),
+    expense: expense
+      ? { vendor: expense.vendor, title: expense.title, amount: formatMoney({ minor: expense.amountMinor, currency: expense.currency as Currency }), currency: expense.currency as Currency, occurredOn: expense.occurredOn, categoryId: expense.categoryId }
+      : null,
   };
 }
 

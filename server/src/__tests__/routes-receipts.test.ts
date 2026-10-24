@@ -147,6 +147,22 @@ describe('POST /v1/receipts/uploads → complete → GET /v1/receipts (AC1)', ()
   });
 });
 
+describe('GET /v1/receipts rows carry their expense (MUT-258)', () => {
+  it('a filed row shows its expense\'s vendor, title and amount; a To-review one shows none', async () => {
+    const { h, as } = await setup();
+    const waiting = await upload(h, as());
+    const filed = await upload(h, as());
+    const approved = await read(await h.app.request(`/v1/receipts/${filed.id}/approve`, json({ ...approveBody, vendor: 'Yellow Cab', title: 'Taxi', amount: '45.50' }, { ...as(), ...idem() })));
+
+    const page = await read(await h.app.request('/v1/receipts', { headers: as() }));
+
+    const row = (id: string) => page.items.find((r: Loose) => r.id === id);
+    expect(row(filed.id).expense).toEqual({ vendor: 'Yellow Cab', title: 'Taxi', amount: '45.50', currency: 'ILS', occurredOn: '2026-10-22', categoryId: null });
+    expect(row(filed.id).expenseId).toBe(approved.expense.id);
+    expect(row(waiting.id).expense).toBeNull();
+  });
+});
+
 describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
   it('creates exactly one expense and files the receipt; a replay creates no duplicate; a new key gets 409 RECEIPT_ALREADY_FILED', async () => {
     const { h, org, as } = await setup();

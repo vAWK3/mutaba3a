@@ -90,6 +90,23 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       expect(await store.expenseReceipts.countByFilingStatus(w.a.id)).toEqual({ toReview: 3, filed: 1 });
     });
 
+    it('a FILED row carries its expense summary; a To-review one (and one whose expense was deleted) carries none (MUT-258)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense({ vendor: 'Yellow Cab', title: 'Taxi', amountMinor: 4_500n, occurredOn: '2026-10-20' }), at(1));
+      const filed = await w.ready({ expenseId: e.id }, 2);
+      const waiting = await w.ready({}, 3);
+
+      const items = (await store.expenseReceipts.list(w.a.id, {}, { limit: 10, cursor: null })).items;
+      expect(items.find((r) => r.id === filed.id)!.expense).toEqual({ vendor: 'Yellow Cab', title: 'Taxi', amountMinor: 4_500n, currency: 'ILS', occurredOn: '2026-10-20', categoryId: null });
+      expect(items.find((r) => r.id === waiting.id)!.expense).toBeNull();
+
+      // Deleting the expense with the library on sends its receipt back To review, with no expense.
+      await store.expenses.softDelete(w.a.id, e.id, at(4), 'unlink');
+      const after = (await store.expenseReceipts.list(w.a.id, {}, { limit: 10, cursor: null })).items.find((r) => r.id === filed.id)!;
+      expect(after).toMatchObject({ filingStatus: 'TO_REVIEW', expense: null });
+    });
+
     it('counts unfinished uploads since a moment, for the per-profile cap', async () => {
       const store = await makeStore();
       const w = await world(store);

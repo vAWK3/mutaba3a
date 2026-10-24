@@ -41,6 +41,16 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Receipt library rows carry their expense (MUT-258)
+
+### Added
+- `GET /v1/receipts` items gain `expense: { vendor, title, amount, currency, occurredOn, categoryId } | null`: a FILED receipt's live expense, read in the same query (Prisma `include`, memory mirrors it); null To review and when that expense is deleted. The phone's Receipts list (MUT-258) and the portal gallery (MUT-260) show vendor and amount from it. Session-only like the rest of `/v1/receipts`. API `1.66.0-mut258`.
+
+### Files
+- `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/{schemas,serializers}.ts`, `server/src/routes/receipts.ts`, OpenAPI; tests `store-contract-receipts.ts`, `routes-receipts.test.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-187)
 
 **Why:** epic MUT-423 (Basel's round 4 variation 3): one calm page with room to grow instead of two popovers, nothing lost from either.
