@@ -4,6 +4,7 @@ import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { getContext } from 'hono/context-storage';
 import { contentDisposition } from './rules.js';
 import type { AttachmentStorage, SignedUrl, StoredObject } from './storage.js';
@@ -120,7 +121,7 @@ export class LocalAttachmentStorage implements AttachmentStorage {
       },
     });
     try {
-      const source = request.body ? Readable.fromWeb(request.body as import('node:stream/web').ReadableStream) : Readable.from([]);
+      const source = request.body ? Readable.fromWeb(request.body as NodeWebReadableStream) : Readable.from([]);
       await pipeline(source, cap, createWriteStream(tmp));
       await mkdir(dirname(target), { recursive: true });
       await rename(tmp, target);

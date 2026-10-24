@@ -6,7 +6,9 @@ import { shutdownAndFlush } from './observability/reporter.js';
 import { apiRelease, createSentryReporter, serverPackageVersion } from './observability/sentry-node.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 import { PrismaLedgerStore } from './repositories/prisma.js';
+import { createHmac } from 'node:crypto';
 import { GcsAttachmentStorage } from './attachments/storage.js';
+import { LocalAttachmentStorage, requestOrigin } from './attachments/local-storage.js';
 import { SIGN_IN_POLICY, SignInThrottle } from './auth/sessions.js';
 import { createArgon2Hasher } from './auth/users.js';
 import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
@@ -113,6 +115,17 @@ const fxRates = new CachedFxRates({
   logger,
 });
 
+// MUT-396: local-disk storage for the dev server and local QA (config refuses it in production and staging). Its URL
+// secret is derived from the session pepper: no new secret, and stable across `tsx watch` restarts.
+const localAttachments =
+  config.ATTACHMENTS_DRIVER === 'local'
+    ? new LocalAttachmentStorage({
+        dir: config.ATTACHMENTS_DIR,
+        secret: createHmac('sha256', config.SESSION_TOKEN_PEPPER).update('mut-396-local-attachments-v1').digest('hex'),
+        origin: requestOrigin,
+      })
+    : null;
+
 const app = createApp({
   store,
   logger,
@@ -120,7 +133,8 @@ const app = createApp({
   adminToken: config.MUTABA3A_ADMIN_TOKEN,
   keyEnvironment: config.API_KEY_ENVIRONMENT,
   version: config.SERVICE_VERSION,
-  attachments: config.ATTACHMENTS_BUCKET ? new GcsAttachmentStorage(config.ATTACHMENTS_BUCKET) : null,
+  attachments: localAttachments ?? (config.ATTACHMENTS_BUCKET ? new GcsAttachmentStorage(config.ATTACHMENTS_BUCKET) : null),
+  localAttachments,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
   passwordHasher: createArgon2Hasher({
@@ -173,7 +187,8 @@ const app = createApp({
     disabled: config.MIN_BUILD_CHECK_DISABLED,
   },
 });
-if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set; attachments routes answer 503');
+if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_DRIVER=local: attachments are stored on this machine (dev and QA only)');
+else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
