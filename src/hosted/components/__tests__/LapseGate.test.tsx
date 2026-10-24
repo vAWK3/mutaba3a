@@ -133,11 +133,13 @@ describe('locked (MUT-361)', () => {
     expect(locationOf(router)).toContain('step=subscribe');
   });
 
-  it('keeps the profile switcher, so a covered profile is a click away', async () => {
+  it('keeps the way to the other profiles, so a covered profile is a click away (MUT-425: through You › Profiles)', async () => {
     const firm = profile({ id: ORG_A, name: 'Haddad & Partners', billing: ent('ACTIVE', 'OPERATOR') });
-    portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'open', others: [firm] });
+    const { user, router } = portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'open', others: [firm] });
     await screen.findByRole('heading', { name: 'Subscribe or download your records' });
-    expect(screen.getByRole('button', { name: /Personal/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: /Personal/ }));
+    await user.click(await screen.findByRole('button', { name: /Haddad & Partners/ }));
+    await waitFor(() => expect(locationOf(router)).toMatch(new RegExp(`^/p/${ORG_A}/?$`)));
   });
 
   it('still offers Billing when Settings › Billing can’t be read (review: never nothing to press)', async () => {
@@ -149,7 +151,7 @@ describe('locked (MUT-361)', () => {
   it('says why New profile is off when the gate holds every profile', async () => {
     const { user } = portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked' });
     await screen.findByRole('heading', { name: 'Subscribe or download your records' });
-    await user.click(screen.getByRole('button', { name: /Personal/ }));
+    await user.click(screen.getByRole('link', { name: /Personal/ }));
     expect(await screen.findByText('Subscribe to add a profile: your plan has ended.')).toBeInTheDocument();
   });
 

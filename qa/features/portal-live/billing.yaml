@@ -24,7 +24,7 @@ features:
     tier: core
     paths:
       - src/hosted/shell/AccountDrawers.tsx
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouAccount.tsx
       - src/hosted/components/RadioCards.tsx
       - src/hosted/i18n/en.json
       - src/hosted/i18n/ar.json
@@ -32,7 +32,7 @@ features:
       - src/hosted/data/filters.ts
       - server/src/billing/stripe/sync.ts
     steps:
-      - Sign in as a new person and open Billing from the account menu
+      - Sign in as a new person and open Billing from You › Account
       - Press Subscribe, choose Israel, For a business, Monthly
       - Read the heads-up and press Continue to payment
       - On Stripe's page, fill in 4242 4242 4242 4242, an Israeli address and the business tax number

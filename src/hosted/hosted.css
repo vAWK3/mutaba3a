@@ -253,22 +253,26 @@
 .hp-spacer { flex: 1; }
 .hp-page { min-width: 0; padding: var(--space-6) var(--space-8) var(--space-12); }
 
-.hp-switcher { position: relative; }
-.hp-switcher-button,
-.hp-usermenu-button {
+/* MUT-425: the sidebar's two links into the You page, where the profile switcher and the account menu were. */
+.hp-you-link-profile,
+.hp-you-link-account {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  text-align: start;
-  font: inherit;
+  min-width: 0;
   color: var(--text);
-  cursor: pointer;
+  text-decoration: none;
   border-radius: var(--radius-lg);
 }
-.hp-switcher-button { background: var(--surface-2); border: 1px solid var(--border); padding: var(--space-2) var(--space-2-5); }
-.hp-switcher-name { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-chevron { color: var(--muted); font-size: var(--text-label); }
+.hp-you-link-profile { background: var(--surface-2); border: 1px solid var(--border); padding: var(--space-2) var(--space-2-5); }
+.hp-you-link-name { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-you-link-account { padding: var(--space-2); }
+.hp-you-link-profile:hover, .hp-you-link-account:hover, .hp-you-link-account[aria-current='page'] { background: var(--surface-3); }
+.hp-you-link-profile:focus-visible, .hp-you-link-account:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-you-link-who { min-width: 0; line-height: var(--leading-tight); display: flex; flex-direction: column; }
+.hp-you-link-who span, .hp-you-link-who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-you-link-who small { color: var(--muted); font-size: var(--text-label); }
 .hp-chip {
   flex: none;
   font-size: var(--text-label);
@@ -288,28 +292,9 @@
   box-shadow: var(--shadow-3);
   padding: var(--space-1-5);
 }
-.hp-switcher-panel { inset-block-start: calc(100% + var(--space-1)); inset-inline-start: 0; width: 300px; }
-.hp-option {
-  display: flex;
-  gap: var(--space-2-5);
-  align-items: flex-start;
-  width: 100%;
-  text-align: start;
-  font: inherit;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-  padding: var(--space-2) var(--space-2-5);
-  cursor: pointer;
-}
-.hp-option:hover, .hp-option:focus-visible { background: var(--surface-hover); outline: none; }
-.hp-option-on { background: var(--surface-2); }
-.hp-check { width: 14px; color: var(--accent-text); font-weight: var(--weight-bold); }
-.hp-option-text { flex: 1; min-width: 0; }
-.hp-option-line { display: flex; gap: var(--space-2); align-items: center; font-weight: var(--weight-medium); }
+.hp-check { flex: none; width: 14px; color: var(--accent-text); font-weight: var(--weight-bold); }
+.hp-option-line { display: flex; gap: var(--space-2); align-items: center; min-width: 0; font-weight: var(--weight-medium); }
 .hp-option-sub { display: block; font-size: var(--text-label); color: var(--muted); }
-.hp-popover-foot { border-top: 1px solid var(--divider); margin: var(--space-1-5) 0 0; padding: var(--space-2) var(--space-2-5) var(--space-1); font-size: var(--text-label); color: var(--muted); }
 
 .hp-nav { display: flex; flex-direction: column; gap: var(--space-0-5); margin-top: var(--space-2-5); }
 .hp-nav a { padding: var(--space-1-5) var(--space-2-5); border-radius: var(--radius-md); color: var(--text-secondary); text-decoration: none; font-size: var(--text-body); }
@@ -317,9 +302,6 @@
 .hp-nav a.hp-nav-on { background: var(--surface-3); color: var(--text); font-weight: var(--weight-medium); }
 .hp-nav a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
-.hp-usermenu { position: relative; }
-.hp-usermenu-button { background: transparent; border: 0; padding: var(--space-2); }
-.hp-usermenu-button:hover, .hp-usermenu-button.hp-open { background: var(--surface-2); }
 .hp-avatar {
   flex: none;
   width: 28px;
@@ -332,12 +314,7 @@
   font-size: var(--text-label);
   font-weight: var(--weight-semibold);
 }
-.hp-usermenu-who { min-width: 0; line-height: var(--leading-tight); display: flex; flex-direction: column; }
-.hp-usermenu-who small { color: var(--muted); font-size: var(--text-label); overflow: hidden; text-overflow: ellipsis; }
-.hp-usermenu-panel { inset-block-end: calc(100% + var(--space-1)); inset-inline-start: 0; width: 220px; }
 .hp-menu-note { margin: 0; padding: var(--space-1) var(--space-2-5) var(--space-2); font-size: var(--text-label); }
-.hp-menu-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2-5); font-size: var(--text-body); }
-.hp-menu-sep { border-top: 1px solid var(--divider); margin: var(--space-1) 0; }
 .hp-menu-item {
   display: block;
   width: 100%;
@@ -352,8 +329,6 @@
   cursor: pointer;
 }
 .hp-menu-item:hover, .hp-menu-item:focus-visible { background: var(--surface-2); outline: none; }
-/* Android "coming soon" (MUT-261): named, not actionable — no hover/focus highlight. */
-.hp-menu-item--soon, .hp-menu-item--soon:hover, .hp-menu-item--soon:focus-visible { color: var(--muted); cursor: default; background: transparent; }
 
 /* ---------- Pages ---------- */
 
@@ -477,12 +452,10 @@
     border-bottom: 1px solid var(--border);
   }
   .hp-side-wordmark { display: none; }
-  .hp-switcher { flex: 1; min-width: 0; }
+  .hp-you-link-profile { flex: 1; width: auto; }
   .hp-spacer { display: none; }
-  .hp-usermenu-who { display: none; }
-  .hp-usermenu-button { padding: var(--space-1); }
-  .hp-usermenu-panel { inset-block-end: auto; inset-block-start: calc(100% + var(--space-1)); inset-inline-start: auto; inset-inline-end: 0; }
-  .hp-switcher-panel { width: min(300px, calc(100vw - 2 * var(--hp-gutter))); }
+  .hp-you-link-who { display: none; }
+  .hp-you-link-account { width: auto; flex: none; padding: var(--space-1); }
   .hp-nav { order: 3; flex-basis: 100%; flex-direction: row; overflow-x: auto; margin-top: 0; }
   .hp-nav a { white-space: nowrap; }
   .hp-page { padding: var(--hp-gutter) var(--hp-gutter) var(--space-12); }
@@ -509,11 +482,55 @@
 
 /* ---------- Profile management (MUT-183) ---------- */
 
-/* Switcher: New profile / Manage profiles below the profile list. */
-.hp-popover-sep { height: 1px; background: var(--divider); margin: var(--space-1-5) var(--space-2-5); }
-.hp-option-action .hp-option-line { color: var(--accent-text); }
-.hp-option-action[aria-disabled='true'] { cursor: not-allowed; }
-.hp-option-action[aria-disabled='true'] .hp-option-line { color: var(--muted); }
+/* ---------- The You page (MUT-425, epic MUT-423 round 4 variation 3) ---------- */
+
+.hp-you { max-width: 560px; margin-inline: auto; }
+.hp-you-head { display: flex; align-items: center; gap: var(--space-3); margin: 0 0 var(--space-5); min-width: 0; }
+.hp-avatar--large { width: 56px; height: 56px; font-size: var(--text-headline); }
+.hp-you-who { min-width: 0; display: flex; flex-direction: column; }
+.hp-you-name { margin: 0; font-size: var(--text-headline); overflow-wrap: anywhere; }
+.hp-you-who small { color: var(--muted); font-size: var(--text-body); overflow-wrap: anywhere; }
+.hp-you-group { margin: 0 0 var(--space-4); }
+.hp-you-group-label { margin: 0 0 var(--space-1-5); padding-inline: var(--space-1); font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--muted); }
+.hp-you-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.hp-you-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2-5);
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--text);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.hp-you-row + .hp-you-row { border-top: 1px solid var(--divider); }
+.hp-you-row:hover { background: var(--surface-hover); }
+.hp-you-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-you-row[aria-current='true'] { background: var(--surface-2); }
+.hp-you-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hp-you-row-text small { color: var(--muted); font-size: var(--text-label); }
+.hp-you-row-label { min-width: 0; overflow-wrap: anywhere; }
+.hp-you-row-tail { color: var(--muted); }
+.hp-you-row--action .hp-you-row-label { color: var(--accent-text); font-weight: var(--weight-medium); }
+.hp-you-row--action[aria-disabled='true'] { cursor: not-allowed; }
+.hp-you-row--action[aria-disabled='true'] .hp-you-row-label { color: var(--muted); }
+.hp-you-row--danger .hp-you-row-label { color: var(--error); font-weight: var(--weight-medium); }
+.hp-you-row--static, .hp-you-row--static:hover, .hp-you-row--note, .hp-you-row--note:hover { cursor: default; background: transparent; }
+.hp-you-row--note { color: var(--muted); }
+.hp-you-row-note { margin: 0; padding: var(--space-1) var(--space-3) var(--space-2); font-size: var(--text-label); }
+.hp-you-switch { flex: none; position: relative; width: 36px; height: 22px; border-radius: var(--radius-pill); background: var(--surface-3); transition: background var(--duration-toggle) var(--ease-spring); }
+.hp-you-switch::after { content: ''; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-1); transition: inset-inline-start var(--duration-toggle) var(--ease-spring); }
+[role='switch'][aria-checked='true'] .hp-you-switch { background: var(--btn-primary-bg, var(--accent)); }
+[role='switch'][aria-checked='true'] .hp-you-switch::after { inset-inline-start: 16px; }
+.hp-you-foot { margin: 0 0 var(--space-4); padding-inline: var(--space-1); font-size: var(--text-label); color: var(--muted); }
+
 
 /* Small text-button links inside drawers (Change, Reload, back to the list). */
 .hp-link-button { font: inherit; font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--accent-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -588,6 +605,17 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-section-tab:hover { color: var(--text); }
 .hp-section-tab.hp-section-tab-on { color: var(--text); border-bottom-color: var(--m-primary-hover); }
 .hp-section-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-xs); }
+/* SectionTabs drawn as a segmented pill (the You page's Profiles · Account · App, MUT-425). After the base rules
+   above: same specificity, so the order is what keeps the pill free of their underline, negative margin and radius. */
+.hp-section-tabs--segmented { display: flex; gap: var(--space-0-5); padding: var(--space-0-5); margin: 0 0 var(--space-5); border: 0; border-radius: var(--radius-lg); background: var(--surface-3); }
+.hp-section-tabs--segmented .hp-section-tab { flex: 1; min-width: 0; text-align: center; padding: var(--space-1-5) var(--space-2); margin: 0; border: 0; border-radius: var(--radius-md); font-size: var(--text-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-section-tabs--segmented .hp-section-tab.hp-section-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-section-tabs--segmented .hp-section-tab:focus-visible { border-radius: var(--radius-md); }
+/* A 44px target on touch screens: the pill's tabs and the phone top bar's avatar link (MUT-425 review). */
+@media (pointer: coarse) {
+  .hp-section-tabs--segmented .hp-section-tab { min-height: 44px; display: grid; place-items: center; }
+  .hp-you-link-account { min-height: 44px; min-width: 44px; justify-content: center; }
+}
 
 .hp-toast-action { margin-inline-start: auto; white-space: nowrap; }
 

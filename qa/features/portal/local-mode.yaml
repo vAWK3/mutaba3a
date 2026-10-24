@@ -17,15 +17,15 @@ features:
     tier: core # the portal's front door for everyone without an account
     paths:
       - src/hosted/session/AuthGate.tsx
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouAccount.tsx
       - src/hosted/shell/HostedShell.tsx
-      - src/hosted/shell/ProfileSwitcher.tsx
+      - src/hosted/pages/you/YouProfiles.tsx
     steps:
       - Open the portal for the first time, with nobody signed in
-      - Open the account menu
+      - Open You › Account, then You › App
     expect:
       - The Personal profile's Overview opens in Arabic, right to left, with no sign-in form
-      - The account reads "على هذا الجهاز" (On this device); the menu offers Sign in and Your data, and no sign-out, password, Malafat or store link
+      - The account reads "على هذا الجهاز" (On this device); You › Account offers Sign in and Your data, You › App Language and the terms, and no sign-out, password, Malafat or store link
       - The nav has the same sections as signed in, Expenses and Conversions included (MUT-287)
       - Exactly one request reached the server, the first-visit check of /v1/me
   - id: received-persists
@@ -96,7 +96,7 @@ features:
     steps:
       - Add money received signed out
       - Record an expense with a PDF receipt (MUT-287)
-      - Open Your data from the account menu and download my records
+      - Open Your data from You › Account and download my records
       - Clear this site's data, then open the portal again
       - Open Your data, restore the downloaded file, and replace
     expect:

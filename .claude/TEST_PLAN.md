@@ -3699,4 +3699,11 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Local mode | `migrations.test.ts` 5 → 6, `format-fingerprint.test.ts` (vendors, vendorNames, exps.vendorId) | `npx vitest run src/hosted/local` |
 | Portal | `VendorPicker.test.tsx` (recent, free text kept on Enter, alias hint, Arabic q); `ExpenseDrawer.test.tsx` (prefill only into an empty category) | `npx vitest run src/hosted` |
 | Release-QA | `portal.expenses.vendor-typeahead` (new vendor kept, suggestion, prefill, POST body); `portal.expenses.create`, `.edit-receipts` still green | `release-qa release --only portal.expenses` |
+## MUT-425 — the You page replaces the switcher and the account menu (2026-10-24, ADR-187)
 
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `shell/__tests__/youRoutes.test.ts` (sectionOf, youPath, isYouPath, parseYouSearch, switchTarget); `data/__tests__/trialPrompt.test.ts` › billingRowOf (trial while snoozed, grace/read-only/locked, payer, no profile) | `npx vitest run src/hosted` |
+| Component (real router) | `pages/you/__tests__/YouPage.test.tsx` (parts, rows → drawer keys, cap and lapse New profile, `?from=` across tabs and drawers, open profile never history Back, locked banner, profile-less `/you`); `YouApp.terms`, `YouApp.malafat`, `AppDownloadRows`; local-mode signed-out You › Account and You › App | same |
+| Regression contract (eng D5) | menu tests migrated: views (switcher entries), local-mode, auth-states sign-out, UsageConsent, LapseGate, pressFeedback, the four account/profile drawers, MalafatPortal | same |
+| Release-QA | `portal.you.{drawers,signed-out,phone-rtl,locked}`; `portal.shell.switch-profile` and the 10 migrated areas | `release-qa run --attach --app portal --only portal.you` |

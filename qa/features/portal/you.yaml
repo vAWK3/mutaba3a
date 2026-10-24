@@ -1,0 +1,66 @@
+app: portal
+area: you
+title: The You page (Profiles · Account · App)
+tier: secondary
+# MUT-425 (epic MUT-423): the page that replaced the profile switcher and the account menu. Switching profile from
+# it is shell.switch-profile; the rows' drawers are their own features (account, billing, your-data, profiles).
+paths:
+  - src/hosted/pages/you/YouPage.tsx
+  - src/hosted/pages/you/YouProfiles.tsx
+  - src/hosted/pages/you/YouAccount.tsx
+  - src/hosted/pages/you/YouApp.tsx
+  - src/hosted/components/YouRows.tsx
+  - src/hosted/components/SectionTabs.tsx
+  - src/hosted/components/ProfileKindLine.tsx
+  - src/hosted/shell/YouLinks.tsx
+  - src/hosted/shell/youRoutes.ts
+  - src/hosted/shell/initials.ts
+features:
+  - id: drawers
+    title: Every row on the You page opens today's drawer by its URL key, over the page, and Back closes it
+    tier: secondary
+    steps:
+      - From Payments, open You › Account from the avatar
+      - Open Billing, Your data and Change password in turn, pressing Back after each
+      - Open You › Profiles and do the same with New profile and Manage profiles
+    expect:
+      - The page shows the name and email, and Profiles · Account · App with Account current; the URL keeps from=payments
+      - Each row opens its drawer (billing, yourData, changePassword, newProfile, manageProfiles) on the You page's URL
+      - Back closes each drawer and leaves the You page as it was
+  - id: signed-out
+    title: Signed out on this device, the You page shows only what needs no account
+    tier: secondary
+    paths:
+      - src/hosted/session/mode.ts
+    steps:
+      - Open the portal with nobody signed in
+      - Open You › Account, then You › App, then You › Profiles
+    expect:
+      - The header reads On this device, with no email
+      - Account has Sign in and Your data only; App has Language and Terms only
+      - Profiles shows no Hosted chip and no note about the local app
+      - No Billing, Change password, Sign out, usage switch, Malafat or store link anywhere on the page
+  - id: phone-rtl
+    title: On a 375px phone in Arabic each part of the You page, and the top bar, fit without sideways scroll
+    tier: secondary
+    paths:
+      - src/hosted/hosted.css
+    steps:
+      - On a 375px phone in Arabic, open a section page on a profile with a long name
+      - Open You › Profiles, You › Account and You › App
+    expect:
+      - The page is right to left; the top bar and each part have no horizontal scroll
+      - A screenshot of each part is attached for review
+  - id: locked
+    title: A locked profile still opens the You page, under the locked banner, so Billing and the other profiles stay reachable
+    tier: secondary
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/data/trialPrompt.ts
+    steps:
+      - Open a profile whose trial locked
+      - Open You › Account from the avatar, then Billing
+    expect:
+      - The locked screen shows on the section; the You page shows under a banner that says Subscribe or download your records
+      - The Billing row reads Locked and opens the Billing drawer

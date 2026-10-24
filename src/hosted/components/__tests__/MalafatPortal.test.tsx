@@ -8,7 +8,7 @@ import { MeProvider, ME_KEY, ProfileProvider } from '../../session/me';
 import { me, profile } from '../../__tests__/harness';
 import { customer } from '../../pages/__tests__/fixtures';
 import { useMalafatPortalMoments } from '../../session/malafatMoments';
-import { MalafatClientsCard, MalafatCreatedNote, MalafatMenuItems } from '../MalafatPortal';
+import { MalafatClientsCard, MalafatCreatedNote, MalafatRows } from '../MalafatPortal';
 import type { Me, HostedProfile } from '../../api/client';
 
 const api = vi.hoisted(() => ({ change: vi.fn() }));
@@ -46,12 +46,12 @@ beforeEach(() => {
 });
 
 /** Malafat suggestions in the portal (MUT-191). */
-describe('MalafatMenuItems (S1, in the account menu)', () => {
+describe('MalafatRows (S1, on You › App, MUT-425)', () => {
   it('offers Malafat and the switch on an eligible business profile', async () => {
-    wrap(me([business('a')]), business('a'), <div role="menu"><MalafatMenuItems profile={business('a')} /></div>);
-    const link = screen.getByRole('menuitem', { name: /Malafat, for law firms and accounting offices/ });
+    wrap(me([business('a')]), business('a'), <MalafatRows profile={business('a')} />);
+    const link = screen.getByRole('link', { name: /Malafat, for law firms and accounting offices/ });
     expect(link.getAttribute('href')).toContain('/en/contact?topic=mutaba3a&utm_source=mutaba3a&utm_medium=portal&utm_campaign=malafat-upsell&utm_content=settings');
-    const toggle = screen.getByRole('menuitemcheckbox', { name: 'Show Malafat suggestions' });
+    const toggle = screen.getByRole('switch', { name: 'Show Malafat suggestions' });
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(toggle);
     expect(api.change).toHaveBeenCalledWith({ off: true });
@@ -59,8 +59,8 @@ describe('MalafatMenuItems (S1, in the account menu)', () => {
 
   it('says so inline when the switch could not be saved, and keeps its state', async () => {
     api.change.mockRejectedValueOnce(new TypeError('offline'));
-    wrap(me([business('a')]), business('a'), <div role="menu"><MalafatMenuItems profile={business('a')} /></div>);
-    const toggle = screen.getByRole('menuitemcheckbox', { name: 'Show Malafat suggestions' });
+    wrap(me([business('a')]), business('a'), <MalafatRows profile={business('a')} />);
+    const toggle = screen.getByRole('switch', { name: 'Show Malafat suggestions' });
     await userEvent.click(toggle);
     expect(await screen.findByRole('status')).toHaveTextContent("Couldn't save. Try again.");
     expect(toggle).toHaveAttribute('aria-checked', 'true');
@@ -68,11 +68,11 @@ describe('MalafatMenuItems (S1, in the account menu)', () => {
 
   it('shows nothing on a personal profile, on a firm, or to someone already on Malafat', () => {
     const personal = profile({ id: 'p', writerOfRecord: null, owned: true, isPersonalDefault: true, type: 'PERSONAL' });
-    wrap(me([personal]), personal, <div role="menu"><MalafatMenuItems profile={personal} /></div>);
-    expect(screen.queryByRole('menuitemcheckbox')).toBeNull();
+    wrap(me([personal]), personal, <MalafatRows profile={personal} />);
+    expect(screen.queryByRole('switch')).toBeNull();
     document.body.innerHTML = '';
-    wrap(me([business('a'), profile()]), business('a'), <div role="menu"><MalafatMenuItems profile={business('a')} /></div>);
-    expect(screen.queryByRole('menuitemcheckbox')).toBeNull();
+    wrap(me([business('a'), profile()]), business('a'), <MalafatRows profile={business('a')} />);
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 });
 

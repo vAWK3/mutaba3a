@@ -13,7 +13,8 @@ import { AlertIcon, LockIcon } from './Icons';
 
 /**
  * MUT-361 (ADR-181): what the portal shows when the open profile's plan isn't running. `LapseBanner` sits above every
- * page of the profile: a failed payment (GRACE) or read-only. `LockedScreen` replaces the page on a LOCKED profile:
+ * page of the profile: a failed payment (GRACE) or read-only, and on the You page only, LOCKED (MUT-425). `LockedScreen`
+ * replaces every other page on a LOCKED profile:
  * Subscribe and Download my records, nothing else (the server refuses the rest anyway). Both offer Subscribe only
  * where a payment of this person's would cover the profile (`coveredProfileIds`, TD-193): anyone else is told to
  * ask the profile's creator. Every action opens a drawer the shell already has: Billing, or Your data.
@@ -29,8 +30,33 @@ function useCoverage(profileId: string): { covered: boolean; sellable: boolean }
 
 export function LapseBanner({ profile }: { profile: HostedProfile }) {
   const notice = lapseNoticeOf(useMe(), profile);
-  if (!notice || notice.kind === 'locked') return null;
+  if (!notice) return null;
+  // A LOCKED profile's pages are the locked screen; only the You page gets through it (MUT-425 eng E1), under this
+  if (notice.kind === 'locked') return <LockedNote profile={profile} />;
   return <LapseNote profile={profile} notice={notice} />;
+}
+
+/** MUT-425 (eng D7): the locked screen's words and actions as a banner, above the You page of a locked profile. */
+function LockedNote({ profile }: { profile: HostedProfile }) {
+  const t = useT();
+  const drawers = useAccountDrawers();
+  const coverage = useCoverage(profile.id);
+  const theirs = coverage !== null && !coverage.covered;
+  return (
+    <section className="hp-banner hp-banner-info hp-lapse-banner" aria-label={t('hosted.billing.gate.label')}>
+      <LockIcon />
+      <div className="hp-lapse-banner-body">
+        <p className="hp-lapse-banner-title">{t('hosted.billing.gate.lockedTitle')}</p>
+        <p>{t(theirs ? 'hosted.billing.gate.lockedNotYours' : 'hosted.billing.gate.lockedBody')}</p>
+        <div className="hp-lapse-banner-actions">
+          <SubscribeAction coverage={coverage} size="sm" />
+          <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
+            {t('hosted.billing.gate.download')}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclude<LapseNotice, { kind: 'locked' }> }) {

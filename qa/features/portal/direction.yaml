@@ -10,7 +10,7 @@ paths:
   - src/hosted/pages/auth/SetupPage.tsx
   - src/hosted/pages/views/DocumentsList.tsx
   - src/hosted/pages/views/PaymentsList.tsx
-  - src/hosted/shell/UserMenu.tsx
+  - src/hosted/pages/you/YouApp.tsx
   - src/hosted/components/ChangePasswordDrawer.tsx
   - src/hosted/components/FilterControls.tsx
   - src/hosted/components/IncomeCaptureDrawer.tsx

@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, customer, office } from '../../support/portal';
 import { FakeApi, payment, receivable } from '../../support/portalApi';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * The portal session (mut-43-auth-states.md): AuthGate sends a signed-out
@@ -74,15 +75,16 @@ test('Sign out: a failure keeps you signed in and says so; then it ends the sess
 
   await step('Sign out while offline: still signed in, and told why', async () => {
     api.once('DELETE', /^\/v1\/sessions\/current$/, 'abort');
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Sign out' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Sign out').click();
     await expect(page.getByRole('alert')).toContainText("Couldn't sign out. Check your connection and try again.");
-    await expect(page.getByRole('table', { name: 'Payments' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeEnabled();
+    // MUT-425: still signed in, on You › Account where Sign out was pressed
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you/account`));
+    await expect(youRow(page, 'Sign out')).toBeEnabled();
   });
 
-  await step('Sign out again from the menu still open: sign-in says you signed out', async () => {
-    await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await step('Sign out again from You › Account, still open: sign-in says you signed out', async () => {
+    await youRow(page, 'Sign out').click();
     await expect(page).toHaveURL(/\/sign-in\?reason=signed_out$/);
     await expect(page.getByRole('note')).toHaveText("You've signed out.");
     expect(api.calls('DELETE', /^\/v1\/sessions\/current$/)).toHaveLength(2);
@@ -93,7 +95,7 @@ test('Sign out: a failure keeps you signed in and says so; then it ends the sess
     const before = api.calls('GET', /^\/v1\//).length;
     await page.goto(`/p/${OFFICE_A}/payments`);
     await expect(page.getByRole('heading', { name: "This profile isn't available" })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Account/ })).toContainText('On this device');
+    await expect(page.locator('.hp-you-link-account')).toContainText('On this device');
     await expect(page.getByText('PAY-0001')).toHaveCount(0);
     expect(api.calls('GET', /^\/v1\//)).toHaveLength(before);
   });
@@ -118,8 +120,8 @@ test('Signing out in one tab signs the other tab out at once', { tag: '@portal.s
   });
 
   await step('Sign out in the other tab', async () => {
-    await other.getByRole('button', { name: /^Account/ }).click();
-    await other.getByRole('menuitem', { name: 'Sign out' }).click();
+    await openYou(other, 'account');
+    await youRow(other, 'Sign out').click();
     await expect(other).toHaveURL(/\/sign-in\?reason=signed_out$/);
   });
 

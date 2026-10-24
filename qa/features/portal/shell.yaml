@@ -39,7 +39,7 @@ features:
       - Sign in and open the portal at /
       - Read the overview, then switch it to USD
       - Visit each section from the sidebar
-      - Open the account menu and choose عربي
+      - Open You › App, choose عربي, then go back to Conversions
     expect:
       - / lands on the first profile's Overview with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
       - USD shows the USD block and puts currency=USD in the URL
@@ -48,19 +48,19 @@ features:
       - Every profile call carried X-Mutaba3a-Profile for that profile
       - A screenshot of the shell is attached in English and in Arabic, for spacing review
   - id: switch-profile
-    title: The profile switcher lists each profile with its kind, closes on Escape, keeps the section when switching, and a profile not on the account says so
+    title: You › Profiles lists each profile with its kind, keeps the section when switching (?from=, MUT-425), and a profile not on the account says so
     tier: secondary
     paths:
-      - src/hosted/shell/ProfileSwitcher.tsx
-      - src/hosted/shell/usePopover.ts
+      - src/hosted/pages/you/YouProfiles.tsx
+      - src/hosted/shell/YouLinks.tsx
+      - src/hosted/shell/youRoutes.ts
       - src/hosted/data/profileRules.ts
     steps:
-      - Open Payments on one office and open the switcher
-      - Press Escape, then switch to the second office
+      - Open Payments on one office and open You › Profiles from the profile name
+      - Switch to the second office
       - Open a profile id that is not on the account, then Go to the first profile
     expect:
       - Each profile shows Hosted and its kind (Business, Income recorded by Malafat), with the local-profiles footer
-      - Escape closes the menu and focus returns to the switcher
       - Switching lands on the same section for the other profile, whose figures are fetched with its own header
       - An unknown profile reads "This profile isn't available" and its button opens the first profile
   - id: client-detail

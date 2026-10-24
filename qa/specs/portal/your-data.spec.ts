@@ -4,6 +4,7 @@ import { test, expect } from '../../support/qa';
 import { OFFICE_A, OFFICE_B, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
 import { encodeRecordsFileText, HOSTED_EXPORT_ORIGIN, RECORDS_FILE_KIND, SNAPSHOT_FIELDS } from '../../../server/src/records-file/codec';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * Your data, signed in (MUT-325): Download my records. The two export routes
@@ -48,8 +49,8 @@ async function serveExport(page: Page) {
 }
 
 async function openYourData(page: Page) {
-  await page.getByRole('button', { name: /^Account/ }).click();
-  await page.getByRole('menuitem', { name: 'Your data' }).click();
+  await openYou(page, 'account');
+  await youRow(page, 'Your data').click();
   const dialog = page.getByRole('dialog', { name: 'Your data' });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -60,7 +61,7 @@ test('Signed in, download my records from Your data, with progress, as one expor
   let server: Awaited<ReturnType<typeof serveExport>> = { release: () => {}, asked: [] };
   let dialog = page.getByRole('dialog', { name: 'Your data' });
 
-  await step('Sign in with two profiles and open Your data from the account menu', async () => {
+  await step('Sign in with two profiles and open Your data from You › Account', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
     server = await serveExport(page);
     dialog = await openYourData(page);

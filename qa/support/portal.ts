@@ -218,3 +218,20 @@ export async function openSignedInPortal(
   await page.goto(path);
   return stub;
 }
+
+export interface SignedOutServer {
+  /** Every /v1 request that reached the "server", as "METHOD /path". */
+  requests: string[];
+}
+
+/** A browser with nobody signed in: the server answers 401 to everything and counts what it was asked (MUT-286; shared since MUT-425). */
+export async function signedOutServer(page: Page, language: 'en' | 'ar' | null = 'en'): Promise<SignedOutServer> {
+  const server: SignedOutServer = { requests: [] };
+  await page.context().route('**/v1/**', async (route) => {
+    const request = route.request();
+    server.requests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
+  });
+  if (language) await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, language] as const);
+  return server;
+}

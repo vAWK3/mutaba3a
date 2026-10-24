@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, QA_CLIENT_RELEASE, QA_TERMS_VERSION, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
+import { openYou } from '../../support/you';
 
 /**
  * MUT-324 (ADR-102): accepting the terms on the portal. The in-memory API
@@ -128,12 +129,12 @@ test('Sign out on the Updated-terms step signs out without accepting', { tag: '@
   });
 });
 
-test('the account menu and the sign-in page link the terms of service', { tag: '@portal.terms.links' }, async ({ page, step }) => {
-  await step('The account menu links the terms in a new tab', async () => {
+test('You › App and the sign-in page link the terms of service', { tag: '@portal.terms.links' }, async ({ page, step }) => {
+  await step('You › App links the terms in a new tab', async () => {
     const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
     await api.open(page, `/p/${OFFICE_A}`, 'en');
-    await page.getByRole('button', { name: /^Account/ }).click();
-    const item = page.getByRole('menu', { name: 'Account' }).getByRole('menuitem', { name: 'Terms of service' });
+    await openYou(page, 'app');
+    const item = page.getByRole('main').getByRole('link', { name: /^Terms of service/ });
     await expect(item).toHaveAttribute('href', /\/terms\?lang=en$/);
     await expect(item).toHaveAttribute('target', '_blank');
   });

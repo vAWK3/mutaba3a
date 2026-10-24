@@ -26,6 +26,14 @@
 **Impact**: `GET /v1/summaries/activity` reads a profile's POSTED payments and expenses for up to 13 months through `listAll` and sums them in `summarizeActivity`, like `/v1/summaries/organization`. A profile with ~10k+ rows a year would make every Reports open and step slow.
 **Fix**: move the sums to SQL (`GROUP BY` currency and day or month on the existing `[organizationId, receivedOn…]` / `[organizationId, occurredOn…]` indexes) behind the same response, keeping `summarizeActivity` as the memory store's path.
 
+### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
+**Status**: Open
+**Ticket**: MUT-425 (eng D1/D2)
+**Added**: 2026-10-24
+**Priority**: Low (works and is tested; it is the old sidebar's shape)
+**Impact**: `shell/YouLinks.tsx` keeps the old switcher's and account menu's places as plain links, with their phone top-bar rules in `hosted.css`, until the pill and the island replace the sidebar.
+**Fix**: MUT-426 deletes `YouLinks` and its CSS; the island links with `?from=` and uses the profile-less `/you`.
+
 ### TD-235: Eight landing and legal release-QA flows still test the retired /hosted page and free tier
 **Status**: Open
 **Ticket**: found by MUT-369's qa-reconcile (not caused by it)

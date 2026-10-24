@@ -201,7 +201,8 @@ describe('Receivables', () => {
     portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(RECEIVABLES)) });
     await screen.findByRole('table', { name: 'Receivables' });
     expect(screen.getByRole('note')).toHaveTextContent('Malafat records income and payments for this profile. To change them, use Malafat.');
-    const actionable = screen.getAllByRole('button').map((b) => b.textContent ?? '');
+    // queryAll: since MUT-425 the shell's way to the You page is a link, so this page may have no button at all
+    const actionable = screen.queryAllByRole('button').map((b) => b.textContent ?? '');
     expect(actionable.filter((label) => /\b(record|edit|add|new|mark|delete|pay)\b|payment/i.test(label))).toEqual([]);
   });
 
@@ -299,18 +300,21 @@ describe('Documents', () => {
   });
 });
 
-describe('Profile switcher', () => {
+/** MUT-425: the profile switcher became You › Profiles; the open profile's name in the sidebar links to it. */
+const profileRows = () => within(document.querySelector<HTMLElement>('.hp-you-box')!).getAllByRole('button');
+
+describe('Profile switcher (You › Profiles)', () => {
   const both = [profile(), profile({ id: ORG_B, name: 'Nour — personal', writerOfRecord: null })];
 
   it('shows each profile with its Hosted chip and source, and says where local profiles live', async () => {
     const { user } = portal(`/p/${ORG_A}`, {}, both);
-    await user.click(await screen.findByRole('button', { name: 'Switch profile: Haddad & Partners' }));
-    const menu = screen.getByRole('menu', { name: 'Switch profile' });
-    const [first, second] = within(menu).getAllByRole('menuitemradio');
-    expect(first).toHaveAttribute('aria-checked', 'true');
+    await user.click(await screen.findByRole('link', { name: 'Switch profile: Haddad & Partners' }));
+    await screen.findByRole('navigation', { name: 'You' });
+    const [first, second] = profileRows();
+    expect(first).toHaveAttribute('aria-current', 'true');
     expect(first).toHaveTextContent('Haddad & PartnersHostedIncome recorded by Malafat');
     expect(second).toHaveTextContent('Nour — personalHostedExpenses only');
-    expect(menu).toHaveTextContent('Your local profiles stay in the MTB3A app on your device.');
+    expect(screen.getByRole('main')).toHaveTextContent('Your local profiles stay in the MTB3A app on your device.');
   });
 
   it('keeps the section, sends the new profile header, and never shows the old figures', async () => {
@@ -321,8 +325,8 @@ describe('Profile switcher', () => {
     );
     const before = await screen.findByRole('table', { name: 'Receivables' });
     expect(within(before).getByText('Lease dispute')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Switch profile/ }));
-    await user.click(screen.getByRole('menuitemradio', { name: /Nour — personal/ }));
+    await user.click(screen.getByRole('link', { name: /Switch profile/ }));
+    await user.click(await screen.findByRole('button', { name: /Nour — personal/ }));
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/receivables`));
     expect(await screen.findByLabelText('Loading')).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Receivables' })).toBeNull();
@@ -623,24 +627,23 @@ describe('Shell overlay keys never reach a list (MUT-183 R1)', () => {
   });
 });
 
-describe('Profile switcher entries (MUT-183)', () => {
+describe('Profile switcher entries (MUT-183; You › Profiles since MUT-425)', () => {
   const builtIn = profile({ id: ORG_B, name: 'Personal', writerOfRecord: null, owned: true, type: 'PERSONAL', isPersonalDefault: true });
   const business = profile({ id: 'c3333333-3333-4333-8333-333333333333', name: 'Nour Studio', writerOfRecord: null, owned: true, type: 'BUSINESS' });
   const writerNullFirm = profile({ id: 'c4444444-4444-4444-8444-444444444444', name: 'Khalil Accounting', writerOfRecord: null });
 
   it('SW1/SW4: lists the profiles with their kind, then New profile and Manage profiles', async () => {
     const { user } = portal(`/p/${ORG_A}`, {}, [profile(), business, writerNullFirm, builtIn]);
-    await user.click(await screen.findByRole('button', { name: 'Switch profile: Haddad & Partners' }));
-    const menu = screen.getByRole('menu', { name: 'Switch profile' });
-    const radios = within(menu).getAllByRole('menuitemradio');
-    expect(radios.map((r) => r.textContent)).toEqual([
+    await user.click(await screen.findByRole('link', { name: 'Switch profile: Haddad & Partners' }));
+    await screen.findByRole('navigation', { name: 'You' });
+    expect(profileRows().map((r) => r.textContent)).toEqual([
       '✓Haddad & PartnersHostedIncome recorded by Malafat',
       'Nour StudioHostedBusiness',
       'Khalil AccountingHostedExpenses only',
       'PersonalHostedYour built-in profile',
     ]);
-    expect(within(menu).getByRole('separator')).toBeInTheDocument();
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['+ New profile', 'Manage profiles']);
+    const actions = within(document.querySelectorAll<HTMLElement>('.hp-you-box')[1]).getAllByRole('button');
+    expect(actions.map((item) => item.textContent)).toEqual(['+ New profile', 'Manage profiles']);
   });
 
   it('SW2: at the cap New profile is aria-disabled, says why, and opens nothing', async () => {
@@ -648,21 +651,20 @@ describe('Profile switcher entries (MUT-183)', () => {
       profile({ id: `6666666${i}-6666-4666-8666-666666666666`, name: `Owned ${i}`, writerOfRecord: null, owned: true, type: 'BUSINESS' }),
     );
     const { user, router } = portal(`/p/${owned[0].id}`, {}, owned);
-    await user.click(await screen.findByRole('button', { name: /Switch profile/ }));
-    const item = screen.getByRole('menuitem', { name: /New profile/ });
+    await user.click(await screen.findByRole('link', { name: /Switch profile/ }));
+    const item = await screen.findByRole('button', { name: /New profile/ });
     expect(item).toHaveAttribute('aria-disabled', 'true');
     expect(item).toHaveTextContent("You've used 6 of 6 profiles");
     await user.click(item);
-    expect(locationOf(router)).toBe(`/p/${owned[0].id}`);
+    expect(locationOf(router)).toBe(`/p/${owned[0].id}/you`);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('SW3: Manage profiles closes the menu and opens the Manage drawer', async () => {
+  it('SW3: Manage profiles opens the Manage drawer', async () => {
     const { user, router } = portal(`/p/${ORG_A}`, {}, [profile(), builtIn]);
-    await user.click(await screen.findByRole('button', { name: /Switch profile/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Manage profiles' }));
+    await user.click(await screen.findByRole('link', { name: /Switch profile/ }));
+    await user.click(await screen.findByRole('button', { name: 'Manage profiles' }));
     expect(await screen.findByRole('dialog', { name: 'Profiles' })).toBeInTheDocument();
-    expect(screen.queryByRole('menu')).toBeNull();
-    expect(locationOf(router)).toBe(`/p/${ORG_A}?manageProfiles=true`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/you?manageProfiles=true`);
   });
 });

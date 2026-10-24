@@ -6,7 +6,6 @@ import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, Me, UpdateProfileResponse } from '../api/client';
 import { atProfileCap, canCreateProfile, coOwnsOthersProfiles, profileEditability } from '../data/profileRules';
-import { useProfileKind } from '../data/useProfileKind';
 import { profileKey, ME_KEY, useMe } from '../session/me';
 import { withProfileLeft } from '../data/profileQueries';
 import { useLostAccess } from '../session/lostAccess';
@@ -14,6 +13,7 @@ import { Drawer } from './Drawer';
 import { LockIcon } from './Icons';
 import { ProfileBanner } from './ProfileBanner';
 import { ProfileEditForm } from './ProfileEditForm';
+import { ProfileKindLine } from './ProfileKindLine';
 import type { ProfileBanner as Banner } from './profileApiErrors';
 import { useToast } from './Toast';
 
@@ -147,7 +147,6 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
 
 function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfile; viewerId: string; open: boolean; onEdit: (id: string) => void }) {
   const t = useT();
-  const kind = useProfileKind(profile, viewerId);
   const editability = profileEditability(profile);
   const body = (
     <>
@@ -159,9 +158,7 @@ function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfil
           {open && <span className="hp-pill-open">{t('hosted.profiles.openNow')}</span>}
         </span>
         {editability.editable ? (
-          <span className="hp-option-sub hp-profile-kind" title={kind}>
-            {kind}
-          </span>
+          <ProfileKindLine profile={profile} viewerId={viewerId} />
         ) : (
           <span className="hp-option-sub hp-profile-row-reason">
             <LockIcon />

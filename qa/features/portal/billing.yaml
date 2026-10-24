@@ -16,13 +16,13 @@ features:
     title: Before Stripe or the GA prices are set, Billing says subscriptions open soon and offers no Subscribe
     tier: secondary
     paths:
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouAccount.tsx
       - src/hosted/i18n/en.json
       - src/hosted/i18n/ar.json
       - src/hosted/hosted.css
     steps:
       - Sign in during the free trial on a server with no Stripe configured
-      - Open Billing from the account menu
+      - Open Billing from You › Account
     expect:
       - The drawer shows the trial status first ("9 days left in your free trial")
       - In place of Subscribe it says "Subscriptions open soon. We'll let you know before your trial ends." and shows no price

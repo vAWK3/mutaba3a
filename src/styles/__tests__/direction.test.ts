@@ -36,7 +36,9 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/components/layout/FxRateReadout.tsx': { ltr: 2 }, // the rate formula
   'src/pages/clients/ClientDetailPage.tsx': { ltr: 1 }, // email and phone
   'src/components/modals/WhatsNewModal.tsx': { ltr: 1 }, // version number
-  'src/hosted/shell/UserMenu.tsx': { ltr: 1 }, // email
+  'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
+  'src/hosted/shell/YouLinks.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the open profile's name (D)
+  'src/hosted/pages/you/YouProfiles.tsx': { auto: 1 }, // MUT-425: each profile's name (D)
   'src/hosted/components/ProfilesManageDrawer.tsx': { ltr: 1, auto: 1 }, // currency code; the profile name (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)

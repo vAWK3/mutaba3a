@@ -14,16 +14,16 @@ function portal(path: string, routes: Record<string, Handler> = {}) {
 const changeCalls = (calls: StubRequest[]) => calls.filter((c) => c.method === 'POST' && c.url.pathname === '/v1/me/password');
 
 async function openFromMenu(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('button', { name: /Account/ }));
-  await user.click(screen.getByRole('menuitem', { name: 'Change password' }));
+  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+  await user.click(await screen.findByRole('button', { name: /^Change password/ }));
   return screen.findByRole('dialog', { name: 'Change password' });
 }
 
 describe('Change password drawer (MUT-237)', () => {
-  it('opens over the current page through the URL from the account menu, not as a page', async () => {
+  it('opens over You › Account through the URL (MUT-425), not as a page', async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
     const dialog = await openFromMenu(user);
-    expect(locationOf(router)).toBe(`/p/${ORG_A}?changePassword=true`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?changePassword=true`);
     expect(within(dialog).getByLabelText('Current password')).toHaveAttribute('autocomplete', 'current-password');
     expect(within(dialog).getByLabelText('New password')).toHaveAttribute('autocomplete', 'new-password');
     expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument();

@@ -24,7 +24,7 @@ function unpressable(): string[] {
 }
 
 describe('every portal button presses (L10)', () => {
-  it('in the signed-in shell, its open menus and a payments row', async () => {
+  it('in the signed-in shell, the You page and a payments row', async () => {
     stubApi({
       'GET /v1/me': () => ok(me([profile(), profile({ id: '33333333-3333-4333-8333-333333333333', name: 'Second firm' })])),
       ...emptyProfileRoutes(),
@@ -35,13 +35,15 @@ describe('every portal button presses (L10)', () => {
     const { user } = renderPortal(`/p/${ORG_A}/payments`);
     await screen.findByRole('button', { name: 'Show where this payment went' });
 
-    await user.click(screen.getByRole('button', { name: /^account/i }));
-    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
     expect(unpressable()).toEqual([]);
 
-    await user.click(screen.getByRole('button', { name: /^account/i }));
-    await user.click(screen.getByRole('button', { name: /^switch profile/i }));
-    expect(screen.getAllByRole('menuitemradio').length).toBeGreaterThan(1);
+    // MUT-425: the account menu and the profile switcher became the You page
+    await user.click(screen.getByRole('link', { name: /^account/i }));
+    expect(await screen.findByRole('button', { name: /^Sign out/ })).toBeInTheDocument();
+    expect(unpressable()).toEqual([]);
+
+    await user.click(screen.getByRole('link', { name: 'Profiles' }));
+    expect(await screen.findByRole('button', { name: /Second firm/ })).toBeInTheDocument();
     expect(unpressable()).toEqual([]);
   });
 

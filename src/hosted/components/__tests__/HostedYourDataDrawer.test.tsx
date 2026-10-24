@@ -26,13 +26,13 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe('Your data, signed in (MUT-325)', () => {
-  it('opens from the account menu through the URL, every profile ticked, and says it is an export, not a backup', async () => {
+  it('opens from You › Account (MUT-425) through the URL, every profile ticked, and says it is an export, not a backup', async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('button', { name: /Account/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Your data' }));
+    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await user.click(await screen.findByRole('button', { name: /^Your data/ }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Your data' });
-    expect(locationOf(router)).toBe(`/p/${ORG_A}?yourData=true`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?yourData=true`);
     expect(within(dialog).getByRole('checkbox', { name: 'Personal' })).toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: 'Haddad & Partners' })).toBeChecked();
     expect(within(dialog).getByText(/an export, not a backup/)).toBeInTheDocument();

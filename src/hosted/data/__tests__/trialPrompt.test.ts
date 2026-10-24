@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Me } from '../../api/client';
-import { TRIAL_BANNER_LAST_DAYS, billingGateOf, lapseNoticeOf, optimisticTrialPrompt, personStandingOf, trialBannerOf, trialWelcomeDue } from '../trialPrompt';
+import { TRIAL_BANNER_LAST_DAYS, billingGateOf, billingRowOf, lapseNoticeOf, optimisticTrialPrompt, personStandingOf, trialBannerOf, trialWelcomeDue } from '../trialPrompt';
 
 /**
  * MUT-418: when the first-run "Your free trial has started" step is due, and what the Home trial banner shows.
@@ -132,5 +132,35 @@ describe('billingGateOf / personStandingOf / lapseNoticeOf', () => {
 
   it('warns about a failed payment (GRACE), even though nothing is refused', () => {
     expect(lapseNoticeOf(withStanding('open'), profile(grace))).toEqual({ kind: 'grace' });
+  });
+});
+
+/** MUT-425 (eng review D6): the You page's Billing row sub-line: the person's trial, else the open profile's lapse state. */
+describe('billingRowOf', () => {
+  // A paying person (no running trial) on a server that enforces the gate (`billingStanding` set)
+  const gated = (): Me => ({ ...me({ billing: { state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: null } }), billingStanding: 'open' }) as Me;
+  const open = (billing: Billing) => ({ billing }) as Me['profiles'][number];
+
+  it('shows the trial’s days left, even while the Home banner is snoozed', () => {
+    const snoozed = me({ prompt: { ...EMPTY, bannerSnoozedUntil: inDays(2) } });
+    expect(billingRowOf(snoozed, null, NOW)).toEqual({ kind: 'trial', daysLeft: 14 });
+  });
+
+  it('shows the trial whichever profile is open', () => {
+    expect(billingRowOf(me(), open({ state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: null }), NOW)).toEqual({ kind: 'trial', daysLeft: 14 });
+  });
+
+  it.each([
+    ['GRACE', 'grace'],
+    ['READ_ONLY', 'read-only'],
+    ['LOCKED', 'locked'],
+  ] as const)('maps an open profile in %s to %s', (state, kind) => {
+    expect(billingRowOf(gated(), open({ state, source: 'STRIPE', tier: 'FREELANCER', until: null }), NOW)).toEqual({ kind });
+  });
+
+  it('is null for a payer in good standing, and with no profile and no trial', () => {
+    const payer = gated();
+    expect(billingRowOf(payer, open({ state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: null }), NOW)).toBeNull();
+    expect(billingRowOf(payer, null, NOW)).toBeNull();
   });
 });

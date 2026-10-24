@@ -1,6 +1,7 @@
 import { test, expect } from '../../support/qa';
 import { FIRM, OFFICE_A, OFFICE_B, QA_USER_ID, customer, malafatFirm, office, type StubOwner, type StubProfile } from '../../support/portal';
 import { FakeApi, apiError, category, receivable, todayInJerusalem, uid } from '../../support/portalApi';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * Hosted profiles (MUT-183): New profile and Manage profiles, both drawers on
@@ -10,8 +11,8 @@ import { FakeApi, apiError, category, receivable, todayInJerusalem, uid } from '
  */
 
 async function openManage(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: /^Switch profile/ }).click();
-  await page.getByRole('menuitem', { name: 'Manage profiles' }).click();
+  await openYou(page, 'profiles');
+  await youRow(page, 'Manage profiles').click();
   await expect(page.getByRole('dialog', { name: 'Profiles' })).toBeVisible();
   await expect(page).toHaveURL(/manageProfiles=true/);
 }
@@ -20,7 +21,7 @@ test('Edit a profile’s name and currency; a change made elsewhere first asks f
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, 'Nour Accounting'), malafatFirm()] });
   const pane = page.getByRole('dialog', { name: 'Nour Studio' });
 
-  await step('Open Manage profiles from the switcher', async () => {
+  await step('Open Manage profiles from You › Profiles', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
     await openManage(page);
     const list = page.getByRole('dialog', { name: 'Profiles' });
@@ -63,11 +64,11 @@ test('Edit a profile’s name and currency; a change made elsewhere first asks f
     expect(patch?.body).toEqual({ name: 'Nour Design Studio', defaultCurrency: 'USD' });
   });
 
-  await step('Back on the list: saved, under its new name and currency, and the switcher says so too', async () => {
+  await step('Back on the list: saved, under its new name and currency, and the sidebar says so too', async () => {
     const list = page.getByRole('dialog', { name: 'Profiles' });
     await expect(page.getByTestId('toast-live')).toHaveText(/Profile saved/);
     await expect(list.getByRole('button', { name: /Nour Design Studio/ })).toContainText('USD');
-    await expect(page.getByRole('button', { name: 'Switch profile: Nour Design Studio' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Switch profile: Nour Design Studio' })).toBeVisible();
   });
 });
 
@@ -122,10 +123,10 @@ test('New profile: name and type are asked for, the zone can be changed, and the
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
   const drawer = page.getByRole('dialog', { name: 'New profile' });
 
-  await step('Choose + New profile in the switcher', async () => {
+  await step('Choose + New profile on You › Profiles', async () => {
     await api.open(page, `/p/${OFFICE_A}`);
-    await page.getByRole('button', { name: /^Switch profile/ }).click();
-    await page.getByRole('menuitem', { name: '+ New profile' }).click();
+    await openYou(page, 'profiles');
+    await youRow(page, '+ New profile').click();
     await expect(drawer).toBeVisible();
     await expect(drawer.getByLabel('Currency')).toHaveValue('ILS');
   });
@@ -155,8 +156,8 @@ test('New profile: name and type are asked for, the zone can be changed, and the
 
   await step('Close and open it again (a slot freed up), then create', async () => {
     await drawer.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('button', { name: /^Switch profile/ }).click();
-    await page.getByRole('menuitem', { name: '+ New profile' }).click();
+    await openYou(page, 'profiles');
+    await youRow(page, '+ New profile').click();
     await drawer.getByLabel('Name').fill('Home');
     await drawer.getByRole('radio', { name: /Personal/ }).check();
     await drawer.getByLabel('Currency').selectOption('JOD');
@@ -168,7 +169,7 @@ test('New profile: name and type are asked for, the zone can be changed, and the
 
   await step('The new profile opens, and the server got exactly what was chosen', async () => {
     await expect(page.getByTestId('toast-live')).toHaveText(/Home is ready/);
-    await expect(page.getByRole('button', { name: 'Switch profile: Home' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Switch profile: Home' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
     const post = api.last('POST', /^\/v1\/profiles$/);
     expect(post?.body).toEqual({ name: 'Home', type: 'PERSONAL', defaultCurrency: 'JOD', timezone: 'Asia/Amman' });
@@ -180,20 +181,19 @@ test('A Malafat-fed profile cannot be edited here, and at the cap New profile sa
   const owned = Array.from({ length: 6 }, (_, i) => office(uid(0x4, i + 1), `Office ${i + 1}`));
   const api = new FakeApi({ profiles: [...owned, malafatFirm()] });
 
-  await step('Open the switcher with six owned profiles', async () => {
+  await step('Open You › Profiles with six owned profiles', async () => {
     await api.open(page, `/p/${owned[0].id}`);
-    await page.getByRole('button', { name: /^Switch profile/ }).click();
-    const newProfile = page.getByRole('menuitem', { name: /New profile/ });
+    await openYou(page, 'profiles');
+    const newProfile = youRow(page, '+ New profile');
     await expect(newProfile).toHaveAttribute('aria-disabled', 'true');
     await expect(newProfile).toContainText("You've used 6 of 6 profiles");
   });
 
   await step('Choosing New profile (it stays focusable) opens nothing', async () => {
-    await page.getByRole('menuitem', { name: /New profile/ }).focus();
+    await youRow(page, '+ New profile').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog', { name: 'New profile' })).toHaveCount(0);
     await expect(page).not.toHaveURL(/newProfile/);
-    await page.keyboard.press('Escape');
   });
 
   await step('Manage profiles: the Malafat firm is locked, with the reason', async () => {
@@ -270,14 +270,15 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
   const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
   const owners = pane.getByRole('region', { name: 'Owners' });
 
-  await step('Open the switcher: the shared profile names Basel, beside your own personal profile and nothing of his', async () => {
+  await step('Open You › Profiles: the shared profile names Basel, beside your own personal profile and nothing of his', async () => {
     await api.open(page, `/p/${OFFICE_A}/payments`);
-    await page.getByRole('button', { name: /^Switch profile/ }).click();
-    await expect(page.getByRole('menuitemradio', { name: /Sader & Haddad/ })).toContainText('Business · Shared with Basel Sader');
+    await openYou(page, 'profiles');
+    const rows = page.getByRole('main').locator('.hp-you-box').first().getByRole('button');
+    await expect(rows.filter({ hasText: 'Sader & Haddad' })).toContainText('Business · Shared with Basel Sader');
     // Each keeps a private personal profile: yours is listed, Basel's never is.
-    await expect(page.getByRole('menuitemradio')).toHaveCount(2);
-    await expect(page.getByRole('menuitemradio', { name: /Personal/ })).toContainText('Personal');
-    await page.keyboard.press('Escape');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: /^✓?Personal/ })).toContainText('Personal');
+    await page.goto(`/p/${OFFICE_A}/payments`);
   });
 
   await step('Open Manage profiles: the list explains the count, and the shared profile reads the same', async () => {
@@ -302,6 +303,8 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
 
   await step('Close the drawer and add a received income on the shared profile', async () => {
     await page.getByRole('button', { name: 'Close' }).click();
+    // MUT-425: Manage profiles opened over the You page; Payments is where income is added
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
     await page.locator('[data-income-add]').click();
     const drawer = page.getByRole('dialog', { name: 'New income' });
     await expect(drawer.getByRole('radio', { name: 'Received' })).toHaveAttribute('aria-checked', 'true');
@@ -363,8 +366,8 @@ test('A co-owner leaves the open shared profile and lands on their personal prof
     await expect(page.getByTestId('toast-live')).toHaveText('You left Sader & Haddad');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText("This profile isn't available")).toHaveCount(0);
-    await page.getByRole('button', { name: /^Switch profile/ }).click();
-    await expect(page.getByRole('menuitemradio', { name: /Sader & Haddad/ })).toHaveCount(0);
+    await openYou(page, 'profiles');
+    await expect(page.getByRole('main').locator('.hp-you-box').first().getByRole('button').filter({ hasText: 'Sader & Haddad' })).toHaveCount(0);
   });
 });
 
@@ -373,7 +376,7 @@ test('Someone removed while working on the shared profile lands on their persona
 
   await step('Work on the shared profile’s Clients', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
-    await expect(page.getByRole('button', { name: /^Switch profile/ })).toContainText('Sader & Haddad');
+    await expect(page.locator('.hp-you-link-profile')).toContainText('Sader & Haddad');
   });
 
   await step('Meanwhile Basel removes you; open Expenses', async () => {
@@ -434,7 +437,7 @@ test('A co-owner adds a client, records a payment and an expense, and renames th
     expect(asShared('POST', /^\/v1\/expenses$/)).toBe(OFFICE_A);
   });
 
-  await step('Rename the shared profile in Manage profiles; the switcher shows the new name', async () => {
+  await step('Rename the shared profile in Manage profiles; the sidebar shows the new name', async () => {
     await page.goto(`/p/${OFFICE_A}/expenses?editProfile=${OFFICE_A}`);
     const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
     await pane.getByLabel('Name').fill('S&H Studio');
@@ -442,6 +445,6 @@ test('A co-owner adds a client, records a payment and an expense, and renames th
     await expect(page.getByTestId('toast-live')).toHaveText('Profile saved');
     const patch = api.last('PATCH', new RegExp(`^/v1/profiles/${OFFICE_A}$`));
     expect(patch?.body).toEqual({ name: 'S&H Studio' });
-    await expect(page.getByRole('button', { name: /^Switch profile/ })).toContainText('S&H Studio');
+    await expect(page.locator('.hp-you-link-profile')).toContainText('S&H Studio');
   });
 });

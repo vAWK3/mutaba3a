@@ -14,6 +14,7 @@ import {
   usePortalMalafat,
 } from '../data/malafatSuggestions';
 import type { MalafatMoment } from '../../types';
+import { RowLink, RowSwitch } from './YouRows';
 
 const TEXT: Record<MalafatMoment, string> = {
   'business-profile': 'hosted.malafat.businessCreated',
@@ -27,12 +28,11 @@ function useMalafatLink() {
 }
 
 /**
- * S1, inside the account menu (MUT-191): a link to Malafat and the "Show Malafat
+ * S1, on You › App (MUT-191, MUT-425): a link to Malafat and the "Show Malafat
  * suggestions" switch, for an eligible profile only and never for someone
- * already on Malafat. Menu items, so the menu's keyboard model holds: a link,
- * and a checkbox item that toggles without closing the menu.
+ * already on Malafat.
  */
-export function MalafatMenuItems({ profile }: { profile: HostedProfile | null }) {
+export function MalafatRows({ profile }: { profile: HostedProfile | null }) {
   const { t } = useLanguage();
   const viewerId = useMe().user.id;
   const state = usePortalMalafat();
@@ -43,24 +43,17 @@ export function MalafatMenuItems({ profile }: { profile: HostedProfile | null })
 
   return (
     <>
-      <div className="hp-menu-sep" role="separator" />
-      <a role="menuitem" className="hp-menu-item press" href={link('settings')} target="_blank" rel="noopener noreferrer">
-        {t('hosted.malafat.menuLink')} <span className="sr-only">{t('common.opensInNewTab')}</span>
-      </a>
-      <button
-        type="button"
-        role="menuitemcheckbox"
-        aria-checked={state.on}
-        className="hp-menu-item press"
-        onClick={() => {
+      <RowLink label={t('hosted.malafat.menuLink')} href={link('settings')} />
+      <RowSwitch
+        label={t('hosted.malafat.menuSwitch')}
+        on={state.on}
+        onToggle={() => {
           if (!change.isPending) change.mutate({ off: state.on });
         }}
-      >
-        {t('hosted.malafat.menuSwitch')}
-      </button>
-      {/* No toast: the menu says it in place, and the switch keeps the state the server has */}
+      />
+      {/* No toast: the page says it in place, and the switch keeps the state the server has */}
       {change.isError && (
-        <p role="status" className="hp-menu-note">
+        <p role="status" className="hp-you-row-note">
           {t('hosted.malafat.saveFailed')}
         </p>
       )}

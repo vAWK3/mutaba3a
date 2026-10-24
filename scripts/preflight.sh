@@ -240,7 +240,7 @@ if [[ "$MODE" == "web" ]]; then
   head_ "Web deploy (Netlify, builds from $RELEASE_BRANCH)"
 
   if [[ -f netlify.toml ]]; then
-    if grep -q 'publish *= *"dist-web"' netlify.toml && grep -q 'command *= *"npm run build:web"' netlify.toml; then
+    if grep -q 'publish *= *"dist-web"' netlify.toml && grep -q 'command *= *"npm run build:web[" ]' netlify.toml; then
       ok "netlify.toml publishes dist-web via npm run build:web"
     else
       bad "netlify.toml does not build dist-web with npm run build:web"
