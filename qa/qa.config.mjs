@@ -45,8 +45,6 @@ export default {
         '!src/hooks/useTauriUpdater.ts',
         // Only the hosted portal renders it; it is in the portal app's watch instead.
         '!src/components/filters/SegmentedTabs.tsx',
-        // MUT-149: only the portal reports crashes until the landing does (MUT-150); in the portal app's watch instead.
-        '!src/lib/observability/**',
       ],
       baseURL: 'http://localhost:5173',
       attachURL: 'http://localhost:5173',
@@ -54,7 +52,8 @@ export default {
       // app under /app — every spec below navigates to /app/... to match.
       // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
       // answers every PostHog request locally, so nothing is ever sent.
-      start: { cmd: `${HEAP_CAPPED} npm run dev -- --port 5173 --strictPort`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY } },
+      // MUT-150: the landing's error reports run on the same dummy DSN; every spec answers Sentry locally
+      start: { cmd: `${HEAP_CAPPED} npm run dev -- --port 5173 --strictPort`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN } },
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
