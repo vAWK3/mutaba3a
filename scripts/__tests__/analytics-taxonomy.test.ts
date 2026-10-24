@@ -23,6 +23,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.0.0': '966de5d11f64413086408c1d870a3dd42d91c892fdbbb081f30bd9eda8c662e9',
   // MUT-418: the trial's card prompt (portal only).
   '2.1.0': '0f4724d88bc4e745b3892fb39f03cab16855c10ed5c645941a731d9cbb1e831c',
+  // MUT-175: report_viewed (portal only).
+  '2.2.0': '8a050a2241c72c64415dd213e9ac367f2ab7be8d8f8eef920c872d3beb44615a',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -208,6 +210,7 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       trial_card_prompt_shown: ['portal'],
       trial_card_prompt_accepted: ['portal'],
       trial_card_prompt_skipped: ['portal'],
+      report_viewed: ['portal'],
     });
   });
 
