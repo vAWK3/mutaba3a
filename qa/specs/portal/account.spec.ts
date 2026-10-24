@@ -1,9 +1,10 @@
 import { test, expect } from '../../support/qa';
 import { FIRM, OFFICE_A, OFFICE_B, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
+import { openYou, youRow } from '../../support/you';
 
 /**
- * Change your own password (MUT-237): the account menu's drawer. The
+ * Change your own password (MUT-237): You › Account's drawer (MUT-425; was the account menu). The
  * in-memory API (qa/support/portalApi.ts) keeps the account's current
  * password, so a wrong guess is refused the way the server refuses it.
  */
@@ -12,17 +13,17 @@ const CURRENT = 'the-current-password';
 const NEW_PASSWORD = 'a brand new long password';
 
 async function openDrawer(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: /^Account/ }).click();
-  await page.getByRole('menuitem', { name: 'Change password' }).click();
+  await openYou(page, 'account');
+  await youRow(page, 'Change password').click();
   await expect(page.getByRole('dialog', { name: 'Change password' })).toBeVisible();
   await expect(page).toHaveURL(/changePassword=true/);
 }
 
-test('Change your password from the account menu; it closes with a toast and nothing else changes', { tag: '@portal.account.change-password' }, async ({ page, step }) => {
+test('Change your password from You › Account; it closes with a toast and nothing else changes', { tag: '@portal.account.change-password' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], currentPassword: CURRENT });
   const dialog = page.getByRole('dialog', { name: 'Change password' });
 
-  await step('Open Change password from the account menu, over the current page', async () => {
+  await step('Open Change password from You › Account', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
     await openDrawer(page);
     await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible();
@@ -64,18 +65,17 @@ test('A new password under 12 characters is refused inline, before anything is s
   expect(api.log.filter((c) => c.method === 'POST' && c.path === '/v1/me/password')).toHaveLength(0);
 });
 
-test('The account menu ends with Get the app: the iPhone and Android links name the portal', { tag: '@portal.account.get-the-app' }, async ({ page, step }) => {
+test('You › App ends with Get the app: the iPhone and Android links name the portal', { tag: '@portal.account.get-the-app' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
-  const menu = page.getByRole('menu', { name: 'Account' });
+  const menu = page.getByRole('main');
 
-  await step('Open the account menu', async () => {
+  await step('Open You › App', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await expect(menu).toBeVisible();
+    await openYou(page, 'app');
   });
 
   await step('"Get the iPhone app" opens the App Store in a new tab, saying it came from the portal', async () => {
-    const ios = menu.getByRole('menuitem', { name: /Get the iPhone app/ });
+    const ios = menu.getByRole('link', { name: /Get the iPhone app/ });
     const href = new URL((await ios.getAttribute('href'))!);
     expect(href.hostname).toBe('apps.apple.com');
     expect(href.searchParams.get('ct')).toBe('mutaba3a-portal');
@@ -83,14 +83,14 @@ test('The account menu ends with Get the app: the iPhone and Android links name 
   });
 
   await step('"Get the Android app" is the last row and opens the Play Store in a new tab, saying it came from the portal', async () => {
-    const android = menu.getByRole('menuitem', { name: /Get the Android app/ });
+    const android = menu.getByRole('link', { name: /Get the Android app/ });
     const raw = (await android.getAttribute('href'))!;
     const href = new URL(raw);
     expect(href.hostname).toBe('play.google.com');
     expect(href.searchParams.get('id')).toBe('com.barmajiyat.mutaba3a');
     expect(href.searchParams.get('referrer')).toContain('utm_campaign=mutaba3a-portal');
     await expect(android).toHaveAttribute('target', '_blank');
-    await expect(menu.locator('[role^="menuitem"]').last()).toHaveAttribute('href', raw);
+    await expect(menu.locator('.hp-you-row').last()).toHaveAttribute('href', raw);
   });
 });
 
@@ -105,16 +105,16 @@ const closingProfiles = () => [
   { id: FIRM, name: 'Haddad & Partners', type: null, owned: false, writerOfRecord: 'MALAFAT' as const },
 ];
 
-async function openCloseAccount(page: import('@playwright/test').Page, menuName = /^Account/, item = 'Close my account') {
-  await page.getByRole('button', { name: menuName }).click();
-  await page.getByRole('menuitem', { name: item }).click();
+async function openCloseAccount(page: import('@playwright/test').Page) {
+  await openYou(page, 'account');
+  await youRow(page, 'Close my account').click();
 }
 
-test('Close my account from the account menu, with the password; the closing page takes over', { tag: '@portal.account.close' }, async ({ page, step }) => {
+test('Close my account from You › Account, with the password; the closing page takes over', { tag: '@portal.account.close' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: closingProfiles(), currentPassword: CURRENT });
   const dialog = page.getByRole('dialog', { name: 'Close my account' });
 
-  await step('From the account menu, choose Close my account', async () => {
+  await step('From You › Account, choose Close my account', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
     await openCloseAccount(page);
     await expect(dialog).toBeVisible();
@@ -174,7 +174,7 @@ test('A locked account can still close itself', { tag: '@portal.account.close-lo
     await expect(page.getByRole('heading', { name: 'Subscribe or download your records' })).toBeVisible();
   });
 
-  await step('From the account menu, choose Close my account and enter the password', async () => {
+  await step('From You › Account, choose Close my account and enter the password', async () => {
     await openCloseAccount(page);
     await dialog.getByLabel('Your password').fill(CURRENT);
     await dialog.getByRole('button', { name: 'Close my account' }).click();

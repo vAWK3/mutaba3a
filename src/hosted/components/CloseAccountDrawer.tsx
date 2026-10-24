@@ -9,7 +9,7 @@ import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
 
 /**
- * MUT-333 (ADR-188, D2, D13): Close my account, from the account menu (drawer-first, `?closeAccount=true`). It says
+ * MUT-333 (ADR-188, D2, D13): Close my account, from You › Account (drawer-first, `?closeAccount=true`). It says
  * what goes and what stays for each of the person's profiles, offers Download my records first, shows the address
  * being closed, and asks for the password again. A wrong password is a banner (the change-password rule). Once
  * closed, `/v1/me` carries the closing and AuthGate shows the closing page in place of the portal.

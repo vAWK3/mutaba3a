@@ -11,14 +11,14 @@ import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
 import { ProfileDrawers } from './ProfileDrawers';
-import { ProfileSwitcher } from './ProfileSwitcher';
 import { TrialWelcomeOpener } from './TrialWelcomeOpener';
-import { UserMenu } from './UserMenu';
+import { YouLinks } from './YouLinks';
 
 /**
- * `HostedShell` (hosted-portal.md §7.1): wordmark, profile switcher, the five
- * read sections plus Expenses (MUT-44 — the portal's only write), the account
- * menu, and the page. There is still no "+ Add" menu: the one create action
+ * `HostedShell` (hosted-portal.md §7.1): wordmark, the open profile's link to
+ * the You page, the five read sections plus Expenses (MUT-44 — the portal's
+ * only write), the avatar's link to the You page (MUT-425: both were menus),
+ * and the page. There is still no "+ Add" menu: the one create action
  * in the portal is the expense drawer, opened from the Expenses list itself.
  * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
  * so nothing is duplicated for assistive tech. Signed in or out, the sections
@@ -56,7 +56,8 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
     <div className="hp-shell">
       <aside className="hp-side">
         <Wordmark className="hp-side-wordmark" markSize={SIDEBAR_MARK_SIZE} />
-        {me.profiles.length > 0 && <ProfileSwitcher active={profile} />}
+        {/* MUT-425: the open profile's name opens You › Profiles (was the profile switcher) */}
+        <YouLinks profile={profile} position="top" />
         {/* MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between. */}
         {profile && billingGateOf(me, profile) !== 'locked' && (
           <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
@@ -73,15 +74,16 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
           </nav>
         )}
         <div className="hp-spacer" />
-        <UserMenu profile={profile} />
+        {/* MUT-425: the avatar opens You › Account (was the account menu) */}
+        <YouLinks profile={profile} position="bottom" />
       </aside>
       <main className="hp-page">
         {!local && <UsagePrompt />}
         {children}
       </main>
-      {/* MUT-183: New profile / Manage profiles, opened by URL from the switcher or the empty state. */}
+      {/* MUT-183: New profile / Manage profiles, opened by URL from You › Profiles or the empty state. */}
       <ProfileDrawers active={profile} />
-      {/* MUT-237: Change password, opened by URL from the account menu. */}
+      {/* MUT-237: Change password and the other account drawers, opened by URL from You › Account. */}
       <AccountDrawers />
       {/* MUT-418: the first-run trial step for a first sign-in that didn't come through /setup. */}
       {profile && <TrialWelcomeOpener />}

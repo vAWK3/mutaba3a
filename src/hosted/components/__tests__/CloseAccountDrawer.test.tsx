@@ -4,7 +4,7 @@ import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, re
 import { closeAccountImpactOf, closingDayLabel } from '../../data/closeAccount';
 
 /**
- * MUT-333 (ADR-188): Close my account, a drawer from the account menu (`?closeAccount=true`), and the closing page
+ * MUT-333 (ADR-188): Close my account, a drawer from You › Account (`?closeAccount=true`), and the closing page
  * AuthGate shows while the account is closing.
  */
 const ME_ID = '99999999-9999-4999-8999-999999999999';
@@ -49,12 +49,11 @@ describe('closeAccountImpactOf (MUT-333)', () => {
 });
 
 describe('Close my account drawer (MUT-333)', () => {
-  it('opens from the account menu over the current page, through the URL', async () => {
-    const { user, router } = portal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('button', { name: /Account/ }));
-    await user.click(screen.getByRole('menuitem', { name: 'Close my account' }));
+  it('opens from You › Account, last and on its own, through the URL', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/you/account`);
+    await user.click(await screen.findByRole('button', { name: /^Close my account/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
-    expect(locationOf(router)).toBe(`/p/${ORG_A}?closeAccount=true`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?closeAccount=true`);
     expect(within(dialog).getByLabelText('Your password')).toHaveAttribute('autocomplete', 'current-password');
   });
 

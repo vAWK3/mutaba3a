@@ -3,6 +3,7 @@ import { test, expect } from '../../support/qa';
 import { OFFICE_A, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
 import { EVENT_PATH, actAsPerson, type AnalyticsSpy, type SentEvent } from '../../support/posthog';
+import { openYou, youRow } from '../../support/you';
 
 /**
  * The portal's opt-in anonymous usage counts (MUT-155, ADR-090). The QA build
@@ -115,9 +116,9 @@ test('turning sharing off sends one last note, then nothing, and forgets the ID'
     await turnOnFromPrompt(page, analytics);
   });
 
-  await step('Open the account menu and turn off "Share anonymous usage"', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    const toggle = page.getByRole('menuitemcheckbox', { name: TURN_ON });
+  await step('Open You › App and turn off "Share anonymous usage"', async () => {
+    await openYou(page, 'app');
+    const toggle = page.getByRole('switch', { name: TURN_ON });
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -131,7 +132,8 @@ test('turning sharing off sends one last note, then nothing, and forgets the ID'
   await step('Reload: nothing more is sent, the notice stays away, and no PostHog key is left', async () => {
     const before = analytics.requestCount();
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    // MUT-425: the switch is on You › App, so the reload is of that page
+    await expect(page.getByRole('switch', { name: TURN_ON })).toHaveAttribute('aria-checked', 'false');
     await page.waitForTimeout(2_000);
     expect(analytics.requestCount()).toBe(before);
     await expect(page.getByRole('region', { name: PROMPT })).toHaveCount(0);
@@ -146,10 +148,10 @@ test('signing out forgets the choice and the ID without sending anything', { tag
   });
 
   let before = 0;
-  await step('Sign out from the account menu: nothing is sent and no PostHog key is left', async () => {
+  await step('Sign out from You › Account: nothing is sent and no PostHog key is left', async () => {
     before = analytics.requestCount();
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitem', { name: 'Sign out' }).click();
+    await openYou(page, 'account');
+    await youRow(page, 'Sign out').click();
     await expect(page).toHaveURL(/\/sign-in\?reason=signed_out$/);
     await page.waitForTimeout(1_000);
     expect(analytics.requestCount()).toBe(before);
@@ -178,9 +180,9 @@ test('turning sharing off in one tab silences another open tab', { tag: '@portal
     await expect.poll(() => analytics.events().filter((e) => e.event === 'portal_opened').length).toBe(1);
   });
 
-  await step('In the first tab, turn off "Share anonymous usage" in the account menu', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menuitemcheckbox', { name: TURN_ON }).click();
+  await step('In the first tab, turn off "Share anonymous usage" on You › App', async () => {
+    await openYou(page, 'app');
+    await page.getByRole('switch', { name: TURN_ON }).click();
     await nextEvent(analytics, 'analytics_opted_out');
   });
 
@@ -196,7 +198,7 @@ test('turning sharing off in one tab silences another open tab', { tag: '@portal
   });
 
   await step("The second tab's switch reads off too", async () => {
-    await other.getByRole('button', { name: /^Account/ }).click();
-    await expect(other.getByRole('menuitemcheckbox', { name: TURN_ON })).toHaveAttribute('aria-checked', 'false');
+    await openYou(other, 'app');
+    await expect(other.getByRole('switch', { name: TURN_ON })).toHaveAttribute('aria-checked', 'false');
   });
 });

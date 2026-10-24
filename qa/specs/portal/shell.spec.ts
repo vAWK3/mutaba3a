@@ -5,6 +5,7 @@ import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
 import { OFFICE_A, OFFICE_B, customer, malafatFirm, office, openSignedInPortal } from '../../support/portal';
 import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
+import { openYou } from '../../support/you';
 
 /**
  * The signed-in portal's shell (hosted-portal.md §7.1): the overview, the
@@ -84,12 +85,13 @@ test('signed in, the portal opens on the first profile’s overview and every se
     }
   });
 
-  await step('Choose عربي in the account menu: the shell turns right to left, in the portal’s Arabic', async () => {
-    await page.getByRole('button', { name: /^Account/ }).click();
-    await page.getByRole('menu', { name: 'Account' }).getByRole('button', { name: 'عربي' }).click();
+  await step('Choose عربي on You › App, then go back to Conversions: the shell turns right to left, in the portal’s Arabic', async () => {
+    await openYou(page, 'app');
+    await page.getByRole('main').getByRole('button', { name: 'عربي' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const nav = page.getByRole('navigation', { name: AR.sections });
     await expect(nav.getByRole('link', { name: AR.nav.clients, exact: true })).toBeVisible();
+    await nav.getByRole('link', { name: AR.nav.conversions, exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: AR_HOSTED.conversions.title })).toBeVisible();
     await attachScreenshot(page, 'portal-shell-conversions-ar');
   });
@@ -101,7 +103,7 @@ test('signed in, the portal opens on the first profile’s overview and every se
   });
 });
 
-test('switching profile keeps the section, and a profile that is not yours says so', { tag: '@portal.shell.switch-profile' }, async ({ page, step }) => {
+test('switching profile from You › Profiles keeps the section, and a profile that is not yours says so', { tag: '@portal.shell.switch-profile' }, async ({ page, step }) => {
   const api = seeded();
 
   await step('Open Payments on Nour Studio', async () => {
@@ -109,27 +111,20 @@ test('switching profile keeps the section, and a profile that is not yours says 
     await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
   });
 
-  const switcher = page.getByRole('button', { name: /^Switch profile/ });
-  await step('Open the profile switcher: each profile with what kind it is, and the local-profiles footer', async () => {
-    await switcher.click();
-    const menu = page.getByRole('menu', { name: 'Switch profile' });
-    await expect(menu.getByRole('menuitemradio', { name: /Nour Studio/ })).toHaveAttribute('aria-checked', 'true');
-    await expect(menu.getByRole('menuitemradio', { name: /Nour Accounting/ })).toContainText('Business');
-    await expect(menu.getByRole('menuitemradio', { name: /Haddad & Partners/ })).toContainText('Income recorded by Malafat');
-    await expect(menu).toContainText('Your local profiles stay in the MTB3A app on your device.');
+  const main = page.getByRole('main');
+  await step('Open You › Profiles from the profile name: each profile with what kind it is, and the local-profiles footer', async () => {
+    await openYou(page, 'profiles');
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you\\?from=payments$`));
+    await expect(main.getByRole('button', { name: /Nour Studio/ })).toHaveAttribute('aria-current', 'true');
+    await expect(main.getByRole('button', { name: /Nour Accounting/ })).toContainText('Business');
+    await expect(main.getByRole('button', { name: /Haddad & Partners/ })).toContainText('Income recorded by Malafat');
+    await expect(main).toContainText('Your local profiles stay in the MTB3A app on your device.');
   });
 
-  await step('Escape closes it and gives focus back to the switcher', async () => {
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('menu', { name: 'Switch profile' })).toHaveCount(0);
-    await expect(switcher).toBeFocused();
-  });
-
-  await step('Switch to Nour Accounting: still on Payments, now for that profile', async () => {
-    await switcher.click();
-    await page.getByRole('menuitemradio', { name: /Nour Accounting/ }).click();
+  await step('Switch to Nour Accounting: back on Payments, now for that profile', async () => {
+    await main.getByRole('button', { name: /Nour Accounting/ }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/payments$`));
-    await expect(page.getByRole('button', { name: 'Switch profile: Nour Accounting' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Switch profile: Nour Accounting' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
     await expect.poll(() => api.last('GET', /^\/v1\/payments$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_B);
   });

@@ -1375,7 +1375,7 @@ npm --prefix server run signups:review -- --decline rana@gmail.com   # deletes t
 
 ### 6g. Closing accounts and the hourly hard delete (MUT-333, ADR-188)
 
-A person closes their own account from the portal's account menu (`POST /v1/me/closure`, the password again). The account is then **closing** for 30 days: it signs in only to keep it (`DELETE /v1/me/closure`) or sign out, and every other request answers 403 `ACCOUNT_CLOSING`. After that it no longer signs in, and the hourly job deletes it.
+A person closes their own account from the portal's You › Account (`POST /v1/me/closure`, the password again). The account is then **closing** for 30 days: it signs in only to keep it (`DELETE /v1/me/closure`) or sign out, and every other request answers 403 `ACCOUNT_CLOSING`. After that it no longer signs in, and the hourly job deletes it.
 
 | Piece | Where | State |
 |---|---|---|

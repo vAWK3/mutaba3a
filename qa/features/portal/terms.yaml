@@ -75,14 +75,14 @@ features:
       - The session ends and the step is gone
       - Nothing is accepted
   - id: links
-    title: The account menu and the sign-in page link the terms of service (MUT-324)
+    title: You › App and the sign-in page link the terms of service (MUT-324)
     tier: secondary
     legacy: [MUT-324]
     paths:
-      - src/hosted/shell/UserMenu.tsx
+      - src/hosted/pages/you/YouApp.tsx
       - src/hosted/pages/auth/SignInPage.tsx
     steps:
-      - Open the account menu while signed in
+      - Open You › App while signed in
       - Open the sign-in page
     expect:
       - Both link the terms of service in the page language, in a new tab

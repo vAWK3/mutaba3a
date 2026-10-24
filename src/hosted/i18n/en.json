@@ -81,6 +81,7 @@
     },
     "closeAccount": {
       "menu": "Close my account",
+      "rowSub": "Deleted after 30 days, unless you keep it",
       "title": "Close my account",
       "lead": "Your account and everything in it will be deleted 30 days from now.",
       "deletesHeading": "Deleted",
@@ -209,6 +210,18 @@
       },
       "account": "Account",
       "language": "Language"
+    },
+    "you": {
+      "title": "You",
+      "parts": {
+        "profiles": "Profiles",
+        "account": "Account",
+        "app": "App"
+      },
+      "groups": {
+        "preferences": "Preferences",
+        "more": "More"
+      }
     },
     "states": {
       "unreachable": {

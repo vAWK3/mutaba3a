@@ -36,7 +36,7 @@
 - `POST /v1/me/closure {password}` (close; Stripe subscriptions end at the period end, past-due ones are cancelled, open checkouts expired; other sessions revoked; `account-closing` mail en/ar with the deletion day) and `DELETE /v1/me/closure` (keep, within the grace). `/v1/me` `user.closure`. Error `ACCOUNT_CLOSING` (403).
 - The hourly hard delete: `POST /jobs/v1/accounts/purge`, `POST /admin/v1/accounts/purge {dryRun}`, `npm run accounts:purge [-- --dry-run]`; `server/src/accounts/{closure,purge-plan,purge-run}.ts`; `accountPurge` repository (memory + Prisma); `storage_purges`; `AccountStripeGateway`; `AttachmentStorage.removePrefix`.
 - Terraform: `google_cloud_scheduler_job.account_purge` (hourly, always on) and two `account_purge` log alerts; `tests/account_purge.tftest.hcl`.
-- Portal: `CloseAccountDrawer` (`?closeAccount=true`, the account menu's last item), `AccountClosingPage` (AuthGate, before the terms step), `data/closeAccount.ts`; en/ar `hosted.closeAccount.*`.
+- Portal: `CloseAccountDrawer` (`?closeAccount=true`, the last row of You › Account, after Sign out; MUT-425 replaced the account menu), `AccountClosingPage` (AuthGate, before the terms step), `data/closeAccount.ts`; en/ar `hosted.closeAccount.*`.
 - QA: `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` (FakeApi tracks a closing).
 - Tests: closure and purge rules, the store contract on both stores, a Postgres catalog test that no value names a purged person, the routes, the Stripe gateway under the real SDK, the CLI, the templates.
 
@@ -44,6 +44,40 @@
 - Migration `20261024210000_mut333_account_closure`: closure columns on `users`; creator columns nullable with SET NULL; `firmRequestedByUserId` SET NULL with a relaxed CHECK. API `createdByUserId`/`uploadedByUserId` are nullable.
 - `POST /v1/me/password` and close share `auth/current-password.ts`. Trial reminders skip closing accounts. The portal re-reads `/v1/me` on 403 `ACCOUNT_CLOSING`. Local snapshot format 6 → 7 (`people.closure`).
 - `profile-rows.sh purge-user` no longer refuses records on others' profiles (they are anonymized by the foreign key); its header points at the hourly purge.
+
+## [web 0.2.0 / api 0.6.0] - 2026-10-24 — Release prep
+
+**Why:** release web + server from main without MUT-175/MUT-333 (still in progress).
+
+### Changed
+- `release-notes.json`: 0.2.0 (en + ar): the carry-over to mtb3a.com, the website's own crash screen, the privacy policy's signup and mail sections.
+- `docs/operations/before-release.md`: Basel approved MUT-369's privacy policy on 2026-10-24 (item removed; MUT-418's TD-219 sentence approved with it). MUT-361 ships with the gate off (`billing_gate_enabled = false`, gitignored `production.tfvars`): `billing:uncovered` only exists from this release; the item now says how to turn it on.
+
+### Fixed
+- `scripts/preflight.sh`: the Netlify check accepts a build command that continues after `npm run build:web` (MUT-150 appended the bundle guard), so `make release web` no longer fails its preflight on every run.
+
+---
+
+## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-187)
+
+**Why:** epic MUT-423 (Basel's round 4 variation 3): one calm page with room to grow instead of two popovers, nothing lost from either.
+
+### Added
+- `/p/:id/you`, `/you/account`, `/you/app` and the profile-less `/you…` (`pages/you/YouPage.tsx`, `YouProfiles`, `YouAccount`, `YouApp`): every item of the old switcher and account menu, each row opening today's drawer by its URL key.
+- `?from=<section>` keeps the section across a profile switch (`shell/youRoutes.ts`); `YouLinks` in the sidebar carries it.
+- `billingRowOf` (trial, else the open profile's lapse state) for the Billing row; a locked profile reaches the page under a locked banner.
+- `components/YouRows.tsx` (row, link, switch, note), `ProfileKindLine` (shared with Manage profiles), `SectionTabs` segmented variant with per-tab `search`.
+- QA `portal.you.{drawers,signed-out,phone-rtl,locked}`; `qa/support/you.ts` (`openYou`, `youRow`), `signedOutServer` moved to `qa/support/portal.ts`.
+
+### Changed
+- `MalafatMenuItems` → `MalafatRows`, `UsageMenuItem` → `UsageSwitchRow`, `AppDownloadMenuItems` → `AppDownloadRows` (rows, not menu items).
+- 11 portal QA specs and the menu unit tests now go through the page; feature `paths` point at the new files.
+
+### Removed
+- `shell/ProfileSwitcher.tsx`, `shell/UserMenu.tsx` and their popover CSS (`usePopover` stays for groups).
+
+### Files
+- `src/hosted/{router.tsx,hosted.css,i18n/*.json}`, `src/hosted/pages/you/**`, `src/hosted/shell/{HostedShell,YouLinks,youRoutes,initials}`, `src/hosted/session/AuthGate.tsx`, `src/hosted/components/{LapseGate,MalafatPortal,SectionTabs,YouRows,ProfileKindLine,ProfilesManageDrawer,UsageSwitchRow,AppDownloadRows}.tsx`, `src/hosted/data/trialPrompt.ts`, `src/styles/__tests__/direction.test.ts`, `qa/**`.
 
 ## [Unreleased] - 2026-10-24 — Landing "Create an account" while signup is open; privacy-policy draft for signup and mail (MUT-369, ADR-186)
 

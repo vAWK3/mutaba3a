@@ -94,12 +94,30 @@ export function trialWelcomeDue(me: Me, now: Date): boolean {
 export function trialBannerOf(me: Me, now: Date): Extract<TrialNotice, { kind: 'trial' }> | null {
   const trial = runningTrial(me);
   if (!trial) return null;
-  const daysLeft = Math.max(0, Math.ceil((new Date(trial.until).getTime() - now.getTime()) / DAY_MS));
+  const daysLeft = daysLeftOf(trial.until, now);
   const dismissible = daysLeft > TRIAL_BANNER_LAST_DAYS;
   const snoozedUntil = me.user.trialPrompt?.bannerSnoozedUntil;
   if (dismissible && snoozedUntil && new Date(snoozedUntil).getTime() > now.getTime()) return null;
   const chargeDeferred = new Date(trial.until).getTime() - now.getTime() >= TRIAL_CARRY_MIN_MS;
   return { kind: 'trial', daysLeft, endsAt: trial.until, dismissible, chargeDeferred };
+}
+
+/** MUT-425 (eng review D6): what the You page's Billing row says under its title. */
+export type BillingRow = { kind: 'trial'; daysLeft: number } | { kind: LapseNotice['kind'] };
+
+/**
+ * The person's running trial (whatever the Home banner's snooze says), else the open profile's lapse state; with no
+ * profile open, the trial only. Null: nothing to say (a payer in good standing, or signed out).
+ */
+export function billingRowOf(me: Me, profile: Pick<HostedProfile, 'billing'> | null, now: Date): BillingRow | null {
+  const trial = runningTrial(me);
+  if (trial) return { kind: 'trial', daysLeft: daysLeftOf(trial.until, now) };
+  const notice = profile ? lapseNoticeOf(me, profile) : null;
+  return notice ? { kind: notice.kind } : null;
+}
+
+function daysLeftOf(until: string, now: Date): number {
+  return Math.max(0, Math.ceil((new Date(until).getTime() - now.getTime()) / DAY_MS));
 }
 
 const SNOOZE_DAYS = 3;

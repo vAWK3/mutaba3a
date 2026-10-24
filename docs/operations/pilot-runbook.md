@@ -619,8 +619,8 @@ Basel's decision (2026-10-19, MUT-327 and MUT-333):
 
 A lapsed payment never starts deletion: the account goes read-only instead.
 
-**Since MUT-333 (ADR-188) the person does it themselves, and the server finishes it.** Point anyone who asks to the
-account menu's **Close my account** (portal; the phone follows with MUT-371/364): Download my records is offered
+**Since MUT-333 (ADR-188) the person does it themselves, and the server finishes it.** Point anyone who asks to
+You › Account's **Close my account** (portal; the phone follows with MUT-371/364): Download my records is offered
 first, the password confirms, and from then on:
 - the account signs in only to **Keep my account** for 30 days (nothing is deleted before that);
 - their Stripe subscriptions end at the period end (past-due ones at once); a Malafat add-on is Malafat's;

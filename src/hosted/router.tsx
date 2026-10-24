@@ -24,6 +24,10 @@ import { ExpensesPage } from './pages/views/ExpensesList';
 import { ConversionsPage } from './pages/views/ConversionsList';
 import { ExpenseGroupsPage } from './pages/views/ExpenseGroupsList';
 import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
+import { YouPage } from './pages/you/YouPage';
+import { HostedShell } from './shell/HostedShell';
+import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
+import { useProfile } from './session/me';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -218,6 +222,38 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
+  /**
+   * MUT-425: the You page, one route per part, inside the open profile (`/p/:id/you…`) and without one (`/you…`, for
+   * a person with no profile or on one they lost, eng D3). `from` is the only search the page reads (eng D3), and it
+   * is parsed again at the page: TanStack carries every raw key into a route's search, so a `?from=bogus` would
+   * otherwise reach the page past `validateSearch` (the same reason pages take `omitShellOverlay(search)`).
+   */
+  const youRoutes = YOU_PARTS.map((part) => {
+    const path = youPath(null, part);
+    const inProfile = createRoute({
+      getParentRoute: () => profileRoute,
+      ...PAGE_CRASH,
+      path,
+      validateSearch: parseYouSearch,
+      component: function YouInProfile() {
+        return <YouPage part={part} profile={useProfile()} search={parseYouSearch(inProfile.useSearch())} />;
+      },
+    });
+    const noProfile = createRoute({
+      getParentRoute: () => authedRoute,
+      path,
+      validateSearch: parseYouSearch,
+      component: function YouWithoutProfile() {
+        return (
+          <HostedShell profile={null}>
+            <YouPage part={part} profile={null} search={parseYouSearch(noProfile.useSearch())} />
+          </HostedShell>
+        );
+      },
+    });
+    return { inProfile, noProfile };
+  });
+
   const routeTree = rootRoute.addChildren([
     signInRoute,
     setupRoute,
@@ -228,7 +264,20 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     authedRoute.addChildren([
       homeRoute,
       captureRoute,
-      profileRoute.addChildren([overviewRoute, clientsRoute, clientRoute, receivablesRoute, paymentsRoute, documentsRoute, expensesRoute, groupsRoute, groupRoute, conversionsRoute]),
+      ...youRoutes.map((route) => route.noProfile),
+      profileRoute.addChildren([
+        overviewRoute,
+        clientsRoute,
+        clientRoute,
+        receivablesRoute,
+        paymentsRoute,
+        documentsRoute,
+        expensesRoute,
+        groupsRoute,
+        groupRoute,
+        conversionsRoute,
+        ...youRoutes.map((route) => route.inProfile),
+      ]),
     ]),
   ]);
 

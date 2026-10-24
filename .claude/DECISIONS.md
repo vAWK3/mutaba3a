@@ -5055,6 +5055,28 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Adding Sentry tracing to the landing with the portal in `tracePropagationTargets` would force a preflight the server doesn't answer and keep the door closed (D17; comment in `signupDoor.ts`).
 - The signup CTA isn't counted in landing analytics (D7, TD-233). Stripe isn't named in the policy yet (D13, TD-234).
 
+---
+
+## ADR-187: Account and Profile Settings Are a Page, Not Menus: the You Page (MUT-425, epic MUT-423)
+
+**Status:** Accepted (2026-10-24, MUT-425; plan `.claude/designs/mut-425-you-page-plan.md`, eng review D1–D9 answered by Basel). The first step of the MUT-423 shell (round 4 variation 3, `.claude/designs/portal-shell-concepts.html`); MUT-426 replaces the sidebar with the pill and the island.
+
+**Context:** the portal's account menu had grown past a popover (billing, Malafat, usage, terms, app links), and the profile switcher was a second popover beside it. Basel chose a calm page with room to grow and no menus anywhere.
+
+**Decision:**
+1. **The You page** at `/p/:id/you`, `/you/account` and `/you/app` holds every item of the old `ProfileSwitcher` and `UserMenu`: Profiles (each profile with its kind and cues, New profile at the cap or under the lapse gate, Manage profiles, the local-profiles note), Account (Billing with the trial or lapse state, Your data, Change password, Sign out set apart; signed out: Sign in and Your data) and App (Language and the usage switch; Malafat, Terms and the phone apps; signed out: Language and Terms only). The parts are routes, so the segmented control is `SectionTabs variant="segmented"`: links with `aria-current`, not a radiogroup (D2).
+2. **Both popovers are gone** (D1, D2): the sidebar keeps the open profile's name (→ Profiles) and the avatar (→ Account) as links (`YouLinks`) until MUT-426.
+3. **A switch keeps the section** through `?from=<section>` (D3, Basel's choice over an in-memory store): the links into the page add it, the part tabs and the drawers keep it, `parseYouSearch` keeps only a known section (twice: TanStack carries raw keys past `validateSearch`). Every profile row, the open one included, goes to `/p/<id>/<from>` or the profile home; never history Back (D4). Profile-less links carry it too (D8).
+4. **A profile-less `/you`** (eng D3) so a person with no profile, or on one they lost, still reaches Billing, the password and the language once the menus are gone.
+5. **The You page shows on a LOCKED profile** (E1): `ProfileLayout` keeps `LockedScreen` off the You routes, and `LapseBanner` shows the locked words and actions above the page (D7).
+6. **Billing's sub-line** is `billingRowOf(me, profile|null, now)`: the person's running trial, else the open profile's lapse state, from `/v1/me` only (D6).
+7. **Drawers are unchanged:** each row opens `ProfileDrawers` / `AccountDrawers` by today's URL keys.
+
+**Consequences:**
+- The 11 menu-driven QA specs and ~10 unit tests moved to the page under a written regression contract (plan, eng D5); menu roles, Escape-closes and focus-on-open are retired with the popovers.
+- `hosted-portal.md` §7.1/§7.2 describe the page; MUT-426 owns the island (it must link with `?from=` and use the profile-less `/you`) and any back affordance.
+- Passkeys (MUT-115/415) and Close account (MUT-333) add rows to You › Account.
+
 ## ADR-188: Closing an Account Is 30 Days of Grace on the User Row, Then an Hourly Hard Delete That Claims First, Passes Shared Profiles On and Anonymizes the Rest (MUT-333, Web Half)
 
 **Status:** Accepted for the build (2026-10-24, MUT-333, unattended run on Basel's "go"). Decisions D1–D20 and eng-review R1–R17 in `.claude/designs/mut-333-close-account.md` are **pending Basel's confirmation**. Basel's own decisions (Jira 12135, 12152, 12293): 30 days' grace then a hard delete, backups age out 14 days later; closing cancels an active Stripe subscription (a Malafat add-on is left alone); `user.terms_accepted` audit rows are purged; records on profiles the person doesn't own are anonymized, not reassigned. Builds on ADR-102 (terms), ADR-160/181 (billing, the lapse gate), ADR-163 (co-owners), ADR-165/170 (Stripe), ADR-174/184 (mail and the job pattern).
