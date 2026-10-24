@@ -701,6 +701,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/self-service": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which self-service doors this server opens: signup, and recovery by email (says nothing about any account) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The doors */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfServiceDoors"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/signups": {
         parameters: {
             query?: never;
@@ -14044,6 +14080,7 @@ export interface components {
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
+            purpose?: components["schemas"]["SetupLinkPurpose"];
         };
         /** @enum {string} */
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
@@ -14068,6 +14105,10 @@ export interface components {
             displayName?: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+        };
+        SelfServiceDoors: {
+            signup: boolean;
+            recovery: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */

@@ -89,7 +89,7 @@ describe('POST /v1/account-setup/check (MUT-235)', () => {
     });
   });
 
-  it('says expired, used, superseded or invalid — and only that', async () => {
+  it('says expired, used, superseded or invalid — and, for a link it knows, only what it was for (MUT-368 D2)', async () => {
     const h = harness();
     const used = await provision(h);
     expect((await redeem(h, used.token)).status).toBe(200);
@@ -98,15 +98,15 @@ describe('POST /v1/account-setup/check (MUT-235)', () => {
     const unknown = 'A'.repeat(43);
     const expired = await provision(h);
     hours(h, 72);
-    for (const [token, state] of [
-      [used.token, 'used'],
-      [superseded.token, 'superseded'],
-      [unknown, 'invalid'],
-      [expired.token, 'expired'],
+    for (const [token, body] of [
+      [used.token, { state: 'used', purpose: 'SETUP' }],
+      [superseded.token, { state: 'superseded', purpose: 'SETUP' }],
+      [unknown, { state: 'invalid' }],
+      [expired.token, { state: 'expired', purpose: 'SETUP' }],
     ] as const) {
       const res = await check(h, token);
       expect(res.status).toBe(200);
-      expect(await read(res)).toEqual({ state });
+      expect(await read(res)).toEqual(body);
     }
   });
 

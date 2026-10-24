@@ -56,7 +56,8 @@ describe('no self-registration route exists (MUT-37)', () => {
   // MUT-360 (ADR-165): the Stripe webhook is public too; its credential is Stripe-Signature, and it creates no user account.
   // MUT-359 (D19): so is Resend's bounce webhook; its credential is the Svix signature, and it only suppresses addresses.
   // MUT-366 (ADR-159): signup and recovery. Both only mail a link that ends on the setup-link redeem; neither signs anyone in.
-  it('the public operations are exactly sign-in, the setup-link pair, signup and recovery, the public FX snapshot and the Stripe and Resend webhooks', async () => {
+  // MUT-368 (D1): GET /v1/self-service says which of those two doors this server opens; it reads config, nothing else.
+  it('the public operations are exactly sign-in, the setup-link pair, signup and recovery and their doors, the public FX snapshot and the Stripe and Resend webhooks', async () => {
     const doc = (await (await inventory().request('/openapi.json')).json()) as {
       paths: Record<string, Record<string, { security?: unknown[] }>>;
     };
@@ -68,6 +69,7 @@ describe('no self-registration route exists (MUT-37)', () => {
       .sort();
     expect(publicOperations).toEqual([
       'GET /v1/public/fx-rates',
+      'GET /v1/self-service',
       'POST /v1/account-recovery',
       'POST /v1/account-setup',
       'POST /v1/account-setup/check',
