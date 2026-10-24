@@ -205,7 +205,7 @@ test('The All profiles switch is off by default; on, it combines every profile a
     await expect(page).toHaveURL(/scope=all/);
     await expect(page.getByRole('button', { name: 'All 2 profiles' })).toBeVisible();
     await expect(page.getByText("combined · other currencies at today's rate")).toBeVisible();
-    await expect(page.getByText('Of which Personal: ≈ ₪1,500')).toBeVisible();
+    await expect(page.getByText(/^Of which Personal: ≈ \u2066?₪1,500\u2069?$/)).toBeVisible();
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪2,000');
     const whoPaid = page.getByRole('region', { name: 'Who paid' });
     await expect(whoPaid.getByText('Client 1')).toHaveCount(2);
@@ -382,7 +382,7 @@ test('The chart answers the keyboard and says each day\'s values; reduced motion
     await page.keyboard.press('ArrowRight');
     await expect(chart.getByRole('button').nth(1)).toBeFocused();
     await page.keyboard.press('Enter');
-    await expect(page.locator('.hp-report-selected')).toContainText('Received ₪0.00 · Spent ₪0.00');
+    await expect.poll(async () => plain((await page.locator('.hp-report-selected').textContent()) ?? '')).toContain('Received ₪0.00 · Spent ₪0.00');
   });
 
   await step('With reduced motion the figures are final at once', async () => {
