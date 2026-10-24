@@ -1894,6 +1894,7 @@ export type SaveBillingSubscriptionOutcome = 'created' | 'changed' | 'unchanged'
  * operator's and, from MUT-360, the Stripe webhook's (both on the unguarded store).
  */
 /** MUT-419: one person the trial-mail run considers. */
+/** MUT-419: an ACTIVE person, not closing (MUT-333), whose trial began in the window. */
 export interface TrialMailCandidate {
   userId: string;
   email: string;

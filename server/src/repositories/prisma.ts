@@ -1987,7 +1987,8 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     trialMailCandidates: async ({ startedAfter, startedUpTo }) => {
       const people = await this.prisma.user.findMany({
-        where: { status: 'ACTIVE', trialStartedAt: { gt: startedAfter, lte: startedUpTo } },
+        // MUT-333 (R16): a closing account gets no trial reminders.
+        where: { status: 'ACTIVE', deleteAfter: null, trialStartedAt: { gt: startedAfter, lte: startedUpTo } },
         select: { id: true, email: true, locale: true, trialStartedAt: true },
         orderBy: [{ trialStartedAt: 'asc' }, { id: 'asc' }],
       });

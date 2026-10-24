@@ -8,6 +8,7 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
+import { CLOSING_OPEN_ENDPOINTS, closingRefusal, isAccountGone } from '../accounts/closure.js';
 import type { Entitlement } from '../billing/entitlement.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
@@ -202,6 +203,9 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
  */
 async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, endpoint: string | null, options: AuthenticateOptions): Promise<void> {
   c.set('identity', identity);
+  // MUT-333 (D3): a closing account reaches only Me, Keep my account and sign-out, before any profile or gate.
+  const closure = identity.user.closure;
+  if (closure && endpoint && !CLOSING_OPEN_ENDPOINTS.has(endpoint)) throw closingRefusal(closure);
   let profileWriter: ProfileWriter = null;
   // MUT-361 (ADR-181): the lapse gate, before any route work. An unmatched route (null endpoint) is never gated: its 404 answers.
   const gated = c.get('billingGate') === true;
@@ -299,7 +303,8 @@ async function validateSessionRecord(
   }
 
   const user = await store.users.getById(session.userId);
-  if (!user || user.status !== 'ACTIVE') {
+  // MUT-333 (D5): past its deadline, or claimed by the hard delete, a closed account keeps no session.
+  if (!user || user.status !== 'ACTIVE' || isAccountGone(user.closure, now)) {
     await store.sessions.revoke(session.id, 'account_changed', now);
     throw sessionExpired();
   }

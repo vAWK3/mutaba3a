@@ -821,6 +821,14 @@ export const TermsAcceptanceRequestSchema = z
   .strict()
   .openapi('TermsAcceptanceRequest');
 
+/** MUT-333 (ADR-188): a closing account's dates, on Me and in the close response. */
+export const AccountClosureSchema = z
+  .object({
+    requestedAt: z.string().datetime(),
+    deleteAfter: z.string().datetime().openapi({ description: 'From this instant the account no longer signs in; the hourly job deletes it within the hour' }),
+  })
+  .openapi('AccountClosure');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -837,6 +845,8 @@ export const MeSchema = z
        * PENDING_REVIEW or DISABLED account can't sign in. Additive since 1.57.0-mut367.
        */
       status: UserStatusSchema,
+      /** MUT-333: set while the account is closing; the portal and the phone then show only Keep my account and Sign out. Additive since 1.65.0-mut333. */
+      closure: AccountClosureSchema.nullable(),
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -1116,6 +1126,57 @@ export const SignupReviewDecisionSchema = z
 export const ChangePasswordRequestSchema = z
   .object({ currentPassword: z.string().max(PRESENTED_PASSWORD_MAX_LENGTH), newPassword: NewPasswordSchema })
   .openapi('ChangePasswordRequest');
+
+// ---- MUT-333: close my account (ADR-188) -------------------------------------------
+
+export const CloseAccountRequestSchema = z
+  .object({ password: z.string().min(1).max(PRESENTED_PASSWORD_MAX_LENGTH).openapi({ description: 'The account password, typed again' }) })
+  .strict()
+  .openapi('CloseAccountRequest');
+
+export const CloseAccountResponseSchema = z
+  .object({
+    closure: AccountClosureSchema,
+    subscriptionsEnded: z.number().int().openapi({ description: 'Stripe subscriptions set to end at their period end (Keep my account turns them back on)' }),
+    subscriptionsCancelled: z.number().int().openapi({ description: 'Past-due or unpaid subscriptions cancelled at once' }),
+  })
+  .openapi('CloseAccountResponse');
+
+export const KeepAccountResponseSchema = z
+  .object({
+    billingNeedsAttention: z.boolean().openapi({ description: 'A subscription the closing ended could not be turned back on: open Billing' }),
+  })
+  .openapi('KeepAccountResponse');
+
+export const AccountPurgeSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    closing: z.number().int().openapi({ description: 'Accounts in their 30 days of grace or due' }),
+    due: z.number().int().openapi({ description: 'Accounts whose grace has run out' }),
+    purged: z.number().int().openapi({ description: 'Deleted by this run (in a dry run, would be)' }),
+    skipped: z.number().int().openapi({ description: 'Due but left for the next run: Stripe failed or is not configured' }),
+    failed: z.number().int(),
+    storagePrefixesEmptied: z.number().int().openapi({ description: "Deleted profiles' bucket prefixes emptied by this run" }),
+    storagePending: z.number().int().openapi({ description: 'Bucket prefixes still waiting to be emptied' }),
+    incomplete: z.boolean().openapi({ description: 'The time budget or the per-run cap ran out; the next run continues' }),
+  })
+  .openapi('AccountPurgeSummary');
+
+export const AccountPurgeRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    outcome: z.enum(['purged', 'would-purge', 'skipped', 'failed']),
+    reason: z.enum(['stripe-failed', 'stripe-unavailable', 'not-due', 'error']).nullable(),
+    deleteProfileIds: z.array(z.string().uuid()),
+    transfers: z.array(z.object({ organizationId: z.string().uuid(), toUserId: z.string().uuid() })),
+    leaveProfileIds: z.array(z.string().uuid()),
+    stripeCustomers: z.number().int().openapi({ description: 'Stripe customers deleted (in a dry run, mirrored ones found)' }),
+  })
+  .openapi('AccountPurgeRow');
+
+export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySchema, rows: z.array(AccountPurgeRowSchema) }).openapi('AccountPurgeRun');
+
+export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
 
 // ---- Milestone 2: customers, projects, import --------------------------------
 

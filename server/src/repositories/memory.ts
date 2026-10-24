@@ -2460,7 +2460,8 @@ export class MemoryLedgerStore implements LedgerStore {
         .flatMap(([userId, trialStartedAt]) => {
           const person = this.people.get(userId);
           const inWindow = trialStartedAt > startedAfter && trialStartedAt <= startedUpTo;
-          return person && person.status === 'ACTIVE' && inWindow ? [{ userId, email: person.email, locale: person.locale, trialStartedAt }] : [];
+          // MUT-333 (R16): a closing account gets no trial reminders.
+          return person && person.status === 'ACTIVE' && !person.closure && inWindow ? [{ userId, email: person.email, locale: person.locale, trialStartedAt }] : [];
         })
         .sort((a, b) => a.trialStartedAt.getTime() - b.trialStartedAt.getTime() || a.userId.localeCompare(b.userId)),
     createGrant: async (input) => {

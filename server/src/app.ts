@@ -38,6 +38,8 @@ import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
+import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
+import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
@@ -103,8 +105,10 @@ export interface AppDependencies {
    * MUT-360: Stripe, one gateway per budget (D7: the webhook answers fast, reconcile is patient). Null or absent = the
    * webhook and both reconcile routes answer 503 BILLING_NOT_CONFIGURED. MUT-362: `checkoutGateway` is the write door
    * for Settings › Billing; absent = GET /v1/billing says `configured: false` and its two POSTs answer 503.
+   * MUT-333: `accountGateway` ends subscriptions when an account closes and deletes the Stripe customer when it is
+   * purged; absent = a person with a Stripe customer can't close (503) and the purge skips them.
    */
-  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway; checkoutGateway?: CheckoutGateway } | null;
+  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway; checkoutGateway?: CheckoutGateway; accountGateway?: AccountStripeGateway } | null;
   /** MUT-362: the consumer-country rules. Defaults to the shipped billing-countries.json. */
   billingCountries?: BillingCountries;
   /** MUT-362: per-person budget for billing session requests. Defaults to BILLING_SESSION_POLICY. */
@@ -221,7 +225,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.64.0-mut369';
+export const API_VERSION = '1.65.0-mut333';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -281,7 +285,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -318,6 +322,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       terms,
     }),
   );
+  // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
+  app.route('/', accountClosureRoutes({ store, passwordHasher, throttle: signInThrottle, settings: sessions, mailer, logger: deps.logger, stripe: deps.stripe?.accountGateway ?? null }));
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
