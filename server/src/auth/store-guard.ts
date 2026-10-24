@@ -218,6 +218,8 @@ export const STORE_ACCESS: StoreAccess = {
     fileAsExpense: { write: 'expenses' },
     // MUT-389: onto an expense that already exists.
     fileOntoExpense: { write: 'expenses' },
+    // MUT-397: the MUT-44 completion under the expense lock.
+    completeOnExpense: { write: 'expenses' },
     // The operator's edit-rate figure (/admin only): across every profile, counts only.
     editRates: 'operator',
   },

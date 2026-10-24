@@ -2015,6 +2015,19 @@ export class MemoryLedgerStore implements LedgerStore {
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },
+    completeOnExpense: async (params, at) => {
+      // Same order as Prisma: the expense first, so a deleted expense answers expense_not_found even when the delete
+      // removed its receipts too.
+      const expense = await this.expenses.getById(params.organizationId, params.expenseId);
+      if (!expense) return { kind: 'expense_not_found' };
+      const r = this.expReceipts.get(params.receiptId);
+      if (!r || r.organizationId !== params.organizationId || r.expenseId !== expense.id || r.deletedAt) return { kind: 'receipt_not_found' };
+      if (r.status === 'READY') return { kind: 'already_ready', receipt: { ...r } };
+      if ((await this.expenseReceipts.listByExpense(params.organizationId, expense.id)).length >= params.maxReceipts) return { kind: 'too_many_receipts' };
+      r.status = 'READY';
+      r.completedAt = at;
+      return { kind: 'completed', receipt: { ...r } };
+    },
     editRates: async (range) =>
       editRatesOf(
         [...this.expReceipts.values()].flatMap((r) => (r.approved && r.approvedAt && r.approvedAt >= range.from && r.approvedAt < range.to ? [{ suggested: r.suggested, approved: r.approved }] : [])),

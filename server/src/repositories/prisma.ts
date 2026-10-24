@@ -1780,7 +1780,9 @@ export class PrismaLedgerStore implements LedgerStore {
         const [expenseRow] = await tx.$queryRaw<Array<{ deletedAt: Date | null }>>`SELECT "deletedAt" FROM "expenses" WHERE "id" = ${params.expenseId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR NO KEY UPDATE`;
         if (!expenseRow || expenseRow.deletedAt) return { kind: 'expense_not_found' as const };
         // Counted under the expense lock, so two filings can't both take its last place (READY only, as listByExpense).
-        // A MUT-44 completion counts without this lock, so it can still race one filing to 11 (known, ADR-167 "Extended by MUT-389").
+        // A MUT-44 completion takes the same lock (completeOnExpense, MUT-397), so neither can overfill the expense.
+        // Lock order: this receipt has no expense yet (lockToReviewReceipt), so neither a delete nor a completion,
+        // which lock the expense and then receipts on it, can ever hold it: receipt-then-expense here can't deadlock.
         const held = await tx.expenseReceipt.count({ where: { organizationId: params.organizationId, expenseId: params.expenseId, status: 'READY', deletedAt: null } });
         if (held >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
         // TODO(blocked-by MUT-307): whether evidence may be added to an approved or posted firm expense.
@@ -1794,6 +1796,25 @@ export class PrismaLedgerStore implements LedgerStore {
         const expense = await tx.expense.findUniqueOrThrow({ where: { id: params.expenseId } });
         return { kind: 'filed' as const, expense, receipt };
       }),
+    completeOnExpense: (params, at) =>
+      this.prisma.$transaction(
+        async (tx) => {
+          // Expense first, then the receipt: the order every operation on receipts that sit on an expense takes
+          // (expenses.softDelete locks the expense, then updates its receipts). NO KEY UPDATE (DECISIONS.md:1961).
+          const [expenseRow] = await tx.$queryRaw<Array<{ deletedAt: Date | null }>>`SELECT "deletedAt" FROM "expenses" WHERE "id" = ${params.expenseId}::uuid AND "organizationId" = ${params.organizationId}::uuid FOR NO KEY UPDATE`;
+          if (!expenseRow || expenseRow.deletedAt) return { kind: 'expense_not_found' as const };
+          // Only a receipt on this expense is locked: never another expense's row.
+          const [receiptRow] = await tx.$queryRaw<Array<{ status: string; deletedAt: Date | null }>>`SELECT "status", "deletedAt" FROM "expense_receipts" WHERE "id" = ${params.receiptId}::uuid AND "organizationId" = ${params.organizationId}::uuid AND "expenseId" = ${params.expenseId}::uuid FOR NO KEY UPDATE`;
+          if (!receiptRow || receiptRow.deletedAt) return { kind: 'receipt_not_found' as const };
+          if (receiptRow.status === 'READY') return { kind: 'already_ready' as const, receipt: toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId } })) };
+          const held = await tx.expenseReceipt.count({ where: { organizationId: params.organizationId, expenseId: params.expenseId, status: 'READY', deletedAt: null } });
+          if (held >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
+          const receipt = await tx.expenseReceipt.update({ where: { id: params.receiptId }, data: { status: 'READY', completedAt: at } });
+          return { kind: 'completed' as const, receipt: toExpenseReceipt(receipt) };
+        },
+        // Lock waits count inside the transaction now; the defaults (5 s) would turn a long wait into a 500.
+        { timeout: 10_000, maxWait: 5_000 },
+      ),
     editRates: async (range) => {
       // Counted in JS from the week's approvals (a few hundred rows at most for the operator's Monday read), so the
       // memory and Prisma stores share one definition (`editRatesOf`).
