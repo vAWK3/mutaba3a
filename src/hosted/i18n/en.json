@@ -1115,7 +1115,8 @@
         "lockedBody": "Your free trial ended more than two weeks ago, so this profile is locked. Nothing is deleted: subscribe to pick up where you left off, or download all your records.",
         "lockedNotYours": "This profile is locked because the person who created it hasn't subscribed. Nothing is deleted, and you can still download its records.",
         "drawerNote": "This profile is read-only, so nothing here can be changed.",
-        "refused": "This profile is read-only now. Subscribe to add or change records."
+        "refused": "This profile is read-only now. Subscribe to add or change records.",
+        "newProfileBlocked": "Subscribe to add a profile: your plan has ended."
       }
     },
     "selfService": {

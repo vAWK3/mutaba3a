@@ -8,6 +8,7 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
+import type { Entitlement } from '../billing/entitlement.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
 import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
@@ -61,8 +62,8 @@ export type AppEnv = {
     expectedVersion: number;
     /** MUT-361: whether the lapse gate is enforced on this server (app-shell.ts, from BILLING_GATE). */
     billingGate: boolean;
-    /** MUT-361: on a person-level route, the person's LOCKED profiles, which a cross-profile read leaves out. */
-    lockedProfileIds: ReadonlySet<string>;
+    /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
+    personEntitlements: ReadonlyMap<string, Entitlement>;
   };
 };
 

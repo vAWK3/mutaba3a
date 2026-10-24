@@ -55,6 +55,8 @@ export interface IncomeCaptureDrawerProps {
   onClose: () => void;
   /** Called after a successful save, before the drawer closes; the page decides where focus goes (review #4). */
   onSaved?: () => void;
+  /** MUT-361: the lapse gate on this profile (IncomeDrawerHost's `useWritableFor`). */
+  writable?: boolean;
 }
 
 const FORM_ID = 'hosted-income-form';
@@ -63,13 +65,14 @@ function defaultCurrency(profile: HostedProfile): Currency {
   return (INCOME_CURRENCIES as readonly string[]).includes(profile.defaultCurrency) ? profile.defaultCurrency : 'USD';
 }
 
-export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose, onSaved }: IncomeCaptureDrawerProps) {
+export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose, onSaved, writable = true }: IncomeCaptureDrawerProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const attempt = useAttemptKey();
   const create = useCreateIncome(profile.id);
   const customers = useCustomerDirectory(profile.id);
-  const { kinds, customer: customerRule } = incomeAffordancesFor(profile);
+  // MUT-361 (review): the host opens this only on a writable profile (`writable` from it); the gate still shapes Add client.
+  const { kinds, customer: customerRule } = incomeAffordancesFor(profile, writable);
   const today = todayInZone(profile.timezone);
   const [detailsToggled, setDetailsToggled] = useState<boolean | null>(null);
   // Values a server error's message names (e.g. the matter's currency), per field, from the last refused save
@@ -225,7 +228,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
               name="customerId"
               control={control}
               render={({ field }) => (
-                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile)} flashSignal={clientFlash} onCreatingChange={picks.track} />
+                <ClientPicker id="hosted-income-client" profileId={profile.id} value={field.value} onChange={field.onChange} placeholder={t('hosted.income.clientPlaceholder')} canCreate={canAddClient(profile, writable)} flashSignal={clientFlash} onCreatingChange={picks.track} />
               )}
             />
             {fieldError('customerId')}
@@ -348,7 +351,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
                       value={field.value}
                       onChange={field.onChange}
                       placeholder={t('hosted.income.matterPlaceholder')}
-                      canCreate={canAddClient(profile)}
+                      canCreate={canAddClient(profile, writable)}
                       currency={currency}
                       onCreatingChange={picks.track}
                     />

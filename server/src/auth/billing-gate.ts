@@ -11,6 +11,7 @@ import type { AppEnv, SessionAuth, SessionIdentity } from './middleware.js';
  */
 
 type GateStore = Pick<LedgerStore, 'memberships' | 'organizations' | 'integrations' | 'billing'>;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A profile-scoped request: the selected profile's own entitlement decides. */
 export async function gateSelectedProfile(c: Context<AppEnv>, auth: SessionAuth, endpoint: string, store: GateStore): Promise<void> {
@@ -29,15 +30,16 @@ export async function gatePersonLevel(c: Context<AppEnv>, identity: SessionIdent
   if (rule === 'pathProfile') return gatePathProfile(c, identity, endpoint, store, now);
 
   const { standing, entitlements } = await standingOfPerson(store, identity.user.id, now);
-  c.set('lockedProfileIds', new Set([...entitlements].filter(([, e]) => e.state === 'LOCKED').map(([id]) => id)));
+  c.set('personEntitlements', entitlements);
   if (standingRefuses(standing, c.req.method)) throw lapsedError(null, representativeOf(standing, entitlements));
 }
 
 /** The profile named in the path, when the caller is one of its members; otherwise the route's own 404 answers. */
 async function gatePathProfile(c: Context<AppEnv>, identity: SessionIdentity, endpoint: string, store: GateStore, now: Date): Promise<void> {
   const profileId = pathParam(endpoint, c.req.path, 'profileId');
-  if (!profileId) return;
-  const membership = await store.memberships.find(identity.user.id, profileId).catch(() => null);
+  // Not a profile id at all: the route's own validation answers. A failing read is never "not a member" (fail closed).
+  if (!profileId || !UUID_RE.test(profileId)) return;
+  const membership = await store.memberships.find(identity.user.id, profileId);
   const organization = membership ? await store.organizations.getById(profileId) : null;
   if (!organization) return;
   const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
@@ -65,5 +67,6 @@ export function pathParam(endpoint: string, path: string, name: string): string 
   const actual = path.split('/');
   if (template.length !== actual.length) return null;
   const index = template.indexOf(`:${name}`);
-  return index >= 0 ? decodeURIComponent(actual[index]!) : null;
+  // c.req.path is already decoded by Hono: decoding again would throw on a literal '%'.
+  return index >= 0 ? actual[index]! : null;
 }

@@ -17,7 +17,7 @@ describe('the portal query client and the lapse gate', () => {
     const client = createPortalQueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await client.getMutationCache().build(client, { mutationFn: () => Promise.reject(lapsed) }).execute(undefined).catch(() => undefined);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ME_KEY });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ME_KEY }, { cancelRefetch: false });
     invalidate.mockClear();
     await client.getMutationCache().build(client, { mutationFn: () => Promise.reject(new ApiError(422, 'VALIDATION_FAILED', 'bad')) }).execute(undefined).catch(() => undefined);
     expect(invalidate).not.toHaveBeenCalled();
@@ -27,6 +27,6 @@ describe('the portal query client and the lapse gate', () => {
     const client = createPortalQueryClient();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     await client.fetchQuery({ queryKey: ['p', 'x', 'expenses'], queryFn: () => Promise.reject(lapsed) }).catch(() => undefined);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ME_KEY });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ME_KEY }, { cancelRefetch: false });
   });
 });

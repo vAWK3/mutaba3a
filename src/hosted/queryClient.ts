@@ -27,7 +27,8 @@ export function isLapseRefusal(error: unknown): boolean {
 /** `defaultOptions` replaces the portal's own (tests: no retries, no stale time); the lapse handling stays. */
 export function createPortalQueryClient(defaultOptions?: DefaultOptions): QueryClient {
   const rereadMe = (error: unknown) => {
-    if (isLapseRefusal(error)) void client.invalidateQueries({ queryKey: ME_KEY });
+    // cancelRefetch false: a page of refused reads re-reads /v1/me once, not once per query (review).
+    if (isLapseRefusal(error)) void client.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false });
   };
   const client: QueryClient = new QueryClient({
     queryCache: new QueryCache({ onError: rereadMe }),

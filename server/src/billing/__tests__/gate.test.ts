@@ -103,3 +103,12 @@ describe('lapsedError', () => {
     expect(() => lapsedError('org-1', GRACE)).toThrow();
   });
 });
+
+describe('pathParam (MUT-361 review)', () => {
+  it('reads a path parameter against its template without decoding twice', async () => {
+    const { pathParam } = await import('../../auth/billing-gate.js');
+    expect(pathParam('PATCH /v1/profiles/:profileId', '/v1/profiles/abc', 'profileId')).toBe('abc');
+    expect(pathParam('PATCH /v1/profiles/:profileId', '/v1/profiles/%', 'profileId')).toBe('%');
+    expect(pathParam('PATCH /v1/profiles/:profileId', '/v1/profiles/a/b', 'profileId')).toBeNull();
+  });
+});

@@ -241,7 +241,9 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     expect((await h.app.request('/v1/inbox', json({ kind: 'expense', amount: '5.00', currency: 'ILS', occurredOn: '2026-10-05' }, { ...p.session, ...idem() }))).status).toBe(201);
     const feed = await read(await h.app.request('/v1/entries', { headers: p.session }));
     expect(feed.items.map((i: Loose) => i.id)).not.toContain(created.id);
-    expect((await h.app.request(`/v1/entries?profileId=${p.personalId}`, { headers: p.session })).status).toBe(402);
+    const asked = await h.app.request(`/v1/entries?profileId=${p.personalId}`, { headers: p.session });
+    expect(asked.status).toBe(402);
+    expect((await read(asked)).error.details).toEqual({ profileId: p.personalId, state: 'LOCKED', source: 'TRIAL', until: null });
     // The firm is covered by its grant, so it writes; the personal profile, locked, doesn't.
     expect((await h.app.request('/v1/expenses', expense(p.on(firm.id)))).status).toBe(201);
     expect((await h.app.request('/v1/expenses', expense(p.on()))).status).toBe(402);
@@ -253,6 +255,14 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     const res = await h.app.request(`/v1/profiles/${p.personalId}`, { method: 'PATCH', headers: { ...p.session, 'content-type': 'application/json', ...idem() }, body: JSON.stringify({ name: 'Mine' }) });
     expect(res.status).toBe(402);
     expect((await read(res)).error.details).toMatchObject({ profileId: p.personalId, state: 'READ_ONLY' });
+  });
+
+  it('a path that is no profile id never reaches the gate, and the route answers it (review)', async () => {
+    const h = harness();
+    const p = await person(h, 'trial-read-only');
+    const res = await h.app.request('/v1/profiles/%25', { method: 'PATCH', headers: { ...p.session, 'content-type': 'application/json', ...idem() }, body: JSON.stringify({ name: 'Mine' }) });
+    expect(res.status).toBeLessThan(500);
+    expect(res.status).not.toBe(402);
   });
 
   it('every organization-independent endpoint is classified', () => {

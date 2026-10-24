@@ -69,17 +69,30 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
         <p className="hp-lapse-banner-title">{t('hosted.billing.gate.readOnlyTitle')}</p>
         <p>{coverage && !coverage.covered ? t('hosted.billing.gate.notYours') : body}</p>
         <div className="hp-lapse-banner-actions">
-          {coverage?.covered && (
-            <Button variant="primary" size="sm" onClick={() => drawers.openBilling(coverage.sellable ? 'subscribe' : undefined)}>
-              {coverage.sellable ? t('hosted.billing.gate.subscribe') : t('hosted.billing.title')}
-            </Button>
-          )}
+          <SubscribeAction coverage={coverage} size="sm" />
           <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
             {t('hosted.billing.gate.download')}
           </Button>
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Subscribe where this person's payment covers the profile and a price exists; Billing (which explains) when no price
+ * can be bought or the coverage couldn't be read (review: never leave the person with nothing to press); nothing for a
+ * profile someone else pays for.
+ */
+function SubscribeAction({ coverage, size }: { coverage: { covered: boolean; sellable: boolean } | null; size?: 'sm' }) {
+  const t = useT();
+  const drawers = useAccountDrawers();
+  if (coverage && !coverage.covered) return null;
+  const subscribe = coverage?.sellable === true;
+  return (
+    <Button variant="primary" size={size} onClick={() => drawers.openBilling(subscribe ? 'subscribe' : undefined)}>
+      {subscribe ? t('hosted.billing.gate.subscribe') : t('hosted.billing.title')}
+    </Button>
   );
 }
 
@@ -97,11 +110,7 @@ export function LockedScreen({ profile }: { profile: HostedProfile }) {
       <h2 id="hp-locked-title">{t('hosted.billing.gate.lockedTitle')}</h2>
       <p>{t(theirs ? 'hosted.billing.gate.lockedNotYours' : 'hosted.billing.gate.lockedBody')}</p>
       <div className="hp-locked-actions">
-        {coverage?.covered && (
-          <Button variant="primary" onClick={() => drawers.openBilling(coverage.sellable ? 'subscribe' : undefined)}>
-            {coverage.sellable ? t('hosted.billing.gate.subscribe') : t('hosted.billing.title')}
-          </Button>
-        )}
+        <SubscribeAction coverage={coverage} />
         <Button variant="secondary" onClick={drawers.openYourData}>
           {t('hosted.billing.gate.download')}
         </Button>

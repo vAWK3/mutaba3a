@@ -140,6 +140,19 @@ describe('locked (MUT-361)', () => {
     expect(screen.getByRole('button', { name: /Personal/ })).toBeInTheDocument();
   });
 
+  it('still offers Billing when Settings › Billing can’t be read (review: never nothing to press)', async () => {
+    portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked', routes: { 'GET /v1/billing': () => fail(503, 'BILLING_NOT_CONFIGURED') } });
+    await screen.findByRole('heading', { name: 'Subscribe or download your records' });
+    expect(await screen.findByRole('button', { name: 'Billing' })).toBeInTheDocument();
+  });
+
+  it('says why New profile is off when the gate holds every profile', async () => {
+    const { user } = portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked' });
+    await screen.findByRole('heading', { name: 'Subscribe or download your records' });
+    await user.click(screen.getByRole('button', { name: /Personal/ }));
+    expect(await screen.findByText('Subscribe to add a profile: your plan has ended.')).toBeInTheDocument();
+  });
+
   it('reads in Arabic, right to left', async () => {
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
     portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked', locale: 'ar' });
