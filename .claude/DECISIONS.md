@@ -5095,7 +5095,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - `DayBars` gained opt-in `second` and `future` props in place (D1); characterization tests pinned the single-series chart first and the expense-group release-QA ran before and after (D5). `CategoryBars` gained plain rows, `meta` and `detail`.
 - A Year request reads 12 months; Month and Week read the 12 months their history needs. If a profile's year passes ~10k rows, move the aggregation to SQL (TD-241).
-- The web Insights CSV is not carried over (plan §9); Basel decides before MUT-292.
+- The web Insights CSV is not carried over (plan §9). Basel accepted the loss on 2026-10-25: MUT-292 may retire it, and export comes back when the flows are rethought.
 ## ADR-188: Closing an Account Is 30 Days of Grace on the User Row, Then an Hourly Hard Delete That Claims First, Passes Shared Profiles On and Anonymizes the Rest (MUT-333, Web Half)
 
 **Status:** Accepted for the build (2026-10-24, MUT-333, unattended run on Basel's "go"). Decisions D1–D20 and review R1–R24 in `.claude/designs/mut-333-close-account.md` are **pending Basel's confirmation**. Basel's own decisions (Jira 12135, 12152, 12293): 30 days' grace then a hard delete, backups age out 14 days later; closing cancels an active Stripe subscription (a Malafat add-on is left alone); `user.terms_accepted` audit rows are purged; records on profiles the person doesn't own are anonymized, not reassigned. Builds on ADR-102 (terms), ADR-160/181 (billing, the lapse gate), ADR-163 (co-owners), ADR-165/170 (Stripe), ADR-174/184 (mail and the job pattern).
