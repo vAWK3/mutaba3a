@@ -23,7 +23,8 @@ import { AlertIcon, LockIcon } from './Icons';
 function useCoverage(profileId: string): { covered: boolean; sellable: boolean } | null {
   const billing = useQuery(billingQuery);
   if (!billing.data) return null;
-  return { covered: billing.data.coveredProfileIds.includes(profileId), sellable: isSellable(billing.data) };
+  // A server older than MUT-362 sends no list: then nobody's payment is known to cover it, so no Subscribe.
+  return { covered: (billing.data.coveredProfileIds ?? []).includes(profileId), sellable: isSellable(billing.data) };
 }
 
 export function LapseBanner({ profile }: { profile: HostedProfile }) {
