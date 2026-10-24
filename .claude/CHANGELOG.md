@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — The lapse gate: read-only and locked accounts on the server and the portal (MUT-361, ADR-181)
+
+**Why:** ADR-160 D3 makes the trial real only if it ends: 14 days free, then read-only with export, then locked from day 30 (Subscribe and Download my records), nothing deleted; a payer who lapses stays read-only for good. `/v1/me` reported these states, but nothing enforced them.
+
+### Added
+- **Server gate** (`server/src/billing/gate.ts`, applied in `authenticate()` by `auth/billing-gate.ts`): READ_ONLY profiles take reads only, LOCKED ones only `GET /v1/records-export*`; person-level routes (inbox, `GET /v1/entries`, `POST /v1/profiles`) follow the person's best standing; identity, billing and sign-out always open; API keys never gated. Refusal: 402 `SUBSCRIPTION_LAPSED` `{ profileId, state, source, until }`.
+- `/v1/me` `billingStanding`; `BILLING_GATE` env and Terraform `billing_gate_enabled` (kill switch, default on).
+- `GET /admin/v1/billing/uncovered` and `npm run billing:uncovered`.
+- `trialTimelineOf` (`billing/entitlement.ts`): the trial's end and lock dates, for Settings › Billing and MUT-419's mails.
+- **Portal:** GRACE and read-only banners on every page of the profile (`LapseGate.tsx`), Add hidden and edit drawers view-only (receipt Download kept), the locked screen (Subscribe, Download my records), New profile on the person's standing, `SUBSCRIPTION_LAPSED` in every error mapper, and a `/v1/me` re-read on any refusal. en/ar, RTL, 375 px.
+- **QA:** `portal.billing.read-only` (core), `.locked` (core), `.locked-arabic-phone`, `.grace`, `.paid-lapse`; `portal-live.billing.lapse-gate` (core) on the real API.
+
+### Changed
+- `GET /v1/entries` leaves LOCKED profiles out. `buildMe`'s membership reads are batched (shared with the gate). API `1.60.0-mut361`.
+
+---
+
+
 ## [Unreleased] - 2026-10-24 — The dev server can keep receipts on local disk, so receipt flows run end to end in local QA (MUT-396)
 
 ### Added

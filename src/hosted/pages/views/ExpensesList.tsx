@@ -14,7 +14,7 @@ import { useAnchoredList } from '../../data/anchoredList';
 import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useProfile, useWriteGate } from '../../session/me';
 import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { canAddClient } from '../../data/incomeAffordances';
 import { NoMatch, PageHeader, ShowMore } from './shared';
@@ -61,6 +61,8 @@ export interface ExpensesListProps {
 
 export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const profile = useProfile();
+  // MUT-361: a read-only profile lists and opens expenses, but offers nothing to record, change or delete.
+  const { writable } = useWriteGate();
   const { t, language } = useLanguage();
   const list = useExpenses(profile.id, filters);
   const categoriesQuery = useExpenseCategories(profile.id);
@@ -111,11 +113,13 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const afterDelete = (id: string) =>
     setFilters({ ...filters, expense: undefined, newExpense: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
-  const recordButton = (
+  const recordButton = writable ? (
     <Button variant="primary" size="sm" onClick={openNew}>
       {t('hosted.expenses.record')}
     </Button>
-  );
+  ) : null;
+  // A `?newExpense` link on a read-only profile opens nothing (review R4).
+  const creating = Boolean(filters.newExpense) && writable;
 
   return (
     <>
@@ -156,7 +160,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
         )}
       </QueryView>
       <SavedNotice kind="expense" message={t('hosted.savedFlash.expenseSaved')} profileId={profile.id} onShow={anchored.show} anchor={filters.anchor} filtersKey={filtersKey} listInError={listInError} preset={saveFeedbackPreset(profile)} />
-      {(filters.newExpense || filters.expense) && (
+      {(creating || filters.expense) && (
         <ExpenseDrawer
           profileId={profile.id}
           timezone={profile.timezone}
@@ -164,7 +168,8 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           expenseId={filters.expense}
           onClose={closeDrawer}
           onDeleted={afterDelete}
-          canAddClient={canAddClient(profile)}
+          canAddClient={canAddClient(profile, writable)}
+          readOnly={!writable}
         />
       )}
     </>

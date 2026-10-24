@@ -5,7 +5,7 @@ import { incomeAffordancesFor, redateAffordancesFor } from '../data/incomeAfford
 import type { IncomeDrawerSearch } from '../data/filters';
 import { IncomeCaptureDrawer } from './IncomeCaptureDrawer';
 import { RecordPaymentDrawer } from './RecordPaymentDrawer';
-import { useMe } from '../session/me';
+import { useMe, useWritableFor } from '../session/me';
 import { RedateDrawer } from './RedateDrawer';
 
 /**
@@ -71,8 +71,10 @@ export interface IncomeDrawerHostProps {
  * drawers (eng review: precedence). A drawer the gate doesn't offer here renders nothing.
  */
 export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, onOpen, onSeePayments }: IncomeDrawerHostProps) {
-  const { kinds, canSettle } = incomeAffordancesFor(profile);
-  const redate = redateAffordancesFor(profile);
+  // MUT-361: a read-only profile opens none of these (a link included); the page offers none either.
+  const writable = useWritableFor(profile);
+  const { kinds, canSettle } = incomeAffordancesFor(profile, writable);
+  const redate = redateAffordancesFor(profile, writable);
   const navigate = useNavigate();
   const userId = useMe().user.id;
   const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
@@ -94,7 +96,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   }
   if (drawer.newIncome && kinds.length > 0) {
     return (
-      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} />
+      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} writable={writable} />
     );
   }
   const redateTarget = drawer.income && redate.owed ? { kind: 'owed' as const, id: drawer.income } : drawer.payment && redate.payments ? { kind: 'payment' as const, id: drawer.payment } : null;

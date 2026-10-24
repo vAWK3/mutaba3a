@@ -17,6 +17,8 @@ export interface ConversionErrorLabels {
   sameCurrency: string;
   conflict: string;
   network: string;
+  /** MUT-361: the lapse gate refused the write (the profile went read-only under the page). */
+  lapsed: string;
 }
 
 function fieldOf(error: ApiError): string | undefined {
@@ -32,6 +34,11 @@ export function applyConversionApiError(
 ): void {
   if (!(error instanceof ApiError)) {
     showToast(labels.network);
+    return;
+  }
+
+  if (error.code === 'SUBSCRIPTION_LAPSED') {
+    showToast(labels.lapsed);
     return;
   }
 

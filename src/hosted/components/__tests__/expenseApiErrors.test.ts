@@ -13,6 +13,7 @@ const labels: ExpenseErrorLabels = {
   dateTooFar: 'date-too-far',
   conflict: 'conflict',
   network: 'network',
+  lapsed: 'lapsed',
 };
 
 function validation(reason: string) {
@@ -77,5 +78,15 @@ describe('applyExpenseApiError', () => {
     applyExpenseApiError(new Error('boom'), setError, labels, showToast);
     expect(setError).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith('network');
+  });
+});
+
+describe('the lapse gate (MUT-361)', () => {
+  it('toasts that the profile went read-only, touching no field', () => {
+    const setError = vi.fn();
+    const showToast = vi.fn();
+    applyExpenseApiError(new ApiError(402, 'SUBSCRIPTION_LAPSED', 'm', { state: 'READ_ONLY' }), setError, labels, showToast);
+    expect(showToast).toHaveBeenCalledWith('lapsed');
+    expect(setError).not.toHaveBeenCalled();
   });
 });

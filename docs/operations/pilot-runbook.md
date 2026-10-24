@@ -132,9 +132,10 @@ section once MUT-300 lands (§9).
 
 ### 1.5 After onboarding
 
-- **Cover them while billing isn't wired yet (MUT-358).** The pre-billing backfill only covered people who
-  existed when it ran. Anyone created after it has no billing coverage. Nothing enforces that yet, but
-  MUT-361 will turn such an account read-only. So grant every new pilot user now:
+- **Cover them (MUT-358, MUT-361).** The pre-billing backfill only covered people who existed when it ran.
+  Anyone created after it has no billing coverage, and the lapse gate (MUT-361) holds such an account
+  read-only: the portal and the phone can read and export but not add anything. So grant every new pilot
+  user now, and check nobody is held by mistake with `npm run billing:uncovered -- --url "$URL"`:
 
   ```bash
   npm run billing:grant -- --url "$URL" --email <email> --tier FREELANCER --reason "pilot P01"

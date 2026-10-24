@@ -26,6 +26,10 @@ record the date where the item says.
     - check that the free-webmail list covers the providers your users use (`server/src/email/domains/free-webmail.txt`).
   - **How to decide reviews:** `npm --prefix server run signups:review` (`server/DEPLOYMENT.md` §6f "Business email and the signup review queue").
   - Delete this item and record the date in DEPLOYMENT.md §7.
+- MUT-361's lapse gate is merged and **on by default** (`BILLING_GATE` unset; Terraform `billing_gate_enabled = true`): a READ_ONLY profile refuses session writes with 402 `SUBSCRIPTION_LAPSED`, a LOCKED one everything but the records export. **Before the release that ships it:**
+  - with the production admin token, run `npm --prefix server run billing:uncovered -- --url "$URL"`: it must print "Nobody active is held read-only or locked." For each person it lists with source `NONE`, run `billing:grant` (pilot-runbook §1.5), then run it again. If it can't be made empty in time, set `billing_gate_enabled = false` in `production.tfvars` for that release and turn it on in the next.
+  - **Before self-signup opens** (`self_signup_enabled = true`): the phone build carrying MUT-364 (it reads the refusal) is live in both stores and the minimum build is raised to it (D11). Released phones treat 402 as retryable: a refused capture waits in their outbox and lands once the person subscribes, so nothing is lost, but they show a generic error until then.
+  - Delete this item and record the date on MUT-361.
 
 ## web
 

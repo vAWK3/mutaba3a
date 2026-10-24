@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-221: The lapse gate reads billing facts on every gated session request
+**Status**: Open
+**Ticket**: MUT-361 (D1, review R7)
+**Added**: 2026-10-24
+**Priority**: Low (three indexed queries; person-level routes add the membership read, batched per tick)
+**Impact**: Each profile-scoped session request runs one `billing.factsFor`; the phone's inbox count and Recent polls also load the person's memberships and integrations.
+**Fix**: Cache a person's entitlements for a few seconds per instance (invalidated by the Stripe webhook and grant writes), or carry them on the session row.
+
+### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
+**Status**: Open
+**Ticket**: MUT-361
+**Added**: 2026-10-24
+**Priority**: Low (the first answer was already delivered or the write never committed)
+**Impact**: The gate refuses at the door, before the idempotency layer, so a retry of a write that succeeded just before the trial ran out answers 402 instead of replaying the stored 201.
+**Fix**: Let the gate pass a request whose Idempotency-Key already holds a completed answer, and let the idempotency layer replay it.
+
 ### TD-220: "For a business" proves nothing where Stripe has no tax-ID type (outside IL/JO)
 **Status**: Open
 **Ticket**: MUT-418 (D10, code review)

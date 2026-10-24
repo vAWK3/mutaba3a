@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { parseBillingCountries } from '../../billing/checkout.js';
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
@@ -378,6 +379,19 @@ describe('billing verbs (MUT-358)', () => {
     await h.store.billing.saveAccount({ stripeCustomerId: 'cus_jo', userId: user.id, country: 'JO', currency: 'USD', at: new Date(), linkAudit: [] });
     expect(await h.run(['billing-status', '--email', 'rana@studio.ps'])).toBe(0);
     expect(h.out).toContain('  CHECK cus_jo: billed in JO, not open to consumers, and no tax ID — confirm it is a business');
+  });
+
+  it('billing-uncovered lists active people the lapse gate would hold, and says so when nobody is (MUT-361)', async () => {
+    const h = harness();
+    const user = await person(h, 'lina@studio.ps');
+    expect(await h.run(['billing-uncovered'])).toBe(0);
+    expect(h.out.some((l) => /^READ_ONLY NONE {2}.+: lina@studio\.ps$/.test(l))).toBe(true);
+    expect(h.out.at(-1)).toMatch(/^1 profile\(s\): 1 NONE\./);
+
+    await h.store.billing.createGrant({ id: randomUUID(), userId: user.id, organizationId: null, tier: 'FREELANCER', reason: 'pre-billing', expiresAt: null, grantedBy: 'test', at: new Date(), audit: [] });
+    h.out.length = 0;
+    expect(await h.run(['billing-uncovered'])).toBe(0);
+    expect(h.out).toEqual(['Nobody active is held read-only or locked.']);
   });
 
   it('billing-status flags nobody while every country is open to consumers (MUT-418)', async () => {

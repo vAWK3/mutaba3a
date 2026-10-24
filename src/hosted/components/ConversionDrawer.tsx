@@ -7,7 +7,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { conversionKey, useConversion, useCreateConversion, useDeleteConversion, useUpdateConversion } from '../data/conversionQueries';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useToast } from './Toast';
-import { Drawer } from './Drawer';
+import { Drawer, ReadOnlyFields } from './Drawer';
 import { Empty, Unreachable } from './QueryView';
 import { applyConversionApiError } from './conversionApiErrors';
 import { conversionFormSchema, impliedRate, type ConversionFormValues } from './conversionFormSchema';
@@ -44,9 +44,11 @@ export interface ConversionDrawerProps {
   timezone?: string;
   /** Called instead of `onClose` after a delete, so the list can drop an anchor on the deleted record (MUT-91). */
   onDeleted?: (conversionId: string) => void;
+  /** MUT-361: the profile is read-only (lapse gate): the conversion opens to be read, with nothing to save or delete. */
+  readOnly?: boolean;
 }
 
-export function ConversionDrawer({ profileId, mode = 'create', conversionId, onClose, timezone, onDeleted }: ConversionDrawerProps) {
+export function ConversionDrawer({ profileId, mode = 'create', conversionId, onClose, timezone, onDeleted, readOnly = false }: ConversionDrawerProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const queryClient = useQueryClient();
@@ -88,6 +90,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
     sameCurrency: t('hosted.conversions.errors.sameCurrency'),
     conflict: t('hosted.conversions.errors.conflict'),
     network: t('hosted.conversions.errors.network'),
+    lapsed: t('hosted.billing.gate.refused'),
   };
 
   /**
@@ -185,6 +188,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
       title={editing ? t('hosted.conversions.drawer.editTitle') : t('hosted.conversions.drawer.newTitle')}
       onClose={onClose}
       closeLabel={t('common.close')}
+      readOnly={readOnly}
       footer={
         <>
           <div className="drawer-footer-left">
@@ -205,121 +209,123 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
         </>
       }
     >
-      <form id="hosted-conversion-form" onSubmit={handleSubmit(onSubmit)}>
-        <div className="form-row">
+      <ReadOnlyFields readOnly={readOnly}>
+        <form id="hosted-conversion-form" onSubmit={handleSubmit(onSubmit)}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="hosted-conversion-from-amount">
+                {t('hosted.conversions.drawer.fromAmount')}
+              </label>
+              <Controller
+                name="fromAmount"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    id="hosted-conversion-from-amount"
+                    type="text"
+                    inputMode="decimal"
+                    dir="ltr"
+                    className="input"
+                    placeholder={t('hosted.conversions.drawer.amountPlaceholder')}
+                    {...field}
+                  />
+                )}
+              />
+              {formState.errors.fromAmount && <p className="form-error">{formState.errors.fromAmount.message}</p>}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="hosted-conversion-from-currency">
+                {t('hosted.conversions.drawer.fromCurrency')}
+              </label>
+              <Controller
+                name="fromCurrency"
+                control={control}
+                render={({ field }) => (
+                  <select id="hosted-conversion-from-currency" className="input" {...field}>
+                    {HOSTED_CURRENCIES.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label" htmlFor="hosted-conversion-to-amount">
+                {t('hosted.conversions.drawer.toAmount')}
+              </label>
+              <Controller
+                name="toAmount"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    id="hosted-conversion-to-amount"
+                    type="text"
+                    inputMode="decimal"
+                    dir="ltr"
+                    className="input"
+                    placeholder={t('hosted.conversions.drawer.amountPlaceholder')}
+                    {...field}
+                  />
+                )}
+              />
+              {formState.errors.toAmount && <p className="form-error">{formState.errors.toAmount.message}</p>}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="hosted-conversion-to-currency">
+                {t('hosted.conversions.drawer.toCurrency')}
+              </label>
+              <Controller
+                name="toCurrency"
+                control={control}
+                render={({ field }) => (
+                  <select id="hosted-conversion-to-currency" className="input" {...field}>
+                    {HOSTED_CURRENCIES.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+              {formState.errors.toCurrency && <p className="form-error">{formState.errors.toCurrency.message}</p>}
+            </div>
+          </div>
+
+          {rate !== null && (
+            <p className="form-hint">{t('hosted.conversions.drawer.impliedRate', { rate: rate.toFixed(4), from: fromCurrency, to: toCurrency })}</p>
+          )}
+
           <div className="form-group">
-            <label className="form-label" htmlFor="hosted-conversion-from-amount">
-              {t('hosted.conversions.drawer.fromAmount')}
+            <label className="form-label" htmlFor="hosted-conversion-date">
+              {t('hosted.conversions.drawer.date')}
             </label>
             <Controller
-              name="fromAmount"
+              name="occurredAt"
               control={control}
-              render={({ field }) => (
-                <input
-                  id="hosted-conversion-from-amount"
-                  type="text"
-                  inputMode="decimal"
-                  dir="ltr"
-                  className="input"
-                  placeholder={t('hosted.conversions.drawer.amountPlaceholder')}
-                  {...field}
-                />
-              )}
+              render={({ field }) => <input id="hosted-conversion-date" type="date" className="input" {...field} />}
             />
-            {formState.errors.fromAmount && <p className="form-error">{formState.errors.fromAmount.message}</p>}
+            {formState.errors.occurredAt && <p className="form-error">{formState.errors.occurredAt.message}</p>}
           </div>
+
           <div className="form-group">
-            <label className="form-label" htmlFor="hosted-conversion-from-currency">
-              {t('hosted.conversions.drawer.fromCurrency')}
+            <label className="form-label" htmlFor="hosted-conversion-notes">
+              {t('hosted.conversions.drawer.notes')}
             </label>
             <Controller
-              name="fromCurrency"
+              name="notes"
               control={control}
               render={({ field }) => (
-                <select id="hosted-conversion-from-currency" className="input" {...field}>
-                  {HOSTED_CURRENCIES.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
+                <textarea id="hosted-conversion-notes" className="input" placeholder={t('hosted.conversions.drawer.notesPlaceholder')} {...field} />
               )}
             />
           </div>
-        </div>
-
-        <div className="form-row">
-          <div className="form-group">
-            <label className="form-label" htmlFor="hosted-conversion-to-amount">
-              {t('hosted.conversions.drawer.toAmount')}
-            </label>
-            <Controller
-              name="toAmount"
-              control={control}
-              render={({ field }) => (
-                <input
-                  id="hosted-conversion-to-amount"
-                  type="text"
-                  inputMode="decimal"
-                  dir="ltr"
-                  className="input"
-                  placeholder={t('hosted.conversions.drawer.amountPlaceholder')}
-                  {...field}
-                />
-              )}
-            />
-            {formState.errors.toAmount && <p className="form-error">{formState.errors.toAmount.message}</p>}
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="hosted-conversion-to-currency">
-              {t('hosted.conversions.drawer.toCurrency')}
-            </label>
-            <Controller
-              name="toCurrency"
-              control={control}
-              render={({ field }) => (
-                <select id="hosted-conversion-to-currency" className="input" {...field}>
-                  {HOSTED_CURRENCIES.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
-              )}
-            />
-            {formState.errors.toCurrency && <p className="form-error">{formState.errors.toCurrency.message}</p>}
-          </div>
-        </div>
-
-        {rate !== null && (
-          <p className="form-hint">{t('hosted.conversions.drawer.impliedRate', { rate: rate.toFixed(4), from: fromCurrency, to: toCurrency })}</p>
-        )}
-
-        <div className="form-group">
-          <label className="form-label" htmlFor="hosted-conversion-date">
-            {t('hosted.conversions.drawer.date')}
-          </label>
-          <Controller
-            name="occurredAt"
-            control={control}
-            render={({ field }) => <input id="hosted-conversion-date" type="date" className="input" {...field} />}
-          />
-          {formState.errors.occurredAt && <p className="form-error">{formState.errors.occurredAt.message}</p>}
-        </div>
-
-        <div className="form-group">
-          <label className="form-label" htmlFor="hosted-conversion-notes">
-            {t('hosted.conversions.drawer.notes')}
-          </label>
-          <Controller
-            name="notes"
-            control={control}
-            render={({ field }) => (
-              <textarea id="hosted-conversion-notes" className="input" placeholder={t('hosted.conversions.drawer.notesPlaceholder')} {...field} />
-            )}
-          />
-        </div>
-      </form>
+        </form>
+      </ReadOnlyFields>
     </Drawer>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Me } from '../../api/client';
-import { TRIAL_BANNER_LAST_DAYS, optimisticTrialPrompt, trialBannerOf, trialWelcomeDue } from '../trialPrompt';
+import { TRIAL_BANNER_LAST_DAYS, billingGateOf, lapseNoticeOf, optimisticTrialPrompt, personStandingOf, trialBannerOf, trialWelcomeDue } from '../trialPrompt';
 
 /**
  * MUT-418: when the first-run "Your free trial has started" step is due, and what the Home trial banner shows.
@@ -95,5 +95,42 @@ describe('optimisticTrialPrompt', () => {
     const answered = optimisticTrialPrompt(EMPTY, 'welcome-skipped', NOW);
     expect(optimisticTrialPrompt(answered, 'welcome-accepted', NOW)).toEqual(answered);
     expect(optimisticTrialPrompt(answered, 'banner-snoozed', NOW)).toEqual({ ...answered, bannerSnoozedUntil: inDays(3) });
+  });
+});
+
+/** MUT-361: the lapse gate's portal view model, read from /v1/me (billingStanding + each profile's billing). */
+describe('billingGateOf / personStandingOf / lapseNoticeOf', () => {
+  type Profile = Me['profiles'][number];
+  const profile = (billing: Billing): Profile => ({ id: 'p', billing }) as unknown as Profile;
+  const withStanding = (billingStanding: Me['billingStanding'] | undefined): Pick<Me, 'billingStanding'> => ({ billingStanding }) as Pick<Me, 'billingStanding'>;
+  const readOnly = (source: 'TRIAL' | 'STRIPE' | 'NONE', until: string | null): Billing => ({ state: 'READ_ONLY', source, tier: source === 'NONE' ? null : 'FREELANCER', until });
+  const locked: Billing = { state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null };
+  const grace: Billing = { state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: inDays(3) };
+
+  it('reads the profile’s state while the server enforces the gate', () => {
+    expect(billingGateOf(withStanding('open'), profile(trial(5)))).toBe('open');
+    expect(billingGateOf(withStanding('open'), profile(grace))).toBe('open');
+    expect(billingGateOf(withStanding('open'), profile(readOnly('TRIAL', inDays(9))))).toBe('read-only');
+    expect(billingGateOf(withStanding('read-only'), profile(locked))).toBe('locked');
+  });
+
+  it('is open everywhere when the server doesn’t enforce it (null standing: signed out, or BILLING_GATE=false)', () => {
+    expect(billingGateOf(withStanding(null), profile(locked))).toBe('open');
+    expect(billingGateOf(withStanding(undefined), profile(readOnly('NONE', null)))).toBe('open');
+    expect(billingGateOf(withStanding('open'), profile(null))).toBe('open');
+    expect(personStandingOf(withStanding(null))).toBe('open');
+    expect(personStandingOf(withStanding('read-only'))).toBe('read-only');
+  });
+
+  it('names a trial’s lock date, says a paid lapse never locks, and has nothing to say on an open profile', () => {
+    expect(lapseNoticeOf(withStanding('open'), profile(readOnly('TRIAL', inDays(9))))).toEqual({ kind: 'read-only', source: 'TRIAL', locksAt: inDays(9) });
+    expect(lapseNoticeOf(withStanding('open'), profile(readOnly('STRIPE', null)))).toEqual({ kind: 'read-only', source: 'STRIPE', locksAt: null });
+    expect(lapseNoticeOf(withStanding('locked'), profile(locked))).toEqual({ kind: 'locked' });
+    expect(lapseNoticeOf(withStanding('open'), profile(trial(5)))).toBeNull();
+    expect(lapseNoticeOf(withStanding(null), profile(readOnly('TRIAL', inDays(9))))).toBeNull();
+  });
+
+  it('warns about a failed payment (GRACE), even though nothing is refused', () => {
+    expect(lapseNoticeOf(withStanding('open'), profile(grace))).toEqual({ kind: 'grace' });
   });
 });

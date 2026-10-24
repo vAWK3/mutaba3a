@@ -362,6 +362,23 @@ const BillingEntitlementSchema = z
   .openapi('BillingEntitlement');
 
 /** MUT-360 review: GET /admin/v1/billing/status, the operator's check before revoking a pilot grant. */
+/**
+ * MUT-361 (Basel's comment 12278): every profile that resolves READ_ONLY or LOCKED and still has an ACTIVE member. Before
+ * the gate goes live the list must be empty (or hold only lapses that are meant), else `billing:grant` each person.
+ */
+export const BillingUncoveredSchema = z
+  .object({
+    profiles: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        name: z.string(),
+        billing: BillingEntitlementSchema,
+        people: z.array(z.object({ userId: z.string().uuid(), email: z.string() })),
+      }),
+    ),
+  })
+  .openapi('BillingUncovered');
+
 export const BillingStatusSchema = z
   .object({
     user: z.object({ id: z.string().uuid(), email: z.string() }),
@@ -805,6 +822,14 @@ export const MeSchema = z
     // Inline, not the TermsStatus ref: the generator writes a ref's null as `nullable`, which OpenAPI 3.1 ignores,
     // so the portal's generated type lost the null (review pass 2). Inline, it is `type: [object, null]`.
     terms: z.object(TERMS_STATUS_SHAPE).nullable(),
+    /**
+     * MUT-361 (ADR-181): the lapse gate's verdict on the person, the best state across their profiles: `open` (some
+     * profile is ACTIVE or GRACE), `read-only`, or `locked` (every profile LOCKED). It decides the person-level routes
+     * (the inbox, the entries feed, New profile); each profile's own gate is its `billing.state`. Null where the gate
+     * isn't enforced (the portal's signed-out mode, or a server with BILLING_GATE=false): then nothing is refused.
+     * Additive since 1.60.0-mut361.
+     */
+    billingStanding: z.enum(['open', 'read-only', 'locked']).nullable(),
   })
   .openapi('Me');
 

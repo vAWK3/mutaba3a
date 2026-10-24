@@ -2,6 +2,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { queryOptions } from '@tanstack/react-query';
 import { api, type HostedProfile, type Me } from '../api/client';
+import { billingGateOf, personStandingOf, type BillingGate } from '../data/trialPrompt';
 
 /**
  * The signed-in person (`GET /v1/me`). Profile figures live under query keys
@@ -53,4 +54,30 @@ export function useProfile(): HostedProfile {
   const profile = useContext(ProfileContext);
   if (!profile) throw new Error('useProfile must be used under /p/$profileId');
   return profile;
+}
+
+/** The active hosted profile, or null outside `/p/$profileId` (the no-profile screens, a drawer opened there). */
+export function useOptionalProfile(): HostedProfile | null {
+  return useContext(ProfileContext);
+}
+
+/**
+ * MUT-361: the lapse gate on the open profile (data/trialPrompt.ts `billingGateOf`). `writable` is what every Add,
+ * Edit and Delete reads; outside a profile it follows the person's standing.
+ */
+export function useWriteGate(): { gate: BillingGate; writable: boolean } {
+  const me = useMe();
+  const profile = useOptionalProfile();
+  const gate = profile ? billingGateOf(me, profile) : personStandingOf(me);
+  return { gate, writable: gate === 'open' };
+}
+
+/** MUT-361: whether the person may do person-level writes (New profile): their best standing across profiles. */
+export function usePersonWritable(): boolean {
+  return personStandingOf(useMe()) === 'open';
+}
+
+/** MUT-361: `useWriteGate().writable` for a profile handed in as a prop (a drawer host that may sit outside the provider). */
+export function useWritableFor(profile: Pick<HostedProfile, 'billing'>): boolean {
+  return billingGateOf(useMe(), profile) === 'open';
 }

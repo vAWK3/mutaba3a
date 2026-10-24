@@ -1,5 +1,6 @@
 import type { HostedProfile, Me, ProfileType, UpdateProfileRequest } from '../api/client';
 import type { HostedCurrency } from '../format/currencies';
+import { personStandingOf } from './trialPrompt';
 
 /**
  * What the portal may offer for a profile (MUT-183). Pure, so every rule is
@@ -10,7 +11,13 @@ import type { HostedCurrency } from '../format/currencies';
 
 /** Below the server's cap. The cap comes from `/v1/me`, never a constant here. */
 export function canCreateProfile(me: Me): boolean {
-  return me.limits.ownedProfiles < me.limits.maxOwnedProfiles;
+  // MUT-361: a person the lapse gate holds everywhere (no writable profile) can't add one either (server: D4).
+  return atProfileCap(me) === false && personStandingOf(me) === 'open';
+}
+
+/** MUT-182: the owned-profile cap is reached (the reason New profile shows the count). */
+export function atProfileCap(me: Me): boolean {
+  return me.limits.ownedProfiles >= me.limits.maxOwnedProfiles;
 }
 
 /** OPERATOR: set up for the user by an operator (MUT-300 D5: "firm" now means firm features are on, owned or not). */

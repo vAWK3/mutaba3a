@@ -13,6 +13,8 @@ import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
 import { useLostAccess } from './lostAccess';
 import { useIsLocalMode } from './mode';
 import { ProfileBanner } from '../components/ProfileBanner';
+import { LapseBanner, LockedScreen } from '../components/LapseGate';
+import { billingGateOf } from '../data/trialPrompt';
 import { pickShellOverlay } from '../data/filters';
 import { useSignOut } from './useSignOut';
 
@@ -123,7 +125,8 @@ function NoProfiles() {
  * profile with a banner that names it, instead of S12.
  */
 export function ProfileLayout({ profileId }: { profileId: string }) {
-  const { profiles } = useMe();
+  const me = useMe();
+  const { profiles } = me;
   const profile = profiles.find((candidate) => candidate.id === profileId);
   const open = useLostAccess((s) => s.open);
   const remember = useLostAccess((s) => s.remember);
@@ -139,13 +142,23 @@ export function ProfileLayout({ profileId }: { profileId: string }) {
       </HostedShell>
     );
   }
+  // MUT-361: a LOCKED profile is one full page (Subscribe, Download my records); a read-only or failing one keeps its
+  // pages under a banner that says why.
+  const locked = billingGateOf(me, profile) === 'locked';
   return (
     <ProfileProvider profile={profile}>
       <HostedShell profile={profile}>
         <LostAccessBanner />
         {/* Keyed so a switch remounts the views: no state or figure carries across profiles. */}
         <Fragment key={profile.id}>
-          <Outlet />
+          {locked ? (
+            <LockedScreen profile={profile} />
+          ) : (
+            <>
+              <LapseBanner profile={profile} />
+              <Outlet />
+            </>
+          )}
         </Fragment>
       </HostedShell>
     </ProfileProvider>

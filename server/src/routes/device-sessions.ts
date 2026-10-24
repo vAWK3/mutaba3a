@@ -67,7 +67,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         idleMs: (settings.deviceIdleDays ?? DEFAULT_DEVICE_IDLE_DAYS) * 86_400_000,
         absoluteMs: (settings.deviceAbsoluteDays ?? DEFAULT_DEVICE_ABSOLUTE_DAYS) * 86_400_000,
       });
-      const me = await buildMe(store, user, terms, c.get('now')());
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'));
       return c.json({ ...me, token }, 201);
     },
   );

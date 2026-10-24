@@ -118,6 +118,12 @@ variable "receipts_library_enabled" {
   default     = false
 }
 
+variable "billing_gate_enabled" {
+  description = "MUT-361 (ADR-181): the lapse gate. true (default) leaves BILLING_GATE unset, and the API enforces it: a READ_ONLY profile refuses session writes and a LOCKED one everything but the records export. false sets BILLING_GATE=false, the operator's kill switch (a pilot person `npm run billing:uncovered` lists still waits for a grant). Nothing is ever deleted either way."
+  type        = bool
+  default     = true
+}
+
 variable "sentry_state_bucket" {
   description = "MUT-148: the GCS bucket holding the Sentry stack's state. null (default) = <project_id>-terraform-state, the bucket both stacks use (DEPLOYMENT.md §1.3)."
   type        = string
