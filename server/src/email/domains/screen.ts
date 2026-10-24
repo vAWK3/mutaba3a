@@ -34,12 +34,16 @@ export interface DomainScreenOptions {
 
 export function createDomainScreen(options: DomainScreenOptions): DomainScreen {
   const { checker, now, logger } = options;
+  // Read at construction (boot), so a missing or malformed list fails the deploy, not every signup (code review).
+  const disposable = loadDomainList('disposable');
+  const webmail = loadDomainList('free-webmail');
+  const relay = loadDomainList('relay');
   return {
     async screen(email) {
       const domain = domainOf(email);
-      if (isListedDomain(domain, loadDomainList('disposable'))) return { kind: 'refused', reason: 'disposable' };
-      if (isListedDomain(domain, loadDomainList('free-webmail'))) return { kind: 'classified', domain, domainClass: 'WEBMAIL', reasons: ['webmail'] };
-      if (isListedDomain(domain, loadDomainList('relay'))) return { kind: 'classified', domain, domainClass: 'BUSINESS_UNVERIFIED', reasons: ['relay'] };
+      if (isListedDomain(domain, disposable)) return { kind: 'refused', reason: 'disposable' };
+      if (isListedDomain(domain, webmail)) return { kind: 'classified', domain, domainClass: 'WEBMAIL', reasons: ['webmail'] };
+      if (isListedDomain(domain, relay)) return { kind: 'classified', domain, domainClass: 'BUSINESS_UNVERIFIED', reasons: ['relay'] };
       if (!isDomainName(domain)) return { kind: 'classified', domain, domainClass: 'BUSINESS_UNVERIFIED', reasons: ['invalid-domain'] };
       let facts: DomainFacts;
       try {
@@ -65,6 +69,8 @@ export const DOMAIN_CACHE_POLICY = { definiteMs: 24 * 3_600_000, transientMs: 10
 
 export class CachedDomainChecker implements DomainChecker {
   private readonly entries = new Map<string, { facts: DomainFacts; expiresAt: number }>();
+  /** One lookup per domain at a time: concurrent signups from one company share it (code review). */
+  private readonly inFlight = new Map<string, Promise<DomainFacts>>();
   private readonly now: () => Date;
   private readonly maxEntries: number;
 
@@ -84,7 +90,11 @@ export class CachedDomainChecker implements DomainChecker {
     const at = this.now().getTime();
     const hit = this.entries.get(domain);
     if (hit && hit.expiresAt > at) return hit.facts;
-    const facts = await this.inner.check(domain);
+    const pending = this.inFlight.get(domain);
+    if (pending) return pending;
+    const lookup = this.inner.check(domain).finally(() => this.inFlight.delete(domain));
+    this.inFlight.set(domain, lookup);
+    const facts = await lookup;
     this.entries.delete(domain);
     this.entries.set(domain, { facts, expiresAt: at + (isTransient(facts) ? DOMAIN_CACHE_POLICY.transientMs : DOMAIN_CACHE_POLICY.definiteMs) });
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);

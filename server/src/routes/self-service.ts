@@ -10,6 +10,7 @@ import { normalizeEmail } from '../auth/users.js';
 import type { Mailer, MailTemplateId, SendInput } from '../email/ports.js';
 import { createFixtureDomainChecker } from '../email/domains/fixture-checker.js';
 import { createDomainScreen, type DomainScreen } from '../email/domains/screen.js';
+import { DOMAIN_CHECK_BUDGET_MS } from '../email/domains/dns-checker.js';
 import type { EmailDomainClass } from '../repositories/ports.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
@@ -39,7 +40,11 @@ export interface SelfServiceOptions {
   /** Per normalised address, both routes, whether or not an account exists (D6). */
   addressMinuteLimiter: RateLimiter;
   addressDayLimiter: RateLimiter;
-  floors: { signupMs: number; recoveryMs: number };
+  /**
+   * `screenMs` (MUT-367, D25 as built): the signup answer also covers the domain screen's budget, measured from before
+   * the screen, so neither a cache hit nor the branch work shows in the timing. Absent = 0 (tests with short floors).
+   */
+  floors: { signupMs: number; recoveryMs: number; screenMs?: number };
   /** The floor's clock (D8). Defaults to performance.now and setTimeout. */
   clock?: MonotonicClock;
   /**
@@ -64,7 +69,7 @@ export function defaultSelfServiceOptions(): SelfServiceOptions {
     ipLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.ipPerHour, HOUR_MS),
     addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
     addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * HOUR_MS),
-    floors: { signupMs: SELF_SERVICE_POLICY.signupFloorMs, recoveryMs: SELF_SERVICE_POLICY.recoveryFloorMs },
+    floors: { signupMs: SELF_SERVICE_POLICY.signupFloorMs, recoveryMs: SELF_SERVICE_POLICY.recoveryFloorMs, screenMs: DOMAIN_CHECK_BUDGET_MS },
   };
 }
 
@@ -172,13 +177,14 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       const email = normalizeEmail(body.email);
       await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'signup', now });
       // MUT-367 (ADR-159 §7a): the business-email screen, for every address alike, before anything is issued. A refusal
-      // depends only on the address. Its time depends only on the domain, so the floor starts after it (D25): the
-      // branches below still sit under a full floor however long the lookups took.
+      // depends only on the address. The floor runs from before the screen and covers its budget too (D25 as built,
+      // code review): a cached domain answers no faster than a fresh one, and the branches still get a full floor.
+      const startedMs = clock.now();
       const screened = await domainScreen.screen(email);
       if (screened.kind === 'refused') throw new ApiError('EMAIL_NOT_ACCEPTED', 'Please use a permanent work email address', { reason: screened.reason });
-      const startedMs = clock.now();
       const domain = { domainClass: screened.domainClass, domainReasons: screened.reasons };
-      return runBranch(c, startedMs, options.floors.signupMs, () => signupBranch(c, { email, locale: body.locale, now, domain }));
+      const floorMs = options.floors.signupMs + (options.floors.screenMs ?? 0);
+      return runBranch(c, startedMs, floorMs, () => signupBranch(c, { email, locale: body.locale, now, domain }));
     },
   );
 

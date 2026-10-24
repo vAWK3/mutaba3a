@@ -236,6 +236,24 @@ lists → parse, sorted, no dups, disjoint; update script deterministic       [e
 dns checker → MX/null MX/A/AAAA/RDAP age/errno/timeout via fake resolver    [dns-checker.test]
 ```
 
+## 9. Code review (before merge, 2026-10-23; as built)
+
+Ten findings from a high-effort review of the diff. Eight were fixed:
+
+- **RDAP bootstrap fetch:** one IANA bootstrap fetch is shared by every lookup, on its own 10 s timeout. A check that reaches its budget stops waiting but no longer cancels the fetch for the others. After a failure with nothing cached, IANA isn't asked again for 10 minutes. Two new tests.
+- **D25, as built:** the `/v1/signups` floor now runs from *before* the screen and covers the screen's budget too (`floors.screenMs`, 2 s in production). So a cached domain answers no sooner than a fresh one, and the branch still gets a full floor.
+- **Cache:** concurrent checks of one domain share one lookup.
+- **Lists:** they are read when the screen is built (boot), so a missing or bad list fails the deploy.
+- **Digest:** the redeem no longer waits for it (`void`). The person's own under-review mail is still sent inside the request.
+- **Granting access:** the operator can't grant access to a pending signup (409 `USER_PENDING_REVIEW`), which would also have blocked its decline.
+- **Review domain:** the review row's domain uses `domainOf` (punycode, lower case).
+- **Memory decline:** it also counts org-scoped idempotency records, as Postgres' RESTRICT does.
+
+Two were kept, as decided:
+
+- **Subdomain addresses** (`a@eng.acme.com`) go to review. This is D6: a walk-up would need the Public Suffix List, and without it free subdomain services would pass as business.
+- **No release-QA flow** for the operator surface. The server and CLI are not a release-qa app here. MUT-368's portal flows drive these routes (§6).
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

@@ -99,6 +99,31 @@ describe('createDnsDomainChecker (MUT-367)', () => {
     expect(slow.cancelled).toBe(true);
   });
 
+  it('code review: one check timing out never cancels the shared bootstrap for the others', async () => {
+    const { fetchFn, requested } = fakeFetch({ [IANA_RDAP_BOOTSTRAP_URL]: { status: 200, body: BOOTSTRAP, delayMs: 40 }, 'https://rdap.registry.example/domain/b.example': registered('2019-05-01T00:00:00Z') });
+    const rdap = createRdapClient({ fetch: fetchFn, now: () => NOW });
+    const early = new AbortController();
+    const first = rdap.lookup('a.example', early.signal);
+    const second = rdap.lookup('b.example', new AbortController().signal);
+    setTimeout(() => early.abort(), 10);
+    expect(await first).toEqual({ status: 'timeout' });
+    expect(await second).toEqual({ status: 'found', registeredAt: new Date('2019-05-01T00:00:00Z') });
+    expect(requested.filter((q) => q.url === IANA_RDAP_BOOTSTRAP_URL)).toHaveLength(1);
+  });
+
+  it('code review: a failed bootstrap is not fetched again for ten minutes', async () => {
+    let clock = NOW.getTime();
+    const { fetchFn, requested } = fakeFetch({ [IANA_RDAP_BOOTSTRAP_URL]: { status: 503 } });
+    const rdap = createRdapClient({ fetch: fetchFn, now: () => new Date(clock) });
+    const signal = new AbortController().signal;
+    expect(await rdap.lookup('a.example', signal)).toEqual({ status: 'error' });
+    expect(await rdap.lookup('b.example', signal)).toEqual({ status: 'error' });
+    expect(requested.filter((q) => q.url === IANA_RDAP_BOOTSTRAP_URL)).toHaveLength(1);
+    clock += 11 * 60_000;
+    await rdap.lookup('c.example', signal);
+    expect(requested.filter((q) => q.url === IANA_RDAP_BOOTSTRAP_URL)).toHaveLength(2);
+  });
+
   it('reads the IANA bootstrap once and reuses it', async () => {
     const r = fakeResolver({});
     const { check, requested } = checker(r, {});

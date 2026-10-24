@@ -222,7 +222,8 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     } catch (err) {
       logger.error({ err, template: 'account-under-review' }, 'review mail failed');
     }
-    await reviewDigest.announce();
+    // Not awaited: the person's answer never waits on the operator's mail; the hourly sweep catches a send this loses.
+    void reviewDigest.announce();
   }
 
   /** Lost a race (another tab, a newer link, a disable, the account made meanwhile, expiry during hashing): say what the link is now. */

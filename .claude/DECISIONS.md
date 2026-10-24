@@ -4796,7 +4796,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Context:** ADR-159 lets anyone sign up. Basel wants business users instantly, hand-approved webmail, and no throwaway addresses.
 
 **Decision:**
-1. **A screen on every signup address**, before anything is issued, so its timing never depends on an account:
+1. **A screen on every signup address**, before anything is issued, so its timing never depends on an account. The answer's floor covers the screen's budget too:
    - **Refused**, on the input alone (400 `EMAIL_NOT_ACCEPTED`): disposable (the vendored list) or no-mail (a null MX, or definitely no MX and no address).
    - **Review:** webmail, relay and alias services, and any domain the checks can't pass.
    - **Business:** an MX, a resolving apex or www, and an RDAP registration at least 90 days old.

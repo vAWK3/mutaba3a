@@ -26,7 +26,7 @@ import { SELF_SERVICE_POLICY } from './auth/self-service.js';
 import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
 import { defaultSelfServiceOptions } from './routes/self-service.js';
 import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.js';
-import { createDnsDomainChecker } from './email/domains/dns-checker.js';
+import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/dns-checker.js';
 import { createFixtureDomainChecker } from './email/domains/fixture-checker.js';
 import { createRdapClient } from './email/domains/rdap.js';
 import { createReviewDigest, msUntilNextSweep } from './email/review-digest.js';
@@ -89,7 +89,7 @@ const selfService = {
   addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * 3_600_000),
   signupEnabled: config.SELF_SIGNUP_ENABLED,
   turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
-  floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS },
+  floors: { signupMs: config.SIGNUP_RESPONSE_FLOOR_MS, recoveryMs: config.RECOVERY_RESPONSE_FLOOR_MS, screenMs: DOMAIN_CHECK_BUDGET_MS },
   // MUT-367 (ADR-159 §7a): DNS and RDAP in production (config refuses the fixture there), cached per domain.
   domainScreen: createDomainScreen({
     checker: new CachedDomainChecker(

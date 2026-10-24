@@ -52,7 +52,7 @@
 ### Changed
 - Operator `enable`/`disable` refuse a pending signup (409 `USER_PENDING_REVIEW`). The operator setup-link route and recovery accept one.
 - `account-ready`, `account-declined` and `review-digest` are outside the per-recipient mail cap.
-- `POST /v1/signups`' floor now starts after the screen (D25).
+- `POST /v1/signups`' floor now also covers the screen's 2 s budget (`floors.screenMs`, D25 as built): it runs from before the screen, so a cached domain answers no sooner than a fresh one. The operator can't grant access to a pending signup.
 - API `1.56.0-mut367`.
 
 ### Technical

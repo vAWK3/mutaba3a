@@ -2136,7 +2136,7 @@ export class MemoryLedgerStore implements LedgerStore {
     if ([...this.inbox.values()].some((e) => e.userId === userId)) return true;
     if ([...this.userIdem.values()].some((r) => (r as { userId?: string }).userId === userId)) return true;
     if (personalOrganizationId === null) return false;
-    const scoped: Map<string, { organizationId: string }>[] = [this.keys, this.ints, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps, this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.exps, this.expCats, this.expReceipts, this.convs, this.expGroups, this.groupMarks];
+    const scoped: Map<string, { organizationId: string }>[] = [this.idem, this.keys, this.ints, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps, this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.exps, this.expCats, this.expReceipts, this.convs, this.expGroups, this.groupMarks];
     return scoped.some((map) => [...map.values()].some((row) => row.organizationId === personalOrganizationId));
   }
 

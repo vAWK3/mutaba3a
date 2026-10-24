@@ -1,3 +1,4 @@
+import { domainOf } from '../email/domains/screen.js';
 import { SETUP_LINK_STATUSES, type EmailDomainClass, type SignupLinkRecord, type UserRecord, type UserStatus } from '../repositories/ports.js';
 import type { SetupLinkState } from './account-setup.js';
 
@@ -63,7 +64,7 @@ export interface SignupAccountOutcome {
  */
 export function signupAccountOutcome(link: SignupLinkRecord, at: Date): SignupAccountOutcome {
   if (link.domainClass === 'BUSINESS') return { status: 'ACTIVE', trialStartsAt: at, review: null };
-  const domain = link.email.slice(link.email.lastIndexOf('@') + 1);
+  const domain = domainOf(link.email);
   const review = link.domainClass
     ? { domain, classification: link.domainClass, reasons: [...link.domainReasons] }
     : { domain, classification: 'BUSINESS_UNVERIFIED' as const, reasons: ['unclassified'] };

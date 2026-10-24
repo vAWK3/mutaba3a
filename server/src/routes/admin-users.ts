@@ -332,7 +332,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         404: notFound,
         409: {
           description:
-            'Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled).',
+            'Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). Either way, USER_PENDING_REVIEW for a signup waiting for review (MUT-367).',
           content: { 'application/json': { schema: ErrorEnvelopeSchema } },
         },
         ...adminErrors,
@@ -341,6 +341,10 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
       const { organizationId, role } = c.req.valid('json');
+      // MUT-367 (code review): a waiting signup gains nothing until it is approved; a membership would also block its decline.
+      if (user.status === 'PENDING_REVIEW') {
+        throw new ApiError('CONFLICT', 'This signup is waiting for review; approve it before granting access', { reason: 'USER_PENDING_REVIEW' });
+      }
       if (role === 'OWNER') return grantCoOwner(c, user, organizationId);
       const org = await store.organizations.getById(organizationId);
       if (!org) throw new ApiError('NOT_FOUND', 'Organization not found');

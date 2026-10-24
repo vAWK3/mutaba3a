@@ -80,6 +80,14 @@ describe('createDomainScreen (MUT-367)', () => {
 });
 
 describe('CachedDomainChecker (D5)', () => {
+  it('code review: concurrent checks of one domain share one lookup', async () => {
+    let calls = 0;
+    const inner: DomainChecker = { check: async () => (calls++, await new Promise((r) => setTimeout(r, 10)), healthy()) };
+    const cached = new CachedDomainChecker(inner, { now: () => NOW });
+    await Promise.all([cached.check('acme.example'), cached.check('acme.example'), cached.check('acme.example')]);
+    expect(calls).toBe(1);
+  });
+
   it('keeps definite facts 24 h and transient ones 10 min, and bounds its size', async () => {
     let clock = NOW.getTime();
     let calls = 0;

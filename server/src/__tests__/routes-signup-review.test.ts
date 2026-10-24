@@ -42,7 +42,7 @@ function countingHasher(delayMs = 15): PasswordHasher & { verifies: number } {
   return hasher;
 }
 
-function harness() {
+function harness(floors: { signupMs: number; recoveryMs: number; screenMs?: number } = { signupMs: 5, recoveryMs: 5 }) {
   const store = new MemoryLedgerStore();
   const logger = pino({ level: 'silent' });
   const outbox = new MemoryMailTransport(() => NOW);
@@ -60,7 +60,7 @@ function harness() {
     passwordHasher,
     signInIpLimiter: generous(),
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 30, deviceAbsoluteDays: 180, portalOrigin: PORTAL },
-    selfService: { signupEnabled: true, turnstile: OK_ONLY, ipLimiter: generous(), addressMinuteLimiter: generous(), addressDayLimiter: generous(), floors: { signupMs: 5, recoveryMs: 5 } },
+    selfService: { signupEnabled: true, turnstile: OK_ONLY, ipLimiter: generous(), addressMinuteLimiter: generous(), addressDayLimiter: generous(), floors },
     signupReview: { digest: createReviewDigest({ store, mailer, logger, now: () => NOW, to: OPERATOR }), supportAddress: SUPPORT },
   });
   return { app, store, outbox, passwordHasher };
@@ -144,6 +144,15 @@ describe('MUT-367 signup screen (A1)', () => {
     expect(await h.store.signupReviews.findByUser(relayUser.id)).toMatchObject({ classification: 'BUSINESS_UNVERIFIED', reasons: ['relay'] });
     // Two pending in one hour: one digest.
     expect(h.outbox.list({ to: OPERATOR })).toHaveLength(1);
+  });
+
+  it('D25 (code review): the answer’s floor covers the screen too, so a cached domain answers no sooner than a fresh one', async () => {
+    const h = harness({ signupMs: 20, recoveryMs: 5, screenMs: 40 });
+    for (const email of [at('studio.example'), at('studio.example')]) {
+      const started = performance.now();
+      expect((await signup(h, email)).status).toBe(202);
+      expect(performance.now() - started).toBeGreaterThanOrEqual(58);
+    }
   });
 
   it('D8: signing up again with a pending account’s address gets the “you already have an account” mail', async () => {
@@ -299,6 +308,18 @@ describe('MUT-367 the operator’s review queue (A3)', () => {
       expect(((await res.json()) as Loose).error.details).toEqual({ reason: 'USER_PENDING_REVIEW' });
     }
     expect((await h.store.users.getById(user.id))?.status).toBe('PENDING_REVIEW');
+  });
+
+  it('code review: the operator can’t grant access to a pending signup (it would also block its decline)', async () => {
+    const h = harness();
+    const email = at('gmail.com');
+    await signUpAndRedeem(h, email);
+    const user = (await h.store.users.findByEmail(email))!;
+    const firm = await h.store.organizations.create({ name: 'Firm', slug: `firm-${seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const res = await h.app.request(`/admin/v1/users/${user.id}/memberships`, json({ organizationId: firm.id }, ADMIN));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as Loose).error.details).toEqual({ reason: 'USER_PENDING_REVIEW' });
+    expect((await admin(h, `/admin/v1/signup-reviews/${user.id}/decline`, 'POST')).status).toBe(200);
   });
 
   it('D16: /v1/me names the status billing reads', async () => {
