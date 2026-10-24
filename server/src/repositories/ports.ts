@@ -1851,11 +1851,24 @@ export type SaveBillingSubscriptionOutcome = 'created' | 'changed' | 'unchanged'
  * MUT-358: billing state. Reads are a signed-in person's (`/v1/me`, store guard `sessionOnly`); writes are the
  * operator's and, from MUT-360, the Stripe webhook's (both on the unguarded store).
  */
+/** MUT-419: one person the trial-mail run considers. */
+export interface TrialMailCandidate {
+  userId: string;
+  email: string;
+  locale: UserLocale;
+  trialStartedAt: Date;
+}
+
 export interface BillingRepository {
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
   /** MUT-331's signup sets it at email verification. Null for an unknown user. */
   setTrialStart(userId: string, at: Date): Promise<{ trialStartedAt: Date } | null>;
+  /**
+   * MUT-419: ACTIVE people whose trial started in `(startedAfter, startedUpTo]`, oldest trial first: who the daily
+   * trial-mail run looks at. PENDING_REVIEW people have no trial until approval; DISABLED people are never mailed.
+   */
+  trialMailCandidates(window: { startedAfter: Date; startedUpTo: Date }): Promise<TrialMailCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */
@@ -1978,6 +1991,8 @@ export interface LedgerStore {
   expenses: ExpenseRepository;
   expenseCategories: ExpenseCategoryRepository;
   expenseReceipts: ExpenseReceiptRepository;
+  /** MUT-254: vendors per profile; session-only like expenses (store guard `expenses`). */
+  vendors: VendorRepository;
   /** MUT-66: the unsorted inbox — the one repository scoped by user, not by organization. */
   inboxEntries: InboxEntryRepository;
   /** MUT-131: idempotency for organization-independent writes (POST /v1/inbox's create). */
@@ -2099,6 +2114,8 @@ export interface ExpenseRecord {
   currency: string;
   title: string | null;
   vendor: string | null;
+  /** MUT-254: the vendor `vendor` resolved to on this profile; null when no vendor was typed (or not yet linked). */
+  vendorId: string | null;
   categoryId: string | null;
   customerId: string | null;
   projectId: string | null;
@@ -2117,6 +2134,8 @@ export interface CreateExpenseInput {
   currency: string;
   title: string | null;
   vendor: string | null;
+  /** MUT-254: resolved by the caller (`vendors.resolve`) before the write; absent = no vendor. */
+  vendorId?: string | null;
   categoryId: string | null;
   customerId: string | null;
   projectId: string | null;
@@ -2125,7 +2144,80 @@ export interface CreateExpenseInput {
 }
 
 /** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */
-export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
+
+// ---- MUT-254: vendors --------------------------------------------------------
+
+export interface VendorRecord {
+  id: string;
+  organizationId: string;
+  canonicalName: string;
+  registrationNo: string | null;
+  phone: string | null;
+  email: string | null;
+  lastCategoryId: string | null;
+  lastUsedAt: Date;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** One of a vendor's names (its canonical name or an alias), unique per profile by `nameKey`. */
+export interface VendorNameRecord {
+  id: string;
+  organizationId: string;
+  vendorId: string;
+  name: string;
+  nameKey: string;
+  createdAt: Date;
+}
+
+/** A typeahead hit: the vendor and the name of it that matched best (the canonical name or an alias). */
+export interface VendorSuggestion {
+  vendor: VendorRecord;
+  matchedName: string;
+  score: number;
+  /** The query's key is exactly one of this vendor's names: saving the typed text links this vendor (V1). */
+  exact: boolean;
+}
+
+/** What a writer typed: the vendor's name, and whatever details came with it (a receipt reader's, MUT-257). */
+export interface ResolveVendorInput {
+  organizationId: string;
+  name: string;
+  registrationNo?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+/**
+ * MUT-254 (ADR-183): vendors per profile, saved automatically from any typed vendor. Session-only (store guard
+ * `expenses`); Malafat's API key never reaches them.
+ */
+export interface VendorRepository {
+  /**
+   * Find the vendor a typed name means, or create it — exactly (decision V1), in one transaction retried whole once
+   * on a unique violation (a concurrent create of the same name): registration number first, then the normalised
+   * name or an alias. A registration hit adds the typed name as an alias when no vendor has it yet; a name hit fills a
+   * missing registration number, phone or email, never overwriting one. null when the name normalises to nothing.
+   * Changes no default: `touch` does that, after the expense write succeeded.
+   */
+  resolve(input: ResolveVendorInput, at: Date): Promise<VendorRecord | null>;
+  /**
+   * After a successful expense write: `lastUsedAt = at`, and `lastCategoryId` when a category is given and it isn't the
+   * profile's automatic Other. Locks the category (KEY SHARE) before the vendor row — the order a profile type change
+   * takes (categories, then vendors) — so the two can't deadlock. Never bumps `version`.
+   */
+  touch(organizationId: string, vendorId: string, change: { categoryId: string | null }, at: Date): Promise<void>;
+  getById(organizationId: string, id: string): Promise<VendorRecord | null>;
+  /**
+   * The typeahead: names whose key starts with or contains the query's key (SQL prefilter), plus the profile's most
+   * recently used vendors, scored in JS (vendors/keys.ts scoreVendorName); best name per vendor, highest first.
+   * An empty query is the most recently used. Never another profile's vendors.
+   */
+  search(organizationId: string, query: string, limit: number): Promise<VendorSuggestion[]>;
+}
+
 
 export interface ExpenseFilter {
   /** Inclusive. */
@@ -2635,6 +2727,9 @@ export interface ProfileExportRecords {
   expGroups: ExpenseGroupRecord;
   /** Keyed `${groupId}:${expenseId}`. */
   groupMarks: ExpenseGroupOverrideRecord;
+  /** MUT-254: vendors and their names (both, so a restored store keeps one vendor per name). */
+  vendors: VendorRecord;
+  vendorNames: VendorNameRecord;
 }
 
 export type ProfileExportField = keyof ProfileExportRecords;

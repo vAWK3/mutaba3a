@@ -108,10 +108,10 @@ describe('MUT-42 carries MUT-39’s expense criteria', () => {
     const { h, a } = await setup();
     const doc = (await read(await h.app.request('/openapi.json'))) as { paths: Record<string, Record<string, unknown>> };
     const ops = Object.entries(doc.paths)
-      .filter(([path]) => /^\/v1\/(expenses|expense-categories|summaries\/expenses)/.test(path))
+      .filter(([path]) => /^\/v1\/(expenses|expense-categories|vendors|summaries\/expenses)/.test(path))
       .flatMap(([path, item]) => ['get', 'post', 'patch', 'delete'].filter((m) => item[m]).map((m) => [m.toUpperCase(), path] as const));
-    // MUT-339 added GET /v1/expenses/streak.
-    expect(ops).toHaveLength(14);
+    // MUT-339 added GET /v1/expenses/streak, MUT-254 GET /v1/vendors.
+    expect(ops).toHaveLength(15);
     for (const [method, path] of ops) {
       const res = await h.app.request(path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-0000000000aa'), { method, headers: { ...a.auth, 'content-type': 'application/json', ...idem(), 'if-match': '1' }, ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }) });
       expect(res.status, `${method} ${path}`).toBe(403);
@@ -132,6 +132,7 @@ describe('POST /v1/expenses', () => {
       currency: 'ILS',
       title: 'Court fee',
       vendor: 'Magistrate court',
+      vendorId: expect.any(String),
       categoryId: null,
       customerId: a.customer.id,
       projectId: a.project.id,

@@ -49,6 +49,108 @@
 ### Files
 - `src/hosted/{router.tsx,hosted.css,i18n/*.json}`, `src/hosted/pages/you/**`, `src/hosted/shell/{HostedShell,YouLinks,youRoutes,initials}`, `src/hosted/session/AuthGate.tsx`, `src/hosted/components/{LapseGate,MalafatPortal,SectionTabs,YouRows,ProfileKindLine,ProfilesManageDrawer,UsageSwitchRow,AppDownloadRows}.tsx`, `src/hosted/data/trialPrompt.ts`, `src/styles/__tests__/direction.test.ts`, `qa/**`.
 
+## [Unreleased] - 2026-10-24 — MUT-291 review fixes: the carry-over fails loudly, never quietly (ADR-185 amendment 1)
+
+**Why:** `/qa-reconcile` ran ten reviewers on the branch. Their findings:
+- One unreadable table could arrive empty and still be marked carried.
+- The old page waited forever when the new one failed.
+- An ordinary Restore failed on a retired currency.
+- A few loops were quadratic on large backups.
+
+### Fixed
+- **The free app reads its backup strictly for the carry-over** (`src/db/backup.ts`): a table it can't read fails the carry-over instead of arriving empty.
+- **The new address answers `failed`** (`src/lib/carryOver/protocol.ts`, `ReceivePage.tsx`). This covers a refused or failed check, a payload that's too large, or a save that didn't finish. Both old pages then offer the file with their own message, and nothing is marked carried. Answers count only after `ready`.
+- **Restore with a retired currency** (AED, SAR, QAR, BHD, OMR) works again with carry-over options: `bigintToDecimal` is the server's `formatMoney`.
+- **Receiving:**
+  - A failed "Download what's here first" keeps the checked summary.
+  - A failed save says so (`save-failed`).
+  - Replace asks with "Yes, replace everything", announced, and ignores the second click of a double-click.
+- **Old address, old app and replay:**
+  - The old address offers the move when its records can't be counted, instead of leaving.
+  - The old app no longer hangs when it can't note the carry-over.
+  - It keeps the banner after Carry over again, then Keep using.
+  - Receipts of an expense that didn't come are listed.
+  - A receipt file that won't decode is listed, not fatal.
+  - A receipt refused at complete is deleted again.
+  - A settle's id comes from `payment.id`.
+  - The records file's summary lists missing receipt files.
+  - Another tab's mode change no longer pulls the receiver to Overview (`SessionBridge.tsx`). The old tab lands on the new address right after `done`; release-QA caught it.
+- **Speed and layout:**
+  - Payment records, receipts and project currencies are grouped once (they were O(n×m)).
+  - One date formatter per timezone.
+  - The replay yields every 40 ms through a MessageChannel, and between phases.
+  - A zip is sniffed from two bytes.
+  - The carried banner no longer pushes the 100vh shell below the fold.
+  - The carry-over pages use the sign-in card's h1.
+  - The warning notes are body size.
+- **Origins and copy:**
+  - Carry-over origins must be canonical, and release builds refuse loopback origins.
+  - Copy: English "Arrived" without broken plurals; Arabic title «انتقلت متابعة إلى عنوان جديد» and «مؤقتًا»; one "Download my records file" label on both old pages; an API reason isolated inside its sentence.
+
+### Technical
+- MUT-291 moves to ADR-185 and TD-227/228/229, the next free numbers when it landed: ADR-181 and TD-221/222 are MUT-361's, ADR-183 and TD-224/225 MUT-254's, ADR-184 and TD-223/226 MUT-419's, and ADR-182 is held by MUT-424's plan.
+- New TD-230 (the gate sees only carried rows), TD-231 (the legacy origins have no end date), TD-232 (release order).
+- Removed: `prepareFreeAppCarryOver`, `ReplayOptions.yieldEvery`, `CARRIED_EXPONENT` and its drift test. Added: `recordsFileName` shared by three downloads; `CHANGE_CODES` / `NOT_CARRIED_CODES`.
+
+---
+
+## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-185)
+
+**Why:** the free web app's records live in its own browser origin and the new address can't read them (MUT-284). Stage `redirect` needs the old address's `/carry-over` page. Plan, decisions D1–D10 and the eng review: `.claude/designs/mut-291-carry-over.md`.
+
+### Added
+- **The free web app's carry-over screen** (`src/pages/carryOver/`): from stage `live`, every visit offers Carry my records over, Download my records file, and Keep using the old app for now. An empty browser goes straight to the new address. Once carried, a banner says changes won't follow (`Settings.carriedOverAt`).
+- **`/carry-over/receive`** (portal) takes the old app's backup or the old address's records file. It shows counts, totals per currency, what changed and what didn't come, plus the JOD warning, and replaces after D3's confirm. **`/carry-over`** (portal, the old address) offers the move or goes straight on.
+- **Your data › Restore reads the old web app's backup file** (E5).
+- `src/hosted/local/carryOver/`: `parseFreeAppBackup`, `mapFreeAppBackup`, `replayCarryOver`, the totals gate (`freeAppTotals`, `snapshotTotals`), `prepareFromBackup`. Plus `src/lib/carryOver/protocol.ts`, `build.ts` and `leave.ts`.
+- Local backend: `prepareCarryOver`, `countRecordsOnThisDevice`, `PendingRestore.deviceRecordCount`/`carryOver`. `createLocalApp` takes `rateLimitPerMinute` (Infinity = none). Also `MemoryAttachmentStorage` and `datasetRepo.countRecords`.
+- Build: `__CARRY_OVER__` in both builds from `config/hosts.json`. It's off before stage `live` and in the web dev server; `MUTABA3A_CARRY_OVER` sets QA origins, or `off`.
+- Release QA: the `carry-over` app (three loopback origins), 7 features, 7 specs passing.
+
+### Technical
+- Tests:
+  - mapping (T-U1–T-U11), replay and the gate (T-U12, T-I2);
+  - the real free app's data carried and restored with equal totals (T-I1), twice (T-I5);
+  - the real local backend (T-I3, T-I4), the protocol (T-U13, T-U20, T-U21);
+  - both portal pages and the free app's gate (T-U15, T-U16, T-U23);
+  - no COOP (server and Netlify), the bundle rules over the carry-over code (T-U22);
+  - T-P1 timing: 20,000 records in 4.3 s.
+- `restoredHome` moves out of `YourDataDrawer` into `src/hosted/session/restoredHome.ts`.
+
+## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-184)
+
+**Why:** ADR-160 D3's trial runs out whether or not the person opens the portal. Someone who never signs in got no warning before losing write access or before the lock.
+
+### Added
+- `server/src/billing/trial-mail.ts`: `trialMailStageOf` (stages are windows from `trialTimelineOf`: day 11–14 `ending-soon`, 14–27 `ended`, 27–30 `locking-soon`), `runTrialMail` (one person at a time, key `trial:<userId>:<stage>`, 200 s time budget, dry run), `trialMailLinks` (`/?billing=true&step=subscribe`, `/?yourData=true`).
+- Who: only people every one of whose profiles is their own TRIAL profile (so "your account" is what the gate does); skips `paying`, `covered`, `other-profiles`, `suppressed`, `gate-off`.
+- Templates `trial-ending-soon`, `trial-ended`, `trial-locking-soon` (en/ar, "within N days", no amount or date), outside the per-recipient cap.
+- `POST /jobs/v1/billing/trial-mail` (Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (`{dryRun}`, rows); `npm --prefix server run billing:trial-mail [-- --dry-run]`. 503 without Stripe; production refuses a real run with loopback links (409 `LINK_ORIGIN_LOOPBACK`).
+- `billing.trialMailCandidates` (memory + Prisma, operator-only in the store guard).
+- Terraform `google_cloud_scheduler_job.trial_mail`, daily 10:00 Asia/Jerusalem, only with `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled`; `tests/trial_mail.tftest.hcl`.
+
+### Changed
+- API `1.63.0-mut419`; `src/hosted/api/schema.d.ts` regenerated.
+
+---
+
+## [Unreleased] - 2026-10-24 — Vendors are remembered per profile and suggested as you type (MUT-254, ADR-183)
+
+### Added
+- `vendors` and `vendor_names` tables and `expenses.vendorId` (migration `20261024190000_mut254_vendors`, additive). Every expense writer (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) links the typed vendor: exact match on the registration number, then the normalised name or an alias (Arabic letter forms, diacritics, punctuation and legal suffixes folded); a new name creates the vendor. Optional `vendorDetails { registrationNo, phone, email }` help the match and fill what a vendor lacks.
+- `GET /v1/vendors?q=&limit=`: the session-only typeahead (prefix, contains, then near-miss spellings; most recently used when empty). Malafat's key is refused.
+- A vendor remembers its last category (never the automatic Other) only after a write succeeded.
+- `npm run backfill:vendors` (`--dry`), also run by post-roll on every deploy.
+- **Portal:** the expense drawer's Vendor field suggests saved vendors, keeps typed text as a new one, and prefills the vendor's last category into an empty Category. en/ar. QA `portal.expenses.vendor-typeahead`.
+
+### Changed
+- `Expense` gains `vendorId`. Local-mode snapshot format 6 (vendors maps; 5 → 6 migration), records export carries vendors and names. API `1.62.0-mut254`.
+
+### Files
+- `server/prisma/{schema.prisma,migrations/20261024190000_mut254_vendors}`, `server/src/vendors/keys.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/expenses/compose.ts`, `server/src/routes/{expenses,inbox,receipts,vendors,portal-routes}.ts`, `server/src/scripts/{backfill-vendors,post-roll}.ts`, `src/hosted/components/{VendorPicker,ExpenseDrawer}.tsx`, `src/hosted/local/migrations/index.ts`, `qa/support/portalApi.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
 
 ### Fixed

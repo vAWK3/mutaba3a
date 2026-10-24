@@ -30,6 +30,7 @@ import type { Mailer } from './email/ports.js';
 import type { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
+import { trialMailRoutes } from './routes/trial-mail.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
 import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
 import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js';
@@ -125,6 +126,8 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
+  trialMail?: { refuseLoopbackLinks: boolean };
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -218,7 +221,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.60.0-mut361';
+export const API_VERSION = '1.63.0-mut419';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -386,6 +389,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: deps.stripeWebhookIpLimiter ?? new SlidingWindowRateLimiter(STRIPE_WEBHOOK_POLICY.ipPerMinute),
       trustedProxyHops: sessions.trustedProxyHops,
       ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
+    }),
+  );
+  // MUT-419: the daily trial reminders (job + operator), on the unguarded store like the Stripe sync.
+  app.route(
+    '/',
+    trialMailRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      billingConfigured: Boolean(deps.stripe),
+      gateOn: deps.billingGate ?? false,
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );
   // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.

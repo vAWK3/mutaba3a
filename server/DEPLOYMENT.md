@@ -308,7 +308,12 @@ What you will see, and what to answer:
    shipped with no backfill). Normally prints `post-roll: 0 captured payment(s)
    re-marked origin CAPTURE` and `post-roll: 0 personal profile(s) backfilled,
    0 skipped`; the proxy stops. A `still has no personal profile` warning names
-   a user to provision by hand.
+   a user to provision by hand. Since MUT-254 it also links expenses to their
+   vendors (`post-roll: vendors — N expense(s) linked, …`): the first deploy
+   with the vendors migration links every existing expense; later runs link
+   only what the old revision wrote during the roll (normally 0). The same
+   step by hand: `DATABASE_URL=… npm run backfill:vendors -- --dry`, then
+   without `--dry`.
 8. The last line is the service URL: `https://mutaba3a-api-….a.run.app`. Keep it.
 
 Repeat runs are the same command; plan 2 shows no changes and the service
@@ -732,8 +737,17 @@ keep working only while it is claimed. Apple's CDN caches the AASA for up to abo
 
 ### Step 6: redirect the old hosts (`stage: "redirect"`)
 
-**Only after the carry-over (MUT-112/MUT-291, design §7) has shipped.** Before that, a
-redirect strands signed-out local-mode records on run.app.
+**Only after the carry-over (MUT-291, ADR-185) has shipped and been checked.** Before that, a
+redirect strands signed-out local-mode records on run.app. In order:
+
+1. `make release server`: ships the receiver (`/carry-over/receive` on the new host) and the old
+   host's `/carry-over` page. Both are inert until someone opens them.
+2. `make release web`: ships the free web app's carry-over screen. From now on, every visit to
+   `netlify.app/app` with records offers the move (MUT-291 D1).
+3. **Day-7 check (operator):** in one real browser holding free-app records, carry them to the
+   live new host and compare the summary's totals with the old app's own screens. Do the same
+   from run.app signed out, if you have local records there.
+4. Then this step.
 
 In `config/hosts.json`, set `"stage": "redirect"`, commit, then:
 
@@ -749,6 +763,9 @@ make release server
   browser on.
 - **Never redirected on run.app:** the API (`/v1/*`), `/admin/*`, the association files,
   `/health`, `/ready`, `/assets/*`, static files and writes.
+- **Then, in the next phone release (Flutter repo):** drop `MUTABA3A_LEGACY_LINK_HOST` (xcconfig,
+  entitlements, the Android manifest and `asset_statements`, the guard test). Not before: until the
+  redirect is live, run.app links still exist and the phone opens them.
 
 Check it:
 
@@ -1317,6 +1334,17 @@ read -rs KEY && printf '%s' "$KEY" | gcloud secrets versions add mutaba3a-api-tu
 At GA (after billing and account closing are live), set `self_signup_enabled = true` and release. Unredeemed signup links are deleted a week after they expire (hourly, in process).
 
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
+
+#### Trial reminders (MUT-419, ADR-184)
+
+A daily Cloud Scheduler job (`mutaba3a-trial-mail`, 10:00 Asia/Jerusalem) posts to `/jobs/v1/billing/trial-mail` with the job token. Terraform creates it only when `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled` are all on. Each person in days 11–30 of an unpaid trial gets the mail for their stage once: the trial ends within 3 days (Add a card), it ended (read-only: Subscribe, Download my records), the account locks within 3 days. People with a card, a grant, Malafat, a firm or any profile that isn't their own TRIAL one get nothing (the portal's banners still show). A second run the same day sends nothing new.
+
+```bash
+npm --prefix server run billing:trial-mail -- --dry-run --url "$URL"   # who would get what today, and why others are skipped
+npm --prefix server run billing:trial-mail -- --url "$URL"             # send today's now (the same run as the job)
+```
+- Call it by the service's public URL (or set `PORTAL_ORIGIN`): in production a real run whose links would point at localhost is refused (409 `LINK_ORIGIN_LOOPBACK`).
+- `Stopped at its time budget` means the run hit 200 s; run it again or let tomorrow's job continue.
 
 #### Business email and the signup review queue (MUT-367, ADR-178)
 

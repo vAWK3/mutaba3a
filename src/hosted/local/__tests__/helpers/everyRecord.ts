@@ -129,12 +129,16 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   await store.attachments.setKey(org, document.id, `org/${org}/attachments/${document.id}`);
   await store.attachments.complete(org, document.id, AT);
 
-  // expCats, exps, expReceipts: a categorized expense with a READY receipt
+  // expCats, exps, expReceipts, vendors, vendorNames: a categorized expense at a saved vendor (with an alias), with a READY receipt
   const category = await store.expenseCategories.create(org, { name: 'Travel', color: null }, AT);
+  const vendor = (await store.vendors.resolve({ organizationId: org, name: 'Yellow Cab', registrationNo: '516667276', phone: '+972 2 555 0100', email: 'billing@yellowcab.test' }, AT))!;
+  await store.vendors.resolve({ organizationId: org, name: 'Yellow Taxi', registrationNo: '51-666-7276' }, AT);
+  await store.vendors.resolve({ organizationId: org, name: 'Corner Shop' }, AT);
   const expense = await store.expenses.create(
-    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id },
+    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', vendorId: vendor.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id },
     AT,
   );
+  await store.vendors.touch(org, vendor.id, { categoryId: category.id }, AT);
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-02', uploadedByUserId: user.id, requestId: null }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.complete(org, receipt.id, AT);

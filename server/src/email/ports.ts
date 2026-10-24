@@ -18,6 +18,9 @@ export const TEMPLATE_IDS = [
   'account-ready',
   'account-declined',
   'review-digest',
+  'trial-ending-soon',
+  'trial-ended',
+  'trial-locking-soon',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -33,7 +36,17 @@ export const RECOVERY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTempl
  * MUT-367 (D26): the review outcomes only the operator triggers, so strangers can't cap them away; and the digest,
  * whose recipient is us.
  */
-export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['password-changed', 'account-ready', 'account-declined', 'review-digest']);
+export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>([
+  'password-changed',
+  'account-ready',
+  'account-declined',
+  'review-digest',
+  // MUT-419 (D11): only the daily run sends these, at most one a day per person, and a stranger asking for signup links
+  // to the address must not cap away the lock warning.
+  'trial-ending-soon',
+  'trial-ended',
+  'trial-locking-soon',
+]);
 
 export interface TemplateVars {
   /** MUT-366: a SIGNUP link to /setup. */
@@ -52,6 +65,13 @@ export interface TemplateVars {
   'account-declined': { supportAddress: string };
   /** MUT-367: to the operator. */
   'review-digest': { pending: number; command: string };
+  /**
+   * MUT-419: the trial reminders. `daysLeft` is whole days left, rounded up (1-3), always worded "within N days" (D2).
+   * `subscribeLink` opens Billing's Subscribe step; `exportLink` opens Your data (the records export).
+   */
+  'trial-ending-soon': { daysLeft: number; subscribeLink: string };
+  'trial-ended': { subscribeLink: string; exportLink: string };
+  'trial-locking-soon': { daysLeft: number; subscribeLink: string; exportLink: string };
 }
 
 export interface RenderedMail {

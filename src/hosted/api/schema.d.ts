@@ -8475,6 +8475,86 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vendor suggestions for what was typed (the typeahead)
+         * @description Names (a vendor’s own or an alias) that start with the query rank first, then names that contain it, then near-misses (similar spelling, at least 60%); one row per vendor, best name first. Matching ignores case, spacing, punctuation, Arabic letter forms and diacritics, and a trailing legal suffix (Ltd, Inc, בע״מ, ش.م.م …). Empty q: the most recently used. Suggestions only: saving an expense matches its vendor exactly.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description What was typed so far. Empty or absent: the most recently used vendors. */
+                    q?: string;
+                    /** @description 1–25. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Suggestions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VendorSuggestionList"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/income": {
         parameters: {
             query?: never;
@@ -13940,6 +14020,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/trial-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily trial reminders (Cloud Scheduler)
+         * @description Mails each person in days 11–30 of an unpaid trial the reminder for the stage they are in: the trial ends within 3 days, it has ended (read-only), the account locks within 3 days. Each stage once per person; a second run the same day sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrialMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/trial-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the trial reminders now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per person in a reminder window: their stage, and whether they are mailed or why not (paying, covered, other-profiles, suppressed, gate-off). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrialMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/email/resend/webhook": {
         parameters: {
             query?: never;
@@ -14165,7 +14381,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -15154,6 +15370,8 @@ export interface components {
             title: string | null;
             vendor: string | null;
             /** Format: uuid */
+            vendorId: string | null;
+            /** Format: uuid */
             categoryId: string | null;
             /** Format: uuid */
             customerId: string | null;
@@ -15172,6 +15390,7 @@ export interface components {
             /** Format: uuid */
             categoryId?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             title?: string;
             /** Format: uuid */
             customerId?: string;
@@ -15180,6 +15399,13 @@ export interface components {
              * @description With projectId alone, customerId is the project's customer
              */
             projectId?: string;
+        };
+        /** @description MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor` */
+        VendorDetails: {
+            registrationNo?: string;
+            phone?: string;
+            /** Format: email */
+            email?: string;
         };
         IncomeResponse: {
             /** Format: uuid */
@@ -15950,6 +16176,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             title?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string;
             /** Format: uuid */
@@ -15975,6 +16202,7 @@ export interface components {
             currency?: components["schemas"]["Currency"] & unknown;
             title?: string | null;
             vendor?: string | null;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string | null;
             /** Format: uuid */
@@ -16052,6 +16280,21 @@ export interface components {
             name?: string;
             color?: string | null;
             archived?: boolean;
+        };
+        VendorSuggestionList: {
+            items: components["schemas"]["VendorSuggestion"][];
+        };
+        VendorSuggestion: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            matchedName: string;
+            registrationNo: string | null;
+            phone: string | null;
+            email: string | null;
+            exact: boolean;
+            /** Format: uuid */
+            lastCategoryId: string | null;
         };
         IncomeCaptureResponse: components["schemas"]["IncomeResponse"] & {
             receivedCount?: number;
@@ -16374,6 +16617,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             title?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string;
             /** Format: uuid */
@@ -16793,6 +17037,55 @@ export interface components {
                 code: string;
             }[];
             pruned: number;
+        };
+        TrialMailSummary: {
+            dryRun: boolean;
+            /** @description People in a reminder window */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description Already mailed for this stage */
+            duplicate: number;
+            /** @description Due but not sent: mail off, capped, provider failure, refused or suppressed */
+            notSent: number;
+            skipped: {
+                /** @description A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed */
+                paying: number;
+                covered: number;
+                otherProfiles: number;
+                suppressed: number;
+                gateOff: number;
+            };
+            /** @description The time budget ran out; the next run continues */
+            incomplete: boolean;
+        };
+        TrialMailRun: {
+            summary: components["schemas"]["TrialMailSummary"];
+            rows: components["schemas"]["TrialMailRow"][];
+        };
+        TrialMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            /** @enum {string} */
+            stage: "ending-soon" | "ended" | "locking-soon";
+            /** @description Whole days to the deadline the mail names, rounded up; null for `ended` */
+            daysLeft: number | null;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "paying" | "covered" | "other-profiles" | "suppressed" | "gate-off" | null;
+            /**
+             * @description The mailer's answer; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        TrialMailRequest: {
+            dryRun: boolean;
         };
         EmailWebhookResponse: {
             /** @enum {boolean} */

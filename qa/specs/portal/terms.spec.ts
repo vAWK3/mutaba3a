@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, QA_CLIENT_RELEASE, QA_TERMS_VERSION, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
-import { openYou, youRow } from '../../support/you';
+import { openYou } from '../../support/you';
 
 /**
  * MUT-324 (ADR-102): accepting the terms on the portal. The in-memory API

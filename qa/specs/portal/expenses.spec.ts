@@ -381,3 +381,43 @@ test('An expense saved with a category, a client and a matter shows all three in
     await expect(drawer.getByLabel('Matter')).toHaveValue('Haddad v. Levi');
   });
 });
+
+test('The vendor field suggests saved vendors: a new one is kept as typed, and picking one prefills its last category', { tag: '@portal.expenses.vendor-typeahead' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [office_, travel] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+  const vendor = drawer.getByLabel('Vendor');
+
+  await step('Record an expense at a new vendor, Yellow Cab, under Travel', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Amount').fill('45');
+    await drawer.getByLabel('Category').selectOption({ label: 'Travel' });
+    await vendor.fill('Yellow Cab');
+    await expect(drawer.getByRole('option', { name: /New vendor.*Yellow Cab/ })).toBeVisible();
+    await vendor.press('Enter');
+    await expect(vendor).toHaveValue('Yellow Cab');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('Record another and type "yel": Yellow Cab is suggested', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Amount').fill('30');
+    await vendor.fill('yel');
+    await expect(drawer.getByRole('option', { name: 'Yellow Cab', exact: true })).toBeVisible();
+    // The box asks once typing pauses (the recent list may show it first).
+    await expect.poll(() => api.last('GET', /^\/v1\/vendors$/)?.query.get('q')).toBe('yel');
+  });
+
+  await step('Pick it: Vendor is filled and Category prefilled with Travel', async () => {
+    await drawer.getByRole('option', { name: 'Yellow Cab', exact: true }).click();
+    await expect(vendor).toHaveValue('Yellow Cab');
+    await expect(drawer.getByLabel('Category')).toHaveValue(travel.id);
+  });
+
+  await step('Save: the server gets the vendor and its category', async () => {
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/expenses$/)?.body).toMatchObject({ amount: '30', vendor: 'Yellow Cab', categoryId: travel.id });
+  });
+});

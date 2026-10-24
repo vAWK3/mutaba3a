@@ -51,6 +51,8 @@ export const ERROR_CODES = {
   OPERATION_IN_PROGRESS: 409,
   /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
   RECONCILE_RUNNING: 409,
+  /** MUT-419 (R11): a real trial-mail run in production whose links would point at a loopback origin; `details.origin`. */
+  LINK_ORIGIN_LOOPBACK: 409,
   /** MUT-324: the terms version the client accepted (or none) is not the current one; `details.current` names it. */
   TERMS_VERSION_STALE: 409,
   /** MUT-235: a setup link that can no longer set a password; `details.state` is expired | used | superseded | invalid. */

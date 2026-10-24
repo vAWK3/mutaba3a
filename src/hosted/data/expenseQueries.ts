@@ -64,8 +64,24 @@ export function useExpenseCategories(profileId: string) {
   });
 }
 
+/**
+ * MUT-254: the profile's vendors matching what was typed (`q` empty: the most recently used). The previous answer stays
+ * up while the next one loads, so the list doesn't blink between keystrokes.
+ */
+export function useVendorSuggestions(profileId: string, q: string) {
+  return useQuery({
+    queryKey: profileKey(profileId, 'vendors', q),
+    // The answer carries its own query, so the picker can tell a suggestion's `exact` is about what is typed now.
+    queryFn: async () => ({ q, items: (await api.vendors(profileId, q ? { q, limit: 10 } : { limit: 10 })).items }),
+    placeholderData: (previous) => previous,
+    staleTime: STALE_MS,
+  });
+}
+
 function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expenses') });
+  // MUT-254: a save may have created a vendor or moved its default category.
+  queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'vendors') });
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary', 'expenses') });
   // MUT-268: an expense's date, amount, category or very existence moves it in or out of groups (membership is computed when read).
   void invalidateGroups(queryClient, profileId);

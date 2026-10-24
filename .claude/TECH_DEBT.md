@@ -26,6 +26,57 @@
 **Impact**: `shell/YouLinks.tsx` keeps the old switcher's and account menu's places as plain links, with their phone top-bar rules in `hosted.css`, until the pill and the island replace the sidebar.
 **Fix**: MUT-426 deletes `YouLinks` and its CSS; the island links with `?from=` and uses the profile-less `/you`.
 
+### TD-227: CSV-imported JOD amounts can't be told apart, so the carry-over only warns
+**Status**: Open
+**Ticket**: MUT-291 (plan §3.3, TD-112)
+**Added**: 2026-10-24
+**Priority**: Low (JOD only, CSV imports only)
+**Impact**: The free app's CSV import stored JOD income and expenses as `parseFloat × 100`, 10× too small (TD-112), and nothing on the row marks a CSV import. The carry-over carries them as they are and shows one warning with the count.
+**Fix**: None possible from the data. A person who knows can correct them after the carry-over.
+
+### TD-228: After a carry-over, the old web app still accepts edits
+**Status**: Open
+**Ticket**: MUT-291 (D1)
+**Added**: 2026-10-24
+**Priority**: Low (the banner says changes won't follow; MUT-292 retires the app)
+**Impact**: Someone who carries over and keeps using the old app (D1 allows it) makes records that only reach the new address if they carry over again, which replaces what's there.
+**Fix**: MUT-292 retires the app at least 90 days after the bridge ships.
+
+### TD-229: The carry-over QA app can reload a page once on a cold dependency cache
+**Status**: Open
+**Ticket**: MUT-291 (QA)
+**Added**: 2026-10-24
+**Priority**: Low (QA only; a retry passes)
+**Impact**: Each of the three dev servers (qa/support/carry-over.vite.ts) has its own Vite cache, but a cold cache still optimises lazily imported dependencies on first use and reloads the page once. The project's Playwright warm-up is off, so a first run in a fresh QA worktree can need its retry.
+**Fix**: Pre-bundle the lazy local chunk's dependencies (`optimizeDeps.include`) in the carry-over wrapper, or turn the warm-up on for this app.
+
+### TD-230: The totals gate checks only the rows the mapper carried
+**Status**: Open
+**Ticket**: MUT-291 (E4, /qa-reconcile review); fix in MUT-428
+**Added**: 2026-10-24
+**Priority**: Medium (no silent loss: every dropped row is listed by kind and count, but not by amount)
+**Impact**: E4 proves the replay made exactly what the mapper sent. Rows the mapper or the rules left out are listed under Not carried with a count, never with an amount. Examples: a currency MTB3A doesn't support, a business over the cap, an archived entry, a settle the date floor refused. Someone can't see that, say, ₪1,200 of what was paid didn't come.
+**Fix**: Show the free app's own totals for every live row next to the carried ones, with the difference per currency.
+
+### TD-231: The receivers trust the two legacy origins with no end date
+**Status**: Open
+**Ticket**: MUT-291 (security review), MUT-292
+**Added**: 2026-10-24
+**Priority**: Low while `mutaba3a.netlify.app` stays ours
+**Impact**: Every portal build at stage `live` or `redirect` accepts a carry-over from `mutaba3a.netlify.app` and the run.app host. If the Netlify site were deleted or renamed, anyone could claim the subdomain and post a crafted backup. The person would still see the summary and have to confirm.
+**Fix**: Keep the Netlify site name reserved for as long as any build trusts it (MUT-292's runbook). Give the sources a removal point: a stage after `redirect`, or a baked end date.
+
+### TD-232: The old app and the receiver must ship in order
+**Status**: Open
+**Ticket**: MUT-291 (API-contract review)
+**Added**: 2026-10-24
+**Priority**: Medium (a wrong order fails every carry-over to the file, it never loses data)
+**Impact**: The free app ships on Netlify and the receiver in the API image, so either can be ahead of the other:
+- Web before the server: the gate is on and `/carry-over/receive` isn't there, so every carry-over falls back after 10 s.
+- A Dexie bump in web before the server: the receiver refuses the backup as too new (`FREE_APP_BACKUP_MAX_VERSION`).
+- A protocol v2 on one side only: messages are dropped quietly (exact `v` match).
+**Fix**: `docs/operations/before-release.md` carries the order. A web release check that the receiver answers before it builds with the gate on would make it impossible to miss.
+
 ### TD-221: The lapse gate reads billing facts on every gated session request
 **Status**: Open
 **Ticket**: MUT-361 (D1, review R7)
@@ -33,6 +84,39 @@
 **Priority**: Low (three indexed queries; person-level routes add the membership read, batched per tick)
 **Impact**: Each profile-scoped session request runs one `billing.factsFor`; the phone's inbox count and Recent polls also load the person's memberships and integrations.
 **Fix**: Cache a person's entitlements for a few seconds per instance (invalidated by the Stripe webhook and grant writes), or carry them on the session row.
+
+### TD-226: The trial-mail run reads each candidate one at a time
+**Status**: Open
+**Ticket**: MUT-419
+**Added**: 2026-10-24
+**Priority**: Low (candidates are only people in days 11–30 of an unpaid trial)
+**Impact**: Per person: memberships, organizations, integrations and billing facts (about four small reads), then one send. At a few hundred a day it stays inside the 200 s budget; beyond that the run reports `incomplete` and the rest go the next day.
+**Fix**: Batch the reads (one `factsFor` across all candidates) and, if needed, run sends with bounded concurrency.
+
+### TD-223: No alert on the trial-mail job, and a rejected send retries daily
+**Status**: Open
+**Ticket**: MUT-419 (R2, R12)
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: The reconcile's failed attempts page; the trial-mail job's don't (a missed day catches up inside the window). A Resend 4xx for one address is re-claimed by the mailer every day of its window (up to 13 for `ended`), and each logs `mail provider failed`, which `email.tf`'s WARNING alert matches.
+**Also (code review, 2026-10-24):** the key `trial:<userId>:<stage>` ignores the trial start, so an operator who restarts a trial (`setTrialStart`) within 30 days of a stage's mail gets no repeat of that stage; a send the mailer recorded UNCERTAIN (a timeout Resend actually accepted) can go out again on the next day's run; under sustained overload the oldest-first order drops the newest trials (the 3-day ending-soon window) first.
+**Fix**: Add the job to `monitoring.tf`'s Scheduler alert; treat a `rejected` trial send as final (or suppress the address); put the trial start in the key if trials are ever restarted.
+
+### TD-224: Typo and one-off vendors stay in the typeahead (no vendor page, merge or delete)
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A17)
+**Added**: 2026-10-24
+**Priority**: Low (suggestions only; saving still matches exactly)
+**Impact**: Every typed vendor is saved, so "Supr Deal" next to "Super Deal" both show up as suggestions, and an expense keeps whichever it was saved under.
+**Fix**: A vendors page per profile: rename, merge (re-point expenses and names), delete unused.
+
+### TD-225: The vendor typeahead's fuzzy matches only see the 50 most recently used vendors
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A16)
+**Added**: 2026-10-24
+**Priority**: Low (prefix and contains hits come from SQL across all names)
+**Impact**: A near-miss spelling of a vendor not used recently isn't suggested in a profile with more than 50 vendors.
+**Fix**: A trigram index (`pg_trgm`) on `vendor_names.nameKey` and a similarity prefilter in SQL.
 
 ### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
 **Status**: Open

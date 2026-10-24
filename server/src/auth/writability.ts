@@ -46,7 +46,7 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   { domain: 'attachments', scopes: ['attachments:read', 'attachments:write'], routes: '/v1/attachments*', apiKey: 'read-write', session: 'read', writerOfRecord: 'MALAFAT' },
   { domain: 'summaries', scopes: ['summaries:read'], routes: '/v1/summaries/* (except expenses)', apiKey: 'read', session: 'read', writerOfRecord: null },
   { domain: 'audit', scopes: ['audit:read'], routes: '/v1/audit', apiKey: 'read', session: 'none', writerOfRecord: null },
-  { domain: 'expenses', scopes: ['expenses:read', 'expenses:write'], routes: '/v1/expenses*, /v1/expense-categories*, /v1/expense-groups*, /v1/summaries/expenses', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
+  { domain: 'expenses', scopes: ['expenses:read', 'expenses:write'], routes: '/v1/expenses*, /v1/expense-categories*, /v1/expense-groups*, /v1/vendors*, /v1/summaries/expenses', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   // MUT-61: a person recording money they were handed, on any hosted profile — a Malafat-fed one included. Its own
   // row so it never widens `payments`: Owed, settle, credits and allocations stay the payments row's business.
   { domain: 'capture', scopes: ['capture:write'], routes: '/v1/income*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },

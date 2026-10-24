@@ -404,6 +404,19 @@ describe('Your data (D2)', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it('reads the old web app\'s backup file too, and says what came over before Replace (MUT-291 E5)', async () => {
+    const carryOver = { counts: { clients: 3, income: 2 }, totals: { ILS: { paid: '50.00', outstanding: '0.00', expenses: '0.00', convertedOut: '0.00', convertedIn: '0.00' } }, changed: [], notCarried: [{ code: 'vendors', count: 4 }], jodEntries: 0 };
+    backend.readRecordsFile.mockResolvedValue({ recordCount: 5, missingReceiptFiles: 0, exportedFromAccountAt: null, deviceRecordCount: 0, carryOver, apply: vi.fn(() => Promise.resolve()) });
+    await openYourData();
+
+    chooseFile('mtb3a-backup-v24-2026-10-24.json');
+    const confirm = await screen.findByRole('alertdialog');
+
+    expect(backend.readRecordsFile).toHaveBeenCalledWith(expect.any(File), expect.objectContaining({ labels: { noClient: 'No client', defaultBusiness: 'My business' }, locale: 'en' }));
+    expect(within(confirm).getByTestId('carry-over-counts')).toHaveTextContent('Clients3');
+    expect(within(confirm).getByTestId('carry-over-not-carried')).toHaveTextContent('Your saved vendor list');
+  });
+
   it('says a file from an account is an export, and from when (MUT-325)', async () => {
     backend.readRecordsFile.mockResolvedValue({ recordCount: 4, missingReceiptFiles: 0, exportedFromAccountAt: new Date('2026-10-20T09:00:00.000Z'), apply: vi.fn(() => Promise.resolve()) });
     await openYourData();

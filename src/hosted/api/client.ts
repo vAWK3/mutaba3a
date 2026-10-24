@@ -45,6 +45,7 @@ export type CustomerSummaryStatus = Schemas['CustomerSummaryStatus'];
 export type Expense = Schemas['Expense'];
 export type ExpenseDetail = Schemas['ExpenseDetail'];
 export type ExpenseCategory = Schemas['ExpenseCategory'];
+export type VendorSuggestion = Schemas['VendorSuggestion'];
 export type ExpenseReceipt = Schemas['ExpenseReceipt'];
 export type ExpenseSummary = Schemas['ExpenseSummary'];
 export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
@@ -241,6 +242,11 @@ export function localBackend(): Promise<LocalBackend> {
       throw error;
     });
   return localBackendPromise;
+}
+
+/** MUT-291: this origin's signed-out records, counted from disk without booting a session (the old address's /carry-over). */
+export async function localRecordCount(): Promise<number> {
+  return (await import('@mut/local-backend')).countRecordsOnThisDevice();
 }
 
 let unhintedProbe: Promise<boolean> | null = null;
@@ -464,6 +470,10 @@ export const api = {
 
   expenseCategories: (profileId: string) =>
     request<Get<'/v1/expense-categories'>>('GET', '/v1/expense-categories', { profileId }),
+
+  // MUT-254: the vendor typeahead (suggestions only; saving an expense links its vendor on the server).
+  vendors: (profileId: string, query: Query<'/v1/vendors'>) =>
+    request<Get<'/v1/vendors'>>('GET', '/v1/vendors', { profileId, query }),
 
   expenseSummary: (profileId: string, query: Query<'/v1/summaries/expenses'>) =>
     request<Get<'/v1/summaries/expenses'>>('GET', '/v1/summaries/expenses', { profileId, query }),

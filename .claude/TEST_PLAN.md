@@ -3615,6 +3615,17 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
+## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `billing/__tests__/trial-mail.test.ts` (22): stage table + daily-run rounding (R3); a 33-day daily walk sends exactly three mails in order (A1); same day twice → duplicate (A2); skips paying (trialing, active, lapsed), covered (user grant, own profile's org grant, Malafat), suppressed, other-profiles (operator firm, covered firm); PENDING_REVIEW/DISABLED/no trial absent; en/ar (A3); dry run; mail off then on; gate off; time budget on its own clock | `npm --prefix server test` |
+| Templates | `email/__tests__/templates.test.ts`: the three new ids in the per-template table (en/ar, RTL, only passed links, no amount/currency/date), "within N days" + Arabic day agreement, links per mail (A3) | same |
+| Server routes | `__tests__/routes-trial-mail.test.ts` (9): job counts only, A2 over HTTP, token checks, 503 without Stripe, gate off, PORTAL_ORIGIN links; admin dry run/real run, loopback refusal; `scripts/__tests__/users-cli.test.ts` (2): `billing-trial-mail [--dry-run]` | same |
+| Store contract | `store-contract-billing.ts` `trialMailCandidates` (window bounds, ACTIVE only, order), memory + Prisma | `npm --prefix server run test:db` |
+| Terraform | `tests/trial_mail.tftest.hcl` (4): no job by default, without Stripe, with the gate off; one daily job with the token when all on | `terraform init -backend=false && terraform test` |
+| Release-QA | None: server only, no screen. The acceptance criteria are proven by the tests above (brief §8) | — |
+
 ## MUT-418 — Trial start step, Home trial banner, consumers everywhere (2026-10-24, ADR-180)
 
 | Layer | Tests | Command |
@@ -3625,6 +3636,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal unit | `data/__tests__/trialPrompt.test.ts`, `session/__tests__/firstRun.test.ts`, `data/__tests__/billingView.test.ts` (activeTrial, `isSellable`, consumers everywhere), local `migrations.test.ts` (4 → 5) + fingerprint | `npm run test:run` |
 | Portal integration | `components/__tests__/TrialWelcome.test.tsx`: step (open, Not now, close, Add a card → Subscribe by replace, open-soon, never for answered/paid/<48 h, Arabic, no reopen after /setup's link), banner (Add a card, hide, last 3 days, gone when paid, no card when unsellable), `/` keeps drawer keys | same |
 | Release-QA | `portal-live.billing.trial-start` (core), `.trial-banner`, `.consumer-everywhere`, and the amount updates in `.subscribe`, `.subscribe-usd`, `.rtl-375`; `portal-selfservice.signup.*` pass through the step's open-soon variant | `release-qa run --attach --only portal-live.billing` (env: `node qa/support/billing-live.mjs`) |
+
+## MUT-291 — the carry-over from the old web app and the old address (2026-10-24, ADR-185)
+- Unit: `src/lib/carryOver/__tests__/protocol.test.ts` (23); `src/hosted/local/carryOver/__tests__/mapFreeAppBackup.test.ts` (34); `replay.test.ts` (rate limit, refusals, progress, gate); `src/hosted/local/__tests__/createLocalApp.test.ts` (rate-limit option); `scripts/__tests__/vite-config.test.ts` (carry-over origins); `src/hosted/local/carryOver/__tests__/money.test.ts` (retired currencies), `totalsGate.test.ts` (E4 refuses through `prepareFromBackup`); `src/hosted/pages/carry-over/__tests__/carryOverCopy.test.ts` (every report code has copy in both languages); `src/db/__tests__/backup.test.ts` (strict read); `src/db/__tests__/carryOverBackupVersion.test.ts`, `datasetCountRecords.test.ts`.
+- Integration: `src/db/__tests__/carryOver.integration.test.ts` (T-I1 the free app's own demo + CSV data, T-I5 twice); `src/hosted/local/carryOver/__tests__/backend.test.ts` (T-I3, T-I4 through the real local backend).
+- UI: `src/hosted/pages/carry-over/__tests__/carryOverPages.test.tsx` (11); `src/pages/carryOver/__tests__/CarryOverScreen.test.tsx` (7); `local-mode.test.tsx` (Restore reads the old backup).
+- Guards: `server/src/__tests__/legacy-redirect.test.ts` (no COOP on either page); `scripts/__tests__/netlify-no-coop.test.ts`; `scripts/__tests__/check-bundles.test.ts` (the carry-over code under HOSTED_RULES and LOCAL_RULES); `npm run test:bundles` passes.
+- Perf (off by default): `replay.perf.test.ts`, `CARRY_OVER_PERF=1`: 20,000 records, 4.3 s, heap +149 MB.
+- Release QA: app `carry-over`, `qa/features/carry-over/carry-over.yaml`, 7 features, `qa/specs/carry-over/carry-over.spec.ts` 7/7 passing (2026-10-24).
+- Not covered: a real cross-host run (run.app or netlify.app to app.mtb3a.com) on a real browser: the operator's day-7 check (plan §6). Real iOS standalone: stubbed in QA.
 
 ## MUT-396 — local-disk attachment storage for the dev server (2026-10-24)
 
@@ -3643,6 +3663,18 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
 | Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |
 
+## MUT-254 — vendors (2026-10-24, ADR-183)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `vendors/__tests__/keys.test.ts`: case, spacing, ASCII and Arabic punctuation, Arabic letter forms, tashkeel/tatweel, legal suffixes (Latin, Hebrew, Arabic), leading "the" only, never empty, registration digits (Arabic-Indic, Extended), scorer order | `npm --prefix server test` |
+| Store contract | `store-contract-vendors.ts` (memory + Prisma): one vendor per name however written, per profile; Arabic folding; blank → none; number first with alias; no merge; fill never overwrites; concurrent first sightings → one; touch (Other, other profile's category, null, no version bump); type change clears defaults; search ranking and recent; expense link through update | `test` + `test:db` |
+| Prisma | `store-prisma-vendor-lock-order.test.ts` (touch waits on the category before the vendor row); `store-records-export-parity.test.ts` (vendors, vendorNames) | `test:db` (private DB) |
+| Routes | `routes-vendors.test.ts`: four writers link, alias via vendorDetails, PATCH re-link/unlink/leave, refused writes move no default, Other skipped, typeahead in ar/he/Latin, recent, isolation, limit, Malafat's key 403 | `npm --prefix server test` |
+| Backfill | `scripts/__tests__/backfill-vendors.test.ts`: --dry writes nothing; oldest-first canonical name, last-used, default not Other, no version bump, idempotent; re-link and unlink of old-revision rows | `test:db` |
+| Local mode | `migrations.test.ts` 5 → 6, `format-fingerprint.test.ts` (vendors, vendorNames, exps.vendorId) | `npx vitest run src/hosted/local` |
+| Portal | `VendorPicker.test.tsx` (recent, free text kept on Enter, alias hint, Arabic q); `ExpenseDrawer.test.tsx` (prefill only into an empty category) | `npx vitest run src/hosted` |
+| Release-QA | `portal.expenses.vendor-typeahead` (new vendor kept, suggestion, prefill, POST body); `portal.expenses.create`, `.edit-receipts` still green | `release-qa release --only portal.expenses` |
 ## MUT-425 — the You page replaces the switcher and the account menu (2026-10-24, ADR-186)
 
 | Layer | Tests | Command |

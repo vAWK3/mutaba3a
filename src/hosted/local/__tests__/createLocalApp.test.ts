@@ -29,6 +29,32 @@ describe('createLocalApp + mintLocalSession', () => {
     expect(body.profiles).toHaveLength(1); // the one personal profile users.create wrote
   });
 
+  it('holds a session to the rate limit it is given (MUT-291 R1)', async () => {
+    const store = new MemoryLedgerStore();
+    const now = () => new Date('2026-01-01T00:00:00.000Z');
+    const { token } = await mintLocalSession(store, now, 'ar');
+    const app = createLocalApp({ store, now, rateLimitPerMinute: 3 });
+    const me = () => app.fetch(new Request('http://local/v1/me', { headers: { Authorization: `Bearer ${token}` } }));
+
+    const statuses = [];
+    for (let i = 0; i < 4; i++) statuses.push((await me()).status);
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
+  });
+
+  it('with no limit, a carry-over replay of 12,000 requests is never refused (MUT-291 R1)', async () => {
+    const store = new MemoryLedgerStore();
+    const now = () => new Date('2026-01-01T00:00:00.000Z');
+    const { token } = await mintLocalSession(store, now, 'ar');
+    const app = createLocalApp({ store, now, rateLimitPerMinute: Infinity });
+    const request = new Request('http://local/v1/me', { headers: { Authorization: `Bearer ${token}` } });
+
+    let refused = 0;
+    for (let i = 0; i < 12_000; i++) if ((await app.fetch(request.clone())).status === 429) refused++;
+
+    expect(refused).toBe(0);
+  }, 60_000);
+
   it('rejects a request with no token', async () => {
     const store = new MemoryLedgerStore();
     const now = () => new Date('2026-01-01T00:00:00.000Z');

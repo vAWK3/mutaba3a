@@ -1,6 +1,8 @@
 import type { PrismaClient } from '@prisma/client';
 import type {
   AgreementRecord,
+  VendorRecord,
+  VendorNameRecord,
   AllocationRecord,
   ConversionRecord,
   CreditRecord,
@@ -84,6 +86,8 @@ const FEE_PROPOSAL = cols<FeeProposalRecord>()({
 const EXPENSE = cols<ExpenseRecord>()({
   id: true, organizationId: true, amountMinor: true, currency: true, occurredOn: true, title: true, vendor: true, notes: true, categoryId: true, customerId: true,
   projectId: true, createdByUserId: true, deletedAt: true, version: true, createdAt: true, updatedAt: true,
+  // MUT-254
+  vendorId: true,
 });
 const EXPENSE_CATEGORY = cols<ExpenseCategoryRecord>()({ id: true, organizationId: true, name: true, color: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 const EXPENSE_RECEIPT = cols<ExpenseReceiptRecord>()({
@@ -98,6 +102,12 @@ const CONVERSION = cols<ConversionRecord>()({
 });
 const EXPENSE_GROUP = cols<ExpenseGroupRecord>()({ id: true, organizationId: true, name: true, startOn: true, endOn: true, notes: true, createdByUserId: true, deletedAt: true, version: true, createdAt: true, updatedAt: true });
 const GROUP_MARK = cols<ExpenseGroupOverrideRecord>()({ groupId: true, expenseId: true, organizationId: true, mode: true, createdAt: true, updatedAt: true });
+// MUT-254: vendors and every name of theirs (registrationKey is an index column, derived from registrationNo).
+const VENDOR = cols<VendorRecord>()({
+  id: true, organizationId: true, canonicalName: true, registrationNo: true, phone: true, email: true, lastCategoryId: true, lastUsedAt: true, version: true,
+  createdAt: true, updatedAt: true,
+});
+const VENDOR_NAME = cols<VendorNameRecord>()({ id: true, organizationId: true, vendorId: true, name: true, nameKey: true, createdAt: true });
 const INBOX_ENTRY = cols<InboxEntryRecord>()({ id: true, userId: true, kind: true, amountMinor: true, currency: true, occurredOn: true, note: true, captureSource: true, version: true, createdAt: true, updatedAt: true });
 
 /** Every export read's Prisma model and the columns it selects, for the test that holds them to the schema. */
@@ -109,6 +119,7 @@ export const EXPORT_COLUMNS: ReadonlyArray<{ model: string; select: Record<strin
   { model: 'ReceivableCredit', select: CREDIT }, { model: 'FeeProposal', select: FEE_PROPOSAL }, { model: 'Expense', select: EXPENSE },
   { model: 'ExpenseCategory', select: EXPENSE_CATEGORY }, { model: 'ExpenseReceipt', select: EXPENSE_RECEIPT }, { model: 'Conversion', select: CONVERSION },
   { model: 'ExpenseGroup', select: EXPENSE_GROUP }, { model: 'ExpenseGroupOverride', select: GROUP_MARK }, { model: 'InboxEntry', select: INBOX_ENTRY },
+  { model: 'Vendor', select: VENDOR }, { model: 'VendorName', select: VENDOR_NAME },
 ];
 
 /** The rows one Prisma delegate returns for `findMany`: what every id-keyed export read needs from it. */
@@ -138,6 +149,8 @@ function idKeyed(prisma: PrismaClient): { [F in Exclude<ProfileExportField, 'cou
     expReceipts: { delegate: d(prisma.expenseReceipt), select: EXPENSE_RECEIPT },
     convs: { delegate: d(prisma.conversion), select: CONVERSION },
     expGroups: { delegate: d(prisma.expenseGroup), select: EXPENSE_GROUP },
+    vendors: { delegate: d(prisma.vendor), select: VENDOR },
+    vendorNames: { delegate: d(prisma.vendorName), select: VENDOR_NAME },
   };
 }
 

@@ -214,6 +214,8 @@ model Organization {
 
   expenses              Expense[]
   expenseCategories     ExpenseCategory[]
+  vendors               Vendor[]
+  vendorNames           VendorName[]
   expenseReceipts       ExpenseReceipt[]
   conversions           Conversion[]
   /// MUT-267: expense groups (trips) and their keep/leave-out marks.
@@ -421,21 +423,21 @@ enum SetupLinkPurpose {
 /// CHECK constraints (migration 20261023180000_mut366_signup_links): userId is null exactly for SIGNUP, and then
 /// email and locale are set; otherwise both are null.
 model AccountSetupToken {
-  id          String           @id @default(uuid()) @db.Uuid
-  userId      String?          @db.Uuid
-  user        User?            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id            String            @id @default(uuid()) @db.Uuid
+  userId        String?           @db.Uuid
+  user          User?             @relation(fields: [userId], references: [id], onDelete: Restrict)
   /// MUT-366: SIGNUP only, normalised (trim, NFKC, lower-case).
-  email       String?
+  email         String?
   /// MUT-366: SIGNUP only: 'en' | 'ar', the language the person signed up in.
-  locale      String?          @db.VarChar(5)
-  tokenDigest String           @unique @db.VarChar(64)
-  purpose     SetupLinkPurpose
+  locale        String?           @db.VarChar(5)
+  tokenDigest   String            @unique @db.VarChar(64)
+  purpose       SetupLinkPurpose
   /// MUT-366: mailed to the address (signup, recovery), not handed over by the operator. Redeeming one verifies the address.
-  mailed      Boolean          @default(false)
-  createdAt   DateTime
-  expiresAt   DateTime
-  usedAt      DateTime?
-  cancelledAt DateTime?
+  mailed        Boolean           @default(false)
+  createdAt     DateTime
+  expiresAt     DateTime
+  usedAt        DateTime?
+  cancelledAt   DateTime?
   /// MUT-367: SIGNUP only: what the signup screen made of the address's domain, and why. The redeem opens a BUSINESS
   /// address at once and sends every other to review (PENDING_REVIEW). Null on a SIGNUP link issued before MUT-367.
   domainClass   EmailDomainClass?
@@ -1104,7 +1106,10 @@ model Expense {
   amountMinor     BigInt
   currency        String           @db.VarChar(3)
   title           String?
+  /// The vendor as typed (history and display). MUT-254 links it to `vendorId`.
   vendor          String?
+  vendorId        String?          @db.Uuid
+  vendorRef       Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   categoryId      String?          @db.Uuid
   category        ExpenseCategory? @relation(fields: [categoryId], references: [id])
   customerId      String?          @db.Uuid
@@ -1132,6 +1137,8 @@ model Expense {
   @@index([organizationId, categoryId])
   /// MUT-182: a type change deletes categories; ON DELETE SET NULL then probes expenses by categoryId alone.
   @@index([categoryId])
+  /// MUT-254: a vendor's expenses (the backfill's re-link check, MUT-308 bills).
+  @@index([organizationId, vendorId])
   /// MUT-270: the entries feed, newest logged first within an organization.
   @@index([organizationId, createdAt(sort: Desc), id(sort: Desc)])
   /// MUT-390: the entries feed by money date, newest day first, then newest logged.
@@ -1154,10 +1161,62 @@ model ExpenseCategory {
   updatedAt      DateTime
 
   expenses Expense[]
+  /// MUT-254: vendors whose last category this is.
+  vendors  Vendor[]
 
   @@unique([organizationId, nameKey])
   @@index([organizationId, createdAt, id])
   @@map("expense_categories")
+}
+
+/// MUT-254: a vendor of a profile, saved automatically from any typed vendor (ADR-183). Matched exactly: registration
+/// number first, then the normalised name or an alias (`VendorName`). Session-only: Malafat's API key never reads it.
+model Vendor {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  /// The first spelling typed, trimmed.
+  canonicalName   String
+  registrationNo  String?
+  /// Digits only (vendors/keys.ts registrationKey); NULLs are distinct, so the unique index allows many unset.
+  registrationKey String?
+  phone           String?
+  email           String?
+  /// The category of the last expense saved with this vendor (never the automatic Other): the typeahead's prefill.
+  lastCategoryId  String?          @db.Uuid
+  lastCategory    ExpenseCategory? @relation(fields: [lastCategoryId], references: [id], onDelete: SetNull)
+  /// Set on every successful link; the typeahead's "recent".
+  lastUsedAt      DateTime
+  version         Int              @default(1)
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  names    VendorName[]
+  expenses Expense[]
+
+  @@unique([organizationId, registrationKey])
+  @@index([organizationId, lastUsedAt(sort: Desc)])
+  /// A type change deletes categories; ON DELETE SET NULL then probes vendors by lastCategoryId alone (as MUT-182).
+  @@index([lastCategoryId])
+  @@map("vendors")
+}
+
+/// MUT-254: a vendor's canonical name and every alias. One row per normalised key per profile, so two saves of a new
+/// name can never create two vendors.
+model VendorName {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  vendorId       String       @db.Uuid
+  vendor         Vendor       @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name           String
+  /// vendors/keys.ts vendorNameKey.
+  nameKey        String
+  createdAt      DateTime
+
+  @@unique([organizationId, nameKey])
+  @@index([vendorId])
+  @@map("vendor_names")
 }
 
 /// MUT-255: where a receipt stands in the profile's receipts library. FILED exactly when it has an expense (DB CHECK

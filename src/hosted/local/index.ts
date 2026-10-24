@@ -1,8 +1,12 @@
 import { CachedFxRates } from '../../../server/src/fx-rates.js';
 import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
-import { localBlobKey, type BootLocalBackend, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
+import { LocalRecordsFileRefused, localBlobKey, type BootLocalBackend, type CarryOverPayloadKind, type CarryOverPrepareOptions, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
 import { LocalAttachmentStorage, liveStoredKeys, sweepBlobs } from './attachments.js';
-import { IndexedDbBlobStore } from './blobStore.js';
+import { IndexedDbBlobStore, readBytes } from './blobStore.js';
+import { CarryOverCheckFailed, countsOf, prepareFromBackup, type PreparedCarryOver } from './carryOver/index.js';
+import { FreeAppBackupRefused, looksLikeFreeAppBackup, parseFreeAppBackupValue } from './carryOver/freeAppBackup.js';
+import { CarryOverAborted } from './carryOver/replay.js';
+import { snapshotTotals, totalsByCurrency } from './carryOver/totals.js';
 import { createLocalApp } from './createLocalApp.js';
 import { PublicFxRateSource } from './fxSource.js';
 import { LocalLock } from './locks.js';
@@ -85,12 +89,20 @@ async function boot(): Promise<LocalBackend> {
     return send(retry);
   }
 
-  async function readRecordsFile(file: Blob): Promise<PendingRestore> {
+  async function readRecordsFile(file: Blob, carryOver?: CarryOverPrepareOptions): Promise<PendingRestore> {
+    const freeAppBackup = await freeAppBackupIn(file);
+    if (freeAppBackup !== null) {
+      if (!carryOver) throw new LocalRecordsFileRefused('not-a-records-file');
+      return pendingCarryOver(await prepareCarriedBackup(freeAppBackup, carryOver));
+    }
     const decoded = await decodeRecordsArchive(file);
     return {
       recordCount: countRecords(decoded.snapshot.maps),
       missingReceiptFiles: decoded.missing.length,
       exportedFromAccountAt: decoded.fromAccount ? decoded.snapshot.savedAt : null,
+      deviceRecordCount: countRecords(store.snapshot().maps),
+      // MUT-291: the old address's records arrive as its own records file; the summary names what it holds.
+      ...(carryOver ? { carryOver: { counts: { ...countsOf(decoded.snapshot.maps) }, totals: totalsByCurrency(snapshotTotals(decoded.snapshot.maps)), changed: [], notCarried: decoded.missing.length > 0 ? [{ code: 'receipt-file-unreadable', count: decoded.missing.length }] : [], jodEntries: 0 } } : {}),
       apply: async () => {
         // Unpacked only now, outside the lock; the lock covers just the add, save and sweep (restore.ts).
         const { files, missing } = await decoded.readFiles();
@@ -99,6 +111,43 @@ async function boot(): Promise<LocalBackend> {
         session = await mintLocalSession(store, now, 'ar');
       },
     };
+  }
+
+  /** MUT-291: the old web app's backup, mapped and replayed through a throwaway local app, then checked (E4); nothing written yet. */
+  async function prepareCarriedBackup(raw: unknown, options: CarryOverPrepareOptions): Promise<PreparedCarryOver> {
+    try {
+      const backup = parseFreeAppBackupValue(raw);
+      return await prepareFromBackup(backup, { now, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale: options.locale, labels: options.labels, ...(options.onProgress ? { onProgress: options.onProgress } : {}) });
+    } catch (error) {
+      if (error instanceof FreeAppBackupRefused) throw new LocalRecordsFileRefused(error.reason === 'too-new' ? 'too-new' : 'not-a-records-file');
+      if (error instanceof CarryOverCheckFailed || error instanceof CarryOverAborted) {
+        console.warn('[mutaba3a local] carry-over check failed', error);
+        throw new LocalRecordsFileRefused('carry-over-failed');
+      }
+      throw error;
+    }
+  }
+
+  function pendingCarryOver(prepared: PreparedCarryOver): PendingRestore {
+    const { counts } = prepared;
+    return {
+      recordCount: counts.clients + counts.projects + counts.income + counts.payments + counts.expenses + counts.conversions,
+      missingReceiptFiles: 0,
+      exportedFromAccountAt: null,
+      deviceRecordCount: countRecords(store.snapshot().maps),
+      carryOver: { counts: { ...counts }, totals: prepared.totals, changed: prepared.report.changed, notCarried: prepared.report.notCarried, jodEntries: prepared.report.jodEntries },
+      apply: async () => {
+        await applyRestore({ lock, persistence, store, blobs, now }, prepared.snapshot, prepared.files);
+        session = await mintLocalSession(store, now, 'ar');
+      },
+    };
+  }
+
+  async function prepareCarryOver(kind: CarryOverPayloadKind, payload: Blob, options: CarryOverPrepareOptions): Promise<PendingRestore> {
+    if (kind === 'records-file') return readRecordsFile(payload, options);
+    const raw = await freeAppBackupIn(payload);
+    if (raw === null) throw new LocalRecordsFileRefused('not-a-records-file');
+    return pendingCarryOver(await prepareCarriedBackup(raw, options));
   }
 
   return {
@@ -115,6 +164,7 @@ async function boot(): Promise<LocalBackend> {
       return zipRecordsArchive(contents);
     },
     readRecordsFile,
+    prepareCarryOver,
     putBlob: async (url, file) => blobs.put(localBlobKey(url), file),
     readBlob: async (url) => blobs.get(localBlobKey(url)),
   };
@@ -184,3 +234,24 @@ export const bootLocalBackend: BootLocalBackend = () => {
   });
   return booted;
 };
+
+/** The parsed JSON when `file` is the old web app's backup (MUT-291), else null: a records zip or file goes the usual way. */
+async function freeAppBackupIn(file: Blob): Promise<unknown> {
+  // Two bytes say whether it's a zip, without reading a large records file twice.
+  const magic = new Uint8Array(await readBytes(file.slice(0, 2)));
+  if (magic[0] === 0x50 && magic[1] === 0x4b) return null; // a zip
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(await readBytes(file)));
+    return looksLikeFreeAppBackup(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** MUT-291: this origin's signed-out records, counted from disk without booting a session or writing anything. */
+export async function countRecordsOnThisDevice(): Promise<number> {
+  const loaded = await new IndexedDbPersistence().load();
+  // Records this build can't read are still records: the caller offers the move rather than leaving them.
+  if (loaded.kind === 'too-new') throw new LocalRecordsFileRefused('too-new');
+  return loaded.kind === 'ok' ? countRecords(loaded.snapshot.maps) : 0;
+}

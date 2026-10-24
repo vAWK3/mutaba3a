@@ -4943,6 +4943,99 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A co-owner's own subscription still doesn't cover a shared profile (TD-193): the portal tells them to ask its creator.
 - API 1.60.0-mut361.
 
+## ADR-183: Vendors Are Saved Per Profile From Every Typed Vendor; Saving Matches Exactly, the Typeahead Fuzzily (MUT-254)
+
+**Status:** Accepted (2026-10-24, MUT-254; Basel's V1/V2). Plan and review amendments A1–A19: `.claude/designs/mut-254-vendors.md`. ADR-182 is held for MUT-253's OCR engine decision.
+
+**Context:** An expense's vendor was free text. Reading receipts (MUT-256/257), firm vendor defaults (MUT-303) and bills (MUT-308) need a vendor the profile remembers, without a vendor page or a merge flow.
+
+**Decision:**
+1. **Tables:** `vendors` (canonical name = first spelling, registration number + its digits-only key, phone, email, `lastCategoryId` SET NULL, `lastUsedAt`, version) and `vendor_names` (canonical name and aliases, unique per profile by `nameKey`). `expenses.vendorId` (SET NULL) beside the free text, which stays as typed.
+2. **Keys** (`server/src/vendors/keys.ts`): `vendorNameKey` = NFKC, lower case, tashkeel/tatweel removed, أإآٱ→ا, ى→ي, ة→ه, punctuation removed, `-_&` → space, then a leading English "the" and one trailing legal suffix (Latin, Hebrew, Arabic, matched after punctuation), each only while something is left. `registrationKey` = digits only (Arabic-Indic folded), fewer than 5 is none.
+3. **Saving matches exactly (V1):** the registration key first, then the name key against names and aliases; a number hit adds the typed name as an alias only when no vendor has it; a name hit fills a missing number, phone or email, never overwriting. No merge. A unique violation retries the whole transaction once (it aborted).
+4. **Every writer links** (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) through `withResolvedVendor`, after every other check; optional `vendorDetails` only help the match. `vendors.touch` runs only after the write committed: `lastUsedAt`, and `lastCategoryId` unless the category is the automatic Other ("Other"/"أخرى"). A refused write moves no default; touch never bumps `version`.
+5. **`GET /v1/vendors?q=&limit=`** (session-only, `expenses:read`, max 25): SQL contains-prefilter on `nameKey` (200) plus the 50 most recently used, scored in JS (prefix 1, contains 0.8, similarity ≥ 0.6 capped below 0.8), best name per vendor. Empty q = most recently used. Suggestions only.
+6. **Lock order:** touch takes the category KEY SHARE before the vendor row; a profile type change locks expenses, categories, then vendors and clears `lastCategoryId` before deleting categories.
+7. **Rolling deploy:** `scripts/backfill-vendors.ts`, run by post-roll on every deploy, links unlinked rows oldest first, re-links rows whose text no longer names their vendor (old revision), unlinks blanked ones, and sets `lastUsedAt` and missing defaults. A link changes neither `version` nor `updatedAt`.
+8. **Local mode:** snapshot format 6 with `vendors` and `vendorNames` maps; the records export carries both.
+9. **Not audited in v1:** vendor creates and aliases. If audit is added, `'vendor'` joins `EXPENSE_ENTITY_TYPES` so Malafat's key never reads it.
+
+**Consequences:**
+- Typos and one-off spellings become vendors and linger in suggestions until a vendor page with merge and delete exists (TD-224).
+- The typeahead reads at most 250 name rows per keystroke; profiles with huge vendor lists get prefix/contains hits but fuzzy only among the recent 50 (TD-225).
+- API 1.62.0-mut254 (additive: `Expense.vendorId`, `vendorDetails`, `GET /v1/vendors`).
+
+---
+
+## ADR-184: Trial Reminder Mails Are Daily Stage Windows, Sent Only Where the Trial Alone Decides the Account (MUT-419)
+
+**Status:** Accepted for the build (2026-10-24, MUT-419, unattended run on Basel's "go"). Decisions D1–D16 and review amendments R1–R12 in `.claude/designs/mut-419-trial-emails.md` are **pending Basel's confirmation**. Builds on ADR-159 §5 (the mailer), ADR-160 D3 (the timeline), ADR-165 (the `/jobs` door) and ADR-181 (the gate).
+
+**Context:** ADR-160's trial ends at day 14 (read-only) and locks at day 30 whether or not the person opens the portal; nothing told someone who stayed away.
+
+**Decision:**
+1. **Three stages, each a window** from `trialTimelineOf`: `ending-soon` (endsAt − 3 d ≤ now < endsAt), `ended` (endsAt ≤ now < lockAt − 3 d), `locking-soon` (lockAt − 3 d ≤ now < lockAt). Only the current stage is sent, so a missed day catches up and a stale stage is never sent (D1). Each is sent once: key `trial:<userId>:<stage>` in the mailer's send log (D3).
+2. **"Within N days"**, N = whole days left rounded up (1–3): a deadline mail never promises more time than there is (D2, R7). No amount, price or date.
+3. **Who:** ACTIVE people with a trial start in the window, and only when every profile they belong to is their own and resolves source TRIAL, so the trial alone decides their standing (`personStanding`) and "your account is read-only / locks" is exactly what the gate does (R4). Otherwise: `paying` (a Stripe subscription, a card on file included), `covered` (Malafat, operator grant), `other-profiles`; plus `suppressed`, and `gate-off` when `BILLING_GATE` is off (R5).
+4. **Doors** like MUT-360's reconcile: `POST /jobs/v1/billing/trial-mail` (Cloud Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (operator, `dryRun`, rows). Both 503 without Stripe (R6). A real production run refuses loopback links (R11). One person at a time, 200 s budget, then `incomplete` (R1).
+5. **Scheduler:** Cloud Scheduler (not an in-process timer, TD-215's lesson), daily 10:00 Asia/Jerusalem, created only with mail, Stripe and the gate all on (D7, D8). The job token now also triggers customer mail; a leaked token can only re-run idempotent mail (D15).
+6. Trial mails are outside the per-recipient cap (D11).
+
+**Consequences:**
+- Someone in a firm or with mixed coverage gets no mail; the portal's per-profile banners (ADR-181) still tell them.
+- A permanently rejected send retries daily within its window (R12, TD-223).
+- API 1.63.0-mut419.
+
+## ADR-185: The Carry-Over Maps the Old Web App's Backup on the New Address, Replays It Through a Throwaway Local App, and Lands It Through Restore (MUT-291)
+
+**Status:** Accepted (2026-10-24, MUT-291). Owner decisions D1–D4 and D10, and eng review D1–D9, are Basel's (`.claude/designs/mut-291-carry-over.md` §4, §11). Builds on ADR-097 (local mode), ADR-155 (the staged domain move) and ADR-156/MUT-287 (the records file and Restore).
+
+**Context:** the free web app's records live in IndexedDB on `mutaba3a.netlify.app`, and the run.app portal's signed-out records on run.app. The new address can read neither. Stage `redirect` needs the run.app `/carry-over` page the server already sends visits to.
+
+**Decision:**
+1. **One receiver, two senders.** `/carry-over/receive` on the new address takes the free app's own backup (`serializeAllTables`) from the old web origin, or the old address's records file from the old portal origin. Each origin may send only its own kind.
+2. **The mapping runs on the receiving side (E1).** `LOCAL_RULES` forbid portal code in `dist-web`, so the old app sends only what it already makes. The mapping lives in `src/hosted/local/carryOver`, which MUT-292 keeps. Nothing in the portal says "Dexie" (R4).
+3. **A throwaway local app, then one Restore (E2).** The backup is mapped to ordered ops and replayed through `createLocalApp` over a fresh in-memory store:
+   - every server rule runs on every record;
+   - no rate limit (R1), and nothing persisted;
+   - a 4xx is listed with the API's reason, with its dependants;
+   - a 5xx aborts.
+
+   The snapshot and its receipt files then land with `applyRestore`, all or nothing.
+4. **A totals gate (E4, R3).** The free app's own rows that arrived must equal the replayed records per profile and currency, and outstanding must equal the organization summary. Otherwise nothing is offered.
+5. **The hand-off protocol** (`src/lib/carryOver/protocol.ts`):
+   - a popup opened from the click before any await (R2);
+   - origins baked from `config/hosts.json` (`__CARRY_OVER__`), never read from the URL;
+   - `event.origin` and `event.source` checked, no `'*'`;
+   - a 10 s ready timeout on the sender; a 20 s payload timeout and an opener-closed check on the receiver (R8);
+   - no COOP on either page, pinned by tests.
+6. **The file is the fallback, and a door of its own (E5).** Your data › Restore and the receive page both read the free app's backup file. An installed home-screen app leads with it (R7).
+7. **Owner rules:**
+   - D1: the old app offers the move on every visit, allows staying, and shows a banner once carried;
+   - D2: each business becomes a Business profile, at most five;
+   - D3: existing records are replaced after a warning, a download-first and a second confirm;
+   - D4: "No client" for Owed with no client, and a project is dropped on a currency mismatch;
+   - D10: signed in, the records go to the browser's signed-out space, and the page says so.
+
+**Alternatives considered:** mapping in the old app (refused by `LOCAL_RULES`); POSTs into the live local store (O(n²) saves, half-written on failure); merging snapshots; an iframe (`frame-ancestors 'none'`); a URL-carried payload (too large).
+
+**Consequences:**
+- The free app's production build gates `/app` from stage `live` on. Its dev server doesn't, unless `MUTABA3A_CARRY_OVER` says so; `off` turns it off on a build.
+- Archived clients and projects arrive active (signed out, the archive routes are read-only).
+- 20,000 records replay in 4.3 s in Node (T-P1), with no Web Worker.
+- The old app still accepts edits after a carry-over (TD-228), until MUT-292.
+
+**Amendment 1 (2026-10-24, MUT-291 /qa-reconcile review):**
+- **v1 answers `done`, `declined` or `failed`.** The receiver sends `failed` whenever the records arrived but couldn't be checked or saved: too large, a refused or failed check, a save that didn't finish. The old page then offers its file at once, and never marks the records carried. The sender takes an answer only after `ready`.
+- **The old app reads its backup strictly for the carry-over** (`serializeAllTables({ strict: true })`). A table it can't read fails the carry-over; it is never sent as an empty table and marked carried. The Back up download keeps the lenient read.
+- **Amounts use the server's formatter** (`formatMoney`), so a records file with a currency the API has retired (MUT-388) still restores. `server/src/money` joins the local backend's allowlist.
+- **Release builds trust only https origins**, each exactly as a browser reports it. Loopback origins are for the QA dev servers only.
+- **Failure paths:**
+  - A read failure on the old address offers the move instead of leaving (never stranded).
+  - A receipt file that won't decode is listed, not fatal.
+  - A receipt the rules refuse at complete is deleted again.
+- **The replay gives the page back every 40 ms** through a MessageChannel, not every 200 ops on a timer: hidden tabs clamp timers.
+- **Still open:** TD-230 (the gate sees only rows the mapper carried), TD-231 (the legacy origins have no end date), TD-232 (sender and receiver versions must ship in order).
 ---
 
 ## ADR-186: Account and Profile Settings Are a Page, Not Menus: the You Page (MUT-425, epic MUT-423)
