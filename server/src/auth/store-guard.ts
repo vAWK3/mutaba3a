@@ -156,6 +156,7 @@ export const STORE_ACCESS: StoreAccess = {
     getById: 'read',
     list: 'read',
     listAllocations: 'read',
+    listAllocationsFor: 'read',
     allocate: { write: 'payments' },
     reverse: { write: 'payments' },
     findReplacedBy: 'read',

@@ -1571,6 +1571,13 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     listAllocations: async (organizationId, paymentId) =>
       [...this.allocs.values()].filter((a) => a.organizationId === organizationId && a.paymentId === paymentId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map((a) => ({ ...a })),
+    listAllocationsFor: async (organizationId, paymentIds) => {
+      const wanted = new Set(paymentIds);
+      return [...this.allocs.values()]
+        .filter((a) => a.organizationId === organizationId && wanted.has(a.paymentId))
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1))
+        .map((a) => ({ ...a }));
+    },
     allocate: async (organizationId, paymentId, requested: AllocationInput[], at) => {
       const payment = this.pays.get(paymentId);
       if (!payment || payment.organizationId !== organizationId) return null;

@@ -1162,6 +1162,8 @@ export interface PaymentRepository {
   getById(organizationId: string, id: string): Promise<PaymentRecord | null>;
   list(organizationId: string, filter: PaymentFilter, page: PageRequest): Promise<Page<PaymentRecord>>;
   listAllocations(organizationId: string, paymentId: string): Promise<AllocationRecord[]>;
+  /** MUT-175: the allocations of many payments in one read (oldest first); ids of another organization match nothing. */
+  listAllocationsFor(organizationId: string, paymentIds: readonly string[]): Promise<AllocationRecord[]>;
   /** Appends allocations to a POSTED payment within its unallocated funds; same guarantees as create. Null when no such payment. */
   allocate(organizationId: string, paymentId: string, allocations: AllocationInput[], at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
   /** Undoes every allocation, zeroes allocated_minor, marks REVERSED. `changed` is false when it already was. */
