@@ -27,10 +27,13 @@ export interface CatalogPrice {
 /** A currency is sellable only with both its prices; otherwise null (PRICES_NOT_SET). */
 export type Catalog = Record<BillingCurrency, { month: CatalogPrice; year: CatalogPrice } | null>;
 
-/** `server/src/billing/billing-countries.json`: Basel fills it from MUT-355's answers (spike §8 D2). */
+/** Every country (MUT-418 D9): `"consumerCountries": "*"`. */
+export const EVERY_COUNTRY = '*';
+
+/** `server/src/billing/billing-countries.json` (spike §8 D2; MUT-418: consumers everywhere, Basel 2026-10-23). */
 export interface BillingCountries {
-  /** Where a person may check out without a tax ID. Empty: every buyer needs one. */
-  consumer: readonly string[];
+  /** Where a person may check out without a tax ID: `"*"` for every country. Empty: every buyer needs one. */
+  consumer: typeof EVERY_COUNTRY | readonly string[];
   /** Where Stripe has no tax-ID type, so a business types its number into a Checkout custom field. */
   customTaxId: readonly string[];
 }
@@ -133,9 +136,14 @@ export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: 
  */
 export function consumerCountryCheck(country: string | null, taxIds: number | null, countries: BillingCountries): { openToConsumers: boolean | null; flagged: boolean | null } {
   if (country === null) return { openToConsumers: null, flagged: null };
-  const openToConsumers = countries.consumer.includes(country);
+  const openToConsumers = isConsumerCountry(countries, country);
   if (openToConsumers) return { openToConsumers, flagged: false };
   return { openToConsumers, flagged: taxIds === null ? null : taxIds === 0 };
+}
+
+/** Whether a person (no tax ID) may buy from `country`. */
+export function isConsumerCountry(countries: BillingCountries, country: string): boolean {
+  return countries.consumer === EVERY_COUNTRY || countries.consumer.includes(country);
 }
 
 export function currencyOf(country: string): BillingCurrency {
@@ -179,17 +187,18 @@ export function checkoutRefusalOf(input: Pick<CheckoutInput, 'country' | 'buyer'
   // D5: the operator decides when a person under a no-expiry grant starts paying (revoking it shows Subscribe).
   if (person.owned.every((e) => e.source === 'MALAFAT' || (e.source === 'OPERATOR' && e.until === null))) return 'COVERED_BY_GRANT';
   if (!COUNTRY.test(input.country)) return 'VALIDATION_FAILED';
-  if (input.buyer === 'person' && !countries.consumer.includes(input.country)) return 'COUNTRY_NEEDS_BUSINESS';
+  if (input.buyer === 'person' && !isConsumerCountry(countries, input.country)) return 'COUNTRY_NEEDS_BUSINESS';
   return null;
 }
 
 function paramsOf(input: CheckoutInput, price: CatalogPrice, countries: BillingCountries): CheckoutParams {
-  const consumerCountry = countries.consumer.includes(input.country);
-  const typedNumber = countries.customTaxId.includes(input.country);
-  // A business outside the consumer list must prove it is one: Stripe's tax ID where Stripe has the type, our field where it doesn't.
-  const taxIdRequired = input.buyer === 'business' && !consumerCountry && !typedNumber;
+  // MUT-418 D10: buying "For a business" means proving it is one, in any country: Stripe's tax ID where Stripe has the
+  // type, our field where it doesn't. A person (who may buy anywhere under "*") is never asked for either.
+  const business = input.buyer === 'business';
+  const typedNumber = business && countries.customTaxId.includes(input.country);
+  const taxIdRequired = business && !typedNumber;
   const customFields: Stripe.Checkout.SessionCreateParams.CustomField[] = typedNumber
-    ? [{ key: BUSINESS_TAX_NUMBER_KEY, label: { type: 'custom', custom: TAX_NUMBER_FIELD_LABEL }, type: 'text', optional: consumerCountry }]
+    ? [{ key: BUSINESS_TAX_NUMBER_KEY, label: { type: 'custom', custom: TAX_NUMBER_FIELD_LABEL }, type: 'text', optional: false }]
     : [];
   return {
     mode: 'subscription',
@@ -220,13 +229,15 @@ function trialCarriedOver(input: CheckoutInput): { trial_end?: number } {
 /** Fails fast at boot on a malformed `billing-countries.json` (the `config/hosts.json` rule). */
 export function parseBillingCountries(raw: unknown): BillingCountries {
   const value = (raw ?? {}) as Record<string, unknown>;
-  return { consumer: codes(value, 'consumerCountries'), customTaxId: codes(value, 'customTaxIdCountries') };
+  const consumer = value.consumerCountries === EVERY_COUNTRY ? EVERY_COUNTRY : codes(value, 'consumerCountries');
+  return { consumer, customTaxId: codes(value, 'customTaxIdCountries') };
 }
 
 function codes(value: Record<string, unknown>, field: string): string[] {
   const list = value[field];
   if (!Array.isArray(list) || !list.every((c) => typeof c === 'string' && COUNTRY.test(c))) {
-    throw new Error(`billing-countries.json: ${field} must be an array of ISO 3166-1 alpha-2 codes in upper case`);
+    const everywhere = field === 'consumerCountries' ? ` or "${EVERY_COUNTRY}"` : '';
+    throw new Error(`billing-countries.json: ${field} must be an array of ISO 3166-1 alpha-2 codes in upper case${everywhere}`);
   }
   if (new Set(list).size !== list.length) throw new Error(`billing-countries.json: ${field} has a duplicate code`);
   return [...(list as string[])];

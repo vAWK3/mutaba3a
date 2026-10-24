@@ -104,9 +104,17 @@ describe('GET /v1/billing (MUT-362)', () => {
       canManage: false,
       trial: null,
       catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
-      countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
+      countries: { consumer: ['IL', 'GB'], consumerEverywhere: false, customTaxId: ['IL', 'JO'] },
       coveredProfileIds: [u.personalId],
     });
+  });
+
+  it('"*" in billing-countries.json is sent as consumerEverywhere, and a person in Jordan gets Checkout (MUT-418 D11)', async () => {
+    const h = harness({ billingCountries: parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: ['IL', 'JO'] }) });
+    const u = await person(h);
+    expect((await read(await u.get())).countries).toEqual({ consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] });
+    const res = await u.post(CHECKOUT, checkoutBody({ country: 'JO' }));
+    expect(res.status).toBe(200);
   });
 
   it('a live subscription wins over a cancelled one with a later period end (review: never strand a payer)', async () => {

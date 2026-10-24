@@ -427,7 +427,12 @@ export const BillingOverviewSchema = z
     trial: z.object({ startedAt: z.string().datetime(), endsAt: z.string().datetime(), lockAt: z.string().datetime() }).nullable(),
     catalog: z.object({ ILS: CatalogPairSchema, USD: CatalogPairSchema }),
     /** billing-countries.json: where a person may buy without a tax ID, and where a business types its number. */
-    countries: z.object({ consumer: z.array(z.string()), customTaxId: z.array(z.string()) }),
+    countries: z.object({
+      consumer: z.array(z.string()),
+      /** MUT-418 (D11): every country is open to a person (billing-countries.json "*"); `consumer` is then empty. */
+      consumerEverywhere: z.boolean(),
+      customTaxId: z.array(z.string()),
+    }),
     /** The profiles a payment would cover: the ones the person created (a co-owner's shared profile is its creator's, TD-193). */
     coveredProfileIds: z.array(z.string().uuid()),
   })

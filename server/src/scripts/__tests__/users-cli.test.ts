@@ -1,3 +1,4 @@
+import { parseBillingCountries } from '../../billing/checkout.js';
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp, type AppDependencies } from '../../app.js';
@@ -370,11 +371,23 @@ describe('billing verbs (MUT-358)', () => {
   it('billing-status asks to confirm a payer billed outside the consumer countries with no tax ID (MUT-362 D9)', async () => {
     const checkout = new FakeCheckoutGateway();
     const stripe = new FakeStripeGateway(() => new Date());
-    const h = harness({ stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout } });
+    // A country list (the shipped file says "*" since MUT-418, which opens every country and flags nobody).
+    const billingCountries = parseBillingCountries({ consumerCountries: ['IL'], customTaxIdCountries: ['IL', 'JO'] });
+    const h = harness({ stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout }, billingCountries });
     const user = await person(h, 'rana@studio.ps');
     await h.store.billing.saveAccount({ stripeCustomerId: 'cus_jo', userId: user.id, country: 'JO', currency: 'USD', at: new Date(), linkAudit: [] });
     expect(await h.run(['billing-status', '--email', 'rana@studio.ps'])).toBe(0);
     expect(h.out).toContain('  CHECK cus_jo: billed in JO, not open to consumers, and no tax ID — confirm it is a business');
+  });
+
+  it('billing-status flags nobody while every country is open to consumers (MUT-418)', async () => {
+    const checkout = new FakeCheckoutGateway();
+    const stripe = new FakeStripeGateway(() => new Date());
+    const h = harness({ stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout } });
+    const user = await person(h, 'rana@studio.ps');
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_jo', userId: user.id, country: 'JO', currency: 'USD', at: new Date(), linkAudit: [] });
+    expect(await h.run(['billing-status', '--email', 'rana@studio.ps'])).toBe(0);
+    expect(h.out.some((line) => line.includes('CHECK'))).toBe(false);
   });
 });
 

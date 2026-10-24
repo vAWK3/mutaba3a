@@ -9,6 +9,7 @@ import {
   consumerCountryCheck,
   currencyOf,
   currentSubscription,
+  isConsumerCountry,
   isReturnPath,
   parseBillingCountries,
   planCheckout,
@@ -158,8 +159,8 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
       adaptive_pricing: { enabled: false },
     });
     expect(result.params.subscription_data).not.toHaveProperty('trial_end');
-    // A person in a consumer country with no Stripe tax-ID type: an optional number field, never required.
-    expect(result.params.custom_fields).toEqual([expect.objectContaining({ key: 'business_tax_number', optional: true })]);
+    // MUT-418 D10: a person never sees the business tax number field, even where Stripe has no tax-ID type.
+    expect(result.params.custom_fields).toEqual([]);
   });
 
   it('subscribing during the trial keeps the rest of it: Stripe first charges on the trial end (review D2)', () => {
@@ -201,10 +202,14 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
     expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
   });
 
-  it('a business in a consumer country gives its number only if it wants to', () => {
-    const result = plan({ country: 'GB', buyer: 'business' });
-    if (!result.ok) throw new Error('expected a plan');
-    expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
+  it('a business must prove it is one, even in a country open to consumers (MUT-418 D10)', () => {
+    const gb = plan({ country: 'GB', buyer: 'business' });
+    if (!gb.ok) throw new Error('expected a plan');
+    expect(gb.params.tax_id_collection).toEqual({ enabled: true, required: 'if_supported' });
+    const il = plan({ country: 'IL', buyer: 'business' });
+    if (!il.ok) throw new Error('expected a plan');
+    expect(il.params.custom_fields).toEqual([expect.objectContaining({ key: 'business_tax_number', optional: false })]);
+    expect(il.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
   });
 
   it('the custom field label fits Stripe’s 50 characters and the message its 1200', () => {
@@ -269,8 +274,28 @@ describe('billing countries, currency and return paths', () => {
     });
   });
 
-  it('the shipped file parses and opens no consumer country until MUT-355 is answered', () => {
-    expect(BILLING_COUNTRIES).toEqual({ consumer: [], customTaxId: ['IL', 'JO'] });
+  it('the shipped file opens every country to consumers (MUT-418, Basel 2026-10-23); IL and JO keep the typed number', () => {
+    expect(BILLING_COUNTRIES).toEqual({ consumer: '*', customTaxId: ['IL', 'JO'] });
+  });
+
+  it('"*" opens every country to a person, with no tax ID and no number field (MUT-418 D9)', () => {
+    const everywhere = parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: ['IL', 'JO'] });
+    expect(isConsumerCountry(everywhere, 'JO')).toBe(true);
+    expect(isConsumerCountry(COUNTRIES, 'JO')).toBe(false);
+    for (const country of ['JO', 'US', 'AE', 'IL']) {
+      const result = planCheckout(input({ country }), person(), everywhere, CATALOG);
+      if (!result.ok) throw new Error(`expected a plan for ${country}`);
+      expect(result.params.tax_id_collection).toEqual({ enabled: true, required: 'never' });
+      expect(result.params.custom_fields).toEqual([]);
+    }
+    const jo = planCheckout(input({ country: 'JO', buyer: 'business' }), person(), everywhere, CATALOG);
+    if (!jo.ok) throw new Error('expected a plan');
+    expect(jo.params.custom_fields).toEqual([expect.objectContaining({ key: 'business_tax_number', optional: false })]);
+    const ae = planCheckout(input({ country: 'AE', buyer: 'business' }), person(), everywhere, CATALOG);
+    if (!ae.ok) throw new Error('expected a plan');
+    expect(ae.params.tax_id_collection).toEqual({ enabled: true, required: 'if_supported' });
+    // The operator's D9 flag has nothing to flag when everyone may buy as a person.
+    expect(consumerCountryCheck('JO', 0, everywhere)).toEqual({ openToConsumers: true, flagged: false });
   });
 
   it('the country file is validated: ISO-2 upper case, no duplicates', () => {
@@ -278,6 +303,9 @@ describe('billing countries, currency and return paths', () => {
     expect(() => parseBillingCountries({ consumerCountries: ['il'], customTaxIdCountries: [] })).toThrow(/consumerCountries/);
     expect(() => parseBillingCountries({ consumerCountries: ['IL', 'IL'], customTaxIdCountries: [] })).toThrow(/duplicate/);
     expect(() => parseBillingCountries({ consumerCountries: ['IL'] })).toThrow(/customTaxIdCountries/);
+    // Only consumers may be "everywhere"; any other string is a typo that must stop the server.
+    expect(() => parseBillingCountries({ consumerCountries: 'all', customTaxIdCountries: [] })).toThrow(/consumerCountries/);
+    expect(() => parseBillingCountries({ consumerCountries: '*', customTaxIdCountries: '*' })).toThrow(/customTaxIdCountries/);
   });
 
   it('a return path is one of ours, never another origin', () => {

@@ -7,6 +7,7 @@ import {
   catalogFrom,
   checkoutRefusalOf,
   currentSubscription,
+  EVERY_COUNTRY,
   isReturnPath,
   planCheckout,
   type BillingCountries,
@@ -104,7 +105,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           canManage: summary.account !== null,
           trial: summary.trialStartedAt ? trialView(summary.trialStartedAt) : null,
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
-          countries: { consumer: [...options.countries.consumer], customTaxId: [...options.countries.customTaxId] },
+          countries: countriesView(options.countries),
           coveredProfileIds: covered.map((p) => p.id),
         },
         200,
@@ -120,7 +121,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       summary: 'Open Stripe Checkout for the Freelancer plan',
       description:
         "Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its " +
-        'metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. Stripe itself is ' +
+        'metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is ' +
         "asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts " +
         'are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe ' +
         'webhook. Audited `billing.checkout_started` on each profile the person owns.',
@@ -328,6 +329,12 @@ function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
     currentPeriodEnd: sub.currentPeriodEnd.toISOString(),
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
   } as const;
+}
+
+/** MUT-418 (D11): `"*"` is sent as `consumerEverywhere`, so `consumer` stays a plain list for every client. */
+function countriesView(countries: BillingCountries) {
+  const everywhere = countries.consumer === EVERY_COUNTRY;
+  return { consumer: everywhere ? [] : [...countries.consumer], consumerEverywhere: everywhere, customTaxId: [...countries.customTaxId] };
 }
 
 function trialView(startedAt: Date) {
