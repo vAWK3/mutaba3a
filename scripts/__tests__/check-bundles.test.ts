@@ -29,6 +29,7 @@ import {
   sourceMaps,
   LANDING_SENTRY_CHUNK,
   PATTERN_SCOPED_ORIGINS,
+  landingSentryChunks,
   sentryOutsideLandingChunks,
   sentryPrecached,
 } from '../bundle-rules';
@@ -438,6 +439,11 @@ describe('Sentry on the landing stays in its lazy chunks (MUT-150, ADR-024)', ()
   it('fails on the SDK in any other dist-web file: the local app shares them', () => {
     const leaky = { ...files, 'assets/vendor-react-b2.js': 'const n="sentry.javascript.browser";' };
     expect(sentryOutsideLandingChunks(paths, reader(leaky))).toEqual(['assets/vendor-react-b2.js']);
+  });
+
+  it('finds the landing chunks, so a build made with the QA DSN proves the guard ran on real Sentry code (review D1)', () => {
+    expect(landingSentryChunks(paths)).toEqual(['assets/landingSentry-c3.js', 'assets/vendor-sentry-d4.js']);
+    expect(landingSentryChunks(['index.html', 'assets/index-a1.js'])).toEqual([]);
   });
 
   it('fails on the SDK inlined into a non-JS dist-web file (MUT-150 review)', () => {

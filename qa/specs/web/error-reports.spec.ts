@@ -30,10 +30,16 @@ async function throwUncaught(page: Page, message: string) {
 const withMessage = (crashReports: CrashReportSpy, message: string) =>
   crashReports.events().filter((event) => event.exception?.values?.some((value) => value.value?.includes(message)));
 
-async function oneReport(crashReports: CrashReportSpy, message: string): Promise<SentErrorEvent> {
+/** One report, and still one once the page's network has gone quiet: a late duplicate fails it (review D1). */
+async function oneReport(page: Page, crashReports: CrashReportSpy, message: string): Promise<SentErrorEvent> {
   await expect.poll(() => withMessage(crashReports, message).length, { timeout: SDK_WAIT_MS }).toBe(1);
+  await page.waitForLoadState('networkidle');
+  expect(withMessage(crashReports, message)).toHaveLength(1);
   return withMessage(crashReports, message)[0];
 }
+
+/** The landing's Sentry code, as the dev server or a build serves it: any request for it from /app is the leak. */
+const SENTRY_CODE = /landingSentry|vendor-sentry|sentry_browser|@sentry\//;
 
 test('an error on the home page is reported once: the landing, its route and language, no account', { tag: '@web.error-reports.landing-crash-reported' }, async ({ page, step, crashReports }) => {
   await step('Open the home page in English', async () => {
@@ -47,7 +53,7 @@ test('an error on the home page is reported once: the landing, its route and lan
   });
 
   await step('Exactly one report: surface landing, route /, English, no user, and the address without its query', async () => {
-    const event = await oneReport(crashReports, 'MUT-150 QA home');
+    const event = await oneReport(page, crashReports, 'MUT-150 QA home');
     expect(event.tags).toMatchObject({ surface: 'landing', route: '/', locale: 'en' });
     expect(event.user).toBeUndefined();
     expect(event.request?.url).not.toContain('utm_source');
@@ -66,7 +72,7 @@ test('an error on the Arabic privacy page is reported with the Arabic language',
   });
 
   await step('One report, tagged Arabic and /privacy', async () => {
-    const event = await oneReport(crashReports, 'MUT-150 QA privacy');
+    const event = await oneReport(page, crashReports, 'MUT-150 QA privacy');
     expect(event.tags).toMatchObject({ surface: 'landing', route: '/privacy', locale: 'ar' });
   });
 });
@@ -80,7 +86,7 @@ test('errors on the download page and on a frozen terms version are reported, th
   });
 
   await step('One report with route /download', async () => {
-    expect((await oneReport(crashReports, 'MUT-150 QA download')).tags).toMatchObject({ route: '/download' });
+    expect((await oneReport(page, crashReports, 'MUT-150 QA download')).tags).toMatchObject({ route: '/download' });
   });
 
   await step('Open the terms at /terms/2026-10-19; something throws', async () => {
@@ -89,7 +95,7 @@ test('errors on the download page and on a frozen terms version are reported, th
   });
 
   await step('One report with the route template /terms/:version', async () => {
-    expect((await oneReport(crashReports, 'MUT-150 QA terms')).tags).toMatchObject({ route: '/terms/:version' });
+    expect((await oneReport(page, crashReports, 'MUT-150 QA terms')).tags).toMatchObject({ route: '/terms/:version' });
   });
 });
 
@@ -101,7 +107,24 @@ test('the free web app never sends a report, even when reached from the website'
     await sdkLoaded;
   });
 
+  await step('With error reporting live, the page moves to /app without reloading, and something throws there', async () => {
+    // The risky path (eng R1): the SDK is already running when the address becomes an app route
+    await page.evaluate(() => window.history.pushState(null, '', '/app/clients'));
+    await throwUncaught(page, 'MUT-150 QA in-page app');
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForLoadState('networkidle');
+    expect(crashReports.requestCount()).toBe(0);
+  });
+
+  // From here on, any request for Sentry's code is the app loading it
+  const sentryCode: string[] = [];
+  page.context().on('request', (request) => {
+    if (SENTRY_CODE.test(request.url())) sentryCode.push(request.url());
+  });
+
   await step('Follow the link back to the web app and log an income', async () => {
+    await page.goto('/download');
+    sentryCode.length = 0;
     await page.locator('a[href="/app"]').first().click();
     await page.waitForURL(/\/app/);
     await page.getByRole('dialog', { name: 'Welcome to MTB3A' }).getByRole('button', { name: 'Skip for now' }).click();
@@ -110,7 +133,7 @@ test('the free web app never sends a report, even when reached from the website'
 
   await step('Something in the app throws an error nobody catches', async () => {
     await throwUncaught(page, 'MUT-150 QA app via landing');
-    await page.waitForTimeout(3_000);
+    await page.waitForLoadState('networkidle');
   });
 
   await step('Open the app directly in a new tab, and something throws there too', async () => {
@@ -119,17 +142,19 @@ test('the free web app never sends a report, even when reached from the website'
     await fresh.goto('/app/clients');
     await expect(fresh.getByRole('main')).toBeVisible();
     await throwUncaught(fresh, 'MUT-150 QA app direct');
-    await fresh.waitForTimeout(3_000);
+    await fresh.waitForLoadState('networkidle');
   });
 
-  await step('Not one request ever reached Sentry', async () => {
+  await step('Not one request ever reached Sentry, and the app never even loaded its code', async () => {
     expect(crashReports.requestCount()).toBe(0);
+    expect(sentryCode).toEqual([]);
   });
 });
 
 test("a website page that can't load shows its own Arabic screen and reports once", { tag: '@web.error-reports.landing-crash-screen' }, async ({ page, step, crashReports }) => {
   await step("Open the home page while its code can't be downloaded (an old tab after a release)", async () => {
-    await page.route('**/src/pages/landing/LandingPage.tsx*', (route) => route.abort());
+    // The page's own chunk, as the dev server (the module) or a build (a hashed asset) serves it
+    await page.route(/\/(src\/pages\/landing\/LandingPage\.tsx|assets\/LandingPage-[^/]+\.js)/, (route) => route.abort());
     await page.goto('/');
   });
 
@@ -141,6 +166,8 @@ test("a website page that can't load shows its own Arabic screen and reports onc
 
   await step('One report reaches Sentry for the crash, tagged landing and /', async () => {
     await expect.poll(() => crashReports.events().length, { timeout: SDK_WAIT_MS }).toBe(1);
+    await page.waitForLoadState('networkidle');
+    expect(crashReports.events()).toHaveLength(1);
     expect(crashReports.events()[0].tags).toMatchObject({ surface: 'landing', route: '/' });
   });
 });

@@ -47,11 +47,13 @@ features:
       - src/pages/download/DownloadPage.tsx
     steps:
       - Open the download page and wait until its error reporting has loaded
+      - With error reporting live, the page moves to /app without reloading, and something throws there
       - Follow the link back to the web app and log an income
       - Something in the app throws an error nobody catches
       - Open the app directly in a new tab, and something throws there too
     expect:
       - Not one request reaches Sentry
+      - The app never loads Sentry's code at all
   - id: landing-crash-screen
     title: A website page that can't load shows its own screen in the visitor's language and reports once (MUT-150)
     tier: secondary

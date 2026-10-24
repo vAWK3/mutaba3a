@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { StrictMode, lazy, Suspense, type ReactNode } from "react";
+import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
@@ -16,17 +16,14 @@ import { router } from "./router";
 import { initDatabase } from "./db";
 import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
-import { LandingProviders } from "./pages/landing/LandingProviders";
 // The one place outside the website's pages that may import its error reports (MUT-150, ADR-024)
 // eslint-disable-next-line no-restricted-imports
-import { LANDING_SENTRY_ENABLED, reportLandingCrash, startLandingErrorReporting } from "./pages/landing/observability/landingErrorReporting";
-// eslint-disable-next-line no-restricted-imports
-import { LandingCrashScreen } from "./pages/landing/observability/LandingCrashScreen";
+import { LANDING_SENTRY_ENABLED, startLandingErrorReporting } from "./pages/landing/observability/landingErrorReporting";
+import { LandingShell } from "./pages/landing/LandingShell";
 import { HOSTED_OFFER_URL } from "./content/download-config";
 import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
-import { BootSplash } from "./components/brand/BootSplash";
 import "./components/ui/ErrorBoundary.css";
 import { handleVersionChange } from "./lib/platform";
 import { APP_VERSION } from "./lib/appVersion";
@@ -82,17 +79,6 @@ const queryClient = createAppQueryClient();
 // before React renders so a crash at start-up is kept (eng O5). The local
 // app's routes never start it (ADR-024), and desktop never builds it.
 if (__BUILD_MODE__ === "web") startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED });
-
-/** A website page: its providers, its crash screen that reports once, and its lazy chunk's splash. */
-function LandingShell({ children }: { children: ReactNode }) {
-  return (
-    <LandingProviders>
-      <ErrorBoundary onError={(error, info) => reportLandingCrash(error, info.componentStack ?? undefined)} fallback={<LandingCrashScreen />}>
-        <Suspense fallback={<BootSplash />}>{children}</Suspense>
-      </ErrorBoundary>
-    </LandingProviders>
-  );
-}
 
 function App() {
   // Web build: handle landing routes outside router

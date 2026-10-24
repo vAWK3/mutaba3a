@@ -358,6 +358,11 @@ export function sentryLeaks(text: string): boolean {
   return SENTRY_MARKER.test(text);
 }
 
+/** The landing's Sentry chunks in a dist-web listing: `test:bundles` builds with the QA DSN and requires them (review D1). */
+export function landingSentryChunks(paths: readonly string[]): string[] {
+  return paths.filter((path) => LANDING_SENTRY_CHUNK.test(path));
+}
+
 /**
  * dist-web files that carry the SDK outside the landing's lazy chunks (MUT-150):
  * the local app loads the rest of dist-web, and never the SDK (ADR-024). Empty when clean.

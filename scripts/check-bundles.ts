@@ -43,6 +43,7 @@ import {
   posthogPrecached,
   sentryInEntryGraph,
   sentryOutsideLandingChunks,
+  landingSentryChunks,
   sentryPrecached,
   sentryLeaks,
   sentrySecrets,
@@ -53,6 +54,8 @@ import {
 
 const DISTS = ['dist-web', 'dist-desktop', 'dist-hosted'] as const;
 const distFlag = process.argv.indexOf('--dist');
+/** `test:bundles` builds web with the QA DSN: the landing's chunks must exist, or every Sentry check above ran on nothing (review D1). */
+const expectLandingSentry = process.argv.includes('--expect-landing-sentry');
 const only = distFlag === -1 ? null : process.argv[distFlag + 1];
 if (only !== null && !(DISTS as readonly string[]).includes(only)) {
   console.error(`--dist must be one of ${DISTS.join(', ')}`);
@@ -217,6 +220,9 @@ function checkSentry(): string[] {
     const read = (path: string) => (existsSync(join(web, path)) ? readFileSync(join(web, path), 'utf8') : '');
     // Every text file, not only .js: an SDK marker inlined into index.html must fail too (MUT-150 review)
     const shipped = files(web).map((file) => relative(web, file).split(sep).join('/'));
+    if (expectLandingSentry && landingSentryChunks(shipped).length === 0) {
+      problems.push(`${web}: no landing Sentry chunk, though this build was made with a landing DSN (--expect-landing-sentry); the checks above proved nothing`);
+    }
     for (const path of sentryOutsideLandingChunks(shipped, read)) problems.push(`${web}/${path}: the Sentry SDK is outside the landing's lazy chunks; the local app loads this file (ADR-024)`);
     for (const path of sentryPrecached(read('sw.js'), read)) {
       problems.push(`${web}/${path}: the service worker precaches Sentry, so it would be stored on every local-app device (add it to SENTRY_PRECACHE_IGNORES)`);
