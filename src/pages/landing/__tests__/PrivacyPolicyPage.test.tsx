@@ -94,15 +94,18 @@ describe('PrivacyPolicyPage', () => {
     expect(reports).toMatch(/The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from/);
     expect(reports).toMatch(/They never attach screenshots or what's on your screen/);
     expect(reports).toMatch(/the hosted portal sends one when a page crashes in your browser/);
-    // Only what is live (ADR-090 P3): the website gets its sentence with MUT-150.
-    expect(reports).not.toMatch(/Our website sends/);
+    // MUT-150 (eng D8): what the website really sends, and that the free web app sends nothing
+    expect(reports).toMatch(/Our website sends a report when one of its pages crashes or hits an error/);
+    expect(reports).toMatch(/These reports include no account at all, and the free web app you open from the website never sends one/);
+    expect(reports).not.toMatch(/fails to load/);
     const noTracking = body(/No ads, no tracking/);
     expect(noTracking).not.toMatch(/crash reporting/);
-    expect(noTracking).toMatch(/Our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks/);
+    expect(noTracking).toMatch(/Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks/);
     expect(noTracking).toMatch(/The free apps on Mac, Windows, and in the browser never send them/);
     expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
     expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports/);
     expect(body(/What reaches the network/)).toMatch(/The hosted portal also sends the error reports described under "Error reports" to Sentry/);
+    expect(body(/What reaches the network/)).toMatch(/when you press Send\. Our website also sends the error reports described under "Error reports" to Sentry\./);
     // MUT-151's phone and MUT-155's PostHog sentences stay (regression contract)
     expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
   });
@@ -115,7 +118,11 @@ describe('PrivacyPolicyPage', () => {
     expect(reports).toContain('Sentry');
     const noTracking = screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' }).parentElement?.textContent ?? '';
     expect(noTracking).not.toContain('أو تقارير الأعطال أو');
-    expect(noTracking).toContain('ترسل خوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
+    expect(noTracking).toContain('يرسل موقعنا وخوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
+    expect(reports).toContain('يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً');
+    expect(reports).toContain('ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا');
+    const network = screen.getByRole('heading', { level: 2, name: 'ما يصل إلى الشبكة' }).parentElement?.textContent ?? '';
+    expect(network).toContain('ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry.');
     expect(reports).toContain('وترسل البوابة المستضافة تقريرًا عندما تتعطّل صفحة في متصفحك');
   });
 
