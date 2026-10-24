@@ -1,4 +1,5 @@
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { webauthnConfigOf } from './auth/webauthn.js';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ARGON2_MINIMUMS } from './auth/users.js';
@@ -65,6 +66,14 @@ const envSchema = z.object({
   DEVICE_SESSION_ABSOLUTE_DAYS: z.coerce.number().int().min(1).max(730).default(180),
   /** The portal's public origin; non-GET session requests must come from it. Unset = compare with the request's own origin. */
   PORTAL_ORIGIN: z.string().url().optional(),
+  /**
+   * MUT-115 (ADR-189, D2): the WebAuthn relying-party ID, the apex domain (Terraform sets it from config/hosts.json at
+   * stages live/redirect). Unset = no passkeys: every passkey route answers 404. WEBAUTHN_ORIGINS (comma list)
+   * replaces the derived origins (PORTAL_ORIGIN and https://<rp id>) for local development; each must be the RP ID or
+   * a subdomain of it.
+   */
+  WEBAUTHN_RP_ID: z.string().min(1).optional(),
+  WEBAUTHN_ORIGINS: z.string().min(1).optional(),
   /** How many proxies in front of the service append to X-Forwarded-For (Cloud Run front end = 1; a load balancer adds one). */
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
   /** Built hosted-portal assets (MUT-45), mounted by the Dockerfile. Unset = the server serves no portal, API-only. */
@@ -215,6 +224,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.FRONT_DOOR_TOKEN && !config.PORTAL_ORIGIN) {
     throw new ConfigError('Invalid configuration:\n  FRONT_DOOR_TOKEN: needs PORTAL_ORIGIN, the origin the front door serves the portal on');
+  }
+  try {
+    webauthnConfigOf({ rpId: config.WEBAUTHN_RP_ID, origins: config.WEBAUTHN_ORIGINS, portalOrigin: config.PORTAL_ORIGIN });
+  } catch (err) {
+    throw new ConfigError(`Invalid configuration:\n  ${(err as Error).message}`);
   }
   if (config.PORTAL_LEGACY_REDIRECT && !config.FRONT_DOOR_TOKEN) {
     throw new ConfigError('Invalid configuration:\n  PORTAL_LEGACY_REDIRECT: needs FRONT_DOOR_TOKEN, or every visit would be redirected, the new host\'s included');
