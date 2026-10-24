@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-237: Reports' activity summary aggregates in memory
+**Status**: Accepted (for now)
+**Ticket**: MUT-175 (plan §4.2, eng review F2; the plan called it TD-221 before that number was taken)
+**Added**: 2026-10-24
+**Priority**: Low (no production row counts measured; a heavy year is ~2–5k rows)
+**Impact**: `GET /v1/summaries/activity` reads a profile's POSTED payments and expenses for up to 13 months through `listAll` and sums them in `summarizeActivity`, like `/v1/summaries/organization`. A profile with ~10k+ rows a year would make every Reports open and step slow.
+**Fix**: move the sums to SQL (`GROUP BY` currency and day or month on the existing `[organizationId, receivedOn…]` / `[organizationId, occurredOn…]` indexes) behind the same response, keeping `summarizeActivity` as the memory store's path.
+
 ### TD-235: Eight landing and legal release-QA flows still test the retired /hosted page and free tier
 **Status**: Open
 **Ticket**: found by MUT-369's qa-reconcile (not caused by it)

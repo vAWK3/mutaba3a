@@ -5054,3 +5054,23 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A home-page visit now makes one GET to our API (disclosed in the policy's network section).
 - Adding Sentry tracing to the landing with the portal in `tracePropagationTargets` would force a preflight the server doesn't answer and keep the door closed (D17; comment in `signupDoor.ts`).
 - The signup CTA isn't counted in landing analytics (D7, TD-233). Stripe isn't named in the policy yet (D13, TD-234).
+
+## ADR-188: Portal Reports — Per-Profile Activity on the Server, Combined and Converted in the Portal, Staged Deterministic Insights (MUT-175)
+
+**Status:** Accepted (2026-10-24, MUT-175). Basel's product calls B1–B9, eng review D1–D6, design review DR1–DR30 and the All-profiles pass DS1–DS5 are in `.claude/designs/mut-175-reports-plan.md`; the copy table (DR28) was approved as written. ADR-181 is MUT-361's; MUT-425 claimed ADR-187, so this is ADR-188.
+
+**Context:** MUT-292 can't retire the web app's Insights page until the portal has reports, and MUT-322's GA gate lists it. Basel called Reports "a very important screen" meant to bring people back weekly.
+
+**Decision:**
+1. **One server read per profile:** `GET /v1/summaries/activity?from&to&bucket=day|month` (in `summaryRoutes`, so `PORTAL_ROUTES` runs it signed out too, ADR-097). It answers per currency (ADR-004): received (POSTED payments by `receivedOn`), spent (expenses by `occurredOn`), zero-filled buckets, the period's categories and received-by-client, a **12-month monthly history ending with `to`'s month**, `dataSince`/`earlierData`, and **days to get paid as the median over fully settled Owed entries whose last payment falls in that window, null below 3** (D2). `summaries:read` + `expenses:read`, session-only like `/v1/summaries/expenses`; defaults to this month; 422 `END_BEFORE_START`, `RANGE_TOO_LONG` (13 months). One batched allocation read, `payments.listAllocationsFor`. In-memory aggregation, like the organization summary (TD-237). API 1.65.0-mut175.
+2. **Weeks, combining and converting happen in the portal** (D1): weeks from day buckets with `weekStart` (Monday en, Saturday ar); All profiles fans out one request per profile and adds per currency; the ≈ figure converts at today's ECB rate through `convertTotal` (widened, not copied). Categories merge by name across profiles; clients never merge (DR30). Days to paid across profiles is the median of each profile's median weighted by its entries (the honest figure without shipping every sample).
+3. **The stage comes from the data** (B3, DR14): a month counts as complete only if records began by its 7th day; 0 / 1 / 2+ complete months are stages 1 / 2 / 3. Stage 2 is a factual recap of the first complete month; movers, concentration, days to paid, best month, trend and average are stage 3 (DR15 amends B4). Insights always describe the latest complete months and never move with the period shown (DR16). They are deterministic rules with named thresholds, no LLM; changed facts rank first, then kind order (DR29), and a fact seen on 3 earlier visits drops below fresh ones (DR18, `localStorage`, best-effort).
+4. **One unit for comparisons** (D3): one currency in view needs no rates; with every rate present it is the base; with one missing, the largest currency in view, labelled "In {currency} only".
+5. **One profile by default; one opt-in "All profiles" switch** (DS1–DS5, `?scope=all`): Reports' one exception to MUT-423 D6. Each profile loads on its own; a failed one is named with its own Retry and the rest renders (D4); the error card shows only when nothing loaded (DR10).
+6. **One opt-in event**, `report_viewed {period, scope, stage}`, debounced 1 s, never signed out (D6, taxonomy v2.2.0).
+7. **Entry point:** a nav item after Overview until MUT-426 moves it to the shell's corner icon (X2, MUT-424 D2). The route stays `/p/$profileId/reports`.
+
+**Consequences:**
+- `DayBars` gained opt-in `second` and `future` props in place (D1); characterization tests pinned the single-series chart first and the expense-group release-QA ran before and after (D5). `CategoryBars` gained plain rows, `meta` and `detail`.
+- A Year request reads 12 months; Month and Week read the 12 months their history needs. If a profile's year passes ~10k rows, move the aggregation to SQL (TD-237).
+- The web Insights CSV is not carried over (plan §9); Basel decides before MUT-292.

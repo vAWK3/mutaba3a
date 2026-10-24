@@ -2094,12 +2094,27 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 Tests: `src/hosted/pages/__tests__/ExpenseGroups.test.tsx` (aria-current on both routes).
 
 ### DayBars — `src/hosted/components/groups/DayBars.tsx`
-**Purpose**: bar chart of `Bar[]` (from `toBars`): one button per bar in a labelled group, roving tab stop, ←/→ mirrored in RTL, Home/End, Enter/click → `onJump(bar)`; ⋯ gap labels between before/in/after; value tooltip on hover/focus flipped inward at the ends; dot for other-currency days. Heights spring via `useSpringScale`.
-Tests: `components/groups/__tests__/DayBars.test.tsx`.
+**Purpose**: bar chart of `Bar[]` (from `toBars`): one button per bar in a labelled group, roving tab stop, ←/→ mirrored in RTL, Home/End, Enter/click → `onJump(bar)`; ⋯ gap labels between before/in/after; value tooltip on hover/focus flipped inward at the ends; dot for other-currency days. Heights spring via `useSpringScale`. **MUT-175 (opt-in):** `second(bar)` draws a second fill at the same scale (`hp-daybars-pair`); `future(bar)` days are faint `aria-hidden` spans the arrows and End never reach.
+Tests: `components/groups/__tests__/DayBars.test.tsx` (incl. the D5 single-series contract).
 
 ### CategoryBars — `src/hosted/components/groups/CategoryBars.tsx`
-**Purpose**: `CategoryRow[]` as toggle buttons (`aria-pressed`) with amount · share and a width bar; `onSelect(key | undefined)`; Uncategorized muted.
+**Purpose**: `CategoryRow[]` as toggle buttons (`aria-pressed`) with amount · share and a width bar; `onSelect(key | undefined)`; Uncategorized muted. **MUT-175:** without `onSelect` the rows are plain `div`s; `meta(row)` adds an end-aligned muted note, `detail(row)` a muted second line.
 Tests: `components/groups/__tests__/CategoryBars.test.tsx`.
+
+## Reports (portal) — MUT-175
+
+### HeroFigures / CountUp — `src/hosted/components/reports/HeroFigures.tsx`
+**Purpose**: Received (anchor, whole units), Spent and Kept from per-currency `Money` and a `Unit`. ≈ figures open an exact per-currency breakdown (hover, focus-visible or tap; Esc/outside closes) via `usePopover`; a missing rate shows one line per currency. `CountUp` counts up on first paint and morphs after; the digits are `aria-hidden`, an sr-only span carries the final value; reduced motion is instant.
+
+### InsightList / TeaserCard — `src/hosted/components/reports/InsightList.tsx`
+**Purpose**: renders `Insight[]` (from `buildInsights`) as plain sentences under "Lately", amounts in LRI isolates and names in FSI isolates; the D3 single-currency label; the dashed teaser with an optional "See insights across all profiles".
+
+### ReportControls — `src/hosted/components/reports/ReportControls.tsx`
+**Purpose**: Week | Month | Year radiogroup (arrows follow reading order; Year `aria-disabled` with "Unlocks in …"), the All profiles `role="switch"`, and ‹ › in reading order with bounds. All targets ≥ 44px.
+
+### Reports data — `src/hosted/data/reports.ts`, `reportInsights.ts`, `reportQueries.ts`
+**Purpose**: periods and stepping, complete months / stage / unlock month, `combine` (All profiles), `chooseUnit`/`inUnit`/`convertMoney`, `chartBars`/`shareRows`/`monthPoints` (rows arrive shaped); `buildInsights`/`recordViews`; per-profile queries with their own status (`useReportActivity`, `useOwedSummaries`, `useNameDirectories`).
+Tests: `data/__tests__/reports.test.ts`, `reportInsights.test.ts`; page: `pages/__tests__/Reports.test.tsx`.
 
 ### useSpringScale — `src/hosted/components/groups/useSpringScale.ts`
 **Purpose**: paints a scaleX/scaleY before first frame, then springs changes from the presentation value on `UI_SPRING`; reduced motion = value swap + 150 ms opacity dip.

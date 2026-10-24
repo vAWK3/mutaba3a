@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Portal Reports (MUT-175, ADR-188)
+
+**Why:** the portal had no reports, and MUT-292 can't retire the web Insights page until it does (MUT-322 GA gate). Basel wants a screen people come back to weekly: what came in, where it went, who paid, and what the history says.
+
+### Added
+- **`GET /v1/summaries/activity`** (`server/src/summaries/activity.ts`, `routes/summaries.ts`): per currency, received and spent per day or month, the period's categories and received by client, a 12-month history, `dataSince`/`earlierData`, and days to get paid (median over fully settled Owed, n ≥ 3). Session-only, `summaries:read` + `expenses:read`; 422 `END_BEFORE_START`, `RANGE_TOO_LONG`. Runs signed out through `PORTAL_ROUTES`. API `1.65.0-mut175`.
+- `payments.listAllocationsFor` (memory + Prisma, M4 store contract); `daysBetween` in `server/src/dates.ts`.
+- **Reports page** `/p/$profileId/reports` (nav item after Overview): Received as the anchor figure, Spent and Kept, ≈ at today's ECB rate with the exact per-currency breakdown, Owed to you now, "Lately" staged insights and the teaser, a received-and-spent chart, Where it went and Who paid; Week/Month/Year with ‹ ›; the All profiles switch (`?scope=all`) with partial-load handling; first run, empty periods and a no-access explainer. Portal modules `data/reports.ts`, `data/reportInsights.ts`, `data/reportQueries.ts`, `format/reportFormat.ts`, `components/reports/*`, `analytics/reportViewed.ts`.
+- `hosted.reports.*` and `hosted.shell.nav.reports` (en + ar, approved copy table); `--text-figure-fluid` in `theme.css`.
+- Analytics: `report_viewed {period, scope, stage}`, taxonomy v2.2.0.
+- QA: `qa/features/portal/reports.yaml` + `qa/specs/portal/reports.spec.ts` (10 flows); the fake API answers the activity route (`activitySummary`).
+
+### Changed
+- `DayBars` (in place, opt-in): `second` series and `future` days; characterization tests pin the expense-group chart (D5). `CategoryBars`: optional `onSelect` (plain rows), `meta`, `detail`.
+- `convertTotal` takes `{ currencies: { currency, total }[] }` (what it always read).
+- `everyPage` is exported from `data/queries.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-24 — Landing "Create an account" while signup is open; privacy-policy draft for signup and mail (MUT-369, ADR-186)
 
 **Why:** at GA the landing must lead to `/signup` (ADR-159 §9), and the privacy policy must name Resend, Cloudflare Turnstile and the DNS/RDAP domain check before MUT-359's mail goes live (D23). **The policy wording is a draft until Basel approves it.**

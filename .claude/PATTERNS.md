@@ -2745,6 +2745,14 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`) so per-IP budgets don't add up.
 - **First instance:** `qa/support/selfservice-live.mjs` (the `portal-selfservice` app).
 
+## Patterns added by MUT-175 (2026-10-24, ADR-188)
+
+### Pattern: Staged insights from data, not from settings
+A screen that gets smarter with history derives its stage from the records themselves (complete months by a cutoff day), computes insights as pure, deterministic rules with named thresholds over the latest complete periods only, and ranks them changed-fact first, then by kind, then by size, capped. What unlocks next is said in one teaser with a date, never hidden. Insights never move with the period on screen. No LLM.
+
+### Pattern: Per-profile server reads, combined and converted in the portal
+The server answers one profile, per currency (ADR-004). A cross-profile view fans out one query per profile, each with its own status, adds per currency, then converts once at today's rate. A failed profile is named with its own Retry and the rest renders; only "nothing loaded" is a page error.
+
 ## Patterns added by MUT-291 (2026-10-24, ADR-185)
 
 ### Pattern: Replay untrusted records through the server's own routes in a throwaway app, then land them in one write

@@ -3626,6 +3626,19 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Server | `routes-self-service.test.ts` (+2): doors GET has ACAO `*` and no allow-credentials; signup and recovery have none | `npm --prefix server test` |
 | Release-QA | `web.landing.signup-open`, `web.landing.signup-closed`, `web.legal.privacy-signup` (recorded, passing; `qa/runs/MUT-369/`) | `release-qa run --app web --only …` |
 
+## MUT-175 — Portal Reports (2026-10-24, ADR-188)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `summaries/__tests__/activity.test.ts` (13): day/month buckets zero-filled, REVERSED excluded, currencies apart (JOD 3 digits), categories and clients order, 12-month history with a partial month, dataSince; days to paid: median vs outlier, n=2 → null, partial-then-full counts once from the last payment, open and reversed skipped, clamp at 0, per-client n ≥ 3 | `npm --prefix server test` |
+| Server routes | `__tests__/routes-activity.test.ts` (7): per day and currency, days to paid through real settles, month buckets + earlierData, empty profile, org-timezone today, 422s, key refused; route-security, writability and portal-routes-coverage inventories | same |
+| Store contract | `store-contract-m4.ts` `listAllocationsFor` (IN read, other org's ids, empty list), memory + Prisma | `npm --prefix server run test:db` |
+| Local parity | `src/hosted/local/__tests__/parity.test.ts` Reports script (day + month + 422) | `npm run test:run` |
+| Portal unit | `data/__tests__/reports.test.ts` (18): week starts en/ar, month/year ranges, stepping across year ends and bounds, 7th/8th-day stages, unlock month, combine (per currency, aligned buckets, categories by name, clients per profile, weighted days), chart bars and shares, D3 units; `reportInsights.test.ts` (12): every threshold above/below, recap, ranking, cap, rotation; `filters.test.ts` parseReports; `analytics/__tests__/reportViewed.test.ts` (debounce, signed out sends nothing) | `npm run test:run` |
+| Components | `DayBars.test.tsx` D5 contract (one bar per day, describe text, dot, gaps, selection, fills, jump vs spring) + second series and future days; `CategoryBars.test.tsx` contract + plain rows; `components/reports/__tests__/reportsComponents.test.tsx` (CountUp reduced motion, controls RTL arrows, Year lock, steps, switch); `pages/__tests__/Reports.test.tsx` (15): nav, first run, stage 1/3, Year lock, chart, insights stay while stepping, ≈ breakdown, missing rate, All profiles, failed profile + Retry, DS5 teaser, 403, error card, Arabic | same |
+| Analytics contract | `scripts/__tests__/analytics-taxonomy.test.ts` (v2.2.0 pinned) | same |
+| Release-QA | `@portal.reports.*` (10): first-run, first-month, third-month, converted-breakdown, period-step, all-profiles-switch, profile-fails, teaser-suggests-switch, arabic (375 px), signed-out; plus `@portal.expense-groups.*` before and after the DayBars change (D5) | `release-qa release --only portal.reports` |
+
 ## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
 
 | Layer | Tests | Command |
