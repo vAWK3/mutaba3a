@@ -3642,3 +3642,17 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Store contract | `store-contract-receipts.ts` `completeOnExpense`: completes, already_ready, receipt_not_found (other expense, deleted), expense_not_found (other profile, missing, deleted with unlink and remove), cap with pending uploads not counted, two concurrent completions (Prisma) | `npm --prefix server test` + `test:db` |
 | Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
 | Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |
+
+## MUT-254 — vendors (2026-10-24, ADR-183)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `vendors/__tests__/keys.test.ts`: case, spacing, ASCII and Arabic punctuation, Arabic letter forms, tashkeel/tatweel, legal suffixes (Latin, Hebrew, Arabic), leading "the" only, never empty, registration digits (Arabic-Indic, Extended), scorer order | `npm --prefix server test` |
+| Store contract | `store-contract-vendors.ts` (memory + Prisma): one vendor per name however written, per profile; Arabic folding; blank → none; number first with alias; no merge; fill never overwrites; concurrent first sightings → one; touch (Other, other profile's category, null, no version bump); type change clears defaults; search ranking and recent; expense link through update | `test` + `test:db` |
+| Prisma | `store-prisma-vendor-lock-order.test.ts` (touch waits on the category before the vendor row); `store-records-export-parity.test.ts` (vendors, vendorNames) | `test:db` (private DB) |
+| Routes | `routes-vendors.test.ts`: four writers link, alias via vendorDetails, PATCH re-link/unlink/leave, refused writes move no default, Other skipped, typeahead in ar/he/Latin, recent, isolation, limit, Malafat's key 403 | `npm --prefix server test` |
+| Backfill | `scripts/__tests__/backfill-vendors.test.ts`: --dry writes nothing; oldest-first canonical name, last-used, default not Other, no version bump, idempotent; re-link and unlink of old-revision rows | `test:db` |
+| Local mode | `migrations.test.ts` 5 → 6, `format-fingerprint.test.ts` (vendors, vendorNames, exps.vendorId) | `npx vitest run src/hosted/local` |
+| Portal | `VendorPicker.test.tsx` (recent, free text kept on Enter, alias hint, Arabic q); `ExpenseDrawer.test.tsx` (prefill only into an empty category) | `npx vitest run src/hosted` |
+| Release-QA | `portal.expenses.vendor-typeahead` (new vendor kept, suggestion, prefill, POST body); `portal.expenses.create`, `.edit-receipts` still green | `release-qa release --only portal.expenses` |
+

@@ -26,6 +26,22 @@
 **Impact**: Each profile-scoped session request runs one `billing.factsFor`; the phone's inbox count and Recent polls also load the person's memberships and integrations.
 **Fix**: Cache a person's entitlements for a few seconds per instance (invalidated by the Stripe webhook and grant writes), or carry them on the session row.
 
+### TD-224: Typo and one-off vendors stay in the typeahead (no vendor page, merge or delete)
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A17)
+**Added**: 2026-10-24
+**Priority**: Low (suggestions only; saving still matches exactly)
+**Impact**: Every typed vendor is saved, so "Supr Deal" next to "Super Deal" both show up as suggestions, and an expense keeps whichever it was saved under.
+**Fix**: A vendors page per profile: rename, merge (re-point expenses and names), delete unused.
+
+### TD-225: The vendor typeahead's fuzzy matches only see the 50 most recently used vendors
+**Status**: Open
+**Ticket**: MUT-254 (ADR-183, A16)
+**Added**: 2026-10-24
+**Priority**: Low (prefix and contains hits come from SQL across all names)
+**Impact**: A near-miss spelling of a vendor not used recently isn't suggested in a profile with more than 50 vendors.
+**Fix**: A trigram index (`pg_trgm`) on `vendor_names.nameKey` and a similarity prefilter in SQL.
+
 ### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
 **Status**: Open
 **Ticket**: MUT-361

@@ -4942,3 +4942,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Released phones map 402 to a retryable error: a refused capture stays in their outbox and lands once the person subscribes. Nobody is gated until self-signup opens (every existing person has a pre-billing grant), so GA's signup opening waits for MUT-364's phone build (D11, before-release.md).
 - A co-owner's own subscription still doesn't cover a shared profile (TD-193): the portal tells them to ask its creator.
 - API 1.60.0-mut361.
+
+## ADR-183: Vendors Are Saved Per Profile From Every Typed Vendor; Saving Matches Exactly, the Typeahead Fuzzily (MUT-254)
+
+**Status:** Accepted (2026-10-24, MUT-254; Basel's V1/V2). Plan and review amendments A1–A19: `.claude/designs/mut-254-vendors.md`. ADR-182 is held for MUT-253's OCR engine decision.
+
+**Context:** An expense's vendor was free text. Reading receipts (MUT-256/257), firm vendor defaults (MUT-303) and bills (MUT-308) need a vendor the profile remembers, without a vendor page or a merge flow.
+
+**Decision:**
+1. **Tables:** `vendors` (canonical name = first spelling, registration number + its digits-only key, phone, email, `lastCategoryId` SET NULL, `lastUsedAt`, version) and `vendor_names` (canonical name and aliases, unique per profile by `nameKey`). `expenses.vendorId` (SET NULL) beside the free text, which stays as typed.
+2. **Keys** (`server/src/vendors/keys.ts`): `vendorNameKey` = NFKC, lower case, tashkeel/tatweel removed, أإآٱ→ا, ى→ي, ة→ه, punctuation removed, `-_&` → space, then a leading English "the" and one trailing legal suffix (Latin, Hebrew, Arabic, matched after punctuation), each only while something is left. `registrationKey` = digits only (Arabic-Indic folded), fewer than 5 is none.
+3. **Saving matches exactly (V1):** the registration key first, then the name key against names and aliases; a number hit adds the typed name as an alias only when no vendor has it; a name hit fills a missing number, phone or email, never overwriting. No merge. A unique violation retries the whole transaction once (it aborted).
+4. **Every writer links** (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) through `withResolvedVendor`, after every other check; optional `vendorDetails` only help the match. `vendors.touch` runs only after the write committed: `lastUsedAt`, and `lastCategoryId` unless the category is the automatic Other ("Other"/"أخرى"). A refused write moves no default; touch never bumps `version`.
+5. **`GET /v1/vendors?q=&limit=`** (session-only, `expenses:read`, max 25): SQL contains-prefilter on `nameKey` (200) plus the 50 most recently used, scored in JS (prefix 1, contains 0.8, similarity ≥ 0.6 capped below 0.8), best name per vendor. Empty q = most recently used. Suggestions only.
+6. **Lock order:** touch takes the category KEY SHARE before the vendor row; a profile type change locks expenses, categories, then vendors and clears `lastCategoryId` before deleting categories.
+7. **Rolling deploy:** `scripts/backfill-vendors.ts`, run by post-roll on every deploy, links unlinked rows oldest first, re-links rows whose text no longer names their vendor (old revision), unlinks blanked ones, and sets `lastUsedAt` and missing defaults. A link changes neither `version` nor `updatedAt`.
+8. **Local mode:** snapshot format 6 with `vendors` and `vendorNames` maps; the records export carries both.
+9. **Not audited in v1:** vendor creates and aliases. If audit is added, `'vendor'` joins `EXPENSE_ENTITY_TYPES` so Malafat's key never reads it.
+
+**Consequences:**
+- Typos and one-off spellings become vendors and linger in suggestions until a vendor page with merge and delete exists (TD-224).
+- The typeahead reads at most 250 name rows per keystroke; profiles with huge vendor lists get prefix/contains hits but fuzzy only among the recent 50 (TD-225).
+- API 1.62.0-mut254 (additive: `Expense.vendorId`, `vendorDetails`, `GET /v1/vendors`).
+
