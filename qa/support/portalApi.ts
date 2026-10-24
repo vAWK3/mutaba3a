@@ -836,7 +836,7 @@ export class FakeApi {
     const items = this.vendors
       .filter((v) => !q || v.name.toLowerCase().includes(q))
       .sort((a, b) => b.lastUsed - a.lastUsed)
-      .map((v) => ({ id: v.id, name: v.name, matchedName: v.name, registrationNo: null, phone: null, email: null, lastCategoryId: v.lastCategoryId }));
+      .map((v) => ({ id: v.id, name: v.name, matchedName: v.name, exact: v.keys.has(q.replace(/\s+/g, ' ')), registrationNo: null, phone: null, email: null, lastCategoryId: v.lastCategoryId }));
     return json({ items });
   }
 

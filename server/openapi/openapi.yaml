@@ -5634,6 +5634,8 @@ components:
         email:
           type: string
           nullable: true
+        exact:
+          type: boolean
         lastCategoryId:
           type: string
           nullable: true
@@ -5645,6 +5647,7 @@ components:
         - registrationNo
         - phone
         - email
+        - exact
         - lastCategoryId
     IncomeCaptureResponse:
       allOf:

@@ -546,7 +546,7 @@ export function serializeExpenseGroupOverride(m: ExpenseGroupOverrideRecord) {
 
 /** MUT-254: a typeahead hit; the registration key is an index column and never leaves the server. */
 export function serializeVendorSuggestion(s: VendorSuggestion) {
-  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId };
+  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, exact: s.exact, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId };
 }
 
 /** MUT-42: the original amount, formatted in its own currency — never converted. */

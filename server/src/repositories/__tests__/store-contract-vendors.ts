@@ -140,11 +140,26 @@ export function describeLedgerStoreVendorsContract(name: string, makeStore: () =
       const hits = await store.vendors.search(w.a.id, 'super', 10);
       expect(hits.map((h) => h.vendor.id)).toEqual([deal.id, mega.id]);
       expect(hits.map((h) => h.score)).toEqual([1, 0.8]);
+      expect(hits.map((h) => h.exact)).toEqual([false, false]);
+      // An exact key ranks first and says so, ahead of another vendor it is merely a prefix of.
+      const superV = (await store.vendors.resolve({ organizationId: w.a.id, name: 'Super' }, at(5)))!;
+      expect((await store.vendors.search(w.a.id, 'SUPER', 10)).map((h) => [h.vendor.id, h.exact])).toEqual([[superV.id, true], [deal.id, false], [mega.id, false]]);
       const fuzzy = await store.vendors.search(w.a.id, 'super dell', 10);
       expect(fuzzy[0]!.vendor.id).toBe(dell.id);
       expect(fuzzy[0]!.score).toBeLessThan(0.8);
       expect(await store.vendors.search(w.a.id, 'zzz', 10)).toEqual([]);
       expect((await store.vendors.search(w.a.id, 'super', 1)).length).toBe(1);
+    });
+
+    it('a near-miss is scored only among the 50 most recently used; a contains match always counts', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const old = (await store.vendors.resolve({ organizationId: w.a.id, name: 'Carrefour' }, at(1)))!;
+      for (let i = 0; i < 50; i += 1) await store.vendors.resolve({ organizationId: w.a.id, name: `Shop ${i}` }, at(10 + i));
+      expect((await store.vendors.search(w.a.id, 'carefour', 10)).map((h) => h.vendor.id)).not.toContain(old.id);
+      expect((await store.vendors.search(w.a.id, 'arref', 10)).map((h) => h.vendor.id)).toEqual([old.id]);
+      await store.vendors.touch(w.a.id, old.id, { categoryId: null }, at(100));
+      expect((await store.vendors.search(w.a.id, 'carefour', 10)).map((h) => h.vendor.id)).toContain(old.id);
     });
 
     it('an empty query lists the most recently used vendors first', async () => {

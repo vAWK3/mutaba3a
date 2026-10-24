@@ -2164,6 +2164,8 @@ export interface VendorSuggestion {
   vendor: VendorRecord;
   matchedName: string;
   score: number;
+  /** The query's key is exactly one of this vendor's names: saving the typed text links this vendor (V1). */
+  exact: boolean;
 }
 
 /** What a writer typed: the vendor's name, and whatever details came with it (a receipt reader's, MUT-257). */

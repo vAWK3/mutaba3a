@@ -16,6 +16,7 @@ export interface VendorPickerProps {
   value: string;
   onChange: (vendor: string) => void;
   onPick?: (vendor: VendorSuggestion) => void;
+  onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
   /** The input's id, so the drawer's `<label htmlFor>` names it. */
@@ -25,14 +26,17 @@ export interface VendorPickerProps {
 const TYPED_OPTION_ID = 'typed';
 const DEBOUNCE_MS = 200;
 
-export function VendorPicker({ profileId, value, onChange, onPick, placeholder, disabled, id }: VendorPickerProps) {
+export function VendorPicker({ profileId, value, onChange, onPick, onBlur, placeholder, disabled, id }: VendorPickerProps) {
   const t = useT();
   const [query, setQuery] = useState(value.trim());
   useEffect(() => {
     const timer = setTimeout(() => setQuery(value.trim()), DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [value]);
-  const { data: suggestions } = useVendorSuggestions(profileId, query);
+  const { data } = useVendorSuggestions(profileId, query);
+  const suggestions = data?.items;
+  // The server's own exact match ("Super Deal Ltd" saves as Super Deal), trusted only for the text it was asked about.
+  const current = data?.q === value.trim();
 
   const options: TypeaheadOption<VendorSuggestion>[] = useMemo(() => {
     const typed = value.trim();
@@ -43,17 +47,18 @@ export function VendorPicker({ profileId, value, onChange, onPick, placeholder, 
       item: s,
       ...(s.matchedName !== s.name ? { secondary: t('hosted.expenses.drawer.vendorAlias', { name: s.matchedName }) } : {}),
     }));
-    // The typed text is a vendor of its own unless a suggestion already spells it: Enter keeps it as typed.
-    const spelled = (suggestions ?? []).some((s) => [s.name, s.matchedName].some((n) => n.toLowerCase() === typed.toLowerCase()));
+    // The typed text is a vendor of its own unless it saves as a suggestion (the server says `exact`: "Super Deal
+    // Ltd" is Super Deal, "احمد" is أحمد); while the answer is for older text, a plain spelling match stands in.
+    const spelled = (suggestions ?? []).some((s) => (current ? s.exact : [s.name, s.matchedName].some((n) => n.toLowerCase() === typed.toLowerCase())));
     if (typed && !spelled) results.push({ id: TYPED_OPTION_ID, label: typed, isNew: true });
     return results;
-  }, [suggestions, value, t]);
+  }, [suggestions, current, value, t]);
 
-  // Enter keeps what was typed (or the suggestion that spells it exactly), never a suggestion that merely starts
-  // with it: "Super" stays Super unless Super Deal is picked.
+  // Enter keeps what was typed (or the suggestion the server would match it to), never a suggestion that merely
+  // starts with it: "Super" stays Super unless Super Deal is picked.
   const autoHighlight = (opts: TypeaheadOption<VendorSuggestion>[], typed: string) => {
     const lower = typed.trim().toLowerCase();
-    const exact = opts.findIndex((o) => !o.isNew && (o.label.toLowerCase() === lower || o.item?.matchedName.toLowerCase() === lower));
+    const exact = opts.findIndex((o) => !o.isNew && o.item && (current ? o.item.exact : [o.item.name, o.item.matchedName].some((n) => n.toLowerCase() === lower)));
     return exact >= 0 ? exact : opts.findIndex((o) => o.isNew);
   };
 
@@ -68,6 +73,7 @@ export function VendorPicker({ profileId, value, onChange, onPick, placeholder, 
       inputValue={value}
       onInputChange={onChange}
       onSelect={select}
+      onBlur={onBlur}
       autoHighlight={autoHighlight}
       placeholder={placeholder}
       disabled={disabled}

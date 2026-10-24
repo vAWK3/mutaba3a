@@ -281,6 +281,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
                       profileId={profileId}
                       value={field.value ?? ''}
                       onChange={field.onChange}
+                      onBlur={field.onBlur}
                       onPick={(vendor) => {
                         // The vendor's last category, only into an empty field and never an archived one (MUT-254).
                         const category = categories?.find((c) => c.id === vendor.lastCategoryId);

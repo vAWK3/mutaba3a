@@ -68,7 +68,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('ExpenseDrawer vendor field (MUT-254)', () => {
   const CATEGORIES = { items: [EMPTY_CATEGORIES.items[0]!, { id: 'cat-2', name: 'Travel', color: null, archived: false, version: 1, createdAt: '', updatedAt: '' }] };
-  const CAB = { id: 'v1', name: 'Yellow Cab', matchedName: 'Yellow Cab', registrationNo: null, phone: null, email: null, lastCategoryId: 'cat-2' };
+  const CAB = { id: 'v1', name: 'Yellow Cab', matchedName: 'Yellow Cab', exact: false, registrationNo: null, phone: null, email: null, lastCategoryId: 'cat-2' };
   beforeEach(() =>
     route({
       'GET /v1/expense-categories': () => ok(CATEGORIES),

@@ -16156,6 +16156,7 @@ export interface components {
             registrationNo: string | null;
             phone: string | null;
             email: string | null;
+            exact: boolean;
             /** Format: uuid */
             lastCategoryId: string | null;
         };

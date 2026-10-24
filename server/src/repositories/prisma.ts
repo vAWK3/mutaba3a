@@ -4,7 +4,7 @@ import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { isAutomaticOtherCategory, registrationKey, vendorNameKey } from '../vendors/keys.js';
-import { bestVendorSuggestions } from './memory.js';
+import { bestVendorSuggestions, RECENT_VENDORS_SCORED } from './memory.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
@@ -1749,17 +1749,19 @@ export class PrismaLedgerStore implements LedgerStore {
       const queryKey = vendorNameKey(query);
       if (!queryKey) {
         const recent = await this.prisma.vendor.findMany({ where: { organizationId }, orderBy: [{ lastUsedAt: 'desc' }, { id: 'asc' }], take: limit });
-        return recent.map((v) => ({ vendor: toVendor(v), matchedName: v.canonicalName, score: 1 }));
+        return recent.map((v) => ({ vendor: toVendor(v), matchedName: v.canonicalName, score: 1, exact: false }));
       }
       // One path (A16): names whose key contains the query (a prefix is a contains), plus every name of the 50 most
       // recently used vendors, so near-misses still get a fuzzy score. Scored in JS by the same ranking as memory.
-      const [matching, recent] = await Promise.all([
-        this.prisma.vendorName.findMany({ where: { organizationId, nameKey: { contains: queryKey } }, include: { vendor: true }, take: 200 }),
-        this.prisma.vendor.findMany({ where: { organizationId }, orderBy: [{ lastUsedAt: 'desc' }, { id: 'asc' }], take: 50, include: { names: true } }),
+      // Prefixes are read on their own, so a prefix (score 1) is never crowded out of the contains page by others.
+      const [prefixed, matching, recent] = await Promise.all([
+        this.prisma.vendorName.findMany({ where: { organizationId, nameKey: { startsWith: queryKey } }, include: { vendor: true }, orderBy: [{ nameKey: 'asc' }, { id: 'asc' }], take: VENDOR_PREFILTER_ROWS }),
+        this.prisma.vendorName.findMany({ where: { organizationId, nameKey: { contains: queryKey } }, include: { vendor: true }, orderBy: [{ nameKey: 'asc' }, { id: 'asc' }], take: VENDOR_PREFILTER_ROWS }),
+        this.prisma.vendor.findMany({ where: { organizationId }, orderBy: [{ lastUsedAt: 'desc' }, { id: 'asc' }], take: RECENT_VENDORS_SCORED, include: { names: true } }),
       ]);
       const vendors = new Map<string, VendorRecord>();
       const names: VendorNameRecord[] = [];
-      for (const n of matching) {
+      for (const n of [...prefixed, ...matching]) {
         vendors.set(n.vendorId, toVendor(n.vendor));
         names.push(toVendorName(n));
       }
@@ -2430,6 +2432,9 @@ function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): Expense
 function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | null): ExpenseReceiptRecord | null {
   return row ? toExpenseReceipt(row) : null;
 }
+
+/** MUT-254: rows each typeahead prefilter reads (prefix, contains); scored in JS (TD-225). */
+const VENDOR_PREFILTER_ROWS = 200;
 
 /** MUT-254: the stored `registrationKey` is an index column, not part of the record. */
 function toVendor(row: Prisma.VendorGetPayload<object>): VendorRecord {

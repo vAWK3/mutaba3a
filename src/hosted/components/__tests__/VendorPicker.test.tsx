@@ -10,7 +10,7 @@ import type { VendorSuggestion } from '../../api/client';
 /** MUT-254: the vendor field is free text; the profile's vendors are suggestions only. */
 const fetchMock = vi.fn();
 
-const vendor = (over: Partial<VendorSuggestion>): VendorSuggestion => ({ id: 'v1', name: 'Super Deal', matchedName: 'Super Deal', registrationNo: null, phone: null, email: null, lastCategoryId: null, ...over });
+const vendor = (over: Partial<VendorSuggestion>): VendorSuggestion => ({ id: 'v1', name: 'Super Deal', matchedName: 'Super Deal', exact: false, registrationNo: null, phone: null, email: null, lastCategoryId: null, ...over });
 const ok = (items: VendorSuggestion[]) => new Response(JSON.stringify({ items }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 const queries = () => fetchMock.mock.calls.map(([input]) => new URL(String(input), 'http://localhost').searchParams.get('q'));
 
@@ -68,6 +68,20 @@ describe('VendorPicker', () => {
     expect(onChange).toHaveBeenLastCalledWith('Super');
     expect(onPick).not.toHaveBeenCalled();
     expect((input as HTMLInputElement).value).toBe('Super');
+  });
+
+  it('text the server would match to a suggestion is that vendor, not a new one: Enter picks it', async () => {
+    const deal = vendor({ exact: true });
+    fetchMock.mockImplementation(() => Promise.resolve(ok([deal])));
+    const user = userEvent.setup();
+    const { onPick } = renderPicker();
+    await user.type(await screen.findByPlaceholderText('Vendor'), 'super deal ltd');
+    // Once the answer for what is typed arrives, the server's exact match drops the New vendor row.
+    await waitFor(() => expect(queries()).toContain('super deal ltd'));
+    await waitFor(() => expect(screen.queryByText(/New vendor/)).toBeNull());
+    await screen.findByRole('option', { name: 'Super Deal' });
+    await user.keyboard('{Enter}');
+    expect(onPick).toHaveBeenCalledWith(deal);
   });
 
   it('asks the server with what was typed, in any script, and shows which alias matched', async () => {

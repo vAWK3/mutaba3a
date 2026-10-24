@@ -176,7 +176,16 @@ export async function withResolvedVendor<T extends { vendor?: string | null }>(s
  * MUT-254 (A2/A3): after the write committed, the expense's vendor was just used, and its category becomes the
  * vendor's default (never the automatic Other: `touch` skips it). Only when the write named the vendor or the
  * category; a write touching neither leaves the vendor's default alone.
+ *
+ * Best effort: the expense is already saved, so a failed touch (a lock wait behind a profile type change) must not
+ * answer 5xx. That would release the Idempotency-Key and a retry would record the expense twice. A missed touch
+ * only leaves the vendor's last use and default as they were; the next write sets them.
  */
 export async function touchExpenseVendor(store: LedgerStore, expense: ExpenseRecord, at: Date): Promise<void> {
-  if (expense.vendorId) await store.vendors.touch(expense.organizationId, expense.vendorId, { categoryId: expense.categoryId }, at);
+  if (!expense.vendorId) return;
+  try {
+    await store.vendors.touch(expense.organizationId, expense.vendorId, { categoryId: expense.categoryId }, at);
+  } catch {
+    // Nothing to undo: see above.
+  }
 }

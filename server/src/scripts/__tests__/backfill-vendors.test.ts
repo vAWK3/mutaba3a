@@ -86,5 +86,44 @@ if (!url) {
       expect((await db.vendor.findUniqueOrThrow({ where: { id: moved.vendorId! } })).canonicalName).toBe('Bakery Salam');
       expect((await reread(w.second.id)).vendorId).toBeNull();
     });
+
+    it('unlinks a row whose vendor the old revision cleared', async () => {
+      const w = await world();
+      await backfillVendors(db);
+      await db.expense.update({ where: { id: w.first.id }, data: { vendor: null } });
+
+      await backfillVendors(db);
+
+      expect((await reread(w.first.id)).vendorId).toBeNull();
+    });
+
+    it('keeps a link made by registration number where another vendor holds the typed name (A5)', async () => {
+      const w = await world();
+      await backfillVendors(db);
+      const nour = (await reread(w.first.id)).vendorId!;
+      const registered = (await store.vendors.resolve({ organizationId: w.org.id, name: 'Nour Trading', registrationNo: '516667276' }, t(5)))!;
+      // A receipt filed as "Cafe Nour" with Nour Trading's number: linked to Nour Trading, the name stays Cafe Nour's.
+      const viaNumber = await store.vendors.resolve({ organizationId: w.org.id, name: 'Cafe Nour', registrationNo: '516667276' }, t(6));
+      expect(viaNumber!.id).toBe(registered.id);
+      await db.expense.update({ where: { id: w.second.id }, data: { vendorId: registered.id } });
+
+      await backfillVendors(db);
+
+      expect((await reread(w.second.id)).vendorId).toBe(registered.id);
+      expect((await reread(w.first.id)).vendorId).toBe(nour);
+    });
+
+    it('relinkSince leaves linked rows not updated since then alone, and still links unlinked ones', async () => {
+      const w = await world();
+      await backfillVendors(db);
+      const linked = (await reread(w.first.id)).vendorId;
+      await db.expense.update({ where: { id: w.first.id }, data: { vendor: 'Bakery Salam', updatedAt: t(1) } });
+      const fresh = await store.expenses.create({ organizationId: w.org.id, occurredOn: '2026-10-01', amountMinor: 500n, currency: 'ILS', title: null, vendor: 'Kiosk Amal', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.first.createdByUserId }, t(9));
+
+      await backfillVendors(db, { relinkSince: t(5) });
+
+      expect((await reread(w.first.id)).vendorId).toBe(linked);
+      expect((await reread(fresh.id)).vendorId).toEqual(expect.any(String));
+    });
   });
 }

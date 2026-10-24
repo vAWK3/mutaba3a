@@ -1961,10 +1961,18 @@ export class MemoryLedgerStore implements LedgerStore {
         return own
           .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime() || a.id.localeCompare(b.id))
           .slice(0, limit)
-          .map((v): VendorSuggestion => ({ vendor: { ...v }, matchedName: v.canonicalName, score: 1 }));
+          .map((v): VendorSuggestion => ({ vendor: { ...v }, matchedName: v.canonicalName, score: 1, exact: false }));
       }
+      // The Prisma store's one path (A16): names containing the query, plus every name of the 50 most recently used
+      // vendors, so a near-miss is suggested in exactly the same cases here and in Postgres.
+      const recent = new Set(
+        own
+          .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime() || a.id.localeCompare(b.id))
+          .slice(0, RECENT_VENDORS_SCORED)
+          .map((v) => v.id),
+      );
       return bestVendorSuggestions(
-        [...this.vendorNames.values()].filter((n) => n.organizationId === organizationId),
+        [...this.vendorNames.values()].filter((n) => n.organizationId === organizationId && (n.nameKey.includes(queryKey) || recent.has(n.vendorId))),
         (id) => this.vendorMap.get(id),
         queryKey,
         limit,
@@ -2690,6 +2698,9 @@ function pageOfMap<T>(map: Map<string, T>, matches: (key: string, row: T) => boo
  * MUT-254: the typeahead's ranking, shared by both stores. Scores each candidate name against the query key
  * (vendors/keys.ts scoreVendorName), keeps the best name per vendor, and orders by score, then most recently used.
  */
+/** How many of the most recently used vendors a typeahead also scores for near-misses (both stores, A16). */
+export const RECENT_VENDORS_SCORED = 50;
+
 export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendorOf: (id: string) => VendorRecord | undefined, queryKey: string, limit: number): VendorSuggestion[] {
   const best = new Map<string, VendorSuggestion>();
   for (const n of names) {
@@ -2697,11 +2708,12 @@ export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendor
     if (score <= 0) continue;
     const vendor = vendorOf(n.vendorId);
     if (!vendor) continue;
+    const exact = n.nameKey === queryKey;
     const held = best.get(vendor.id);
-    if (!held || score > held.score) best.set(vendor.id, { vendor: { ...vendor }, matchedName: n.name, score });
+    if (!held || (exact && !held.exact) || (exact === held.exact && score > held.score)) best.set(vendor.id, { vendor: { ...vendor }, matchedName: n.name, score, exact });
   }
   return [...best.values()]
-    .sort((a, b) => b.score - a.score || b.vendor.lastUsedAt.getTime() - a.vendor.lastUsedAt.getTime() || a.vendor.id.localeCompare(b.vendor.id))
+    .sort((a, b) => Number(b.exact) - Number(a.exact) || b.score - a.score || b.vendor.lastUsedAt.getTime() - a.vendor.lastUsedAt.getTime() || a.vendor.id.localeCompare(b.vendor.id))
     .slice(0, limit);
 }
 

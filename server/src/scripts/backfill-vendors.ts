@@ -11,10 +11,16 @@ import { vendorNameKey } from '../vendors/keys.js';
  *   DATABASE_URL=… npm run backfill:vendors            # apply
  *   DATABASE_URL=… npm run backfill:vendors -- --dry   # report only, writes nothing
  *
- * For every live expense with vendor text, oldest first (so a vendor's name is its first spelling):
- * - no link yet → resolve the text exactly as a write would (`vendors.resolve`, dated the expense's createdAt) and link;
- * - linked, but the text no longer names that vendor (the old revision changed it) → re-link the same way;
- * - text that normalises to nothing → unlink, or skip when unlinked (rescanned each run; cheap).
+ * Oldest first (so a vendor's name is its first spelling), over live expenses:
+ * - vendor text, no link yet → resolve the text exactly as a write would (`vendors.resolve`, dated the expense's
+ *   createdAt) and link;
+ * - linked, but the text no longer names that vendor (the old revision changed it) → re-link the same way. Except a
+ *   link made by registration number where another vendor holds the typed name (A5 leaves the name there): that
+ *   link is right and stays. An old-revision edit on such a row to another vendor's name stays linked too (rare);
+ * - linked, but the text was cleared or normalises to nothing → unlink. Unlinked text that normalises to nothing is
+ *   rescanned each run (cheap).
+ * `relinkSince` limits the linked rows checked to those updated since then: post-roll passes the last 7 days, which
+ * covers a roll and a short rollback; after a longer rollback run it by hand without it.
  * Then every vendor's `lastUsedAt` catches up with its newest linked expense, and a vendor with no default takes the
  * category of its newest categorised expense (never the automatic Other).
  *
@@ -33,13 +39,19 @@ export interface VendorBackfillResult {
   defaultsSet: number;
 }
 
-export async function backfillVendors(db: PrismaClient, options: { dry?: boolean } = {}): Promise<VendorBackfillResult> {
+export async function backfillVendors(db: PrismaClient, options: { dry?: boolean; relinkSince?: Date } = {}): Promise<VendorBackfillResult> {
   const store = new PrismaLedgerStore(db);
   const result: VendorBackfillResult = { linked: 0, relinked: 0, unlinked: 0, lastUsedCaughtUp: 0, defaultsSet: 0 };
   let after: { createdAt: Date; id: string } | null = null;
   for (;;) {
     const rows: Array<{ id: string; organizationId: string; vendor: string | null; vendorId: string | null; createdAt: Date }> = await db.expense.findMany({
-      where: { vendor: { not: null }, deletedAt: null, ...(after ? { OR: [{ createdAt: { gt: after.createdAt } }, { createdAt: after.createdAt, id: { gt: after.id } }] } : {}) },
+      where: {
+        deletedAt: null,
+        AND: [
+          { OR: [{ vendorId: null, vendor: { not: null } }, { vendorId: { not: null }, ...(options.relinkSince ? { updatedAt: { gte: options.relinkSince } } : {}) }] },
+          ...(after ? [{ OR: [{ createdAt: { gt: after.createdAt } }, { createdAt: after.createdAt, id: { gt: after.id } }] }] : []),
+        ],
+      },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: PAGE,
       select: { id: true, organizationId: true, vendor: true, vendorId: true, createdAt: true },
@@ -48,6 +60,7 @@ export async function backfillVendors(db: PrismaClient, options: { dry?: boolean
     after = rows[rows.length - 1]!;
 
     const linkedIds = [...new Set(rows.flatMap((r) => (r.vendorId ? [r.vendorId] : [])))];
+    const registered = new Set((await db.vendor.findMany({ where: { id: { in: linkedIds }, registrationKey: { not: null } }, select: { id: true } })).map((v) => v.id));
     const namesOf = new Map<string, Set<string>>();
     for (const n of await db.vendorName.findMany({ where: { vendorId: { in: linkedIds } }, select: { vendorId: true, nameKey: true } })) {
       (namesOf.get(n.vendorId) ?? namesOf.set(n.vendorId, new Set()).get(n.vendorId)!).add(n.nameKey);
@@ -63,6 +76,11 @@ export async function backfillVendors(db: PrismaClient, options: { dry?: boolean
         continue;
       }
       if (row.vendorId && namesOf.get(row.vendorId)?.has(key)) continue;
+      if (row.vendorId && registered.has(row.vendorId)) {
+        // Linked by its registration number while another vendor holds this name (A5): right as it is.
+        const owner = await db.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId: row.organizationId, nameKey: key } }, select: { vendorId: true } });
+        if (owner && owner.vendorId !== row.vendorId) continue;
+      }
       if (row.vendorId) result.relinked += 1;
       else result.linked += 1;
       if (options.dry) continue;

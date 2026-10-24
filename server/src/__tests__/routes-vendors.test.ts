@@ -73,7 +73,9 @@ describe('the expense writers link the typed vendor (MUT-254)', () => {
     expect(second.vendorId).toBe(first.vendorId);
     expect(second.vendor).toBe('super  deal');
     expect((await create({})).vendorId).toBeNull();
-    expect(await suggest('super')).toEqual([{ id: first.vendorId, name: 'Super Deal Ltd', matchedName: 'Super Deal Ltd', registrationNo: null, phone: null, email: null, lastCategoryId: null }]);
+    // What saves as this vendor says so, however it is written.
+    expect((await suggest('SUPER DEAL, inc.'))[0]).toMatchObject({ id: first.vendorId, exact: true });
+    expect(await suggest('super')).toEqual([{ id: first.vendorId, name: 'Super Deal Ltd', matchedName: 'Super Deal Ltd', exact: false, registrationNo: null, phone: null, email: null, lastCategoryId: null }]);
   });
 
   it('vendorDetails: a matching registration number reuses the vendor under another name, which becomes an alias', async () => {
@@ -110,6 +112,15 @@ describe('the expense writers link the typed vendor (MUT-254)', () => {
     await app.request(`/v1/expense-categories/${food.id}`, json({ archived: true }, { ...as(), 'if-match': String(food.version) }, 'PATCH'));
     expect((await create({ vendor: 'Cafe', categoryId: food.id }).catch(() => null))).toBeNull();
     expect((await suggest('cafe'))[0].lastCategoryId).toBe(travel.id);
+  });
+
+  it('a failed touch never fails the saved expense (a 5xx would release the Idempotency-Key and a retry duplicate it)', async () => {
+    const { store, create } = await setup();
+    store.vendors.touch = async () => {
+      throw new Error('lock timeout');
+    };
+    const saved = await create({ vendor: 'Cafe' });
+    expect(saved.vendorId).toEqual(expect.any(String));
   });
 
   it('the automatic Other never becomes a vendor’s default', async () => {

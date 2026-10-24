@@ -2516,6 +2516,8 @@ export const VendorSuggestionSchema = z
     registrationNo: z.string().nullable(),
     phone: z.string().nullable(),
     email: z.string().nullable(),
+    /** The typed text saves as this vendor: its key is exactly one of the vendor's names (the server's exact match). A client offers no "new vendor" then. */
+    exact: z.boolean(),
     /** The category the profile last filed this vendor under (never the automatic Other); a client prefills it only when none is chosen yet. */
     lastCategoryId: uuid.nullable(),
   })

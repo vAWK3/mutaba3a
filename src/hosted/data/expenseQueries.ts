@@ -71,8 +71,8 @@ export function useExpenseCategories(profileId: string) {
 export function useVendorSuggestions(profileId: string, q: string) {
   return useQuery({
     queryKey: profileKey(profileId, 'vendors', q),
-    queryFn: () => api.vendors(profileId, q ? { q, limit: 10 } : { limit: 10 }),
-    select: (data) => data.items,
+    // The answer carries its own query, so the picker can tell a suggestion's `exact` is about what is typed now.
+    queryFn: async () => ({ q, items: (await api.vendors(profileId, q ? { q, limit: 10 } : { limit: 10 })).items }),
     placeholderData: (previous) => previous,
     staleTime: STALE_MS,
   });
