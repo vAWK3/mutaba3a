@@ -5,6 +5,7 @@ import { db } from '../../../db/database';
 import { settingsRepo } from '../../../db/repository';
 import { renderWithProviders } from '../../../test/utils';
 import { CarryOverGate } from '../CarryOverScreen';
+import { chooseLanguage } from '../../../test/language';
 
 /**
  * MUT-291 §3.6 (T-U15, T-U23; D1, R7): the free web app's gate in front of the
@@ -128,6 +129,16 @@ describe('the free app\'s carry-over gate', () => {
     await user.click(screen.getByRole('button', { name: 'Download my records file' }));
     expect(backUpNow).toHaveBeenCalledTimes(1);
     open.mockRestore();
+  });
+
+  it('speaks Arabic, right to left, when that is the language (the default for everyone, ADR-077)', async () => {
+    chooseLanguage('ar');
+    await withRecords();
+    gate();
+    expect(await screen.findByRole('heading', { name: 'لمتابعة عنوان جديد' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'انقل سجلاتي' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('rtl');
+    localStorage.clear();
   });
 
   it('opened from the home screen, leads with the file and never tries the popup (R7)', async () => {

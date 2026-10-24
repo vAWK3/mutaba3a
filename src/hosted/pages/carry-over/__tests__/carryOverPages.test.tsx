@@ -105,6 +105,13 @@ describe('the new address: /carry-over/receive', () => {
     expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.done', v: 1, counts: SUMMARY.counts, totals: SUMMARY.totals } });
   });
 
+  it('opens in Arabic, right to left, for anyone who hasn\'t chosen a language (ADR-077)', async () => {
+    localStorage.removeItem(PORTAL_LANGUAGE_KEY);
+    renderPortal('/carry-over/receive');
+    expect(await screen.findByRole('heading', { name: 'انقل سجلاتك من ملف' })).toBeInTheDocument();
+    expect(document.documentElement.dir).toBe('rtl');
+  });
+
   it('ignores a payload from anywhere but the old app\'s window', async () => {
     const { opener } = openFrom('web');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
