@@ -45,6 +45,9 @@ export default {
         '!src/hooks/useTauriUpdater.ts',
         // Only the hosted portal renders it; it is in the portal app's watch instead.
         '!src/components/filters/SegmentedTabs.tsx',
+        // MUT-291: the carry-over spans both apps; the carry-over app owns it.
+        '!src/pages/carryOver/**',
+        '!src/lib/carryOver/**',
       ],
       baseURL: 'http://localhost:5173',
       attachURL: 'http://localhost:5173',
@@ -69,7 +72,9 @@ export default {
         '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
         '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts',
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
-        '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts'],
+        '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts',
+        // MUT-291: the carry-over's pages and mapping are the carry-over app's (they need the old app's origin too).
+        '!src/hosted/pages/carry-over/**', '!src/hosted/local/carryOver/**'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -142,6 +147,21 @@ export default {
       start: { cmd: `${HEAP_CAPPED} node qa/support/selfservice-live.mjs` },
       // Answers only once the API is up with signup open (not just once something listens).
       ready: 'http://127.0.0.1:8791/v1/self-service',
+      personas: {},
+    },
+    'carry-over': {
+      label: 'Carry-over: the old web app and the old address to the new address',
+      platform: 'web',
+      // The receiver ships with the portal (api-v*); the old app's screen with the web app (web-v*). The receiver is
+      // the half every carry-over needs, so this app follows the API's tag.
+      release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
+      watch: ['src/pages/carryOver/**', 'src/lib/carryOver/**', 'src/hosted/pages/carry-over/**', 'src/hosted/local/carryOver/**', '!**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      // support/carry-over.mjs (MUT-291 R6): the old app on :5183, the old portal on :5187 and the new on :5188, all
+      // on the loopback, each told the others' origins through MUTABA3A_CARRY_OVER. No API runs; specs answer /v1.
+      baseURL: 'http://127.0.0.1:5188',
+      attachURL: 'http://127.0.0.1:5188',
+      start: { cmd: `${HEAP_CAPPED} node qa/support/carry-over.mjs`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
+      ready: 'http://127.0.0.1:5188',
       personas: {},
     },
   },

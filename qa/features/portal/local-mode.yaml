@@ -92,6 +92,7 @@ features:
       - src/hosted/components/YourDataDrawer.tsx
       - src/hosted/shell/AccountDrawers.tsx
       - src/hosted/data/filters.ts
+      - src/hosted/session/restoredHome.ts
     steps:
       - Add money received signed out
       - Record an expense with a PDF receipt (MUT-287)
