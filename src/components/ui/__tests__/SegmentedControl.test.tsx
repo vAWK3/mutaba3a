@@ -57,6 +57,34 @@ describe('SegmentedControl', () => {
     expect(screen.getByRole('radio', { name: 'العربية' })).toHaveAttribute('tabindex', '0');
   });
 
+  it('follows the reading direction in RTL and moves focus with the choice (MUT-175)', () => {
+    const onChange = vi.fn();
+    const three = [...OPTIONS, { value: 'fr', label: 'Français' }];
+    render(
+      <div dir="rtl">
+        <SegmentedControl options={three} value="en" onChange={onChange} ariaLabel="Language" />
+      </div>,
+    );
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'English' }), { key: 'ArrowLeft' });
+    expect(onChange).toHaveBeenLastCalledWith('ar');
+    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'العربية' }));
+  });
+
+  it('keeps a disabled option reachable but never chooses it, reporting the attempt with its hint (MUT-175)', () => {
+    const onChange = vi.fn();
+    const onDisabledChoice = vi.fn();
+    const withLocked = [...OPTIONS, { value: 'fr', label: 'Français', disabled: true, hint: 'Unlocks in December' }];
+    render(<SegmentedControl options={withLocked} value="ar" onChange={onChange} onDisabledChoice={onDisabledChoice} ariaLabel="Language" />);
+    const locked = screen.getByRole('radio', { name: 'Français' });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    expect(locked).toHaveAttribute('aria-description', 'Unlocks in December');
+    fireEvent.click(locked);
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'العربية' }), { key: 'ArrowRight' });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onDisabledChoice).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(locked);
+  });
+
   it('accepts labelledBy instead of an inline label', () => {
     render(
       <>

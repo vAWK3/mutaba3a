@@ -1,5 +1,6 @@
 import type { Currency } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
+import { PERIODS, type Period } from './reports';
 
 /**
  * One filters object per list view, kept in the URL's search params and updated
@@ -43,6 +44,18 @@ export interface OverviewFilters {
   currency?: Currency;
 }
 export const parseOverview = (raw: Raw): OverviewFilters => compact({ currency: oneOf(raw.currency, CURRENCIES) });
+
+/**
+ * Reports (MUT-175): the period, any day inside it, and the All-profiles switch
+ * (DS4: off by default, so only `all` is ever written). A Year asked for before
+ * stage 3 falls back to Month on the page, which knows the stage (DR27).
+ */
+export interface ReportsSearch {
+  period?: Period;
+  at?: string;
+  scope?: 'all';
+}
+export const parseReports = (raw: Raw): ReportsSearch => compact({ period: oneOf(raw.period, PERIODS), at: day(raw.at), scope: raw.scope === 'all' ? ('all' as const) : undefined });
 
 export interface ClientsFilters {
   q?: string;

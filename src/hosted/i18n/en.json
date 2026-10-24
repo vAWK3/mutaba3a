@@ -194,6 +194,7 @@
       "sections": "Sections",
       "nav": {
         "overview": "Overview",
+        "reports": "Reports",
         "clients": "Clients",
         "receivables": "Receivables",
         "payments": "Payments",
@@ -1345,6 +1346,124 @@
       },
       "noClient": "No client",
       "defaultBusiness": "My business"
+    },
+    "reports": {
+      "title": "Reports",
+      "period": {
+        "label": "Period",
+        "week": "Week",
+        "month": "Month",
+        "year": "Year",
+        "yearLocked": "Unlocks in {month}"
+      },
+      "step": {
+        "previous": {
+          "week": "Previous week",
+          "month": "Previous month",
+          "year": "Previous year"
+        },
+        "next": {
+          "week": "Next week",
+          "month": "Next month",
+          "year": "Next year"
+        }
+      },
+      "scope": {
+        "switch": "All profiles"
+      },
+      "hero": {
+        "received": "Received",
+        "spent": "Spent",
+        "kept": "Kept",
+        "keptNegative": "Spent more than came in",
+        "soFar": "{period} · so far",
+        "weekRange": "{from} – {to}",
+        "converted": "≈ {amount}",
+        "breakdownOpen": "Show the exact amount in each currency",
+        "breakdownTitle": "Exact amounts",
+        "rateFooter": "ECB · {date} · today's rate"
+      },
+      "owed": {
+        "label": "Owed to you now",
+        "open": "Open Owed to you"
+      },
+      "combined": {
+        "profiles": {
+          "one": "{count} profile",
+          "other": "All {count} profiles"
+        },
+        "line": "{profiles} combined · other currencies at today's rate",
+        "listTitle": "Profiles in this report",
+        "share": "Of which {profile}: ≈ {amount}",
+        "partial": "{loaded} of {total} profiles · {profile} couldn't load",
+        "forbidden": "{profile} isn't included: you can't see its payments",
+        "retry": "Retry"
+      },
+      "noAccess": {
+        "title": "You can't see this profile's payments",
+        "body": "Ask an owner."
+      },
+      "insights": {
+        "heading": "Lately",
+        "singleCurrency": "In {currency} only: today's rates aren't available",
+        "recap": {
+          "base": "In {month}: {received} received, {spent} spent.",
+          "topCategory": "Most spending went to {category}.",
+          "topClient": "{client} paid the most."
+        },
+        "mover": {
+          "up": "{category}: {amount} in {month}, {delta} more than {previous}.",
+          "down": "{category}: {amount} in {month}, {delta} less than {previous}."
+        },
+        "trend": {
+          "up": "Received in {month}: {amount}, {delta} more than {previous}.",
+          "down": "Received in {month}: {amount}, {delta} less than {previous}."
+        },
+        "average": "Over the last 3 months you received about {amount} a month.",
+        "best": "Your best month in the last year was {month}: {amount} received.",
+        "concentration": "{client} paid {percent} of what you received in the last 3 months.",
+        "daysToPaid": {
+          "one": "Clients typically pay in full {count} day after you log what they owe.",
+          "other": "Clients typically pay in full {count} days after you log what they owe."
+        },
+        "daysToPaidSameDay": "Clients typically pay in full the same day you log what they owe."
+      },
+      "teaser": {
+        "stage1": "Your first monthly recap arrives in {month}.",
+        "stage2": "Trends, your best month and how fast clients pay unlock in {month}.",
+        "scope": "{profile} started in {month}; insights unlock in {unlock}.",
+        "seeAll": "See insights across all profiles"
+      },
+      "firstRun": {
+        "title": "Your reports start with your first payment or expense",
+        "body": "Log what came in or what you spent, and this page fills in day by day."
+      },
+      "empty": {
+        "period": "Nothing logged in {period}",
+        "goTo": "Go to {period}"
+      },
+      "loading": "Loading reports",
+      "chart": {
+        "days": "Day by day",
+        "months": "Month by month",
+        "labelDays": "Received and spent per day. Arrow keys move between days.",
+        "labelMonths": "Received and spent per month. Arrow keys move between months.",
+        "bar": "{date}: received {received}, spent {spent}",
+        "selected": "{date} · Received {received} · Spent {spent}",
+        "beforeStart": "before you started"
+      },
+      "lists": {
+        "whereItWent": "Where it went",
+        "noSpending": "No spending in {period}",
+        "whoPaid": "Who paid",
+        "noClient": "Not linked to a client",
+        "typically": {
+          "one": "typically {count} day",
+          "other": "typically {count} days"
+        },
+        "typicallySameDay": "typically the same day",
+        "biggestChange": "biggest change"
+      }
     }
   }
 }

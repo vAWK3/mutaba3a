@@ -1456,6 +1456,8 @@ export class PrismaLedgerStore implements LedgerStore {
       return toPage(rows, page);
     },
     listAllocations: (organizationId, paymentId) => this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    listAllocationsFor: async (organizationId, paymentIds) =>
+      paymentIds.length === 0 ? [] : this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId: { in: [...paymentIds] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     allocate: async (organizationId, paymentId, requested, at) => {
       const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, select: { id: true } });
       if (!exists) return null;

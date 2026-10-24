@@ -157,7 +157,44 @@ async function expenseScript(s: Side): Promise<unknown[]> {
   return out;
 }
 
+/** MUT-175 (plan T3): Reports' activity summary — payments, a settled Owed entry and expenses, by day and by month. */
+async function reportsScript(s: Side): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const record = async (method: string, path: string, body?: unknown) => {
+    const result = await s.request(method, path, body);
+    out.push({ method, path: path.replace(UUID, ':id'), ...result });
+    return result.body as Record<string, unknown>;
+  };
+
+  const customer = await record('POST', '/v1/customers', { name: 'Parity Client' });
+  for (const [occurredOn, paidAt] of [['2026-08-03', '2026-08-20'], ['2026-09-01', '2026-09-04'], ['2026-09-10', '2026-10-01']]) {
+    const owed = await record('POST', '/v1/income', { kind: 'owed', amount: '300.00', currency: 'ILS', occurredOn, customerId: customer.id, title: 'Work' });
+    await record('POST', `/v1/receivables/${String(owed.id)}/settle`, { paidAt });
+  }
+  await record('POST', '/v1/income', { kind: 'received', amount: '250.50', currency: 'USD', occurredOn: '2026-10-10' });
+  await record('POST', '/v1/expenses', { occurredOn: '2026-10-02', amount: '1.234', currency: 'JOD', title: 'Taxi' });
+  await record('POST', '/v1/expenses', { occurredOn: '2026-09-03', amount: '120.00', currency: 'ILS', title: 'Hotel' });
+
+  await record('GET', '/v1/summaries/activity?from=2026-10-01&to=2026-10-31');
+  await record('GET', '/v1/summaries/activity?from=2026-01-01&to=2026-12-31&bucket=month');
+  await record('GET', '/v1/summaries/activity?from=2026-10-31&to=2026-10-01');
+  return out;
+}
+
 describe('local/remote parity (AC3)', () => {
+  it('Reports’ activity summary answers the same signed in and signed out (MUT-175)', async () => {
+    globalThis.indexedDB = new IDBFactory();
+    const [remote, local] = await Promise.all([remoteSide(), localSide()]);
+
+    const remoteTranscript = normalize(await reportsScript(remote));
+    const localTranscript = normalize(await reportsScript(local));
+
+    expect(localTranscript).toEqual(remoteTranscript);
+    const steps = localTranscript as Array<{ status: number; body: { daysToPaid?: unknown } }>;
+    expect(steps.map((step) => step.status).slice(-3)).toEqual([200, 200, 422]);
+    expect(steps.at(-3)!.body.daysToPaid).toMatchObject({ overall: { median: 17, n: 3 } });
+  });
+
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
   });

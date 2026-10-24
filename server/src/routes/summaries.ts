@@ -1,16 +1,21 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
-import { todayFor } from '../agreements/compose.js';
+import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
+import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
-import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AgreementRecord, ExpenseCursor, ExpenseRecord, FeeProposalRecord, PageCursor, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
-import { CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
+import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
+import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
+
+/** MUT-175: Reports reads a hosted profile's expenses too, so like /v1/summaries/expenses it is session-only. */
+const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 
 /** /v1/summaries — the figures Malafat renders (M6 brief §2). Computed on read; nothing is materialized. */
 export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
@@ -144,6 +149,49 @@ export function summaryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/summaries/activity',
+      tags: ['Summaries'],
+      summary: 'Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)',
+      description:
+        'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.',
+      security: SESSION_ONLY,
+      middleware: [requireScope('summaries:read'), requireScope('expenses:read')] as const,
+      request: { query: ActivitySummaryQuerySchema },
+      responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ActivitySummarySchema } } }, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = sessionAuth(c);
+      const q = c.req.valid('query');
+      const today = todayFor(organization, c.get('now')());
+      // Review: the shape regex lets 2026-02-30 or 9999-12-31 through; refuse them before any date arithmetic
+      const from = q.from ? activityDate(q.from, today, 'from') : `${monthOf(today)}-01`;
+      const to = q.to ? activityDate(q.to, today, 'to') : endOfMonth(today);
+      const bucket = q.bucket;
+      if (compareIsoDates(from, to) > 0) throw validationError('END_BEFORE_START', '`to` is before `from`', { field: 'to' });
+      if (compareIsoDates(to, addDays(`${addMonths(monthOf(from), ACTIVITY_RANGE_MAX_MONTHS)}-01`, -1)) > 0) {
+        throw validationError('RANGE_TOO_LONG', `A range covers at most the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month`, { field: 'to', maxMonths: ACTIVITY_RANGE_MAX_MONTHS });
+      }
+      // The read window: from (or the 12 months ending with to's month, if earlier) through the end of to's month
+      const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
+      const end = historyEnd(to);
+      const before = addDays(start, -1);
+      const [payments, expenses, paidEarlier, spentEarlier] = await Promise.all([
+        listAll((cursor) => store.payments.list(organization.id, { status: 'POSTED', receivedAfter: start, receivedBefore: end }, { limit: 200, cursor })),
+        listAll<ExpenseRecord, ExpenseCursor>((cursor) => store.expenses.list(organization.id, { from: start, to: end }, { limit: 200, cursor })),
+        store.payments.list(organization.id, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null }),
+        store.expenses.list(organization.id, { to: before }, { limit: 1, cursor: null }),
+      ]);
+      const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
+      const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
+      const earlierData = paidEarlier.items.length > 0 || spentEarlier.items.length > 0;
+      const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
+      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary }, 200);
+    },
+  );
+
   async function projectSummary(organization: Organization, project: ProjectRecord, receivables: ReceivableRecord[], today: string): Promise<ProjectView> {
     const proposals: FeeProposalRecord[] = await listAll((cursor) => store.feeProposals.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
     const agreements: AgreementRecord[] = await listAll((cursor) => store.agreements.list(organization.id, { projectId: project.id }, { limit: 200, cursor }));
@@ -191,10 +239,23 @@ function projectWire(project: ProjectRecord, view: ProjectView) {
   };
 }
 
-/** Walks every page of a keyset-paginated list. */
-export async function listAll<T>(fetchPage: (cursor: { createdAt: Date; id: string } | null) => Promise<{ items: T[]; nextCursor: { createdAt: Date; id: string } | null }>): Promise<T[]> {
+/**
+ * MUT-175: a Reports date — a real calendar date (422 DATE_INVALID), no further back than the money-date floor plus
+ * one year (a Year view may start before the floor day) and no further ahead than the money-date ceiling.
+ */
+function activityDate(value: string, today: string, field: 'from' | 'to'): string {
+  const date = assertIsoDate(value, field);
+  if (compareIsoDates(date, addDays(today, -DAYS_IN_PAST_LIMIT - DAYS_IN_YEAR)) < 0) throw validationError('DATE_INVALID', `${field} is too far in the past`, { field, bound: 'past' satisfies DateBound });
+  if (compareIsoDates(date, addDays(today, DAYS_IN_FUTURE_LIMIT)) > 0) throw validationError('DATE_INVALID', `${field} is too far ahead`, { field, bound: 'future' satisfies DateBound });
+  return date;
+}
+
+const DAYS_IN_YEAR = 366;
+
+/** Walks every page of a keyset-paginated list, whatever its cursor's shape. */
+export async function listAll<T, C = PageCursor>(fetchPage: (cursor: C | null) => Promise<{ items: T[]; nextCursor: C | null }>): Promise<T[]> {
   const all: T[] = [];
-  let cursor: { createdAt: Date; id: string } | null = null;
+  let cursor: C | null = null;
   for (let i = 0; i < 1000; i += 1) {
     const page = await fetchPage(cursor);
     all.push(...page.items);

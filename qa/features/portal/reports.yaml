@@ -1,0 +1,148 @@
+app: portal
+area: reports
+title: Reports — what came in, where it went, who paid (MUT-175)
+tier: secondary
+paths:
+  - src/hosted/pages/views/ReportsPage.tsx
+  - src/hosted/components/reports/**
+  - src/hosted/data/reports.ts
+  - src/hosted/data/reportInsights.ts
+  - src/hosted/data/reportQueries.ts
+  - src/hosted/format/reportFormat.ts
+  - src/hosted/format/rateLines.ts
+  - src/hosted/analytics/reportViewed.ts
+features:
+  - id: first-run
+    title: With no records, Reports is one block that starts the first payment or expense
+    tier: secondary
+    steps:
+      - Open Reports on a profile with no payments or expenses
+    expect:
+      - The heading says "Your reports start with your first payment or expense"
+      - '"+ Add income" and "Record expense" are offered; no controls, chart or teaser'
+  - id: first-month
+    title: In the first month Received heads the page, then Spent, Kept, Owed now, the chart and a teaser naming the unlock month
+    tier: secondary
+    steps:
+      - Log a payment and an expense this month, then open Reports
+    expect:
+      - Received is the large figure; Spent and Kept sit beside it in whole units; nothing says "billed"
+      - The caption names this month "so far" and "Owed to you now" is its own line
+      - Received and spent are drawn per day, the days still to come faint
+      - The teaser says the first monthly recap arrives next month; Year is locked and says when it unlocks
+  - id: third-month
+    title: With two complete months, Lately lists up to three insights and Year opens
+    tier: secondary
+    steps:
+      - Open Reports on a profile with records since three months back
+    expect:
+      - Under "Lately" up to three plain sentences: the category mover first, then client concentration, then days to get paid
+      - The biggest mover is marked on its row in Where it went
+      - Year can be chosen
+  - id: converted-breakdown
+    title: Two currencies make one ≈ total at today's rate, and the exact amounts are one tap away
+    tier: secondary
+    steps:
+      - Receive ILS and USD this month and open Reports
+      - Tap the ≈ figure
+    expect:
+      - Received reads ≈ in ILS at today's rate
+      - The breakdown lists the exact amount per currency, the rate line and "ECB · date · today's rate"; Esc closes it
+  - id: period-step
+    title: Week, Month and Year, and ‹ › step through time without changing what Lately says
+    tier: secondary
+    steps:
+      - Open Reports, step to the previous month, then choose Week, then Year
+    expect:
+      - The caption follows the period; Next is off at the current period
+      - The URL keeps the period and the day
+      - The Lately sentences stay the same while stepping
+  - id: all-profiles-switch
+    title: The All profiles switch is off by default; on, it combines every profile and says so
+    tier: secondary
+    steps:
+      - With two profiles, open Reports
+      - Turn on All profiles
+      - Reload the page
+    expect:
+      - The switch starts off and the figures are this profile's
+      - On, the line reads "All 2 profiles combined · other currencies at today's rate" with "Of which" this profile's share
+      - Who paid names each client once per profile; the URL keeps scope=all and a reload reopens combined
+  - id: profile-fails
+    title: In All profiles a profile that fails is named with its own Retry, and the rest still renders
+    tier: secondary
+    steps:
+      - Turn on All profiles while one profile's report fails to load
+      - Retry it once the server answers again
+    expect:
+      - '"1 of 2 profiles · Studio couldn''t load" with Retry; the totals cover the profile that loaded'
+      - After Retry the totals cover both and the line goes away
+  - id: teaser-suggests-switch
+    title: A young profile's teaser offers the combined insights the older profiles already have
+    tier: secondary
+    steps:
+      - Open Reports on a profile started this month while another profile has months of records
+      - Choose "See insights across all profiles"
+    expect:
+      - The teaser says when this profile's insights unlock
+      - The switch turns on and Lately appears
+  - id: arabic
+    title: In Arabic on a phone Reports reads right to left without sideways scrolling
+    tier: secondary
+    steps:
+      - Open Reports in Arabic on a 375 px phone
+    expect:
+      - The page is right to left with the Arabic copy; ‹ › follow reading order
+      - Nothing scrolls sideways
+  - id: signed-out
+    title: Signed out on this device, Reports runs on the records kept in the browser
+    tier: secondary
+    steps:
+      - Signed out, open Reports, add income from its first-run block, and come back
+    expect:
+      - The first-run block shows, then Received shows the income just logged
+      - No report request reaches the server
+  - id: second-month
+    title: With one complete month, Lately is a factual recap of it, and the teaser names when the rest unlocks
+    tier: secondary
+    steps:
+      - Open Reports on a profile that started early last month
+    expect:
+      - 'Lately holds one sentence: last month''s received and spent, its top category and its top client, with no comparison'
+      - The teaser says trends, the best month and how fast clients pay unlock next month
+  - id: insights-rotate
+    title: Lately rotates; insights seen on 3 earlier visits make way for the trend, the best month and the average
+    tier: secondary
+    steps:
+      - Open Reports with records since three months back, then come back three more times
+    expect:
+      - The first visits show the category mover, client concentration and days to get paid
+      - The fourth visit leads with the best month, the month trend and the 3-month average
+  - id: missing-rate
+    title: With a rate missing, each currency stands on its own and the lists say which one they count
+    tier: secondary
+    steps:
+      - Spend in ILS and USD this month while today's rates are unavailable, then open Reports
+    expect:
+      - The hero shows ILS and USD on their own lines, with no ≈
+      - '"Where it went" says it counts ILS only because today''s rates aren''t available'
+  - id: chart-keyboard
+    title: The chart answers the keyboard and says each day's values; reduced motion shows the figures at once
+    tier: secondary
+    steps:
+      - Open Reports with motion on
+      - Move through the chart with Home and the arrows, and choose a day with Enter
+      - Reload with reduced motion
+    expect:
+      - The bars grow to their height
+      - Each bar's name says its day, received and spent; Enter shows the chosen day's values under the chart
+      - With reduced motion the figures and bars are final at once
+  - id: profile-forbidden
+    title: A profile the person can't read is named and left out; alone, it explains itself
+    tier: secondary
+    steps:
+      - Turn on All profiles while one profile's payments are off limits
+      - Open that profile's own Reports
+    expect:
+      - The profile is named as not included, and the rest still renders
+      - Its own Reports says you can't see its payments and to ask an owner

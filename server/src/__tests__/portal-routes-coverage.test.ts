@@ -78,6 +78,7 @@ const CLIENT_CALLS: readonly ClientCall[] = [
   { method: 'POST', path: '/v1/customers', local: true }, // 50 — MUT-286: the client picker's Add «name», both modes
   { method: 'POST', path: '/v1/projects', local: true }, // 51 — MUT-318: the matter picker's Add «name», both modes
   { method: 'GET', path: '/v1/summaries/expenses', local: true }, // defined in client.ts, unused by any screen yet (brief §3's "– , free" row)
+  { method: 'GET', path: '/v1/summaries/activity', local: true }, // 56 — MUT-175: Reports, both modes
 ];
 
 function servedPaths(): ReadonlySet<string> {
@@ -103,8 +104,8 @@ describe('PORTAL_ROUTES coverage (MUT-286)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318), the terms acceptance (MUT-324), the records export (MUT-325) and the trial prompt (MUT-418): 55 calls, 10 remote-only', () => {
-    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(55);
+  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318), the terms acceptance (MUT-324), the records export (MUT-325), the trial prompt (MUT-418) and Reports (MUT-175): 56 calls, 10 remote-only', () => {
+    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(56);
     expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(10);
   });
 

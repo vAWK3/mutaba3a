@@ -13,8 +13,9 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, pickShellOverlay } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
+import { ReportsPage } from './pages/views/ReportsPage';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
 import { ReceivablesPage } from './pages/views/ReceivablesList';
@@ -125,6 +126,17 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     validateSearch: parseOverview,
     component: function Overview() {
       return <OverviewPage filters={omitShellOverlay(overviewRoute.useSearch())} setFilters={useReplaceSearch()} />;
+    },
+  });
+
+  /** MUT-175: Reports — period, day and the All-profiles switch in the URL (DS4). */
+  const reportsRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/reports',
+    validateSearch: parseReports,
+    component: function Reports() {
+      return <ReportsPage search={omitShellOverlay(reportsRoute.useSearch())} setSearch={useReplaceSearch()} />;
     },
   });
 
@@ -267,6 +279,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,
+        reportsRoute,
         clientsRoute,
         clientRoute,
         receivablesRoute,
