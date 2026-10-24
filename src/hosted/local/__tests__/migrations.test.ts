@@ -89,7 +89,9 @@ describe('local snapshot migrations', () => {
     await store.expenses.create({ organizationId: personal.id, occurredOn: '2026-10-01', amountMinor: 1_000n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, AT);
     const { maps } = store.snapshot();
     const exps = new Map([...maps.exps].map(([id, e]) => [id, Object.fromEntries(Object.entries(e).filter(([field]) => field !== 'vendorId'))]));
-    const { vendors: _vendors, vendorNames: _vendorNames, ...older } = maps;
+    const older: Partial<StoredSnapshot['maps']> = { ...maps };
+    delete older.vendors;
+    delete older.vendorNames;
     const before = { formatVersion: 5, stateVersion: 2, savedAt: AT, maps: { ...older, exps } } as unknown as StoredSnapshot;
 
     const after = migrate(before);

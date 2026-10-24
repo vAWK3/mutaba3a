@@ -8475,6 +8475,86 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vendor suggestions for what was typed (the typeahead)
+         * @description Names (a vendor’s own or an alias) that start with the query rank first, then names that contain it, then near-misses (similar spelling, at least 60%); one row per vendor, best name first. Matching ignores case, spacing, punctuation, Arabic letter forms and diacritics, and a trailing legal suffix (Ltd, Inc, בע״מ, ش.م.م …). Empty q: the most recently used. Suggestions only: saving an expense matches its vendor exactly.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description What was typed so far. Empty or absent: the most recently used vendors. */
+                    q?: string;
+                    /** @description 1–25. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Suggestions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["VendorSuggestionList"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/income": {
         parameters: {
             query?: never;
@@ -15154,6 +15234,8 @@ export interface components {
             title: string | null;
             vendor: string | null;
             /** Format: uuid */
+            vendorId: string | null;
+            /** Format: uuid */
             categoryId: string | null;
             /** Format: uuid */
             customerId: string | null;
@@ -15172,6 +15254,7 @@ export interface components {
             /** Format: uuid */
             categoryId?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             title?: string;
             /** Format: uuid */
             customerId?: string;
@@ -15180,6 +15263,13 @@ export interface components {
              * @description With projectId alone, customerId is the project's customer
              */
             projectId?: string;
+        };
+        /** @description MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor` */
+        VendorDetails: {
+            registrationNo?: string;
+            phone?: string;
+            /** Format: email */
+            email?: string;
         };
         IncomeResponse: {
             /** Format: uuid */
@@ -15950,6 +16040,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             title?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string;
             /** Format: uuid */
@@ -15975,6 +16066,7 @@ export interface components {
             currency?: components["schemas"]["Currency"] & unknown;
             title?: string | null;
             vendor?: string | null;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string | null;
             /** Format: uuid */
@@ -16052,6 +16144,20 @@ export interface components {
             name?: string;
             color?: string | null;
             archived?: boolean;
+        };
+        VendorSuggestionList: {
+            items: components["schemas"]["VendorSuggestion"][];
+        };
+        VendorSuggestion: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            matchedName: string;
+            registrationNo: string | null;
+            phone: string | null;
+            email: string | null;
+            /** Format: uuid */
+            lastCategoryId: string | null;
         };
         IncomeCaptureResponse: components["schemas"]["IncomeResponse"] & {
             receivedCount?: number;
@@ -16374,6 +16480,7 @@ export interface components {
             currency: components["schemas"]["Currency"];
             title?: string;
             vendor?: string;
+            vendorDetails?: components["schemas"]["VendorDetails"];
             /** Format: uuid */
             categoryId?: string;
             /** Format: uuid */

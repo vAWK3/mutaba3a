@@ -4,6 +4,7 @@ import type { ApiError } from '../errors.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
+import type { VendorDetails } from '../schemas.js';
 
 /**
  * Expense rules shared by the routes (MUT-42 brief §3 D6, §10). Pure except
@@ -155,4 +156,27 @@ export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { oc
   if (body.categoryId !== undefined) patch.categoryId = body.categoryId;
   if (body.notes !== undefined) patch.notes = body.notes;
   return patch;
+}
+
+/**
+ * MUT-254 (ADR-183, A2): the vendor link a write carries. Runs after every other check, so a refused request has
+ * created nothing it didn't need. A typed vendor resolves to the profile's vendor (exact keys only, decision V1),
+ * created on first sight; `null` (or a name that normalises to nothing) unlinks; absent (a PATCH that leaves the vendor
+ * alone) changes nothing. `details` (a receipt reader's number, phone, email) only help the match and fill what the
+ * vendor lacks. A vendor made for a write that then fails stays: it is still right, and harmless.
+ */
+export async function withResolvedVendor<T extends { vendor?: string | null }>(store: LedgerStore, organizationId: string, input: T, details: VendorDetails | undefined, at: Date): Promise<T & { vendorId?: string | null }> {
+  if (input.vendor === undefined) return input;
+  if (input.vendor === null) return { ...input, vendorId: null };
+  const vendor = await store.vendors.resolve({ organizationId, name: input.vendor, registrationNo: details?.registrationNo ?? null, phone: details?.phone ?? null, email: details?.email ?? null }, at);
+  return { ...input, vendorId: vendor?.id ?? null };
+}
+
+/**
+ * MUT-254 (A2/A3): after the write committed, the expense's vendor was just used, and its category becomes the
+ * vendor's default (never the automatic Other: `touch` skips it). Only when the write named the vendor or the
+ * category; a write touching neither leaves the vendor's default alone.
+ */
+export async function touchExpenseVendor(store: LedgerStore, expense: ExpenseRecord, at: Date): Promise<void> {
+  if (expense.vendorId) await store.vendors.touch(expense.organizationId, expense.vendorId, { categoryId: expense.categoryId }, at);
 }
