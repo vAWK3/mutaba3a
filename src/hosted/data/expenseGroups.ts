@@ -247,7 +247,7 @@ export interface ConvertedTotal {
  * `rate` is units of the currency per 1 base, so a currency goes to the base by
  * dividing; minor units are rescaled between exponents (3 for JOD, 2 for the rest).
  */
-export function convertTotal(summary: ExpenseGroupSummary, rates: FxRatesResponse): ConvertedTotal | null {
+export function convertTotal(summary: { currencies: ReadonlyArray<{ currency: Currency; total: string }> }, rates: FxRatesResponse): ConvertedTotal | null {
   if (summary.currencies.length === 0) return null;
   const baseExponent = currencyExponent(rates.base);
   let minor = 0;
