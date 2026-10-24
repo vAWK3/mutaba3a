@@ -236,6 +236,20 @@ what signup keeps before an account; no-mail refusal and relay review, `email/do
 Failure modes: API down or slow → closed (today's page); malformed body → closed; Sentry tracing added later →
 preflight → closed (D17 guards it). 0 critical gaps.
 
+## qa-reconcile (2026-10-24): PASS WITH GAPS
+
+| AC | Criterion | Feature | Run @ commit | Step @ time | Verdict |
+|---|---|---|---|---|---|
+| AC1a | Open: the CTA opens /signup in the page language | `web.landing.signup-open` | MUT-369 @ HEAD (spec-final run) | "Open the landing page in Arabic…" 0:00; "Switch to English…" 0:01; "Press Create an account…" 0:04 | PASS |
+| AC1b | Closed: exactly as today | `web.landing.signup-closed` | same | "With signup closed…" 0:00; "With signup unreachable…" 0:01 | PASS |
+| AC2a | Policy names Resend (US records), Turnstile, RDAP, en + ar | `web.legal.privacy-signup` | same | "Open /privacy in English…" 0:00; "…in Arabic…" 0:01 | PASS |
+| AC2b | Basel approves the text | — | — | — | **OPEN: pending Basel** (before-release.md web item; no web release before) |
+| AC3 | Landing CTA spec passes in both states | as AC1a/AC1b | same | — | PASS |
+
+- Plan vs code: no gap, no scope creep. Drift from the ticket text, deliberate: D1 (runtime doors read instead of a build value).
+- Gates (Node 22): root lint (0 errors, 2 pre-existing warnings), typecheck, `test:run` 447 files / 6292 tests, `build`, `test:bundles`; server typecheck, lint, `openapi:check`, `test` 3656 passed (DB suites skipped without Postgres; no DB change). `release-qa lint`: no errors, no new unmapped files.
+- Whole landing + legal areas run: 21 pass; 12 failures in 8 features predate MUT-369 (TD-229). One real regression found and fixed: `web.legal.privacy-error-reports` expected "Mutaba3a" in the English policy.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
