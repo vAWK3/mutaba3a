@@ -60,7 +60,7 @@ The read window is the first day of the month 11 months before `to`'s month, thr
 | arabic | Open Reports in Arabic | RTL, Arabic copy, mirrored chart |
 | signed-out | Local mode, open Reports | Same page, no network for the report |
 
-## Copy table (DR28) — **awaiting Basel's sign-off**
+## Copy table (DR28) — **approved as written by Basel, 2026-10-24**
 
 All keys live under `hosted.reports.*` unless the key starts with `hosted.`. Plural keys (marked ⓟ) use `tp`: English `one`/`other`, Arabic `zero`/`one`/`two`/`few`/`many`/`other`. Amounts are always `<bdi>`. "Billed" appears nowhere (B2). Months and dates are formatted at runtime with `Intl` in the reader's language.
 
