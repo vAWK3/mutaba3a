@@ -242,8 +242,10 @@ describe('order and refs (T-U11)', () => {
     }
   });
 
-  it('archives the project before its client, both last', () => {
-    expect(plan.ops.slice(-2).map((op) => op.op)).toEqual(['archive-project', 'archive-customer']);
+  it('carries an archived client and project active, and says so (signed out they can\'t be archived)', () => {
+    expect(changed(plan, 'client-archive-dropped')).toBe(1);
+    expect(changed(plan, 'project-archive-dropped')).toBe(1);
+    expect(plan.ops.map((op) => op.op)).not.toContain('archive-customer');
   });
 
   it('refs are unique', () => {

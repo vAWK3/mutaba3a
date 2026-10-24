@@ -44,7 +44,8 @@ export type ChangeCode =
   | 'unscoped-assigned'
   | 'client-email-dropped'
   | 'client-details-shortened'
-  | 'client-kept-active'
+  | 'client-archive-dropped'
+  | 'project-archive-dropped'
   | 'project-no-client'
   | 'project-details-dropped'
   | 'owed-no-client'
@@ -56,7 +57,9 @@ export type ChangeCode =
   | 'income-category-dropped'
   | 'review-flag-dropped'
   | 'expense-project-dropped'
-  | 'text-shortened';
+  | 'text-shortened'
+  /** Added by the replay: a link the record can do without (a category, a project) didn't arrive. */
+  | 'link-dropped';
 
 export type NotCarriedCode =
   | 'business-over-cap'
@@ -99,6 +102,8 @@ export interface OpSource {
   id: string;
 }
 
+export const sourceKey = (source: OpSource): string => `${source.table}:${source.id}`;
+
 interface OpBase {
   ref: string;
   source: OpSource;
@@ -116,9 +121,7 @@ export type CarryOp =
   | (OpBase & { op: 'settle'; profile: string; owed: string; amountMinor: number; currency: CarriedCurrency; paidAt: string })
   | (OpBase & { op: 'expense'; profile: string; amountMinor: number; currency: CarriedCurrency; occurredOn: string; title?: string; vendor?: string; category?: string; customer?: string; project?: string; notes?: string })
   | (OpBase & { op: 'receipt'; profile: string; expense: string; fileName: string; mimeType: string; sizeBytes: number; data: string })
-  | (OpBase & { op: 'conversion'; profile: string; amountMinor: number; currency: CarriedCurrency; toAmountMinor: number; toCurrency: CarriedCurrency; occurredOn: string; notes?: string })
-  | (OpBase & { op: 'archive-project'; profile: string; project: string })
-  | (OpBase & { op: 'archive-customer'; profile: string; customer: string });
+  | (OpBase & { op: 'conversion'; profile: string; amountMinor: number; currency: CarriedCurrency; toAmountMinor: number; toCurrency: CarriedCurrency; occurredOn: string; notes?: string });
 
 export interface CarryOverPlan {
   ops: CarryOp[];
@@ -152,12 +155,6 @@ export function dependenciesOf(op: CarryOp): string[] {
     case 'receipt':
       refs.push(op.expense);
       break;
-    case 'archive-project':
-      refs.push(op.project);
-      break;
-    case 'archive-customer':
-      refs.push(op.customer);
-      break;
   }
   return refs.filter((ref): ref is string => typeof ref === 'string');
 }
@@ -180,7 +177,7 @@ class Mapper {
   private defaultProfile: string | null = null;
 
   private readonly clients = new Map<string, { ref: string; profile: string }>();
-  private readonly projects = new Map<string, { ref: string; profile: string; customer: string; currency: CarriedCurrency; clientId: string | null; archived: boolean }>();
+  private readonly projects = new Map<string, { ref: string; profile: string; customer: string; currency: CarriedCurrency; clientId: string | null }>();
   private readonly noClient = new Map<string, string>();
   private readonly categories = new Map<string, string>();
 
@@ -196,7 +193,6 @@ class Mapper {
     this.mapIncome();
     this.mapExpenses();
     this.mapConversions();
-    this.mapArchives();
     this.countTheRest();
     return { ops: this.ops, report: this.report() };
   }
@@ -258,6 +254,8 @@ class Mapper {
       const profile = this.profileFor(client.profileId);
       if (!profile) continue;
       const ref = `customer:${client.id}`;
+      // Signed out, a client can't be archived (the route answers READ_ONLY_PROFILE), so it arrives active.
+      if (client.archivedAt) this.note('client-archive-dropped');
       this.ops.push({ op: 'customer', ref, source: { table: 'clients', id: client.id }, profile, ...this.customerFields(client) });
       this.clients.set(client.id, { ref, profile });
     }
@@ -297,10 +295,11 @@ class Mapper {
         customer = this.noClientOf(profile);
       }
       if (project.field || project.notes) this.note('project-details-dropped');
+      if (project.archivedAt) this.note('project-archive-dropped');
       const currency = this.projectCurrency(project, profile);
       const ref = `project:${project.id}`;
       this.ops.push({ op: 'project', ref, source: { table: 'projects', id: project.id }, profile, customer, name: this.shorten(project.name.trim() || this.options.labels.noClient, NAME_MAX, 'text-shortened'), currency });
-      this.projects.set(project.id, { ref, profile, customer, currency, clientId: client && client.profile === profile ? project.clientId! : null, archived: Boolean(project.archivedAt) });
+      this.projects.set(project.id, { ref, profile, customer, currency, clientId: client && client.profile === profile ? project.clientId! : null });
     }
   }
 
@@ -331,7 +330,7 @@ class Mapper {
       }
       const profile = this.profileFor(tx.profileId);
       if (!profile) continue;
-      this.mapIncomeEntry(tx, profile, currency, (records.get(tx.id) ?? []).sort((a, b) => a.paidAt.localeCompare(b.paidAt)));
+      this.mapIncomeEntry(tx, profile, currency, records.get(tx.id) ?? []);
     }
   }
 
@@ -342,11 +341,7 @@ class Mapper {
     if (tx.needsReview) this.note('review-flag-dropped');
     if (currency === 'JOD') this.jodEntries++;
 
-    const recorded = records.reduce((sum, r) => sum + r.amountMinor, 0);
-    const target = tx.status === 'paid' ? tx.amountMinor : (tx.receivedAmountMinor ?? 0);
-    const uncovered = Math.max(0, target - recorded);
-    const payments: Array<{ source: OpSource; amountMinor: number; paidAt: string; notes?: string | undefined }> = records.map((r) => ({ source: { table: 'paymentRecords', id: r.id }, amountMinor: r.amountMinor, paidAt: r.paidAt, notes: r.notes }));
-    if (uncovered > 0) payments.push({ source: { table: 'uncovered', id: tx.id }, amountMinor: uncovered, paidAt: tx.paidAt ?? tx.occurredAt });
+    const payments = paymentsOf(tx, records);
     if (payments.some((p) => p.notes)) this.note('payment-notes-dropped');
 
     // Paid with no client: Received money, one entry per payment. Otherwise an Owed and one settle per payment.
@@ -519,24 +514,7 @@ class Mapper {
     }
   }
 
-  // ── archives, and what has no home ─────────────────────────────────────────
-
-  /** Archived projects first: a client can be archived only once none of its projects is active. */
-  private mapArchives(): void {
-    for (const [id, project] of this.projects) {
-      if (project.archived) this.ops.push({ op: 'archive-project', ref: `archive-project:${id}`, source: { table: 'projects', id }, profile: project.profile, project: project.ref });
-    }
-    for (const client of this.backup.tables.clients) {
-      const carried = this.clients.get(client.id);
-      if (!client.archivedAt || !carried) continue;
-      const activeProject = [...this.projects.values()].some((p) => p.customer === carried.ref && !p.archived);
-      if (activeProject) {
-        this.note('client-kept-active');
-        continue;
-      }
-      this.ops.push({ op: 'archive-customer', ref: `archive-customer:${client.id}`, source: { table: 'clients', id: client.id }, profile: carried.profile, customer: carried.ref });
-    }
-  }
+  // ── what has no home ───────────────────────────────────────────────────────
 
   private countTheRest(): void {
     const { tables, counted, malformed } = this.backup;
@@ -588,6 +566,29 @@ class Mapper {
       jodEntries: this.jodEntries,
     };
   }
+}
+
+export interface IncomePayment {
+  source: OpSource;
+  amountMinor: number;
+  paidAt: string;
+  notes?: string | undefined;
+}
+
+/**
+ * The money an income entry received: one per live payment record, oldest
+ * first, plus what was paid that no record covers (`uncoveredPaymentAmount` in
+ * the free app's v23 backfill, MUT-60: a paid entry is paid in full, a part-paid
+ * one up to `receivedAmountMinor`). Shared by the mapper and the totals check.
+ */
+export function paymentsOf(tx: FreeAppTransaction, records: FreeAppPaymentRecord[]): IncomePayment[] {
+  const live = records.filter((r) => r.transactionId === tx.id && !r.deletedAt).sort((a, b) => a.paidAt.localeCompare(b.paidAt));
+  const recorded = live.reduce((sum, r) => sum + r.amountMinor, 0);
+  const target = tx.status === 'paid' ? tx.amountMinor : (tx.receivedAmountMinor ?? 0);
+  const uncovered = Math.max(0, target - recorded);
+  const payments: IncomePayment[] = live.map((r) => ({ source: { table: 'paymentRecords', id: r.id }, amountMinor: r.amountMinor, paidAt: r.paidAt, notes: r.notes }));
+  if (uncovered > 0) payments.push({ source: { table: 'uncovered', id: tx.id }, amountMinor: uncovered, paidAt: tx.paidAt ?? tx.occurredAt });
+  return payments;
 }
 
 /** Default first, then active before archived, then oldest first. */
