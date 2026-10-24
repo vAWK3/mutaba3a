@@ -24,6 +24,7 @@ import demo from './demo.json';
 import download from './download.json';
 import landing from './landing.json';
 import whatsNew from './whatsNew.json';
+import carryOver from './carryOver.json';
 
 export const PARTS = {
   common,
@@ -45,6 +46,7 @@ export const PARTS = {
   download,
   landing,
   whatsNew,
+  carryOver,
 };
 
 const ar = composeDictionary(PARTS);

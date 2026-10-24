@@ -241,6 +241,54 @@ export function portalUrl(override: string | undefined): string {
   return assertHttpsOrigin("MUTABA3A_PORTAL_URL", override ?? DEFAULT_PORTAL_URL);
 }
 
+/** What a build knows about the carry-over (MUT-291 §3.2): the old origins a receiver accepts, and where a sender sends. */
+export interface CarryOverBuild {
+  sources: { web?: string; portal?: string };
+  portalOrigin: string | null;
+}
+
+const LOOPBACK_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
+
+/**
+ * An origin exactly as a browser reports `event.origin` (anything else would never match it, or would post to another
+ * host: `https://x@host`). http on the loopback only for the QA dev servers: a release build refuses it.
+ */
+function carryOverOrigin(value: unknown, release: boolean): string {
+  const canonical = typeof value === "string" && URL.canParse(value) && new URL(value).origin === value;
+  const allowed = canonical && (value.startsWith("https://") || (!release && LOOPBACK_ORIGIN.test(value)));
+  if (!allowed) {
+    throw new Error(`MUTABA3A_CARRY_OVER origins must be https origins${release ? "" : ", or http on the loopback for QA"}; got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * The carry-over's origins, baked into both the web and the portal build (MUT-291). From config/hosts.json:
+ * off (no sources, no portal) until stage live, then the two legacy origins and the new portal. Origins are never
+ * read from a URL at run time. MUTABA3A_CARRY_OVER (JSON `{ web?, portal?, portalOrigin }`) replaces them for QA,
+ * whose origins are loopback ports; `off` turns it off (a QA run of the app's own features on a built preview).
+ */
+export const CARRY_OVER_OFF: CarryOverBuild = { sources: {}, portalOrigin: null };
+
+export function carryOverBuild(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "portalOrigin">, override: string | undefined, options: { offByDefault?: boolean; release?: boolean } = {}): CarryOverBuild {
+  const release = options.release ?? false;
+  if (override === "off") return CARRY_OVER_OFF;
+  if (override !== undefined && override !== "") {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(override) as Record<string, unknown>;
+    } catch {
+      throw new Error("MUTABA3A_CARRY_OVER must be JSON: { web?, portal?, portalOrigin }");
+    }
+    return {
+      sources: { ...(parsed.web !== undefined ? { web: carryOverOrigin(parsed.web, release) } : {}), ...(parsed.portal !== undefined ? { portal: carryOverOrigin(parsed.portal, release) } : {}) },
+      portalOrigin: carryOverOrigin(parsed.portalOrigin, release),
+    };
+  }
+  if (options.offByDefault || !hosts.legacy || (hosts.stage !== "live" && hosts.stage !== "redirect")) return CARRY_OVER_OFF;
+  return { sources: { web: hosts.legacy.landingOrigin, portal: hosts.legacy.portalOrigin }, portalOrigin: hosts.portalOrigin };
+}
+
 /** MUT-324: the landing's /terms, which the portal links to (versioned as /terms/<version>); a bad origin fails the build. */
 export function termsUrl(override: string | undefined): string {
   return `${assertHttpsOrigin("MUTABA3A_PUBLIC_ORIGIN", override ?? DEFAULT_PUBLIC_ORIGIN)}/terms`;
@@ -556,7 +604,7 @@ export function scopeServerBufferShim(): Plugin {
  * cache can ever hold firm figures. Same-origin with the API in dev through the
  * proxy, like the API service will serve it in production.
  */
-function hostedConfig(): UserConfig {
+function hostedConfig(command: "build" | "serve"): UserConfig {
   const sentry = hostedSentry(process.env);
   return {
     base: "/",
@@ -603,6 +651,8 @@ function hostedConfig(): UserConfig {
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
       // The bot check on /signup and /recover (MUT-368); public, never the secret
       __TURNSTILE_SITE_KEY__: JSON.stringify(turnstileSiteKey(process.env.MUTABA3A_TURNSTILE_SITE_KEY)),
+      // The carry-over's origins (MUT-291): the receiver's accepted old origins and the new portal
+      __CARRY_OVER__: JSON.stringify(carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { release: command === "build" })),
       // Crash reports, signed in only (MUT-149, ADR-091 am.11); no DSN compiles them out
       ...sentry.define,
     },
@@ -640,8 +690,8 @@ function hostedConfig(): UserConfig {
   };
 }
 
-export default defineConfig(({ mode }) => {
-  if (mode === "hosted") return hostedConfig();
+export default defineConfig(({ mode, command }) => {
+  if (mode === "hosted") return hostedConfig(command);
 
   // Check both Tauri env vars AND the --mode flag
   const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY || mode === "desktop";
@@ -655,6 +705,9 @@ export default defineConfig(({ mode }) => {
       __BUILD_MODE__: JSON.stringify(buildMode),
       // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
       __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
+      // The carry-over (MUT-291): where the old app sends its records; off in the desktop build
+      // The dev server leaves it off unless MUTABA3A_CARRY_OVER turns it on: the app's own QA must open the app, not the gate
+      __CARRY_OVER__: JSON.stringify(buildMode === "web" ? carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { offByDefault: command !== "build", release: command === "build" }) : CARRY_OVER_OFF),
       // The landing's cookieless visit counts (MUT-154, ADR-090); the local app and desktop never use it
       __POSTHOG_KEY__: JSON.stringify(buildMode === "web" ? posthogKey(process.env.MUTABA3A_POSTHOG_KEY) : ""),
       // The landing's error reports (MUT-150); desktop always gets the "off" values

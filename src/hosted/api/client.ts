@@ -244,6 +244,11 @@ export function localBackend(): Promise<LocalBackend> {
   return localBackendPromise;
 }
 
+/** MUT-291: this origin's signed-out records, counted from disk without booting a session (the old address's /carry-over). */
+export async function localRecordCount(): Promise<number> {
+  return (await import('@mut/local-backend')).countRecordsOnThisDevice();
+}
+
 let unhintedProbe: Promise<boolean> | null = null;
 
 /**

@@ -109,6 +109,17 @@ describe('legacy-host redirect (MUT-326)', () => {
     expect(res.status).not.toBe(302);
   });
 
+  // MUT-291 §3.2: the carry-over's popup answers through window.opener, which COOP same-origin would cut.
+  it.each([
+    ['the old host\'s carry-over page', `${OLD}${LEGACY_CARRY_OVER_PATH}?next=%2F`, {}],
+    ['the new host\'s receiver', `${OLD}/carry-over/receive?from=web`, { [FRONT_DOOR_HEADER]: TOKEN }],
+  ])('serves %s with no Cross-Origin-Opener-Policy', async (_name, url, headers) => {
+    const res = await app.request(url, { headers, redirect: 'manual' });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('portal shell');
+    expect(res.headers.get('cross-origin-opener-policy')).toBeNull();
+  });
+
   it('is off unless the stage turns it on', async () => {
     const res = await harness({ legacyRedirect: false }).request(`${OLD}/sign-in`, { redirect: 'manual' });
     expect(res.status).toBe(200);

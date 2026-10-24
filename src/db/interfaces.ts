@@ -313,8 +313,10 @@ export interface LegacyImportFile {
  * restore, export and import, wipe, and the integrity and orphan checks.
  */
 export interface IDatasetRepository {
-  /** Every table as plain rows, tagged with the schema version. */
-  serializeBackup(): Promise<BackupData>;
+  /** Every table as plain rows, tagged with the schema version; `strict` throws if a table can't be read. */
+  serializeBackup(options?: { strict?: boolean }): Promise<BackupData>;
+  /** Clients, projects, entries and expenses that aren't deleted: whether the carry-over has anything to carry (MUT-291). */
+  countRecords(): Promise<number>;
   /** Replace everything with a backup; refuses one from a newer schema. */
   restoreBackup(backupJson: string): Promise<{ recordsRestored: number; backupVersion: number }>;
   exportProfile(profileId: string): Promise<ProfileExportRows>;

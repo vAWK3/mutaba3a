@@ -21,6 +21,23 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('serializeAllTables', () => {
+  function failingTable(name: string) {
+    const real = db.table.bind(db);
+    vi.spyOn(db, 'table').mockImplementation(((table: string) => (table === name ? { toArray: () => Promise.reject(new Error('read failed')) } : real(table))) as typeof db.table);
+  }
+
+  it('a table it can\'t read comes out empty, so a backup download still gets the rest', async () => {
+    failingTable('transactions');
+    expect((await serializeAllTables()).tables.transactions).toEqual([]);
+  });
+
+  it('strict, a table it can\'t read fails the whole read: the carry-over never sends it as empty (MUT-291)', async () => {
+    failingTable('transactions');
+    await expect(serializeAllTables({ strict: true })).rejects.toThrow('read failed');
+  });
+});
+
 describe('restoreFromBackup', () => {
   it('sets the last backup date to the restored backup\'s own timestamp', async () => {
     await settingsRepo.update({ lastBackupAt: '2026-10-13T09:12:00.000Z' });

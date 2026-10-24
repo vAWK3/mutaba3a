@@ -15,6 +15,7 @@ import configFn, {
   appVersion,
   netlifyFormsHtml,
   netlifyRedirects,
+  carryOverBuild,
   LEGACY_LANDING_PATHS,
   portalUrl,
   posthogKey,
@@ -75,10 +76,15 @@ function maskPortalUrl(define: UserConfig['define']) {
   return define?.__PORTAL_URL__ === JSON.stringify(HOSTS.portalOrigin) ? { __PORTAL_URL__: '<config/hosts.json portalOrigin>' } : {};
 }
 
+/** MUT-291: the web build's carry-over origins come from config/hosts.json too. */
+function maskCarryOver(define: UserConfig['define']) {
+  return define?.__CARRY_OVER__ === JSON.stringify(carryOverBuild(HOSTS, undefined)) && define.__BUILD_MODE__ === JSON.stringify('web') ? { __CARRY_OVER__: '<config/hosts.json carry-over origins>' } : {};
+}
+
 function comparable(config: UserConfig) {
   return {
     ...config,
-    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define) },
+    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define), ...maskCarryOver(config.define) },
     plugins: pluginNames(config.plugins),
   };
 }
@@ -133,6 +139,54 @@ describe('vite.config', () => {
         expect.arrayContaining(['favicon.svg', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']),
       );
       for (const asset of PWA_INCLUDE_ASSETS) expect(existsSync(repoPath(`public/${asset}`)), asset).toBe(true);
+    });
+  });
+
+  describe('the carry-over origins (MUT-291 §3.2)', () => {
+    const LEGACY = { landing: 'https://old.netlify.example', portal: 'https://old-portal.run.example' };
+    const hosts = (env: Record<string, unknown>) =>
+      resolveHosts(parseHostsConfig({ production: { domain: null, portalSubdomain: 'app', stage: 'legacy', legacy: LEGACY, ...env } }));
+
+    it('is off until the domain is live, so no build accepts a carry-over too early', () => {
+      expect(carryOverBuild(hosts({}), undefined)).toEqual({ sources: {}, portalOrigin: null });
+      expect(carryOverBuild(hosts({ domain: 'placeholder.example', stage: 'proxy' }), undefined)).toEqual({ sources: {}, portalOrigin: null });
+    });
+
+    it.each(['live', 'redirect'])('at stage %s, accepts the two legacy origins and sends to the new portal', (stage) => {
+      expect(carryOverBuild(hosts({ domain: 'placeholder.example', stage }), undefined)).toEqual({
+        sources: { web: 'https://old.netlify.example', portal: 'https://old-portal.run.example' },
+        portalOrigin: 'https://app.placeholder.example',
+      });
+    });
+
+    it('is off in the dev server unless MUTABA3A_CARRY_OVER turns it on, and off whenever it says so', () => {
+      const live = hosts({ domain: 'placeholder.example', stage: 'live' });
+      expect(carryOverBuild(live, undefined, { offByDefault: true })).toEqual({ sources: {}, portalOrigin: null });
+      expect(carryOverBuild(live, 'off')).toEqual({ sources: {}, portalOrigin: null });
+      expect(carryOverBuild(live, JSON.stringify({ portalOrigin: 'http://127.0.0.1:5178' }), { offByDefault: true }).portalOrigin).toBe('http://127.0.0.1:5178');
+    });
+
+    it('takes QA\'s loopback origins from MUTABA3A_CARRY_OVER', () => {
+      const override = JSON.stringify({ web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177', portalOrigin: 'http://127.0.0.1:5178' });
+      expect(carryOverBuild(hosts({}), override)).toEqual({ sources: { web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177' }, portalOrigin: 'http://127.0.0.1:5178' });
+    });
+
+    it.each([
+      ['plain http off the loopback', { web: 'http://evil.example', portalOrigin: 'http://127.0.0.1:5178' }],
+      ['a path', { web: 'https://old.example/app', portalOrigin: 'https://app.example' }],
+      ['no portal origin', { web: 'https://old.example' }],
+      ['credentials before the host', { web: 'https://x@old.example', portalOrigin: 'https://app.example' }],
+      ['a query', { web: 'https://old.example?', portalOrigin: 'https://app.example' }],
+      ['an upper-case host', { web: 'https://Old.example', portalOrigin: 'https://app.example' }],
+      ['the default port spelled out', { web: 'https://old.example:443', portalOrigin: 'https://app.example' }],
+    ])('refuses an override with %s', (_label, value) => {
+      expect(() => carryOverBuild(hosts({}), JSON.stringify(value))).toThrow(/MUTABA3A_CARRY_OVER/);
+    });
+
+    it('a release build never trusts the loopback, even when the variable leaks into it', () => {
+      const override = JSON.stringify({ web: 'http://127.0.0.1:5183', portalOrigin: 'http://127.0.0.1:5188' });
+      expect(() => carryOverBuild(hosts({}), override, { release: true })).toThrow(/MUTABA3A_CARRY_OVER/);
+      expect(carryOverBuild(hosts({}), JSON.stringify({ web: 'https://old.example', portalOrigin: 'https://app.example' }), { release: true }).portalOrigin).toBe('https://app.example');
     });
   });
 
