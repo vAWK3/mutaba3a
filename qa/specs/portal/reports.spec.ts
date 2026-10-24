@@ -44,7 +44,7 @@ const threeMonths = (): StubReportRecords => ({
     payment(4, { customerId: client.id, amount: '1500.00', receivedOn: on(0, 1) }),
   ],
   expenses: [expense(1, { amount: '100.00', categoryId: food.id, occurredOn: on(-2, 4) }), expense(2, { amount: '300.00', categoryId: food.id, occurredOn: on(-1, 4) })],
-  daysToPaid: { median: 12, n: 4 },
+  daysToPaid: { samples: [11, 12, 13] },
 });
 
 function world(seed: Partial<FakeApiSeed> = {}) {
@@ -86,7 +86,7 @@ test('In the first month Received heads the page, then Spent, Kept, Owed now, th
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪1,500');
     await expect(hero(page).locator('.hp-report-pair .sr-only')).toHaveText(['₪400', '₪1,100']);
     await expect(hero(page)).toContainText(`${monthName(THIS_MONTH, true)} · so far`);
-    await expect(page.getByText('Owed to you now')).toBeVisible();
+    await expect(page.getByText(/Owed to you now/)).toBeVisible();
     await expect(page.locator('body')).not.toContainText(/billed/i);
   });
 
@@ -115,6 +115,7 @@ test('With two complete months, Lately lists up to three insights and Year opens
 
   await step('Lately: the category mover, client concentration, then days to get paid', async () => {
     const lately = page.locator('section', { has: page.getByRole('heading', { name: 'Lately' }) });
+    await expect(lately.getByRole('listitem')).toHaveCount(3);
     const items = (await lately.getByRole('listitem').allTextContents()).map(plain);
     expect(items).toEqual([
       `Food: ₪300.00 in ${named(month(-1))}, ₪200.00 more than ${named(month(-2))}.`,
@@ -164,6 +165,7 @@ test('Week, Month and Year, and ‹ › step through time without changing what 
 
   await step('Open Reports on this month', async () => {
     await openReports(page, api);
+    await expect(lately.getByRole('listitem')).toHaveCount(3);
     before = await lately.getByRole('listitem').allTextContents();
     await expect(page.getByRole('button', { name: 'Next month' })).toBeDisabled();
   });
@@ -173,7 +175,7 @@ test('Week, Month and Year, and ‹ › step through time without changing what 
     await expect(page).toHaveURL(new RegExp(`at=${month(-1)}-01`));
     await expect(hero(page)).toContainText(monthName(month(-1), true));
     await expect(page.getByRole('button', { name: 'Next month' })).toBeEnabled();
-    expect(await lately.getByRole('listitem').allTextContents()).toEqual(before);
+    await expect(lately.getByRole('listitem')).toHaveText(before);
   });
 
   await step('Choose Week, then Year', async () => {
@@ -183,7 +185,7 @@ test('Week, Month and Year, and ‹ › step through time without changing what 
     await page.getByRole('radio', { name: 'Year' }).click();
     await expect(page).toHaveURL(/period=year/);
     await expect(hero(page)).toContainText(TODAY.slice(0, 4));
-    expect(await lately.getByRole('listitem').allTextContents()).toEqual(before);
+    await expect(lately.getByRole('listitem')).toHaveText(before);
   });
 });
 
@@ -298,5 +300,113 @@ test('Signed out on this device, Reports runs on the records kept in the browser
 
   await step('No report request reached the server', async () => {
     expect(requests.filter((path) => path.startsWith('/v1/summaries'))).toEqual([]);
+  });
+});
+
+test('With one complete month, Lately is a factual recap of it, and the teaser names when the rest unlocks', { tag: '@portal.reports.second-month' }, async ({ page, step }) => {
+  const records: StubReportRecords = {
+    payments: [payment(1, { customerId: client.id, amount: '800.00', receivedOn: on(-1, 2) }), payment(2, { customerId: client.id, amount: '100.00', receivedOn: on(0, 1) })],
+    expenses: [expense(1, { amount: '250.00', categoryId: food.id, occurredOn: on(-1, 3) })],
+  };
+  const api = world({ reports: { [OFFICE_A]: records } });
+
+  await step('Open Reports on a profile that started early last month', async () => {
+    await openReports(page, api);
+  });
+
+  await step('Lately recaps last month, with no comparison; the teaser names the month the rest unlocks', async () => {
+    const lately = page.locator('section', { has: page.getByRole('heading', { name: 'Lately' }) });
+    await expect(lately.getByRole('listitem')).toHaveCount(1);
+    expect((await lately.getByRole('listitem').allTextContents()).map(plain)).toEqual([`In ${named(month(-1))}: ₪800.00 received, ₪250.00 spent. Most spending went to Food. Client 1 paid the most.`]);
+    await expect(lately.locator('.hp-teaser')).toContainText(`Trends, your best month and how fast clients pay unlock in ${named(month(1))}.`);
+  });
+});
+
+test('Lately rotates: insights seen on 3 earlier visits make way for the trend, the best month and the average', { tag: '@portal.reports.insights-rotate' }, async ({ page, step }) => {
+  const api = world({ reports: { [OFFICE_A]: threeMonths() } });
+  const lately = page.locator('section', { has: page.getByRole('heading', { name: 'Lately' }) });
+
+  await step('Open Reports and come back three more times', async () => {
+    await openReports(page, api);
+    await expect(lately.getByRole('listitem')).toHaveCount(3);
+    for (let visit = 0; visit < 3; visit++) {
+      await page.reload();
+      await expect(lately.getByRole('listitem')).toHaveCount(3);
+    }
+  });
+
+  await step('The fourth visit leads with the trend, the best month and the 3-month average', async () => {
+    await expect(lately.getByRole('listitem').first()).toContainText('Your best month in the last year');
+    const items = (await lately.getByRole('listitem').allTextContents()).map(plain);
+    expect(items).toEqual([
+      `Your best month in the last year was ${named(month(-2))}: ₪1,200.00 received.`,
+      `Received in ${named(month(-1))}: ₪900.00, ₪300.00 less than ${named(month(-2))}.`,
+      'Over the last 3 months you received about ₪1,033.33 a month.',
+    ]);
+  });
+});
+
+test('With a rate missing, each currency stands on its own and the lists say which one they count', { tag: '@portal.reports.missing-rate' }, async ({ page, step }) => {
+  const records = thisMonth();
+  records.expenses.push(expense(2, { amount: '50.00', currency: 'USD', categoryId: food.id, occurredOn: on(0, 1) }));
+  const api = world({ reports: { [OFFICE_A]: records }, fxRates: 'unavailable' });
+
+  await step('Spend in ILS and USD this month while today\'s rates are unavailable, then open Reports', async () => {
+    await openReports(page, api);
+  });
+
+  await step('The hero lists ILS and USD on their own lines, no ≈; both lists say they count ILS only', async () => {
+    await expect(hero(page).locator('.hp-report-currency')).toHaveCount(2);
+    await expect(hero(page)).not.toContainText('≈');
+    await expect(hero(page)).toContainText('$50');
+    await expect(page.getByRole('region', { name: 'Where it went' })).toContainText("In ILS only: today's rates aren't available");
+  });
+});
+
+test('The chart answers the keyboard and says each day\'s values; reduced motion shows the figures at once', { tag: '@portal.reports.chart-keyboard' }, async ({ page, step }) => {
+  const api = world({ reports: { [OFFICE_A]: thisMonth() } });
+  const chart = page.getByRole('group', { name: 'Received and spent per day. Arrow keys move between days.' });
+
+  await step('Open Reports with motion on: the bars grow in from nothing', async () => {
+    await openReports(page, api);
+    // DR21: the first bar starts at zero and grows to its height
+    await expect.poll(async () => chart.locator('.hp-daybar-fill').first().evaluate((el) => (el as HTMLElement).style.transform)).toBe('scaleY(1)');
+  });
+
+  await step('Tab into the chart, move with the arrows, and choose a day with Enter', async () => {
+    await chart.getByRole('button').first().focus();
+    await page.keyboard.press('Home');
+    await expect(chart.getByRole('button').first()).toBeFocused();
+    const firstName = await chart.getByRole('button').first().getAttribute('aria-label');
+    expect(plain(firstName ?? '')).toMatch(/: received ₪1,500\.00, spent ₪400\.00$/);
+    await page.keyboard.press('ArrowRight');
+    await expect(chart.getByRole('button').nth(1)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.hp-report-selected')).toContainText('Received ₪0.00 · Spent ₪0.00');
+  });
+
+  await step('With reduced motion the figures are final at once', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.reload();
+    await expect(hero(page).locator('.hp-report-received .hp-countup')).toHaveText('₪1,500');
+    await expect(chart.locator('.hp-daybar-fill').first()).toHaveAttribute('style', /scaleY\(1\)/);
+  });
+});
+
+test('A profile the person can\'t read is named and left out; alone, it explains itself', { tag: '@portal.reports.profile-forbidden' }, async ({ page, step }) => {
+  const api = world({ profiles: [office(OFFICE_A, 'Personal'), office(OFFICE_B, 'Studio')], reports: { [OFFICE_A]: thisMonth(), [OFFICE_B]: { payments: [], expenses: [], refuse: 403 } } });
+
+  await step('Turn on All profiles while Studio\'s payments are off limits', async () => {
+    await openReports(page, api, 'en', `${reportsPath()}?scope=all`);
+  });
+
+  await step('Studio is named and left out; Personal\'s figures still show', async () => {
+    await expect(page.getByText("Studio isn't included: you can't see its payments")).toBeVisible();
+    await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪1,500');
+  });
+
+  await step('Opening Studio\'s own Reports explains why there is nothing to see', async () => {
+    await page.goto(reportsPath(OFFICE_B));
+    await expect(page.getByRole('heading', { name: "You can't see this profile's payments" })).toBeVisible();
   });
 });

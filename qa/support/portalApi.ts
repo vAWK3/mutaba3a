@@ -396,10 +396,18 @@ export interface FakeApiSeed {
 export interface StubReportRecords {
   payments: StubPayment[];
   expenses: StubExpense[];
-  /** The server's median over fully settled Owed (D2), or none. */
-  daysToPaid?: { median: number; n: number } | null;
+  /** Each fully paid Owed entry's days (D2): the fake answers the median, n, samples and per-client rows as the server does. */
+  daysToPaid?: { samples: number[]; byCustomer?: Array<{ customerId: string; median: number; n: number }> } | null;
   /** 403 / 500: the activity request is refused for this profile. */
   refuse?: 403 | 500;
+}
+
+/** The server's D2 figure from the samples a spec gives: the median with n, null below 3. */
+function daysToPaidOf(given: StubReportRecords['daysToPaid']) {
+  const samples = [...(given?.samples ?? [])].sort((a, b) => a - b);
+  const mid = Math.floor(samples.length / 2);
+  const median = samples.length % 2 === 1 ? samples[mid]! : Math.round((samples[mid - 1]! + samples[mid]!) / 2);
+  return { overall: samples.length >= 3 ? { median, n: samples.length } : null, byCustomer: given?.byCustomer ?? [], samples };
 }
 
 const addMonthTo = (month: string, n: number) => {
@@ -443,8 +451,10 @@ export function activitySummary(records: StubReportRecords, from: string, to: st
   if (bucket === 'day') for (let d = new Date(`${from}T00:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) starts.push(d.toISOString().slice(0, 10));
   else for (let m = from.slice(0, 7); m <= to.slice(0, 7); m = addMonthTo(m, 1)) starts.push(`${m}-01`);
   const keyOf = (on: string) => (bucket === 'day' ? on : `${on.slice(0, 7)}-01`);
-  const windowStart = `${addMonthTo(to.slice(0, 7), -11)}-01`;
-  const read = rows.filter((r) => r.on >= windowStart && r.on <= to);
+  // The server's read window: from (or the first of the 12 months ending with to's month, if earlier) through to's month end
+  const historyFirst = `${addMonthTo(to.slice(0, 7), -11)}-01`;
+  const windowStart = from < historyFirst ? from : historyFirst;
+  const read = rows.filter((r) => r.on >= windowStart && r.on.slice(0, 7) <= to.slice(0, 7));
   return {
     from,
     to,
@@ -461,7 +471,7 @@ export function activitySummary(records: StubReportRecords, from: string, to: st
     })),
     currencies,
     history: Array.from({ length: 12 }, (_, i) => addMonthTo(to.slice(0, 7), i - 11)).map((month) => ({ month, currencies: block(read.filter((r) => r.on.slice(0, 7) === month)) })),
-    daysToPaid: { overall: records.daysToPaid ?? null, byCustomer: [] },
+    daysToPaid: daysToPaidOf(records.daysToPaid ?? null),
   };
 }
 

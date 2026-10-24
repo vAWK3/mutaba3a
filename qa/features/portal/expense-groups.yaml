@@ -9,6 +9,7 @@ paths:
   - src/hosted/components/groups/**
   - src/hosted/data/expenseGroups.ts
   - src/hosted/data/expenseGroupQueries.ts
+  - src/hosted/format/rateLines.ts
   - src/hosted/components/Toast.tsx
   - src/lib/motion/rowEnter.ts
   - src/lib/motion/mediaQuery.ts

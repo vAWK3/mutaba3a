@@ -9,6 +9,7 @@ paths:
   - src/hosted/data/reportInsights.ts
   - src/hosted/data/reportQueries.ts
   - src/hosted/format/reportFormat.ts
+  - src/hosted/format/rateLines.ts
   - src/hosted/analytics/reportViewed.ts
 features:
   - id: first-run
@@ -101,3 +102,47 @@ features:
     expect:
       - The first-run block shows, then Received shows the income just logged
       - No report request reaches the server
+  - id: second-month
+    title: With one complete month, Lately is a factual recap of it, and the teaser names when the rest unlocks
+    tier: secondary
+    steps:
+      - Open Reports on a profile that started early last month
+    expect:
+      - 'Lately holds one sentence: last month''s received and spent, its top category and its top client, with no comparison'
+      - The teaser says trends, the best month and how fast clients pay unlock next month
+  - id: insights-rotate
+    title: Lately rotates; insights seen on 3 earlier visits make way for the trend, the best month and the average
+    tier: secondary
+    steps:
+      - Open Reports with records since three months back, then come back three more times
+    expect:
+      - The first visits show the category mover, client concentration and days to get paid
+      - The fourth visit leads with the best month, the month trend and the 3-month average
+  - id: missing-rate
+    title: With a rate missing, each currency stands on its own and the lists say which one they count
+    tier: secondary
+    steps:
+      - Spend in ILS and USD this month while today's rates are unavailable, then open Reports
+    expect:
+      - The hero shows ILS and USD on their own lines, with no ≈
+      - '"Where it went" says it counts ILS only because today''s rates aren''t available'
+  - id: chart-keyboard
+    title: The chart answers the keyboard and says each day's values; reduced motion shows the figures at once
+    tier: secondary
+    steps:
+      - Open Reports with motion on
+      - Move through the chart with Home and the arrows, and choose a day with Enter
+      - Reload with reduced motion
+    expect:
+      - The bars grow to their height
+      - Each bar's name says its day, received and spent; Enter shows the chosen day's values under the chart
+      - With reduced motion the figures and bars are final at once
+  - id: profile-forbidden
+    title: A profile the person can't read is named and left out; alone, it explains itself
+    tier: secondary
+    steps:
+      - Turn on All profiles while one profile's payments are off limits
+      - Open that profile's own Reports
+    expect:
+      - The profile is named as not included, and the rest still renders
+      - Its own Reports says you can't see its payments and to ask an owner
