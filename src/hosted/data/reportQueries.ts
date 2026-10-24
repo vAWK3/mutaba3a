@@ -27,8 +27,9 @@ export interface ProfileLoad<T> {
   retry: () => void;
 }
 
+/** Under the profile's summaries: an income save refreshes them all, and an expense save refreshes this one too. */
 export function activityKey(profileId: string, range: Range, bucket: 'day' | 'month') {
-  return profileKey(profileId, 'activity', range.from, range.to, bucket);
+  return profileKey(profileId, 'summary', 'activity', range.from, range.to, bucket);
 }
 
 interface QueryLike<T> {

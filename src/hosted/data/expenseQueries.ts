@@ -83,6 +83,8 @@ function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, prof
   // MUT-254: a save may have created a vendor or moved its default category.
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'vendors') });
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary', 'expenses') });
+  // MUT-175: Reports' spent figures and history
+  queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary', 'activity') });
   // MUT-268: an expense's date, amount, category or very existence moves it in or out of groups (membership is computed when read).
   void invalidateGroups(queryClient, profileId);
 }
