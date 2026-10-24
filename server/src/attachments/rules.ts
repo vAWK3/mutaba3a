@@ -40,6 +40,11 @@ export function storageKey(organizationId: string, attachmentId: string): string
   return `org/${organizationId}/${attachmentId}`;
 }
 
+/** MUT-333 (R1): everything a profile ever stored lives under this prefix; the hard delete empties it. */
+export function profileStoragePrefix(organizationId: string): string {
+  return `org/${organizationId}`;
+}
+
 /** An expense receipt's object key (MUT-42): same bucket, its own prefix, ids only. */
 export function receiptStorageKey(organizationId: string, receiptId: string): string {
   return `org/${organizationId}/expense-receipts/${receiptId}`;

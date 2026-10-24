@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_IDS, type MailTemplateId, type TemplateVars } from '../ports.js';
 import { renderMail } from '../templates/index.js';
+import { mailDay } from '../templates/copy.js';
 
 /**
  * MUT-359 A1 (ADR-159 §5, brief §8.4): every mail exists in English and Arabic, Arabic is RTL, nothing but the
@@ -22,6 +23,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'trial-ending-soon': { daysLeft: 3, subscribeLink: SUBSCRIBE },
   'trial-ended': { subscribeLink: SUBSCRIBE, exportLink: EXPORT },
   'trial-locking-soon': { daysLeft: 2, subscribeLink: SUBSCRIBE, exportLink: EXPORT },
+  'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: 'https://portal.example.test/sign-in' },
 };
 /** Numbers a template may print, from its own count vars; anything else numeric is a defect. */
 const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
@@ -31,6 +33,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'review-digest': ['3'],
   'trial-ending-soon': ['3'],
   'trial-locking-soon': ['2'],
+  // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
+  'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
 };
 const LINKS_OF = (vars: object): string[] => Object.values(vars).filter((v): v is string => typeof v === 'string' && /^https?:\/\//.test(v));
 const CURRENCY = /\b(USD|ILS|NIS|EUR|GBP|JOD|AED|SAR|QAR|KWD|BHD|OMR|EGP)\b|[₪$€£]|شيكل|دولار|دينار|درهم|ريال/;
@@ -90,6 +94,18 @@ describe.each(TEMPLATE_IDS)('template %s', (id) => {
         expect(rest).not.toMatch(/[\d٠-٩۰-۹]/u);
       }
     }
+  });
+});
+
+describe('account-closing (MUT-333)', () => {
+  it('names the deletion day in each language and links to sign-in', () => {
+    const vars = SAMPLE['account-closing'];
+    const en = renderMail('account-closing', 'en', vars);
+    const ar = renderMail('account-closing', 'ar', vars);
+    expect(en.subject).toBe('Your MTB3A account will be deleted on November 23, 2026');
+    expect(en.text).toContain('Sign in to keep my account');
+    expect(ar.subject).toContain(mailDay(vars.deleteOn, 'ar'));
+    expect(ar.text).toContain(vars.signInLink);
   });
 });
 

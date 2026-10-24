@@ -1,4 +1,6 @@
 import Stripe from 'stripe';
+import type { LiveSubscription } from '../../../accounts/closure.js';
+import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
@@ -222,5 +224,79 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     this.calls.push(call);
     const failure = this.failures.shift();
     if (failure) throw failure;
+  }
+}
+
+/**
+ * MUT-333: Stripe as closing an account sees it, in memory. Customers name their person; subscriptions carry their
+ * own ending state, so a test can check what close, keep and purge did to them. `failOn` fails a named operation.
+ */
+export class FakeAccountStripeGateway implements AccountStripeGateway {
+  readonly customers = new Map<string, { email: string; userId: string; deleted: boolean; openCheckouts: number }>();
+  readonly subscriptions = new Map<string, LiveSubscription & { customer: string }>();
+  readonly calls: string[] = [];
+  private readonly failing = new Map<string, number>();
+
+  customer(id: string, person: { email: string; userId: string }, openCheckouts = 0): this {
+    this.customers.set(id, { ...person, deleted: false, openCheckouts });
+    return this;
+  }
+
+  subscription(id: string, customer: string, status: string, ending: { cancelAtPeriodEnd?: boolean; cancelAt?: Date | null } = {}): this {
+    this.subscriptions.set(id, { id, customer, status, cancelAtPeriodEnd: ending.cancelAtPeriodEnd ?? false, cancelAt: ending.cancelAt ?? null });
+    return this;
+  }
+
+  /** The next `times` calls of `operation` (e.g. `setCancelAtPeriodEnd:sub_2`, or just `deleteCustomer`) fail transiently. */
+  failOn(operation: string, times = 1): void {
+    this.failing.set(operation, times);
+  }
+
+  private call(operation: string, target: string): void {
+    this.calls.push(`${operation}:${target}`);
+    for (const key of [`${operation}:${target}`, operation]) {
+      const left = this.failing.get(key) ?? 0;
+      if (left > 0) {
+        this.failing.set(key, left - 1);
+        throw new StripeGatewayError({ code: null, type: 'StripeAPIError', requestId: 'req_fake', transient: true });
+      }
+    }
+  }
+
+  async customersOf(person: { userId: string; email: string }): Promise<string[]> {
+    this.call('customersOf', person.email);
+    return [...this.customers].filter(([, c]) => !c.deleted && c.email === person.email && c.userId === person.userId).map(([id]) => id);
+  }
+
+  async liveSubscriptionsOf(customer: string): Promise<LiveSubscription[]> {
+    this.call('liveSubscriptionsOf', customer);
+    return [...this.subscriptions.values()].filter((s) => s.customer === customer).map(({ customer: _c, ...sub }) => ({ ...sub }));
+  }
+
+  async setCancelAtPeriodEnd(subscriptionId: string, value: boolean): Promise<void> {
+    this.call('setCancelAtPeriodEnd', subscriptionId);
+    const sub = this.subscriptions.get(subscriptionId);
+    if (sub) sub.cancelAtPeriodEnd = value;
+  }
+
+  async cancelNow(subscriptionId: string): Promise<void> {
+    this.call('cancelNow', subscriptionId);
+    const sub = this.subscriptions.get(subscriptionId);
+    if (sub) sub.status = 'canceled';
+  }
+
+  async expireOpenCheckouts(customer: string): Promise<number> {
+    this.call('expireOpenCheckouts', customer);
+    const c = this.customers.get(customer);
+    const count = c?.openCheckouts ?? 0;
+    if (c) c.openCheckouts = 0;
+    return count;
+  }
+
+  async deleteCustomer(customer: string): Promise<void> {
+    this.call('deleteCustomer', customer);
+    const c = this.customers.get(customer);
+    if (c) c.deleted = true;
+    for (const sub of this.subscriptions.values()) if (sub.customer === customer) sub.status = 'canceled';
   }
 }

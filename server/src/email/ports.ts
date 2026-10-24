@@ -6,7 +6,8 @@ import type { UserLocale } from '../repositories/ports.js';
  * `log` in development, `memory` in tests and QA, `noop` when unconfigured). Swapping the provider is one transport.
  *
  * No template variable is an amount, a currency or a date: an email carries a link, never a money record
- * (ADR-159 §5, pinned by templates.test.ts).
+ * (ADR-159 §5, pinned by templates.test.ts). One exception (MUT-333, ADR-188 override log): `account-closing` names
+ * the day the account is deleted, a calendar day and never a money date.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -21,6 +22,7 @@ export const TEMPLATE_IDS = [
   'trial-ending-soon',
   'trial-ended',
   'trial-locking-soon',
+  'account-closing',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -46,6 +48,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'trial-ending-soon',
   'trial-ended',
   'trial-locking-soon',
+  // MUT-333: sent once per close, which the password gates, like the password notice.
+  'account-closing',
 ]);
 
 export interface TemplateVars {
@@ -72,6 +76,18 @@ export interface TemplateVars {
   'trial-ending-soon': { daysLeft: number; subscribeLink: string };
   'trial-ended': { subscribeLink: string; exportLink: string };
   'trial-locking-soon': { daysLeft: number; subscribeLink: string; exportLink: string };
+  /**
+   * MUT-333 (D10): the account was closed; it is deleted on `deleteOn` (a calendar day in the person's zone,
+   * accounts/closure.ts deletionDayOf) unless they sign in and keep it.
+   */
+  'account-closing': { deleteOn: CalendarDay; signInLink: string };
+}
+
+/** MUT-333: a calendar day, formatted by the template in the mail's own language. */
+export interface CalendarDay {
+  year: number;
+  month: number;
+  day: number;
 }
 
 export interface RenderedMail {
