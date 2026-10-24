@@ -5,14 +5,15 @@ import { useT } from '../../../lib/i18n';
  * own words, in the visitor's language, instead of the app's English
  * "Your data is safe" fallback. It reuses the boundary's styles, which
  * `main.tsx` always loads, so it renders even when the page's own CSS
- * never arrived.
+ * never arrived. It is the whole page, so its title is the page's h1, styled
+ * like the boundary's h2, and its one button is a 44px touch target.
  */
 export function LandingCrashScreen() {
   const t = useT();
   return (
-    <div className="error-boundary-fallback" role="alert">
+    <div className="error-boundary-fallback landing-crash" role="alert">
       <div className="error-boundary-content">
-        <h2>{t('landing.crash.title')}</h2>
+        <h1>{t('landing.crash.title')}</h1>
         <p>{t('landing.crash.body')}</p>
         <div className="error-boundary-actions">
           <button type="button" onClick={() => window.location.reload()} className="btn btn-primary">
