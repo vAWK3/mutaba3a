@@ -105,6 +105,9 @@ export default {
         'src/hosted/shell/TrialWelcomeOpener.tsx',
         'src/hosted/session/trialWelcomeOffer.ts',
         'server/src/billing/trial-prompt.ts',
+        // MUT-361: the lapse gate, enforced by the API and shown by the portal.
+        'server/src/billing/gate.ts',
+        'server/src/auth/billing-gate.ts',
       ],
       // support/billing-live.mjs: the Keychain sandbox key, a migrated QA database, the sandbox catalog,
       // `stripe listen`, the API on :8790 and the portal on :5176 (8787-8789 are other sessions' dev APIs).

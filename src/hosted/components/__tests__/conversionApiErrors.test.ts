@@ -10,6 +10,7 @@ const labels: ConversionErrorLabels = {
   sameCurrency: 'same-currency',
   conflict: 'conflict',
   network: 'network',
+  lapsed: 'lapsed',
 };
 
 const dateInvalid = (details: Record<string, unknown>) => new ApiError(422, 'VALIDATION_FAILED', 'm', { reason: 'DATE_INVALID', field: 'occurredOn', ...details });

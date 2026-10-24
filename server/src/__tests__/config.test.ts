@@ -98,6 +98,12 @@ describe('loadConfig — custom-domain front door (MUT-326)', () => {
 });
 
 describe('loadConfig — receipts library switch (MUT-389)', () => {
+  it('enforces the lapse gate unless BILLING_GATE is exactly "false" (MUT-361 D7 kill switch)', () => {
+    expect(loadConfig(base).BILLING_GATE).toBe(true);
+    expect(loadConfig({ ...base, BILLING_GATE: 'true' }).BILLING_GATE).toBe(true);
+    expect(loadConfig({ ...base, BILLING_GATE: 'false' }).BILLING_GATE).toBe(false);
+  });
+
   it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
     expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);
@@ -439,5 +445,29 @@ describe('loadConfig — signup domain checker (MUT-367, D3)', () => {
     expect(loadConfig({ ...base, EMAIL_DOMAIN_CHECKER: 'dns' }).EMAIL_DOMAIN_CHECKER).toBe('dns');
     expect(loadConfig({ ...base, NODE_ENV: 'production' }).EMAIL_DOMAIN_CHECKER).toBe('dns');
     expect(() => loadConfig({ ...base, NODE_ENV: 'production', EMAIL_DOMAIN_CHECKER: 'fixture' })).toThrow('EMAIL_DOMAIN_CHECKER');
+  });
+});
+
+describe('loadConfig — attachment storage (MUT-396)', () => {
+  it('leaves storage unset by default and resolves the local folder under the server package', () => {
+    const config = loadConfig(base);
+    expect(config.ATTACHMENTS_DRIVER).toBeUndefined();
+    expect(config.ATTACHMENTS_DIR.endsWith('/server/.data/attachments')).toBe(true);
+  });
+
+  it('accepts the local driver in development and test, and keeps an absolute folder as given', () => {
+    expect(loadConfig({ ...base, ATTACHMENTS_DRIVER: 'local' }).ATTACHMENTS_DRIVER).toBe('local');
+    expect(loadConfig({ ...base, NODE_ENV: 'test', ATTACHMENTS_DRIVER: 'local', ATTACHMENTS_DIR: '/tmp/receipts' }).ATTACHMENTS_DIR).toBe('/tmp/receipts');
+  });
+
+  it.each(['production', 'staging'])('refuses the local driver in %s', (env) => {
+    expect(() => loadConfig({ ...base, NODE_ENV: env, ATTACHMENTS_DRIVER: 'local' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, NODE_ENV: env, ATTACHMENTS_DRIVER: 'local' })).toThrow(/ATTACHMENTS_DRIVER: local storage is for the dev server/);
+  });
+
+  it('refuses local together with a bucket, and gcs without one', () => {
+    expect(() => loadConfig({ ...base, ATTACHMENTS_DRIVER: 'local', ATTACHMENTS_BUCKET: 'my-bucket' })).toThrow(/ambiguous/);
+    expect(() => loadConfig({ ...base, ATTACHMENTS_DRIVER: 'gcs' })).toThrow(/gcs needs ATTACHMENTS_BUCKET/);
+    expect(loadConfig({ ...base, ATTACHMENTS_DRIVER: 'gcs', ATTACHMENTS_BUCKET: 'my-bucket' }).ATTACHMENTS_DRIVER).toBe('gcs');
   });
 });

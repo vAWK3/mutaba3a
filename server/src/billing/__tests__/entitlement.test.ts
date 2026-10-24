@@ -210,3 +210,15 @@ describe('resolveEntitlement', () => {
     });
   });
 });
+
+describe('trialTimelineOf (MUT-361, read by MUT-419)', () => {
+  it('ends the trial on day 14 and locks on day 30', async () => {
+    const { trialTimelineOf } = await import('../entitlement.js');
+    const startedAt = new Date('2026-10-01T09:00:00.000Z');
+    expect(trialTimelineOf(startedAt)).toEqual({
+      startedAt,
+      endsAt: new Date('2026-10-15T09:00:00.000Z'),
+      lockAt: new Date('2026-10-31T09:00:00.000Z'),
+    });
+  });
+});

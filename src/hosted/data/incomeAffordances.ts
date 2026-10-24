@@ -27,9 +27,14 @@ export interface IncomeAffordances {
 
 const CLOSED_STATUSES: ReadonlySet<Receivable['status']> = new Set(['PAID', 'VOID']);
 
-export function incomeAffordancesFor(profile: HostedProfile): IncomeAffordances {
+/**
+ * MUT-361: `writable` is the lapse gate for this profile (`useWriteGate().writable`); a READ_ONLY or LOCKED profile
+ * offers no write at all. Every view passes it; the default is only for callers that ask what the profile allows in
+ * principle (ReadOnlyNotice, whose reason the lapse banner already gives).
+ */
+export function incomeAffordancesFor(profile: HostedProfile, writable = true): IncomeAffordances {
   const rules = profile.income;
-  const owned = profile.owned;
+  const owned = profile.owned && writable;
   const kinds: IncomeKind[] =
     owned && profile.access.capture === 'read-write'
       ? (['received', 'owed'] as const).filter((kind) => rules[kind])
@@ -45,8 +50,8 @@ export function incomeAffordancesFor(profile: HostedProfile): IncomeAffordances 
  * writer-null firm is nobody's own (ADR-066), and Malafat writes the clients and matters of the profiles it feeds.
  * Every local profile is owned.
  */
-export function canAddClient(profile: HostedProfile): boolean {
-  return profile.owned && profile.writerOfRecord === null;
+export function canAddClient(profile: HostedProfile, writable = true): boolean {
+  return writable && profile.owned && profile.writerOfRecord === null;
 }
 
 /**
@@ -63,18 +68,18 @@ export function isSettleable(receivable: Receivable): boolean {
  * (MUT-373) a partner's entry is theirs to re-date, as with payments — and not a voided one. A settled entry can
  * still be re-dated: the server keeps its due date and its payments.
  */
-export function canRedateOwed(profile: HostedProfile, receivable: Receivable, userId: string): boolean {
-  return redateAffordancesFor(profile).owed && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID' && receivable.capturedByUserId === userId;
+export function canRedateOwed(profile: HostedProfile, receivable: Receivable, userId: string, writable = true): boolean {
+  return redateAffordancesFor(profile, writable).owed && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID' && receivable.capturedByUserId === userId;
 }
 
 /**
  * MUT-224: which re-date drawers a profile offers at all: what pages wire a row click to, and what a deep link may
  * open. Owned profiles only; PATCH /v1/income stands on `capture`, PATCH /v1/payments on `payments`.
  */
-export function redateAffordancesFor(profile: HostedProfile): { owed: boolean; payments: boolean } {
+export function redateAffordancesFor(profile: HostedProfile, writable = true): { owed: boolean; payments: boolean } {
   return {
-    owed: profile.owned && profile.access.capture === 'read-write',
-    payments: profile.owned && profile.access.payments === 'read-write',
+    owed: writable && profile.owned && profile.access.capture === 'read-write',
+    payments: writable && profile.owned && profile.access.payments === 'read-write',
   };
 }
 
@@ -83,6 +88,6 @@ export function redateAffordancesFor(profile: HostedProfile): { owed: boolean; p
  * entry or a settle payment), still posted, on a profile they own. A Malafat-fed profile never passes `owned`, so it
  * looks exactly as before; the server would answer 403 there anyway.
  */
-export function canRedatePayment(profile: HostedProfile, payment: Payment, userId: string): boolean {
-  return redateAffordancesFor(profile).payments && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
+export function canRedatePayment(profile: HostedProfile, payment: Payment, userId: string, writable = true): boolean {
+  return redateAffordancesFor(profile, writable).payments && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
 }

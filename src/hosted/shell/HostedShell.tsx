@@ -6,6 +6,7 @@ import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
 import { Wordmark } from '../components/Brand';
 import { UsagePrompt } from '../components/UsagePrompt';
+import { billingGateOf } from '../data/trialPrompt';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
@@ -56,7 +57,8 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
       <aside className="hp-side">
         <Wordmark className="hp-side-wordmark" markSize={SIDEBAR_MARK_SIZE} />
         {me.profiles.length > 0 && <ProfileSwitcher active={profile} />}
-        {profile && (
+        {/* MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between. */}
+        {profile && billingGateOf(me, profile) !== 'locked' && (
           <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
             {SECTIONS.map((section) => (
               <Link

@@ -26,7 +26,7 @@ export function TrialBanner() {
   return notice ? <TrialNote notice={notice} /> : null;
 }
 
-function TrialNote({ notice }: { notice: TrialNotice }) {
+function TrialNote({ notice }: { notice: Extract<TrialNotice, { kind: 'trial' }> }) {
   const t = useT();
   const tp = useTp();
   const { language } = useLanguage();

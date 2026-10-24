@@ -3706,7 +3706,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Native crashes** skip the Dart scrubber. A project-level Advanced Data Scrubbing rule on `mutaba3a-flutter` is their second layer (INFRA §1).
 - **ApiErrors.** Only `serverError` with status 0 (an unreadable reply) or 5xx is reported. Repositories catch errors into `Result`, so unreadable replies are reported explicitly at each site, by endpoint and error type only, never the error's text.
 - **User.** The account's internal id. The store answers therefore say crash data is **linked to identity** (App Store) and add **User IDs** (Play).
-- **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395).
+- **Excluded.** The Share Extension, widgets and Siri intents send nothing (follow-up MUT-395). Superseded by amendment 13.
 
 **Amendment 11 (the portal, MUT-149, 2026-10-23)**: the hosted portal reports to `mutaba3a-web`. Design and Basel's answers: `.claude/designs/mut-149-portal-sentry.md` (eng D1–D6, design D3–D8).
 - **Signed in only.** `src/hosted/observability/errorReporting.ts` is in the entry and imports no SDK. It loads `portalSentry.ts`, a lazy chunk and the one portal file that imports `@sentry/browser`, only in `remote` mode (ADR-097 §10). Until the chunk arrives it holds up to 10 window errors, rejections and boundary reports, then replays them (eng R1); signing out stops the SDK and drops them. A build without `MUTABA3A_SENTRY_DSN` compiles the chunk out. Every event is also dropped at send time unless the mode, read live from storage, is still `remote` (review: another tab's sign-out may not reach the gate when a crash screen has replaced the router).
@@ -3733,6 +3733,14 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Bundle guard on Netlify.** `netlify.toml` runs `check-bundles --dist dist-web` after the build (TD-084 for the landing). dist-web may carry the SDK only in `vendor-sentry-*` / `landingSentry-*`, never from the entry graph, never precached (`SENTRY_PRECACHE_IGNORES`), and the ingest host and `docs.sentry.io` are allowed in those chunks only (`PATTERN_SCOPED_ORIGINS`, eng O1).
 - **No landing CSP.** The landing serves none (checked live 2026-10-24), so MUT-150's CSP criterion is N/A; a landing CSP would be its own ticket.
 - **Privacy copy.** "Our website sends a report when one of its pages crashes or hits an error…" (eng D8: not "fails to load", which it mostly can't report).
+
+**Amendment 13 (the iOS extensions, MUT-395, 2026-10-24)**: the Share Extension, widgets and Siri intents report to `mutaba3a-flutter`. Design and Basel's answers: mutaba3a-flutter `.claude/designs/mut-395-extension-sentry.md` (D1–D6).
+- **Own SDK, same version.** sentry-cocoa 8.58.4 (the app's pod version) over SPM, the static `Sentry` product, through the local package `ios/CaptureReporting`, linked into the three extensions and never Runner (D1).
+- **Same contract, in Swift.** `CaptureScrub` is a line-for-line port of the app's `event_scrubber.dart`, run by `swift test` against the same pinned contract copy (all 11 fixtures, parity, sha256). `beforeSend` clears the user (D3), tags `surface=capture-app` and `route=share-extension|widgets|intents`, scrubs, and rebuilds the event through `SentryEventDecoder` (SPI); a scrub that can't complete sends the MUT-151 D14 minimal report, never the original.
+- **Off by default.** A Run Script phase writes `SentryDSN` into each extension's Info.plist only when the build carries `MUTABA3A_SENTRY_DSN` (Flutter's DART_DEFINES): debug and `SENTRY=off` builds report nothing. Sessions, app-hang, watchdog, performance and network tracking are off; the crash handler is on, and a crash is sent on that extension's next start.
+- **Store and privacy.** Each extension's privacy manifest declares crash and diagnostic data, not linked. The store answers (MUT-151) already declare crash data, and the privacy sentence "The iPhone and Android apps send a report when the app crashes…" covers the app's own extensions, so no copy changes.
+- **Symbols.** The iOS lane uploads gym's dSYM zip (the extensions' dSYMs) after the existing upload; first exercised on MUT-413's release.
+- **Open.** The widget memory budget (D2: under 20 MB peak with Sentry on, else widgets are excluded) and the forced-crash proof per extension (D6) wait for a simulator session with Basel's taps.
 
 ## ADR-092: The Phone Sends Its Opt-In Counts Through Its Own Small Dart Client, Not posthog_flutter
 
@@ -4639,7 +4647,9 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - **Filing approves nothing.** `approved` / `approvedAt` / `approvedByUserId` are never written by it. A receipt approved earlier and unlinked by an expense delete keeps that approval (D2). A suggestion sent with the filing replaces the stored one, as approval's does (D4), except on a receipt that keeps an earlier approval: its reading stays, so the edit-rate pair never changes after the fact (qa-reconcile D1, 2026-10-22). The two 404s carry `details.reason` `RECEIPT_NOT_FOUND` / `EXPENSE_NOT_FOUND`; `RECEIPT_ALREADY_FILED` joins the published 409 reasons.
 - **Answers** 200 `{ expense: ExpenseDetail, receipt }`: the expense with its receipts, since the expense itself is unchanged (D3). Already filed, even on the requested expense, is decision 1's 409 with `details.expenseId`.
 - **Release (replaces decision 8's hold).** `RECEIPTS_LIBRARY` (Terraform `receipts_library_enabled`, default false) mounts `/v1/receipts*` and switches expense delete to unlink; unset, the API behaves as before MUT-255, so main deploys with the library dark (D5). It is turned on with MUT-260 or MUT-258 and left on.
-- **Known gap.** The cap is enforced under the expense lock only between filings: a MUT-44 completion still counts without that lock, so it can race one filing to 11 receipts. Closing it means moving the MUT-44 room check into the same locked transaction.
+- **Known gap — resolved by MUT-397 (2026-10-24).** The MUT-44 completion now goes through `expenseReceipts.completeOnExpense`, which counts and marks READY under the same expense lock, so completions and filings serialise and an expense ends at exactly 10 READY. Proven by forced-overlap Prisma tests (`store-prisma-receipt-complete-lock.test.ts`, waiters counted transitively through `pg_blocking_pids`).
+- **Lock order (MUT-397).** For receipts that sit on an expense: the expense first, then the receipt (`expenses.softDelete`, `completeOnExpense`). Filing locks its receipt first and then the expense, which is deadlock-free only because that receipt has no expense yet, so neither a delete nor a completion can hold it.
+- **Invariant (MUT-397).** A PENDING_UPLOAD receipt's `expenseId` never changes: filing needs READY and an unlink touches READY rows only. That is also why the library's own completion (`POST /v1/receipts/{id}/complete`, receipts with no expense) needs no expense lock. A feature that attaches a pending upload to an expense must revisit both.
 **Consequences**:
 - A deleted expense no longer takes its receipts with it on the hosted server; they reappear under To review (since MUT-389, only while `RECEIPTS_LIBRARY` is on).
 - Once a To-review receipt exists, the previous server revision cannot read that row (Prisma P2032): rolling back means rolling forward, or moving the To-review rows aside first (DEPLOYMENT.md).
@@ -4905,6 +4915,76 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
 - `/` keeps the drawer keys, so mails (MUT-419) and the lapse gate (MUT-361) can link `/?billing=true&step=subscribe`.
 - The privacy sentence for the new usage notes waits on Basel (TD-219); the Flutter contract copy lags (TD-218).
+
+---
+
+## ADR-181: The Lapse Gate Is Enforced Once, at the Door: READ_ONLY Takes Reads Only, LOCKED Only the Records Export; 402 SUBSCRIPTION_LAPSED (MUT-361) (Amends ADR-160 Decision 4)
+
+**Status:** Accepted for the build (2026-10-24, MUT-361, unattended run on Basel's "go"). Decisions D1–D12 and review amendments R1–R9 in `.claude/designs/mut-361-lapse-gate.md` are **pending Basel's confirmation**. Builds on ADR-160 (states), ADR-162 (the resolver) and ADR-180.
+
+**Context:** `/v1/me` reported each profile's entitlement (ACTIVE, GRACE, READ_ONLY, LOCKED) but nothing enforced it. ADR-160 decision 4 put the rule "in `store-guard.ts` and `authenticate()`".
+
+**Override log (ADR-160 decision 4):** *what changed:* the rule lives only at the door (`authenticate()` → `server/src/auth/billing-gate.ts`, rules in `server/src/billing/gate.ts`); the store guard is untouched. *Why:* the store guard sees only repository calls, so a READ_ONLY session could still do work that touches no write method (a presigned upload URL), and it refuses mid-route after the idempotency claim; the door refuses before any work, for cookie and device sessions alike, and is also where LOCKED reads must be refused. *Date:* 2026-10-24.
+
+**Decision:**
+1. **Profile-scoped session requests** follow the selected profile's state: ACTIVE and GRACE → anything; READ_ONLY → safe methods only (every POST/PATCH/PUT/DELETE is a write, D5); LOCKED → only `GET /v1/records-export` and `GET /v1/records-export/receipts/:receiptId`.
+2. **Organization-independent session routes** are each classified in `PERSON_LEVEL_GATE` (a test fails on an unclassified one): `open` (identity, sessions, password, terms, trial prompt, `/v1/billing/*`, fx, leaving a co-owned profile, D6); `person` (the inbox, `GET /v1/entries`, `POST /v1/profiles`: the person's best standing across their profiles, D4; the feed leaves LOCKED profiles out); `pathProfile` (profile edit, type-change preview, firm request: the profile in the path, members only).
+3. **API keys are never gated** (Malafat's coverage is Malafat's). An unmatched route is never gated, so its 404 answers.
+4. **The refusal is `SUBSCRIPTION_LAPSED`, HTTP 402** (D2), details `{ profileId (null when the standing refused), state READ_ONLY|LOCKED, source, until }`; `until` is a trial's lock date, else null (D3, instead of the ticket's `since`).
+5. **`/v1/me` publishes `billingStanding`** (`open` | `read-only` | `locked`, null where the gate is off), so the portal and the phone never re-derive the person-level rule (D12). Each profile's own gate stays its `billing.state`.
+6. **Switch:** `BILLING_GATE` (on unless exactly "false"); Terraform `billing_gate_enabled` (default true) is the operator's kill switch (D7). `createApp` defaults it off so suites with ungranted people keep testing what they test; the gate's suites turn it on.
+7. **Operator list:** `GET /admin/v1/billing/uncovered` / `npm run billing:uncovered`: every READ_ONLY or LOCKED profile with an ACTIVE member. Must be empty (or hold only intended lapses) before a release carries the gate.
+8. **Portal:** GRACE and READ_ONLY banners above every page of the profile; Add hidden and URL-opened create drawers refused; edit drawers open view-only (fields disabled, Save/Delete gone, receipt Download kept); LOCKED is one full page with Subscribe (only where this person's payment covers the profile) and Download my records; the switcher and account menu stay (D9). A late refusal re-reads `/v1/me`.
+9. **For MUT-419:** `trialTimelineOf(trialStartedAt)` (`billing/entitlement.ts`) gives `{ startedAt, endsAt (day 14), lockAt (day 30) }`; the stage is `resolveEntitlement`'s TRIAL state.
+
+**Consequences:**
+- One extra `billing.factsFor` (three indexed queries) per gated session request; person-level routes also load the person's memberships (TD-221).
+- Released phones map 402 to a retryable error: a refused capture stays in their outbox and lands once the person subscribes. Nobody is gated until self-signup opens (every existing person has a pre-billing grant), so GA's signup opening waits for MUT-364's phone build (D11, before-release.md).
+- A co-owner's own subscription still doesn't cover a shared profile (TD-193): the portal tells them to ask its creator.
+- API 1.60.0-mut361.
+
+## ADR-183: Vendors Are Saved Per Profile From Every Typed Vendor; Saving Matches Exactly, the Typeahead Fuzzily (MUT-254)
+
+**Status:** Accepted (2026-10-24, MUT-254; Basel's V1/V2). Plan and review amendments A1–A19: `.claude/designs/mut-254-vendors.md`. ADR-182 is held for MUT-253's OCR engine decision.
+
+**Context:** An expense's vendor was free text. Reading receipts (MUT-256/257), firm vendor defaults (MUT-303) and bills (MUT-308) need a vendor the profile remembers, without a vendor page or a merge flow.
+
+**Decision:**
+1. **Tables:** `vendors` (canonical name = first spelling, registration number + its digits-only key, phone, email, `lastCategoryId` SET NULL, `lastUsedAt`, version) and `vendor_names` (canonical name and aliases, unique per profile by `nameKey`). `expenses.vendorId` (SET NULL) beside the free text, which stays as typed.
+2. **Keys** (`server/src/vendors/keys.ts`): `vendorNameKey` = NFKC, lower case, tashkeel/tatweel removed, أإآٱ→ا, ى→ي, ة→ه, punctuation removed, `-_&` → space, then a leading English "the" and one trailing legal suffix (Latin, Hebrew, Arabic, matched after punctuation), each only while something is left. `registrationKey` = digits only (Arabic-Indic folded), fewer than 5 is none.
+3. **Saving matches exactly (V1):** the registration key first, then the name key against names and aliases; a number hit adds the typed name as an alias only when no vendor has it; a name hit fills a missing number, phone or email, never overwriting. No merge. A unique violation retries the whole transaction once (it aborted).
+4. **Every writer links** (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) through `withResolvedVendor`, after every other check; optional `vendorDetails` only help the match. `vendors.touch` runs only after the write committed: `lastUsedAt`, and `lastCategoryId` unless the category is the automatic Other ("Other"/"أخرى"). A refused write moves no default; touch never bumps `version`.
+5. **`GET /v1/vendors?q=&limit=`** (session-only, `expenses:read`, max 25): SQL contains-prefilter on `nameKey` (200) plus the 50 most recently used, scored in JS (prefix 1, contains 0.8, similarity ≥ 0.6 capped below 0.8), best name per vendor. Empty q = most recently used. Suggestions only.
+6. **Lock order:** touch takes the category KEY SHARE before the vendor row; a profile type change locks expenses, categories, then vendors and clears `lastCategoryId` before deleting categories.
+7. **Rolling deploy:** `scripts/backfill-vendors.ts`, run by post-roll on every deploy, links unlinked rows oldest first, re-links rows whose text no longer names their vendor (old revision), unlinks blanked ones, and sets `lastUsedAt` and missing defaults. A link changes neither `version` nor `updatedAt`.
+8. **Local mode:** snapshot format 6 with `vendors` and `vendorNames` maps; the records export carries both.
+9. **Not audited in v1:** vendor creates and aliases. If audit is added, `'vendor'` joins `EXPENSE_ENTITY_TYPES` so Malafat's key never reads it.
+
+**Consequences:**
+- Typos and one-off spellings become vendors and linger in suggestions until a vendor page with merge and delete exists (TD-224).
+- The typeahead reads at most 250 name rows per keystroke; profiles with huge vendor lists get prefix/contains hits but fuzzy only among the recent 50 (TD-225).
+- API 1.62.0-mut254 (additive: `Expense.vendorId`, `vendorDetails`, `GET /v1/vendors`).
+
+---
+
+## ADR-184: Trial Reminder Mails Are Daily Stage Windows, Sent Only Where the Trial Alone Decides the Account (MUT-419)
+
+**Status:** Accepted for the build (2026-10-24, MUT-419, unattended run on Basel's "go"). Decisions D1–D16 and review amendments R1–R12 in `.claude/designs/mut-419-trial-emails.md` are **pending Basel's confirmation**. Builds on ADR-159 §5 (the mailer), ADR-160 D3 (the timeline), ADR-165 (the `/jobs` door) and ADR-181 (the gate).
+
+**Context:** ADR-160's trial ends at day 14 (read-only) and locks at day 30 whether or not the person opens the portal; nothing told someone who stayed away.
+
+**Decision:**
+1. **Three stages, each a window** from `trialTimelineOf`: `ending-soon` (endsAt − 3 d ≤ now < endsAt), `ended` (endsAt ≤ now < lockAt − 3 d), `locking-soon` (lockAt − 3 d ≤ now < lockAt). Only the current stage is sent, so a missed day catches up and a stale stage is never sent (D1). Each is sent once: key `trial:<userId>:<stage>` in the mailer's send log (D3).
+2. **"Within N days"**, N = whole days left rounded up (1–3): a deadline mail never promises more time than there is (D2, R7). No amount, price or date.
+3. **Who:** ACTIVE people with a trial start in the window, and only when every profile they belong to is their own and resolves source TRIAL, so the trial alone decides their standing (`personStanding`) and "your account is read-only / locks" is exactly what the gate does (R4). Otherwise: `paying` (a Stripe subscription, a card on file included), `covered` (Malafat, operator grant), `other-profiles`; plus `suppressed`, and `gate-off` when `BILLING_GATE` is off (R5).
+4. **Doors** like MUT-360's reconcile: `POST /jobs/v1/billing/trial-mail` (Cloud Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (operator, `dryRun`, rows). Both 503 without Stripe (R6). A real production run refuses loopback links (R11). One person at a time, 200 s budget, then `incomplete` (R1).
+5. **Scheduler:** Cloud Scheduler (not an in-process timer, TD-215's lesson), daily 10:00 Asia/Jerusalem, created only with mail, Stripe and the gate all on (D7, D8). The job token now also triggers customer mail; a leaked token can only re-run idempotent mail (D15).
+6. Trial mails are outside the per-recipient cap (D11).
+
+**Consequences:**
+- Someone in a firm or with mixed coverage gets no mail; the portal's per-profile banners (ADR-181) still tell them.
+- A permanently rejected send retries daily within its window (R12, TD-223).
+- API 1.63.0-mut419.
 
 ## ADR-185: The Carry-Over Maps the Old Web App's Backup on the New Address, Replays It Through a Throwaway Local App, and Lands It Through Restore (MUT-291)
 

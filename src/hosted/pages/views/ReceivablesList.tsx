@@ -13,7 +13,7 @@ import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../com
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useMe, useProfile } from '../../session/me';
+import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
@@ -40,7 +40,7 @@ interface ReceivableRow {
   redatable: boolean;
 }
 
-function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile, userId: string): ReceivableRow[] {
+function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile, userId: string, writable: boolean): ReceivableRow[] {
   return items.map((r) => ({
     id: r.id,
     client: customers.get(r.customerId)?.name ?? '—',
@@ -53,7 +53,7 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     outstanding: r.outstanding,
     status: r.status,
     settleable: isSettleable(r),
-    redatable: canRedateOwed(profile, r, userId),
+    redatable: canRedateOwed(profile, r, userId, writable),
   }));
 }
 
@@ -72,6 +72,7 @@ interface ReceivablesListProps {
 export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecordPayment, addAction, onRedate }: ReceivablesListProps) {
   const profile = useProfile();
   const userId = useMe().user.id;
+  const { writable } = useWriteGate();
   const { t, language } = useLanguage();
   const effective = fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters;
   const list = useReceivables(profile.id, effective);
@@ -79,8 +80,8 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   const projects = useProjectDirectory(profile.id);
 
   const rows = useMemo(
-    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language, profile, userId) : undefined),
-    [list.data, customers.data, projects.data, language, profile, userId],
+    () => (list.data && customers.data && projects.data ? shape(list.data, customers.data, projects.data, language, profile, userId, writable) : undefined),
+    [list.data, customers.data, projects.data, language, profile, userId, writable],
   );
 
   const columns = useMemo<Column<ReceivableRow>[]>(
@@ -184,8 +185,10 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
   const profile = useProfile();
   const { t } = useLanguage();
   const { filters, drawer } = splitIncomeDrawer(search);
-  const { kinds, canSettle } = incomeAffordancesFor(profile);
-  const redate = redateAffordancesFor(profile);
+  // MUT-361: nothing to add, settle or re-date on a read-only profile.
+  const { writable } = useWriteGate();
+  const { kinds, canSettle } = incomeAffordancesFor(profile, writable);
+  const redate = redateAffordancesFor(profile, writable);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
   const addButton = (header: boolean) =>

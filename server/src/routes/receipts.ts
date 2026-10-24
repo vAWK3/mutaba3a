@@ -6,7 +6,7 @@ import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
-import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
+import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -300,7 +300,10 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       const receiptId = c.req.valid('param').receiptId;
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const expense = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      const prepared = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      // MUT-254: before the receipt lock, after every body check. A replay or an already-filed receipt finds (never
+      // duplicates) the vendor; only a filing that succeeded touches it.
+      const expense = await withResolvedVendor(store, organization.id, prepared, body.vendorDetails, now);
       const approved: ApprovedReceiptFields = { occurredOn: expense.occurredOn, amountMinor: expense.amountMinor.toString(), currency: expense.currency, vendor: expense.vendor, categoryId: expense.categoryId };
       const result = await withCategoryForeignKey(() =>
         store.expenseReceipts.fileAsExpense({ organizationId: organization.id, receiptId, userId: user.id, expense, approved, ...(body.suggested ? { suggested: body.suggested } : {}) }, now),
@@ -308,6 +311,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
       if (result.kind === 'already_filed') throw await alreadyFiled(organization.id, receiptId);
       if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
+      await touchExpenseVendor(store, result.expense, now);
       // The same row POST /v1/expenses writes, same keys, so anything counting expense.created counts these; receiptId marks where it came from.
       await audit(c, 'expense.created', 'expense', result.expense.id, { currency: result.expense.currency, occurredOn: result.expense.occurredOn, receiptId: result.receipt.id, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'new' });

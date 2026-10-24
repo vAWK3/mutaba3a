@@ -322,7 +322,7 @@ npm run tauri build      # macOS/Windows bundles
 ### Terms of service (MUT-324, ADR-102)
 Hosted accounts are covered by terms of service at `/terms/<version>`. The texts are frozen and versioned, governed by the law of England & Wales, with English prevailing. A person accepts at their setup link, and again in the portal's Updated-terms step after a version bump. Each acceptance records the version, the language, the text's sha256 and the surface. Signed out, no terms apply.
 
-**Billing (MUT-358, MUT-360, ADR-160/162/165; nothing enforced until MUT-361).**
+**Billing (MUT-358, MUT-360, MUT-361, ADR-160/162/165/181).**
 - The person pays; each hosted profile is entitled. `GET /v1/me` reports `billing: { state, source, tier, until }` on every profile. `server/src/billing/entitlement.ts` resolves it from:
   - a CONNECTED Malafat integration;
   - an operator grant;
@@ -344,6 +344,8 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
   - `/setup` finishes a SIGNUP with a name, a currency and a time zone, and lands on the personal profile.
   - A pending signup sees "We're reviewing your account" at setup and at every sign-in until approved.
   - QA runs them on a live API in the `portal-selfservice` release-QA app.
+- Lapse gate (MUT-361, ADR-181): `authenticate()` enforces each profile's state for sessions (cookie and phone): READ_ONLY takes reads only, LOCKED only `GET /v1/records-export*`; the inbox, `GET /v1/entries` and New profile follow the person's best standing (`/v1/me` `billingStanding`); identity, billing and sign-out always answer; API keys are never gated. Refusal: 402 `SUBSCRIPTION_LAPSED`. Kill switch: `BILLING_GATE=false` (Terraform `billing_gate_enabled`); `npm run billing:uncovered` lists who it holds. The portal shows GRACE/read-only banners, view-only drawers and the locked screen (Subscribe, Download my records). Nothing is deleted.
+- Trial reminders (MUT-419, ADR-184): a daily Cloud Scheduler job (`POST /jobs/v1/billing/trial-mail`, 10:00 Jerusalem, only with mail, Stripe and the gate on) mails each person in days 11–30 of an unpaid trial their current stage once: "ends within N days" (Add a card), "read-only" (Subscribe, Download my records), "locks within N days". Only people whose profiles are all their own TRIAL ones; operator dry run `npm --prefix server run billing:trial-mail -- --dry-run`.
 - Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
 
 ### Taking your records with you (MUT-325, ADR-156)

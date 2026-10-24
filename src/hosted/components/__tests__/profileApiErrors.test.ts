@@ -80,3 +80,9 @@ describe('co-owners (MUT-373)', () => {
     expect(mapOwnerError(err(404, 'NOT_FOUND'))).toEqual({ done: true, refetchMe: true });
   });
 });
+
+describe('the lapse gate (MUT-361)', () => {
+  it('banners the read-only refusal and re-reads /v1/me', () => {
+    expect(mapProfileError(new ApiError(402, 'SUBSCRIPTION_LAPSED', 'm', { state: 'READ_ONLY' }))).toMatchObject({ banner: { key: 'hosted.billing.gate.refused' }, refetchMe: true });
+  });
+});

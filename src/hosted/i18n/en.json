@@ -415,6 +415,8 @@
         "titlePlaceholder": "What was it for?",
         "vendor": "Vendor",
         "vendorPlaceholder": "Business or vendor name",
+        "vendorNew": "New vendor",
+        "vendorAlias": "Matched “{name}”",
         "client": "Client",
         "clientPlaceholder": "Search for a client",
         "matter": "Matter",
@@ -1098,6 +1100,25 @@
         "hide": "Hide for 3 days",
         "endsOn": "Ends on {date}. You won't be charged until then.",
         "endsSoon": "Ends on {date}."
+      },
+      "gate": {
+        "label": "Your plan",
+        "graceTitle": "We couldn't take your last payment",
+        "graceBody": "Everything still works while we try again. Update your card so nothing stops.",
+        "updateCard": "Update your card",
+        "readOnlyTitle": "This profile is read-only",
+        "readOnlyTrial": "Your free trial has ended. You can see and download everything, but not add or change anything. Subscribe to keep going. On {date} the profile locks until you subscribe.",
+        "readOnlyPaid": "Your subscription has ended. You can see and download everything, but not add or change anything. Subscribe again to keep going. Nothing is deleted.",
+        "readOnlyNone": "This profile has no plan. You can see and download everything, but not add or change anything. Subscribe to keep going.",
+        "notYours": "The person who created this profile pays for it. Ask them to subscribe so it can be changed again.",
+        "subscribe": "Subscribe",
+        "download": "Download my records",
+        "lockedTitle": "Subscribe or download your records",
+        "lockedBody": "Your free trial ended more than two weeks ago, so this profile is locked. Nothing is deleted: subscribe to pick up where you left off, or download all your records.",
+        "lockedNotYours": "This profile is locked because the person who created it hasn't subscribed. Nothing is deleted, and you can still download its records.",
+        "drawerNote": "This profile is read-only, so nothing here can be changed.",
+        "refused": "This profile is read-only now. Subscribe to add or change records.",
+        "newProfileBlocked": "Subscribe to add a profile: your plan has ended."
       }
     },
     "selfService": {

@@ -39,12 +39,20 @@ export const ERROR_CODES = {
   /** MUT-237: the typed current password is wrong, or the account is locked. Not 401 — the session is still valid; a
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,
+  /**
+   * MUT-361 (ADR-181): a session asked a READ_ONLY or LOCKED profile (or a person whose profiles all are) for something
+   * its plan no longer allows. `details`: { profileId (null for a person-level refusal), state READ_ONLY|LOCKED,
+   * source, until (a trial's lock date, else null) }. Never for an API key.
+   */
+  SUBSCRIPTION_LAPSED: 402,
   NOT_FOUND: 404,
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
   OPERATION_IN_PROGRESS: 409,
   /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
   RECONCILE_RUNNING: 409,
+  /** MUT-419 (R11): a real trial-mail run in production whose links would point at a loopback origin; `details.origin`. */
+  LINK_ORIGIN_LOOPBACK: 409,
   /** MUT-324: the terms version the client accepted (or none) is not the current one; `details.current` names it. */
   TERMS_VERSION_STALE: 409,
   /** MUT-235: a setup link that can no longer set a password; `details.state` is expired | used | superseded | invalid. */

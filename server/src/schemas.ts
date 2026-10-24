@@ -362,6 +362,23 @@ const BillingEntitlementSchema = z
   .openapi('BillingEntitlement');
 
 /** MUT-360 review: GET /admin/v1/billing/status, the operator's check before revoking a pilot grant. */
+/**
+ * MUT-361 (Basel's comment 12278): every profile that resolves READ_ONLY or LOCKED and still has an ACTIVE member. Before
+ * the gate goes live the list must be empty (or hold only lapses that are meant), else `billing:grant` each person.
+ */
+export const BillingUncoveredSchema = z
+  .object({
+    profiles: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        name: z.string(),
+        billing: BillingEntitlementSchema,
+        people: z.array(z.object({ userId: z.string().uuid(), email: z.string() })),
+      }),
+    ),
+  })
+  .openapi('BillingUncovered');
+
 export const BillingStatusSchema = z
   .object({
     user: z.object({ id: z.string().uuid(), email: z.string() }),
@@ -479,6 +496,44 @@ export const StripeReconcileSummarySchema = z
     pruned: z.number().int(),
   })
   .openapi('StripeReconcileSummary');
+
+// ---- MUT-419: the trial reminders' run ------------------------------------------
+
+export const TrialMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'People in a reminder window' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'Already mailed for this stage' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: mail off, capped, provider failure, refused or suppressed' }),
+    skipped: z.object({
+      paying: z.number().int().openapi({ description: 'A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed' }),
+      covered: z.number().int(),
+      otherProfiles: z.number().int(),
+      suppressed: z.number().int(),
+      gateOff: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('TrialMailSummary');
+
+export const TrialMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stage: z.enum(['ending-soon', 'ended', 'locking-soon']),
+    daysLeft: z.number().int().nullable().openapi({ description: 'Whole days to the deadline the mail names, rounded up; null for `ended`' }),
+    action: z.enum(['send', 'skip']),
+    skip: z.enum(['paying', 'covered', 'other-profiles', 'suppressed', 'gate-off']).nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer; null on a skip or a dry run" }),
+  })
+  .openapi('TrialMailRow');
+
+export const TrialMailRunSchema = z.object({ summary: TrialMailSummarySchema, rows: z.array(TrialMailRowSchema) }).openapi('TrialMailRun');
+
+export const TrialMailRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('TrialMailRequest');
 
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
@@ -805,6 +860,14 @@ export const MeSchema = z
     // Inline, not the TermsStatus ref: the generator writes a ref's null as `nullable`, which OpenAPI 3.1 ignores,
     // so the portal's generated type lost the null (review pass 2). Inline, it is `type: [object, null]`.
     terms: z.object(TERMS_STATUS_SHAPE).nullable(),
+    /**
+     * MUT-361 (ADR-181): the lapse gate's verdict on the person, the best state across their profiles: `open` (some
+     * profile is ACTIVE or GRACE), `read-only`, or `locked` (every profile LOCKED). It decides the person-level routes
+     * (the inbox, the entries feed, New profile); each profile's own gate is its `billing.state`. Null where the gate
+     * isn't enforced (the portal's signed-out mode, or a server with BILLING_GATE=false): then nothing is refused.
+     * Additive since 1.60.0-mut361.
+     */
+    billingStanding: z.enum(['open', 'read-only', 'locked']).nullable(),
   })
   .openapi('Me');
 
@@ -2381,6 +2444,20 @@ const expenseNotes = z.string().max(4000);
 const categoryName = z.string().trim().min(1).max(60);
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, '#rrggbb');
 
+/**
+ * MUT-254: what else is known about the vendor typed in `vendor` (a receipt reader's values, MUT-257). Used only to
+ * match the vendor (the registration number first) and to fill what it lacks; never stored on the expense.
+ */
+export const VendorDetailsSchema = z
+  .object({
+    registrationNo: z.string().trim().min(1).max(40).optional(),
+    phone: z.string().trim().min(1).max(40).optional(),
+    email: z.string().trim().email().max(200).optional(),
+  })
+  .strict()
+  .openapi('VendorDetails');
+export type VendorDetails = z.infer<typeof VendorDetailsSchema>;
+
 export const ExpenseSchema = z
   .object({
     id: uuid,
@@ -2390,6 +2467,8 @@ export const ExpenseSchema = z
     currency: CurrencySchema,
     title: z.string().nullable(),
     vendor: z.string().nullable(),
+    /** MUT-254: the profile's vendor `vendor` resolved to (exact match, created on first sight); null when none. */
+    vendorId: uuid.nullable(),
     categoryId: uuid.nullable(),
     /** The client this expense is for, if any. Null = the firm's own (or, on a personal profile, personal) spending. */
     customerId: uuid.nullable(),
@@ -2459,6 +2538,31 @@ export const ExpenseReceiptSchema = z
 export const ExpenseDetailSchema = ExpenseSchema.extend({ receipts: z.array(ExpenseReceiptSchema) }).openapi('ExpenseDetail');
 export const ExpensePageSchema = z.object({ items: z.array(ExpenseSchema), nextCursor: z.string().nullable() }).openapi('ExpensePage');
 
+/** MUT-254: GET /v1/vendors, the vendor typeahead. */
+export const ListVendorsQuerySchema = z.object({
+  q: z.string().max(200).optional().openapi({ description: 'What was typed so far. Empty or absent: the most recently used vendors.' }),
+  limit: z.coerce.number().int().min(1).max(25).default(10).openapi({ description: '1–25.' }),
+});
+
+export const VendorSuggestionSchema = z
+  .object({
+    id: uuid,
+    /** The vendor's own name: its first spelling. */
+    name: z.string(),
+    /** The name of it that matched the query best: `name` or one of its aliases. */
+    matchedName: z.string(),
+    registrationNo: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    /** The typed text saves as this vendor: its key is exactly one of the vendor's names (the server's exact match). A client offers no "new vendor" then. */
+    exact: z.boolean(),
+    /** The category the profile last filed this vendor under (never the automatic Other); a client prefills it only when none is chosen yet. */
+    lastCategoryId: uuid.nullable(),
+  })
+  .openapi('VendorSuggestion');
+
+export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSuggestionSchema) }).openapi('VendorSuggestionList');
+
 export const CreateExpenseRequestSchema = z
   .object({
     occurredOn: ExpenseMoneyDateSchema,
@@ -2466,6 +2570,7 @@ export const CreateExpenseRequestSchema = z
     currency: CurrencySchema,
     title: expenseText.optional(),
     vendor: expenseText.optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     categoryId: uuid.optional(),
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
@@ -2499,6 +2604,7 @@ export const UpdateExpenseRequestSchema = z
     currency: CurrencySchema.optional().openapi({ description: 'Only together with amount (422 AMOUNT_REQUIRED alone), which is then read in this currency\'s digits.' }),
     title: expenseText.nullable().optional(),
     vendor: expenseText.nullable().optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     categoryId: uuid.nullable().optional(),
     customerId: uuid.nullable().optional(),
     projectId: uuid.nullable().optional(),
@@ -2840,6 +2946,7 @@ export const FileAsExpenseRequestSchema = z
   .object({
     categoryId: uuid.optional(),
     vendor: expenseText.optional(),
+    vendorDetails: VendorDetailsSchema.optional().openapi({ description: 'MUT-254: helps match `vendor` to a saved vendor (registration number first) and fills what it lacks; ignored without `vendor`' }),
     title: expenseText.optional(),
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),

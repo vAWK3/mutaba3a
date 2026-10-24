@@ -96,6 +96,83 @@
   - T-P1 timing: 20,000 records in 4.3 s.
 - `restoredHome` moves out of `YourDataDrawer` into `src/hosted/session/restoredHome.ts`.
 
+## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-184)
+
+**Why:** ADR-160 D3's trial runs out whether or not the person opens the portal. Someone who never signs in got no warning before losing write access or before the lock.
+
+### Added
+- `server/src/billing/trial-mail.ts`: `trialMailStageOf` (stages are windows from `trialTimelineOf`: day 11–14 `ending-soon`, 14–27 `ended`, 27–30 `locking-soon`), `runTrialMail` (one person at a time, key `trial:<userId>:<stage>`, 200 s time budget, dry run), `trialMailLinks` (`/?billing=true&step=subscribe`, `/?yourData=true`).
+- Who: only people every one of whose profiles is their own TRIAL profile (so "your account" is what the gate does); skips `paying`, `covered`, `other-profiles`, `suppressed`, `gate-off`.
+- Templates `trial-ending-soon`, `trial-ended`, `trial-locking-soon` (en/ar, "within N days", no amount or date), outside the per-recipient cap.
+- `POST /jobs/v1/billing/trial-mail` (Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (`{dryRun}`, rows); `npm --prefix server run billing:trial-mail [-- --dry-run]`. 503 without Stripe; production refuses a real run with loopback links (409 `LINK_ORIGIN_LOOPBACK`).
+- `billing.trialMailCandidates` (memory + Prisma, operator-only in the store guard).
+- Terraform `google_cloud_scheduler_job.trial_mail`, daily 10:00 Asia/Jerusalem, only with `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled`; `tests/trial_mail.tftest.hcl`.
+
+### Changed
+- API `1.63.0-mut419`; `src/hosted/api/schema.d.ts` regenerated.
+
+---
+
+## [Unreleased] - 2026-10-24 — Vendors are remembered per profile and suggested as you type (MUT-254, ADR-183)
+
+### Added
+- `vendors` and `vendor_names` tables and `expenses.vendorId` (migration `20261024190000_mut254_vendors`, additive). Every expense writer (POST/PATCH `/v1/expenses`, inbox file-as-expense, receipt approve) links the typed vendor: exact match on the registration number, then the normalised name or an alias (Arabic letter forms, diacritics, punctuation and legal suffixes folded); a new name creates the vendor. Optional `vendorDetails { registrationNo, phone, email }` help the match and fill what a vendor lacks.
+- `GET /v1/vendors?q=&limit=`: the session-only typeahead (prefix, contains, then near-miss spellings; most recently used when empty). Malafat's key is refused.
+- A vendor remembers its last category (never the automatic Other) only after a write succeeded.
+- `npm run backfill:vendors` (`--dry`), also run by post-roll on every deploy.
+- **Portal:** the expense drawer's Vendor field suggests saved vendors, keeps typed text as a new one, and prefills the vendor's last category into an empty Category. en/ar. QA `portal.expenses.vendor-typeahead`.
+
+### Changed
+- `Expense` gains `vendorId`. Local-mode snapshot format 6 (vendors maps; 5 → 6 migration), records export carries vendors and names. API `1.62.0-mut254`.
+
+### Files
+- `server/prisma/{schema.prisma,migrations/20261024190000_mut254_vendors}`, `server/src/vendors/keys.ts`, `server/src/repositories/{ports,memory,prisma,prisma-records-export}.ts`, `server/src/expenses/compose.ts`, `server/src/routes/{expenses,inbox,receipts,vendors,portal-routes}.ts`, `server/src/scripts/{backfill-vendors,post-roll}.ts`, `src/hosted/components/{VendorPicker,ExpenseDrawer}.tsx`, `src/hosted/local/migrations/index.ts`, `qa/support/portalApi.ts`.
+
+---
+
+## [Unreleased] - 2026-10-24 — An expense can no longer end up with 11 receipts when a completion races a filing (MUT-397)
+
+### Fixed
+- The MUT-44 receipt completion (`POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete`) checks the 10-receipt cap and marks the receipt READY under the expense row lock (`expenseReceipts.completeOnExpense`, memory and Prisma), the lock MUT-389's filing takes. Two completions, or a completion and a filing, at 9 now end at exactly 10; the loser gets 422 `TOO_MANY_RECEIPTS` and keeps its state. Same routes, same answers; no migration, no API change.
+
+### Changed
+- ADR-167 "Extended by MUT-389": the known gap is resolved; the lock order and the PENDING `expenseId` invariant are written down. Filing, completion and expense delete share one 15 s transaction budget, and the expense lock sets `lock_timeout` 8 s so a pathological wait frees its connection instead of hanging (it still answers as an error, as before: no new response codes). The forced-overlap helpers moved to `repositories/__tests__/expense-lock-harness.ts` and count queued sessions transitively.
+
+### Files
+- `server/src/repositories/{ports,prisma,memory}.ts`, `server/src/auth/store-guard.ts`, `server/src/routes/expenses.ts`, `.claude/DECISIONS.md`; tests `store-contract-receipts.ts`, `store-prisma-receipt-complete-lock.test.ts`, `store-prisma-receipt-file-lock.test.ts`, `expense-lock-harness.ts`, `routes-expenses.test.ts`.
+## [Unreleased] - 2026-10-24 — The lapse gate: read-only and locked accounts on the server and the portal (MUT-361, ADR-181)
+
+**Why:** ADR-160 D3 makes the trial real only if it ends: 14 days free, then read-only with export, then locked from day 30 (Subscribe and Download my records), nothing deleted; a payer who lapses stays read-only for good. `/v1/me` reported these states, but nothing enforced them.
+
+### Added
+- **Server gate** (`server/src/billing/gate.ts`, applied in `authenticate()` by `auth/billing-gate.ts`): READ_ONLY profiles take reads only, LOCKED ones only `GET /v1/records-export*`; person-level routes (inbox, `GET /v1/entries`, `POST /v1/profiles`) follow the person's best standing; identity, billing and sign-out always open; API keys never gated. Refusal: 402 `SUBSCRIPTION_LAPSED` `{ profileId, state, source, until }`.
+- `/v1/me` `billingStanding`; `BILLING_GATE` env and Terraform `billing_gate_enabled` (kill switch, default on).
+- `GET /admin/v1/billing/uncovered` and `npm run billing:uncovered`.
+- `trialTimelineOf` (`billing/entitlement.ts`): the trial's end and lock dates, for Settings › Billing and MUT-419's mails.
+- **Portal:** GRACE and read-only banners on every page of the profile (`LapseGate.tsx`), Add hidden and edit drawers view-only (receipt Download kept), the locked screen (Subscribe, Download my records), New profile on the person's standing, `SUBSCRIPTION_LAPSED` in every error mapper, and a `/v1/me` re-read on any refusal. en/ar, RTL, 375 px.
+- **QA:** `portal.billing.read-only` (core), `.locked` (core), `.locked-arabic-phone`, `.grace`, `.paid-lapse`; `portal-live.billing.lapse-gate` (core) on the real API.
+
+### Changed
+- `GET /v1/entries` leaves LOCKED profiles out. `buildMe`'s membership reads are batched (shared with the gate). API `1.60.0-mut361`.
+
+---
+
+
+## [Unreleased] - 2026-10-24 — The dev server can keep receipts on local disk, so receipt flows run end to end in local QA (MUT-396)
+
+### Added
+- `ATTACHMENTS_DRIVER=local` (+ `ATTACHMENTS_DIR`): `LocalAttachmentStorage` stores attachment bytes on disk and hands out HMAC-signed URLs served by `PUT`/`GET /dev/attachments/:token` (key, action, expiry, content type and size cap, like a GCS V4 signature; expiry on the app clock; URLs on the request's origin). `GET /dev/attachments` answers `{driver: "local"}` for Flutter QA's env check. Not in OpenAPI; no API version change.
+- Vite's hosted dev server proxies `/dev` next to `/v1`, so the portal reaches those URLs same-origin (PORTAL_CSP `connect-src 'self'`).
+
+### Changed
+- Config refuses the local driver in production and staging, local together with `ATTACHMENTS_BUCKET`, and `gcs` without a bucket. The portal fallback never serves `/dev/*`.
+
+### Why
+- Every receipt and attachment route answered 503 against `localhost:8787`, so no phone or portal QA flow could attach, list or open a receipt (MUT-258/260 need it). Production storage is untouched.
+
+### Files
+- `server/src/attachments/local-storage.ts`, `server/src/routes/dev-attachments.ts`, `server/src/app.ts`, `server/src/index.ts`, `server/src/config.ts`, `server/.env.example`, `vite.config.ts`, `.gitignore`; tests `attachments/__tests__/local-storage.test.ts`, `__tests__/routes-dev-attachments.test.ts`, `__tests__/config.test.ts`.
+
 ## [Unreleased] - 2026-10-24 — The website's pages report errors to Sentry; the free web app never does (MUT-150, ADR-091 am.12)
 
 **Why:** epic MUT-146 wants every production error seen. The landing (`/`, `/download`, `/privacy`, `/terms`) shares `dist-web` with the local-first app, which promises no telemetry (ADR-024), so the website reports and the app provably doesn't.

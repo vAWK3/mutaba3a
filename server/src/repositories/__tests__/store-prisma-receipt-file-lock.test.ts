@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { PrismaLedgerStore } from '../prisma.js';
 import type { CreateExpenseReceiptInput, LedgerStore } from '../ports.js';
+import { expenseLockHarness } from './expense-lock-harness.js';
 
 /**
  * MUT-389: filing a receipt onto an existing expense locks the expense and decides under that lock. Deterministic: a
@@ -27,7 +28,6 @@ if (!url) {
   const MAX = 10;
   const unique = () => Math.random().toString(36).slice(2, 10);
   const at = (ms: number) => new Date(Date.UTC(2026, 9, 22, 10, 0, 0, ms));
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   async function seed(s: LedgerStore) {
     const o = await s.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
@@ -41,42 +41,7 @@ if (!url) {
     return { o, expense, ready };
   }
 
-  /**
-   * Holds the expense's row lock from another connection, runs `change` under it, and commits on release(). `isLocked`
-   * resolves with the holder's backend pid, or rejects with `change`'s error instead of leaving the test to time out.
-   */
-  function holdExpense(expenseId: string, change: (tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]) => Promise<unknown>) {
-    let release!: () => void;
-    const released = new Promise<void>((r) => (release = r));
-    let locked!: (pid: number) => void;
-    let failed!: (error: unknown) => void;
-    const isLocked = new Promise<number>((resolve, reject) => ((locked = resolve), (failed = reject)));
-    const done = holder.$transaction(async (tx) => {
-      try {
-        const [me] = await tx.$queryRaw<Array<{ pid: number }>>`SELECT pg_backend_pid() AS pid`;
-        await tx.$queryRaw`SELECT "id" FROM "expenses" WHERE "id" = ${expenseId}::uuid FOR NO KEY UPDATE`;
-        await change(tx);
-        locked(me!.pid);
-      } catch (error) {
-        failed(error);
-        throw error;
-      }
-      await released;
-    }, { timeout: 20_000 });
-    // Reported through isLocked; the test still awaits `done` for a failed commit.
-    done.catch(() => {});
-    return { isLocked, release, done };
-  }
-
-  /** Resolves once some session is blocked by this holder, i.e. the operation under test is queued on its lock. */
-  async function blockedBy(holderPid: number): Promise<void> {
-    for (let i = 0; i < 100; i += 1) {
-      const [row] = await prober.$queryRaw<Array<{ n: number }>>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))`;
-      if (row && row.n > 0) return;
-      await sleep(20);
-    }
-    throw new Error('nothing ever waited on the expense lock');
-  }
+  const { holdExpense, blockedBy } = expenseLockHarness(holder, prober);
 
   describe('Prisma receipt filing lock (MUT-389)', () => {
     it('a filing that waits while another takes the expense’s 10th place is refused once that commits', async () => {

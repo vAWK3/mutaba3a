@@ -4,6 +4,7 @@ import type { HostedProfile } from '../api/client';
 import { omitShellOverlay, parseProfileDrawer, type ProfileDrawerSearch } from '../data/filters';
 import { ProfileCreateDrawer } from '../components/ProfileCreateDrawer';
 import { ProfilesManageDrawer } from '../components/ProfilesManageDrawer';
+import { usePersonWritable } from '../session/me';
 
 /**
  * The shell's profile drawers (MUT-183), on every page and on the empty state.
@@ -33,7 +34,9 @@ export function useProfileDrawers() {
 export function ProfileDrawers({ active }: { active: HostedProfile | null }) {
   const drawers = useProfileDrawers();
   const { state } = drawers;
-  if (state.newProfile) return <ProfileCreateDrawer active={active} onClose={drawers.close} />;
+  // MUT-361 (review R4): a `?newProfile` link opens nothing while the lapse gate holds every profile the person has.
+  const mayCreate = usePersonWritable();
+  if (state.newProfile && mayCreate) return <ProfileCreateDrawer active={active} onClose={drawers.close} />;
   if (state.manageProfiles || state.editProfile) {
     return (
       <ProfilesManageDrawer

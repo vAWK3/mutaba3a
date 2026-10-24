@@ -50,6 +50,8 @@ function readOnlyToast(error: ApiError): string {
 function nonValidation(error: unknown): MappedError | null {
   if (!(error instanceof ApiError) || error.code === 'NETWORK') return { fields: [], toast: 'hosted.income.errors.network' };
   if (error.code === 'READ_ONLY_PROFILE') return { fields: [], toast: readOnlyToast(error) };
+  // MUT-361: the lapse gate refused it; the query client re-reads /v1/me, so the page turns read-only behind the toast.
+  if (error.code === 'SUBSCRIPTION_LAPSED') return { fields: [], toast: 'hosted.billing.gate.refused' };
   return null;
 }
 

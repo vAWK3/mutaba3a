@@ -15,7 +15,7 @@ import { useToast } from '../Toast';
  * groups (a keep mark). Omitted while either list loads or fails (8A): the
  * line is a convenience, never a reason for the drawer to look broken.
  */
-export function InGroupsLine({ profileId, expense }: { profileId: string; expense: Expense }) {
+export function InGroupsLine({ profileId, expense, readOnly = false }: { profileId: string; expense: Expense; readOnly?: boolean }) {
   const { t } = useLanguage();
   const showToast = useToast();
   const queryClient = useQueryClient();
@@ -55,13 +55,17 @@ export function InGroupsLine({ profileId, expense }: { profileId: string; expens
               <Link to={`/p/${profileId}/expenses/groups/${group.id}`} className="hp-link">
                 {group.name}
               </Link>{' '}
+              {/* MUT-361: a read-only profile lists its groups, with no way to change them */}
+              {!readOnly && (
               <button type="button" className="hp-link-button hp-muted press" disabled={busy} aria-label={t('hosted.groups.inGroups.actionLabel', { action, name: group.name })} onClick={() => void change(group, verb)}>
                 {action}
               </button>
+              )}
             </li>
           );
         })}
       </ul>
+      {!readOnly && (
       <div className="hp-in-groups-add">
         <button ref={buttonRef} type="button" className="hp-link-button press" aria-haspopup="menu" aria-expanded={open} disabled={busy} onClick={toggle}>
           {t('hosted.groups.inGroups.add')}
@@ -80,6 +84,7 @@ export function InGroupsLine({ profileId, expense }: { profileId: string; expens
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawer
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile } from '../../session/me';
+import { useProfile, useWriteGate } from '../../session/me';
 import { DocumentsList } from './DocumentsList';
 import { PaymentsList } from './PaymentsList';
 import { ReceivablesList } from './ReceivablesList';
@@ -39,8 +39,10 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
   const tab: ClientTab = search.tab ?? 'summary';
   // MUT-133: drawer state lives beside the tab's filters, never in them (eng review R1).
   const { filters: rest, drawer } = splitIncomeDrawer(search);
-  const { kinds, canSettle } = incomeAffordancesFor(profile);
-  const redate = redateAffordancesFor(profile);
+  // MUT-361: nothing to add, settle or re-date on a read-only profile.
+  const { writable } = useWriteGate();
+  const { kinds, canSettle } = incomeAffordancesFor(profile, writable);
+  const redate = redateAffordancesFor(profile, writable);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...rest, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
   const addButton = (header: boolean) =>

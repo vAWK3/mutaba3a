@@ -13,7 +13,7 @@ import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawer
 import { useCustomerDirectory, usePayments, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useMe, useProfile } from '../../session/me';
+import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
@@ -66,6 +66,7 @@ interface PaymentsListProps {
 export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, onRedate }: PaymentsListProps) {
   const profile = useProfile();
   const userId = useMe().user.id;
+  const { writable } = useWriteGate();
   const { t, language } = useLanguage();
   const list = usePayments(profile.id, fixedCustomerId ? { ...filters, customerId: fixedCustomerId } : filters);
   const customers = useCustomerDirectory(profile.id);
@@ -75,9 +76,9 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
   const rows = useMemo(
     () =>
       list.data && customers.data
-        ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`), (p) => canRedatePayment(profile, p, userId))
+        ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`), (p) => canRedatePayment(profile, p, userId, writable))
         : undefined,
-    [list.data, customers.data, language, t, profile, userId],
+    [list.data, customers.data, language, t, profile, userId, writable],
   );
 
   const toggle = useCallback(
@@ -215,8 +216,10 @@ export function PaymentsPage({ search, setSearch }: { search: PaymentsPageSearch
   const profile = useProfile();
   const { t } = useLanguage();
   const { filters, drawer } = splitIncomeDrawer(search);
-  const { kinds } = incomeAffordancesFor(profile);
-  const redate = redateAffordancesFor(profile);
+  // MUT-361: nothing to add or re-date on a read-only profile.
+  const { writable } = useWriteGate();
+  const { kinds } = incomeAffordancesFor(profile, writable);
+  const redate = redateAffordancesFor(profile, writable);
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('received') ? 'received' : kinds[0] });
   const addButton = (header: boolean) =>

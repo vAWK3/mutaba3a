@@ -26,3 +26,84 @@ features:
     expect:
       - The drawer shows the trial status first ("9 days left in your free trial")
       - In place of Subscribe it says "Subscriptions open soon. We'll let you know before your trial ends." and shows no price
+  # MUT-361 (ADR-181): the lapse gate. The states come from /v1/me (each profile's billing and billingStanding); the
+  # server's own refusals run live in portal-live (billing.lapse-gate).
+  - id: read-only
+    title: A profile whose trial ended is read-only, with Subscribe, the lock date and Download my records
+    tier: core
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/components/Drawer.tsx
+      - src/hosted/components/ExpenseDrawer.tsx
+      - src/hosted/components/ReceiptUploader.tsx
+      - src/hosted/pages/views/ExpensesList.tsx
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/session/me.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/hosted.css
+    steps:
+      - Sign in on day 20, after the free trial ended without a card
+      - Open Expenses
+      - Open an expense
+      - Close it and press Subscribe on the banner
+    expect:
+      - 'Every page of the profile says "This profile is read-only", with the date it locks, Subscribe and Download my records'
+      - There is no Record expense button
+      - The expense opens with its fields disabled, a note that nothing can be changed, no Save or Delete, and its receipt still downloads
+      - Subscribe opens Billing's Subscribe step
+  - id: locked
+    title: From day 30 an unpaid trial is locked to one page, Subscribe or download your records
+    tier: core
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/shell/HostedShell.tsx
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+      - src/hosted/i18n/en.json
+    steps:
+      - Sign in on day 31 of a trial that never got a card
+      - Press Download my records
+      - Close Your data and press Subscribe
+    expect:
+      - Only "Subscribe or download your records" shows, with no section navigation and no list loaded
+      - Download my records opens Your data
+      - Subscribe opens Billing's Subscribe step
+  - id: locked-arabic-phone
+    title: The locked screen and the read-only banner read right to left in Arabic on a 375px phone
+    tier: secondary
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - On a 375px phone, in Arabic, sign in with one locked profile and one read-only profile
+      - Look at the locked profile, then switch to the read-only one
+    expect:
+      - The page is right to left, nothing scrolls sideways, and the locked screen's two buttons stack full width
+      - The read-only banner is in Arabic with its buttons wrapping inside the page
+  - id: grace
+    title: A failed payment shows a warning with Update your card, and nothing is refused
+    tier: secondary
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/data/incomeAffordances.ts
+    steps:
+      - Sign in while Stripe retries a failed payment
+      - Open Expenses
+    expect:
+      - '"We couldn''t take your last payment" shows with Update your card, which opens Billing'
+      - Record expense is still there
+  - id: paid-lapse
+    title: A cancelled subscription leaves the profile read-only for good, and says it never locks
+    tier: secondary
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/views/PaymentsList.tsx
+      - src/hosted/components/IncomeDrawerHost.tsx
+    steps:
+      - Sign in after the subscription ended
+      - Open Receivables
+    expect:
+      - The banner says the subscription ended, nothing is deleted, and Subscribe starts it again
+      - There is no Add income

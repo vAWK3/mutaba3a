@@ -666,6 +666,9 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
       watch: { ignored: ["**/qa/runs/**"] },
       proxy: {
         "/v1": { target: process.env.MUTABA3A_API_ORIGIN ?? DEFAULT_DEV_API_ORIGIN },
+        // MUT-396: a local API (ATTACHMENTS_DRIVER=local) signs upload/download URLs on the request's origin; this
+        // keeps them same-origin for the portal, which PORTAL_CSP's connect-src 'self' requires.
+        "/dev/attachments": { target: process.env.MUTABA3A_API_ORIGIN ?? DEFAULT_DEV_API_ORIGIN },
       },
     },
     build: {

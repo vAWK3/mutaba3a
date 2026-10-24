@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, Me, UpdateProfileResponse } from '../api/client';
-import { canCreateProfile, coOwnsOthersProfiles, profileEditability } from '../data/profileRules';
+import { atProfileCap, canCreateProfile, coOwnsOthersProfiles, profileEditability } from '../data/profileRules';
 import { useProfileKind } from '../data/useProfileKind';
 import { profileKey, ME_KEY, useMe } from '../session/me';
 import { withProfileLeft } from '../data/profileQueries';
@@ -125,6 +125,8 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
               {tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}
               {/* MUT-373 (DR2): only for someone the count would otherwise puzzle. */}
               {coOwnsOthersProfiles(me) && <span className="hp-profiles-cap-hint">{t('hosted.profiles.owners.capHint')}</span>}
+              {/* MUT-361 (review): New profile is off because of the lapse gate, not the cap */}
+              {!canCreate && !atProfileCap(me) && <span className="hp-profiles-cap-hint">{t('hosted.billing.gate.newProfileBlocked')}</span>}
             </span>
             <Button variant="secondary" size="sm" aria-disabled={!canCreate || undefined} onClick={() => canCreate && onNew()}>
               {t('hosted.shell.switcher.newProfile')}

@@ -204,6 +204,7 @@ export function expense(n: number, e: { amount: string; currency?: Currency; tit
     currency: e.currency ?? 'ILS',
     title: e.title ?? null,
     vendor: e.vendor ?? null,
+    vendorId: null as string | null,
     categoryId: e.categoryId ?? null,
     customerId: e.customerId ?? null,
     projectId: e.projectId ?? null,
@@ -383,6 +384,10 @@ export interface FakeApiSeed {
   currentPassword?: string;
   /** MUT-324: false makes the portal show the Updated-terms step until the spec agrees. Defaults to true. */
   termsAccepted?: boolean;
+  /** MUT-361: /v1/me `billingStanding`, the lapse gate's verdict on the person; absent = null (the gate off). */
+  billingStanding?: 'open' | 'read-only' | 'locked' | null;
+  /** MUT-361: GET /v1/billing's answer (Settings › Billing, and whether a payment would cover a profile). */
+  billing?: Json;
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -398,6 +403,9 @@ export class FakeApi {
   /** Requests that reached the storage bucket (receipt PUTs, signed-URL downloads). */
   readonly storage: { method: string; url: string }[] = [];
   signedIn: boolean;
+  /** MUT-361: what /v1/me says about the lapse gate. */
+  billingStanding: 'open' | 'read-only' | 'locked' | null;
+  private readonly billingOverview: Json | null;
   private profiles: ProfileState[];
   private readonly customers;
   private readonly projects;
@@ -406,6 +414,8 @@ export class FakeApi {
   private readonly attachments;
   private readonly categories;
   private readonly expenses;
+  /** MUT-254 (A18): vendors as the server saves them, matched on a minimal exact key (case and spacing only). */
+  private readonly vendors: { id: string; name: string; keys: Set<string>; lastCategoryId: string | null; lastUsed: number }[] = [];
   private readonly conversions;
   private readonly groups: StubGroup[];
   private readonly marks: Map<string, Mark>;
@@ -427,6 +437,8 @@ export class FakeApi {
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
+    this.billingStanding = seed.billingStanding ?? null;
+    this.billingOverview = seed.billing ?? null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
     this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => customer(i));
     this.projects = [...(seed.projects ?? [])];
@@ -482,6 +494,7 @@ export class FakeApi {
     );
     return {
       ...body,
+      billingStanding: this.billingStanding,
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
         return state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
@@ -566,6 +579,7 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    if (resource === 'billing' && method === 'GET' && !id && this.billingOverview) return json(this.billingOverview);
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
       if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
@@ -617,6 +631,7 @@ export class FakeApi {
     }
     if (resource === 'expense-categories' && method === 'GET') return json({ items: this.categories });
     if (resource === 'expenses') return this.expenseAnswer(e, id, sub, subId, action);
+    if (resource === 'vendors' && method === 'GET') return this.vendorAnswer(e);
     if (resource === 'expense-groups') return this.groupAnswer(e, id, sub, subId);
     if (resource === 'fx-rates' && method === 'GET') return this.fxRates === 'unavailable' ? json({ error: { code: 'FX_RATES_UNAVAILABLE', message: 'No rates' } }, 503) : json(this.fxRates);
     if (resource === 'conversions') return this.conversionAnswer(e, id);
@@ -801,6 +816,30 @@ export class FakeApi {
     p.version += 1;
   }
 
+  /** MUT-254: the server's resolve + touch, minimally: the typed vendor's own exact key, created on first sight. */
+  private linkVendor(name: string | null, categoryId: string | null): string | null {
+    const key = name?.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!name || !key) return null;
+    let vendor = this.vendors.find((v) => v.keys.has(key));
+    if (!vendor) {
+      vendor = { id: this.nextId(0xa), name: name.trim(), keys: new Set([key]), lastCategoryId: null, lastUsed: 0 };
+      this.vendors.push(vendor);
+    }
+    vendor.lastUsed = ++this.serial;
+    if (categoryId) vendor.lastCategoryId = categoryId;
+    return vendor.id;
+  }
+
+  /** GET /v1/vendors: names containing the query (no fuzzy matching here), else the most recently used. */
+  private vendorAnswer(e: Logged) {
+    const q = (e.query.get('q') ?? '').trim().toLowerCase();
+    const items = this.vendors
+      .filter((v) => !q || v.name.toLowerCase().includes(q))
+      .sort((a, b) => b.lastUsed - a.lastUsed)
+      .map((v) => ({ id: v.id, name: v.name, matchedName: v.name, exact: v.keys.has(q.replace(/\s+/g, ' ')), registrationNo: null, phone: null, email: null, lastCategoryId: v.lastCategoryId }));
+    return json({ items });
+  }
+
   private expenseAnswer(e: Logged, id?: string, sub?: string, subId?: string, action?: string) {
     const q = (key: string) => e.query.get(key) ?? undefined;
     if (!id) {
@@ -820,6 +859,8 @@ export class FakeApi {
       if (e.method === 'POST') {
         const b = e.body as Json;
         const made = { ...expense(this.serial++, { amount: String(b.amount), currency: b.currency as Currency }), ...b, id: this.nextId(0x9), receipts: [] as StubReceipt[] } as StubExpense;
+        delete (made as { vendorDetails?: unknown }).vendorDetails;
+        made.vendorId = this.linkVendor(made.vendor, made.categoryId);
         this.expenses.unshift(made);
         return json(listed(made), 201);
       }
@@ -832,6 +873,8 @@ export class FakeApi {
       if (e.method === 'PATCH') {
         if (e.headers['if-match'] !== String(found.version)) return conflict('VERSION_MISMATCH');
         Object.assign(found, e.body, { version: found.version + 1 });
+        const patch = e.body as { vendor?: string | null; categoryId?: string | null };
+        if (patch.vendor !== undefined || patch.categoryId !== undefined) found.vendorId = this.linkVendor(found.vendor, found.categoryId);
         return json(listed(found));
       }
       if (e.method === 'DELETE') {

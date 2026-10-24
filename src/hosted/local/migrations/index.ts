@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { ExpenseReceiptRecord, MembershipRecord, Organization, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, UserRecord } from '../../../../server/src/repositories/ports.js';
 
 /**
  * The portal's local-mode migrations key off `CURRENT_STORE_SNAPSHOT_VERSION`
@@ -112,6 +112,23 @@ function addTrialPrompt(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-254, 5 → 6: expenses gain `vendorId`, and the vendors and their names get maps of their own. Nothing saved
+ * before had a vendor, so every expense's is null and both maps start empty; a typed vendor resolves on the next save.
+ */
+function addVendors(snapshot: StoredSnapshot): StoredSnapshot {
+  const exps = snapshot.maps.exps as Map<string, Omit<ExpenseRecord, 'vendorId'>>;
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      exps: new Map([...exps].map(([id, expense]) => [id, { ...expense, vendorId: null }])),
+      vendors: new Map(),
+      vendorNames: new Map(),
+    },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -122,6 +139,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 2, to: 3, migrate: addReceiptLibraryFields },
   { from: 3, to: 4, migrate: addEmailVerifiedAt },
   { from: 4, to: 5, migrate: addTrialPrompt },
+  { from: 5, to: 6, migrate: addVendors },
 ];
 
 /**

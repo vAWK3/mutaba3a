@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
+import { lapsedError } from '../billing/gate.js';
 import { decodeFeedCursor, encodeFeedCursor } from '../entries/merge.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { EntryPageSchema, ListEntriesQuerySchema } from '../schemas.js';
@@ -63,7 +64,13 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const requested = [...new Set(q.profileId ?? [])];
       // Same answer for a profile that exists elsewhere and one that never did (selectProfile's rule).
       if (requested.some((id) => !mine.includes(id))) throw new ApiError('NOT_FOUND', 'Profile not found');
-      const organizationIds = requested.length > 0 ? requested : mine;
+      // MUT-361 (ADR-181): a LOCKED profile answers only its records export, so the feed leaves it out (the gate set
+      // the list); naming one asks for exactly what is refused.
+      const entitlements = c.get('personEntitlements');
+      const locked = new Set([...(entitlements ?? [])].filter(([, e]) => e.state === 'LOCKED').map(([id]) => id));
+      const lockedAsked = requested.find((id) => locked.has(id));
+      if (lockedAsked) throw lapsedError(lockedAsked, entitlements!.get(lockedAsked)!);
+      const organizationIds = (requested.length > 0 ? requested : mine).filter((id) => !locked.has(id));
 
       const page = await store.entries.list(organizationIds, {
         limit: q.limit,

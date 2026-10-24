@@ -3,7 +3,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
-import { billingStatusOf, serializeEntitlement } from '../billing/coverage.js';
+import { billingStatusOf, entitlementsFor, serializeEntitlement } from '../billing/coverage.js';
 import { consumerCountryCheck, type BillingCountries } from '../billing/checkout.js';
 import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
@@ -13,6 +13,7 @@ import type { AuditEventInput, JsonObject, LedgerStore } from '../repositories/p
 import {
   BillingAccountListSchema,
   BillingStatusSchema,
+  BillingUncoveredSchema,
   CreateEntitlementGrantRequestSchema,
   EntitlementGrantListSchema,
   EntitlementGrantSchema,
@@ -272,6 +273,36 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/billing/uncovered',
+      tags: ['Admin'],
+      summary: 'Profiles the lapse gate would hold read-only or locked, with their active people (MUT-361)',
+      description:
+        'Every profile that resolves READ_ONLY or LOCKED right now and has at least one ACTIVE member, with those members. Run before a release ' +
+        'that turns the gate on (BILLING_GATE): a pilot person here with source NONE needs `billing:grant`. One billing read for every profile.',
+      security: [{ adminToken: [] }],
+      responses: { 200: { description: 'Uncovered profiles', content: { 'application/json': { schema: BillingUncoveredSchema } } }, ...adminErrors },
+    }),
+    async (c) => {
+      const organizations = await store.organizations.list();
+      const integrations = await Promise.all(organizations.map((o) => store.integrations.findByOrganizationAndProvider(o.id, 'MALAFAT')));
+      const profiles = organizations.map((organization, i) => ({ organization, malafatConnected: integrations[i]?.status === 'CONNECTED' }));
+      const entitlements = await entitlementsFor(store, profiles, c.get('now')());
+      const lapsed = organizations.filter((o) => ['READ_ONLY', 'LOCKED'].includes(entitlements.get(o.id)!.state));
+      const rows = await Promise.all(
+        lapsed.map(async (organization) => {
+          const members = await store.memberships.listByOrganization(organization.id);
+          const users = await Promise.all(members.map((m) => store.users.getById(m.userId)));
+          const people = users.flatMap((u) => (u && u.status === 'ACTIVE' ? [{ userId: u.id, email: u.email }] : []));
+          return { organizationId: organization.id, name: organization.name, billing: serializeEntitlement(entitlements.get(organization.id)!), people };
+        }),
+      );
+      return c.json({ profiles: rows.filter((r) => r.people.length > 0) }, 200);
     },
   );
 

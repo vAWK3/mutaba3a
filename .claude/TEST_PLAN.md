@@ -3376,6 +3376,8 @@ Not exercised here: the portal `/setup` page (MUT-236, which carries the UI rele
 | Test | Covers |
 |---|---|
 | `server/src/billing/__tests__/entitlement.test.ts` (22, pure) | Every rule in order: Malafat first; live, expired, revoked and someone else's grants; Freelancer covers the owner's profiles but not a firm they belong to; Firm covers its organization and the payer's own; trialing = active; past_due = GRACE; ranking ACTIVE > GRACE then FIRM; lapsed paid = READ_ONLY for good; incomplete ignored; trial ACTIVE to day 14, READ_ONLY to day 30, LOCKED from day 30; a payer is never LOCKED (AC2); incomplete_expired isn't paying; running trial beats a lapsed subscription; operator firm and no-trial accounts are READ_ONLY/NONE |
+| `server/src/billing/__tests__/gate.test.ts` (15, pure) + `server/src/__tests__/billing-gate-routes.test.ts` (20, memory, gate on) | MUT-361: standing per state; READ_ONLY reads only, LOCKED only the export; every state × list read, expense/income/conversion writes, receipts upload, records export (+ receipt) of a LOCKED profile with nothing deleted; /v1/me, trial prompt, billing and sign-out open; person-level inbox/entries/New profile on the best standing, the feed leaving a LOCKED profile out; profile PATCH on the path's profile; a device session; a Malafat API key never gated; an unmatched route's 404; every organization-independent endpoint classified; `billingStanding` null with the gate off. Plus `users-cli` `billing-uncovered`, `config` BILLING_GATE default and `trialTimelineOf` |
+| `src/hosted/components/__tests__/LapseGate.test.tsx` (13) + `src/hosted/__tests__/queryClient.test.ts` (3) | MUT-361 portal: read-only banner (trial lock date, paid lapse, not-yours), no Record/Add income, view-only expense drawer with receipt Download, `?newExpense` refused, gate-off unchanged, GRACE banner, locked screen (no list read, Download → Your data, Subscribe → step, switcher kept, Arabic RTL), a late 402 re-reading /v1/me; mapper tests for SUBSCRIPTION_LAPSED |
 | `server/src/__tests__/billing-core.test.ts` (13, memory) | `/v1/me` `billing` per profile through a trial, past_due and a grant (ISO `until`); Malafat-covered firm; `null` in signed-out mode; one `factsFor` read per call; the snapshot carries no billing; admin grant by email (audited on owned profiles only) and on a profile with expiry; 422 two targets / past expiry, 404 unknown, 401 no token; revoke once + idempotent + `active=true` listing; link needs a currency for a new customer, is idempotent and audited; unlinked listing; 409 `CUSTOMER_LINKED_ELSEWHERE` / `USER_HAS_ANOTHER_ACCOUNT`; 422 bad customer id |
 | `server/src/repositories/__tests__/store-contract-billing.ts` via `store-memory-billing.test.ts` and `store-prisma-billing.test.ts` (6 each) | `factsFor` (payer on each subscription, grants, trial starts), grant write + audit, revoke once, `activeAt`, one-target + FK refusals, link idempotency/conflicts/currency, unlinked listing, subscription upsert needs a known customer |
 | `server/src/repositories/__tests__/migration-mut358.test.ts` (1, scratch DB) | The backfill grants every existing user (FREELANCER) and operator firm (FIRM), none for owned profiles, no trials; the one-target CHECK; schema parity after later migrations |
@@ -3613,6 +3615,17 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
+## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `billing/__tests__/trial-mail.test.ts` (22): stage table + daily-run rounding (R3); a 33-day daily walk sends exactly three mails in order (A1); same day twice → duplicate (A2); skips paying (trialing, active, lapsed), covered (user grant, own profile's org grant, Malafat), suppressed, other-profiles (operator firm, covered firm); PENDING_REVIEW/DISABLED/no trial absent; en/ar (A3); dry run; mail off then on; gate off; time budget on its own clock | `npm --prefix server test` |
+| Templates | `email/__tests__/templates.test.ts`: the three new ids in the per-template table (en/ar, RTL, only passed links, no amount/currency/date), "within N days" + Arabic day agreement, links per mail (A3) | same |
+| Server routes | `__tests__/routes-trial-mail.test.ts` (9): job counts only, A2 over HTTP, token checks, 503 without Stripe, gate off, PORTAL_ORIGIN links; admin dry run/real run, loopback refusal; `scripts/__tests__/users-cli.test.ts` (2): `billing-trial-mail [--dry-run]` | same |
+| Store contract | `store-contract-billing.ts` `trialMailCandidates` (window bounds, ACTIVE only, order), memory + Prisma | `npm --prefix server run test:db` |
+| Terraform | `tests/trial_mail.tftest.hcl` (4): no job by default, without Stripe, with the gate off; one daily job with the token when all on | `terraform init -backend=false && terraform test` |
+| Release-QA | None: server only, no screen. The acceptance criteria are proven by the tests above (brief §8) | — |
+
 ## MUT-418 — Trial start step, Home trial banner, consumers everywhere (2026-10-24, ADR-180)
 
 | Layer | Tests | Command |
@@ -3632,3 +3645,34 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 - Perf (off by default): `replay.perf.test.ts`, `CARRY_OVER_PERF=1`: 20,000 records, 4.3 s, heap +149 MB.
 - Release QA: app `carry-over`, `qa/features/carry-over/carry-over.yaml`, 7 features, `qa/specs/carry-over/carry-over.spec.ts` 7/7 passing (2026-10-24).
 - Not covered: a real cross-host run (run.app or netlify.app to app.mtb3a.com) on a real browser: the operator's day-7 check (plan §6). Real iOS standalone: stubbed in QA.
+
+## MUT-396 — local-disk attachment storage for the dev server (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `attachments/__tests__/local-storage.test.ts`: round trip, signed download, expiry on the injected clock, tampered/foreign-secret tokens, action binding, Content-Type, Content-Length and streamed size caps, aborted upload, concurrent PUTs, key traversal, idempotent remove, missing download | `npm --prefix server test` |
+| Server routes | `__tests__/routes-dev-attachments.test.ts`: expense receipt and library receipt start → PUT → complete → download same bytes on a frozen clock; complete before bytes and an oversized PUT; expiry on the app clock; the probe; not mounted without the driver; never the portal fallback | same |
+| Config | `__tests__/config.test.ts`: default dir under server/, local in development/test, refused in production and staging, local + bucket, gcs without bucket | same |
+| Release-QA (phone) | `ios.privacy.receipt-cleanup` without its stand-in, asserting READY and the downloaded bytes (lands after MUT-124); Flutter `qa.config.mjs` checks `GET /dev/attachments` | `release-qa release --only ios.privacy.receipt-cleanup --wait` (mutaba3a-flutter) |
+
+## MUT-397 — receipt completion under the expense lock (2026-10-24)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Store contract | `store-contract-receipts.ts` `completeOnExpense`: completes, already_ready, receipt_not_found (other expense, deleted), expense_not_found (other profile, missing, deleted with unlink and remove), cap with pending uploads not counted, two concurrent completions (Prisma) | `npm --prefix server test` + `test:db` |
+| Prisma lock | `store-prisma-receipt-complete-lock.test.ts`: completion queued behind a filing's 10th place, two completions queued with one place, completion queued behind a delete; mutation without the lock fails all three | `test:db` (private DB) |
+| Routes | `routes-expenses.test.ts`: the eleventh refused at completion though its start had room, idempotent at the cap, 404 after a delete | `npm --prefix server test` |
+
+## MUT-254 — vendors (2026-10-24, ADR-183)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `vendors/__tests__/keys.test.ts`: case, spacing, ASCII and Arabic punctuation, Arabic letter forms, tashkeel/tatweel, legal suffixes (Latin, Hebrew, Arabic), leading "the" only, never empty, registration digits (Arabic-Indic, Extended), scorer order | `npm --prefix server test` |
+| Store contract | `store-contract-vendors.ts` (memory + Prisma): one vendor per name however written, per profile; Arabic folding; blank → none; number first with alias; no merge; fill never overwrites; concurrent first sightings → one; touch (Other, other profile's category, null, no version bump); type change clears defaults; search ranking and recent; expense link through update | `test` + `test:db` |
+| Prisma | `store-prisma-vendor-lock-order.test.ts` (touch waits on the category before the vendor row); `store-records-export-parity.test.ts` (vendors, vendorNames) | `test:db` (private DB) |
+| Routes | `routes-vendors.test.ts`: four writers link, alias via vendorDetails, PATCH re-link/unlink/leave, refused writes move no default, Other skipped, typeahead in ar/he/Latin, recent, isolation, limit, Malafat's key 403 | `npm --prefix server test` |
+| Backfill | `scripts/__tests__/backfill-vendors.test.ts`: --dry writes nothing; oldest-first canonical name, last-used, default not Other, no version bump, idempotent; re-link and unlink of old-revision rows | `test:db` |
+| Local mode | `migrations.test.ts` 5 → 6, `format-fingerprint.test.ts` (vendors, vendorNames, exps.vendorId) | `npx vitest run src/hosted/local` |
+| Portal | `VendorPicker.test.tsx` (recent, free text kept on Enter, alias hint, Arabic q); `ExpenseDrawer.test.tsx` (prefill only into an empty category) | `npx vitest run src/hosted` |
+| Release-QA | `portal.expenses.vendor-typeahead` (new vendor kept, suggestion, prefill, POST body); `portal.expenses.create`, `.edit-receipts` still green | `release-qa release --only portal.expenses` |
+

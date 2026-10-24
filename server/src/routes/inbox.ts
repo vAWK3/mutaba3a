@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, withCategoryForeignKey } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
@@ -214,29 +214,28 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
       if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
 
-      const filed = await withCategoryForeignKey(() =>
-        store.inboxEntries.fileAsExpense(
-          {
-            userId: user.id,
-            inboxEntryId: entry.id,
-            kind: 'EXPENSE',
-            expense: {
-              organizationId: organization.id,
-              occurredOn: entry.occurredOn,
-              amountMinor: entry.amountMinor,
-              currency: entry.currency,
-              title: body.title ?? null,
-              vendor: body.vendor ?? null,
-              categoryId: body.categoryId ?? null,
-              ...links,
-              notes: entry.note,
-              createdByUserId: user.id,
-            },
-          },
-          now,
-        ),
+      // MUT-254: after every check, so a refusal never creates a vendor it didn't need (A2).
+      const expense = await withResolvedVendor(
+        store,
+        organization.id,
+        {
+          organizationId: organization.id,
+          occurredOn: entry.occurredOn,
+          amountMinor: entry.amountMinor,
+          currency: entry.currency,
+          title: body.title ?? null,
+          vendor: body.vendor ?? null,
+          categoryId: body.categoryId ?? null,
+          ...links,
+          notes: entry.note,
+          createdByUserId: user.id,
+        },
+        body.vendorDetails,
+        now,
       );
+      const filed = await withCategoryForeignKey(() => store.inboxEntries.fileAsExpense({ userId: user.id, inboxEntryId: entry.id, kind: 'EXPENSE', expense }, now));
       if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
+      await touchExpenseVendor(store, filed.expense, now);
 
       await store.audit.append({
         organizationId: organization.id,
