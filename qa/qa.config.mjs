@@ -68,7 +68,9 @@ export default {
       // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
       watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
         '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
-        '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts'],
+        '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts',
+        // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
+        '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -92,6 +94,13 @@ export default {
         'server/src/billing/checkout.ts',
         'server/src/billing/billing-countries.json',
         'server/src/billing/stripe/checkout-gateway.ts',
+        // MUT-418: the free trial's card prompt (first-run step, Home banner) and the answers it stores.
+        'src/hosted/components/TrialBanner.tsx',
+        'src/hosted/data/trialPrompt.ts',
+        'src/hosted/data/trialPromptQueries.ts',
+        'src/hosted/shell/TrialWelcomeOpener.tsx',
+        'src/hosted/session/trialWelcomeOffer.ts',
+        'server/src/billing/trial-prompt.ts',
       ],
       // support/billing-live.mjs: the Keychain sandbox key, a migrated QA database, the sandbox catalog,
       // `stripe listen`, the API on :8790 and the portal on :5176 (8787-8789 are other sessions' dev APIs).

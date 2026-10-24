@@ -243,8 +243,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
       queryClient.setQueryData(ME_KEY, me);
       adoptAccountLocale(me.user.locale);
-      // A new account starts on its personal profile (D13; MUT-418's first-run step goes there)
-      void navigate({ to: signup ? firstRunPath(me) : '/', replace: true });
+      // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
+      void navigate({ ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as never);
     } catch (error) {
       // MUT-367: the password is right but the operator hasn't approved the account yet
       onOutcome(error instanceof ApiError && error.code === 'ACCOUNT_UNDER_REVIEW' ? { kind: 'underReview' } : otherwise);

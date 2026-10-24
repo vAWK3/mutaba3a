@@ -63,7 +63,16 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
 
 export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' = 'en'): Me {
   return {
-    user: { id: '99999999-9999-4999-8999-999999999999', email: 'nour@firm.ps', displayName: 'Nour Haddad', locale, malafatSuggestions: { off: false, dismissed: [] } },
+    user: {
+      id: '99999999-9999-4999-8999-999999999999',
+      email: 'nour@firm.ps',
+      displayName: 'Nour Haddad',
+      locale,
+      malafatSuggestions: { off: false, dismissed: [] },
+      // MUT-418: a test person has answered the first-run trial step unless a test says otherwise.
+      trialPrompt: { welcomedAt: '2026-10-01T09:00:00.000Z', welcomeAnswer: 'skipped', bannerSnoozedUntil: null },
+      status: 'ACTIVE',
+    },
     profiles,
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
     // MUT-324: a signed-in test person has accepted the current terms unless a test says otherwise.

@@ -1,5 +1,5 @@
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -80,6 +80,27 @@
       "description": "A payment received was saved. Phone: on the local save. Portal: when the server confirms Record payment.",
       "properties": {
         "currency": { "type": "currency", "description": "The payment's currency code. Never the amount." }
+      }
+    },
+    "trial_card_prompt_shown": {
+      "emitters": ["portal"],
+      "description": "MUT-418: the free trial's card prompt was shown: the first-run step, or the Home banner (once per page view). Opt-in only (ADR-090), so first-run counts are partial; users.trialPrompt holds every answer.",
+      "properties": {
+        "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
+      }
+    },
+    "trial_card_prompt_accepted": {
+      "emitters": ["portal"],
+      "description": "MUT-418: the person chose to add a card from the trial's card prompt (it opens Subscribe, then Stripe Checkout with the rest of the trial).",
+      "properties": {
+        "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
+      }
+    },
+    "trial_card_prompt_skipped": {
+      "emitters": ["portal"],
+      "description": "MUT-418: the person declined the trial's card prompt: Not now (or closing) on the first-run step, or hiding the Home banner for 3 days.",
+      "properties": {
+        "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
       }
     }
   }

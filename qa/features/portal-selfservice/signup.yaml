@@ -36,7 +36,7 @@ features:
       - The page is Arabic, right to left, and says the terms come with the password
       - '"Check your email" names the address; the mail is in the page''s language'
       - /setup says "Finish creating your account", with the address read-only and the currency and time zone
-      - The person lands signed in on their personal profile
+      - The person lands signed in on their personal profile, on "Your 14-day free trial has started" (MUT-418; no Stripe on this API, so "Subscriptions open soon" and Continue, no card), then Home
   - id: existing-email
     title: Signing up with an address that already has an account shows the same "Check your email", and the mail says how to sign in instead
     steps:
@@ -112,7 +112,7 @@ features:
     expect:
       - After /setup, "We're reviewing your account. We'll email you within 2 working days." with the support address and Sign out
       - Sign-in shows the same screen
-      - The approval mail arrives, and sign-in lands on Home
+      - The approval mail arrives, and sign-in opens "Your 14-day free trial has started" (MUT-418 D6), then Home
   - id: review-declined
     title: When the operator declines a waiting signup, the decline mail names the support address and sign-in is refused like any unknown account
     paths:

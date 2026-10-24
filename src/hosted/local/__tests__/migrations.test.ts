@@ -65,8 +65,22 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(4);
-    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, emailVerifiedAt: null })));
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    // 4 → 5 runs next and answers nothing on the trial prompt.
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, emailVerifiedAt: null, trialPrompt: null })));
+  });
+
+  it('4 → 5 (MUT-418): people arrive with nothing answered on the trial prompt (a device has no trial)', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'trialPrompt'))]));
+    const before: StoredSnapshot = { formatVersion: 4, stateVersion: 2, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(5);
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, trialPrompt: null })));
   });
 
   it("leaves the snapshot it was given untouched", async () => {

@@ -209,7 +209,11 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
    1 year, on the product tagged `tier: freelancer`; a price that isn't is never sold (MUT-362 review: it would be paid
    but never mirrored, or break the VAT promise). Don't turn on Adaptive Pricing or add currency options to them: the
    server pins Checkout to the price's own currency. Until both of a currency's prices exist, Billing says
-   "Subscriptions open soon". A changed price shows within 10 minutes.
+   "Subscriptions open soon". A changed price shows within 10 minutes. **MUT-418 (Basel, 2026-10-23):** the GA list
+   prices are ₪49.00 / $16.00 a month and ₪490.00 / $160.00 a year, VAT-exclusive. To change an amount later, create
+   a new Price with the same lookup key and **Transfer lookup key** ticked (the API's `transfer_lookup_key=true`); the
+   old Price keeps the subscriptions already on it. The sandbox holds the same amounts
+   (`node qa/support/billing-live.mjs --catalog-only` sets them).
 4. **Webhook endpoint.** In the Mutaba3a Stripe account, add the endpoint `https://<api host>/v1/billing/stripe/webhook`
    with exactly these 9 events (`HANDLED_EVENT_TYPES` in `server/src/billing/stripe/sync.ts`):
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,

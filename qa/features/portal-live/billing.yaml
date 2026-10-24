@@ -6,9 +6,9 @@ tier: secondary
 # `stripe listen` forwarding the webhook, so the flows fill Stripe's real hosted Checkout and cancel in its real
 # Customer Portal. Checkout's Subscribe runs an hCaptcha that never passes under automation, and QA doesn't work
 # around bot checks, so the paying flows fill the page, then pay on that Checkout's own customer and price through
-# Stripe's API and follow its success URL back (TD-201). Started by qa/support/billing-live.mjs. billing-countries.json ships with no consumer country
-# (Basel fills it after MUT-355), so the paying flows buy as a business; a person's card path is covered by
-# server/src/billing/__tests__/checkout.test.ts and the route tests.
+# Stripe's API and follow its success URL back (TD-201). Started by qa/support/billing-live.mjs. MUT-418: consumers
+# everywhere (billing-countries.json "*"), the GA list prices ₪49 / $16 a month, and the trial's card prompt, which
+# starts at a real signup on this API (memory mailer, fixture domains, Turnstile's test secret).
 paths:
   - src/hosted/components/BillingDrawer.tsx
   - src/hosted/data/billingView.ts
@@ -39,7 +39,7 @@ features:
       - Pay (through Stripe's API on this Checkout's customer and price; its page blocks automated payment)
     expect:
       - Our drawer explains the plan, both prices, the VAT sentence and the cancel rule before any Stripe page (AC4)
-      - Stripe's page charges ₪39.00 a month, asks for "Business tax number · الرقم الضريبي" and shows our Arabic + English note
+      - Stripe's page charges ₪49.00 a month, asks for "Business tax number · الرقم الضريبي" and shows our Arabic + English note
       - The Checkout is on the person's own Stripe customer (metadata mutaba3a_user_id), in subscription mode, at freelancer_list_monthly_ils
       - Back in the portal the drawer says "Confirming your payment…", then "You're subscribed. Thank you." once the webhook lands, with Manage billing (AC1, ILS)
   - id: subscribe-usd
@@ -50,18 +50,61 @@ features:
       - Choose United Arab Emirates, For a business, Yearly
       - Fill in Stripe's page with the test card and a UAE TRN, then pay (through Stripe's API, as above)
     expect:
-      - The step's summary and Stripe's page show $100.00 a year; Yearly is labelled "2 months free"
+      - The step's summary and Stripe's page show $160.00 a year; Yearly is labelled "2 months free"
       - Back in the portal the drawer says "You're subscribed. Thank you." (AC1, USD)
-  - id: business-only
-    title: A person outside the countries open to consumers never reaches the card form; a business can go on
+  - id: consumer-everywhere
+    title: A person in any country goes straight on to the card; a business still gives its tax number
     tier: secondary
     steps:
       - Sign in, open Billing and press Subscribe
       - Choose Jordan and For yourself
-      - Switch to For a business
+      - Continue to Stripe's page
     expect:
-      - As a person, "We can't sell to individuals in Jordan yet" with Contact us, and Continue to payment stays disabled (AC2)
-      - As a business, the summary shows $10.00 a month and Continue to payment is enabled
+      - '"No tax number needed, in any country", the summary shows $16.00 a month, and Continue to payment is enabled (MUT-418 comment 12451)'
+      - Stripe's page charges $16.00 a month and asks for no business tax number
+  - id: trial-start
+    title: A new signup lands on "Your 14-day free trial has started"; adding a card keeps the trial and the first charge is its end
+    tier: core
+    paths:
+      - src/hosted/session/trialWelcomeOffer.ts
+      - src/hosted/shell/TrialWelcomeOpener.tsx
+      - src/hosted/data/trialPrompt.ts
+      - src/hosted/data/trialPromptQueries.ts
+      - server/src/billing/trial-prompt.ts
+      - server/src/routes/sessions.ts
+      - server/src/routes/me.ts
+      - qa/support/billing-live.mjs
+    steps:
+      - Ask for a signup link on a business address and open the mail's link
+      - Finish creating the account (password, terms) in English
+      - Read the trial step, then press Add a card now (recommended)
+      - Choose Israel, For yourself, Monthly and continue to Stripe's page
+      - Fill in the test card and an Israeli address, then add it (through Stripe's API with the trial's end, TD-201)
+      - Go back to Home
+    expect:
+      - The first sign-in lands on "Your 14-day free trial has started" with its end date, "You won't be charged until <date>. Cancel any time before then.", Add a card now (recommended) and Not now (AC1)
+      - 'The Subscribe step shows ₪49.00 and "Your free trial continues: the first charge is on <date>"; Stripe''s page shows the free days first and asks a person for no tax number'
+      - Back in the portal, "You're subscribed. Thank you." and "Card added. Your first charge is on <trial end>"; Stripe holds a trialing subscription whose trial_end is the trial end, and /v1/me says ACTIVE paid by Stripe (AC2)
+      - Home shows neither the step nor the trial banner again
+  - id: trial-banner
+    title: The Home trial banner in Arabic on a 375 px phone - Not now, hide for 3 days, the last 3 days, gone once a card is on file
+    tier: secondary
+    paths:
+      - src/hosted/components/TrialBanner.tsx
+      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/data/trialPrompt.ts
+    steps:
+      - Sign up and finish the account in Arabic on a 375 px screen
+      - Press ليس الآن on the trial step
+      - Press إخفاء لمدة 3 أيام, then reload
+      - Move the trial to its last 3 days, then reload
+      - Add a card (a trialing subscription through Stripe's API), then reload
+    expect:
+      - The trial step reads right to left in Arabic with nothing overflowing sideways
+      - Not now lands on Home with the days left in the trial and أضف بطاقة (AC3); the step never returns
+      - Hidden, the banner stays hidden after a reload (the snooze is stored on the account)
+      - In the last 3 days it shows again ("بقي يومان من تجربتك المجانية") with no way to hide it
+      - Once a card is on file the banner is gone (AC3)
   - id: manage
     title: Manage billing opens Stripe's Customer Portal; cancelling keeps the plan until the period ends
     tier: core
@@ -93,4 +136,4 @@ features:
       - Open Billing, then the Subscribe step, choose Israel and For a business
     expect:
       - Nothing overflows sideways; the headline, chip and buttons read right to left
-      - The amount reads ₪39.00 inside Arabic text (<bdi>), and Continue to payment spans the footer (AC4, DR10)
+      - The amount reads ₪49.00 inside Arabic text (<bdi>), and Continue to payment spans the footer (AC4, DR10)

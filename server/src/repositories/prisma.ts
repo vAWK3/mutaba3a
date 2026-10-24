@@ -9,6 +9,7 @@ import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
+import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -340,6 +341,14 @@ export class PrismaLedgerStore implements LedgerStore {
         if (!locked) return null;
         const next = applyMalafatChange(locked.malafatSuggestions, change);
         return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
+      }),
+    // MUT-418: the same row-lock discipline, so a welcome answered on two devices keeps the first
+    updateTrialPrompt: async (id, action, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ trialPrompt: unknown }>>`SELECT "trialPrompt" FROM "users" WHERE "id" = ${id}::uuid FOR UPDATE`;
+        if (!locked) return null;
+        const next = applyTrialPromptAction(locked.trialPrompt, action, at);
+        return toUser(await tx.user.update({ where: { id }, data: { trialPrompt: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
       }),
     latestTermsAcceptance: async (userId) =>
       mapNullable(await this.prisma.termsAcceptance.findFirst({ where: { userId }, orderBy: { version: 'desc' } }), toTermsAcceptance),
@@ -2739,6 +2748,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     lastSignInAt: row.lastSignInAt,
     emailVerifiedAt: row.emailVerifiedAt,
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
+    trialPrompt: row.trialPrompt === null ? null : resolveTrialPrompt(row.trialPrompt),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

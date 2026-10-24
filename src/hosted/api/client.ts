@@ -22,6 +22,9 @@ export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type RemoveProfileOwnerResponse = Schemas['RemoveProfileOwnerResponse'];
 export type ProfileOwner = Schemas['ProfileOwner'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
+/** MUT-418: the person's answers to the trial's card prompt. */
+export type TrialPrompt = Schemas['TrialPrompt'];
+export type TrialPromptAction = Schemas['TrialPromptChange']['action'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
@@ -405,6 +408,8 @@ export const api = {
     request<Schemas['SelfServiceAccepted']>('POST', '/v1/account-recovery', { body, signal }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */
+  changeTrialPrompt: (action: TrialPromptAction) => request<TrialPrompt>('PATCH', '/v1/me/trial-prompt', { body: { action } }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
   acceptTerms: (body: Schemas['TermsAcceptanceRequest']) => request<Schemas['TermsStatus']>('POST', '/v1/me/terms-acceptance', { body }),
   /** MUT-362: Settings › Billing. Person-level: no profile header; signed in only. */

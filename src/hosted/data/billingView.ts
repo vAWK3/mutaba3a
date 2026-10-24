@@ -10,6 +10,8 @@ export type BillingAction = 'subscribe' | 'manage' | 'payInPortal' | 'contactUs'
 
 export type BillingPanel =
   | { kind: 'active'; renewsAt: string; interval: 'month' | 'year' | null }
+  /** MUT-418: a card added during the free trial: Stripe's `trialing`, first charged on the trial's end. */
+  | { kind: 'activeTrial'; firstChargeAt: string }
   | { kind: 'pending' }
   | { kind: 'ending'; endsAt: string }
   | { kind: 'grace' }
@@ -62,11 +64,15 @@ export function firstChargeOf(billing: BillingOverview, now: Date): string | nul
   return endsAt;
 }
 
+/** Subscribe can open: Stripe is configured on this server and at least one currency has its price pair (DR4/DR5). */
+export function isSellable(billing: Pick<BillingOverview, 'configured' | 'catalog'>): boolean {
+  return billing.configured && (billing.catalog.ILS !== null || billing.catalog.USD !== null);
+}
+
 export function billingViewOf(billing: BillingOverview, profiles: readonly BillingProfile[], now: Date): BillingView {
   const fromSubscription = billing.subscription ? subscriptionPanel(billing.subscription) : null;
   const { panel, action } = fromSubscription ?? profilePanel(profiles, billing, now);
-  const sellable = billing.configured && (billing.catalog.ILS !== null || billing.catalog.USD !== null);
-  return { panel, action, openSoon: action === 'subscribe' && !sellable };
+  return { panel, action, openSoon: action === 'subscribe' && !isSellable(billing) };
 }
 
 /** The subscription decides while it exists; a cancelled or abandoned one hands over to the profiles. */
@@ -76,9 +82,10 @@ function subscriptionPanel(sub: Subscription): { panel: BillingPanel; action: Bi
       return { panel: { kind: 'pending' }, action: 'manage' };
     case 'active':
     case 'trialing':
-      return sub.cancelAtPeriodEnd
-        ? { panel: { kind: 'ending', endsAt: sub.currentPeriodEnd }, action: 'manage' }
-        : { panel: { kind: 'active', renewsAt: sub.currentPeriodEnd, interval: sub.interval }, action: 'manage' };
+      if (sub.cancelAtPeriodEnd) return { panel: { kind: 'ending', endsAt: sub.currentPeriodEnd }, action: 'manage' };
+      // MUT-418: a card added in the trial keeps the rest of it; Stripe's first charge is the trial's end (the period end).
+      if (sub.status === 'trialing') return { panel: { kind: 'activeTrial', firstChargeAt: sub.currentPeriodEnd }, action: 'manage' };
+      return { panel: { kind: 'active', renewsAt: sub.currentPeriodEnd, interval: sub.interval }, action: 'manage' };
     case 'past_due':
       return { panel: { kind: 'grace' }, action: 'manage' };
     case 'unpaid':
@@ -132,10 +139,11 @@ export function daysLeft(iso: string, now: Date): number {
 /** Plan §2.3, mirrored for the step's wording: the server is still the one that decides. */
 export function checkoutRouteOf(country: string | null, buyer: 'person' | 'business', countries: BillingOverview['countries']): CheckoutRoute | null {
   if (!country) return null;
-  const consumer = countries.consumer.includes(country);
+  // MUT-418 (D11): `consumerEverywhere` is billing-countries.json's "*"; an older server sends no field.
+  const consumer = countries.consumerEverywhere === true || countries.consumer.includes(country);
   if (buyer === 'person') return consumer ? 'card' : 'contact-us';
-  if (countries.customTaxId.includes(country)) return 'card-tax-number';
-  return consumer ? 'card' : 'card-tax-id';
+  // MUT-418 D10: a business proves it is one in every country (the server's rule).
+  return countries.customTaxId.includes(country) ? 'card-tax-number' : 'card-tax-id';
 }
 
 export function currencyOfCountry(country: string): 'ILS' | 'USD' {

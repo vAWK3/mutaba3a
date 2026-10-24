@@ -3605,3 +3605,14 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Route (server) | `routes-self-service.test.ts`, `routes-account-setup.test.ts`, `routes-users.test.ts`, `portal.test.ts`, `no-self-registration.test.ts`, `route-security.test.ts` | `GET /v1/self-service` for every switch/mail combination, public, no-store; a dead link's purpose (and none for an unknown token); the CSP; the public-operation pins |
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
+
+## MUT-418 — Trial start step, Home trial banner, consumers everywhere (2026-10-24, ADR-180)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server unit | `billing/__tests__/trial-prompt.test.ts` (resolve, first answer wins, snooze); `billing/__tests__/checkout.test.ts` (`"*"`, business always proves it is one, D9 flag under `"*"`) | `npm --prefix server test` |
+| Server routes | `routes-sessions.test.ts` (PATCH /v1/me/trial-prompt: both sessions, device, 422s, CSRF/key/401, no audit); `billing-routes.test.ts` (`consumerEverywhere`, a person in JO gets Checkout); `users-cli.test.ts` (no D9 flag under `"*"`); `route-security`, `portal-routes-coverage` | same |
+| Store contract | `store-contract-users.ts` (memory + Prisma via test:db): `updateTrialPrompt`, concurrent answers keep one | `npm --prefix server run test:db` |
+| Portal unit | `data/__tests__/trialPrompt.test.ts`, `session/__tests__/firstRun.test.ts`, `data/__tests__/billingView.test.ts` (activeTrial, `isSellable`, consumers everywhere), local `migrations.test.ts` (4 → 5) + fingerprint | `npm run test:run` |
+| Portal integration | `components/__tests__/TrialWelcome.test.tsx`: step (open, Not now, close, Add a card → Subscribe by replace, open-soon, never for answered/paid/<48 h, Arabic, no reopen after /setup's link), banner (Add a card, hide, last 3 days, gone when paid, no card when unsellable), `/` keeps drawer keys | same |
+| Release-QA | `portal-live.billing.trial-start` (core), `.trial-banner`, `.consumer-everywhere`, and the amount updates in `.subscribe`, `.subscribe-usd`, `.rtl-375`; `portal-selfservice.signup.*` pass through the step's open-soon variant | `release-qa run --attach --only portal-live.billing` (env: `node qa/support/billing-live.mjs`) |

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
+import { applyTrialPromptAction } from '../billing/trial-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -163,8 +164,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 3 (MUT-255): `expReceipts` gained `filingStatus`, `receivedOn`, `suggested`, `approved`, `approvedAt`,
  *   `approvedByUserId` and `version`, and `expenseId` may be null (a To-review receipt).
  * 4 (MUT-366): `people` gained `emailVerifiedAt`.
+ * 5 (MUT-418): `people` gained `trialPrompt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 4;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 5;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -494,6 +496,12 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
     },
+    updateTrialPrompt: async (id, action, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { trialPrompt: applyTrialPromptAction(u.trialPrompt, action, at), updatedAt: at });
+      return { ...u, trialPrompt: u.trialPrompt && { ...u.trialPrompt } };
+    },
     latestTermsAcceptance: async (userId) => {
       let latest: TermsAcceptanceRecord | undefined;
       for (const a of this.termsAcceptances.values()) if (a.userId === userId && (!latest || a.version > latest.version)) latest = a;
@@ -609,6 +617,7 @@ export class MemoryLedgerStore implements LedgerStore {
       lastSignInAt: null,
       emailVerifiedAt: input.emailVerifiedAt,
       malafatSuggestions: null,
+      trialPrompt: null,
       createdAt: input.at,
       updatedAt: input.at,
     };

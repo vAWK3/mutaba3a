@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.58.0-mut368
+  version: 1.59.0-mut418
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -194,6 +194,8 @@ components:
               $ref: "#/components/schemas/UserLocale"
             malafatSuggestions:
               $ref: "#/components/schemas/MalafatSuggestions"
+            trialPrompt:
+              $ref: "#/components/schemas/TrialPrompt"
             status:
               $ref: "#/components/schemas/UserStatus"
           required:
@@ -202,6 +204,7 @@ components:
             - displayName
             - locale
             - malafatSuggestions
+            - trialPrompt
             - status
         profiles:
           type: array
@@ -260,6 +263,28 @@ components:
         - business-profile
         - client-threshold
         - second-business
+    TrialPrompt:
+      type: object
+      properties:
+        welcomedAt:
+          type: string
+          nullable: true
+          format: date-time
+        welcomeAnswer:
+          type: string
+          nullable: true
+          enum:
+            - accepted
+            - skipped
+            - null
+        bannerSnoozedUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - welcomedAt
+        - welcomeAnswer
+        - bannerSnoozedUntil
     UserStatus:
       type: string
       enum:
@@ -541,6 +566,18 @@ components:
           uniqueItems: true
       additionalProperties: false
       minProperties: 1
+    TrialPromptChange:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - welcome-accepted
+            - welcome-skipped
+            - banner-snoozed
+      required:
+        - action
+      additionalProperties: false
     TermsAcceptanceRequest:
       type: object
       properties:
@@ -6209,12 +6246,15 @@ components:
               type: array
               items:
                 type: string
+            consumerEverywhere:
+              type: boolean
             customTaxId:
               type: array
               items:
                 type: string
           required:
             - consumer
+            - consumerEverywhere
             - customTaxId
         coveredProfileIds:
           type: array
@@ -7548,6 +7588,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MalafatSuggestions"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/trial-prompt:
+    patch:
+      tags:
+        - Sessions
+      summary: The person's answers to the free trial's card prompt (MUT-418)
+      description: '`welcome-accepted` / `welcome-skipped` answer the first-run "Your free trial has started" step; the first answer wins, so two devices never undo each other. `banner-snoozed` hides the Home trial banner for 3 days from now (server clock). Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees.'
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialPromptChange"
+      responses:
+        "200":
+          description: The answers now stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialPrompt"
         "401":
           description: No valid session
           content:
@@ -14844,7 +14924,7 @@ paths:
       tags:
         - Billing
       summary: Open Stripe Checkout for the Freelancer plan
-      description: Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
+      description: Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
       security:
         - session: []
         - deviceSession: []

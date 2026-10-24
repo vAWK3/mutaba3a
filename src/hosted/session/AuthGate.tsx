@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Navigate, Outlet, useNavigate, useRouter } from '@tanstack/react-router';
+import { Navigate, Outlet, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +13,7 @@ import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
 import { useLostAccess } from './lostAccess';
 import { useIsLocalMode } from './mode';
 import { ProfileBanner } from '../components/ProfileBanner';
+import { pickShellOverlay } from '../data/filters';
 import { useSignOut } from './useSignOut';
 
 /**
@@ -75,8 +76,11 @@ function RedirectToSignIn() {
 /** The first hosted profile at `to`, or S11 when the account has none. */
 function FirstProfileRedirect({ to }: { to: string }) {
   const { profiles } = useMe();
+  // MUT-418 (D14): the shell's drawer keys ride along, so `/?billing=true&step=subscribe` (a mail's link, the lapse
+  // gate) opens Billing on the profile it lands on.
+  const overlay = pickShellOverlay(useSearch({ strict: false }) as Record<string, unknown>);
   if (profiles.length === 0) return <NoProfiles />;
-  return <Navigate to={`/p/${profiles[0].id}${to}`} replace />;
+  return <Navigate to={`/p/${profiles[0].id}${to}`} search={overlay as never} replace />;
 }
 
 /** `/`: the first hosted profile, or S11 when the account has none. */

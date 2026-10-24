@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { entitlementsFor, serializeEntitlement } from '../billing/coverage.js';
+import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
@@ -74,7 +75,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
   profiles.sort((a, b) => rank(a) - rank(b));
   const [ownedProfiles, termsNow] = await Promise.all([store.organizations.countOwnedBy(user.id), terms && termsStatus(store, user.id, terms)]);
   return {
-    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions), status: user.status },
+    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions), trialPrompt: resolveTrialPrompt(user.trialPrompt), status: user.status },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },
     currencies: [...SUPPORTED_CURRENCIES],

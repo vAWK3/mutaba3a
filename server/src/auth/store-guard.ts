@@ -71,6 +71,8 @@ export const STORE_ACCESS: StoreAccess = {
     recordSignIn: 'control',
     // MUT-191: a person's own preference, written by their session (identity row)
     updateMalafatSuggestions: { write: 'identity' },
+    // MUT-418: the person's answers to the trial's card prompt, the same identity-row write.
+    updateTrialPrompt: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.

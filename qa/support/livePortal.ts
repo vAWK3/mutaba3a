@@ -90,8 +90,11 @@ export async function customerOnClock(person: LivePerson): Promise<{ customerId:
   return { customerId: customer.id, clockId: clock.id, now };
 }
 
-/** A paid subscription on that customer (test card, monthly ILS unless named), mirrored into the API by the webhook. */
-export async function subscribeByApi(customerId: string, lookupKey = 'freelancer_list_monthly_ils'): Promise<string> {
+/**
+ * A paid subscription on that customer (test card, monthly ILS unless named), mirrored into the API by the webhook.
+ * `trialEnd` (MUT-418) starts it `trialing` until then, as our Checkout does during the free trial (ADR-170 R-D2).
+ */
+export async function subscribeByApi(customerId: string, lookupKey = 'freelancer_list_monthly_ils', trialEnd?: number): Promise<string> {
   await stripeApi('POST', 'payment_methods/pm_card_visa/attach', { customer: customerId }).catch(() => undefined);
   const methods = await stripeApi('GET', 'payment_methods', { customer: customerId, type: 'card' });
   const prices = await stripeApi('GET', 'prices', { 'lookup_keys[]': lookupKey });
@@ -99,6 +102,7 @@ export async function subscribeByApi(customerId: string, lookupKey = 'freelancer
     customer: customerId,
     'items[0][price]': prices.data[0].id,
     default_payment_method: methods.data[0].id,
+    ...(trialEnd ? { trial_end: String(trialEnd) } : {}),
   });
   return sub.id;
 }
@@ -146,7 +150,7 @@ export async function fillStripeCheckout(page: Page, opts: { name: string; count
  * (TD-201), so the subscription is made on the customer this Checkout was opened for, with the price it sells.
  * Checks the session first: our person's own customer (D3), subscription mode, the lookup key.
  */
-export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey: string): Promise<void> {
+export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey: string, opts: { trialEnd?: number } = {}): Promise<void> {
   const sessionId = /\/(cs_test_[A-Za-z0-9]+)/.exec(page.url())?.[1];
   expect(sessionId, 'a Checkout Session in the page URL').toBeTruthy();
   const session = await stripeApi('GET', `checkout/sessions/${sessionId}`, { 'expand[]': 'line_items' });
@@ -154,7 +158,70 @@ export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey
   expect(session.line_items.data[0].price.lookup_key).toBe(lookupKey);
   const customer = await stripeApi('GET', `customers/${session.customer}`);
   expect(customer.metadata.mutaba3a_user_id).toBe(person.userId);
-  await subscribeByApi(session.customer, lookupKey);
+  await subscribeByApi(session.customer, lookupKey, opts.trialEnd);
   await stripeApi('POST', `checkout/sessions/${sessionId}/expire`);
   await page.goto(session.success_url);
+}
+
+// ---- MUT-418: people who start at a real signup, so their free trial is the one the redeem starts ----------------
+
+const DB = { container: 'mutaba3a-test-pg', database: 'mutaba3a_qa_billing' };
+const SIGNUP_PASSWORD = 'qa-live-trial-passphrase-long';
+
+export interface TrialPerson extends LivePerson {
+  password: string;
+}
+
+/** An address the fixture domain checker opens at once (business.example), unique to this run. */
+function signupAddress(label: string): string {
+  return `qa-trial-${label}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}@business.example`;
+}
+
+/** A random client address per signup, so the API's per-IP budget (it trusts one proxy hop here) never adds up. */
+const randomIp = () => `10.${[0, 0, 0].map(() => Math.floor(Math.random() * 254) + 1).join('.')}`;
+
+/**
+ * Asks for a signup link as the /signup page does (Turnstile's always-pass test secret on this dev API), reads the
+ * mail from the memory outbox, and returns the /setup link the person would click.
+ */
+export async function requestSignup(locale: 'en' | 'ar', label: string): Promise<{ email: string; setupLink: string }> {
+  const { apiOrigin, portalOrigin, adminToken } = liveState();
+  const email = signupAddress(label);
+  const res = await fetch(`${apiOrigin}/v1/signups`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: portalOrigin, 'x-forwarded-for': randomIp() },
+    body: JSON.stringify({ email, locale, turnstileToken: 'qa-turnstile-test-token' }),
+  });
+  expect(res.status, `signup ${await res.clone().text()}`).toBe(202);
+  let link: string | undefined;
+  await expect
+    .poll(async () => {
+      const mails = (await fetch(`${apiOrigin}/admin/v1/dev-outbox?to=${encodeURIComponent(email)}`, { headers: { 'x-admin-token': adminToken } }).then((r) => r.json())) as { mails: Array<{ template: string; text: string }> };
+      link = mails.mails.filter((m) => m.template === 'finish-signup').at(-1)?.text.match(/https?:\/\/[^\s]+\/setup#[A-Za-z0-9_-]{43}/)?.[0];
+      return link !== undefined;
+    }, { message: `a finish-signup mail to ${email}`, timeout: 15_000 })
+    .toBe(true);
+  return { email, setupLink: link! };
+}
+
+/** Opens the mail's /setup link and finishes the account in the page's language; returns the signed-in person. */
+export async function finishSignupInPage(page: Page, signup: { email: string; setupLink: string }, language: 'en' | 'ar'): Promise<TrialPerson> {
+  const copy = language === 'ar'
+    ? { finish: 'أكمل إنشاء حسابك', password: 'كلمة المرور الجديدة', terms: /شروط الخدمة/, create: 'أنشئ الحساب' }
+    : { finish: 'Finish creating your account', password: 'New password', terms: /terms of service/, create: 'Create account' };
+  await page.goto(signup.setupLink);
+  await expect(page.getByRole('heading', { level: 1, name: copy.finish })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel(copy.password).fill(SIGNUP_PASSWORD);
+  await page.getByRole('checkbox', { name: copy.terms }).check();
+  await page.getByRole('button', { name: copy.create }).click();
+  await page.waitForURL(/\/p\/[0-9a-f-]{36}/, { timeout: 30_000 });
+  const me = await (await page.request.get('/v1/me')).json();
+  const personal = me.profiles.find((p: { isPersonalDefault: boolean }) => p.isPersonalDefault);
+  return { userId: me.user.id, email: signup.email, personalId: personal.id, password: SIGNUP_PASSWORD };
+}
+
+/** Moves the person's trial start in the QA database (no clock route exists): `daysAgo` days before now. */
+export function setTrialStartedDaysAgo(userId: string, daysAgo: number): void {
+  const sql = `UPDATE users SET "trialStartedAt" = now() - interval '${Number(daysAgo)} days' WHERE id = '${userId.replace(/[^0-9a-f-]/g, '')}'`;
+  execFileSync('docker', ['exec', DB.container, 'psql', '-U', 'mutaba3a', '-d', DB.database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
 }

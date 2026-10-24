@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — "Your 14-day free trial has started", a card recommended and skippable; consumers everywhere; GA sandbox prices (MUT-418, ADR-180)
+
+**Why:** Basel's sellable portal is "sign up → onboarding → 14-day trial → card optional but recommended". MUT-362 already kept the trial when a card is added during it, but nothing asked. Basel also decided anyone may subscribe as an individual, in every country (comment 12451).
+
+### Added
+- **First-run trial step** (`?billing=true&step=welcome`, a step of the Billing drawer): "Your 14-day free trial has started", the end date, "Add a card now (recommended)" (→ the Subscribe step → Checkout with `trial_end`) and "Not now". With no price pair it says subscriptions open soon and offers Continue only. `firstRunPath` opens it after /setup; `TrialWelcomeOpener` after any other first sign-in (an approved webmail signup). Shown only while ≥ 48 h of trial remain.
+- **Home trial banner** (`TrialBanner`, Overview): "N days left in your free trial · Add a card" while the person's trial runs with no card; "Hide for 3 days", not offered in the last 3 days.
+- **Server:** `users.trialPrompt` (JSON, migration `20261024120000_mut418_trial_prompt`), `PATCH /v1/me/trial-prompt` (`welcome-accepted` | `welcome-skipped` | `banner-snoozed`; first answer wins, row-locked, no audit), `/v1/me` `user.trialPrompt`.
+- **Billing drawer:** a `trialing` subscription reads "Card added. Your first charge is on <trial end>".
+- **Analytics contract 2.1.0:** `trial_card_prompt_shown|_accepted|_skipped` (portal, `prompt: first_run|banner`), through `trackPortal` (opt-in only).
+- **QA:** `portal-live.billing.trial-start` (core) and `.trial-banner`, starting at a real signup on the billing-live API (memory mailer, fixture domains, Turnstile test secret); `.consumer-everywhere` replaces `.business-only`.
+
+### Changed
+- **Consumers everywhere:** `billing-countries.json` `"consumerCountries": "*"` (validated at boot); `GET /v1/billing` adds `countries.consumerEverywhere`. Buying For a business now always proves it is one (Stripe's tax ID, or the required number field in IL/JO); a person never sees the number field.
+- `/` keeps the shell's drawer keys through its redirect, so `/?billing=true&step=subscribe` opens Subscribe.
+- Local snapshot format 5 (`people.trialPrompt`). API `1.59.0-mut418`.
+- Stripe **sandbox** list prices moved to ₪49 / ₪490 / $16 / $160 by lookup-key transfer (`node qa/support/billing-live.mjs --catalog-only`).
+- The `portal-selfservice` signup specs pass through the trial step (its open-soon variant) on the way to Home.
+
 ## [Unreleased] - 2026-10-24 — The docs name mtb3a.com as the landing; MUT-112 closed
 
 **Why:** MUT-112's steps 0–5 are live (front door, stage `live`, the phone release with both hosts). Its close-out was to point the remaining landing-host rows at `mtb3a.com` (Jira comment 12411). Step 6 (stage `redirect`) and dropping the phone's legacy run.app link host move to MUT-291, which step 6 waits on.

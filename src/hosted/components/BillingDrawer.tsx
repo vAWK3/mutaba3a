@@ -7,14 +7,17 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
+import { trackPortal } from '../analytics/portalAnalytics';
 import { ApiError, apiErrorReason, type BillingOverview } from '../api/client';
 import { billingQuery, billingReturnPath, CONFIRM_POLL_LIMIT_MS, CONFIRM_POLL_MS, useOpenBillingPortal, useStartCheckout } from '../data/billingQueries';
 import {
   billingViewOf,
   checkoutRouteOf,
   currencyOfCountry,
+  daysLeft,
   firstChargeOf,
   isConfirmed,
+  isSellable,
   profilesListOf,
   yearlySavingOf,
   type BillingPanel,
@@ -26,7 +29,10 @@ import { formatDecimal } from '../format/DecimalAmount';
 import { minorToDecimal } from '../format/currencies';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
+import { trialWelcomeApplies } from '../data/trialPrompt';
+import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
 import { ME_KEY, useMe } from '../session/me';
+import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
 import { SUPPORT_EMAIL } from '../terms';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -37,14 +43,22 @@ import { RadioCards } from './RadioCards';
  * order (DR1): a chip, where you stand, the one action, then the price and the rules. Subscribe is a second step in
  * the same drawer (DR2, `?step=subscribe`); Stripe's English pages come only after our own explanation (AC4, DR6).
  * Coming back from Checkout or the Customer Portal, it polls until the webhook lands (eng review D4).
+ * MUT-418: `?step=welcome` is the first-run "Your 14-day free trial has started" step, with adding a card recommended
+ * and skippable; adding one goes to Subscribe, which carries the rest of the trial into Stripe (ADR-170 R-D2).
  */
 
+export type BillingStep = 'subscribe' | 'welcome';
+
+/** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
+const TRIAL_LENGTH_DAYS = 14;
+
 export interface BillingDrawerProps {
-  step: 'subscribe' | undefined;
+  step: BillingStep | undefined;
   checkout: 'success' | 'cancelled' | undefined;
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
-  onStep: (step: 'subscribe' | undefined) => void;
+  /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
+  onStep: (step: 'subscribe' | undefined, replace?: boolean) => void;
   onClose: () => void;
 }
 
@@ -60,7 +74,14 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
   usePortalReturn(portalReturned, billing.data);
   const subscribe = useSubscribeForm(billing.data);
   const subscribing = step === 'subscribe' && billing.data !== undefined;
-  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : t('hosted.billing.title');
+  const welcome = useTrialWelcome(step === 'welcome', billing.data, onStep, onClose);
+  const welcomeTitle = step === 'welcome' && (billing.isPending || welcome.open);
+  // Review: the step is on screen (loading included), so the shell's one offer is spent: closing it while billing
+  // loads never has the shell open it again on this page.
+  useEffect(() => {
+    if (step === 'welcome') takeTrialWelcomeOffer();
+  }, [step]);
+  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : welcomeTitle ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
 
   let body;
   if (billing.isPending) {
@@ -83,6 +104,8 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
         </div>
       </div>
     );
+  } else if (welcome.open) {
+    body = <WelcomeBody welcome={welcome} />;
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
   } else {
@@ -90,7 +113,12 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
   }
 
   return (
-    <Drawer title={title} onClose={onClose} closeLabel={t('common.close')} footer={subscribing ? <SubscribeFooter form={subscribe} /> : undefined}>
+    <Drawer
+      title={title}
+      onClose={welcome.open ? welcome.skip : onClose}
+      closeLabel={t('common.close')}
+      footer={welcome.open ? <WelcomeFooter welcome={welcome} /> : subscribing ? <SubscribeFooter form={subscribe} /> : undefined}
+    >
       {body}
     </Drawer>
   );
@@ -262,6 +290,13 @@ function panelCopy(
         headline: k('headline.active', { date: day(panel.renewsAt) }),
         // DR6: the Stripe note sits under Manage billing; the context is the plan's own line.
         context: panel.interval === 'month' ? k('context.activeMonth') : panel.interval === 'year' ? k('context.activeYear') : null,
+      };
+    case 'activeTrial':
+      return {
+        chip: k('chip.active'),
+        tone: 'mint',
+        headline: k('headline.activeTrial', { date: day(panel.firstChargeAt) }),
+        context: k('context.activeTrial'),
       };
     case 'pending':
       return {
@@ -560,7 +595,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
             {
               value: 'person',
               label: t('hosted.billing.subscribe.person'),
-              note: t('hosted.billing.subscribe.personNote'),
+              note: t(billing.countries.consumerEverywhere ? 'hosted.billing.subscribe.personNoteEverywhere' : 'hosted.billing.subscribe.personNote'),
             },
             {
               value: 'business',
@@ -615,6 +650,91 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
       {firstCharge && <p className="hp-billing-fine">{t('hosted.billing.subscribe.firstCharge', { date: formatInstant(firstCharge, language, browserTimezone()) })}</p>}
       <p className="hp-billing-fine">{t('hosted.billing.subscribe.headsUp')}</p>
       {billing.catalog.ILS === null && billing.catalog.USD === null && <Banner tone="info" text={t('hosted.billing.openSoon')} />}
+    </div>
+  );
+}
+
+/**
+ * MUT-418: the first-run step's state. Open only once billing has loaded (the trial end and whether a card can be
+ * taken both come from it). Every way out but "Add a card now" is "Not now" (D13); each answer is stored once, on
+ * the server, so the step never comes back on any device (D1).
+ */
+function useTrialWelcome(active: boolean, billing: BillingOverview | undefined, onStep: BillingDrawerProps['onStep'], onClose: () => void) {
+  const me = useMe();
+  const answer = useAnswerTrialPrompt();
+  // Review: a hand-typed or stale `?step=welcome` with no running trial (or under 48 h of one) shows the status view,
+  // never "Your 14-day free trial has started".
+  const open = active && billing !== undefined && trialWelcomeApplies(me, new Date());
+  const sellable = billing ? isSellable(billing) : false;
+  const endsAt = billing?.trial?.endsAt ?? me.profiles.find((p) => p.isPersonalDefault)?.billing?.until ?? null;
+  const accept = () => {
+    answer.mutate('welcome-accepted');
+    void trackPortal('trial_card_prompt_accepted', { prompt: 'first_run' });
+    onStep('subscribe', true);
+  };
+  const skip = () => {
+    if (active) {
+      answer.mutate('welcome-skipped');
+      void trackPortal('trial_card_prompt_skipped', { prompt: 'first_run' });
+    }
+    onClose();
+  };
+  return { open, sellable, endsAt, accept, skip };
+}
+
+type TrialWelcome = ReturnType<typeof useTrialWelcome>;
+
+function WelcomeBody({ welcome }: { welcome: TrialWelcome }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const headline = useRef<HTMLHeadingElement>(null);
+  const shown = useRef(false);
+  const tp = useTp();
+  const date = welcome.endsAt ? formatInstant(welcome.endsAt, language, browserTimezone()) : '';
+  // Review: someone first signing in days into the trial (an approval that waited) reads the days left, not "has started".
+  const left = welcome.endsAt ? daysLeft(welcome.endsAt, new Date()) : TRIAL_LENGTH_DAYS;
+  const heading = left >= TRIAL_LENGTH_DAYS - 1 ? t('hosted.billing.welcome.headline') : tp('hosted.billing.headline.trialDaysLeft', left);
+  useEffect(() => {
+    headline.current?.focus();
+    if (shown.current) return;
+    shown.current = true;
+    void trackPortal('trial_card_prompt_shown', { prompt: 'first_run' });
+  }, []);
+  return (
+    <div className="hp-billing hp-billing-welcome">
+      <div className="hp-billing-status">
+        <Chip tone="butter" label={t('hosted.billing.chip.trial')} />
+        <h3 ref={headline} tabIndex={-1} className="hp-billing-headline">
+          {heading}
+        </h3>
+        {date && <p>{t('hosted.billing.welcome.endsOn', { date })}</p>}
+      </div>
+      {/* AC4: no price pair, no card action, and nothing that pretends otherwise (D5). */}
+      {welcome.sellable ? <p className="hp-billing-welcome-pitch">{t('hosted.billing.welcome.pitch', { date })}</p> : <Banner tone="info" text={t('hosted.billing.openSoon')} />}
+      <p className="hp-billing-fine">{t('hosted.billing.welcome.later')}</p>
+    </div>
+  );
+}
+
+function WelcomeFooter({ welcome }: { welcome: TrialWelcome }) {
+  const t = useT();
+  if (!welcome.sellable) {
+    return (
+      <div className="hp-billing-footer">
+        <Button className="hp-billing-continue" onClick={welcome.skip}>
+          {t('hosted.billing.welcome.continue')}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <div className="hp-billing-footer">
+      <Button className="hp-billing-continue" onClick={welcome.accept}>
+        {t('hosted.billing.welcome.addCard')}
+      </Button>
+      <Button className="hp-billing-continue" variant="secondary" onClick={welcome.skip}>
+        {t('hosted.billing.welcome.notNow')}
+      </Button>
     </div>
   );
 }

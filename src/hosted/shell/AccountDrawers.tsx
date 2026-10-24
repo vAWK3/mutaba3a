@@ -28,7 +28,7 @@ export function useAccountDrawers() {
     open: () => go({ changePassword: true }, false),
     openYourData: () => go({ yourData: true }, false),
     /** MUT-362: Settings › Billing; the Subscribe step is its own history entry, so Back returns to the status view (DR2). */
-    openBilling: (step?: 'subscribe') => go(step ? { billing: true, step } : { billing: true }, false),
+    openBilling: (step?: 'subscribe' | 'welcome', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
     /** The step's own Back replaces its entry: browser Back afterwards never reopens the step (review). */
     leaveBillingStep: () => go({ billing: true }, true),
     close: () => go({}, true),
@@ -42,7 +42,7 @@ export function AccountDrawers() {
   if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} />;
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
-    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step) => (step ? drawers.openBilling(step) : drawers.leaveBillingStep())} onClose={drawers.close} />;
+    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }
   return null;
 }

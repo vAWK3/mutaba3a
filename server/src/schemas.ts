@@ -427,7 +427,12 @@ export const BillingOverviewSchema = z
     trial: z.object({ startedAt: z.string().datetime(), endsAt: z.string().datetime(), lockAt: z.string().datetime() }).nullable(),
     catalog: z.object({ ILS: CatalogPairSchema, USD: CatalogPairSchema }),
     /** billing-countries.json: where a person may buy without a tax ID, and where a business types its number. */
-    countries: z.object({ consumer: z.array(z.string()), customTaxId: z.array(z.string()) }),
+    countries: z.object({
+      consumer: z.array(z.string()),
+      /** MUT-418 (D11): every country is open to a person (billing-countries.json "*"); `consumer` is then empty. */
+      consumerEverywhere: z.boolean(),
+      customTaxId: z.array(z.string()),
+    }),
     /** The profiles a payment would cover: the ones the person created (a co-owner's shared profile is its creator's, TD-193). */
     coveredProfileIds: z.array(z.string().uuid()),
   })
@@ -716,6 +721,22 @@ export const MalafatSuggestionsChangeSchema = z
   // The generated spec says what the refinements enforce, so a client built from it sends nothing the server refuses
   .openapi('MalafatSuggestionsChange', { minProperties: 1 });
 
+/** MUT-418 (D1, D2): the person's answers to the trial's card prompt. All null until the first. */
+export const TrialPromptSchema = z
+  .object({
+    /** When the person answered the first-run "Your free trial has started" step; the first answer wins. */
+    welcomedAt: z.string().datetime().nullable(),
+    welcomeAnswer: z.enum(['accepted', 'skipped']).nullable(),
+    /** The Home trial banner stays hidden until then (the portal ignores it in the trial's last 3 days). */
+    bannerSnoozedUntil: z.string().datetime().nullable(),
+  })
+  .openapi('TrialPrompt');
+
+export const TrialPromptChangeSchema = z
+  .object({ action: z.enum(['welcome-accepted', 'welcome-skipped', 'banner-snoozed']) })
+  .strict()
+  .openapi('TrialPromptChange');
+
 /** MUT-324 T1: GET /admin/v1/terms-acceptance — every user and the terms version they last accepted. */
 export const TermsReportSchema = z
   .object({
@@ -754,6 +775,8 @@ export const MeSchema = z
       locale: UserLocaleSchema,
       /** MUT-191: on, nothing dismissed, until the person changes it. */
       malafatSuggestions: MalafatSuggestionsSchema,
+      /** MUT-418: the trial's card prompt (all null until the person answers). Additive since 1.59.0-mut418. */
+      trialPrompt: TrialPromptSchema,
       /**
        * MUT-367 (D16): the account's status, for billing to read. Behind a session it is always ACTIVE: a
        * PENDING_REVIEW or DISABLED account can't sign in. Additive since 1.57.0-mut367.

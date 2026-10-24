@@ -283,6 +283,76 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/me/trial-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * The person's answers to the free trial's card prompt (MUT-418)
+         * @description `welcome-accepted` / `welcome-skipped` answer the first-run "Your free trial has started" step; the first answer wins, so two devices never undo each other. `banner-snoozed` hides the Home trial banner for 3 days from now (server clock). Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialPromptChange"];
+                };
+            };
+            responses: {
+                /** @description The answers now stored */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TrialPrompt"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/v1/me/terms-acceptance": {
         parameters: {
             query?: never;
@@ -10538,7 +10608,7 @@ export interface paths {
         put?: never;
         /**
          * Open Stripe Checkout for the Freelancer plan
-         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) only in a country open to consumers. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
+         * @description Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
          */
         post: {
             parameters: {
@@ -13943,6 +14013,7 @@ export interface components {
                 displayName: string;
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
+                trialPrompt: components["schemas"]["TrialPrompt"];
                 status: components["schemas"]["UserStatus"];
             };
             profiles: components["schemas"]["HostedProfile"][];
@@ -13970,6 +14041,14 @@ export interface components {
         };
         /** @enum {string} */
         MalafatMoment: "business-profile" | "client-threshold" | "second-business";
+        TrialPrompt: {
+            /** Format: date-time */
+            welcomedAt: string | null;
+            /** @enum {string|null} */
+            welcomeAnswer: "accepted" | "skipped" | null;
+            /** Format: date-time */
+            bannerSnoozedUntil: string | null;
+        };
         /** @enum {string} */
         UserStatus: "ACTIVE" | "DISABLED" | "PENDING_REVIEW";
         HostedProfile: {
@@ -14049,6 +14128,10 @@ export interface components {
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
+        };
+        TrialPromptChange: {
+            /** @enum {string} */
+            action: "welcome-accepted" | "welcome-skipped" | "banner-snoozed";
         };
         TermsAcceptanceRequest: {
             version: components["schemas"]["TermsVersion"];
@@ -16192,6 +16275,7 @@ export interface components {
             };
             countries: {
                 consumer: string[];
+                consumerEverywhere: boolean;
                 customTaxId: string[];
             };
             coveredProfileIds: string[];

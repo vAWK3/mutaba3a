@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingEntitlement, BillingOverview } from '../../api/client';
-import { billingViewOf, checkoutRouteOf, currencyOfCountry, daysLeft, firstChargeOf, isConfirmed, profilesListOf, yearlySavingOf, type BillingProfile } from '../billingView';
+import { billingViewOf, checkoutRouteOf, currencyOfCountry, daysLeft, firstChargeOf, isConfirmed, isSellable, profilesListOf, yearlySavingOf, type BillingProfile } from '../billingView';
 
 /**
  * MUT-362 (plan §2.7, design review DR1–DR12): which panel the Billing drawer shows, its one action, and the small
@@ -17,7 +17,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   canManage: false,
   trial: null,
   catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
-  countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
+  countries: { consumer: ['IL', 'GB'], consumerEverywhere: false, customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [],
   ...over,
 });
@@ -32,6 +32,34 @@ const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}): 
 });
 const ent = (state: BillingEntitlement['state'], source: BillingEntitlement['source'], until: string | null = null): BillingEntitlement => ({ state, source, tier: 'FREELANCER', until });
 const profile = (billing: BillingEntitlement | null, owned = true, name = 'Personal'): BillingProfile => ({ id: name, name, owned, billing });
+
+describe('MUT-418: consumers everywhere and a card added in the trial', () => {
+  it('checkoutRouteOf: with consumerEverywhere a person anywhere goes to the card; a business still proves it is one', () => {
+    const everywhere = { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] };
+    for (const country of ['JO', 'US', 'AE', 'IL']) expect(checkoutRouteOf(country, 'person', everywhere), country).toBe('card');
+    expect(checkoutRouteOf('JO', 'business', everywhere)).toBe('card-tax-number');
+    expect(checkoutRouteOf('AE', 'business', everywhere)).toBe('card-tax-id');
+  });
+
+  it('an older server with no consumerEverywhere reads as the list alone', () => {
+    expect(checkoutRouteOf('JO', 'person', { consumer: ['IL'], customTaxId: [] } as unknown as BillingOverview['countries'])).toBe('contact-us');
+  });
+
+  it('trialing → "Card added", the first charge on the period end (= the trial end), Manage billing', () => {
+    expect(billingViewOf(overview({ subscription: sub({ status: 'trialing', currentPeriodEnd: iso(13) }), canManage: true }), [profile(ent('ACTIVE', 'STRIPE', iso(13)))], NOW)).toMatchObject({
+      panel: { kind: 'activeTrial', firstChargeAt: iso(13) },
+      action: 'manage',
+    });
+    // Cancelling inside the trial still reads as ending on that date.
+    expect(billingViewOf(overview({ subscription: sub({ status: 'trialing', cancelAtPeriodEnd: true, currentPeriodEnd: iso(13) }) }), [], NOW).panel).toEqual({ kind: 'ending', endsAt: iso(13) });
+  });
+
+  it('isSellable: Stripe configured and at least one price pair', () => {
+    expect(isSellable(overview())).toBe(true);
+    expect(isSellable(overview({ configured: false }))).toBe(false);
+    expect(isSellable(overview({ catalog: { ILS: null, USD: null } }))).toBe(false);
+  });
+});
 
 describe('billingViewOf: a subscription decides first', () => {
   it('active → renews, Manage billing', () => {
@@ -149,7 +177,8 @@ describe('the Subscribe step’s rules', () => {
     expect(checkoutRouteOf('JO', 'person', countries)).toBe('contact-us');
     expect(checkoutRouteOf('JO', 'business', countries)).toBe('card-tax-number');
     expect(checkoutRouteOf('AE', 'business', countries)).toBe('card-tax-id');
-    expect(checkoutRouteOf('GB', 'business', countries)).toBe('card');
+    // MUT-418 D10: a business proves it is one even where a person needs nothing.
+    expect(checkoutRouteOf('GB', 'business', countries)).toBe('card-tax-id');
   });
 
   it('currency follows the country: shekels in Israel, dollars elsewhere', () => {

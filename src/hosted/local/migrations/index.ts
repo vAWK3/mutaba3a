@@ -101,6 +101,17 @@ function addEmailVerifiedAt(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-418, 4 → 5: people gain `trialPrompt`. A device has no trial, so nothing was ever answered: null.
+ */
+function addTrialPrompt(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'trialPrompt'>>;
+  return {
+    ...snapshot,
+    maps: { ...snapshot.maps, people: new Map([...people].map(([id, person]) => [id, { ...person, trialPrompt: null }])) },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -110,6 +121,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 1, to: 2, migrate: addFirmFields },
   { from: 2, to: 3, migrate: addReceiptLibraryFields },
   { from: 3, to: 4, migrate: addEmailVerifiedAt },
+  { from: 4, to: 5, migrate: addTrialPrompt },
 ];
 
 /**
