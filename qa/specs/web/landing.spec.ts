@@ -681,3 +681,81 @@ test('the FAQ lists ILS, USD, EUR and JOD and no Gulf currency, in English and A
     await expect(answer).not.toContainText(/درهم|ريال|البحريني|العماني/);
   });
 });
+
+/**
+ * MUT-369: the landing asks the portal whether signup is open (GET /v1/self-service, answered locally by the
+ * `signupDoor` fixture). Open, every way in leads to the portal's /signup in the page language; closed, or with the
+ * portal unreachable, the page is today's.
+ */
+const SIGNUP_LINK = (language: 'en' | 'ar') => new RegExp(`^https://[^/]+/signup\\?lang=${language}$`);
+
+test('While signup is open, the landing leads with Create an account on the portal signup page, in the page language (MUT-369)', { tag: '@web.landing.signup-open' }, async ({ page, step, signupDoor }) => {
+  signupDoor!.set('open');
+  const hero = page.locator('[data-part="hero"]');
+  const getIt = page.locator('[data-part="get-it"]');
+  const phone = page.locator('[data-part="phone"]');
+
+  await step('Open the landing page in Arabic, its default: the hero leads with أنشئ حسابًا on /signup?lang=ar', async () => {
+    await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+    await page.goto('/');
+    await expect(heroCta(page)).toHaveAttribute('href', SIGNUP_LINK('ar'));
+    await expect(heroCta(page)).toContainText(ar.landing.hero.ctaCreate);
+    await expect(heroCta(page)).toHaveAttribute('target', '_blank');
+    await expect(hero.getByText(ar.landing.hero.altNoteOpen)).toBeVisible();
+    await expect(headerCta(page)).toHaveAttribute('href', SIGNUP_LINK('ar'));
+    expect(signupDoor!.requests()).toBe(1);
+    await attachScreenshot(page, 'signup-open-ar');
+  });
+
+  await step('Switch to English: every Create an account now opens /signup?lang=en', async () => {
+    await page.locator('.landing-lang-toggle').click();
+    await expect(heroCta(page)).toHaveAttribute('href', SIGNUP_LINK('en'));
+    await expect(heroCta(page)).toContainText(en.landing.hero.ctaCreate);
+  });
+
+  await step('Get it lists Create an account first and keeps the request form for those who want help', async () => {
+    await getIt.scrollIntoViewIfNeeded();
+    const first = getIt.locator('.landing-get-it-options a').first();
+    await expect(first).toContainText(en.landing.getIt.createCta);
+    await expect(first).toHaveAttribute('href', SIGNUP_LINK('en'));
+    await expect(getIt.getByRole('heading', { name: en.landing.getIt.requestCtaOpen })).toBeVisible();
+    await expect(getIt.getByRole('form')).toBeVisible();
+    await expect(page.locator('main')).not.toContainText(/no public sign-up/);
+    await expect(getIt).not.toContainText(/[₪$€]\s?\d|\/month|per month|checkout/i);
+    await attachScreenshot(page, 'signup-open-get-it-en');
+  });
+
+  await step('The phone chapter and the free-plan answer point at signing up', async () => {
+    await phone.scrollIntoViewIfNeeded();
+    await expect(phone.getByRole('link', { name: new RegExp(`^${en.landing.phone.hintLinkOpen}`) })).toHaveAttribute('href', SIGNUP_LINK('en'));
+    await page.getByRole('button', { name: en.landing.faq.q1 }).click();
+    await expect(page.getByText(en.landing.faq.a1Open)).toBeVisible();
+  });
+
+  await step('Press Create an account: the portal signup page opens in a new tab, in English', async () => {
+    await heroCta(page).scrollIntoViewIfNeeded();
+    const [popup] = await Promise.all([page.waitForEvent('popup'), heroCta(page).click()]);
+    await expect(popup).toHaveURL(SIGNUP_LINK('en'));
+    await expect(popup.getByRole('heading', { name: 'Portal signup (QA stand-in)' })).toBeVisible();
+    await popup.close();
+  });
+});
+
+test('While signup is closed, or the portal cannot be asked, the landing is today’s page (MUT-369)', { tag: '@web.landing.signup-closed' }, async ({ page, step, signupDoor }) => {
+  for (const state of ['closed', 'unreachable'] as const) {
+    await step(`With signup ${state}, the hero still says Request an account and scrolls to the form`, async () => {
+      signupDoor!.set(state);
+      const before = signupDoor!.requests();
+      await openLanding(page, 'en');
+      await expect.poll(() => signupDoor!.requests()).toBe(before + 1);
+      await expect(heroCta(page)).toHaveAttribute('href', '#get-it');
+      await expect(heroCta(page)).toContainText(en.landing.hero.ctaRequest);
+      await expect(page.locator('[data-part="hero"]').getByText(en.landing.hero.altNote)).toBeVisible();
+      await expect(page.locator('main')).not.toContainText(en.landing.hero.ctaCreate);
+      await heroCta(page).click();
+      await expect(page).toHaveURL(/#get-it$/);
+      await expect(page.locator('[data-part="get-it"]').getByRole('heading', { name: en.landing.getIt.requestCta })).toBeVisible();
+      await attachScreenshot(page, `signup-${state}-en`);
+    });
+  }
+});

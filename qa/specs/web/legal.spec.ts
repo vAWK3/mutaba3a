@@ -181,3 +181,26 @@ test('the website publishes the list of released terms versions', { tag: '@web.l
     expect(current?.sha256.ar).toMatch(/^[0-9a-f]{64}$/);
   });
 });
+
+test('The privacy policy says what signup and account emails involve, in English and Arabic (MUT-369, draft)', { tag: '@web.legal.privacy-signup' }, async ({ page, step }) => {
+  for (const language of ['en', 'ar'] as const) {
+    const copy = privacy[language];
+    await step(`Open /privacy in ${language === 'en' ? 'English' : 'Arabic'}: the signup and email sections follow where records live`, async () => {
+      await preferLanguage(page, language);
+      await page.goto('/privacy');
+      const headings = page.getByRole('heading', { level: 2 });
+      await expect(page.getByRole('heading', { level: 2, name: copy.email.title })).toBeVisible();
+      const titles = await headings.allTextContents();
+      const records = titles.indexOf(copy.hostedAccounts.title);
+      expect(titles.slice(records + 1, records + 3)).toEqual([copy.createAccount.title, copy.email.title]);
+      const create = page.getByRole('heading', { level: 2, name: copy.createAccount.title });
+      await create.scrollIntoViewIfNeeded();
+      await expect(page.getByText(copy.createAccount.body)).toBeVisible();
+      await expect(page.getByText(copy.email.body)).toBeVisible();
+      for (const name of ['Cloudflare Turnstile', 'RDAP', 'DNS']) expect(copy.createAccount.body).toContain(name);
+      expect(copy.email.body).toContain('Resend');
+      await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
+      if (language === 'en') await expect(page.getByRole('main')).not.toContainText('Mutaba3a');
+    });
+  }
+});

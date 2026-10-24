@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { interceptPosthog, type AnalyticsSpy } from './posthog';
 import { interceptSentry, type CrashReportSpy } from './sentry';
+import { answerSignupDoor, type SignupDoor } from './signupDoor';
 
 export interface Persona {
   email: string;
@@ -159,7 +160,7 @@ function clientIpFor(testId: string, retry: number): string {
   return `10.${(h >>> 16) & 255}.${(h >>> 8) & 255}.${(h & 253) + 1}`;
 }
 
-export const test = base.extend<{ persona: string | null; step: Step; analytics: AnalyticsSpy; crashReports: CrashReportSpy }>({
+export const test = base.extend<{ persona: string | null; step: Step; analytics: AnalyticsSpy; crashReports: CrashReportSpy; signupDoor: SignupDoor | null }>({
   persona: [null, { option: true }],
 
   // Every spec: PostHog is answered locally, so no QA run ever sends to it (ADR-090, MUT-154)
@@ -174,6 +175,16 @@ export const test = base.extend<{ persona: string | null; step: Step; analytics:
   crashReports: [
     async ({ context }, use) => {
       await use(await interceptSentry(context));
+    },
+    { auto: true },
+  ],
+
+  // Web app specs: the landing's signup door (MUT-369) is answered locally, closed unless a spec opens it, so no QA
+  // run asks production's API. Other apps talk to their own server and are left alone.
+  signupDoor: [
+    async ({ context }, use, testInfo) => {
+      if (testInfo.project.name !== 'web') return use(null);
+      await use(await answerSignupDoor(context, qa.baseURL('web')));
     },
     { auto: true },
   ],
