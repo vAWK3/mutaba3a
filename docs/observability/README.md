@@ -14,7 +14,7 @@ contain. MUT-147 set it up. The surface stories wire it in:
 |---|---|---|
 | Hosted API (`server/`) | `mutaba3a-api` | Unknown errors and `ApiError`s with status 500 or higher; pre-roll and post-roll crashes (MUT-148: live once `sentry_enabled`) |
 | Hosted portal (`--mode hosted`) | `mutaba3a-web` (made by hand, imported) | Crashes, uncaught errors, unhandled rejections |
-| Landing pages (`/`, `/download`, `/privacy`, lazy chunks only) | `mutaba3a-landing` | The same as the portal, with no user context |
+| Landing pages (`/`, `/download`, `/privacy`, `/terms`, lazy chunks only) | `mutaba3a-landing` | Crashes, uncaught errors, unhandled rejections; no user context, at most 5 per page load. MUT-150: live once Netlify's production context has the DSN |
 | Capture app (Flutter, iOS + Android) | `mutaba3a-flutter` (made by hand, imported) | Dart, Flutter-framework and native crashes, and replies the app couldn't read (type and endpoint only). MUT-151: live in the first store release built with a DSN. The Share Extension, widgets and Siri intents send nothing (MUT-395) |
 
 **Never:** the local web app (`/app`) or desktop. They send nothing, ever (ADR-024, ADR-090).
@@ -270,7 +270,7 @@ and refuses an org outside the EU region before writing anything (D5).
 |---|---|---|
 | api | Secret Manager → Cloud Run env `SENTRY_DSN`. MUT-148 reads it from this module's state with `terraform_remote_state`, so deploys need no Sentry token | none needed (source ships in the image) |
 | portal | `MUTABA3A_SENTRY_DSN` in the git-ignored `deploy.env`, exported by the Makefile into `npm run build:hosted` (`server/scripts/deploy.sh` step 1); the build refuses a DSN off the org's ingest host (MUT-149) | `SENTRY_AUTH_TOKEN` from the operator shell, else Keychain `release-kit` / `barmajiyat/SENTRY_AUTH_TOKEN`, passed by `make release server` to deploy.sh only; a DSN without it stops the release |
-| landing | `VITE_SENTRY_DSN` in Netlify's **production context only** | `SENTRY_AUTH_TOKEN` in Netlify's build env, **scoped to the Production deploy context and marked "Contains secret values"**, so deploy-preview and branch builds (which run PR code) can never read it |
+| landing | `MUTABA3A_LANDING_SENTRY_DSN` in Netlify's **production context only** (MUT-150; never `VITE_`) | `SENTRY_AUTH_TOKEN` in Netlify's build env, **scoped to the Production deploy context and marked "Contains secret values"**, so deploy-preview and branch builds (which run PR code) can never read it |
 | capture-app | `MUTABA3A_SENTRY_DSN`, passed by the fastlane release lanes with their own `--dart-define` from the login Keychain (service `release-kit`, account `barmajiyat/MUTABA3A_SENTRY_DSN`; never the shared `.env`, which `make run` reads too). The lanes check it against the app's EU pattern before building. The SDK starts only under `kReleaseMode` | `SENTRY_AUTH_TOKEN` from the Keychain (`barmajiyat/SENTRY_AUTH_TOKEN`) or the fastlane shell env; `sentry_dart_plugin` uploads the dSYMs, Dart debug files and R8 mapping per build |
 
 DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
@@ -279,8 +279,8 @@ DSNs come from `terraform output -json dsn` in `server/infrastructure/sentry`.
 
 - **Never put a token in a build variable.** The portal's DSN is a `MUTABA3A_*` define; a
   token must never become one. `check-bundles` fails on any `sntrys_` or `sntryu_` string and
-  on the fixtures' marker (MUT-149), and `deploy.sh` runs it on `dist-hosted`. The landing's
-  Netlify path still skips it (TD-084).
+  on the fixtures' marker (MUT-149), and `deploy.sh` runs it on `dist-hosted`; Netlify runs it on `dist-web`
+  (MUT-150).
 - **The Flutter `.env` is compiled into the app.** fastlane and the Makefile pass it with
   `--dart-define-from-file`, so every value in it ships inside the binary. A
   `SENTRY_AUTH_TOKEN` placed there ships to every phone. Keep it in the Keychain; the lanes
@@ -351,10 +351,15 @@ surface adds itself to `noTracking.body`'s list.
 
 ### Landing page (MUT-150)
 
-**`errorReports` sentence.**
+**Published with MUT-150 (2026-10-24).** `noTracking.body` names the website first: EN "Our website,
+our servers, the hosted portal, and the iPhone and Android apps send error reports…", AR «يرسل موقعنا
+وخوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال…». The free apps' "never" stays.
 
-- EN: "Our website sends a report when one of its pages fails to load or crashes. These reports include no account at all, and the free web app you open from the website never sends one."
-- AR: «يرسل موقعنا تقريرًا عندما تفشل إحدى صفحاته في التحميل أو تتعطّل. لا تتضمن هذه التقارير أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا.»
+**`errorReports` sentence** (eng D8: "crashes or hits an error", not "fails to load", which the
+website mostly can't report).
+
+- EN: "Our website sends a report when one of its pages crashes or hits an error. These reports include no account at all, and the free web app you open from the website never sends one."
+- AR: «يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً. لا تتضمن هذه التقارير أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا.»
 
 **`network.body`.** Add after the request-form sentence: EN "Our website also sends the error reports described under "Error reports" to Sentry." AR «ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry.»
 

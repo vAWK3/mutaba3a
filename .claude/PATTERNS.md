@@ -2465,6 +2465,11 @@ A Vite `define` is read through one tiny module (`src/lib/appVersion.ts` for `__
   the few errors that happen before the chunk arrives and drops them on sign-out. A boolean define
   (`__SENTRY_ENABLED__`) guards the `import()`, so a build without the key emits no chunk at all;
   only the chunk reads the key itself, so the key's text never lands in the entry.
+- **When it must stay on some routes of a shared bundle** (MUT-150, Sentry on the landing): the
+  gate runs only where `landingRoute()` names a website page and drops anything sent once the page
+  isn't one. Name the SDK's `manualChunks` entry only when the key is set (naming it emits the chunk
+  even unimported), add both chunks to the precache ignores, and scope any origin the chunk needs
+  to those chunk names (`PATTERN_SCOPED_ORIGINS`), never to the bundle-wide allowlist.
 
 ### Pattern: Release-QA answers third-party traffic locally
 - **The fixture.** `qa/support/qa.ts` gives every spec an `analytics` fixture

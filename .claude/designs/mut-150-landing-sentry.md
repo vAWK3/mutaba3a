@@ -152,6 +152,8 @@ Paths cover the two new files, `main.tsx`'s marketing branch and `landing.json`.
 
 ## 8. Operator steps (Basel, after merge, before `make release web`)
 
+As built: `server/DEPLOYMENT.md` §1.5 step 9 is the runbook, with eng C4's local dry run first and C2's outage escape. The steps below are the plan-time draft.
+
 1. `terraform -chdir=server/infrastructure/sentry output -json dsns` (admin token): copy the `landing` DSN.
 2. Netlify › Site configuration › Environment variables, **Production context only**:
    - `MUTABA3A_LANDING_SENTRY_DSN` = that DSN;
