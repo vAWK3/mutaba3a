@@ -28,6 +28,40 @@
 
 ---
 
+## [Unreleased] - 2026-10-23 — Business email signs up at once; webmail and unverified domains wait for the operator (MUT-367, ADR-178)
+
+**Why:** ADR-159 decision 2 (Basel, 2026-10-20, reconfirmed 2026-10-23): disposable addresses are refused, verified business domains sign up instantly, and webmail or unverifiable domains wait for the operator's approval.
+
+### Added
+- The signup screen (`server/src/email/domains/`) runs on every address in `POST /v1/signups`, after Turnstile and the address budgets:
+  - **Refused:** 400 `EMAIL_NOT_ACCEPTED` (new), with `details.reason` `disposable` (the vendored list) or `no-mail` (a null MX, or no MX and no address). No mail, no token.
+  - **Webmail** (`free-webmail.txt`) and **relay** (`relay.txt`) addresses wait for review.
+  - **Everything else is checked** by DNS (MX, apex/www A/AAAA) and RDAP (IANA bootstrap, the registration date), in 2 s, cached 24 h (10 min for transient answers). Business = MX + a resolving apex or www + registered ≥ 90 days ago; otherwise review, with reasons such as `rdap-age-12d`.
+  - The `fixture` checker (`.example` table) serves tests, QA and development: `EMAIL_DOMAIN_CHECKER`, refused in production.
+- The verdict rides on the SIGNUP token (`domainClass`, `domainReasons`). The redeem opens BUSINESS addresses ACTIVE with their trial. Everything else opens `PENDING_REVIEW` (new `UserStatus`) with no trial, writes a `signup_reviews` row, mails `account-under-review`, and nudges the operator digest. The redeem answers `status` as well as `email`.
+- Sign-in (cookie and device) with the right password on a pending account answers 403 `ACCOUNT_UNDER_REVIEW` (new). A wrong password is the same 401 as an unknown address. Recovery works for pending accounts (RESET).
+- The operator queue:
+  - `GET /admin/v1/signup-reviews?state=pending|decided`;
+  - `POST /admin/v1/signup-reviews/{userId}/approve`: ACTIVE, trial starts now, `account-ready` mail, audit `user.signup_approved`;
+  - `POST …/decline`: hard-deletes the empty account and personal profile, `account-declined` mail with the support address, log line `user.signup_declined`; the review row stays with no person;
+  - `npm --prefix server run signups:review [-- --approve|--decline <email>]`.
+- An operator digest to `OPERATOR_ALERT_EMAIL`, at most one per UTC hour, only for reviews not yet announced. It is sent after a pending redeem and by a sweep five minutes past each hour.
+- `npm --prefix server run email-domains:update -- --commit <sha>` refreshes `disposable.txt` from the CC0 list, reproducibly.
+- `Me.user.status`.
+
+### Changed
+- Operator `enable`/`disable` refuse a pending signup (409 `USER_PENDING_REVIEW`). The operator setup-link route and recovery accept one.
+- `account-ready`, `account-declined` and `review-digest` are outside the per-recipient mail cap.
+- `POST /v1/signups`' floor now also covers the screen's 2 s budget (`floors.screenMs`, D25 as built): it runs from before the screen, so a cached domain answers no sooner than a fresh one. The operator can't grant access to a pending signup.
+- API `1.57.0-mut367`.
+
+### Technical
+- Migrations:
+  - `20261024090000_mut367_pending_review_status` (enum value, its own transaction);
+  - `20261024090100_mut367_signup_reviews` (two enums, two token columns + CHECK, `signup_reviews` with two CHECKs and a unique userId, FK SET NULL).
+- The server build copies `src/email/domains/*.txt` into dist.
+- Decisions D1–D29 are pending Basel's confirmation (`.claude/designs/mut-367-signup-review-queue.md` §4). TD-213, TD-214, TD-215.
+
 ## [Unreleased] - 2026-10-23 — A personal profile's logging streak, and entries logged on the day the phone saved them (MUT-339, ADR-177)
 
 **Why:** MUT-339 shows personal users a streak from 3 days of logging in a row (Basel's S1–S3), and an entry saved offline must count on the day it was logged, not the day it uploaded (S4). Plan and eng review R1–R12: mutaba3a-flutter `.claude/designs/mut-339-logging-streaks.md` (Jira comment 12456).

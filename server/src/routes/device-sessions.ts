@@ -49,6 +49,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
       responses: {
         201: { description: 'Signed in; the token is shown once', content: { 'application/json': { schema: DeviceSessionSchema } } },
         401: errorResponse('INVALID_CREDENTIALS — the same answer for every refusal'),
+        403: errorResponse('ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address'),
       },

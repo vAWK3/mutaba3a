@@ -2239,3 +2239,23 @@ notice. Tests: `server/src/email/__tests__/`.
 `UNCONFIGURED_TURNSTILE` refuses everything. Reuse the verifier for any other public form (MUT-197's landing form).
 Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src/__tests__/routes-self-service.test.ts`.
 
+### createDomainScreen / DomainChecker / CachedDomainChecker — `server/src/email/domains/` (MUT-367, ADR-178)
+- **`createDomainScreen({ checker, now, logger }).screen(email)`** returns `refused` (`disposable`, `no-mail`) or `classified` (`domain`, `domainClass` BUSINESS | BUSINESS_UNVERIFIED | WEBMAIL, `reasons`).
+- **Checkers:**
+  - `createDnsDomainChecker({ rdap, resolver?, budgetMs? })`: DNS plus `createRdapClient({ fetch, now })`;
+  - `createFixtureDomainChecker(now)`: the `FIXTURE_DOMAINS` table;
+  - `new CachedDomainChecker(inner, { now })`: 24 h / 10 min.
+- **`classifyDomainFacts(facts, now)`** is the pure rule.
+- **Lists:**
+  - `loadDomainList('disposable' | 'free-webmail' | 'relay')`;
+  - `isListedDomain(domain, list)` (matches parents too);
+  - `parseDomainList(text)` (throws on a bad line).
+- **Reuse:** reuse the screen for any other place that must judge an address (MUT-306 invites).
+- **Tests:** `server/src/email/domains/__tests__/`.
+
+### createReviewDigest / adminSignupReviewRoutes — `server/src/email/review-digest.ts`, `server/src/routes/admin-signup-reviews.ts` (MUT-367)
+- **`createReviewDigest({ store, mailer, logger, now, to }).announce()`:** at most one `review-digest` per UTC hour, only for reviews not yet announced, serialised. `msUntilNextSweep(now)` aligns the timer.
+- **`adminSignupReviewRoutes({ store, mailer, logger, settings, supportAddress })`** mounts list, approve and decline under `/admin/v1/signup-reviews`.
+- **Store:** `store.signupReviews` (list, findByUser, digestFacts, markNotified, approve, decline), operator-only.
+- **Tests:** `server/src/email/__tests__/review-digest.test.ts`, `server/src/__tests__/routes-signup-review.test.ts`, `store-contract-signup-reviews.ts`.
+

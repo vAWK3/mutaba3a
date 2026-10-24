@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-213: A business domain gives every address on it an instant trial
+**Status**: Open
+**Ticket**: MUT-367 (eng review, deferred)
+**Added**: 2026-10-23
+**Priority**: Low (before signup volume grows)
+**Impact**: Anyone who controls a domain that passes the checks can sign up any number of addresses (`a+1@`, `b@` …) and get a 14-day trial for each, with no review. The per-IP and per-address budgets slow this down but don't stop it.
+**Fix**: a per-domain budget for instant signups (for example, the third in 24 hours goes to review with reason `domain-volume`), counted from the SIGNUP tokens.
+
+### TD-214: The disposable list is a hand-made seed until it is refreshed
+**Status**: Open
+**Ticket**: MUT-367 (D2)
+**Added**: 2026-10-23
+**Priority**: Medium (before signup opens)
+**Impact**: `server/src/email/domains/disposable.txt` holds about 85 well-known services, not the full CC0 list (thousands). Other throwaway domains pass the refusal and are then judged by DNS/RDAP; most land in review rather than instant.
+**Fix**: run `npm --prefix server run email-domains:update -- --commit <sha of disposable-email-domains/disposable-email-domains>`, review the diff and commit it (before-release.md). Repeat each quarter.
+
+### TD-215: The review digest's hourly sweep runs in process
+**Status**: Accepted (TD-017: one instance)
+**Ticket**: MUT-367 (D27)
+**Added**: 2026-10-23
+**Priority**: Low
+**Impact**: The digest goes out on a pending redeem (inside the request) and again from a timer five minutes past each hour. Cloud Run throttles CPU between requests, so the timer can be late. A review that arrived after its hour's digest may then wait until the next request-time sweep or a later timer tick.
+**Fix**: if that matters, add `/jobs/signup-review-digest` to the existing Cloud Scheduler (MUT-360's `/jobs` pattern).
+
 ### TD-208: A suppressed mail address can't be lifted without SQL
 **Status**: Open
 **Ticket**: MUT-359 (D10)

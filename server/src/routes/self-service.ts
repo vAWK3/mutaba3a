@@ -8,6 +8,10 @@ import { isSamePortalOrigin, requestClientIp, sessionDigest } from '../auth/sess
 import { createTurnstileVerifier, TURNSTILE_TEST_SECRETS, type TurnstileAction, type TurnstileVerifier } from '../auth/turnstile.js';
 import { normalizeEmail } from '../auth/users.js';
 import type { Mailer, MailTemplateId, SendInput } from '../email/ports.js';
+import { createFixtureDomainChecker } from '../email/domains/fixture-checker.js';
+import { createDomainScreen, type DomainScreen } from '../email/domains/screen.js';
+import { DOMAIN_CHECK_BUDGET_MS } from '../email/domains/dns-checker.js';
+import type { EmailDomainClass } from '../repositories/ports.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from '../rate-limit.js';
@@ -36,9 +40,18 @@ export interface SelfServiceOptions {
   /** Per normalised address, both routes, whether or not an account exists (D6). */
   addressMinuteLimiter: RateLimiter;
   addressDayLimiter: RateLimiter;
-  floors: { signupMs: number; recoveryMs: number };
+  /**
+   * `screenMs` (MUT-367, D25 as built): the signup answer also covers the domain screen's budget, measured from before
+   * the screen, so neither a cache hit nor the branch work shows in the timing. Absent = 0 (tests with short floors).
+   */
+  floors: { signupMs: number; recoveryMs: number; screenMs?: number };
   /** The floor's clock (D8). Defaults to performance.now and setTimeout. */
   clock?: MonotonicClock;
+  /**
+   * MUT-367 (ADR-159 §7a): the business-email screen. index.ts passes the configured one (DNS + RDAP in production);
+   * absent, the fixture checker answers (tests, QA), so no test ever asks real DNS.
+   */
+  domainScreen?: DomainScreen;
 }
 
 const HOUR_MS = 3_600_000;
@@ -56,7 +69,7 @@ export function defaultSelfServiceOptions(): SelfServiceOptions {
     ipLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.ipPerHour, HOUR_MS),
     addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
     addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * HOUR_MS),
-    floors: { signupMs: SELF_SERVICE_POLICY.signupFloorMs, recoveryMs: SELF_SERVICE_POLICY.recoveryFloorMs },
+    floors: { signupMs: SELF_SERVICE_POLICY.signupFloorMs, recoveryMs: SELF_SERVICE_POLICY.recoveryFloorMs, screenMs: DOMAIN_CHECK_BUDGET_MS },
   };
 }
 
@@ -66,6 +79,8 @@ export interface SelfServiceRouteDependencies {
   mailer: Mailer;
   logger: Logger;
   options: SelfServiceOptions;
+  /** The app's clock (the fixture screen's "today"). */
+  now: () => Date;
 }
 
 const SIGNUPS_PATH = '/v1/signups';
@@ -78,6 +93,11 @@ const accepted = { description: 'Accepted. The same answer for every address, wh
 export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHono<AppEnv> {
   const { store, settings, mailer, logger, options } = deps;
   const clock = options.clock ?? SYSTEM_CLOCK;
+  // Built on first use when not injected: the fixture screen reads the vendored lists from disk, which the portal's
+  // local mode (createApp in a browser or jsdom) must never do just by composing the app. index.ts injects the
+  // production screen, built at boot so a bad list still fails the deploy.
+  let fallbackScreen: DomainScreen | null = null;
+  const domainScreen = (): DomainScreen => options.domainScreen ?? (fallbackScreen ??= createDomainScreen({ checker: createFixtureDomainChecker(deps.now), now: deps.now, logger }));
   const app = new OpenAPIHono<AppEnv>();
 
   // The switch answers before the body is validated, so a closed signup is a 404 whatever is sent (D10).
@@ -147,6 +167,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       request: { body: { required: true, content: { 'application/json': { schema: SignupRequestSchema } } } },
       responses: {
         202: accepted,
+        400: errorResponse('EMAIL_NOT_ACCEPTED: details.reason is disposable (a throwaway service) or no-mail (the domain takes no mail). Depends only on the address; nothing is sent (MUT-367)'),
         403: errorResponse('CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "signup")'),
         404: errorResponse('NOT_FOUND: signup is not open on this server'),
         422: errorResponse('Validation failed'),
@@ -154,26 +175,35 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       },
     }),
     async (c) => {
-      const startedMs = clock.now();
       const now = c.get('now')();
       const ip = await guard(c, now);
       const body = c.req.valid('json');
       const email = normalizeEmail(body.email);
       await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'signup', now });
-      // MUT-367 seam: the disposable / no-mail refusal (400 EMAIL_NOT_ACCEPTED) and the domain classification, which
-      // the SIGNUP link stores, go here: before anything is issued, and for every address alike.
-      return runBranch(c, startedMs, options.floors.signupMs, () => signupBranch(c, { email, locale: body.locale, now }));
+      // MUT-367 (ADR-159 §7a): the business-email screen, for every address alike, before anything is issued. A refusal
+      // depends only on the address. The floor runs from before the screen and covers its budget too (D25 as built,
+      // code review): a cached domain answers no faster than a fresh one, and the branches still get a full floor.
+      const startedMs = clock.now();
+      const screened = await domainScreen().screen(email);
+      if (screened.kind === 'refused') throw new ApiError('EMAIL_NOT_ACCEPTED', 'Please use a permanent work email address', { reason: screened.reason });
+      const domain = { domainClass: screened.domainClass, domainReasons: screened.reasons };
+      const floorMs = options.floors.signupMs + (options.floors.screenMs ?? 0);
+      return runBranch(c, startedMs, floorMs, () => signupBranch(c, { email, locale: body.locale, now, domain }));
     },
   );
 
   /** The branch's store work; resolves to its mail, still sending, or null when it mails nothing. */
-  async function signupBranch(c: Context<AppEnv>, input: { email: string; locale: UserLocale; now: Date }): Promise<PendingMail | null> {
+  async function signupBranch(
+    c: Context<AppEnv>,
+    input: { email: string; locale: UserLocale; now: Date; domain: { domainClass: EmailDomainClass; domainReasons: string[] } },
+  ): Promise<PendingMail | null> {
     // D15: a suppressed address gets nothing, not even a token.
     if (await store.email.isSuppressed(input.email)) return null;
     const holder = await store.users.findByEmail(input.email);
     if (holder) {
-      // D16: a disabled account is pointed nowhere (recovery can't help it).
-      if (holder.status !== 'ACTIVE') return null;
+      // D16: a disabled account is pointed nowhere (recovery can't help it). MUT-367 (D8): one waiting for review is
+      // told it exists, like an active one: signing in then shows the waiting screen.
+      if (holder.status === 'DISABLED') return null;
       return { sending: send({
         to: holder.email,
         template: 'account-exists',
@@ -189,6 +219,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       tokenDigest: sessionDigest(settings.pepper, token),
       at: input.now,
       expiresAt: new Date(input.now.getTime() + SELF_SERVICE_POLICY.signupLinkHours * HOUR_MS),
+      ...input.domain,
     });
     return {
       sending: send({

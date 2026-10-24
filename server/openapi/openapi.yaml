@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.56.0-mut339
+  version: 1.57.0-mut367
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -194,12 +194,15 @@ components:
               $ref: "#/components/schemas/UserLocale"
             malafatSuggestions:
               $ref: "#/components/schemas/MalafatSuggestions"
+            status:
+              $ref: "#/components/schemas/UserStatus"
           required:
             - id
             - email
             - displayName
             - locale
             - malafatSuggestions
+            - status
         profiles:
           type: array
           items:
@@ -257,6 +260,12 @@ components:
         - business-profile
         - client-threshold
         - second-business
+    UserStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - DISABLED
+        - PENDING_REVIEW
     HostedProfile:
       type: object
       properties:
@@ -453,6 +462,7 @@ components:
               type: string
               enum:
                 - INVALID_SIGNATURE
+                - EMAIL_NOT_ACCEPTED
                 - UNAUTHENTICATED
                 - INVALID_API_KEY
                 - API_KEY_REVOKED
@@ -468,6 +478,7 @@ components:
                 - READ_ONLY_PROFILE
                 - CROSS_SITE_REQUEST
                 - CHECK_FAILED
+                - ACCOUNT_UNDER_REVIEW
                 - CURRENT_PASSWORD_WRONG
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -629,8 +640,14 @@ components:
       properties:
         email:
           type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - PENDING_REVIEW
       required:
         - email
+        - status
     SetupLinkRedeemRequest:
       type: object
       properties:
@@ -6731,10 +6748,7 @@ components:
         locale:
           $ref: "#/components/schemas/UserLocale"
         status:
-          type: string
-          enum:
-            - ACTIVE
-            - DISABLED
+          $ref: "#/components/schemas/UserStatus"
         passwordChangedAt:
           type: string
           format: date-time
@@ -6839,10 +6853,7 @@ components:
               email:
                 type: string
               status:
-                type: string
-                enum:
-                  - ACTIVE
-                  - DISABLED
+                $ref: "#/components/schemas/UserStatus"
               latestVersion:
                 allOf:
                   - $ref: "#/components/schemas/TermsVersion"
@@ -6944,6 +6955,102 @@ components:
           minimum: 0
       required:
         - revoked
+    SignupReviewList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignupReview"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - data
+        - nextCursor
+    SignupReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          nullable: true
+          format: uuid
+        email:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        locale:
+          allOf:
+            - $ref: "#/components/schemas/UserLocale"
+            - nullable: true
+        domain:
+          type: string
+        classification:
+          $ref: "#/components/schemas/EmailDomainClass"
+        reasons:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        notifiedAt:
+          type: string
+          nullable: true
+          format: date-time
+        decidedAt:
+          type: string
+          nullable: true
+          format: date-time
+        decision:
+          type: string
+          nullable: true
+          enum:
+            - APPROVED
+            - DECLINED
+            - null
+      required:
+        - id
+        - userId
+        - email
+        - displayName
+        - locale
+        - domain
+        - classification
+        - reasons
+        - createdAt
+        - notifiedAt
+        - decidedAt
+        - decision
+    EmailDomainClass:
+      type: string
+      enum:
+        - BUSINESS
+        - BUSINESS_UNVERIFIED
+        - WEBMAIL
+    SignupReviewDecision:
+      type: object
+      properties:
+        review:
+          $ref: "#/components/schemas/SignupReview"
+        mail:
+          type: string
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+      required:
+        - review
+        - mail
     EntitlementGrant:
       type: object
       properties:
@@ -7368,7 +7475,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: CROSS_SITE_REQUEST
+          description: CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session
           content:
             application/json:
               schema:
@@ -7548,6 +7655,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
           content:
@@ -7687,6 +7800,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SelfServiceAccepted"
+        "400":
+          description: "EMAIL_NOT_ACCEPTED: details.reason is disposable (a throwaway service) or no-mail (the domain takes no mail). Depends only on the address; nothing is sent (MUT-367)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "signup")
           content:
@@ -16108,7 +16227,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled)."
+          description: "Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). Either way, USER_PENDING_REVIEW for a signup waiting for review (MUT-367)."
           content:
             application/json:
               schema:
@@ -16198,7 +16317,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first
+          description: The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first. A user waiting for signup review may get one (MUT-367 D29)
           content:
             application/json:
               schema:
@@ -16242,6 +16361,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/users/{userId}/enable:
     post:
       tags:
@@ -16275,6 +16400,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/users/{userId}/sessions/revoke:
     post:
       tags:
@@ -16304,6 +16435,132 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/signup-reviews:
+    get:
+      tags:
+        - Admin
+      summary: Self-service signups waiting for (or decided by) the operator, oldest first (MUT-367)
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - pending
+              - decided
+            default: pending
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: integer
+            nullable: true
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/signup-reviews/{userId}/approve:
+    post:
+      tags:
+        - Admin
+      summary: "Approve a signup: the account opens, its 14-day trial starts now, and the person is mailed (MUT-367)"
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided; `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No review for this user (unknown, never self-signed-up, or already declined)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/signup-reviews/{userId}/decline:
+    post:
+      tags:
+        - Admin
+      summary: "Decline a signup: the empty account and its personal profile are deleted, and the person is mailed (MUT-367)"
+      description: The review stays, with its domain and reasons but no person. The address may sign up again.
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided; `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No review for this user (unknown, never self-signed-up, or already declined)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
           content:
             application/json:
               schema:

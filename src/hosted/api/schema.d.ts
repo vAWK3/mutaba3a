@@ -126,7 +126,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST */
+                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -462,6 +462,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description Validation failed */
                 422: {
                     headers: {
@@ -722,6 +731,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["SelfServiceAccepted"];
+                    };
+                };
+                /** @description EMAIL_NOT_ACCEPTED: details.reason is disposable (a throwaway service) or no-mail (the domain takes no mail). Depends only on the address; nothing is sent (MUT-367) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
                 /** @description CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "signup") */
@@ -7326,6 +7344,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/expenses/streak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This personal profile’s logging streak
+         * @description MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Streak */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Streak"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/expenses/{expenseId}": {
         parameters: {
             query?: never;
@@ -8311,7 +8404,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["IncomeResponse"];
+                        "application/json": components["schemas"]["IncomeCaptureResponse"];
                     };
                 };
                 /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
@@ -12552,7 +12645,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). */
+                /** @description Without `role`: the organization is a profile another user owns (CONFLICT, details.reason PERSONAL_PROFILE or OWNED_PROFILE). With `role: OWNER` (MUT-373): PERSONAL_PROFILE, NOT_BUSINESS (an owned Personal profile), NOT_CO_OWNABLE (not an owned profile), OWNER_LIMIT, ROLE_CHANGE_NOT_SUPPORTED (already a member with another role), or USER_DISABLED (the account is disabled). Either way, USER_PENDING_REVIEW for a signup waiting for review (MUT-367). */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -12687,7 +12780,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first */
+                /** @description The user is disabled (CONFLICT, details.reason USER_DISABLED); enable them first. A user waiting for signup review may get one (MUT-367 D29) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -12761,6 +12854,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -12817,6 +12919,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -12866,6 +12977,197 @@ export interface paths {
                 };
                 /** @description Unknown user or organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/signup-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Self-service signups waiting for (or decided by) the operator, oldest first (MUT-367) */
+        get: {
+            parameters: {
+                query?: {
+                    state?: "pending" | "decided";
+                    limit?: number | null;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reviews */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/signup-reviews/{userId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a signup: the account opens, its 14-day trial starts now, and the person is mailed (MUT-367) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided; `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No review for this user (unknown, never self-signed-up, or already declined) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/signup-reviews/{userId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a signup: the empty account and its personal profile are deleted, and the person is mailed (MUT-367)
+         * @description The review stays, with its domain and reasons but no person. The address may sign up again.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided; `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No review for this user (unknown, never self-signed-up, or already declined) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -13605,6 +13907,7 @@ export interface components {
                 displayName: string;
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
+                status: components["schemas"]["UserStatus"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -13631,6 +13934,8 @@ export interface components {
         };
         /** @enum {string} */
         MalafatMoment: "business-profile" | "client-threshold" | "second-business";
+        /** @enum {string} */
+        UserStatus: "ACTIVE" | "DISABLED" | "PENDING_REVIEW";
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -13695,7 +14000,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -13747,6 +14052,8 @@ export interface components {
         };
         SetupLinkRedeemResponse: {
             email: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "PENDING_REVIEW";
         };
         SetupLinkRedeemRequest: {
             token: string;
@@ -15341,6 +15648,26 @@ export interface components {
             items: components["schemas"]["Expense"][];
             nextCursor: string | null;
         };
+        Streak: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            today: string;
+            current: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            startedOn: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            lastLoggedOn: string | null;
+            /**
+             * Format: date-time
+             * @description The instant the current streak ends unless something is logged (end of lastLoggedOn + 1 in the profile’s timezone)
+             */
+            aliveUntil: string | null;
+            /** @description The run before the gap, at least 3 days, ended within the last 7 */
+            previous: {
+                days: number;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                lastDay: string;
+            } | null;
+        };
         ExpenseDetail: components["schemas"]["Expense"] & {
             receipts: components["schemas"]["ExpenseReceipt"][];
         };
@@ -15460,6 +15787,11 @@ export interface components {
             projectId?: string;
             notes?: string;
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date. */
@@ -15547,6 +15879,9 @@ export interface components {
             color?: string | null;
             archived?: boolean;
         };
+        IncomeCaptureResponse: components["schemas"]["IncomeResponse"] & {
+            receivedCount?: number;
+        };
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -15564,6 +15899,11 @@ export interface components {
             dueDate?: string;
             method?: components["schemas"]["PaymentMethod"];
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
         };
         UpdateIncomeRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today. Received: not later than today. Owed: not more than ten years (3660 days) after it. 422 DATE_INVALID with details.bound past or future. */
@@ -15870,6 +16210,11 @@ export interface components {
             projectId?: string;
             notes?: string;
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         /** @description The expense with its READY receipts (the filed one among them), and the filed receipt */
@@ -16021,8 +16366,7 @@ export interface components {
             email: string;
             displayName: string;
             locale: components["schemas"]["UserLocale"];
-            /** @enum {string} */
-            status: "ACTIVE" | "DISABLED";
+            status: components["schemas"]["UserStatus"];
             /** Format: date-time */
             passwordChangedAt: string;
             /** Format: date-time */
@@ -16064,8 +16408,7 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 email: string;
-                /** @enum {string} */
-                status: "ACTIVE" | "DISABLED";
+                status: components["schemas"]["UserStatus"];
                 latestVersion: components["schemas"]["TermsVersion"] & unknown;
                 clientRelease: string | null;
                 accepted: boolean;
@@ -16104,6 +16447,37 @@ export interface components {
         };
         RevokeSessionsResponse: {
             revoked: number;
+        };
+        SignupReviewList: {
+            data: components["schemas"]["SignupReview"][];
+            nextCursor: string | null;
+        };
+        SignupReview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string | null;
+            email: string | null;
+            displayName: string | null;
+            locale: components["schemas"]["UserLocale"] & unknown;
+            domain: string;
+            classification: components["schemas"]["EmailDomainClass"];
+            reasons: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            notifiedAt: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            /** @enum {string|null} */
+            decision: "APPROVED" | "DECLINED" | null;
+        };
+        /** @enum {string} */
+        EmailDomainClass: "BUSINESS" | "BUSINESS_UNVERIFIED" | "WEBMAIL";
+        SignupReviewDecision: {
+            review: components["schemas"]["SignupReview"];
+            /** @enum {string} */
+            mail: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed";
         };
         EntitlementGrant: {
             /** Format: uuid */

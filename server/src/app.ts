@@ -39,6 +39,8 @@ import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
+import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
+import { createReviewDigest, type ReviewDigest } from './email/review-digest.js';
 import { auditRoutes } from './routes/audit.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/profiles.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES, PUBLIC_FX_POLICY, publicFxRateRoutes } from './routes/fx-rates.js';
@@ -133,6 +135,11 @@ export interface AppDependencies {
    * production budgets and floors; index.ts passes the configured switch, verifier and floors.
    */
   selfService?: SelfServiceOptions;
+  /**
+   * MUT-367 (ADR-159 §7a): the operator digest (OPERATOR_ALERT_EMAIL) and the address a declined person may write to
+   * (MAIL_REPLY_TO). Absent = no digest, and a placeholder support address (tests).
+   */
+  signupReview?: { digest: ReviewDigest; supportAddress: string };
 }
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
@@ -197,7 +204,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.56.0-mut339';
+export const API_VERSION = '1.57.0-mut367';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -230,6 +237,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     deps.mailer ??
     createMailer({ transport: NOOP_TRANSPORT, store: deps.store, logger: deps.logger, now, fromAddress: 'no-reply@example.invalid', replyTo: null, limits: { daily: 1, securityReserve: 0, perRecipient: 1 } });
   const terms = deps.terms ?? CURRENT_TERMS;
+  // MUT-367: on the unguarded store, like the mailer's send log.
+  const signupReview = deps.signupReview ?? { digest: createReviewDigest({ store: deps.store, mailer, logger: deps.logger, now, to: null }), supportAddress: 'help@example.invalid' };
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
@@ -293,9 +302,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
-  app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: deps.selfService ?? defaultSelfServiceOptions() }));
+  app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: deps.selfService ?? defaultSelfServiceOptions(), now }));
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));
@@ -346,6 +355,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
+  // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
+  app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe

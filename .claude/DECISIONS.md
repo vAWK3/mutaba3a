@@ -4817,3 +4817,37 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences**: A settled Owed creates a payment, so settling counts as logging. A `capturedAt` moves the feed's "logged" order the same way, which is the order Recent already shows. Conversions don't count. Past 400 days the count stops at what fits.
 
+## ADR-178: Business Email Signs Up at Once; Webmail, Relay and Unverified Domains Wait for the Operator (MUT-367)
+
+**Status:** Accepted for the build (2026-10-23, MUT-367, unattended run on Basel's "go"). Decisions D1–D29 in `.claude/designs/mut-367-signup-review-queue.md` §4 are **pending Basel's confirmation**. This builds ADR-159 decision 2 (§7a) on ADR-175's seams.
+
+**Context:** ADR-159 lets anyone sign up. Basel wants business users instantly, hand-approved webmail, and no throwaway addresses.
+
+**Decision:**
+1. **A screen on every signup address**, before anything is issued, so its timing never depends on an account. The answer's floor covers the screen's budget too:
+   - **Refused**, on the input alone (400 `EMAIL_NOT_ACCEPTED`): disposable (the vendored list) or no-mail (a null MX, or definitely no MX and no address).
+   - **Review:** webmail, relay and alias services, and any domain the checks can't pass.
+   - **Business:** an MX, a resolving apex or www, and an RDAP registration at least 90 days old.
+   - **DNS and RDAP only.** RDAP goes through IANA's bootstrap to the registry and follows no redirect; the server never fetches the domain's website. It asks about the exact domain, never a parent, so free subdomain services wait for review.
+   - **Failures:** a lookup error is never a refusal (only ENOTFOUND/ENODATA mean absent); a failing checker means review.
+2. **The verdict travels on the SIGNUP token**, and the redeem decides the account: ACTIVE with its trial, or `PENDING_REVIEW` with no trial plus a `signup_reviews` row.
+3. **A pending account learns its state only with its password:** 403 `ACCOUNT_UNDER_REVIEW` after a correct, unlocked verify. Every other refusal is the usual 401. It can recover.
+4. **Approve and decline are the only ways out.**
+   - Each takes a row lock and decides only an undecided review.
+   - Approve starts the trial in its own transaction (the column `billing.setTrialStart` writes).
+   - Decline hard-deletes the account and its empty personal profile, every setup link and the address's SIGNUP rows. It refuses if anything else holds the account. The review row stays with domain, class and reasons, but no person.
+5. **The operator digest** announces unannounced reviews only, at most once per UTC hour, keyed on the hour in the mail log.
+
+**Rejected:**
+- Walking RDAP up to a parent (free subdomains would inherit an old parent's age).
+- rdap.org's redirector.
+- Treating an MX hosted at a webmail provider as webmail (every Google Workspace business would wait).
+- A repeated hourly reminder while reviews wait (noise; the CLI lists them).
+- Calling `billing.setTrialStart` after the approve commits (a failure between the two would leave an open account with no trial).
+
+**Consequences:**
+- Nothing changes in production until signup opens (`self_signup_enabled`) with mail on.
+- The disposable list ships as a hand-made seed until the operator runs `email-domains:update` (TD-214).
+- A business domain gives unlimited instant trials (TD-213).
+- The hourly sweep is in process (TD-215).
+

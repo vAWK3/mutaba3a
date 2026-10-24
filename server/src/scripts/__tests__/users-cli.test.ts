@@ -378,3 +378,48 @@ describe('billing verbs (MUT-358)', () => {
   });
 });
 
+
+describe('signups:review (MUT-367)', () => {
+  /** A self-service signup from gmail.com, redeemed: PENDING_REVIEW with its review row, as the routes write it. */
+  async function pendingSignup(store: MemoryLedgerStore, email: string) {
+    const at = new Date();
+    const link = await store.accountSetup.issueSignup({ email, locale: 'en', tokenDigest: 'e'.repeat(60) + email.length.toString().padStart(4, '0'), at, expiresAt: new Date(at.getTime() + 86_400_000), domainClass: 'WEBMAIL', domainReasons: ['webmail'] });
+    const created = await store.accountSetup.redeemSignup({
+      tokenDigest: link.tokenDigest,
+      passwordHash: 'x',
+      at,
+      displayName: 'Rana',
+      personal: { name: 'Personal', slug: `personal-${email.length}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+      status: 'PENDING_REVIEW',
+      review: { domain: 'gmail.com', classification: 'WEBMAIL', reasons: ['webmail'] },
+      trialStartsAt: null,
+      terms: { version: CURRENT_TERMS.version, locale: 'en', textSha256: 'f'.repeat(64), surface: 'portal', clientRelease: null },
+      auditFor: () => [],
+    });
+    return created!.user;
+  }
+
+  it('lists the queue, approves by address, and says when nothing waits', async () => {
+    const h = harness();
+    expect(await h.run(['signup-reviews'])).toBe(0);
+    expect(h.out.at(-1)).toBe('no signups waiting for review');
+    const user = await pendingSignup(h.store, 'rana@gmail.com');
+    expect(await h.run(['signup-reviews'])).toBe(0);
+    expect(h.out.join('\n')).toMatch(/rana@gmail\.com — WEBMAIL webmail — waiting since /);
+    expect(await h.run(['signup-reviews', '--approve', 'rana@gmail.com'])).toBe(0);
+    expect(h.out.at(-1)).toMatch(/^rana@gmail\.com approved: .* \(mail: disabled\)$/);
+    expect((await h.store.users.getById(user.id))?.status).toBe('ACTIVE');
+    // Decided: a second decision is refused, and named.
+    expect(await h.run(['signup-reviews', '--decline', 'rana@gmail.com'])).toBe(1);
+    expect(h.err.at(-1)).toMatch(/409 CONFLICT/);
+  });
+
+  it('declines by address, deleting the empty account; both flags at once is refused', async () => {
+    const h = harness();
+    const user = await pendingSignup(h.store, 'omar.k@gmail.com');
+    expect(await h.run(['signup-reviews', '--approve', 'omar.k@gmail.com', '--decline', 'omar.k@gmail.com'])).toBe(1);
+    expect(await h.run(['signup-reviews', '--decline', 'omar.k@gmail.com'])).toBe(0);
+    expect(h.out.at(-1)).toMatch(/^omar\.k@gmail\.com declined: /);
+    expect(await h.store.users.getById(user.id)).toBeNull();
+  });
+});

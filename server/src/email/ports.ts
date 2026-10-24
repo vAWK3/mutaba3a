@@ -30,8 +30,10 @@ export const RECOVERY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTempl
 /**
  * Mail outside the per-recipient cap (D17): the password notice is gated by the password itself, and requests other
  * people can trigger for an address (signup, recovery) must never use up the one mail that reports a takeover.
+ * MUT-367 (D26): the review outcomes only the operator triggers, so strangers can't cap them away; and the digest,
+ * whose recipient is us.
  */
-export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['password-changed']);
+export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>(['password-changed', 'account-ready', 'account-declined', 'review-digest']);
 
 export interface TemplateVars {
   /** MUT-366: a SIGNUP link to /setup. */

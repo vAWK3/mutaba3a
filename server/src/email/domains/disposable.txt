@@ -1,0 +1,93 @@
+# Disposable email domains: refused at signup (POST /v1/signups → 400 EMAIL_NOT_ACCEPTED, reason "disposable").
+# MUT-367 (ADR-159 §7a, ADR-178). A domain here also covers its subdomains.
+# source: seed
+# commit: none
+# fetched: 2026-10-23
+# licence: CC0-1.0
+# A hand-made seed of well-known throwaway services (D2). Refresh it from the public CC0 list with
+# `npm --prefix server run email-domains:update -- --commit <sha>` and commit the result before GA.
+10minutemail.com
+10minutemail.net
+1secmail.com
+1secmail.net
+1secmail.org
+20minutemail.com
+armyspy.com
+binkmail.com
+bobmail.info
+burnermail.io
+chammy.info
+cuvox.de
+dayrep.com
+devnullmail.com
+discard.email
+dispostable.com
+einrot.com
+emailfake.com
+emailondeck.com
+fakeinbox.com
+fakemailgenerator.com
+fleckens.hu
+getnada.com
+grr.la
+guerrillamail.biz
+guerrillamail.com
+guerrillamail.de
+guerrillamail.net
+guerrillamail.org
+guerrillamailblock.com
+gustr.com
+inboxkitten.com
+jourrapide.com
+letthemeatspam.com
+mail-temp.com
+mailcatch.com
+maildrop.cc
+mailinater.com
+mailinator.com
+mailinator.net
+mailinator2.com
+mailnesia.com
+mailpoof.com
+mintemail.com
+moakt.com
+mohmal.com
+mytemp.email
+nada.email
+notmailinator.com
+pokemail.net
+reallymymail.com
+rhyta.com
+safetymail.info
+sharklasers.com
+sogetthis.com
+spam4.me
+spambox.us
+spamgourmet.com
+spamherelots.com
+superrito.com
+suremail.info
+teleworm.us
+temp-mail.io
+temp-mail.org
+tempail.com
+tempinbox.com
+tempmail.com
+tempmail.net
+tempmailaddress.com
+tempmailo.com
+tempr.email
+thisisnotmyrealemail.com
+throwawaymail.com
+tmpmail.net
+tmpmail.org
+tradermail.info
+trash-mail.com
+trashmail.com
+trashmail.de
+trashmail.net
+veryrealemail.com
+yopmail.com
+yopmail.fr
+yopmail.net
+zippymail.info

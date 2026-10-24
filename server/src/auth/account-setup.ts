@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { PersonSetupLinkRecord, UserRecord } from '../repositories/ports.js';
+import { SETUP_LINK_STATUSES, type PersonSetupLinkRecord, type UserRecord } from '../repositories/ports.js';
 
 /**
  * One-time setup links (MUT-235, ADR-088). The operator never knows anyone's
@@ -27,11 +27,12 @@ export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'inva
 
 /**
  * What a link is good for at `now`. `used` and `superseded` win over `expired`,
- * so a person is told the more useful thing. A link whose person is not ACTIVE
- * reads as `invalid`, the same as an unknown one.
+ * so a person is told the more useful thing. A link whose person is disabled
+ * reads as `invalid`, the same as an unknown one. MUT-367 (D9): a person waiting
+ * for review may use theirs (recovery).
  */
 export function setupLinkState(link: PersonSetupLinkRecord | null, person: Pick<UserRecord, 'status'> | null, now: Date): SetupLinkState {
-  if (!link || !person || person.status !== 'ACTIVE') return 'invalid';
+  if (!link || !person || !SETUP_LINK_STATUSES.has(person.status)) return 'invalid';
   if (link.usedAt) return 'used';
   if (link.cancelledAt) return 'superseded';
   if (now.getTime() >= link.expiresAt.getTime()) return 'expired';

@@ -121,6 +121,13 @@ describe('STORE_ACCESS', () => {
       'organizations.listFirmRequests',
       'organizations.setFirm',
       'sessions.revokeAllForUser',
+      // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
+      'signupReviews.approve',
+      'signupReviews.decline',
+      'signupReviews.digestFacts',
+      'signupReviews.findByUser',
+      'signupReviews.list',
+      'signupReviews.markNotified',
       'users.create',
       // MUT-324 T1: the operator's terms report.
       'users.listLatestTermsVersions',

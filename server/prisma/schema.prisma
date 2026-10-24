@@ -254,6 +254,25 @@ model ApiKey {
 enum UserStatus {
   ACTIVE
   DISABLED
+  /// MUT-367 (ADR-159 §7a, ADR-178): a self-service signup from a webmail, relay or unverified domain, waiting for
+  /// the operator. Can't sign in (403 ACCOUNT_UNDER_REVIEW with the right password); can recover; has no trial yet.
+  PENDING_REVIEW
+}
+
+/// MUT-367: what the signup screen made of an address's domain (server/src/email/domains).
+enum EmailDomainClass {
+  /// MX, a resolving apex or www, and an RDAP registration at least 90 days old: signs up at once.
+  BUSINESS
+  /// Not webmail, but a check failed, timed out or couldn't be answered, or a relay service: waits for review.
+  BUSINESS_UNVERIFIED
+  /// On the vendored free-webmail list: waits for review.
+  WEBMAIL
+}
+
+/// MUT-367: the operator's answer to a signup review.
+enum SignupReviewDecision {
+  APPROVED
+  DECLINED
 }
 
 /// A person who may sign in to the hosted portal (MUT-37, ADR-037). Issued by
@@ -317,6 +336,8 @@ model User {
   billingAccount    BillingAccount?
   /// MUT-358: operator grants covering this person's own profiles.
   entitlementGrants EntitlementGrant[]
+  /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
+  signupReview      SignupReview?
 
   @@map("users")
 }
@@ -412,10 +433,38 @@ model AccountSetupToken {
   expiresAt   DateTime
   usedAt      DateTime?
   cancelledAt DateTime?
+  /// MUT-367: SIGNUP only: what the signup screen made of the address's domain, and why. The redeem opens a BUSINESS
+  /// address at once and sends every other to review (PENDING_REVIEW). Null on a SIGNUP link issued before MUT-367.
+  domainClass   EmailDomainClass?
+  domainReasons String[]
 
   @@index([userId])
   @@index([email])
   @@map("account_setup_tokens")
+}
+
+/// MUT-367 (ADR-159 §7a, ADR-178): one self-service signup waiting for (or decided by) the operator. Written by the
+/// SIGNUP redeem that opens a PENDING_REVIEW account. A decline hard-deletes the account; this row stays, with no
+/// user and no address, as the record of the decision.
+model SignupReview {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String?               @unique @db.Uuid
+  user           User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// The address's domain (punycode), never the address.
+  domain         String                @db.VarChar(253)
+  classification EmailDomainClass
+  /// Why it waits, e.g. ["webmail"], ["rdap-age-12d"], ["no-mx", "rdap-not-found"].
+  reasons        String[]
+  createdAt      DateTime
+  /// When the operator digest first counted it; null until a digest is sent (MUT-367 D13).
+  notifiedAt     DateTime?
+  decidedAt      DateTime?
+  decision       SignupReviewDecision?
+  /// Who decided: "admin-token" (the admin token carries no identity; D15).
+  decidedBy      String?               @db.VarChar(64)
+
+  @@index([createdAt])
+  @@map("signup_reviews")
 }
 
 /// MUT-324: where a terms acceptance happened; a session knows only cookie or device.
