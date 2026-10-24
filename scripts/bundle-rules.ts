@@ -36,23 +36,17 @@ export const LOCAL_RULES: Rule[] = [
 ];
 
 /**
- * The portal offers no self-service account door, in either language, and
- * carries no Dexie or service worker. `تسجيل` alone is allowed: `تسجيل الدخول`
- * is "sign in". `اشترك` is allowed since MUT-362 (ADR-170): a firm subscribes
- * from Settings › Billing; the account door itself stays closed. IndexedDB is allowed since ADR-097, but only in the lazy local
- * backend: see `localBackendInEntryGraph`.
+ * The portal carries no Dexie or service worker, and no invite door in either language (invites wait for MUT-306).
+ * `اشترك` is allowed since MUT-362 (ADR-170): a firm subscribes from Settings › Billing. Since MUT-368 (ADR-159) the
+ * portal has its two self-service doors, /signup and /recover, so "sign up", "create an account", "forgot" and "reset
+ * password" (and إنشاء حساب, نسيت, إعادة تعيين) are allowed on purpose; the server's no-self-registration test still pins
+ * that those are the only two. IndexedDB is allowed since ADR-097, but only in the lazy local backend: see
+ * `localBackendInEntryGraph`.
  */
 export const HOSTED_RULES: Rule[] = [
   { name: 'Dexie', pattern: /\bDexie\b/ },
   { name: 'service worker', pattern: /serviceWorker/ },
-  { name: 'sign up', pattern: /\bsign[\s-]?up\b/i },
-  { name: 'create account', pattern: /create (an )?account/i },
-  { name: 'forgot', pattern: /\bforgot/i },
-  { name: 'reset password', pattern: /reset (your )?password/i },
   { name: 'invite', pattern: /\binvit(e|ation)/i },
-  { name: 'ar: create account', pattern: /إنشاء حساب/ },
-  { name: 'ar: forgot', pattern: /نسيت/ },
-  { name: 'ar: reset', pattern: /إعادة تعيين/ },
   { name: 'ar: invite', pattern: /دعوة/ },
   // MUT-91: the portal imports the app's after-save store; nothing of the app's
   // profile store or its Show routes may come along with it.

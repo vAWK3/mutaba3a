@@ -17,5 +17,7 @@ declare const __PORTAL_URL__: string;
 declare const __HOSTED_OFFER_URL__: string;
 /** MUT-324: the landing's /terms; portal build only (read through a typeof guard, ADR-076). */
 declare const __TERMS_URL__: string;
+/** MUT-368: the portal's Turnstile site key (public); Cloudflare's always-pass test key outside production. */
+declare const __TURNSTILE_SITE_KEY__: string;
 /** The PostHog project ingest key (ADR-090): "" when unset and always "" in the desktop build; absent in Vitest. */
 declare const __POSTHOG_KEY__: string;
