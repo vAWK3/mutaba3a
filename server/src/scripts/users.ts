@@ -48,7 +48,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'signup-reviews'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'signup-reviews'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -79,6 +79,7 @@ const USAGE = [
   '  billing-unlinked   (Stripe customers not yet matched to a person)',
   '  billing-reconcile  (MUT-360: re-read every Stripe subscription now, as the nightly job does)',
   '  billing-status   --email <email> | --user-id <uuid>   (their Stripe mirror, and each profile with and without grants)',
+  '  billing-uncovered  (MUT-361: profiles the lapse gate holds read-only or locked, with their active people; run before turning BILLING_GATE on)',
   '  signup-reviews [--approve <email> | --decline <email>]   (MUT-367: npm run signups:review)',
   '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
   '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
@@ -368,6 +369,17 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
       if (check.flagged) out(`  CHECK ${check.stripeCustomerId}: billed in ${check.country}, not open to consumers, and no tax ID — confirm it is a business`);
       else if (check.flagged === null && check.country !== null) out(`  ${check.stripeCustomerId}: couldn't ask Stripe for tax IDs; country check skipped`);
     }
+  },
+  // MUT-361 (comment 12278): before the gate goes live, nobody active may be held by it by mistake.
+  'billing-uncovered': async ({ client, out }) => {
+    const { profiles } = await client.call<{ profiles: { organizationId: string; name: string; billing: { state: string; source: string; until: string | null }; people: { userId: string; email: string }[] }[] }>('GET', '/admin/v1/billing/uncovered');
+    if (profiles.length === 0) return out('Nobody active is held read-only or locked.');
+    const bySource = new Map<string, number>();
+    for (const p of profiles) {
+      bySource.set(p.billing.source, (bySource.get(p.billing.source) ?? 0) + 1);
+      out(`${p.billing.state} ${p.billing.source}${p.billing.until ? ` until ${p.billing.until}` : ''}  ${p.name} (${p.organizationId}): ${p.people.map((x) => x.email).join(', ')}`);
+    }
+    out(`${profiles.length} profile(s): ${[...bySource].map(([source, n]) => `${n} ${source}`).join(', ')}. NONE means nothing ever covered it: billing:grant each person.`);
   },
 };
 

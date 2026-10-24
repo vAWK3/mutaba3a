@@ -383,6 +383,10 @@ export interface FakeApiSeed {
   currentPassword?: string;
   /** MUT-324: false makes the portal show the Updated-terms step until the spec agrees. Defaults to true. */
   termsAccepted?: boolean;
+  /** MUT-361: /v1/me `billingStanding`, the lapse gate's verdict on the person; absent = null (the gate off). */
+  billingStanding?: 'open' | 'read-only' | 'locked' | null;
+  /** MUT-361: GET /v1/billing's answer (Settings › Billing, and whether a payment would cover a profile). */
+  billing?: Json;
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -398,6 +402,9 @@ export class FakeApi {
   /** Requests that reached the storage bucket (receipt PUTs, signed-URL downloads). */
   readonly storage: { method: string; url: string }[] = [];
   signedIn: boolean;
+  /** MUT-361: what /v1/me says about the lapse gate. */
+  billingStanding: 'open' | 'read-only' | 'locked' | null;
+  private readonly billingOverview: Json | null;
   private profiles: ProfileState[];
   private readonly customers;
   private readonly projects;
@@ -427,6 +434,8 @@ export class FakeApi {
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
+    this.billingStanding = seed.billingStanding ?? null;
+    this.billingOverview = seed.billing ?? null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
     this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => customer(i));
     this.projects = [...(seed.projects ?? [])];
@@ -482,6 +491,7 @@ export class FakeApi {
     );
     return {
       ...body,
+      billingStanding: this.billingStanding,
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
         return state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
@@ -566,6 +576,7 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    if (resource === 'billing' && method === 'GET' && !id && this.billingOverview) return json(this.billingOverview);
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
       if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);

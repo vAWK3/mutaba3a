@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient } from '@tanstack/react-query';
+import { createPortalQueryClient } from '../queryClient';
 import { createMemoryHistory } from '@tanstack/react-router';
 import { PortalProviders } from '../HostedApp';
 import { createPortalRouter } from '../router';
@@ -57,6 +57,8 @@ export function profile(overrides: Partial<HostedProfile> = {}): HostedProfile {
     // MUT-373: a profile you don't own lists no owners.
     owners: null,
     firmRequestedBy: null,
+    // MUT-358/361: no billing in a test unless it says so (the signed-out shape; the lapse gate off).
+    billing: null,
     ...overrides,
   };
 }
@@ -77,6 +79,8 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
     // MUT-324: a signed-in test person has accepted the current terms unless a test says otherwise.
     terms: { version: '2026-10-19', accepted: true },
+    // MUT-361: the lapse gate isn't enforced unless a test says so.
+    billingStanding: null,
   };
 }
 
@@ -110,7 +114,8 @@ export function stubApi(routes: Record<string, Handler>) {
 }
 
 export function renderPortal(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  // The portal's own client (MUT-361: a lapse refusal re-reads /v1/me), without retries.
+  const queryClient = createPortalQueryClient({ queries: { retry: false }, mutations: { retry: false } });
   const history = createMemoryHistory({ initialEntries: [path] });
   const router = createPortalRouter(queryClient, history);
   const user = userEvent.setup();

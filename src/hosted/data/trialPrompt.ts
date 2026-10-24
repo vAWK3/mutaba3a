@@ -1,21 +1,62 @@
-import type { BillingEntitlement, Me, TrialPrompt, TrialPromptAction } from '../api/client';
+import type { BillingEntitlement, HostedProfile, Me, TrialPrompt, TrialPromptAction } from '../api/client';
 
 /**
  * MUT-418: the free trial's card prompt, read from /v1/me. Pure, so every branch is a unit test; the step and the
  * banner only render. The trial is the person's own: their personal profile's entitlement is their trial (its owner
  * is always them), whichever profile they have open.
  *
- * MUT-361 seam: `TrialNotice` is a union so the lapse gate can add its read-only and locked notices beside `trial`.
+ * MUT-361: `TrialNotice` also carries the lapse gate's notices for the open profile (`lapseNoticeOf`): a failed
+ * payment (GRACE), read-only and locked.
  */
 
-export type TrialNotice = {
-  kind: 'trial';
-  daysLeft: number;
-  endsAt: string;
-  dismissible: boolean;
-  /** A card added now is first charged on the trial's end (≥ 48 h left); otherwise Checkout charges at once. */
-  chargeDeferred: boolean;
-};
+export type TrialNotice =
+  | {
+      kind: 'trial';
+      daysLeft: number;
+      endsAt: string;
+      dismissible: boolean;
+      /** A card added now is first charged on the trial's end (≥ 48 h left); otherwise Checkout charges at once. */
+      chargeDeferred: boolean;
+    }
+  /** MUT-361: Stripe is retrying a failed payment; nothing is refused yet. */
+  | { kind: 'grace' }
+  /** MUT-361: reads and the export only. `locksAt`: the day an unpaid trial locks; null for a payer, who never locks. */
+  | { kind: 'read-only'; source: BillingEntitlement['source']; locksAt: string | null }
+  /** MUT-361: only Subscribe and Download my records. */
+  | { kind: 'locked' };
+
+export type LapseNotice = Exclude<TrialNotice, { kind: 'trial' }>;
+
+/** MUT-361: what the server lets the person do on a profile (server billing/gate.ts, mirrored). */
+export type BillingGate = 'open' | 'read-only' | 'locked';
+
+/**
+ * The person's standing (server-computed `billingStanding`: the best state across their profiles), for the
+ * person-level actions: New profile. Null — signed out, or a server with the gate off — refuses nothing.
+ */
+export function personStandingOf(me: Pick<Me, 'billingStanding'>): BillingGate {
+  return me.billingStanding ?? 'open';
+}
+
+/** The open profile's gate: its `billing.state`, while the server enforces the gate at all (`billingStanding` set). */
+export function billingGateOf(me: Pick<Me, 'billingStanding'>, profile: Pick<HostedProfile, 'billing'>): BillingGate {
+  if (!me.billingStanding) return 'open';
+  const state = profile.billing?.state;
+  if (state === 'READ_ONLY') return 'read-only';
+  if (state === 'LOCKED') return 'locked';
+  return 'open';
+}
+
+/** The banner (or locked screen) the open profile needs, if any. */
+export function lapseNoticeOf(me: Pick<Me, 'billingStanding'>, profile: Pick<HostedProfile, 'billing'>): LapseNotice | null {
+  const billing = profile.billing;
+  if (!billing) return null;
+  if (billing.state === 'GRACE') return { kind: 'grace' };
+  const gate = billingGateOf(me, profile);
+  if (gate === 'locked') return { kind: 'locked' };
+  if (gate === 'read-only') return { kind: 'read-only', source: billing.source, locksAt: billing.source === 'TRIAL' ? billing.until : null };
+  return null;
+}
 
 /** The banner can't be hidden in the trial's last 3 days (ticket). */
 export const TRIAL_BANNER_LAST_DAYS = 3;
@@ -50,7 +91,7 @@ export function trialWelcomeDue(me: Me, now: Date): boolean {
 }
 
 /** The Home banner: whole days left (rounded up), hidden while snoozed except in the trial's last 3 days. */
-export function trialBannerOf(me: Me, now: Date): TrialNotice | null {
+export function trialBannerOf(me: Me, now: Date): Extract<TrialNotice, { kind: 'trial' }> | null {
   const trial = runningTrial(me);
   if (!trial) return null;
   const daysLeft = Math.max(0, Math.ceil((new Date(trial.until).getTime() - now.getTime()) / DAY_MS));

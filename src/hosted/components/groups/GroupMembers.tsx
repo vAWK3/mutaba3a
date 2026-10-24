@@ -42,6 +42,8 @@ export interface GroupMembersProps {
   labels: { members: string; leftOut: string; kept: string; untitled: string; columns: { title: string; category: string; amount: string; action: string } };
   /** Where focus goes when the last row of a list leaves. */
   fallbackFocus: RefObject<HTMLElement | null>;
+  /** MUT-361: a read-only profile (lapse gate) lists members with no Leave out / Put back. */
+  readOnly?: boolean;
 }
 
 const dayId = (groupId: string, date: string) => `group-${groupId}-day-${date}`;
@@ -149,7 +151,7 @@ function nextAction(row: HTMLElement): HTMLElement | null {
 
 const focusIsLost = () => document.activeElement === null || document.activeElement === document.body;
 
-function MemberRow({ row, list, group, narrow, categoryName, verbLabel, onAct, motion, labels, container, fallbackFocus }: GroupMembersProps & { row: Expense; list: RowList; container: RefObject<HTMLElement | null> }) {
+function MemberRow({ row, list, group, narrow, categoryName, verbLabel, onAct, motion, labels, container, fallbackFocus, readOnly = false }: GroupMembersProps & { row: Expense; list: RowList; container: RefObject<HTMLElement | null> }) {
   const element = useRef<HTMLTableRowElement>(null);
   const reducedMotion = usePrefersReducedMotion();
   const verb = verbFor(list, row.occurredOn, group);
@@ -201,9 +203,11 @@ function MemberRow({ row, list, group, narrow, categoryName, verbLabel, onAct, m
         <DecimalAmount value={row.amount} currency={row.currency} />
       </td>
       <td className="hp-member-action">
-        <button type="button" className={`btn btn-secondary btn-sm press hp-row-action ${ACTION_CLASS}`} aria-label={`${verbLabel(verb)}: ${title}`} onClick={() => onAct(verb, row, list)}>
-          {verbLabel(verb)}
-        </button>
+        {!readOnly && (
+          <button type="button" className={`btn btn-secondary btn-sm press hp-row-action ${ACTION_CLASS}`} aria-label={`${verbLabel(verb)}: ${title}`} onClick={() => onAct(verb, row, list)}>
+            {verbLabel(verb)}
+          </button>
+        )}
       </td>
     </tr>
   );

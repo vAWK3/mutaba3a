@@ -136,6 +136,7 @@ const app = createApp({
   localAttachments,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
+  billingGate: config.BILLING_GATE,
   passwordHasher: createArgon2Hasher({
     memoryKiB: config.ARGON2_MEMORY_KIB,
     timeCost: config.ARGON2_TIME_COST,

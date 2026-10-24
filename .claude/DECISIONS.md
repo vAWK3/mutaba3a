@@ -4915,3 +4915,30 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
 - `/` keeps the drawer keys, so mails (MUT-419) and the lapse gate (MUT-361) can link `/?billing=true&step=subscribe`.
 - The privacy sentence for the new usage notes waits on Basel (TD-219); the Flutter contract copy lags (TD-218).
+
+---
+
+## ADR-181: The Lapse Gate Is Enforced Once, at the Door: READ_ONLY Takes Reads Only, LOCKED Only the Records Export; 402 SUBSCRIPTION_LAPSED (MUT-361) (Amends ADR-160 Decision 4)
+
+**Status:** Accepted for the build (2026-10-24, MUT-361, unattended run on Basel's "go"). Decisions D1–D12 and review amendments R1–R9 in `.claude/designs/mut-361-lapse-gate.md` are **pending Basel's confirmation**. Builds on ADR-160 (states), ADR-162 (the resolver) and ADR-180.
+
+**Context:** `/v1/me` reported each profile's entitlement (ACTIVE, GRACE, READ_ONLY, LOCKED) but nothing enforced it. ADR-160 decision 4 put the rule "in `store-guard.ts` and `authenticate()`".
+
+**Override log (ADR-160 decision 4):** *what changed:* the rule lives only at the door (`authenticate()` → `server/src/auth/billing-gate.ts`, rules in `server/src/billing/gate.ts`); the store guard is untouched. *Why:* the store guard sees only repository calls, so a READ_ONLY session could still do work that touches no write method (a presigned upload URL), and it refuses mid-route after the idempotency claim; the door refuses before any work, for cookie and device sessions alike, and is also where LOCKED reads must be refused. *Date:* 2026-10-24.
+
+**Decision:**
+1. **Profile-scoped session requests** follow the selected profile's state: ACTIVE and GRACE → anything; READ_ONLY → safe methods only (every POST/PATCH/PUT/DELETE is a write, D5); LOCKED → only `GET /v1/records-export` and `GET /v1/records-export/receipts/:receiptId`.
+2. **Organization-independent session routes** are each classified in `PERSON_LEVEL_GATE` (a test fails on an unclassified one): `open` (identity, sessions, password, terms, trial prompt, `/v1/billing/*`, fx, leaving a co-owned profile, D6); `person` (the inbox, `GET /v1/entries`, `POST /v1/profiles`: the person's best standing across their profiles, D4; the feed leaves LOCKED profiles out); `pathProfile` (profile edit, type-change preview, firm request: the profile in the path, members only).
+3. **API keys are never gated** (Malafat's coverage is Malafat's). An unmatched route is never gated, so its 404 answers.
+4. **The refusal is `SUBSCRIPTION_LAPSED`, HTTP 402** (D2), details `{ profileId (null when the standing refused), state READ_ONLY|LOCKED, source, until }`; `until` is a trial's lock date, else null (D3, instead of the ticket's `since`).
+5. **`/v1/me` publishes `billingStanding`** (`open` | `read-only` | `locked`, null where the gate is off), so the portal and the phone never re-derive the person-level rule (D12). Each profile's own gate stays its `billing.state`.
+6. **Switch:** `BILLING_GATE` (on unless exactly "false"); Terraform `billing_gate_enabled` (default true) is the operator's kill switch (D7). `createApp` defaults it off so suites with ungranted people keep testing what they test; the gate's suites turn it on.
+7. **Operator list:** `GET /admin/v1/billing/uncovered` / `npm run billing:uncovered`: every READ_ONLY or LOCKED profile with an ACTIVE member. Must be empty (or hold only intended lapses) before a release carries the gate.
+8. **Portal:** GRACE and READ_ONLY banners above every page of the profile; Add hidden and URL-opened create drawers refused; edit drawers open view-only (fields disabled, Save/Delete gone, receipt Download kept); LOCKED is one full page with Subscribe (only where this person's payment covers the profile) and Download my records; the switcher and account menu stay (D9). A late refusal re-reads `/v1/me`.
+9. **For MUT-419:** `trialTimelineOf(trialStartedAt)` (`billing/entitlement.ts`) gives `{ startedAt, endsAt (day 14), lockAt (day 30) }`; the stage is `resolveEntitlement`'s TRIAL state.
+
+**Consequences:**
+- One extra `billing.factsFor` (three indexed queries) per gated session request; person-level routes also load the person's memberships (TD-221).
+- Released phones map 402 to a retryable error: a refused capture stays in their outbox and lands once the person subscribes. Nobody is gated until self-signup opens (every existing person has a pre-billing grant), so GA's signup opening waits for MUT-364's phone build (D11, before-release.md).
+- A co-owner's own subscription still doesn't cover a shared profile (TD-193): the portal tells them to ask its creator.
+- API 1.60.0-mut361.

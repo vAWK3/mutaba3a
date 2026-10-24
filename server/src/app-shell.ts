@@ -13,6 +13,8 @@ export interface ApiShellDependencies {
   logger: Logger;
   /** MUT-148: where errors logged as errors are also reported. Absent = none (the portal's local mode, ADR-024). */
   reporter?: ErrorReporter;
+  /** MUT-361: whether the lapse gate is enforced (billing/gate.ts). Absent = off (tests, the portal's local mode). */
+  billingGate?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     const requestId = c.req.header('x-request-id') ?? randomUUID();
     c.set('requestId', requestId);
     c.set('now', now);
+    c.set('billingGate', deps.billingGate ?? false);
     await next();
   });
 

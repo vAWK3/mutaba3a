@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.59.0-mut418
+  version: 1.60.0-mut361
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -41,6 +41,8 @@ info:
     Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session's own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today's read-only behaviour on all of it (403 READ_ONLY_PROFILE) except what MUT-61 opens below.
 
     Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile's rules as `income`.
+
+    Lapse gate (MUT-361, ADR-181): each hosted profile is entitled per GET /v1/me `billing.state`. On a READ_ONLY profile a session (cookie or device) may only read: any other method answers 402 SUBSCRIPTION_LAPSED with details { profileId, state, source, until }. A LOCKED profile answers only GET /v1/records-export and its receipts. The person-level routes (the inbox, GET /v1/entries, POST /v1/profiles) follow `billingStanding`, the best state across the person's profiles; GET /v1/entries leaves LOCKED profiles out. Identity (/v1/me*, sessions, password, terms), /v1/billing/* and leaving a profile stay open in every state. An API key is never gated, and nothing is ever deleted.
 
     Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization's today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.
 
@@ -234,12 +236,21 @@ components:
           required:
             - version
             - accepted
+        billingStanding:
+          type: string
+          nullable: true
+          enum:
+            - open
+            - read-only
+            - locked
+            - null
       required:
         - user
         - profiles
         - limits
         - currencies
         - terms
+        - billingStanding
     UserLocale:
       type: string
       enum:
@@ -505,6 +516,7 @@ components:
                 - CHECK_FAILED
                 - ACCOUNT_UNDER_REVIEW
                 - CURRENT_PASSWORD_WRONG
+                - SUBSCRIPTION_LAPSED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
                 - CONFLICT
@@ -7406,6 +7418,41 @@ components:
         - source
         - tier
         - until
+    BillingUncovered:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              billing:
+                $ref: "#/components/schemas/BillingEntitlement"
+              people:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    userId:
+                      type: string
+                      format: uuid
+                    email:
+                      type: string
+                  required:
+                    - userId
+                    - email
+            required:
+              - organizationId
+              - name
+              - billing
+              - people
+      required:
+        - profiles
     StripeWebhookResponse:
       type: object
       properties:
@@ -16910,6 +16957,27 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/uncovered:
+    get:
+      tags:
+        - Admin
+      summary: Profiles the lapse gate would hold read-only or locked, with their active people (MUT-361)
+      description: "Every profile that resolves READ_ONLY or LOCKED right now and has at least one ACTIVE member, with those members. Run before a release that turns the gate on (BILLING_GATE): a pilot person here with source NONE needs `billing:grant`. One billing read for every profile."
+      security:
+        - adminToken: []
+      responses:
+        "200":
+          description: Uncovered profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingUncovered"
+        "401":
+          description: Missing or invalid admin token
           content:
             application/json:
               schema:

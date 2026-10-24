@@ -13658,6 +13658,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/billing/uncovered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Profiles the lapse gate would hold read-only or locked, with their active people (MUT-361)
+         * @description Every profile that resolves READ_ONLY or LOCKED right now and has at least one ACTIVE member, with those members. Run before a release that turns the gate on (BILLING_GATE): a pilot person here with source NONE needs `billing:grant`. One billing read for every profile.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Uncovered profiles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BillingUncovered"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/stripe/webhook": {
         parameters: {
             query?: never;
@@ -14032,6 +14080,8 @@ export interface components {
                 version: components["schemas"]["TermsVersion"];
                 accepted: boolean;
             } | null;
+            /** @enum {string|null} */
+            billingStanding: "open" | "read-only" | "locked" | null;
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -14115,7 +14165,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -16714,6 +16764,19 @@ export interface components {
             tier: "FREELANCER" | "FIRM" | null;
             /** Format: date-time */
             until: string | null;
+        };
+        BillingUncovered: {
+            profiles: {
+                /** Format: uuid */
+                organizationId: string;
+                name: string;
+                billing: components["schemas"]["BillingEntitlement"];
+                people: {
+                    /** Format: uuid */
+                    userId: string;
+                    email: string;
+                }[];
+            }[];
         };
         StripeWebhookResponse: {
             /** @enum {boolean} */

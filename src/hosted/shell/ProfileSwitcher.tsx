@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile } from '../api/client';
-import { canCreateProfile } from '../data/profileRules';
+import { atProfileCap, canCreateProfile } from '../data/profileRules';
 import { useProfileKind } from '../data/useProfileKind';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
@@ -102,7 +102,9 @@ export function ProfileSwitcher({ active }: { active: HostedProfile | null }) {
           >
             <span className="hp-option-text">
               <span className="hp-option-line">{t('hosted.shell.switcher.newProfile')}</span>
-              {!canCreate && (
+              {/* MUT-361 (review): say why New profile is off when the lapse gate, not the cap, holds it */}
+              {!atProfileCap(me) && !canCreate && <span className="hp-option-sub">{t('hosted.billing.gate.newProfileBlocked')}</span>}
+              {atProfileCap(me) && (
                 <span className="hp-option-sub">{tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}</span>
               )}
             </span>

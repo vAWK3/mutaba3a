@@ -12,6 +12,9 @@ import { changedFields, isShared, profileEditability } from '../data/profileRule
 import { fetchTypeChangePreview, useUpdateProfile } from '../data/profileQueries';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { ME_KEY, meQuery, useMe } from '../session/me';
+import { billingGateOf } from '../data/trialPrompt';
+import { ReadOnlyFields } from './Drawer';
+import { LockIcon } from './Icons';
 import { FirmRequestSection } from './FirmRequestSection';
 import { ProfileOwnersSection } from './ProfileOwnersSection';
 import { ProfileBanner } from './ProfileBanner';
@@ -68,7 +71,10 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
   const [banner, setBanner] = useState<Banner | null>(null);
   const [conflict, setConflict] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
-  const live = useMe().profiles.find((p) => p.id === profile.id) ?? opened;
+  const me = useMe();
+  const live = me.profiles.find((p) => p.id === profile.id) ?? opened;
+  // MUT-361: a profile the lapse gate holds can't be renamed or changed (the server refuses the PATCH, D4).
+  const readOnly = billingGateOf(me, live) !== 'open';
   const shared = isShared(live);
   const confirmHeading = useRef<HTMLHeadingElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -147,7 +153,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
     return message ? <p className="form-error">{t(message)}</p> : null;
   };
 
-  const footer = leaveConfirmOpen ? null : step.kind === 'confirm' ? (
+  const footer = leaveConfirmOpen || readOnly ? null : step.kind === 'confirm' ? (
       <>
         <Button type="button" variant="secondary" onClick={backFromConfirm}>
           {t('hosted.profiles.confirm.back')}
@@ -197,6 +203,13 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
           </p>
         </section>
       ) : (
+        <ReadOnlyFields readOnly={readOnly}>
+        {readOnly && (
+          <p className="hp-readonly" role="note">
+            <LockIcon />
+            <span>{t('hosted.billing.gate.drawerNote')}</span>
+          </p>
+        )}
         <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="form-group">
             <label className="form-label" htmlFor={`${FORM_ID}-name`}>
@@ -257,13 +270,14 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
             )}
           </div>
         </form>
+        </ReadOnlyFields>
       )}
       {/* MUT-373 (DR1): form, then Owners, then firm features; both outside the form and gone while a type change confirms. */}
       {step.kind !== 'confirm' && (
         <ProfileOwnersSection profileId={profile.id} onLeft={onLeftProfile} onBusyChange={onOwnersBusy} onLeaveConfirmChange={setLeaveConfirmOpen} />
       )}
       {/* MUT-300: outside the form, so asking for firm features never submits or dirties it */}
-      {step.kind !== 'confirm' && !leaveConfirmOpen && <FirmRequestSection profileId={profile.id} />}
+      {step.kind !== 'confirm' && !leaveConfirmOpen && !readOnly && <FirmRequestSection profileId={profile.id} />}
     </>
   );
 }

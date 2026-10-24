@@ -74,6 +74,8 @@ export function mapProfileError(error: unknown, shared = false): MappedProfileEr
       return conflict(error, shared);
     case 'READ_ONLY_PROFILE':
       return { ...banner('hosted.profiles.errors.notOwner'), refetchMe: true, backToList: true };
+    case 'SUBSCRIPTION_LAPSED':
+      return { ...banner('hosted.billing.gate.refused'), refetchMe: true };
     case 'NOT_FOUND':
       return { ...banner('hosted.profiles.errors.gone'), refetchMe: true, backToList: true };
     case 'VALIDATION_FAILED':

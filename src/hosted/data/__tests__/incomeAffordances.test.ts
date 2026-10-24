@@ -129,3 +129,14 @@ describe('canAddClient (MUT-286)', () => {
     expect(canAddClient(personal({ owned: false, isPersonalDefault: false, type: null }))).toBe(false);
   });
 });
+
+describe('the lapse gate (MUT-361)', () => {
+  it('a profile that is not writable offers no income write, settle, re-date or new client', async () => {
+    const { incomeAffordancesFor, redateAffordancesFor, canAddClient } = await import('../incomeAffordances');
+    const owned = personal();
+    expect(incomeAffordancesFor(owned, false)).toEqual({ kinds: [], customer: 'optional', canSettle: false });
+    expect(redateAffordancesFor(owned, false)).toEqual({ owed: false, payments: false });
+    expect(canAddClient(owned, false)).toBe(false);
+    expect(canAddClient(owned, true)).toBe(true);
+  });
+});

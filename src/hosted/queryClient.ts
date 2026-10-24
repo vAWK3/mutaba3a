@@ -1,5 +1,6 @@
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, type DefaultOptions } from '@tanstack/react-query';
 import { ApiError } from './api/client';
+import { ME_KEY } from './session/me';
 
 /**
  * The portal's query client. The cache lives in memory only: no persister, no
@@ -15,11 +16,27 @@ function retryTransient(failureCount: number, error: unknown): boolean {
   return transient && failureCount < TRANSIENT_RETRIES;
 }
 
-export function createPortalQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
+/**
+ * MUT-361 (ADR-181): a refusal from the lapse gate means the profile's plan changed under the page (the trial ran out,
+ * a payment lapsed). `/v1/me` is read again, so its banner, its disabled actions or the locked screen take over.
+ */
+export function isLapseRefusal(error: unknown): boolean {
+  return error instanceof ApiError && error.code === 'SUBSCRIPTION_LAPSED';
+}
+
+/** `defaultOptions` replaces the portal's own (tests: no retries, no stale time); the lapse handling stays. */
+export function createPortalQueryClient(defaultOptions?: DefaultOptions): QueryClient {
+  const rereadMe = (error: unknown) => {
+    // cancelRefetch false: a page of refused reads re-reads /v1/me once, not once per query (review).
+    if (isLapseRefusal(error)) void client.invalidateQueries({ queryKey: ME_KEY }, { cancelRefetch: false });
+  };
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({ onError: rereadMe }),
+    mutationCache: new MutationCache({ onError: rereadMe }),
+    defaultOptions: defaultOptions ?? {
       queries: { staleTime: STALE_MS, retry: retryTransient },
       mutations: { retry: false },
     },
   });
+  return client;
 }

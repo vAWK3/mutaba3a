@@ -39,6 +39,12 @@ export const ERROR_CODES = {
   /** MUT-237: the typed current password is wrong, or the account is locked. Not 401 — the session is still valid; a
    * 401 here would trip the portal's generic "session expired" handler and sign the person out mid-form. */
   CURRENT_PASSWORD_WRONG: 403,
+  /**
+   * MUT-361 (ADR-181): a session asked a READ_ONLY or LOCKED profile (or a person whose profiles all are) for something
+   * its plan no longer allows. `details`: { profileId (null for a person-level refusal), state READ_ONLY|LOCKED,
+   * source, until (a trial's lock date, else null) }. Never for an API key.
+   */
+  SUBSCRIPTION_LAPSED: 402,
   NOT_FOUND: 404,
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
