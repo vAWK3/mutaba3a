@@ -1,6 +1,6 @@
 /**
  * The carry-over hand-off (MUT-291 §3.2, ADR-181): an old page opens
- * app.mtb3a.com/carry-over/receive in a popup and posts this browser's records
+ * the new portal's /carry-over/receive in a popup and posts this browser's records
  * to it. Shared by both senders (the free app, src/pages/carryOver; the run.app
  * portal, src/hosted/pages/carry-over) and the receiver, so it lives in src/lib
  * and imports nothing: no storage, no portal code.

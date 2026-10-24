@@ -1,5 +1,4 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
@@ -7,8 +6,9 @@ import { formatDay } from '../format/dates';
 import { useTp } from '../../lib/i18n/plural';
 import { localBackend } from '../api/client';
 import { saveBlobAs } from '../data/download';
-import { ME_KEY, meQuery } from '../session/me';
+import { useRestoredHome } from '../session/restoredHome';
 import { isRecordsFileRefused, type PendingRestore } from '../session/localBackendContract';
+import { CarryOverDetails } from '../pages/carry-over/CarryOverDetails';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
 import { useToast } from './Toast';
@@ -25,7 +25,7 @@ import { useToast } from './Toast';
 type Problem = 'notAFile' | 'tooNew' | 'failed';
 
 function problemFor(error: unknown): Problem {
-  if (isRecordsFileRefused(error)) return error.reason === 'too-new' ? 'tooNew' : 'notAFile';
+  if (isRecordsFileRefused(error)) return error.reason === 'too-new' ? 'tooNew' : error.reason === 'carry-over-failed' ? 'failed' : 'notAFile';
   return 'failed';
 }
 
@@ -37,7 +37,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
   const { t, language } = useLanguage();
   const tp = useTp();
   const toast = useToast();
-  const queryClient = useQueryClient();
+  const restoredHome = useRestoredHome();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingRestore | null>(null);
@@ -65,7 +65,8 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     setPending(null);
     try {
       const backend = await localBackend();
-      const read = await backend.readRecordsFile(file);
+      // MUT-291 (E5): the old web app's backup file is read too, through the same carry-over as its hand-off.
+      const read = await backend.readRecordsFile(file, { labels: { noClient: t('hosted.carryOver.noClient'), defaultBusiness: t('hosted.carryOver.defaultBusiness') }, locale: language === 'en' ? 'en' : 'ar' });
       if (pick === latestPick.current) setPending(read);
     } catch (error) {
       if (pick === latestPick.current) setProblem(problemFor(error));
@@ -85,24 +86,6 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
     // From here the records are replaced: whatever happens next, the person is told so, never "nothing was changed".
     toast(t('hosted.local.data.restored'), { tone: 'info' });
     await navigate({ to: await restoredHome(), replace: true });
-  }
-
-  /**
-   * The restored person's first profile, from a fresh /v1/me. `/` would redirect once, from whatever answer
-   * AuthGate last rendered, which can still be the old one for a tick, and a redirect doesn't correct itself;
-   * the profile page reads /v1/me on every render, so it does. `/` when /v1/me can't be read now. Leaving the
-   * page also closes this drawer.
-   */
-  async function restoredHome(): Promise<string> {
-    try {
-      const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_KEY[0] });
-      const first = me.profiles[0];
-      return first ? `/p/${first.id}` : '/';
-    } catch {
-      void queryClient.resetQueries();
-      return '/';
-    }
   }
 
   return (
@@ -136,6 +119,7 @@ export function YourDataDrawer({ onClose }: { onClose: () => void }) {
 
         {pending && (
           <div className="hp-card hp-your-data-confirm" role="alertdialog" aria-labelledby="your-data-confirm">
+            {pending.carryOver && <CarryOverDetails summary={pending.carryOver} />}
             <p id="your-data-confirm">{tp('hosted.local.data.confirm', pending.recordCount)}</p>
             {/* MUT-325: a file from an account's Download says so, and from when */}
             {pending.exportedFromAccountAt && <p>{t('hosted.local.data.fromAccount', { date: formatDay(pending.exportedFromAccountAt.toISOString().slice(0, 10), language) })}</p>}

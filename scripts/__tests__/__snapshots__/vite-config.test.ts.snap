@@ -35,6 +35,7 @@ exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""desktop"",
+    "__CARRY_OVER__": "{"sources":{},"portalOrigin":null}",
     "__LANDING_SENTRY_DSN__": """",
     "__LANDING_SENTRY_ENABLED__": "false",
     "__LANDING_SENTRY_ENVIRONMENT__": """",
@@ -120,6 +121,7 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   "define": {
     "__APP_VERSION__": "<package.json version>",
     "__BUILD_MODE__": ""web"",
+    "__CARRY_OVER__": "<config/hosts.json carry-over origins>",
     "__LANDING_SENTRY_DSN__": """",
     "__LANDING_SENTRY_ENABLED__": "false",
     "__LANDING_SENTRY_ENVIRONMENT__": """",

@@ -11,7 +11,7 @@ import {
 
 /**
  * MUT-291 §3.2: the cross-origin hand-off between an old page (the free app,
- * or the run.app portal) and app.mtb3a.com/carry-over/receive. Both ends are
+ * or the old portal address) and the new address's /carry-over/receive. Both ends are
  * exercised against fake windows: the browser's own `message` events are
  * modelled by `deliver`, so every check (origin, source, kind, size) and both
  * timeouts are proven without a second origin.

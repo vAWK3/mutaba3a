@@ -83,7 +83,7 @@ async function crossCheckOutstanding(result: ReplayResult): Promise<TotalsMismat
   return mismatches;
 }
 
-function countsOf(maps: LocalSnapshotMaps): CarryOverCounts {
+export function countsOf(maps: LocalSnapshotMaps): CarryOverCounts {
   const live = <T extends { deletedAt?: Date | null }>(m: Map<string, T>) => [...m.values()].filter((r) => !r.deletedAt).length;
   return {
     businesses: [...maps.orgs.values()].filter((o) => !o.personalOwnerUserId).length,

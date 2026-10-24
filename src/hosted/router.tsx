@@ -5,6 +5,8 @@ import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { RecoverPage } from './pages/auth/RecoverPage';
+import { CarryOverPage } from './pages/carry-over/CarryOverPage';
+import { ReceivePage } from './pages/carry-over/ReceivePage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
@@ -91,6 +93,10 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   /** MUT-368: the two self-service doors, public like sign-in; each asks GET /v1/self-service whether it is open. */
   const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/signup', component: SignupPage });
   const recoverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/recover', component: RecoverPage });
+
+  /** MUT-291: public like sign-in. The old address's carry-over page, and the new address's receiver. */
+  const carryOverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/carry-over', component: CarryOverPage });
+  const carryOverReceiveRoute = createRoute({ getParentRoute: () => rootRoute, path: '/carry-over/receive', component: ReceivePage });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -217,6 +223,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     setupRoute,
     signupRoute,
     recoverRoute,
+    carryOverRoute,
+    carryOverReceiveRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,

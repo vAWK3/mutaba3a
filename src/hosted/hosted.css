@@ -797,3 +797,17 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
   .hp-billing-interval .segmented-control-option { flex: 1; }
   .hp-billing-continue { inline-size: 100%; }
 }
+
+/* MUT-291: the carry-over's two pages and its summary (also inside Your data › Restore). */
+.hp-carry-over { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-5) var(--space-6); max-width: 640px; width: 100%; }
+.hp-carry-over h2 { font-size: var(--text-title, var(--text-body)); margin: 0; }
+.hp-carry-over p { margin: 0; }
+.hp-carry-over-details { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-carry-over-counts { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); margin: 0; }
+.hp-carry-over-counts div { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.hp-carry-over-counts dt { color: var(--text-secondary); }
+.hp-carry-over-counts dd { margin: 0; font-weight: var(--weight-medium); }
+.hp-carry-over-totals h3 { font-size: var(--text-body); margin: 0 0 var(--space-2); }
+.hp-carry-over-report summary { cursor: pointer; font-weight: var(--weight-medium); }
+.hp-carry-over-report ul { margin: var(--space-2) 0 0; padding-inline-start: var(--space-5); display: flex; flex-direction: column; gap: var(--space-1-5); }
+.hp-carry-over-report li { display: flex; justify-content: space-between; gap: var(--space-3); }
