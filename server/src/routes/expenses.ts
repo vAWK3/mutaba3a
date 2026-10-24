@@ -306,12 +306,15 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { expenseId, receiptId } = c.req.valid('param');
       const receipt = await mustGetReceipt(organization.id, expenseId, receiptId);
       if (receipt.status === 'READY') return c.json(serializeExpenseReceipt(receipt), 200);
+      // Storage first, outside any transaction: no network I/O under a database lock.
       await verifyUploadedObject(s, receipt);
-      await assertRoomForReceipt(organization.id, expenseId);
-      const ready = await store.expenseReceipts.complete(organization.id, receipt.id, c.get('now')());
-      if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
-      await audit(c, 'expense_receipt.added', 'expense_receipt', ready.id, { expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes });
-      return c.json(serializeExpenseReceipt(ready), 200);
+      // MUT-397: the room check and the flip to READY happen under the expense lock, the same one filing takes.
+      const result = await store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE }, c.get('now')());
+      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
+      if (result.kind === 'receipt_not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
+      if (result.kind === 'too_many_receipts') throw tooManyReceipts();
+      if (result.kind === 'completed') await audit(c, 'expense_receipt.added', 'expense_receipt', result.receipt.id, { expenseId, filename: result.receipt.filename, sizeBytes: result.receipt.sizeBytes });
+      return c.json(serializeExpenseReceipt(result.receipt), 200);
     },
   );
 
@@ -392,6 +395,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     },
   );
 
+  /** Advisory, for the upload start only: completion re-checks under the expense lock (completeOnExpense, MUT-397). */
   async function assertRoomForReceipt(organizationId: string, expenseId: string): Promise<void> {
     if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
   }
