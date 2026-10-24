@@ -5054,3 +5054,33 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A home-page visit now makes one GET to our API (disclosed in the policy's network section).
 - Adding Sentry tracing to the landing with the portal in `tracePropagationTargets` would force a preflight the server doesn't answer and keep the door closed (D17; comment in `signupDoor.ts`).
 - The signup CTA isn't counted in landing analytics (D7, TD-233). Stripe isn't named in the policy yet (D13, TD-234).
+
+## ADR-188: Closing an Account Is 30 Days of Grace on the User Row, Then an Hourly Hard Delete That Claims First, Passes Shared Profiles On and Anonymizes the Rest (MUT-333, Web Half)
+
+**Status:** Accepted for the build (2026-10-24, MUT-333, unattended run on Basel's "go"). Decisions D1–D20 and eng-review R1–R17 in `.claude/designs/mut-333-close-account.md` are **pending Basel's confirmation**. Basel's own decisions (Jira 12135, 12152, 12293): 30 days' grace then a hard delete, backups age out 14 days later; closing cancels an active Stripe subscription (a Malafat add-on is left alone); `user.terms_accepted` audit rows are purged; records on profiles the person doesn't own are anonymized, not reassigned. Builds on ADR-102 (terms), ADR-160/181 (billing, the lapse gate), ADR-163 (co-owners), ADR-165/170 (Stripe), ADR-174/184 (mail and the job pattern).
+
+**Context:** GA needs self-service account deletion (privacy law; App Store 5.1.1(v) for the phone). The operator did it by hand with `profile-rows.sh purge-user`, which refused shared profiles and records on others' profiles ("MUT-333's decisions").
+
+**Decision:**
+1. **The closure lives on the user row** (D18): `closeRequestedAt`, `deleteAfter` (+30 × 24 h), `closeEndedSubscriptionIds`, `purgeStartedAt`, `purgeLastTriedAt`. The auth layer already reads the row, so the grace restriction costs no read.
+2. **Grace is a restricted session** (D3, R8): sign-in still works; every other session is revoked at close; a closing session reaches only `GET /v1/me`, `DELETE /v1/me/closure` and sign-out, anything else is **403 `ACCOUNT_CLOSING`** `{ deleteAfter }`. API keys are unaffected. Past `deleteAfter` (or once claimed) the account is gone to the person: sign-in 401, sessions expire (D5). Both closure routes are `open` in the lapse gate.
+3. **Billing (D1, R5–R7):** close reads Stripe live, ends `active|trialing` subscriptions at the period end and cancels `past_due|unpaid` ones now, after expiring open checkouts on every customer whose metadata names the person; a Stripe failure reverts what it changed (502, nothing changed). Keep my account turns back on only what the close ended. The purge deletes every such customer.
+4. **The hard delete claims first, deletes files last (R1, R2):** per person, a claim under the user-row lock (after which no cancel can win, whatever the clocks), then Stripe, then one transaction (120 s budget, R13), which queues the deleted profiles' bucket prefixes in `storage_purges`; the prefixes are emptied after the commit and at the start of every run.
+5. **What happens to each profile (D6, R10):** one the person created alone is deleted with every row; one they created and share passes to a co-owner (active and not closing first); anything else keeps the person's records, anonymized: the creator columns are nullable with ON DELETE SET NULL (D7). On surviving profiles the audit keeps a tombstone: the bare user id, metadata cleared, plus `user.deleted` (D8, R3).
+6. **The job is always on** (D11): Cloud Scheduler `mutaba3a-account-purge` hourly at :15, `POST /jobs/v1/accounts/purge`; at most 25 people and about 200 s a run; one failure never stops it; skips and failures log `account purge needs the operator`, which alerts. The operator dry-runs with `POST /admin/v1/accounts/purge {dryRun}` / `npm run accounts:purge -- --dry-run`.
+7. **Completeness is tested against Postgres itself** (R14): `prisma-purge-tables.ts` names every table; a test:db fails on an unclassified `organizationId` table or user foreign key, and another scans every text/uuid/JSON column after a purge for the person's id, email and name.
+
+**Override log:**
+
+| Overridden | What it said | Replaced by | Why | Date |
+|---|---|---|---|---|
+| ADR-159 §5 / MUT-359 templates | "No template variable is an amount, a currency or a date" | `account-closing` carries the deletion day (a calendar day, never a money date); the template test allows that one value | The person must know the day their account goes | 2026-10-24 |
+| MUT-42 / MUT-161 / MUT-267 schema | `expenses`, `conversions`, `expense_groups.createdByUserId` and `expense_receipts.uploadedByUserId` NOT NULL, RESTRICT | Nullable, ON DELETE SET NULL; the API fields are nullable | Basel's 12293: records stay, anonymized | 2026-10-24 |
+| ADR-099 (MUT-300 O8) | `firmRequestedByUserId` RESTRICT and set exactly with `firmRequestedAt` | SET NULL; the CHECK only says requested-by implies requested-at | A pending request outlives its requester | 2026-10-24 |
+| MUT-327 runbook / `profile-rows.sh` | purge-user "until MUT-333"; refuses records on others' profiles | The hourly purge is the path; the script stays for the operator's own cases | The decisions it deferred are now made | 2026-10-24 |
+
+**Consequences:**
+- The phone half (MUT-371/364 phase) must add Close my account, the closing screen, treat 403 `ACCOUNT_CLOSING` as terminal, and accept null creator ids (its feed already does).
+- The restricted Stripe key needs **Write on Subscriptions** (D14); without it close answers 502.
+- Co-owners whose shared profile was covered by the closer's subscription get no notice and may lose coverage during the grace (TD-237). `email_suppressions` keep the address (TD-238). `profile-rows.sh purge-user` duplicates part of the purge (TD-239).
+- The privacy policy's 30-day/14-day promise is now true by code; its "Deleting your account" paragraph still says to email us: Basel rewords it (before-release).

@@ -1373,6 +1373,21 @@ npm --prefix server run signups:review -- --decline rana@gmail.com   # deletes t
 - `enable:user` / `disable:user` refuse a waiting account; decide it instead.
 - Moving a webmail provider to instant signup is a recorded decision plus an edit to `free-webmail.txt`, not code.
 
+### 6g. Closing accounts and the hourly hard delete (MUT-333, ADR-188)
+
+A person closes their own account from the portal's account menu (`POST /v1/me/closure`, the password again). The account is then **closing** for 30 days: it signs in only to keep it (`DELETE /v1/me/closure`) or sign out, and every other request answers 403 `ACCOUNT_CLOSING`. After that it no longer signs in, and the hourly job deletes it.
+
+| Piece | Where | State |
+|---|---|---|
+| Scheduler job `mutaba3a-account-purge` | `infrastructure/terraform/main.tf`, hourly at :15 (Asia/Jerusalem), `POST /jobs/v1/accounts/purge` with the job token | Always on: closing is a promise in the privacy policy |
+| Alerts "Account deletion needs the operator" and "Account deletion job failed" | `monitoring.tf` (`account_purge`), on the §6b channels | Created with the alert channels |
+| Operator run | `npm --prefix server run accounts:purge -- --url "$URL" [--dry-run]` (`POST /admin/v1/accounts/purge`) | Any time; `--dry-run` changes nothing |
+| Stripe | the restricted key needs **Write on Subscriptions** (close ends subscriptions) and Write on Customers (the purge deletes customers) | Edit the key in place (Developers › API keys › the key › Edit); its secret doesn't change |
+
+**What a run does,** for at most 25 due accounts and about 200 s: claims the account (from then on it can't be kept), deletes every Stripe customer whose metadata names the person, then in one transaction deletes the profiles they alone own with every row, passes a Business profile they share to a co-owner, anonymizes their records on other profiles, clears audit details naming them (the bare id stays as the tombstone), deletes their own rows and the user, and queues the deleted profiles' bucket prefixes; it empties those after the commit (and any left queued at the start of each run). The bucket's soft delete keeps the files 14 days more, like the backups.
+
+**When the alert fires:** run the dry run; `stripe-failed` is transient (the next hour retries, the account stays claimed), `stripe-unavailable` means Stripe isn't configured while the person has a customer, `error` names the exception in the log, `storage` is a bucket problem (the prefix stays queued). Fix it and run without `--dry-run`, or let the next hour do it.
+
 ## 7. Production record
 
 Project `malafat-production`, region `me-west1`. Read from Cloud Run, Artifact

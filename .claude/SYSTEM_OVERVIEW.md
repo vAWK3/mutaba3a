@@ -600,3 +600,10 @@ mini-crm/
 - **Paths**: the operator adds (`grant:user --role owner`, `memberships.grantOwner`); a co-owner leaves or the creator removes (`DELETE /v1/profiles/{id}/owners/{userId}`, `memberships.removeOwner`); the creator can't leave (TD-194). `/v1/me` and the profile responses carry `owners` and `firmRequestedBy` (API 1.43.0-mut373).
 - **Guards**: a shared profile stays BUSINESS (`CO_OWNED`); firm enable keeps every OWNER; `npm run pre-roll` stops a deploy on a stray membership; `purge-user` refuses a creator with co-owners. Billing still follows the creator (TD-193).
 - **Portal**: Owners section in the edit pane, shared cue in the switcher and list, cap hint, lost-access banner, leave → personal profile. Hidden in local mode (one person).
+
+## MUT-333 — Close my account (2026-10-24, ADR-188, web half)
+
+- **Close**: the account menu's Close my account drawer (`?closeAccount=true`) → `POST /v1/me/closure {password}`: Stripe subscriptions end at the period end (past-due ones now, open checkouts expired), other sessions revoked, an `account-closing` mail (en/ar) names the deletion day. The closure lives on the user row (`deleteAfter` = +30 days).
+- **Grace**: a closing session reaches only `GET /v1/me`, `DELETE /v1/me/closure` (Keep my account) and sign-out; anything else is 403 `ACCOUNT_CLOSING`. The portal's AuthGate shows the closing page. Past the deadline the account no longer signs in.
+- **Hard delete**: Cloud Scheduler hourly → `POST /jobs/v1/accounts/purge` (operator: `npm run accounts:purge [-- --dry-run]`): claim → delete the Stripe customers → one transaction (own profiles deleted; a shared one passes to a co-owner; records elsewhere anonymized; audit scrubbed to a tombstone; the person's own rows deleted) → empty the deleted profiles' bucket prefixes (`storage_purges` queue). At most 25 a run.
+- **Phone**: not built yet (MUT-371/364 phase); the contract is §7 of `.claude/designs/mut-333-close-account.md`.

@@ -2759,3 +2759,14 @@ Imported data is never written field by field into the live store. It is mapped 
 - In the portal every write affordance takes `writable` (`useWriteGate()`); a write drawer stays openable view-only (`Drawer readOnly` + `ReadOnlyFields`), keeping reads like a receipt's Download. A late refusal re-reads `/v1/me` through the query client's caches.
 - **First instance:** the lapse gate (ADR-181).
 
+
+### Pattern: An irreversible job claims under the row lock, calls out, commits, then cleans up from a queue (MUT-333)
+- A destructive per-row job first commits a claim (`purgeStartedAt`) under the same row lock the user's own "undo" takes, and the undo is a conditional update that refuses once claimed: the two serialize, whatever the instances' clocks say.
+- External, idempotent deletes that must not outlive the row (Stripe) run after the claim and before the transaction; a failure leaves the claim and retries next run.
+- Deletes that must follow the decision (bucket objects) are queued inside the transaction (`storage_purges`) and drained after the commit and at the start of every run, so a crash loses nothing and a decision that changed in the window never deletes the wrong files.
+- **First instance:** `server/src/accounts/purge-run.ts` (ADR-188).
+
+### Pattern: Prove a delete is complete against the database's own catalog (MUT-333)
+- List every table the delete knows in one module (`prisma-purge-tables.ts`); a test:db reads `information_schema`/`pg_constraint` and fails on a table or foreign key it doesn't classify, so a new table can't be forgotten.
+- After a seeded delete, scan every text, uuid, JSON and array column of every table for the subject's id, email and name, with named exemptions only (the audit tombstone). Keys alone miss columns with no foreign key.
+- **First instance:** `server/src/repositories/__tests__/prisma-account-purge-catalog.test.ts`.
