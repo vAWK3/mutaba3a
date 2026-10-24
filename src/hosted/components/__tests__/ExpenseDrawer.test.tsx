@@ -66,6 +66,40 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe('ExpenseDrawer vendor field (MUT-254)', () => {
+  const CATEGORIES = { items: [EMPTY_CATEGORIES.items[0]!, { id: 'cat-2', name: 'Travel', color: null, archived: false, version: 1, createdAt: '', updatedAt: '' }] };
+  const CAB = { id: 'v1', name: 'Yellow Cab', matchedName: 'Yellow Cab', registrationNo: null, phone: null, email: null, lastCategoryId: 'cat-2' };
+  beforeEach(() =>
+    route({
+      'GET /v1/expense-categories': () => ok(CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/vendors': () => ok({ items: [CAB] }),
+    }),
+  );
+
+  it('picking a suggested vendor prefills its last category into an empty field', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    const category = (await screen.findByDisplayValue('Choose a category')) as HTMLSelectElement;
+    await user.click(screen.getByLabelText('Vendor'));
+    await user.click(await screen.findByRole('option', { name: 'Yellow Cab' }));
+    expect((screen.getByLabelText('Vendor') as HTMLInputElement).value).toBe('Yellow Cab');
+    await waitFor(() => expect(category.value).toBe('cat-2'));
+  });
+
+  it('never overwrites a category already chosen', async () => {
+    const user = userEvent.setup();
+    renderDrawer();
+    const category = (await screen.findByDisplayValue('Choose a category')) as HTMLSelectElement;
+    await user.selectOptions(category, 'cat-1');
+    await user.click(screen.getByLabelText('Vendor'));
+    await user.click(await screen.findByRole('option', { name: 'Yellow Cab' }));
+    expect((screen.getByLabelText('Vendor') as HTMLInputElement).value).toBe('Yellow Cab');
+    expect(category.value).toBe('cat-1');
+  });
+});
+
 describe('ExpenseDrawer (hosted)', () => {
   it('renders the create form once categories load, with the amount input in decimal-text mode', async () => {
     renderDrawer();
