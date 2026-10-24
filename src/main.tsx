@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { StrictMode, lazy, Suspense } from "react";
+import { StrictMode, lazy, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
@@ -17,6 +17,8 @@ import { initDatabase } from "./db";
 import { DEFAULT_LANGUAGE, LanguageProvider } from "./lib/i18n";
 import { ThemeProvider } from "./lib/theme";
 import { LandingProviders } from "./pages/landing/LandingProviders";
+import { LANDING_SENTRY_ENABLED, reportLandingCrash, startLandingErrorReporting } from "./pages/landing/observability/landingErrorReporting";
+import { LandingCrashScreen } from "./pages/landing/observability/LandingCrashScreen";
 import { HOSTED_OFFER_URL } from "./content/download-config";
 import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ToastContainer } from "./components/ui/ToastContainer";
@@ -73,6 +75,22 @@ const TermsPage =
 
 const queryClient = createAppQueryClient();
 
+// The website's error reports (MUT-150, ADR-091): website pages only, started
+// before React renders so a crash at start-up is kept (eng O5). The local
+// app's routes never start it (ADR-024), and desktop never builds it.
+if (__BUILD_MODE__ === "web") startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED });
+
+/** A website page: its providers, its crash screen that reports once, and its lazy chunk's splash. */
+function LandingShell({ children }: { children: ReactNode }) {
+  return (
+    <LandingProviders>
+      <ErrorBoundary onError={(error, info) => reportLandingCrash(error, info.componentStack ?? undefined)} fallback={<LandingCrashScreen />}>
+        <Suspense fallback={<BootSplash />}>{children}</Suspense>
+      </ErrorBoundary>
+    </LandingProviders>
+  );
+}
+
 function App() {
   // Web build: handle landing routes outside router
   if (__BUILD_MODE__ === "web") {
@@ -81,45 +99,21 @@ function App() {
     const route = landingRoute(window.location.pathname);
 
     if (route === "/" && LandingPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <LandingPage />
-          </Suspense>
-        </LandingProviders>
-      );
+      return <LandingShell><LandingPage /></LandingShell>;
     }
 
     if (route === "/download" && DownloadPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <DownloadPage />
-          </Suspense>
-        </LandingProviders>
-      );
+      return <LandingShell><DownloadPage /></LandingShell>;
     }
 
     if (route === "/privacy" && PrivacyPolicyPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <PrivacyPolicyPage search={window.location.search} />
-          </Suspense>
-        </LandingProviders>
-      );
+      return <LandingShell><PrivacyPolicyPage search={window.location.search} /></LandingShell>;
     }
 
     // MUT-324: /terms is the latest terms, /terms/<version> each released version, frozen;
     // ?lang is the language the portal records for the reader
     if ((route === "/terms" || route === "/terms/:version") && TermsPage) {
-      return (
-        <LandingProviders>
-          <Suspense fallback={<BootSplash />}>
-            <TermsPage path={path} search={window.location.search} />
-          </Suspense>
-        </LandingProviders>
-      );
+      return <LandingShell><TermsPage path={path} search={window.location.search} /></LandingShell>;
     }
 
     // /hosted is retired (the free-vs-hosted comparison): hosted is now the only

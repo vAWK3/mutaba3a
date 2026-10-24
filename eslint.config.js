@@ -59,7 +59,14 @@ const STORAGE_SEAM_PATTERNS = [
 const SENTRY_SDK_PATH = {
   name: '@sentry/browser',
   allowTypeImports: true,
-  message: 'Only src/hosted/observability/portalSentry.ts loads the Sentry SDK, lazily and signed in only (ADR-091 am.11).',
+  message:
+    'Only src/hosted/observability/portalSentry.ts (signed in only, ADR-091 am.11) and src/pages/landing/observability/landingSentry.ts (website pages only, MUT-150) load the Sentry SDK, lazily.',
+}
+
+/** Browser Sentry code reuses MUT-148's contract and scrubber, both pure and Node-free, and nothing else of the server. */
+const SERVER_SENTRY_CONTRACT_ONLY = {
+  regex: '(^|/)server/src/(?!observability/(sentry-rules|sentry-scrub)(\\.js)?$)',
+  message: 'The browser Sentry setup imports only the contract and the scrubber from the server (ADR-091 am.6).',
 }
 
 /** The portal's import bans (MUT-43, hosted-portal.md §8), shared by the portal and its local backend (ADR-097). */
@@ -203,15 +210,28 @@ export default defineConfig([
         'error',
         {
           paths: [SENTRY_SDK_PATH],
-          patterns: [
-            ...STORAGE_SEAM_PATTERNS,
-            {
-              regex: '(^|/)server/src/(?!observability/(sentry-rules|sentry-scrub)(\\.js)?$)',
-              message: 'The browser Sentry setup imports only the contract and the scrubber from the server (ADR-091 am.6).',
-            },
-          ],
+          patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY],
         },
       ],
+    },
+  },
+  {
+    // MUT-150: the landing's error reports, under the same server-import rule.
+    // The TypeScript variant, so it repeats the storage seam it replaces.
+    files: ['src/pages/landing/observability/**/*.{ts,tsx}'],
+    ignores: ['src/pages/landing/observability/**/__tests__/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        { paths: [SENTRY_SDK_PATH], patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY] },
+      ],
+    },
+  },
+  {
+    // The landing's lazy error-report chunk (MUT-150): the one landing file that loads the Sentry SDK.
+    files: ['src/pages/landing/observability/landingSentry.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY] }],
     },
   },
   {
