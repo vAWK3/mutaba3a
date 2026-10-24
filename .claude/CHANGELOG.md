@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-186)
+## [Unreleased] - 2026-10-24 — The portal's You page replaces the profile switcher and the account menu (MUT-425, ADR-187)
 
 **Why:** epic MUT-423 (Basel's round 4 variation 3): one calm page with room to grow instead of two popovers, nothing lost from either.
 
@@ -48,6 +48,23 @@
 
 ### Files
 - `src/hosted/{router.tsx,hosted.css,i18n/*.json}`, `src/hosted/pages/you/**`, `src/hosted/shell/{HostedShell,YouLinks,youRoutes,initials}`, `src/hosted/session/AuthGate.tsx`, `src/hosted/components/{LapseGate,MalafatPortal,SectionTabs,YouRows,ProfileKindLine,ProfilesManageDrawer,UsageSwitchRow,AppDownloadRows}.tsx`, `src/hosted/data/trialPrompt.ts`, `src/styles/__tests__/direction.test.ts`, `qa/**`.
+
+## [Unreleased] - 2026-10-24 — Landing "Create an account" while signup is open; privacy-policy draft for signup and mail (MUT-369, ADR-186)
+
+**Why:** at GA the landing must lead to `/signup` (ADR-159 §9), and the privacy policy must name Resend, Cloudflare Turnstile and the DNS/RDAP domain check before MUT-359's mail goes live (D23). **The policy wording is a draft until Basel approves it.**
+
+### Added
+- `src/pages/landing/signupDoor.ts`: `fetchSignupOpen`, `signupOpenOnce`, `signupHref`, `useSignupUrl` (one GET per page load, closed on any failure or after 3 s).
+- Landing open state: hero, bar, Get it, phone chapter and FAQ a1 switch to "Create an account" → `<portal>/signup?lang=<page language>` (new tab); the request form stays under "Want us to set it up for you?". en/ar keys `hero.ctaCreate/altNoteOpen`, `getIt.createCta/noteOpen/requestCtaOpen`, `phone.hintLinkOpen`, `faq.a1Open`.
+- `src/lib/i18n/linkLanguage.ts` (`linkedLanguageOf`, `takeLinkedLanguage`); the portal opens in a link's `?lang` and removes it from the address.
+- Privacy policy sections "When you create an account" and "Emails we send"; Cloudflare and Resend under sharing; the doors request and Turnstile under network; the portal's payment and trial-reminder notes (TD-219); English says MTB3A.
+- QA: `web.landing.signup-open`, `web.landing.signup-closed`, `web.legal.privacy-signup`; `qa/support/signupDoor.ts` answers the landing's doors request in every web spec (closed by default).
+
+### Changed
+- `GET /v1/self-service` answers `Access-Control-Allow-Origin: *`. API `1.64.0-mut369`.
+- `brandName.test.ts`: the privacy policy is no longer exempt (MUT-402 D4).
+
+---
 
 ## [Unreleased] - 2026-10-24 — MUT-291 review fixes: the carry-over fails loudly, never quietly (ADR-185 amendment 1)
 

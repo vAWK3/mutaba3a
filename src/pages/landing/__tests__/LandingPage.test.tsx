@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, within, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { LandingPage } from '../LandingPage';
 import { malafatUrl } from '../../../content/malafatLinks';
 import { FakeIntersectionObserver, installFakeIntersectionObserver } from '../../../test/intersectionObserver';
+import { resetSignupDoorForTests } from '../signupDoor';
 
 // The store config, swapped per case through a getter so every reassignment is seen
 const apps = vi.hoisted(() => ({
@@ -65,6 +66,8 @@ function partCopy(name: string): string {
 beforeEach(() => {
   localStorage.clear();
   apps.links = { ios: { available: true, url: null }, android: { available: false, url: null } };
+  // One doors question per page load (MUT-369): each test is a fresh page
+  resetSignupDoorForTests();
 });
 
 describe('LandingPage structure', () => {
@@ -407,5 +410,98 @@ describe('LandingPage Malafat (MUT-174)', () => {
     }
     expect('part of Malafat').toMatch(MONEY_CORE_EN);
     expect(bare('جزء من Malafat')).toMatch(MONEY_CORE_AR);
+  });
+});
+
+/**
+ * MUT-369 (D1–D6): while the server says signup is open, the landing's way in is "Create an account" on the portal's
+ * /signup, in the page language. While it is closed, or the server can't be asked, the page is exactly as today.
+ */
+describe('LandingPage self-service signup (MUT-369)', () => {
+  const PORTAL = 'https://portal.test';
+  const doors = (signup: boolean) =>
+    vi.fn(async () => new Response(JSON.stringify({ signup, recovery: true }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function renderOpen(language: 'en' | 'ar') {
+    vi.stubGlobal('__PORTAL_URL__', PORTAL);
+    vi.stubGlobal('fetch', doors(true));
+    renderLanding(language);
+    await waitFor(() => expect(document.querySelector('.hero-cta-primary')).toHaveAttribute('href', `${PORTAL}/signup?lang=${language}`));
+  }
+
+  it('leads with "Create an account" on the portal signup page, in a new tab, in the bar too', async () => {
+    await renderOpen('en');
+    const hero = part('hero');
+    const create = within(hero).getByRole('link', { name: /^Create an account/ });
+    expect(create).toHaveAttribute('href', `${PORTAL}/signup?lang=en`);
+    expect(create).toHaveAttribute('target', '_blank');
+    expect(create.getAttribute('rel')).toContain('noopener');
+    expect(hero).not.toHaveTextContent('Request an account');
+    expect(hero).not.toHaveTextContent(/no public sign-up/);
+    const bar = document.querySelector('[data-part="header-cta"]')!;
+    expect(bar).toHaveAttribute('href', `${PORTAL}/signup?lang=en`);
+    expect(bar).toHaveTextContent('Create an account');
+  });
+
+  it('lists Create an account first in Get it and keeps the request form for those who want help (D6)', async () => {
+    await renderOpen('en');
+    const getIt = part('get-it');
+    const options = within(getIt).getAllByRole('link');
+    expect(options[0]).toHaveAccessibleName(/^Create an account/);
+    expect(options[0]).toHaveAttribute('href', `${PORTAL}/signup?lang=en`);
+    expect(within(getIt).getByRole('heading', { name: 'Want us to set it up for you?' })).toBeInTheDocument();
+    expect(within(getIt).getByRole('form')).toBeInTheDocument();
+    expect(getIt).not.toHaveTextContent(/no public sign-up/);
+  });
+
+  it('points the phone chapter and the free-plan answer at signing up', async () => {
+    await renderOpen('en');
+    expect(within(part('phone')).getByRole('link', { name: /^Create an account/ })).toHaveAttribute('href', `${PORTAL}/signup?lang=en`);
+    fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
+    expect(part('faq')).toHaveTextContent('You can create an account with your email address');
+  });
+
+  it('opens signup in Arabic from the Arabic page', async () => {
+    await renderOpen('ar');
+    expect(within(part('hero')).getByRole('link', { name: /^أنشئ حسابًا/ })).toHaveAttribute('href', `${PORTAL}/signup?lang=ar`);
+    expect(within(part('get-it')).getByRole('heading', { name: 'تريد أن نُعدّه لك؟' })).toBeInTheDocument();
+  });
+
+  it('makes no price, checkout or banned claim on the open page, in either language', async () => {
+    await renderOpen('en');
+    // The words signup brings (the mocks' sample amounts are not prices): no price or checkout (MUT-365 is v3)
+    fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
+    const signupCopy = ['.hero-cta', '.hero-cta-note', '.landing-get-it-options', '.landing-get-it-note', '#get-it-request-title', '.landing-phone-hint', '.landing-faq-answer:not([hidden])']
+      .map((selector) => document.querySelector(selector)?.textContent ?? '')
+      .join(' ');
+    expect(signupCopy).toContain('Create an account');
+    expect(signupCopy).not.toMatch(/[₪$€]\s?\d|\d\s?(₪|\$|USD|ILS)|\/month|per month|a month|checkout|trial|price/i);
+    // The parts signup changes that the banned-claims rule already covers (the hero's "instantly" predates it)
+    for (const name of ['get-it', 'phone']) expect(partCopy(name)).not.toMatch(BANNED_CLAIMS_EN);
+    cleanup();
+    resetSignupDoorForTests();
+    await renderOpen('ar');
+    for (const name of ['get-it', 'phone']) expect(bare(partCopy(name))).not.toMatch(BANNED_CLAIMS_AR);
+  });
+
+  it.each([
+    ['closed', () => doors(false)],
+    ['unreachable', () => vi.fn(async () => Promise.reject(new TypeError('Failed to fetch')))],
+    ['erroring', () => vi.fn(async () => new Response('{}', { status: 503 }))],
+  ])('is today\'s page while signup is %s', async (_state, makeFetch) => {
+    vi.stubGlobal('__PORTAL_URL__', PORTAL);
+    const fetchFn = makeFetch();
+    vi.stubGlobal('fetch', fetchFn);
+    renderLanding('en');
+    await waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector('.hero-cta-primary')).toHaveAttribute('href', '#get-it');
+    expect(part('hero')).toHaveTextContent('Request an account');
+    expect(part('hero')).toHaveTextContent("there's no public sign-up");
+    expect(within(part('get-it')).getByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
+    expect(within(part('phone')).getByRole('link', { name: 'Request an account' })).toHaveAttribute('href', '#get-it');
+    expect(document.querySelector('main')?.textContent).not.toContain('Create an account');
   });
 });

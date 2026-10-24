@@ -17,11 +17,21 @@ interface LandingHeaderProps {
   showCta?: boolean;
   /** Where the wordmark goes: the top of the landing page, or home from a sub-page. */
   homeHref?: string;
+  /** MUT-369: while signup is open the bar's button mirrors the hero's "Create an account". */
+  signupUrl?: string | null;
 }
 
 /** The hero's primary button, mirrored in the bar once the hero's own has scrolled away. */
-function HeaderCta({ visible }: { visible: boolean }) {
+function HeaderCta({ visible, signupUrl }: { visible: boolean; signupUrl: string | null }) {
   const t = useT();
+  if (signupUrl) {
+    return (
+      <a href={signupUrl} target="_blank" rel="noopener noreferrer" className="landing-header-cta" data-part="header-cta" data-visible={visible}>
+        <span className="landing-header-cta-label">{t('landing.hero.ctaCreate')}</span>
+        <span className="sr-only"> {t('common.opensInNewTab')}</span>
+      </a>
+    );
+  }
   return (
     <a href="#get-it" className="landing-header-cta" data-part="header-cta" data-visible={visible}>
       <span className="landing-header-cta-label">{t('landing.hero.ctaRequest')}</span>
@@ -37,7 +47,7 @@ function HeaderCta({ visible }: { visible: boolean }) {
  * sentinel at the very top of the page tells the bar when to show its
  * scroll-edge fade, so nothing listens to scroll events.
  */
-export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps) {
+export function LandingHeader({ showCta, homeHref = '#top', signupUrl = null }: LandingHeaderProps) {
   const t = useT();
   const { language, setLanguage } = useLanguage();
   const topRef = useRef<HTMLDivElement>(null);
@@ -85,7 +95,7 @@ export function LandingHeader({ showCta, homeHref = '#top' }: LandingHeaderProps
                   {t('landing.header.signIn')} <span className="sr-only">{t('common.opensInNewTab')}</span>
                 </a>
               )}
-              {showCta !== undefined && <HeaderCta visible={showCta} />}
+              {showCta !== undefined && <HeaderCta visible={showCta} signupUrl={signupUrl} />}
             </span>
             <button type="button" className="landing-lang-toggle" onClick={toggleLanguage}>
               <span className={language === 'en' ? 'active' : ''}>{t('landing.langToggle.en')}</span>

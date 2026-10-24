@@ -6,6 +6,7 @@ paths:
   - src/pages/landing/TermsPage.tsx
   - src/pages/landing/LegalPage.tsx
   - src/content/legal/**
+  - src/lib/i18n/linkLanguage.ts
 features:
   - id: terms-page
     title: /terms shows the latest frozen terms in Arabic and English, every released version keeps its own address, and an unknown version says so (MUT-324)
@@ -90,3 +91,15 @@ features:
       - Fetch /legal/terms-versions.json from the website
     expect:
       - It lists 2026-10-19 with a sha256 for the English and the Arabic text
+  - id: privacy-signup
+    title: The privacy policy says what self-service signup and account emails involve, naming Cloudflare Turnstile, the DNS and RDAP domain lookup and Resend, in English and Arabic (MUT-369, draft pending Basel's approval)
+    tier: secondary
+    tickets: [MUT-369]
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+    steps:
+      - Open /privacy in English and read "When you create an account" and "Emails we send"
+      - Open it in Arabic and read «عند إنشاء حساب» and «الرسائل التي نرسلها»
+    expect:
+      - Both sections follow "Where your records live"; they name Cloudflare Turnstile, public DNS records, RDAP and Resend, and say only the domain is sent and Resend's records sit in the United States
+      - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a

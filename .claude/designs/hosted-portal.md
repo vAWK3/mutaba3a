@@ -253,7 +253,7 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), and the page. Since MUT-425 (ADR-186) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
+- **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), and the page. Since MUT-425 (ADR-187) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
 - **Routes** (TanStack Router, code-based like `src/router.tsx`; base `/`):
   - `/sign-in`
   - `/setup#<token>` (MUT-236): a setup link's page, public like sign-in; the token is stripped from the address bar on arrival (ADR-088 §8)

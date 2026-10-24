@@ -3,15 +3,19 @@ import { legalLanguageOf } from '../../content/legal/language';
 import { LegalPage } from './LegalPage';
 
 /*
- * Authoring note (MUT-402 D4): the current policy text (landing.privacyPolicy.*) still says
- * "Mutaba3a" and is exempt from the brand-name guard (src/lib/i18n/__tests__/brandName.test.ts)
- * until its next real revision, which names the product MTB3A in English and متابعة in Arabic.
+ * Authoring note: the policy is ordinary copy (landing.privacyPolicy.*), not a frozen, accepted text like the terms
+ * (MUT-324), so a revision is an edit plus a new "Last updated" date. Legal wording is Basel's: a draft waits in
+ * docs/operations/before-release.md until he approves it. MUT-369 was the "next real revision" MUT-402 D4 waited
+ * for: English now says MTB3A, and the brand-name guard no longer exempts the policy.
  */
 
 const SECTION_KEYS = [
   'scope',
   'mobile',
   'hostedAccounts',
+  // MUT-369: self-service signup (Turnstile, the DNS/RDAP domain check) and the account emails (Resend)
+  'createAccount',
+  'email',
   'whatYouEnter',
   'network',
   'sharing',

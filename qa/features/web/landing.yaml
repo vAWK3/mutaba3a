@@ -172,3 +172,34 @@ features:
     expect:
       - The English answer names US dollars, shekels, euros and Jordanian dinars, and no dirham or riyal
       - The Arabic answer names الدولار الأمريكي والشيكل واليورو والدينار الأردني, and no درهم or ريال
+  - id: signup-open
+    title: While the portal says signup is open, the landing leads with "Create an account" on the portal's /signup in the page language, and keeps the request form for those who want help (MUT-369)
+    tier: secondary
+    tickets: [MUT-369]
+    paths:
+      - src/pages/landing/signupDoor.ts
+      - src/pages/landing/LandingPage.tsx
+      - src/pages/landing/components/HeroSection.tsx
+      - src/pages/landing/components/LandingHeader.tsx
+      - src/pages/landing/components/GetItSection.tsx
+      - src/pages/landing/components/PhoneSection.tsx
+      - src/pages/landing/components/FAQSection.tsx
+    steps:
+      - With sign-up open, open the landing page in Arabic, its default, and look at the hero and Get it
+      - Switch to English, scroll to Get MTB3A, the phone chapter and the free-plan question
+      - Press "Create an account"
+    expect:
+      - The hero, the bar's button, Get it's first option and the phone chapter all say «أنشئ حسابًا» / "Create an account" and link the portal's /signup with ?lang=ar, then ?lang=en after the switch
+      - Get it keeps the request form under "Want us to set it up for you?"; no line says there's no public sign-up, and no price or checkout appears
+      - Pressing it opens the portal's /signup?lang=en in a new tab
+  - id: signup-closed
+    title: While signup is closed, or the portal can't be asked, the landing is exactly as before, with "Request an account" (MUT-369)
+    tier: secondary
+    tickets: [MUT-369]
+    paths:
+      - src/pages/landing/signupDoor.ts
+    steps:
+      - With sign-up closed, open the landing page in English
+      - Again with the portal unreachable
+    expect:
+      - The hero's "Request an account" scrolls to the request form; the hero says there's no public sign-up; nothing says "Create an account"

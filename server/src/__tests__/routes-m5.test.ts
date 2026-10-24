@@ -283,8 +283,8 @@ describe('contract', () => {
   it('publishes the M5 paths, reasons and version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.63.0-mut419');
-    expect(API_VERSION).toBe('1.63.0-mut419');
+    expect(doc.info.version).toBe('1.64.0-mut369');
+    expect(API_VERSION).toBe('1.64.0-mut369');
     for (const path of ['/v1/retainers/{agreementId}/changes/preview', '/v1/retainers/{agreementId}/changes', '/v1/retainers/{agreementId}/cancel/preview', '/v1/retainers/{agreementId}/cancel']) {
       expect(doc.paths[path], path).toBeDefined();
     }

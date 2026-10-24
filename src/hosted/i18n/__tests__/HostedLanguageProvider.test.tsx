@@ -87,3 +87,39 @@ describe('HostedLanguageProvider', () => {
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
   });
 });
+
+/** MUT-369 (D5): a link from the landing names the page language (`/signup?lang=en`). */
+describe('HostedLanguageProvider with a linked language', () => {
+  beforeEach(() => localStorage.clear());
+
+  const mountLinked = (linkedLanguage: 'en' | 'ar') =>
+    render(
+      <HostedLanguageProvider linkedLanguage={linkedLanguage}>
+        <Probe />
+      </HostedLanguageProvider>,
+    );
+
+  it('opens in the link language instead of the Arabic default, and stores nothing', () => {
+    mountLinked('en');
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBeNull();
+  });
+
+  it('beats a stored choice and the account hint for this load only', () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    localStorage.setItem(PORTAL_ACCOUNT_LOCALE_KEY, 'ar');
+    mountLinked('en');
+    expect(screen.getByTestId('lang')).toHaveTextContent('en');
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('ar');
+    cleanup();
+    mount();
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+  });
+
+  it('still stores the person’s own switch', () => {
+    mountLinked('en');
+    act(() => screen.getByText('switch').click());
+    expect(screen.getByTestId('lang')).toHaveTextContent('ar');
+    expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('ar');
+  });
+});
