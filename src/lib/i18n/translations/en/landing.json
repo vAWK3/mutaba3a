@@ -228,6 +228,11 @@
         "edit": "Wrong email? Edit and send again",
         "backHome": "Back to the homepage"
       }
+    },
+    "crash": {
+      "title": "This page didn't load properly",
+      "body": "Something went wrong on our side. Reloading the page usually fixes it.",
+      "reload": "Reload page"
     }
   }
 }
