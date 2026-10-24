@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-227: The landing's "Create an account" isn't counted
+**Status**: Open
+**Ticket**: MUT-369 (D7)
+**Added**: 2026-10-24
+**Priority**: Low (until GA; then it is the funnel's first step)
+**Impact**: `ctaForHref` counts store, web-app, /hosted and Malafat links only; the portal signup link (like Sign in) is uncounted, so GA can't see how many visitors press it.
+**Fix**: Add a `signup` value to `landing_cta_clicked.cta` (events contract minor bump, copy to the Flutter fixture per TD-218) and match the portal origin's `/signup` in `ctaForHref`.
+
+### TD-228: The privacy policy doesn't name Stripe
+**Status**: Open
+**Ticket**: MUT-369 (D13); billing MUT-362/418
+**Added**: 2026-10-24
+**Priority**: High before the first live charge
+**Impact**: Self-service billing sends card and billing details to Stripe (Checkout, Customer Portal, Tax), but the policy names no payment processor.
+**Fix**: Basel drafts or approves a Stripe paragraph (what Stripe receives, where, under which terms) and it ships with the release that turns Stripe live.
+
 ### TD-221: The lapse gate reads billing facts on every gated session request
 **Status**: Open
 **Ticket**: MUT-361 (D1, review R7)
@@ -84,7 +100,7 @@
 **Fix**: In the next Flutter change (MUT-364 or earlier), copy the file and its 2.1.0 hash into the Flutter fixture and its README.
 
 ### TD-219: The privacy policy doesn't yet name the trial-prompt usage notes
-**Status**: Open
+**Status**: In Progress (MUT-369 put the sentence in the policy draft; resolved once Basel approves the wording and it ships)
 **Ticket**: MUT-418 (D16)
 **Added**: 2026-10-24
 **Priority**: Medium (before the release that ships MUT-418's portal)

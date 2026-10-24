@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Landing "Create an account" while signup is open; privacy-policy draft for signup and mail (MUT-369, ADR-185)
+
+**Why:** at GA the landing must lead to `/signup` (ADR-159 §9), and the privacy policy must name Resend, Cloudflare Turnstile and the DNS/RDAP domain check before MUT-359's mail goes live (D23). **The policy wording is a draft until Basel approves it.**
+
+### Added
+- `src/pages/landing/signupDoor.ts`: `fetchSignupOpen`, `signupOpenOnce`, `signupHref`, `useSignupUrl` (one GET per page load, closed on any failure or after 3 s).
+- Landing open state: hero, bar, Get it, phone chapter and FAQ a1 switch to "Create an account" → `<portal>/signup?lang=<page language>` (new tab); the request form stays under "Want us to set it up for you?". en/ar keys `hero.ctaCreate/altNoteOpen`, `getIt.createCta/noteOpen/requestCtaOpen`, `phone.hintLinkOpen`, `faq.a1Open`.
+- `src/lib/i18n/linkLanguage.ts` (`linkedLanguageOf`, `takeLinkedLanguage`); the portal opens in a link's `?lang` and removes it from the address.
+- Privacy policy sections "When you create an account" and "Emails we send"; Cloudflare and Resend under sharing; the doors request and Turnstile under network; the portal's payment and trial-reminder notes (TD-219); English says MTB3A.
+- QA: `web.landing.signup-open`, `web.landing.signup-closed`, `web.legal.privacy-signup`; `qa/support/signupDoor.ts` answers the landing's doors request in every web spec (closed by default).
+
+### Changed
+- `GET /v1/self-service` answers `Access-Control-Allow-Origin: *`. API `1.64.0-mut369`.
+- `brandName.test.ts`: the privacy policy is no longer exempt (MUT-402 D4).
+
+---
+
 ## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-184)
 
 **Why:** ADR-160 D3's trial runs out whether or not the person opens the portal. Someone who never signs in got no warning before losing write access or before the lock.

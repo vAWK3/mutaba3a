@@ -74,7 +74,7 @@ them over the open page too.
 `Access-Control-Allow-Credentials`. The body is two public booleans that say nothing about any account, and without
 credentials the browser sends no cookie. An allow-list was weighed: the landing has several hosts during the domain
 move (mtb3a.com, www, the legacy netlify host, deploy previews), and listing them buys nothing for a public boolean.
-Every other route still sends no CORS header (test). API **1.64.0-mut369** (ADR-? number at merge time).
+Every other route still sends no CORS header (test). API **1.64.0-mut369**, ADR-185.
 
 ### 3.3 The portal honours `?lang` (D5)
 

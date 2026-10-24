@@ -4986,3 +4986,21 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A permanently rejected send retries daily within its window (R12, TD-223).
 - API 1.63.0-mut419.
 
+
+## ADR-185: The Landing Asks the Server Whether Signup Is Open; the Privacy Policy Is Revised as Copy, Approved by Basel (MUT-369)
+
+**Status:** Accepted for the build (2026-10-24, MUT-369, unattended run on Basel's "go"). Decisions D1–D17 in `.claude/designs/mut-369-signup-cta-privacy.md` are **pending Basel's confirmation**. **The privacy-policy wording is a draft: Basel must approve it before any release** (before-release.md). Builds on ADR-159 §9, ADR-179 (the doors endpoint), ADR-076/ADR-155 (the build-time portal origin).
+
+**Context:** at GA the landing's way in must become the portal's `/signup`, and the privacy policy must name what signup and mail add (Resend, Cloudflare Turnstile, the DNS/RDAP domain check). MUT-369's ticket said "a build value decides the CTA"; MUT-368 recommended reading its doors endpoint.
+
+**Decision:**
+1. **The landing reads `GET /v1/self-service` at runtime** (D1): once per page load, CORS-simple (GET, `credentials: 'omit'`, no custom headers), 3 s timeout. Only `signup: true` opens it; anything else is today's page (D3). The portal origin is still the ADR-076 build value. The CTA can't drift from `SELF_SIGNUP_ENABLED`, and GA needs no web release.
+2. **That one route answers `Access-Control-Allow-Origin: *`** (D2), no credentials, no preflight handling. Two public booleans name no account; an allow-list would have to track every landing host during the domain move. Every other route still sends no CORS header (tested). API 1.64.0-mut369.
+3. **While open:** hero, bar, Get it's first option and the phone chapter say "Create an account" and open `<portal>/signup?lang=<page language>` in a new tab (D4); the request form stays under "Want us to set it up for you?" (D6); FAQ a1 and the notes drop "no public sign-up". No price, trial length or checkout word (MUT-365 is v3).
+4. **The portal honours a link's `?lang`** (D5, D15): read once in `src/hosted/main.tsx` (`takeLinkedLanguage`), taken off the address before the router starts, beating a stored choice for that load and never stored. `linkedLanguageOf` (`src/lib/i18n/linkLanguage.ts`) is the one reader; `legalLanguageOf` re-exports it.
+5. **The privacy policy is not pinned or accepted** (unlike the terms, ADR-102), so a revision is a copy edit plus a "Last updated" date, and no terms version changes (D11). This revision is MUT-402 D4's "next real revision": English says MTB3A and the brand guard's exemption is gone (D10).
+
+**Consequences:**
+- A home-page visit now makes one GET to our API (disclosed in the policy's network section).
+- Adding Sentry tracing to the landing with the portal in `tracePropagationTargets` would force a preflight the server doesn't answer and keep the door closed (D17; comment in `signupDoor.ts`).
+- The signup CTA isn't counted in landing analytics (D7, TD-227). Stripe isn't named in the policy yet (D13, TD-228).

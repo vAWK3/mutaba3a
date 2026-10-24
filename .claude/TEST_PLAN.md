@@ -3615,6 +3615,17 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release guard | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_turnstile_site_key`: any key with mail off; a real key with resend; refuses unset/empty/test keys with resend; refuses rather than guess; wired before the bootstrap and the portal build |
 | Release-QA | `qa/specs/portal-selfservice/{signup,recover}.spec.ts` (live API, built portal, real CSP) | signup.create (core, ar + en), existing-email, expired-link, check-refused, disposable, no-mail-domain, rate-limited, closed, business-instant, review-webmail (core, en + ar), review-declined, 375; recover.reset (core), unknown, pending-account: 17 tests, all passing recorded |
 
+## MUT-369 — Landing signup CTA, portal `?lang`, privacy-policy draft (2026-10-24, ADR-185)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Landing unit | `pages/landing/__tests__/signupDoor.test.ts` (10): open only on `signup: true`; closed on 5xx, bad JSON, wrong shape, network error, 3 s timeout; CORS-simple request (no credentials, no headers, no-store); one request per page; `?lang` on the href; hook null without a portal URL | `npm run test:run` |
+| Landing pages | `LandingPage.test.tsx` MUT-369 block (8): open → hero, bar, Get it first option, phone link, FAQ a1, Arabic `?lang=ar`, no price/checkout/banned words; closed, unreachable, 503 → today's page | same |
+| Privacy | `PrivacyPolicyPage.test.tsx` MUT-369 block (7): section order, Turnstile/DNS/RDAP/Resend facts, sharing and network lines, TD-219 sentence, MTB3A in English, Arabic; `hostedOfferKeys.test.ts` (2): same privacy keys in en/ar, open-state keys filled; `brandName.test.ts`: no privacy exemption | same |
+| Portal | `lib/i18n/__tests__/linkLanguage.test.ts` (4), `hosted/i18n/__tests__/HostedLanguageProvider.test.tsx` (+3): link language beats default and stored choice, never stored, switch still stored; `?lang` stripped, other params and hash kept | same |
+| Server | `routes-self-service.test.ts` (+2): doors GET has ACAO `*` and no allow-credentials; signup and recovery have none | `npm --prefix server test` |
+| Release-QA | `web.landing.signup-open`, `web.landing.signup-closed`, `web.legal.privacy-signup` (recorded, passing; `qa/runs/MUT-369/`) | `release-qa run --app web --only …` |
+
 ## MUT-419 — Trial reminder mails (2026-10-24, ADR-184)
 
 | Layer | Tests | Command |
