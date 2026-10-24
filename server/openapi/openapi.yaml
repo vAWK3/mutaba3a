@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.64.0-mut369
+  version: 1.65.0-mut333
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -200,6 +200,8 @@ components:
               $ref: "#/components/schemas/TrialPrompt"
             status:
               $ref: "#/components/schemas/UserStatus"
+            closure:
+              $ref: "#/components/schemas/AccountClosure"
           required:
             - id
             - email
@@ -208,6 +210,7 @@ components:
             - malafatSuggestions
             - trialPrompt
             - status
+            - closure
         profiles:
           type: array
           items:
@@ -302,6 +305,20 @@ components:
         - ACTIVE
         - DISABLED
         - PENDING_REVIEW
+    AccountClosure:
+      type: object
+      nullable: true
+      properties:
+        requestedAt:
+          type: string
+          format: date-time
+        deleteAfter:
+          type: string
+          format: date-time
+          description: From this instant the account no longer signs in; the hourly job deletes it within the hour
+      required:
+        - requestedAt
+        - deleteAfter
     HostedProfile:
       type: object
       properties:
@@ -516,6 +533,7 @@ components:
                 - CHECK_FAILED
                 - ACCOUNT_UNDER_REVIEW
                 - CURRENT_PASSWORD_WRONG
+                - ACCOUNT_CLOSING
                 - SUBSCRIPTION_LAPSED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -634,6 +652,40 @@ components:
               type: string
           required:
             - token
+    CloseAccountResponse:
+      type: object
+      properties:
+        closure:
+          $ref: "#/components/schemas/AccountClosure"
+        subscriptionsEnded:
+          type: integer
+          description: Stripe subscriptions set to end at their period end (Keep my account turns them back on)
+        subscriptionsCancelled:
+          type: integer
+          description: Past-due or unpaid subscriptions cancelled at once
+      required:
+        - closure
+        - subscriptionsEnded
+        - subscriptionsCancelled
+    CloseAccountRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: The account password, typed again
+      required:
+        - password
+      additionalProperties: false
+    KeepAccountResponse:
+      type: object
+      properties:
+        billingNeedsAttention:
+          type: boolean
+          description: "A subscription the closing ended could not be turned back on: open Billing"
+      required:
+        - billingNeedsAttention
     SetupLinkCheckResponse:
       oneOf:
         - type: object
@@ -3226,7 +3278,9 @@ components:
           nullable: true
         createdByUserId:
           type: string
+          nullable: true
           format: uuid
+          description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
         version:
           type: integer
         createdAt:
@@ -3420,7 +3474,9 @@ components:
               format: date-time
             createdByUserId:
               type: string
+              nullable: true
               format: uuid
+              description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
             expense:
               allOf:
                 - $ref: "#/components/schemas/Expense"
@@ -3516,7 +3572,9 @@ components:
               format: date-time
             createdByUserId:
               type: string
+              nullable: true
               format: uuid
+              description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
             conversion:
               $ref: "#/components/schemas/Conversion"
           required:
@@ -3552,7 +3610,9 @@ components:
           nullable: true
         createdByUserId:
           type: string
+          nullable: true
           format: uuid
+          description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
         version:
           type: integer
         createdAt:
@@ -5067,7 +5127,9 @@ components:
           type: integer
         uploadedByUserId:
           type: string
+          nullable: true
           format: uuid
+          description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
         createdAt:
           type: string
           format: date-time
@@ -5769,7 +5831,9 @@ components:
           type: integer
         createdByUserId:
           type: string
+          nullable: true
           format: uuid
+          description: Null once that person has deleted their account (MUT-333, a former member); nullable since 1.65.0-mut333.
         version:
           type: integer
         createdAt:
@@ -7706,6 +7770,121 @@ components:
       required:
         - dryRun
       additionalProperties: false
+    AccountPurgeSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        closing:
+          type: integer
+          description: Accounts in their 30 days of grace or due
+        due:
+          type: integer
+          description: Accounts whose grace has run out
+        purged:
+          type: integer
+          description: Deleted by this run (in a dry run, would be)
+        skipped:
+          type: integer
+          description: "Due but left for the next run: Stripe failed or is not configured"
+        failed:
+          type: integer
+        storagePrefixesEmptied:
+          type: integer
+          description: Deleted profiles' bucket prefixes emptied by this run
+        storagePending:
+          type: integer
+          description: Bucket prefixes still waiting to be emptied
+        incomplete:
+          type: boolean
+          description: The time budget or the per-run cap ran out; the next run continues
+      required:
+        - dryRun
+        - closing
+        - due
+        - purged
+        - skipped
+        - failed
+        - storagePrefixesEmptied
+        - storagePending
+        - incomplete
+    AccountPurgeRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/AccountPurgeSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountPurgeRow"
+      required:
+        - summary
+        - rows
+    AccountPurgeRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum:
+            - purged
+            - would-purge
+            - skipped
+            - failed
+        reason:
+          type: string
+          nullable: true
+          enum:
+            - stripe-failed
+            - stripe-unavailable
+            - not-due
+            - error
+            - null
+        deleteProfileIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        transfers:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId:
+                type: string
+                format: uuid
+              toUserId:
+                type: string
+                format: uuid
+            required:
+              - organizationId
+              - toUserId
+        leaveProfileIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        stripeCustomers:
+          type: integer
+          description: Stripe customers deleted (in a dry run, mirrored ones found)
+      required:
+        - userId
+        - outcome
+        - reason
+        - deleteProfileIds
+        - transfers
+        - leaveProfileIds
+        - stripeCustomers
+    AccountPurgeRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+      required:
+        - dryRun
+      additionalProperties: false
     EmailWebhookResponse:
       type: object
       properties:
@@ -8035,6 +8214,73 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/closure:
+    post:
+      tags:
+        - Sessions
+      summary: Close your account (MUT-333)
+      description: Starts 30 days of grace, then the account and every profile it created are deleted (a business profile shared with a co-owner passes to them; firms and Malafat profiles keep the records, anonymized). Paying Stripe subscriptions end at their period end; past-due ones are cancelled now. Every other session, web and phone, is signed out; this one stays, but until the account is kept it reaches only GET /v1/me, DELETE /v1/me/closure and sign-out (403 ACCOUNT_CLOSING). A wrong password counts toward the sign-in lockout.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseAccountRequest"
+      responses:
+        "200":
+          description: Closing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloseAccountResponse"
+        "403":
+          description: CURRENT_PASSWORD_WRONG (wrong password, or the account is locked), ACCOUNT_CLOSING, CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe could not be reached; nothing changed"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: the account has a Stripe customer and this server has no Stripe"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Sessions
+      summary: Keep your account (MUT-333)
+      description: "Ends a closing within its 30 days: nothing was deleted, and the Stripe subscriptions the closing set to end are turned back on. `billingNeedsAttention` is true when one could not be (open Billing). Idempotent: an account that is not closing answers the same."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Kept
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepAccountResponse"
+        "403":
+          description: CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
           content:
             application/json:
               schema:
@@ -17436,6 +17682,66 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/accounts/purge:
+    post:
+      tags:
+        - Admin
+      summary: Hourly hard delete of closed accounts (Cloud Scheduler)
+      description: "Deletes every account whose 30 days of grace have run out: its Stripe customers, every profile it created (a business profile with a co-owner passes to them instead), its records and its files, and every row naming the person; its records on profiles it belonged to stay, anonymized. At most 25 accounts a run, about 200 s; `incomplete` means the next run continues. A person Stripe fails for is retried next run. Answers counts only; always 200 once it ran."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountPurgeSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/accounts/purge:
+    post:
+      tags:
+        - Admin
+      summary: Run the hard delete of closed accounts now, or see what it would do
+      description: "Deletes every account whose 30 days of grace have run out: its Stripe customers, every profile it created (a business profile with a co-owner passes to them instead), its records and its files, and every row naming the person; its records on profiles it belonged to stay, anonymized. At most 25 accounts a run, about 200 s; `incomplete` means the next run continues. A person Stripe fails for is retried next run. One row per due account. `dryRun` claims, deletes and calls nothing."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountPurgeRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountPurgeRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
           content:
             application/json:
               schema:

@@ -270,7 +270,7 @@ export class FakeAccountStripeGateway implements AccountStripeGateway {
 
   async liveSubscriptionsOf(customer: string): Promise<LiveSubscription[]> {
     this.call('liveSubscriptionsOf', customer);
-    return [...this.subscriptions.values()].filter((s) => s.customer === customer).map(({ customer: _c, ...sub }) => ({ ...sub }));
+    return [...this.subscriptions.values()].filter((s) => s.customer === customer).map(({ id, status, cancelAtPeriodEnd, cancelAt }) => ({ id, status, cancelAtPeriodEnd, cancelAt }));
   }
 
   async setCancelAtPeriodEnd(subscriptionId: string, value: boolean): Promise<void> {

@@ -39,6 +39,7 @@ import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billin
 import { adminUserRoutes } from './routes/admin-users.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
+import { accountPurgeRoutes } from './routes/account-purge.js';
 import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
@@ -410,6 +411,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );
+  // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.
+  app.route('/', accountPurgeRoutes({ store: deps.store, stripe: deps.stripe?.accountGateway ?? null, storage: deps.attachments ?? null, logger: deps.logger }));
   // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.
   app.route(
     '/',

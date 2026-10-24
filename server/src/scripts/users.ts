@@ -24,6 +24,7 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
  *   npm run signups:review -- --approve rana@gmail.com          (opens the account, starts its trial, mails them)
  *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
  *   npm run billing:trial-mail [-- --dry-run]                   (MUT-419: today's trial reminders, or who they would mail)
+ *   npm run accounts:purge [-- --dry-run]                       (MUT-333: delete closed accounts whose 30 days ran out, or see which)
  *
  * MUT-300 (ADR-099): `firm-enable` turns firm features on in place. An owned
  * Business profile stays its owner's, who becomes OWNER; an operator firm
@@ -49,7 +50,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews', 'accounts-purge'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -84,6 +85,9 @@ const USAGE = [
   '  billing-trial-mail [--dry-run]   (MUT-419: npm run billing:trial-mail; the daily job does the same)',
   '          mails each person in days 11-30 of an unpaid trial the reminder for their stage, once per stage;',
   '          --dry-run: lists who would get what (and why others are skipped), and mails nothing',
+  '  accounts-purge [--dry-run]   (MUT-333: npm run accounts:purge; the hourly job does the same)',
+  '          deletes every closed account whose 30 days of grace ran out (at most 25 a run);',
+  '          --dry-run: lists each one with what would be deleted, passed on or left, and changes nothing',
   '  signup-reviews [--approve <email> | --decline <email>]   (MUT-367: npm run signups:review)',
   '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
   '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
@@ -401,6 +405,19 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
 };
 
 const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> = {
+  // MUT-333: the hard delete of closed accounts, or (--dry-run) what it would do now.
+  'accounts-purge': async ({ client, flag, out }) => {
+    const dryRun = flag('dry-run');
+    type Row = { userId: string; outcome: string; reason: string | null; deleteProfileIds: string[]; transfers: { organizationId: string; toUserId: string }[]; leaveProfileIds: string[]; stripeCustomers: number };
+    type Summary = { closing: number; due: number; purged: number; skipped: number; failed: number; storagePrefixesEmptied: number; storagePending: number; incomplete: boolean };
+    const { summary: s, rows } = await client.call<{ summary: Summary; rows: Row[] }>('POST', '/admin/v1/accounts/purge', { dryRun });
+    for (const r of rows) {
+      const what = `delete ${r.deleteProfileIds.length} profile(s), pass ${r.transfers.length} to a co-owner, leave ${r.leaveProfileIds.length}, ${r.stripeCustomers} Stripe customer(s)`;
+      out(`${r.reason ? `${r.outcome} (${r.reason})` : r.outcome}  ${r.userId}  ${r.reason ? '' : what}`.trimEnd());
+    }
+    if (s.incomplete) out('Stopped at its cap or time budget; run it again to continue.');
+    out(`${s.closing} closing, ${s.due} due. ${dryRun ? `Dry run: ${s.purged} would be deleted.` : `Deleted ${s.purged}, skipped ${s.skipped}, failed ${s.failed}; bucket prefixes emptied ${s.storagePrefixesEmptied}, still queued ${s.storagePending}.`}`);
+  },
   create: async ({ client, need, optional, out }) => {
     const locale = optional('locale');
     const organizationId = optional('organization-id');

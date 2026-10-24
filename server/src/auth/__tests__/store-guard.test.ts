@@ -79,6 +79,14 @@ describe('STORE_ACCESS', () => {
     const operator = entries.filter(([, , a]) => a === 'operator').map(([r, m]) => `${r}.${m}`).sort();
     expect(operator).toEqual([
       // MUT-235: issued by /admin and redeemed by the two public setup routes, neither of which runs a guard.
+      'accountPurge.claim',
+      // MUT-333: the hard delete of closed accounts, from /jobs and /admin only.
+      'accountPurge.countClosing',
+      'accountPurge.finishStoragePurge',
+      'accountPurge.listDue',
+      'accountPurge.listStoragePurges',
+      'accountPurge.planOf',
+      'accountPurge.purge',
       'accountSetup.findByDigest',
       'accountSetup.issue',
       // MUT-366: the SIGNUP links the public signup route issues and the public redeem claims; pruned by the server's timer.

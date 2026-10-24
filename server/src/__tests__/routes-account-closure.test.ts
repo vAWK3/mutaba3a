@@ -18,6 +18,7 @@ const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
 let seq = 0;
 
 const ADMIN = { 'x-admin-token': 'test-admin-token-with-at-least-32-characters' };
+const JOB = { 'x-job-token': 'test-job-token-with-at-least-32-characters-long' };
 const ORIGIN = 'http://localhost';
 const T0 = new Date('2026-11-01T09:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -41,6 +42,7 @@ function harness(overrides: Partial<AppDependencies> = {}) {
     mailer,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 400, deviceAbsoluteDays: 400, portalOrigin: ORIGIN },
     stripe: { webhookGateway: new FakeStripeGateway(() => now), reconcileGateway: new FakeStripeGateway(() => now), accountGateway: accountStripe },
+    jobToken: JOB['x-job-token'],
     ...overrides,
   });
   return { app, store, transport, accountStripe, setNow: (at: Date) => void (now = at) };
@@ -247,5 +249,30 @@ describe('after the deadline (MUT-333 D5)', () => {
     expect(res.status).toBe(401);
     expect((await read(res)).error.code).toBe('INVALID_CREDENTIALS');
     expect((await h.store.users.getById(p.userId))?.failedSignIns).toBe(0);
+  });
+});
+
+describe('the hard delete doors (MUT-333 D11)', () => {
+  it('the hourly job needs the job token and answers counts; the operator can dry-run first', async () => {
+    const h = harness();
+    const p = await person(h);
+    const { auth } = await deviceSession(h, p);
+    await close(h, auth, p.password);
+    h.setNow(new Date(T0.getTime() + 30 * DAY + 60_000));
+
+    expect((await h.app.request('/jobs/v1/accounts/purge', { method: 'POST' })).status).toBe(401);
+    expect((await h.app.request('/jobs/v1/accounts/purge', { method: 'POST', headers: ADMIN })).status).toBe(401);
+
+    const dry = await read(await h.app.request('/admin/v1/accounts/purge', json({ dryRun: true }, ADMIN)));
+    expect(dry.summary).toMatchObject({ dryRun: true, due: 1, purged: 1 });
+    expect(dry.rows).toEqual([{ userId: p.userId, outcome: 'would-purge', reason: null, deleteProfileIds: [p.personalId], transfers: [], leaveProfileIds: [], stripeCustomers: 0 }]);
+    expect(await h.store.users.getById(p.userId)).not.toBeNull();
+
+    const res = await h.app.request('/jobs/v1/accounts/purge', { method: 'POST', headers: JOB });
+    expect(res.status).toBe(200);
+    expect(await read(res)).toMatchObject({ dryRun: false, due: 1, purged: 1, failed: 0 });
+    expect(await h.store.users.getById(p.userId)).toBeNull();
+    const signIn = await h.app.request('/v1/device-sessions', json({ email: p.email, password: p.password }));
+    expect(signIn.status).toBe(401);
   });
 });
