@@ -34,6 +34,24 @@ describe('request-account copy', () => {
     }
   });
 
+  it('adds the signup and email sections to the privacy policy in both languages, with the same keys (MUT-369)', () => {
+    expect(Object.keys(leaves(ar.landing.privacyPolicy)).sort()).toEqual(Object.keys(leaves(en.landing.privacyPolicy)).sort());
+    for (const dict of [en, ar]) {
+      expect(dict.landing.privacyPolicy.createAccount.body).toContain('Cloudflare Turnstile');
+      expect(dict.landing.privacyPolicy.createAccount.body).toContain('RDAP');
+      expect(dict.landing.privacyPolicy.email.body).toContain('Resend');
+    }
+  });
+
+  it('keeps the request form while signup is open, and names it for those who want help (MUT-369, D6)', () => {
+    for (const dict of [en, ar]) {
+      for (const key of ['ctaCreate', 'altNoteOpen'] as const) expect(dict.landing.hero[key].trim()).not.toBe('');
+      for (const key of ['createCta', 'noteOpen', 'requestCtaOpen'] as const) expect(dict.landing.getIt[key].trim()).not.toBe('');
+      expect(dict.landing.phone.hintLinkOpen.trim()).not.toBe('');
+      expect(dict.landing.faq.a1Open.trim()).not.toBe('');
+    }
+  });
+
   it('promises a reply within 2 working days before and after sending (4A)', () => {
     expect(en.landing.requestAccount.form.lead).toContain('2 working days');
     expect(en.landing.requestAccount.success.body).toContain('2 working days');

@@ -7,13 +7,10 @@ import { repoPath } from '../../../test/css/brandCss';
 /**
  * The product's name in copy (MUT-400, MUT-402 D5): English always writes MTB3A,
  * Arabic always متابعة. Identifiers, URLs and storage keys are not copy and stay
- * as they are. The current privacy policy is the one legal exemption until its
- * next real revision (D4); the dated terms live in src/content/legal, outside
- * these files.
+ * as they are. The privacy policy's exemption ended with its next real revision
+ * (MUT-400/402 D4, MUT-369); the dated terms live in src/content/legal, outside
+ * these files, and keep their frozen words.
  */
-
-/** The privacy policy keeps "Mutaba3a" until its next version (Basel, MUT-400). */
-const LEGAL_EXEMPT = /^landing\.privacyPolicy\./;
 
 type Leaf = { file: string; key: string; value: string };
 
@@ -31,7 +28,7 @@ function translationFiles(language: 'en' | 'ar'): string[] {
 /** Copy leaves that name the product other than as `language` writes it. */
 export function offendingLeaves(entries: Leaf[], language: 'en' | 'ar'): string[] {
   const wrong = language === 'en' ? /Mutaba3a/ : /Mutaba3a|MTB3A/;
-  return entries.filter(({ key, value }) => wrong.test(value) && !LEGAL_EXEMPT.test(key)).map(({ file, key }) => `${file} ${key}`);
+  return entries.filter(({ value }) => wrong.test(value)).map(({ file, key }) => `${file} ${key}`);
 }
 
 function htmlTitle(file: string): string | undefined {
@@ -45,10 +42,10 @@ describe('the product name in copy', () => {
     expect(offendingLeaves(entries, language)).toEqual([]);
   });
 
-  it('catches an English "Mutaba3a", lets the privacy policy keep it, and catches Latin in Arabic', () => {
+  it('catches an English "Mutaba3a" anywhere, the privacy policy included (MUT-369), and catches Latin in Arabic', () => {
     const leaf = (key: string, value: string): Leaf => ({ file: 'x.json', key, value });
     expect(offendingLeaves([leaf('landing.hero.title', 'Welcome to Mutaba3a')], 'en')).toEqual(['x.json landing.hero.title']);
-    expect(offendingLeaves([leaf('landing.privacyPolicy.intro', 'Mutaba3a collects')], 'en')).toEqual([]);
+    expect(offendingLeaves([leaf('landing.privacyPolicy.intro', 'Mutaba3a collects')], 'en')).toEqual(['x.json landing.privacyPolicy.intro']);
     expect(offendingLeaves([leaf('landing.hero.title', 'MTB3A')], 'en')).toEqual([]);
     expect(offendingLeaves([leaf('shell.welcome', 'مرحبًا في MTB3A')], 'ar')).toEqual(['x.json shell.welcome']);
   });

@@ -52,12 +52,20 @@ function StoreEntry({ platform }: { platform: Platform }) {
   );
 }
 
-function PhoneExtra() {
+function PhoneExtra({ signupUrl }: { signupUrl: string | null }) {
   const t = useT();
   return (
     <>
       <p className="landing-phone-hint">
-        {t(`${T}.hint`)} <a href="#get-it">{t(`${T}.hintLink`)}</a>
+        {t(`${T}.hint`)}{' '}
+        {signupUrl ? (
+          <a href={signupUrl} target="_blank" rel="noopener noreferrer">
+            {t(`${T}.hintLinkOpen`)}
+            <span className="sr-only"> {t('common.opensInNewTab')}</span>
+          </a>
+        ) : (
+          <a href="#get-it">{t(`${T}.hintLink`)}</a>
+        )}
       </p>
       <ul className="landing-phone-stores" aria-label={t(`${T}.storesLabel`)}>
         {PLATFORMS.map((platform) => (
@@ -75,7 +83,7 @@ function PhoneExtra() {
  * /hosted's laptop-and-phone picture and, under the paragraph, each phone
  * platform's state read from `MOBILE_APP_LINKS` (never hardcoded).
  */
-export function PhoneSection() {
+export function PhoneSection({ signupUrl = null }: { signupUrl?: string | null }) {
   const t = useT();
   return (
     <ChapterSection
@@ -84,7 +92,7 @@ export function PhoneSection() {
       body={t(`${T}.body`)}
       visual={<HostedDevicesMock />}
       flip
-      extra={<PhoneExtra />}
+      extra={<PhoneExtra signupUrl={signupUrl} />}
     />
   );
 }

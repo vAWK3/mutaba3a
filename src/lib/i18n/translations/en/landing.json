@@ -17,10 +17,12 @@
       "headlineLine2": "you forget it.",
       "subheadline": "Every client, every payment, every expense — captured in seconds on your phone, visible instantly in your hosted portal. Built for growing businesses that move fast.",
       "ctaRequest": "Request an account",
+      "ctaCreate": "Create an account",
       "ctaSignIn": "Sign in",
       "ctaIos": "iPhone, on the App Store",
       "ctaAndroid": "Android, on Google Play",
-      "altNote": "Accounts are set up for your organization — there's no public sign-up."
+      "altNote": "Accounts are set up for your organization — there's no public sign-up.",
+      "altNoteOpen": "Sign up with your email address, or ask us to set an account up for your organization."
     },
     "chapters": {
       "clients": {
@@ -56,18 +58,22 @@
       "title": "Get MTB3A",
       "lead": "One account for your whole business — the portal in your browser, and the app on your phone.",
       "requestCta": "Request an account",
+      "createCta": "Create an account",
+      "requestCtaOpen": "Want us to set it up for you?",
       "requestHint": "Tell us about your work and we'll reply within 2 working days with an offer.",
       "signInCta": "Already have an account? Sign in",
       "appsLabel": "Already set up? Get the app",
       "appsIos": "iPhone, on the App Store",
       "appsAndroid": "Android, on Google Play",
-      "note": "Accounts are set up for your organization — there's no public sign-up."
+      "note": "Accounts are set up for your organization — there's no public sign-up.",
+      "noteOpen": "Sign up with your email address. Want help setting up your organization? Ask us below."
     },
     "phone": {
       "title": "Log it on your phone. See it all in your hosted account.",
       "body": "The phone app is for logging: an income or an expense in seconds, even with no signal. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they’ve paid, on any computer.",
       "hint": "Both come with the same account.",
       "hintLink": "Request an account",
+      "hintLinkOpen": "Create an account",
       "storesLabel": "Phone apps",
       "store": {
         "ios": "iPhone, on the App Store",
@@ -90,6 +96,7 @@
       "headline": "Questions",
       "q1": "Is there a free plan?",
       "a1": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
+      "a1Open": "No. You can create an account with your email address, or request one and we'll reply with an offer for your organization.",
       "q2": "Where is my data stored?",
       "a2": "On MTB3A's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
       "q3": "How do I back up, or move to another device?",
@@ -117,43 +124,51 @@
     "privacyPolicy": {
       "title": "Privacy Policy",
       "updated": "Last updated October 24, 2026",
-      "intro": "This policy covers Mutaba3a's website, its hosted web portal and its iPhone and Android apps. The portal and the apps work the same way: you sign in with an account, and what you enter is saved to Mutaba3a's servers. It does not cover any other product.",
+      "intro": "This policy covers MTB3A's website, its hosted web portal and its iPhone and Android apps. The portal and the apps work the same way: you sign in with an account, and what you enter is saved to MTB3A's servers. It does not cover any other product.",
       "backLink": "Back to the homepage",
       "scope": {
         "title": "The short version",
-        "body": "Mutaba3a is a hosted product. You sign in with an account, and what you enter — clients, projects, income, expenses, receipts — is saved to our servers so it's there on every device you sign in on. Our website sends us what you type in the account-request form, only if you fill it in and press Send, and it counts visits anonymously, as described under \"Anonymous usage counts\". None of our apps use ads or tracking, and we never sell your data."
+        "body": "MTB3A is a hosted product. You sign in with an account, and what you enter — clients, projects, income, expenses, receipts — is saved to our servers so it's there on every device you sign in on. Our website sends us what you type in the account-request form, only if you fill it in and press Send, and it counts visits anonymously, as described under \"Anonymous usage counts\". Each visit to its home page also asks our servers whether sign-up is open, as described under \"What reaches the network\". None of our apps use ads or tracking, and we never sell your data."
       },
       "mobile": {
         "title": "iPhone and Android: your account and our servers",
-        "body": "The mobile apps need an account, which your organization or we set up for you. There's no public sign-up. When you sign in, we keep your email address, display name, language, and which business profiles you can use. What you enter is stored on Mutaba3a's servers, and a copy is kept on your phone so the app works offline. Entries you make while offline are saved on your phone and uploaded once you're back online. Signing out ends your session on our servers. Entries that haven't uploaded yet stay on the phone and upload after you sign in again."
+        "body": "The mobile apps need an account. While sign-up is open you can create one yourself on the hosted portal, as described under \"When you create an account\"; otherwise your organization or we set one up for you. When you sign in, we keep your email address, display name, language, and which business profiles you can use. What you enter is stored on MTB3A's servers, and a copy is kept on your phone so the app works offline. Entries you make while offline are saved on your phone and uploaded once you're back online. Signing out ends your session on our servers. Entries that haven't uploaded yet stay on the phone and upload after you sign in again."
       },
       "hostedAccounts": {
         "title": "Where your records live",
-        "body": "Your account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on Mutaba3a's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, and we can restore your records to any moment in the last 7 days. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Accounts are also covered by our terms of service."
+        "body": "Your account (the web portal, and the iPhone and Android apps when you're signed in) keeps your records on MTB3A's servers in Google Cloud's Tel Aviv region (me-west1). We back them up every day and keep each backup for 14 days, and we can restore your records to any moment in the last 7 days. When something breaks, an error report goes to Sentry in the EU with the content of your records removed. Usage counts go to PostHog in the EU only if you agree. Our team opens your records only when you ask us to help, to fix a fault, or when the law requires it. When you close your account, we delete it and its records after 30 days, including the record that you accepted our terms, and our backups clear 14 days later. Accounts are also covered by our terms of service."
+      },
+      "createAccount": {
+        "title": "When you create an account",
+        "body": "While sign-up is open, you can create an account yourself on the hosted portal. You type your email address and we email you a link that works for 24 hours; your account is created only when you open that link and set a password. Until then we keep only your address and the page's language with the link, and we delete them about a week after the link expires. The sign-up and password-recovery forms first run a check with Cloudflare Turnstile to tell people from bots. Turnstile receives your IP address and details about your browser and device, and never what you type into the form. To check that your address can receive email, our servers look up its domain (the part after the @) in public DNS records, and ask the domain's registry, through its public registration records (RDAP), when the domain was registered. Only the domain name is sent in these lookups, never the rest of your address. We don't accept addresses from disposable email services or at domains that can't receive email. Sign-ups from personal email providers or email-forwarding services, and from domains these lookups can't confirm (for example, one registered in the last 90 days), are reviewed by our team before the account opens; we keep the domain and the reason for the review with it, and we email you the outcome."
+      },
+      "email": {
+        "title": "Emails we send",
+        "body": "We email you only about your account: the link to finish creating it or to set a new password, a reminder that you already have an account if you try to sign up again, a notice when your password changes, a notice that we're reviewing your sign-up and then its outcome, and notices that your free trial is ending, that your account has become read-only, or that it will lock. Our emails never include amounts or your records, and we don't track whether you open them or click their links. We send them through Resend, which receives your email address, the message and what happens to it (for example, that it was delivered or bounced). Resend sends our emails from the EU (Ireland) and keeps its records of them, including your email address and their delivery, in the United States, under its data processing agreement with us. If an email to you bounces permanently or you mark it as spam, we stop emailing that address, and we keep the address on our do-not-email list so it stays that way."
       },
       "whatYouEnter": {
         "title": "What you enter",
-        "body": "You control what goes into Mutaba3a: client names and contact details, projects, income records, optional expenses, notes, and any receipts you attach. It's sent to our servers so it can be stored with your account. On iPhone, you can share a photo or PDF of a receipt into Mutaba3a. It's uploaded to private cloud storage and attached to the expense."
+        "body": "You control what goes into MTB3A: client names and contact details, projects, income records, optional expenses, notes, and any receipts you attach. It's sent to our servers so it can be stored with your account. On iPhone, you can share a photo or PDF of a receipt into MTB3A. It's uploaded to private cloud storage and attached to the expense."
       },
       "network": {
         "title": "What reaches the network",
-        "body": "The website's account-request form sends what you type in it to Netlify when you press Send. The website also sends the error reports described under \"Error reports\" to Sentry and the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog. The hosted portal also sends the error reports described under \"Error reports\" to Sentry. The mobile apps connect to Mutaba3a's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
+        "body": "The website's account-request form sends what you type in it to Netlify when you press Send. Each time you open the website's home page, it asks our servers whether sign-up is open. That request carries nothing about you, but like any request it reaches our servers with your IP address and browser details, which go into the technical logs described under \"No ads, no tracking\". The website also sends the error reports described under \"Error reports\" to Sentry and the anonymous visit counts described under \"Anonymous usage counts\" to PostHog. The hosted portal connects to MTB3A's servers and, if you turned on anonymous usage, to PostHog. The hosted portal also sends the error reports described under \"Error reports\" to Sentry, and its sign-up and password-recovery pages connect to Cloudflare Turnstile for the check described under \"When you create an account\". The mobile apps connect to MTB3A's servers, to Sentry for error reports, to the private storage that holds your receipts, and, if you turned on anonymous usage, to PostHog, always over encrypted connections."
       },
       "sharing": {
         "title": "Who else handles your data",
-        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Sentry, hosted in the EU, receives the error reports described under \"Error reports\" and stores them for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and Mutaba3a. Beyond that, we disclose data only when the law requires it."
+        "body": "We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Cloudflare carries the connections between you and our hosted portal and servers, and runs the Turnstile check described under \"When you create an account\". Resend sends our emails, as described under \"Emails we send\". Sentry, hosted in the EU, receives the error reports described under \"Error reports\" and stores them for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under \"Anonymous usage counts\" for us. If your organization has linked its business profiles to Malafat, the records in those profiles are shared between Malafat and MTB3A. Beyond that, we disclose data only when the law requires it."
       },
       "security": {
         "title": "Keeping the mobile apps secure",
-        "body": "Your password is stored on our servers only as a secure hash, and never on your phone. Your sign-in session is kept in the iPhone Keychain or in Android's encrypted storage. You can turn on App Lock so opening the app needs Face ID, Touch ID, your fingerprint, or your device passcode. That check happens on your device, and Mutaba3a never receives your biometric data. The mobile apps don't use your camera, contacts, or location, and they only see a photo or file when you choose to share it into the app."
+        "body": "Your password is stored on our servers only as a secure hash, and never on your phone. Your sign-in session is kept in the iPhone Keychain or in Android's encrypted storage. You can turn on App Lock so opening the app needs Face ID, Touch ID, your fingerprint, or your device passcode. That check happens on your device, and MTB3A never receives your biometric data. The mobile apps don't use your camera, contacts, or location, and they only see a photo or file when you choose to share it into the app."
       },
       "noTracking": {
         "title": "No ads, no tracking",
-        "body": "None of Mutaba3a's apps use advertising or tracking that follows you across sites or apps. Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks, as described under \"Error reports\". The free apps on Mac, Windows, and in the browser never send them. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
+        "body": "None of MTB3A's apps use advertising or tracking that follows you across sites or apps. Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks, as described under \"Error reports\". The free apps on Mac, Windows, and in the browser never send them. The anonymous usage counts we do keep are described under \"Anonymous usage counts\". Our servers keep standard technical logs (such as when a request arrived, its IP address, and whether it succeeded) so we can run the service. We don't use them to profile you."
       },
       "usageAnalytics": {
         "title": "Anonymous usage counts",
-        "body": "Where we count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, and each time you save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of Mutaba3a people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
+        "body": "Where we count usage, we use PostHog, hosted in the EU. We never send amounts, names, notes, contact details, your location, or anything you type, and nothing we send is linked to your account. Our website counts page visits and which buttons are pressed, without cookies and without storing anything on your device. To tell visits apart for a single day, PostHog combines your IP address and browser details into a code that changes every day and keeps neither, so a visit can't be linked to you or to visits on other days. The hosted portal asks you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, it sends a short note when you turn it on (saying whether you did so from the prompt or the account menu), each time you open the portal, each time you save an income, an expense or a payment received, and when it shows the free trial's reminder to add a card and whether you chose to add one or not. A note says only which of these it was, its currency, for an income whether it was already paid, and for the trial reminder whether it showed when you first signed in or on your Home page, along with the portal's version and its analytics library's version, its language, your browser's type, your device's operating system and its version, and whether it's a computer, tablet, or phone. Notes are sent under a random ID kept only in your browser, not linked to your account, and replaced when you sign out. If you turn it off from the account menu, we send one last note saying you turned it off, then stop and delete the random ID. The iPhone and Android apps ask you once whether you want to share anonymous usage, and it's off unless you turn it on. If you do, they send a short note each time you turn it on (saying whether you did so from the prompt or Settings), once more the first time you turn it on after signing in, and each time you add a client or save an income or an expense. A note says only which of these it was, its currency, and for an income whether it was already paid, along with the app's version and its analytics library's version, its language, your phone's operating system and its version, and whether it's a phone or a tablet. Notes are sent under a random ID kept only on your phone, not linked to your account, and replaced when you sign out. If you turn it off in Settings, we send one last note saying you turned it off, then stop and delete the random ID. These counts are used only to understand which parts of MTB3A people use. They're never used for advertising, and no one but PostHog, which processes them for us, receives them."
       },
       "errorReports": {
         "title": "Error reports",
@@ -161,11 +176,11 @@
       },
       "mobileDeletion": {
         "title": "Deleting your account and data",
-        "body": "You can delete individual entries in the mobile apps. To delete your whole account and everything stored with it, email info@malafat.app from your account's email address, and we'll do it within 30 days. Records in a business profile that belongs to your organization are your organization's, so we handle those together with them. Copies in our backups expire within 14 days of deletion. Signing out and uninstalling the mobile app removes Mutaba3a's data from your phone."
+        "body": "You can delete individual entries in the mobile apps. To delete your whole account and everything stored with it, email info@malafat.app from your account's email address, and we'll do it within 30 days. Records in a business profile that belongs to your organization are your organization's, so we handle those together with them. Copies in our backups expire within 14 days of deletion. Signing out and uninstalling the mobile app removes MTB3A's data from your phone."
       },
       "children": {
         "title": "Children's privacy",
-        "body": "Mutaba3a is a business tool and isn't directed at children. We don't knowingly collect information from anyone under 13."
+        "body": "MTB3A is a business tool and isn't directed at children. We don't knowingly collect information from anyone under 13."
       },
       "changes": {
         "title": "Changes to this policy",
@@ -177,7 +192,7 @@
       },
       "contact": {
         "title": "Contact",
-        "body": "Questions about this policy can be sent to info@malafat.app. Mutaba3a is made by Barmajiyat Ltd."
+        "body": "Questions about this policy can be sent to info@malafat.app. MTB3A is made by Barmajiyat Ltd."
       }
     },
     "terms": {
