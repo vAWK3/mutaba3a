@@ -3542,7 +3542,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Release-QA | none: server-only, no user-visible flow (`server/src/**` is outside every app's watch). MUT-368's `signup.*`/`recover.*` specs will read `GET /admin/v1/dev-outbox` | — |
 | Live (deferred) | DEPLOYMENT.md §6f step 8 | a real mail reaches Gmail and Outlook inboxes in both languages: at Basel's end-of-run go-live |
 
-## MUT-366 — signup and recovery routes (2026-10-23, ADR-175)
+## MUT-366 — signup and recovery routes (2026-10-23, ADR-176)
 
 | Layer | Where | Covers |
 |---|---|---|
@@ -3557,8 +3557,20 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Code review fixes | `routes-self-service.test.ts` "code review fixes", `store-contract-signup.ts`, `turnstile.test.ts`, `config.test.ts` | #1 the Turnstile key is never the client's `X-Request-Id`; #2 recovery leaves the operator link valid, redeeming one supersedes the other (store: mailed cancels mailed only, operator cancels all); #3 a 600 ms provider doesn't hold the answer past the floor; #4 a store failure on either branch answers 202 after the floor; #5 no or empty action fails; #6 staging with resend needs a secret |
 | Local snapshot | `src/hosted/local/__tests__/{format-fingerprint,migrations}.test.ts` | `people.emailVerifiedAt` in the fingerprint (fixture verifies an address through a mailed link); 3 → 4 adds it as null |
 | Release-QA | none: server-only. MUT-368's `signup.*`/`recover.*` portal specs drive these routes through `GET /admin/v1/dev-outbox` | — |
+## MUT-340 — receivedCount on Received captures (2026-10-23, ADR-176)
+- Route: `src/__tests__/income-routes.test.ts`: counts 1, 2, 3; an undone capture drops out; Owed has no count; an Idempotency-Key replay answers the stored count; Malafat's own payments count; the entries feed never carries it.
+- Store contract (memory and Postgres): `src/repositories/__tests__/store-contract-capture.ts`: count after each capture, after an undo, per organization; four parallel captures get four different counts (proved on Postgres on a scratch database).
+- OpenAPI: `npm run openapi:check` with `IncomeCaptureResponse`.
+- Release-QA: the phone's `ios.capture.milestone-*` flows (mutaba3a-flutter) cover it end to end.
 
-## MUT-367 — business-email screen and the signup review queue (2026-10-23, ADR-177)
+## MUT-339 — logging streak and capturedAt (2026-10-23, ADR-177)
+- Unit: `src/expenses/__tests__/streak.test.ts`: runs and gaps, alive through yesterday, previous (3+ days, within 7), DST midnight, the 48 h clamp.
+- Route: `src/__tests__/streak-routes.test.ts`: any entry counts (S1); deleted and undone don't; the 23:50-offline case counts on its day (S4); an old capturedAt is clamped; 409 NOT_PERSONAL on business and firm; no API key.
+- Store contract (memory and Postgres): `store-contract-entries.ts` loggedDays: zone shift, live rows only, conversions out, the since bound, Owed counted.
+- Inventories: `route-security`, `writability-routes`, `routes-expenses`.
+- Release-QA: the phone's `ios.capture.streak-*` flows (mutaba3a-flutter).
+
+## MUT-367 — business-email screen and the signup review queue (2026-10-23, ADR-178)
 
 | Layer | Where | Covers |
 |---|---|---|
@@ -3574,6 +3586,6 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Route (server) | `routes-signup-review.test.ts` | S1 disposable / S2 no-mail → 400, no mail; S3 business → ACTIVE + trial + sign-in; S4 gmail → PENDING_REVIEW, under-review mail, a digest; S5 young (`rdap-age-12d`) and relay; D8 account-exists for a pending holder; S6 403 on cookie and device, no session, no failure counted; S7 wrong password = unknown (status, body, one verify each, both wait on it); S8 locked → 401; S9 recovery works and still 403; the queue lists with reasons, needs the admin token; S10 approve (trial, ready mail with sign-in link, audit, sign-in 201); S11 409 ALREADY_DECIDED, 404 unknown; S12 decline (account and profile gone, declined mail with support address, sign-in 401, 404 after); S13 sign up again; D11 enable/disable 409; D16 Me.user.status |
 | CLI | `scripts/__tests__/users-cli.test.ts` | `signup-reviews` lists, approves and declines by address, refuses both flags and a second decision |
 | Config | `config.test.ts` | `EMAIL_DOMAIN_CHECKER` defaults (fixture / dns in production) and refuses the fixture in production |
-| Pins | `store-guard.test.ts`, `routes-m*.test.ts`, `routes-account-setup.test.ts`, `routes-self-service.test.ts` | the six new store methods operator-only; API 1.56.0-mut367; the redeem's `status` |
+| Pins | `store-guard.test.ts`, `routes-m*.test.ts`, `routes-account-setup.test.ts`, `routes-self-service.test.ts` | the six new store methods operator-only; API 1.57.0-mut367; the redeem's `status` |
 | Release-QA | none: server and operator only. MUT-368's `signup.review-webmail` (core), `signup.review-declined`, `signup.business-instant`, `signup.disposable` and `signup.no-mail-domain` drive these through the dev outbox and the admin routes (design §6) | — |
 

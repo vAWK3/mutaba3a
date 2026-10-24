@@ -12,7 +12,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { setupTokenOf } from './helpers/provision.js';
 
 /**
- * MUT-367 (ADR-159 §7a, ADR-177): the business-email screen at signup and the operator's review queue, end to end
+ * MUT-367 (ADR-159 §7a, ADR-178): the business-email screen at signup and the operator's review queue, end to end
  * through the routes on the memory store and the fixture domain checker (no DNS anywhere).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

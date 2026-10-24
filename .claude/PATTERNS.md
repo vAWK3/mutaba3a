@@ -2698,7 +2698,7 @@ When a row must not exist until a link is redeemed (no user yet), lock on the na
 inside the redeem's transaction; also catch the unique violation a writer that doesn't take the lock can cause.
 First instance: `accountSetup.issueSignup` / `redeemSignup`.
 
-## Patterns added by MUT-367 (2026-10-23, ADR-177)
+## Patterns added by MUT-367 (2026-10-23, ADR-178)
 
 ### Pattern: An outside lookup behind a port, with a fixture adapter that production config refuses
 - **The port and its adapters:** a check that would reach the internet (DNS, RDAP) sits behind a port.

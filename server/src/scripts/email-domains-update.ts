@@ -26,7 +26,7 @@ export function buildDisposableFile(upstream: string, options: { commit: string;
   }
   const header = [
     '# Disposable email domains: refused at signup (POST /v1/signups → 400 EMAIL_NOT_ACCEPTED, reason "disposable").',
-    '# MUT-367 (ADR-159 §7a, ADR-177). A domain here also covers its subdomains.',
+    '# MUT-367 (ADR-159 §7a, ADR-178). A domain here also covers its subdomains.',
     `# source: ${upstreamUrlFor(options.commit)}`,
     `# commit: ${options.commit}`,
     `# fetched: ${options.fetched}`,

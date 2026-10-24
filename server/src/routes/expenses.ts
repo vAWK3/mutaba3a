@@ -10,7 +10,9 @@ import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, withCategoryForeignKey } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
+import { computeStreak, loggedAtOf } from '../expenses/streak.js';
 import { summarizeExpenses } from '../expenses/summary.js';
+import { ownsProfile, profileTypeOf } from '../personal-profile.js';
 import { idempotent } from '../idempotency.js';
 import { formatMoney, type Currency } from '../money.js';
 import { ifMatch } from '../if-match.js';
@@ -31,10 +33,14 @@ import {
   ExpenseSummarySchema,
   IfMatchHeaderSchema,
   ListExpensesQuerySchema,
+  StreakResponseSchema,
   UpdateExpenseRequestSchema,
 } from '../schemas.js';
 import { serializeExpense, serializeExpenseReceipt } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+
+/** MUT-339: how far back a streak is read; past a year it is shown as a year and more. */
+const STREAK_LOOKBACK_DAYS = 400;
 
 export interface ExpenseRouteOptions {
   /** The M6 attachments bucket; receipts use it under their own prefix (MUT-42 D1). Null: receipt routes answer 503. */
@@ -116,6 +122,32 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     },
   );
 
+  // MUT-339: before /v1/expenses/{expenseId}, so "streak" is never read as an id.
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/expenses/streak',
+      tags: ['Expenses'],
+      summary: 'This personal profile’s logging streak',
+      description:
+        'MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.',
+      security: SESSION_ONLY,
+      middleware: [requireScope('expenses:read')] as const,
+      responses: { 200: { description: 'Streak', content: { 'application/json': { schema: StreakResponseSchema } } }, ...conflictResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization, user, membershipRole } = sessionAuth(c);
+      if (profileTypeOf(organization) !== 'PERSONAL' || !ownsProfile(organization, user.id, membershipRole)) {
+        throw new ApiError('CONFLICT', 'Streaks are for your own personal profile', { reason: 'NOT_PERSONAL' });
+      }
+      const now = c.get('now')();
+      const today = todayFor(organization, now);
+      const since = new Date(now.getTime() - STREAK_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+      const days = await store.entries.loggedDays(organization.id, since, organization.timezone);
+      return c.json({ today, ...computeStreak(days, today, organization.timezone) }, 200);
+    },
+  );
+
   app.openapi(
     createRoute({
       method: 'get',
@@ -150,8 +182,10 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     async (c) => {
       const { organization, user } = sessionAuth(c);
       const body = c.req.valid('json');
-      const input = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, c.get('now')()), body);
-      const expense = await withCategoryForeignKey(() => store.expenses.create(input, c.get('now')()));
+      const now = c.get('now')();
+      const input = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
+      const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));
       await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn: input.occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       return c.json(serializeExpense(expense), 201);
     },

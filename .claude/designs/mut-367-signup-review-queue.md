@@ -3,7 +3,7 @@
 **Ticket:** MUT-367 (epic MUT-322, label `ga-gate`). **Builds:** ADR-159 decision 2, `.claude/designs/mut-331-self-service-signup.md` §3, §6 and §7a, on the seams MUT-366 left (ADR-175 §6).
 **Blocked by:** MUT-366, merged to local main as `77985482`. **Blocks:** MUT-368 (the portal's signup, recover and under-review pages).
 **Status:** planned 2026-10-23 in Basel's unattended self-service run. D1–D22 below are **pending Basel's confirmation**. Basel reconfirmed the rule on 2026-10-23: webmail and unverified domains wait for review, and disposable domains are refused.
-**ADR:** ADR-177. **API:** `1.56.0-mut367`.
+**ADR:** ADR-178. **API:** `1.57.0-mut367`.
 
 ## 1. Problem and acceptance criteria
 
@@ -166,7 +166,7 @@ Webmail (`gmail.com` …) and disposable (`mailinator.com` …) come from the re
   - `EmailDomainClass` and `SignupReviewDecision` enums;
   - two token columns and a CHECK;
   - the `signup_reviews` table.
-- **Contract:** the API becomes `1.56.0-mut367`, all additive:
+- **Contract:** the API becomes `1.57.0-mut367`, all additive:
   - `POST /v1/signups` 400 `EMAIL_NOT_ACCEPTED`;
   - sign-in 403 `ACCOUNT_UNDER_REVIEW`;
   - redeem `status`;

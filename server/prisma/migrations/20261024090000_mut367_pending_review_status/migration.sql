@@ -1,4 +1,4 @@
--- MUT-367 (ADR-159 §7a, ADR-177): a self-service signup from a webmail, relay or unverified domain opens a
+-- MUT-367 (ADR-159 §7a, ADR-178): a self-service signup from a webmail, relay or unverified domain opens a
 -- PENDING_REVIEW account. On its own migration (D29): Postgres refuses to use an enum value added in the same
 -- transaction, and the next migration's index and CHECKs must not trip over that.
 --

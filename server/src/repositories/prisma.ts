@@ -1367,18 +1367,20 @@ export class PrismaLedgerStore implements LedgerStore {
       }),
   };
 
-  readonly payments: PaymentRepository = {
-    // The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once.
-    create: async (input, at) => {
-      for (let attempt = 0; ; attempt += 1) {
-        try {
-          return await this.prisma.$transaction((tx) => createPaymentTx(tx, input, at));
-        } catch (err) {
-          if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
-          throw asLockConflict(err);
-        }
+  /** The counter upsert can race on first use of a year (two inserts); one loses with P2002 and retries once. */
+  private async paymentWrite<T>(write: () => Promise<T>): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await write();
+      } catch (err) {
+        if (attempt === 0 && isUniqueViolation(err) && String((err as Prisma.PrismaClientKnownRequestError).meta?.target ?? '').includes('year')) continue;
+        throw asLockConflict(err);
       }
-    },
+    }
+  }
+
+  readonly payments: PaymentRepository = {
+    create: (input, at) => this.paymentWrite(() => this.prisma.$transaction((tx) => createPaymentTx(tx, input, at))),
     getById: (organizationId, id) => this.prisma.payment.findFirst({ where: { id, organizationId } }),
     list: async (organizationId, filter: PaymentFilter, page) => {
       const rows = await this.prisma.payment.findMany({
@@ -1435,7 +1437,14 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
-    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    capture: (input, at) =>
+      this.paymentWrite(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { payment } = await createPaymentTx(tx, { ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+          const postedCount = await tx.payment.count({ where: { organizationId: input.organizationId, status: 'POSTED' } });
+          return { payment, postedCount };
+        }),
+      ),
     undoCapture: async (organizationId, paymentId, userId, at) => {
       // One conditional write. allocate() holds FOR UPDATE on this row; whichever commits first wins, and Postgres
       // re-checks this WHERE against the row allocate() left behind, so an allocation is never silently undone.
@@ -1974,7 +1983,7 @@ export class PrismaLedgerStore implements LedgerStore {
    * MUT-359 (D2). Count then insert, without a database lock: the mailer serializes its claims, and production runs
    * one instance (TD-017). A concurrent claim of the same key loses on the unique keyDigest and is a duplicate.
    */
-  // MUT-367 (ADR-177): the operator's signup review queue.
+  // MUT-367 (ADR-178): the operator's signup review queue.
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = await this.prisma.signupReview.findMany({
@@ -2100,6 +2109,22 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly entries: EntriesRepository = {
+    // MUT-339: one query over the three kinds' live rows, each bounded by its (organizationId, createdAt) index. The
+    // columns are UTC without a zone, so they are read as UTC before they are shifted into the profile's zone.
+    loggedDays: async (organizationId, since, timezone) => {
+      const rows = await this.prisma.$queryRaw<Array<{ day: Date }>>`
+        SELECT DISTINCT day FROM (
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS day FROM "expenses"
+            WHERE "organizationId" = ${organizationId}::uuid AND "deletedAt" IS NULL AND "createdAt" >= ${since}
+          UNION
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date FROM "payments"
+            WHERE "organizationId" = ${organizationId}::uuid AND ("reversalReason" IS NULL OR "reversalReason" <> ${CAPTURE_UNDO_REASON}) AND "createdAt" >= ${since}
+          UNION
+          SELECT (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date FROM "receivables"
+            WHERE "organizationId" = ${organizationId}::uuid AND "origin" = 'ADJUSTMENT' AND "deletedAt" IS NULL AND "createdAt" >= ${since}
+        ) logged ORDER BY day DESC`;
+      return rows.map((row) => row.day.toISOString().slice(0, 10));
+    },
     // D3: one typed, index-bounded query per organization and kind (limit + 1 rows each), merged in memory. Review D1:
     // one organization at a time, its 4 kinds in parallel, so a request holds at most 4 pooled connections.
     // MUT-390: `order=occurredOn` reads the same branches by each kind's money date column (`moneyDateOf`), on its own

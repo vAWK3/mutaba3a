@@ -4,7 +4,7 @@ import { classifyDomainFacts, isTransient, type DomainFacts, type DomainRefusal,
 import { isDomainName, isListedDomain, loadDomainList } from './lists.js';
 
 /**
- * MUT-367 (ADR-159 §7a, ADR-177): the screen `POST /v1/signups` runs on every address, account or not.
+ * MUT-367 (ADR-159 §7a, ADR-178): the screen `POST /v1/signups` runs on every address, account or not.
  *
  *   1. disposable list (the domain or a parent)  → refused  `disposable`
  *   2. free-webmail list                         → WEBMAIL  [webmail]               (review)

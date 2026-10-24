@@ -4788,8 +4788,36 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Rejected**: creating a pending user at signup (unverified addresses would fill `users`); a Scheduler job for pruning (one instance, the mail log's hourly timer is enough); answering the switch-off with the route absent (the contract would depend on the environment); a session after the SIGNUP redeem (ADR-088 §5).
 7. **Code review (before merge).** The Turnstile idempotency key is generated per check, never the client's `X-Request-Id` (one solved token could otherwise be replayed). A recovery link cancels only earlier mailed links, so a stranger's request can't kill the operator's open link; redeeming any link cancels the person's others. Each branch's mail is raced against the floor and finishes in the background, and a store failure in a branch is logged and still answered with the same 202. Turnstile requires the form's exact action. Any server with `MAILER=resend` must name a Turnstile secret, staging included.
 **Consequences**: merging changes nothing in production (`mailer = "noop"`, signup off). Recovery goes live with mail, which now also needs the Turnstile secret (before-release.md). The limiters are in process (TD-017). TD-211 (setup copy for SIGNUP until MUT-368); TD-212 resolved before merge. The portal's local snapshot moved to format 4 (`people.emailVerifiedAt`).
+## ADR-176: A Received Capture Answers the Profile's Payment Count; the Phone Owns the Milestone Ladder (MUT-340)
 
-## ADR-177: Business Email Signs Up at Once; Webmail, Relay and Unverified Domains Wait for the Operator (MUT-367)
+**Status**: Accepted (2026-10-23, MUT-340). Basel's M1–M3, eng review R1–R12. ADR-174 is MUT-359's and ADR-175 MUT-366's.
+
+**Context**: MUT-340 celebrates income milestones on the phone. Basel chose the count of payments received (1st, 10th, 50th, 100th, 250th, 500th, 1000th), the same in every currency, played once after the save that crosses it. Nothing on the server exposed a payment count; the `PAY-YYYY-NNNN` number is per year and keeps reversed payments. The phone saves through an outbox, so the count has to come back with the upload, not with Save.
+
+**Decision**:
+1. **Counted on write.** `POST /v1/income` (received) answers `receivedCount`, the organization's POSTED payments of every origin, counted in the capture's transaction after the payment counter upsert. That upsert row-locks `(organization, year)`, so concurrent captures get distinct counts.
+2. **Fixed by idempotency.** A replay with the same Idempotency-Key answers the stored body, so a retried upload never crosses a milestone twice.
+3. **The ladder is the phone's.** The server only reports the count. Which counts are milestones, and whether one was already shown on this install, live in the app.
+4. **POST-only schema.** `IncomeCaptureResponse` extends `IncomeResponse`; no other route advertises the field.
+5. **Nothing materialized.** No milestone table: one indexed count per Received capture.
+
+**Consequences**: Filing an Unsorted income, Malafat's API-key payments and Siri's direct posts count toward the total but carry no count, so they never trigger a celebration. The count uses the `(organizationId, …)` prefix indexes; a personal profile's payments are in the thousands at most.
+
+## ADR-177: A Logging Streak Is Read From Logged Days; an Entry Is Logged When the Phone Saved It, Within 48 Hours (MUT-339)
+
+**Status**: Accepted (2026-10-23, MUT-339). Basel's S1–S4, eng review R1–R12. ADR-174 is MUT-359's, ADR-175 MUT-366's, ADR-176 MUT-340's.
+
+**Context**: MUT-339 shows a personal profile's streak of consecutive days with at least one entry. Nothing on the server returned entry days, and the phone has no timezone library. The phone saves through an outbox, so the server's own write time can put an offline entry on the next day.
+
+**Decision**:
+1. **Read, not stored.** `GET /v1/expenses/streak` works the streak out from `entries.loggedDays`: distinct `(("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE tz)::date` over the entries feed's live rows, bounded 400 days back from the request's clock. No streak table while it stays one indexed query.
+2. **Logged = createdAt, from the phone within 48 hours.** `capturedAt` on the two create routes becomes `createdAt`, clamped to [now − 48 h, now]. Offline logging lands on its day; nobody backdates a streak beyond two days. The money date (`occurredOn`) never counts.
+3. **Instants for the phone.** `aliveUntil` is the end of `lastLoggedOn + 1` in the profile's zone, as UTC, so the phone never does zone math.
+4. **Personal books only.** `profileTypeOf(org) === 'PERSONAL' && ownsProfile(...)`; under `/v1/expenses*`, so it stays session-only by the writability matrix.
+
+**Consequences**: A settled Owed creates a payment, so settling counts as logging. A `capturedAt` moves the feed's "logged" order the same way, which is the order Recent already shows. Conversions don't count. Past 400 days the count stops at what fits.
+
+## ADR-178: Business Email Signs Up at Once; Webmail, Relay and Unverified Domains Wait for the Operator (MUT-367)
 
 **Status:** Accepted for the build (2026-10-23, MUT-367, unattended run on Basel's "go"). Decisions D1–D29 in `.claude/designs/mut-367-signup-review-queue.md` §4 are **pending Basel's confirmation**. This builds ADR-159 decision 2 (§7a) on ADR-175's seams.
 

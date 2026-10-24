@@ -37,7 +37,7 @@ if (!url) {
       // What the old revision wrote during the window: a person's payment with the column default.
       const stranded = (await store.payments.create({ ...base, createdByUserId: user.id, origin: 'INTEGRATION' }, at)).payment;
       const integration = (await store.payments.create({ ...base, createdByUserId: null, origin: 'INTEGRATION' }, at)).payment;
-      const capture = await store.payments.capture({ ...base, createdByUserId: user.id, captureSource: 'app' }, at);
+      const capture = (await store.payments.capture({ ...base, createdByUserId: user.id, captureSource: 'app' }, at)).payment;
 
       expect(await repairCaptureOrigins(db)).toBeGreaterThanOrEqual(1);
       expect(await store.payments.getById(org.id, stranded.id)).toMatchObject({ origin: 'CAPTURE' });

@@ -1168,8 +1168,12 @@ export interface PaymentRepository {
   reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
-  /** MUT-61: a person's own Received — POSTED, origin CAPTURE, no allocations. Same numbering as create. */
-  capture(input: CaptureReceivedInput, at: Date): Promise<PaymentRecord>;
+  /**
+   * MUT-61: a person's own Received — POSTED, origin CAPTURE, no allocations. Same numbering as create.
+   * MUT-340: `postedCount` is the profile's POSTED payments (every origin) right after this one, counted in the same
+   * transaction, under the (organization, year) counter lock, so two captures never read the same count.
+   */
+  capture(input: CaptureReceivedInput, at: Date): Promise<{ payment: PaymentRecord; postedCount: number }>;
   /**
    * MUT-61: reverse this person's own capture, only while nothing is allocated — one conditional write, so an
    * allocation that lands at the same moment either wins (→ `allocated`) or finds the payment reversed. Never
@@ -1627,7 +1631,7 @@ export interface AccountSetupRepository {
   pruneSignupLinks(expiredBefore: Date): Promise<number>;
 }
 
-// ---- MUT-367 (ADR-159 §7a, ADR-177): the operator's signup review queue ------
+// ---- MUT-367 (ADR-159 §7a, ADR-178): the operator's signup review queue ------
 
 export type SignupReviewDecisionRecord = 'APPROVED' | 'DECLINED';
 
@@ -2552,6 +2556,12 @@ export interface EntriesRepository {
    * here never writes.
    */
   list(organizationIds: readonly string[], page: FeedPageRequest): Promise<FeedPage<EntryRow>>;
+  /**
+   * MUT-339 (ADR-177): the distinct days, in `timezone`, on which the organization logged an entry since `since`,
+   * newest first. "Logged" is `createdAt`; live rows by the feed's own rules (an expense not deleted, a payment not
+   * undone, an Owed not deleted), so a streak day is a day that shows in Recent. Conversions don't count.
+   */
+  loggedDays(organizationId: string, since: Date, timezone: string): Promise<IsoDate[]>;
   /**
    * MUT-270 review (D2): for each payment with exactly one allocation, to an Owed (ADJUSTMENT) receivable, that
    * receivable's id: the Owed it paid toward, which a settle (full or partial) is. Judged by shape, not by which route

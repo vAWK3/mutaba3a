@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { insertUserWithPersonalRow } from './fixtures/raw-rows.js';
 
 /**
- * MUT-367 (ADR-177, D29): the PENDING_REVIEW value ships in its own migration, so the review table's migration never
+ * MUT-367 (ADR-178, D29): the PENDING_REVIEW value ships in its own migration, so the review table's migration never
  * uses an enum value added in its own transaction. Each runs in one transaction (as Prisma runs them), existing
  * links keep no domain verdict, and the CHECKs hold: only a SIGNUP link carries a verdict, a decision comes with its
  * time, and an open review always names its person.

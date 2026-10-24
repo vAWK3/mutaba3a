@@ -9,7 +9,7 @@ import { ErrorEnvelopeSchema, SignupReviewDecisionSchema, SignupReviewListQueryS
 import { signInLinkOf } from './account-setup.js';
 
 /**
- * MUT-367 (ADR-159 §7a, ADR-177): the operator's signup review queue, behind MUTABA3A_ADMIN_TOKEN like the rest of
+ * MUT-367 (ADR-159 §7a, ADR-178): the operator's signup review queue, behind MUTABA3A_ADMIN_TOKEN like the rest of
  * /admin (ADR-037 §1). `npm --prefix server run signups:review` drives it.
  *
  *   GET  /admin/v1/signup-reviews?state=pending|decided   oldest first

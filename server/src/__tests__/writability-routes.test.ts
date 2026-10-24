@@ -173,8 +173,8 @@ describe('every route sits inside the matrix', () => {
   it('reads a non-trivial inventory', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
-    // and 4 receipts-library reads (MUT-255).
-    expect(SESSION_READS.length).toBe(34);
+    // and 4 receipts-library reads (MUT-255), and the streak (MUT-339).
+    expect(SESSION_READS.length).toBe(35);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -229,8 +229,11 @@ describe('a session on a key-only operation (hosted-portal.md §5 layer 2)', () 
     }
   });
 
+  /** MUT-339: the streak is personal-profile only, so on this firm it is 409 NOT_PERSONAL (its 200: streak-routes.test.ts). */
+  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : 200);
+
   it.each(SESSION_READS.filter((op) => !op.path.includes(':')).map((op) => [op.key, op] as const))('%s answers 200 to a session (a read row)', async (_key, op) => {
-    expect((await send(h, op, as(a.org.id))).status).toBe(200);
+    expect((await send(h, op, as(a.org.id))).status).toBe(okOn(op));
   });
 });
 
@@ -402,7 +405,8 @@ describe('switching profiles never leaks one profile’s figures into another (a
         h.calls.length = 0;
         const ids = { customerId: mine.customer.id, projectId: mine.project.id, agreementId: op.path.startsWith('/v1/retainers') ? mine.retainer.id : mine.agreement.id };
         const res = await send(h, op, as(mine.org.id), ids);
-        expect([200, 404], op.key).toContain(res.status);
+        // MUT-339: the streak refuses a firm profile with 409 NOT_PERSONAL, before any store read.
+        expect([200, 404, ...(op.path === '/v1/expenses/streak' ? [409] : [])], op.key).toContain(res.status);
         const leaked = h.calls.filter((call) => bigintSafe(call.args).includes(theirs.org.id)).map((call) => `${call.repo}.${call.method}`);
         expect(leaked).toEqual([]);
       }

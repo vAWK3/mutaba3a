@@ -148,6 +148,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { todayIn } from '../dates.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -1577,7 +1578,17 @@ export class MemoryLedgerStore implements LedgerStore {
       return { payment: { ...payment }, changed: true };
     },
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
-    capture: async (input, at) => (await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at)).payment,
+    capture: async (input, at) => {
+      const { payment } = await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+      // Counted up to this payment in insertion order, as Postgres's counter lock serializes it: captures in flight at
+      // once each see only the ones before them.
+      let postedCount = 0;
+      for (const p of this.pays.values()) {
+        if (p.organizationId === input.organizationId && p.status === 'POSTED') postedCount += 1;
+        if (p.id === payment.id) break;
+      }
+      return { payment, postedCount };
+    },
     undoCapture: async (organizationId, paymentId, userId, at) => {
       const p = this.pays.get(paymentId);
       if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId) return { result: 'not-found', payment: null };
@@ -2056,7 +2067,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
-  // MUT-367 (ADR-177): the review queue. Each method runs without an await: the stand-in for Prisma's transaction and lock.
+  // MUT-367 (ADR-178): the review queue. Each method runs without an await: the stand-in for Prisma's transaction and lock.
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = [...this.reviews.values()]
@@ -2324,6 +2335,14 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       const cursor = createdAtCursorOf(page.cursor);
       return mergeNewestFirst([rows.filter((row) => !cursor || isBeforeCursor(row.record, cursor))], page.limit, (row) => row.record);
+    },
+    loggedDays: async (organizationId, since, timezone) => {
+      const at = [
+        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e) => ({ org: e.organizationId, createdAt: e.createdAt })),
+        ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ org: p.organizationId, createdAt: p.createdAt })),
+        ...[...this.recs.values()].filter((r) => r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r) => ({ org: r.organizationId, createdAt: r.createdAt })),
+      ].filter((row) => row.org === organizationId && row.createdAt.getTime() >= since.getTime());
+      return [...new Set(at.map((row) => todayIn(timezone, row.createdAt)))].sort().reverse();
     },
     settledOwedIds: async (organizationIds, paymentIds) => {
       const byPayment = new Map<string, AllocationRecord[]>();

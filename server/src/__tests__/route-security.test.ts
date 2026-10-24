@@ -29,6 +29,8 @@ const EXPENSE_OPERATIONS = [
   'GET /v1/expenses',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-339: a personal profile's logging streak.
+  'GET /v1/expenses/streak',
   'GET /v1/summaries/expenses',
   'PATCH /v1/expenses/{expenseId}',
   'POST /v1/expense-categories',

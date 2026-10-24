@@ -1,5 +1,5 @@
 # Forwarding and alias (relay) services: a signup here waits for the operator's review (reason "relay").
-# MUT-367 (ADR-177, D23): their domains pass every DNS and RDAP check, but each alias is free and unlimited.
+# MUT-367 (ADR-178, D23): their domains pass every DNS and RDAP check, but each alias is free and unlimited.
 # A domain here also covers its subdomains.
 # source: hand-maintained
 # commit: none

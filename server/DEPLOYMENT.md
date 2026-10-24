@@ -1299,7 +1299,7 @@ At GA (after billing and account closing are live), set `self_signup_enabled = t
 
 **A suppressed address** (hard bounce or complaint) gets no more mail. There's no command to lift it yet (TD). If a person fixes their mailbox, delete their row from `email_suppressions` by hand (`npm run db:psql`).
 
-#### Business email and the signup review queue (MUT-367, ADR-177)
+#### Business email and the signup review queue (MUT-367, ADR-178)
 
 **The screen.** Every signup address is screened before any link is mailed:
 - Disposable addresses and domains that take no mail are refused (400 `EMAIL_NOT_ACCEPTED`).

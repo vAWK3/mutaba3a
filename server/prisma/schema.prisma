@@ -254,7 +254,7 @@ model ApiKey {
 enum UserStatus {
   ACTIVE
   DISABLED
-  /// MUT-367 (ADR-159 §7a, ADR-177): a self-service signup from a webmail, relay or unverified domain, waiting for
+  /// MUT-367 (ADR-159 §7a, ADR-178): a self-service signup from a webmail, relay or unverified domain, waiting for
   /// the operator. Can't sign in (403 ACCOUNT_UNDER_REVIEW with the right password); can recover; has no trial yet.
   PENDING_REVIEW
 }
@@ -443,7 +443,7 @@ model AccountSetupToken {
   @@map("account_setup_tokens")
 }
 
-/// MUT-367 (ADR-159 §7a, ADR-177): one self-service signup waiting for (or decided by) the operator. Written by the
+/// MUT-367 (ADR-159 §7a, ADR-178): one self-service signup waiting for (or decided by) the operator. Written by the
 /// SIGNUP redeem that opens a PENDING_REVIEW account. A decline hard-deletes the account; this row stays, with no
 /// user and no address, as the record of the decision.
 model SignupReview {

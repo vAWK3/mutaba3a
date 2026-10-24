@@ -2239,7 +2239,7 @@ notice. Tests: `server/src/email/__tests__/`.
 `UNCONFIGURED_TURNSTILE` refuses everything. Reuse the verifier for any other public form (MUT-197's landing form).
 Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src/__tests__/routes-self-service.test.ts`.
 
-### createDomainScreen / DomainChecker / CachedDomainChecker — `server/src/email/domains/` (MUT-367, ADR-177)
+### createDomainScreen / DomainChecker / CachedDomainChecker — `server/src/email/domains/` (MUT-367, ADR-178)
 - **`createDomainScreen({ checker, now, logger }).screen(email)`** returns `refused` (`disposable`, `no-mail`) or `classified` (`domain`, `domainClass` BUSINESS | BUSINESS_UNVERIFIED | WEBMAIL, `reasons`).
 - **Checkers:**
   - `createDnsDomainChecker({ rdap, resolver?, budgetMs? })`: DNS plus `createRdapClient({ fetch, now })`;

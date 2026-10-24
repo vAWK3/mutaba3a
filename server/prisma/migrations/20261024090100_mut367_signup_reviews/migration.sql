@@ -1,4 +1,4 @@
--- MUT-367 (ADR-159 §7a, ADR-177): the signup screen's verdict on the SIGNUP token, and the operator's review queue.
+-- MUT-367 (ADR-159 §7a, ADR-178): the signup screen's verdict on the SIGNUP token, and the operator's review queue.
 -- Additive: two enums, two nullable/defaulted token columns with a CHECK every existing row satisfies, one table.
 --
 -- Forward-only (DEPLOYMENT.md). To revert, ship a migration that drops "signup_reviews", the CHECK and the two

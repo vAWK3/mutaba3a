@@ -7344,6 +7344,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/expenses/streak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * This personal profile’s logging streak
+         * @description MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Streak */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Streak"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/expenses/{expenseId}": {
         parameters: {
             query?: never;
@@ -8329,7 +8404,7 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["IncomeResponse"];
+                        "application/json": components["schemas"]["IncomeCaptureResponse"];
                     };
                 };
                 /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
@@ -15573,6 +15648,26 @@ export interface components {
             items: components["schemas"]["Expense"][];
             nextCursor: string | null;
         };
+        Streak: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            today: string;
+            current: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            startedOn: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            lastLoggedOn: string | null;
+            /**
+             * Format: date-time
+             * @description The instant the current streak ends unless something is logged (end of lastLoggedOn + 1 in the profile’s timezone)
+             */
+            aliveUntil: string | null;
+            /** @description The run before the gap, at least 3 days, ended within the last 7 */
+            previous: {
+                days: number;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                lastDay: string;
+            } | null;
+        };
         ExpenseDetail: components["schemas"]["Expense"] & {
             receipts: components["schemas"]["ExpenseReceipt"][];
         };
@@ -15692,6 +15787,11 @@ export interface components {
             projectId?: string;
             notes?: string;
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date. */
@@ -15779,6 +15879,9 @@ export interface components {
             color?: string | null;
             archived?: boolean;
         };
+        IncomeCaptureResponse: components["schemas"]["IncomeResponse"] & {
+            receivedCount?: number;
+        };
         CreateIncomeRequest: {
             kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -15796,6 +15899,11 @@ export interface components {
             dueDate?: string;
             method?: components["schemas"]["PaymentMethod"];
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
         };
         UpdateIncomeRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today. Received: not later than today. Owed: not more than ten years (3660 days) after it. 422 DATE_INVALID with details.bound past or future. */
@@ -16102,6 +16210,11 @@ export interface components {
             projectId?: string;
             notes?: string;
             captureSource?: components["schemas"]["CaptureSource"];
+            /**
+             * Format: date-time
+             * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+             */
+            capturedAt?: string;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         /** @description The expense with its READY receipts (the filed one among them), and the filed receipt */

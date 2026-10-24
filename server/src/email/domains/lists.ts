@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 /**
- * MUT-367 (ADR-159 §7a, ADR-177): the vendored domain lists the signup screen reads. Plain text beside this module,
+ * MUT-367 (ADR-159 §7a, ADR-178): the vendored domain lists the signup screen reads. Plain text beside this module,
  * one lower-case domain per line, `# key: value` header lines (source, commit, fetched, licence) and comments.
  * `npm run build` copies them into dist next to the compiled module.
  *

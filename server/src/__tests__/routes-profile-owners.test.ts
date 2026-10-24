@@ -210,8 +210,8 @@ describe('a co-owner owns the profile as fully as its creator', () => {
     const as = (p: Person) => p.me({ 'x-mutaba3a-profile': id, ...idem() });
     expect((await h.app.request('/v1/customers', json({ name: 'Al-Quds Bakery' }, as(lina)))).status).toBe(201);
     expect((await h.app.request('/v1/income', json({ kind: 'received', amount: '300.00', currency: 'ILS', occurredOn: '2026-10-08' }, as(lina)))).status).toBe(201);
-    const capture = (by: Person) =>
-      h.store.payments.capture({ organizationId: id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: by.userId, captureSource: 'app' }, h.clock.now);
+    const capture = async (by: Person) =>
+      (await h.store.payments.capture({ organizationId: id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: by.userId, captureSource: 'app' }, h.clock.now)).payment;
     const mine = await capture(lina);
     const theirs = await capture(basel);
     const redate = (paymentId: string) => h.app.request(`/v1/payments/${paymentId}`, json({ receivedOn: '2026-10-01' }, lina.me({ 'x-mutaba3a-profile': id, 'if-match': '1' }), 'PATCH'));

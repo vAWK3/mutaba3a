@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuditEventInput, EmailDomainClass, LedgerStore } from '../ports.js';
 
 /**
- * MUT-367 storage contract (ADR-159 §7a, ADR-177): the operator's signup review queue. A PENDING_REVIEW redeem writes
+ * MUT-367 storage contract (ADR-159 §7a, ADR-178): the operator's signup review queue. A PENDING_REVIEW redeem writes
  * its review row in the same transaction; approve opens the account and starts the trial; decline hard-deletes the
  * empty account (D12, D28) and keeps the review with no person; decisions never race each other.
  */

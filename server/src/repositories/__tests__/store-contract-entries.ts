@@ -25,7 +25,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
     const conversion = (organizationId: string, s: number) =>
       store.conversions.create({ organizationId, occurredOn: '2026-10-08', amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, at(s));
     const capture = (organizationId: string, s: number) =>
-      store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: 'app' }, at(s));
+      store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
     const owed = (s: number) =>
       store.receivables.createAdjustment(
         { organizationId: b.id, customerId: client.id, projectId: null, currency: 'ILS', netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Logo', dueDate: '2026-10-31', postingDate: '2026-10-08', postedAt: at(s), createdByUserId: user.id, requestId: null },
@@ -35,6 +35,39 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
   }
 
   describe(`${name} LedgerStore entries contract (MUT-270)`, () => {
+    it('MUT-339: loggedDays — distinct logged days in the zone, live rows only, newest first, since the bound', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const when = (iso: string) => new Date(iso);
+      const exp = (iso: string) =>
+        store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-08', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id }, when(iso));
+      const cap = (iso: string) =>
+        store.payments.capture({ organizationId: w.a.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, when(iso)).then((r) => r.payment);
+
+      await exp('2026-10-18T21:30:00Z'); // 00:30 on 10-19 in Jerusalem
+      await cap('2026-10-17T10:00:00Z');
+      await store.conversions.create({ organizationId: w.a.id, occurredOn: '2026-10-08', amountMinor: 100n, currency: 'USD', toAmountMinor: 365n, toCurrency: 'ILS', notes: null, createdByUserId: w.user.id }, when('2026-10-16T10:00:00Z'));
+      const undone = await cap('2026-10-15T10:00:00Z');
+      await store.payments.undoCapture(w.a.id, undone.id, w.user.id, when('2026-10-15T10:01:00Z'));
+      const deleted = await exp('2026-10-14T10:00:00Z');
+      await store.expenses.softDelete(w.a.id, deleted.id, when('2026-10-14T10:01:00Z'), 'unlink');
+      await exp('2026-09-01T10:00:00Z'); // before the bound
+      await exp('2026-10-13T10:00:00Z');
+      await exp('2026-10-13T12:00:00Z'); // same day twice → once
+
+      const since = when('2026-10-01T00:00:00Z');
+      expect(await store.entries.loggedDays(w.a.id, since, 'Asia/Jerusalem')).toEqual(['2026-10-19', '2026-10-17', '2026-10-13']);
+      expect(await store.entries.loggedDays(w.a.id, since, 'UTC')).toEqual(['2026-10-18', '2026-10-17', '2026-10-13']);
+      expect(await store.entries.loggedDays(w.other.id, since, 'UTC')).toEqual([]);
+    });
+
+    it('MUT-339: an Owed counts on the day it was logged', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      await w.owed(5);
+      expect(await store.entries.loggedDays(w.b.id, new Date('2026-10-01T00:00:00Z'), 'Asia/Jerusalem')).toEqual(['2026-10-18']);
+    });
+
     it('merges every kind across the given organizations, newest logged first, and nothing from others', async () => {
       const store = await makeStore();
       const w = await world(store);
@@ -170,7 +203,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const conversion = (organizationId: string, occurredOn: string, s: number) =>
         store.conversions.create({ organizationId, occurredOn, amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: w.user.id }, at(s));
       const capture = (organizationId: string, receivedOn: string, s: number) =>
-        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s));
+        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 25_000n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
       const owed = (postingDate: string, s: number) =>
         store.receivables.createAdjustment(
           { organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', netMinor: 50_000n, vatMinor: 0n, grossMinor: 50_000n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Logo', dueDate: '2026-10-31', postingDate, postedAt: at(s), createdByUserId: w.user.id, requestId: null },

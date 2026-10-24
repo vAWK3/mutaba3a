@@ -93,7 +93,11 @@ const accepted = { description: 'Accepted. The same answer for every address, wh
 export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHono<AppEnv> {
   const { store, settings, mailer, logger, options } = deps;
   const clock = options.clock ?? SYSTEM_CLOCK;
-  const domainScreen = options.domainScreen ?? createDomainScreen({ checker: createFixtureDomainChecker(deps.now), now: deps.now, logger });
+  // Built on first use when not injected: the fixture screen reads the vendored lists from disk, which the portal's
+  // local mode (createApp in a browser or jsdom) must never do just by composing the app. index.ts injects the
+  // production screen, built at boot so a bad list still fails the deploy.
+  let fallbackScreen: DomainScreen | null = null;
+  const domainScreen = (): DomainScreen => options.domainScreen ?? (fallbackScreen ??= createDomainScreen({ checker: createFixtureDomainChecker(deps.now), now: deps.now, logger }));
   const app = new OpenAPIHono<AppEnv>();
 
   // The switch answers before the body is validated, so a closed signup is a 404 whatever is sent (D10).
@@ -180,7 +184,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
       // depends only on the address. The floor runs from before the screen and covers its budget too (D25 as built,
       // code review): a cached domain answers no faster than a fresh one, and the branches still get a full floor.
       const startedMs = clock.now();
-      const screened = await domainScreen.screen(email);
+      const screened = await domainScreen().screen(email);
       if (screened.kind === 'refused') throw new ApiError('EMAIL_NOT_ACCEPTED', 'Please use a permanent work email address', { reason: screened.reason });
       const domain = { domainClass: screened.domainClass, domainReasons: screened.reasons };
       const floorMs = options.floors.signupMs + (options.floors.screenMs ?? 0);

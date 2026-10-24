@@ -1,5 +1,5 @@
 /**
- * MUT-367 (ADR-159 §7a, ADR-177): what the facts about a domain mean for a signup. Pure: the facts come from a
+ * MUT-367 (ADR-159 §7a, ADR-178): what the facts about a domain mean for a signup. Pure: the facts come from a
  * `DomainChecker` (DNS and RDAP in production, a fixture in tests and QA).
  */
 

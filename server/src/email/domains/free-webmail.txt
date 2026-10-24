@@ -1,5 +1,5 @@
 # Free webmail domains: a signup here waits for the operator's review (PENDING_REVIEW, reason "webmail").
-# MUT-367 (ADR-159 §7a Q4b, ADR-177). A domain here also covers its subdomains. Moving a provider to instant
+# MUT-367 (ADR-159 §7a Q4b, ADR-178). A domain here also covers its subdomains. Moving a provider to instant
 # signup is an edit to this file plus a recorded decision, not code.
 # source: hand-maintained
 # commit: none
