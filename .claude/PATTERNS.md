@@ -2741,7 +2741,7 @@ First instance: `accountSetup.issueSignup` / `redeemSignup`.
 - Each test sends its own `X-Forwarded-For` (`playwright.clientIpHeader`) so per-IP budgets don't add up.
 - **First instance:** `qa/support/selfservice-live.mjs` (the `portal-selfservice` app).
 
-## Patterns added by MUT-291 (2026-10-24, ADR-184)
+## Patterns added by MUT-291 (2026-10-24, ADR-185)
 
 ### Pattern: Replay untrusted records through the server's own routes in a throwaway app, then land them in one write
 Imported data is never written field by field into the live store. It is mapped to requests and sent through `createLocalApp` over a fresh `MemoryLedgerStore`, with no persistence and no rate limit, so every route rule checks it. Its snapshot is then checked against the source and written once with `applyRestore`. A 4xx is the record's answer and gets listed; a 5xx aborts.

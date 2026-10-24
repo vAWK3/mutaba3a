@@ -181,7 +181,7 @@ IndexedDB belongs to its origin, so without a bridge both groups lose their reco
 | E4 | A totals mismatch blocks the write, it never just warns | plan |
 | E5 | Your data › Restore also accepts the old app's backup `.json` | plan |
 
-ADR-184 records E1/E2/E4/E5 and the protocol. Its alternatives considered:
+ADR-185 records E1/E2/E4/E5 and the protocol. Its alternatives considered:
 - sender-side mapping (refused by `LOCAL_RULES`);
 - POSTs into the live store;
 - snapshot merge;
@@ -214,7 +214,7 @@ ADR-184 records E1/E2/E4/E5 and the protocol. Its alternatives considered:
 - `src/vite-env.d.ts`.
 - `scripts/__tests__/no-hardcoded-hosts.test.ts` stays green (no literals).
 - `server/DEPLOYMENT.md` §5a step 6.
-- Knowledge files: ADR-184, TD entries (§9), CHANGELOG, COMPONENT_REGISTRY, PATTERNS (cross-origin handoff), TEST_PLAN, SYSTEM_OVERVIEW.
+- Knowledge files: ADR-185, TD entries (§9), CHANGELOG, COMPONENT_REGISTRY, PATTERNS (cross-origin handoff), TEST_PLAN, SYSTEM_OVERVIEW.
 
 **Not changed:** no server code and no API contract change (no new route; the portal ships inside the API image, so it still releases with `make release server`). No Dexie schema version.
 
@@ -280,9 +280,9 @@ Commands: `npm run lint`, `npm run typecheck`, `npm run test:run`, `npm run buil
 
 ## 9. Tech debt opened
 
-- **TD-226:** CSV-imported JOD rows can't be told apart (TD-112), so the carry-over only warns.
-- **TD-227:** after a carry-over the old app still accepts edits. The banner says they won't follow, but nothing stops it. MUT-292 ends this.
-- **TD-228:** the carry-over QA app can reload a page once on a cold dependency cache (§12).
+- **TD-227:** CSV-imported JOD rows can't be told apart (TD-112), so the carry-over only warns.
+- **TD-228:** after a carry-over the old app still accepts edits. The banner says they won't follow, but nothing stops it. MUT-292 ends this.
+- **TD-229:** the carry-over QA app can reload a page once on a cold dependency cache (§12).
 
 ## 10. Cost, privacy, i18n
 
@@ -299,7 +299,7 @@ Built to §3–§11, with these departures, each found while building:
 - **The old app's done state shows what arrived** (the new address's counts), not both sides' figures side by side. The totals gate (E4) already holds them equal before anything is saved.
 - **The replay's in-page requests use `http://localhost`**, the loopback origin the portal bundle is already reviewed for; `http://local` failed `test:bundles`.
 - **The web dev server leaves the gate off** unless `MUTABA3A_CARRY_OVER` turns it on, so the app's own QA still opens the app. `off` turns it off on a build.
-- **QA's three dev servers each get their own Vite cache** (`qa/support/carry-over.vite.ts`). Sharing one, they reloaded each other's pages mid-test. TD-228 is now the cold-cache reload that remains (the hostname-trick TD was dropped by R6).
+- **QA's three dev servers each get their own Vite cache** (`qa/support/carry-over.vite.ts`). Sharing one, they reloaded each other's pages mid-test. TD-229 is now the cold-cache reload that remains (the hostname-trick TD was dropped by R6).
 - **T-P1:** 20,000 records in 4.3 s, heap +149 MB (Node). No Web Worker (R5).
 - **Not verified:** a real cross-host run, which is the operator's day-7 check (§6 step 3, `server/DEPLOYMENT.md` §5a step 6), and iOS standalone on a device (stubbed in QA).
 
@@ -472,8 +472,8 @@ Critical gaps (no test, no handling and silent): none.
 ### NOT in scope
 
 - **Moving carried records into a signed-in account:** MUT-290 (Backlog). E3 only says where they went.
-- **Stopping edits in the old app after a carry-over:** TD-227. MUT-292 retires the app.
-- **Detecting the 10× CSV JOD rows:** not possible from the data (TD-112, TD-226). The carry-over warns.
+- **Stopping edits in the old app after a carry-over:** TD-228. MUT-292 retires the app.
+- **Detecting the 10× CSV JOD rows:** not possible from the data (TD-112, TD-227). The carry-over warns.
 - **A Web Worker replay:** only if T-P1 says it's needed (R5).
 - **The phone's legacy-host removal itself:** Flutter repo, the next phone release after stage `redirect` (§6 step 4).
 
@@ -512,7 +512,7 @@ Critical gaps (no test, no handling and silent): none.
 - [ ] **T8 (P2, human: ~1d / CC: ~1h):** release-QA: app `carry-over` on three `127.0.0.1` ports, seven features, specs (R6, R7).
   - Files: `qa/`.
   - Verify: `release-qa run --attach --only carry-over.*`; `release-qa lint` clean.
-- [ ] **T9 (P2, human: ~2h / CC: ~15min):** docs: ADR-184, TD-226/222, CHANGELOG, registry, patterns, `DEPLOYMENT.md` §5a step 6.
+- [ ] **T9 (P2, human: ~2h / CC: ~15min):** docs: ADR-185, TD-227/228, CHANGELOG, registry, patterns, `DEPLOYMENT.md` §5a step 6.
   - Verify: review.
 
 ### Worktree parallelization
@@ -540,7 +540,7 @@ Lane A: T1 → T3 → T4 → T5 (shared `src/hosted/local`). Lane B: T2 → T6. 
 - Performance review: 1 issue found (R5).
 - NOT in scope: written.
 - What already exists: written.
-- TODOS.md updates: 0 items proposed (the debt is tracked as TD-226/222).
+- TODOS.md updates: 0 items proposed (the debt is tracked as TD-227/228).
 - Failure modes: 0 critical gaps flagged (one watch item: the memory on phones, T-P1).
 - Unresolved decisions: 0 in this review (E3 settled by Basel as D10: save into the signed-out space and explain).
 - Outside voice: codex, unavailable. Codex is not installed, and the native Plan reviewer gave no complete report within five minutes.

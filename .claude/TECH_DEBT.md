@@ -18,7 +18,7 @@
 
 ## Open Debt
 
-### TD-226: CSV-imported JOD amounts can't be told apart, so the carry-over only warns
+### TD-227: CSV-imported JOD amounts can't be told apart, so the carry-over only warns
 **Status**: Open
 **Ticket**: MUT-291 (plan §3.3, TD-112)
 **Added**: 2026-10-24
@@ -26,7 +26,7 @@
 **Impact**: The free app's CSV import stored JOD income and expenses as `parseFloat × 100`, 10× too small (TD-112), and nothing on the row marks a CSV import. The carry-over carries them as they are and shows one warning with the count.
 **Fix**: None possible from the data. A person who knows can correct them after the carry-over.
 
-### TD-227: After a carry-over, the old web app still accepts edits
+### TD-228: After a carry-over, the old web app still accepts edits
 **Status**: Open
 **Ticket**: MUT-291 (D1)
 **Added**: 2026-10-24
@@ -34,7 +34,7 @@
 **Impact**: Someone who carries over and keeps using the old app (D1 allows it) makes records that only reach the new address if they carry over again, which replaces what's there.
 **Fix**: MUT-292 retires the app at least 90 days after the bridge ships.
 
-### TD-228: The carry-over QA app can reload a page once on a cold dependency cache
+### TD-229: The carry-over QA app can reload a page once on a cold dependency cache
 **Status**: Open
 **Ticket**: MUT-291 (QA)
 **Added**: 2026-10-24
@@ -42,7 +42,7 @@
 **Impact**: Each of the three dev servers (qa/support/carry-over.vite.ts) has its own Vite cache, but a cold cache still optimises lazily imported dependencies on first use and reloads the page once. The project's Playwright warm-up is off, so a first run in a fresh QA worktree can need its retry.
 **Fix**: Pre-bundle the lazy local chunk's dependencies (`optimizeDeps.include`) in the carry-over wrapper, or turn the warm-up on for this app.
 
-### TD-229: The totals gate checks only the rows the mapper carried
+### TD-230: The totals gate checks only the rows the mapper carried
 **Status**: Open
 **Ticket**: MUT-291 (E4, /qa-reconcile review); fix in MUT-428
 **Added**: 2026-10-24
@@ -50,7 +50,7 @@
 **Impact**: E4 proves the replay made exactly what the mapper sent. Rows the mapper or the rules left out are listed under Not carried with a count, never with an amount. Examples: a currency MTB3A doesn't support, a business over the cap, an archived entry, a settle the date floor refused. Someone can't see that, say, ₪1,200 of what was paid didn't come.
 **Fix**: Show the free app's own totals for every live row next to the carried ones, with the difference per currency.
 
-### TD-230: The receivers trust the two legacy origins with no end date
+### TD-231: The receivers trust the two legacy origins with no end date
 **Status**: Open
 **Ticket**: MUT-291 (security review), MUT-292
 **Added**: 2026-10-24
@@ -58,7 +58,7 @@
 **Impact**: Every portal build at stage `live` or `redirect` accepts a carry-over from `mutaba3a.netlify.app` and the run.app host. If the Netlify site were deleted or renamed, anyone could claim the subdomain and post a crafted backup. The person would still see the summary and have to confirm.
 **Fix**: Keep the Netlify site name reserved for as long as any build trusts it (MUT-292's runbook). Give the sources a removal point: a stage after `redirect`, or a baked end date.
 
-### TD-231: The old app and the receiver must ship in order
+### TD-232: The old app and the receiver must ship in order
 **Status**: Open
 **Ticket**: MUT-291 (API-contract review)
 **Added**: 2026-10-24

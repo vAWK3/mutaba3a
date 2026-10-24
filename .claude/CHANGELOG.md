@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-24 — MUT-291 review fixes: the carry-over fails loudly, never quietly (ADR-184 amendment 1)
+## [Unreleased] - 2026-10-24 — MUT-291 review fixes: the carry-over fails loudly, never quietly (ADR-185 amendment 1)
 
 **Why:** `/qa-reconcile` ran ten reviewers on the branch. Their findings:
 - One unreadable table could arrive empty and still be marked carried.
@@ -67,13 +67,13 @@
   - Copy: English "Arrived" without broken plurals; Arabic title «انتقلت متابعة إلى عنوان جديد» and «مؤقتًا»; one "Download my records file" label on both old pages; an API reason isolated inside its sentence.
 
 ### Technical
-- MUT-291 moves to ADR-184 and TD-226/227/228. ADR-181 and TD-221/222 are MUT-361's, and ADR-182/183 and TD-223..225 are claimed by MUT-419 and MUT-254.
-- New TD-229 (the gate sees only carried rows), TD-230 (the legacy origins have no end date), TD-231 (release order).
+- MUT-291 moves to ADR-185 and TD-227/228/229, the next free numbers when it landed: ADR-181 and TD-221/222 are MUT-361's, ADR-183 and TD-224/225 MUT-254's, ADR-184 and TD-223/226 MUT-419's, and ADR-182 is held by MUT-424's plan.
+- New TD-230 (the gate sees only carried rows), TD-231 (the legacy origins have no end date), TD-232 (release order).
 - Removed: `prepareFreeAppCarryOver`, `ReplayOptions.yieldEvery`, `CARRIED_EXPONENT` and its drift test. Added: `recordsFileName` shared by three downloads; `CHANGE_CODES` / `NOT_CARRIED_CODES`.
 
 ---
 
-## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-184)
+## [Unreleased] - 2026-10-24 — Bring your records from the old web app (and the old address) to the new address (MUT-291, ADR-185)
 
 **Why:** the free web app's records live in its own browser origin and the new address can't read them (MUT-284). Stage `redirect` needs the old address's `/carry-over` page. Plan, decisions D1–D10 and the eng review: `.claude/designs/mut-291-carry-over.md`.
 
