@@ -97,6 +97,10 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     await rm(this.pathOf(key), { force: true });
   }
 
+  async removePrefix(prefix: string): Promise<void> {
+    await rm(this.pathOf(prefix), { recursive: true, force: true });
+  }
+
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const path = this.pathOf(key);
     if (!(await this.head(key))) return null;

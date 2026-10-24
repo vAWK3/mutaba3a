@@ -74,6 +74,8 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
       // MUT-418: a test person has answered the first-run trial step unless a test says otherwise.
       trialPrompt: { welcomedAt: '2026-10-01T09:00:00.000Z', welcomeAnswer: 'skipped', bannerSnoozedUntil: null },
       status: 'ACTIVE',
+      // MUT-333: not closing unless a test says so.
+      closure: null,
     },
     profiles,
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },

@@ -18,6 +18,38 @@
 
 ## Open Debt
 
+### TD-240: The hard delete scans `audit_events` and `idempotency_keys` as text, once per person
+**Status**: Accepted (pilot volume)
+**Ticket**: MUT-333 (R24)
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: To clear audit details and stored replays that name the person (R3), the purge runs `metadata::text LIKE` and `"responseBody"::text LIKE` over the whole tables inside its 120 s transaction, which holds the user and billing locks. Fine at today's size; slow once `audit_events` is large.
+**Fix**: Scope the scans to the profiles the person belonged to, or do one scan per run for every purged id.
+
+### TD-237: Co-owners get no notice when a closing partner's subscription covered their shared profile
+**Status**: Open
+**Ticket**: MUT-333 (R11)
+**Added**: 2026-10-24
+**Priority**: Medium (only shared Business profiles, a pilot-path feature)
+**Impact**: Coverage follows the creator (`profileOwnerOf`, TD-193). When the creator closes, close sets their subscription to end at the period end; the co-owners keep working until then, and after the hard delete the profile passes to one of them (ADR-188 §5), whose own plan then decides. Nobody tells the co-owners during the grace, so the profile can turn read-only or locked for them with no warning. The drawer only warns the closer.
+**Fix**: Mail the co-owners at close (a new template) and/or say it on the shared profile's banner; settle with TD-193's co-owner coverage.
+
+### TD-238: Email suppressions keep a deleted person's address
+**Status**: Accepted (pending Basel, D9)
+**Ticket**: MUT-333
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: `email_suppressions` holds the address of a hard bounce or a complaint in plain text, and the purge keeps it, so a complainer is never mailed again even if someone else types their address. AC4's literal "no row for the user" is read as rows of the account; the catalog scan exempts the table.
+**Fix**: Store a digest instead of the address (the mailer looks it up by the normalized address, so a digest works), then delete nothing.
+
+### TD-239: `profile-rows.sh purge-user` duplicates part of the hourly purge
+**Status**: Open
+**Ticket**: MUT-333
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: The operator's script still deletes an account and its profiles by hand, with its own catalog-driven SQL, but without MUT-333's transfer of shared profiles, audit scrub, SIGNUP-link rule or Stripe step. Two implementations can drift.
+**Fix**: Make `purge-user` close the account through the admin API and run `accounts:purge` for it, or retire it once the hourly purge has run for a release.
+
 ### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
 **Status**: Open
 **Ticket**: MUT-425 (eng D1/D2)

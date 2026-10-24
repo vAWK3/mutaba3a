@@ -78,6 +78,9 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.
     latestTermsAcceptance: 'read',
     acceptTerms: { write: 'identity' },
+    // MUT-333: closing and keeping one's own account, the same identity-row write as changePassword.
+    requestClosure: { write: 'identity' },
+    cancelClosure: { write: 'identity' },
     // MUT-324 T1: the operator's "who is behind on the terms" list.
     listLatestTermsVersions: 'operator',
   },
@@ -89,6 +92,16 @@ export const STORE_ACCESS: StoreAccess = {
   // MUT-366: the self-service routes are public, so they run with no guard (like redeem); no credential may call these.
   accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator', issueSignup: 'operator', redeemSignup: 'operator', pruneSignupLinks: 'operator' },
   // MUT-367: the review queue is the operator's (/admin and the CLI); the SIGNUP redeem writes its rows inside redeemSignup.
+  // MUT-333: the hard delete runs only from /jobs and /admin, on the unguarded store.
+  accountPurge: {
+    listDue: 'operator',
+    countClosing: 'operator',
+    claim: 'operator',
+    planOf: 'operator',
+    purge: 'operator',
+    listStoragePurges: 'operator',
+    finishStoragePurge: 'operator',
+  },
   signupReviews: { list: 'operator', findByUser: 'operator', digestFacts: 'operator', markNotified: 'operator', approve: 'operator', decline: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',

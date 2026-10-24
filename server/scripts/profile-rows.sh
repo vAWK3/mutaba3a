@@ -5,7 +5,8 @@
 #   export      write one profile's records as CSV files, plus the lines that copy
 #               its receipts out of the bucket ("we send you your records" until MUT-325)
 #   restore     put one profile back as a restored copy has it (runbook §4.2)
-#   purge-user  delete a closed account and every profile it owns (until MUT-333)
+#   purge-user  delete an account and every profile it owns, by hand (the hourly job does it for closed accounts
+#               since MUT-333: npm run accounts:purge; this stays for the operator's own cases)
 #
 #   DATABASE_URL=… scripts/profile-rows.sh export --organization-id <uuid> --out <dir> [--bucket <name>]
 #   SOURCE_DATABASE_URL=<restored copy> DATABASE_URL=<live> scripts/profile-rows.sh restore --organization-id <uuid> [--dry-run] [--yes]
@@ -29,9 +30,10 @@
 #     SYSTEM event organization.restored records the restore.
 #   * purge-user refuses while the person is a member of a profile they don't own
 #     (revoke:user first, which audits it), while a profile they created has
-#     co-owners (MUT-373), or while rows in someone else's profile still point at
-#     them — a co-owner's records on a shared profile included. Those are MUT-333's
-#     decisions, not the operator's.
+#     co-owners (MUT-373), or while RESTRICT rows in someone else's profile still
+#     point at them. Since MUT-333 (D7) the creator columns are SET NULL, so their
+#     records elsewhere stay, anonymized. MUT-333's own purge (accounts:purge) also
+#     passes a shared profile to its co-owner and scrubs the audit; prefer it.
 #   * Neither touches the attachments bucket: they print the gcloud lines to run.
 # Bash 3.2 compatible (macOS /bin/bash).
 set -euo pipefail

@@ -235,21 +235,12 @@ if (!url || !hasPsql) {
       }
     });
 
-    it('refuses while rows in someone else\'s profile still point at the person', async () => {
-      const expense = await live.db.expense.create({
-        data: { organizationId: ids.firm, occurredOn: '2026-09-30', amountMinor: 100n, currency: 'ILS', createdByUserId: ids.owner, createdAt: at, updatedAt: at },
-      });
-      try {
-        const r = profileRows(env(), 'purge-user', '--user-id', ids.owner, '--yes');
-        expect(r.status).not.toBe(0);
-        expect(r.err).toContain('expenses.createdByUserId');
-      } finally {
-        await live.db.expense.delete({ where: { id: expense.id } });
-      }
-    });
-
     it('deletes the person, every profile they own and its rows, their terms rows everywhere, and nothing of anyone else', async () => {
       await live.db.auditEvent.create({ data: { organizationId: ids.firm, actorType: 'USER', actorId: ids.owner, action: 'user.terms_accepted', entityType: 'user', entityId: ids.owner } });
+      // MUT-333 (D7): a record the person entered in someone else's profile stays there, anonymized by the foreign key.
+      const inFirm = await live.db.expense.create({
+        data: { organizationId: ids.firm, occurredOn: '2026-09-30', amountMinor: 100n, currency: 'ILS', createdByUserId: ids.owner, createdAt: at, updatedAt: at },
+      });
       const othersBefore = { customers: await live.db.customer.count({ where: { organizationId: ids.otherPersonal } }), firmAudit: await live.db.auditEvent.count({ where: { organizationId: ids.firm } }) };
 
       const dry = profileRows(env(), 'purge-user', '--user-id', ids.owner, '--dry-run', '--bucket', 'demo-bucket');
@@ -269,6 +260,7 @@ if (!url || !hasPsql) {
       expect(await live.db.auditEvent.count({ where: { organizationId: ids.firm } })).toBe(othersBefore.firmAudit - 1);
       expect(await live.db.customer.count({ where: { organizationId: ids.otherPersonal } })).toBe(othersBefore.customers);
       expect(await live.db.user.count({ where: { id: ids.other } })).toBe(1);
+      expect((await live.db.expense.findUnique({ where: { id: inFirm.id } }))?.createdByUserId).toBeNull();
       expect(r.out).toContain(`gcloud storage rm --recursive 'gs://demo-bucket/org/${ids.business}/'`);
       expect(existsSync(SCRIPT)).toBe(true);
     });

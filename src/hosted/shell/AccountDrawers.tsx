@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { omitShellOverlay, parseProfileDrawer, type ProfileDrawerSearch } from '../data/filters';
 import { BillingDrawer } from '../components/BillingDrawer';
 import { ChangePasswordDrawer } from '../components/ChangePasswordDrawer';
+import { CloseAccountDrawer } from '../components/CloseAccountDrawer';
 import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
@@ -31,6 +32,8 @@ export function useAccountDrawers() {
     openBilling: (step?: 'subscribe' | 'welcome', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
     /** The step's own Back replaces its entry: browser Back afterwards never reopens the step (review). */
     leaveBillingStep: () => go({ billing: true }, true),
+    /** MUT-333: Close my account. */
+    openCloseAccount: () => go({ closeAccount: true }, false),
     close: () => go({}, true),
   };
 }
@@ -41,6 +44,8 @@ export function AccountDrawers() {
   const local = useIsLocalMode();
   if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} />;
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
+  // MUT-333: an account's, never this device's; Download my records opens Your data in its place.
+  if (drawers.state.closeAccount && !local) return <CloseAccountDrawer onClose={drawers.close} onDownload={drawers.openYourData} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }

@@ -15,6 +15,7 @@ import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/profiles.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/fx-rates.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/entries.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing.js';
+import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -268,7 +269,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
   it('every organization-independent endpoint is classified', () => {
     const all = [
       ...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES,
-      ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);

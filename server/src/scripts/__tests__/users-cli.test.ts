@@ -429,6 +429,25 @@ describe('billing verbs (MUT-358)', () => {
     expect(outbox.list({ to: 'omar@studio.ps' })).toHaveLength(1);
   });
 
+  it('accounts-purge --dry-run lists who would be deleted and changes nothing; without it, deletes them (MUT-333)', async () => {
+    const store = new MemoryLedgerStore();
+    const h = harness({ store });
+    const user = await person(h, 'leaving@studio.ps');
+    const longAgo = new Date(Date.now() - 31 * 24 * 3_600_000);
+    const session = await store.sessions.create({ userId: user.id, tokenDigest: 'd'.repeat(64), kind: 'cookie', at: longAgo, idleExpiresAt: new Date(), absoluteExpiresAt: new Date(), userAgent: null });
+    await store.users.requestClosure({ userId: user.id, at: longAgo, deleteAfter: new Date(longAgo.getTime() + 30 * 24 * 3_600_000), endedSubscriptionIds: [], exceptSessionId: session.id, audit: [] });
+
+    expect(await h.run(['accounts-purge', '--dry-run'])).toBe(0);
+    expect(h.out).toContain(`would-purge  ${user.id}  delete 1 profile(s), pass 0 to a co-owner, leave 0, 0 Stripe customer(s)`);
+    expect(h.out.at(-1)).toBe('1 closing, 1 due. Dry run: 1 would be deleted.');
+    expect(await store.users.getById(user.id)).not.toBeNull();
+
+    h.out.length = 0;
+    expect(await h.run(['accounts-purge'])).toBe(0);
+    expect(h.out.at(-1)).toBe('1 closing, 1 due. Deleted 1, skipped 0, failed 0; bucket prefixes emptied 0, still queued 1.');
+    expect(await store.users.getById(user.id)).toBeNull();
+  });
+
   it('billing-status flags nobody while every country is open to consumers (MUT-418)', async () => {
     const checkout = new FakeCheckoutGateway();
     const stripe = new FakeStripeGateway(() => new Date());

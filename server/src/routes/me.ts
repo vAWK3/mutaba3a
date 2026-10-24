@@ -72,7 +72,17 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
   profiles.sort((a, b) => rank(a) - rank(b));
   const [ownedProfiles, termsNow] = await Promise.all([store.organizations.countOwnedBy(user.id), terms && termsStatus(store, user.id, terms)]);
   return {
-    user: { id: user.id, email: user.email, displayName: user.displayName, locale: user.locale, malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions), trialPrompt: resolveTrialPrompt(user.trialPrompt), status: user.status },
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      locale: user.locale,
+      malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
+      trialPrompt: resolveTrialPrompt(user.trialPrompt),
+      status: user.status,
+      // MUT-333: while closing, the clients show only Keep my account and Sign out.
+      closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
+    },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },
     currencies: [...SUPPORTED_CURRENCIES],

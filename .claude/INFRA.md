@@ -174,6 +174,7 @@ Money M8.
 | Attachments bucket, incl. 14 days of soft-deleted receipts (TD-190) | cents/mo at pilot volume (STANDARD rate; soft-deleted bytes bill the same until purged) |
 | Secret Manager, Artifact Registry, uptime checks + 5 alert conditions (MUT-328) | < $1/mo (checks within the 1M runs/month free; ~$0.10/condition/month if alerting charges apply) |
 | Stripe sync (MUT-360): 3 secrets, 1 Cloud Scheduler job, 3 log-match alert policies, Stripe API reads | about $0.18/mo for the secrets; the job is within the 3 free jobs per billing account; the policies ~$0.10/condition/month if alerting charges apply; Stripe reads are free |
+| Account deletion (MUT-333): 1 Cloud Scheduler job (hourly), 2 log-match alert policies, Stripe deletes | free while the billing account has at most 3 Scheduler jobs, $0.10/mo past that; the policies ~$0.10/condition/month if alerting charges apply |
 | Mail (MUT-359) | the shared Barmajiyat Resend plan (free: 100/day across both products; Pro $20/mo for 50k); 2 secrets ≈ $0.12/mo; 2 log-match alerts ~$0.10/condition/month if charged |
 
 ADR-005's "zero server costs" still holds for the desktop/PWA; the hosted API

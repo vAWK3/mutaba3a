@@ -1,11 +1,12 @@
 import type { UserLocale } from '../../repositories/ports.js';
-import type { MailTemplateId, TemplateVars } from '../ports.js';
+import type { CalendarDay, MailTemplateId, TemplateVars } from '../ports.js';
 import type { MailBody } from './layout.js';
 
 /**
  * MUT-359: every mail's words, English and Arabic side by side (brief §8.4). Server-generated strings, so a record
  * per language is enough (precedent: PERSONAL_PROFILE_NAME); there is no i18n library on the server. Arabic is the
- * default wherever a caller has no language (ADR-077). No amount, currency or date ever appears (ADR-159 §5).
+ * default wherever a caller has no language (ADR-077). No amount, currency or date ever appears (ADR-159 §5), except
+ * the deletion day of `account-closing` (MUT-333, ADR-188), never a money date.
  */
 type Copy<T extends MailTemplateId> = Record<UserLocale, (vars: TemplateVars[T]) => MailBody>;
 
@@ -279,6 +280,35 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
   }),
 };
 
+/**
+ * MUT-333: the deletion day in the mail's language, as the portal writes dates (format/dates.ts getLocale): a long
+ * calendar date, read in UTC so no zone moves it to another day.
+ */
+export function mailDay(day: CalendarDay, locale: UserLocale): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(day.year, day.month - 1, day.day)));
+}
+
+const accountClosing: Copy<'account-closing'> = {
+  en: ({ deleteOn, signInLink }) => ({
+    subject: `Your MTB3A account will be deleted on ${mailDay(deleteOn, 'en')}`,
+    intro: [
+      [`You closed your MTB3A account. We'll delete it, with all its records and receipts, on ${mailDay(deleteOn, 'en')}.`],
+      ["Until then you can sign in and keep it. After that it can't be recovered, and the copies in our backups expire two weeks later."],
+    ],
+    action: { label: 'Sign in to keep my account', href: signInLink },
+    outro: [["If you didn't close it, sign in, keep your account and change your password."]],
+  }),
+  ar: ({ deleteOn, signInLink }) => ({
+    subject: `سيُحذف حسابك في متابعة بتاريخ ${mailDay(deleteOn, 'ar')}`,
+    intro: [
+      [`أغلقتَ حسابك في متابعة. سنحذفه مع كل سجلاته وإيصالاته بتاريخ ${mailDay(deleteOn, 'ar')}.`],
+      ['حتى ذلك الحين يمكنك تسجيل الدخول والإبقاء عليه. بعدها لا يمكن استعادته، وتنتهي النسخ الموجودة في نسخنا الاحتياطية بعد أسبوعين.'],
+    ],
+    action: { label: 'سجّل الدخول للإبقاء على حسابي', href: signInLink },
+    outro: [['إذا لم تكن أنت من أغلقه، سجّل الدخول وأبقِ على حسابك ثم غيّر كلمة المرور.']],
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -292,4 +322,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'trial-ending-soon': trialEndingSoon,
   'trial-ended': trialEnded,
   'trial-locking-soon': trialLockingSoon,
+  'account-closing': accountClosing,
 };

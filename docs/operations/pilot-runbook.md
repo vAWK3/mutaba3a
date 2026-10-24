@@ -617,8 +617,29 @@ Basel's decision (2026-10-19, MUT-327 and MUT-333):
 3. Then a hard delete.
 4. Backups age out **14 days** after that.
 
-The operator does all of this by hand until MUT-333 ships "Close my account". A lapsed payment never
-starts deletion: the account goes read-only instead.
+A lapsed payment never starts deletion: the account goes read-only instead.
+
+**Since MUT-333 (ADR-188) the person does it themselves, and the server finishes it.** Point anyone who asks to
+You › Account's **Close my account** (portal; the phone follows with MUT-371/364): Download my records is offered
+first, the password confirms, and from then on:
+- the account signs in only to **Keep my account** for 30 days (nothing is deleted before that);
+- their Stripe subscriptions end at the period end (past-due ones at once); a Malafat add-on is Malafat's;
+- the hourly `mutaba3a-account-purge` job deletes it within the hour after day 30: their own profiles with every
+  record and file, their Stripe customers and every row naming them. A Business profile they share passes to a
+  co-owner; firms and Malafat profiles keep their records, without their name. Audit rows on surviving profiles
+  keep only the bare id.
+
+Your part:
+- **See who is closing or due:** `npm --prefix server run accounts:purge -- --url "$URL" --dry-run`.
+- **"Account deletion needs the operator" alert:** run the dry run, fix the cause (Stripe key scope, the bucket),
+  then run it without `--dry-run`. `reason: stripe-unavailable` means Stripe isn't configured on the server while the
+  person has a Stripe customer.
+- **Someone can't sign in to close** (lost password): recovery (`/recover`) first. Only if that fails, the manual
+  steps below remain (§7.1–§7.3), with `profile-rows.sh purge-user` as the last resort (TD-239).
+- §4.3 restores: an account deleted by the job is in the API logs (`account purged`, with the user id).
+- §7.4 still applies: tell them the backups age out 14 days after the deletion day.
+
+The manual steps below are the fallback.
 
 ### 7.1 Day 0: the request, and the export
 
@@ -670,9 +691,8 @@ nothing was deleted.
    **Co-owners (MUT-373).** `purge-user` also refuses:
    - a person who **created** a profile that still has co-owners — remove each co-owner first (`revoke:user`
      on that profile), or hand the profile over (no command yet, TD-194);
-   - a co-owner who **recorded anything** on someone else's shared profile, even after leaving it
-     (`expenses.createdByUserId` and friends are Restrict). Stop and ask: MUT-333 decides whether those records
-     move to the creator or the person is anonymized.
+   - (no longer since MUT-333: records a person entered on someone else's profile are anonymized, the creator
+     columns are SET NULL, so they no longer block a purge.)
 2. **Rehearse the purge.** This runs it all and rolls back:
 
    ```bash
@@ -682,8 +702,8 @@ nothing was deleted.
 
    It refuses, and names the reason:
    - while they're still a member of a profile they don't own (step 1);
-   - while rows in someone else's profile still point at them, such as an expense they entered in a
-     firm. That case is MUT-333's decision: **stop and ask Basel**.
+   - while a RESTRICT row in someone else's profile still points at them (none today: since MUT-333 their
+     records there are anonymized when they go).
 3. **Purge.** Type the user id when asked:
 
    ```bash

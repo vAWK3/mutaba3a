@@ -67,7 +67,7 @@ describe('local snapshot migrations', () => {
 
     expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     // 4 → 5 runs next and answers nothing on the trial prompt.
-    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, emailVerifiedAt: null, trialPrompt: null })));
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, emailVerifiedAt: null, trialPrompt: null, closure: null })));
   });
 
   it('4 → 5 (MUT-418): people arrive with nothing answered on the trial prompt (a device has no trial)', async () => {
@@ -80,7 +80,8 @@ describe('local snapshot migrations', () => {
     const after = migrate(before);
 
     expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
-    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, trialPrompt: null })));
+    // 6 → 7 runs later and leaves the person not closing.
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, trialPrompt: null, closure: null })));
   });
 
   it('5 → 6 (MUT-254): expenses arrive with no vendor, and the vendor maps start empty', async () => {
@@ -96,10 +97,24 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(6);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.exps.values()]).toEqual([...before.maps.exps.values()].map((e) => ({ ...e, vendorId: null })));
     expect(after.maps.vendors.size).toBe(0);
     expect(after.maps.vendorNames.size).toBe(0);
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('6 → 7 (MUT-333): people arrive not closing (closing is the hosted account’s)', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'closure'))]));
+    const before: StoredSnapshot = { formatVersion: 6, stateVersion: 2, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(7);
+    expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, closure: null })));
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

@@ -29,7 +29,9 @@ export function localPersonOf(person: UserRecord): UserRecord {
     id: person.id, email: LOCAL_PERSON_EMAIL, displayName: person.displayName, passwordHash: null, locale: person.locale, status: 'ACTIVE', failedSignIns: 0,
     lockedUntil: null, passwordChangedAt: person.passwordChangedAt, lastSignInAt: null, emailVerifiedAt: null, malafatSuggestions: person.malafatSuggestions,
     // MUT-418: the trial's card prompt is the hosted account's; a device has no trial.
-    trialPrompt: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    trialPrompt: null,
+    // MUT-333: closing is the hosted account's; a device's records file never carries it.
+    closure: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 

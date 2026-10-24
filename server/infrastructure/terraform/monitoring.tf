@@ -294,6 +294,56 @@ locals {
   }
 }
 
+# MUT-333 (D11, D12): the hourly hard delete logs `account purge needs the operator` for a person it had to skip (Stripe
+# failed or isn't configured), one it failed on, or a bucket prefix it couldn't empty; `account closure needs the
+# operator` when Keep my account couldn't turn a subscription back on. Scheduler logs a run that got no 2xx. Always on,
+# like the job: a closed account that isn't deleted on time breaks the privacy policy's promise.
+locals {
+  account_purge_alerts = {
+    run = {
+      display_name = "Account deletion needs the operator"
+      severity     = "WARNING"
+      filter       = "${local.stripe_api_logs} AND jsonPayload.msg=(\"account purge needs the operator\" OR \"account closure needs the operator: a subscription could not be turned back on\")"
+      doc          = "A closed account couldn't be deleted on time (`reason`: stripe-failed, stripe-unavailable, error, storage), or a kept account's subscription couldn't be turned back on. Run `npm run accounts:purge -- --url \"$URL\" --dry-run` to see who is due, fix the cause (Stripe key scope: Write on Customers and Subscriptions; the attachments bucket), then run it without --dry-run: pilot runbook §7, DEPLOYMENT.md §6g."
+    }
+    scheduler = {
+      display_name = "Account deletion job failed"
+      severity     = "ERROR"
+      filter       = "resource.type=\"cloud_scheduler_job\" AND resource.labels.job_id=\"${local.account_purge_job}\" AND severity>=ERROR"
+      doc          = "Cloud Scheduler's `${local.account_purge_job}` got no 2xx: 401 (job token rotated, the revision not rolled), 503 JOBS_NOT_CONFIGURED, or a timeout. Closed accounts stop being deleted until it runs. Read the attempt in Scheduler's logs, fix, then `gcloud scheduler jobs run ${local.account_purge_job} --location=${var.region}`: DEPLOYMENT.md §6g."
+    }
+  }
+}
+
+resource "google_monitoring_alert_policy" "account_purge" {
+  for_each     = local.alerting_enabled ? local.account_purge_alerts : {}
+  project      = var.project_id
+  display_name = each.value.display_name
+  combiner     = "OR"
+  severity     = each.value.severity
+
+  conditions {
+    display_name = each.value.display_name
+    condition_matched_log {
+      filter = each.value.filter
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "3600s"
+    }
+    auto_close = "1800s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = each.value.doc
+  }
+
+  notification_channels = local.alert_channels
+}
+
 resource "google_monitoring_alert_policy" "stripe" {
   for_each     = var.stripe_enabled && local.alerting_enabled ? local.stripe_alerts : {}
   project      = var.project_id

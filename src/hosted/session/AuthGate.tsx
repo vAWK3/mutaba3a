@@ -7,6 +7,7 @@ import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
 import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
 import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
+import { AccountClosingPage } from '../pages/auth/AccountClosingPage';
 import { HostedShell } from '../shell/HostedShell';
 import { isYouPath } from '../shell/youRoutes';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
@@ -37,6 +38,9 @@ export function AuthGate() {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 
+  // MUT-333: a closing account sees only the closing page (the server refuses everything else); before the terms,
+  // since a person leaving needn't accept new ones to keep or leave.
+  if (me.data?.user.closure) return <AccountClosingPage me={me.data} />;
   // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks
   if (me.data?.terms?.accepted === false) return <TermsUpdatePage version={me.data.terms.version} />;
   if (me.data) {

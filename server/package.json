@@ -53,6 +53,7 @@
     "billing:status": "tsx src/scripts/users.ts billing-status",
     "billing:uncovered": "tsx src/scripts/users.ts billing-uncovered",
     "billing:trial-mail": "tsx src/scripts/users.ts billing-trial-mail",
+    "accounts:purge": "tsx src/scripts/users.ts accounts-purge",
     "smoke": "tsx src/scripts/smoke.ts",
     "sentry:smoke": "tsx src/scripts/sentry-smoke.ts",
     "seed:demo-account": "tsx src/scripts/seed-demo-account.ts",

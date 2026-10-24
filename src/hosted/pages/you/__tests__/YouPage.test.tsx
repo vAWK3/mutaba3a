@@ -122,18 +122,21 @@ describe('the You page (MUT-425)', () => {
       ['Billing', 'billing=true'],
       ['Your data', 'yourData=true'],
       ['Change password', 'changePassword=true'],
+      // MUT-333
+      ['Close my account', 'closeAccount=true'],
     ])('%s opens its drawer by URL', async (name, key) => {
       const { user, router } = portal(`/p/${ORG_A}/you/account`);
       await user.click(await screen.findByRole('button', { name: new RegExp(`^${name}`) }));
       expect(locationOf(router)).toContain(key);
     });
 
-    it('shows the trial on Billing (eng review D6) and Sign out set apart, last', async () => {
+    it('shows the trial on Billing (eng review D6), Sign out set apart, and Close my account apart after it (MUT-333)', async () => {
       const trial = me([{ ...personal, billing: ent('ACTIVE', 'TRIAL', new Date(Date.now() + 9.5 * DAY).toISOString()) }]);
       portal(`/p/${ORG_A}/you/account`, trial);
       expect(await screen.findByRole('button', { name: /^Billing/ })).toHaveTextContent('10 days left in your free trial');
       const rows = screen.getAllByRole('button').filter((b) => b.classList.contains('hp-you-row'));
-      expect(rows[rows.length - 1]).toHaveTextContent('Sign out');
+      expect(rows[rows.length - 2]).toHaveTextContent('Sign out');
+      expect(rows[rows.length - 1]).toHaveTextContent('Close my account');
     });
   });
 
