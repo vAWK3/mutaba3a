@@ -23,6 +23,8 @@ import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
 import { EMAIL_WEBHOOK_POLICY, emailWebhookRoutes } from './routes/email-webhook.js';
 import { devOutboxRoutes } from './routes/dev-outbox.js';
+import { devAttachmentRoutes } from './routes/dev-attachments.js';
+import type { LocalAttachmentStorage } from './attachments/local-storage.js';
 import { createMailer } from './email/mailer.js';
 import type { Mailer } from './email/ports.js';
 import type { MemoryMailTransport } from './email/transports/memory.js';
@@ -130,6 +132,8 @@ export interface AppDependencies {
   emailWebhookIpLimiter?: RateLimiter;
   /** MUT-359 (D11): the memory mailer's outbox, served at GET /admin/v1/dev-outbox. Only ever set for MAILER=memory outside production. */
   devOutbox?: MemoryMailTransport | null;
+  /** MUT-396: the local-disk storage behind ATTACHMENTS_DRIVER=local, whose signed URLs /dev/attachments serves. Never set in production or staging. */
+  localAttachments?: LocalAttachmentStorage | null;
   /**
    * MUT-366 (ADR-159): signup and recovery. Absent = signup closed (404), Turnstile's always-pass test secret, the
    * production budgets and floors; index.ts passes the configured switch, verifier and floors.
@@ -154,11 +158,12 @@ const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disa
  * still 404 as JSON, never silently serve the SPA shell to an Apple/Google
  * crawler.
  */
-const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/'];
+const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/', '/dev/attachments/'];
 const PORTAL_EXCLUDED_EXACT = new Set([
   '/health',
   '/ready',
   '/openapi.json',
+  '/dev/attachments',
   '/.well-known/apple-app-site-association',
   '/.well-known/assetlinks.json',
 ]);
@@ -390,6 +395,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     }),
   );
   if (deps.devOutbox) app.route('/', devOutboxRoutes(deps.devOutbox));
+  if (deps.localAttachments) app.route('/', devAttachmentRoutes(deps.localAttachments));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
