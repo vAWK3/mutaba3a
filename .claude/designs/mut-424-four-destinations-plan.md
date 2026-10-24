@@ -116,7 +116,7 @@ No server, API, OpenAPI or Flutter change. No new query, so there are zero extra
 
 ## Knowledge updates
 
-- **ADR-181** "The portal is four destinations; URLs unchanged" (E1/E2/E3). It supersedes the sidebar list in `hosted-portal.md` §7.1.
+- **A new ADR** (next free number at build time; ADR-181 is taken by MUT-361's unmerged lapse-gate branch) "The portal is four destinations; URLs unchanged" (E1/E2/E3). It supersedes the sidebar list in `hosted-portal.md` §7.1.
 - `hosted-portal.md` §7.1 (shell + routes, with the destination map) and §7.3 (Overview row renamed Owed).
 - `COMPONENT_REGISTRY` (`DeeperLinks`, `PageHeader back`, `destinations.ts`), `CHANGELOG`, `SYSTEM_OVERVIEW` (portal navigation), `TEST_PLAN`.
 
@@ -382,7 +382,7 @@ Synthesized from this review's findings and the approved plan. CC effort assumes
 - [ ] **T8 (P2, human ~10min / CC ~2min)** — tracker — Comment on MUT-175 and MUT-426: Reports opens from a corner icon, isn't a destination, and joins `NO_DESTINATION`
   - Surfaced by: R2 (D2).
   - Verify: the comments are on both tickets.
-- [ ] **T9 (P2, human ~1h / CC ~5min)** — knowledge — ADR-181, `hosted-portal.md` §7.1/§7.3, COMPONENT_REGISTRY, CHANGELOG, SYSTEM_OVERVIEW, TEST_PLAN
+- [ ] **T9 (P2, human ~1h / CC ~5min)** — knowledge — the new ADR (next free number), `hosted-portal.md` §7.1/§7.3, COMPONENT_REGISTRY, CHANGELOG, SYSTEM_OVERVIEW, TEST_PLAN
   - Surfaced by: Knowledge updates.
   - Verify: the docs read back.
 
