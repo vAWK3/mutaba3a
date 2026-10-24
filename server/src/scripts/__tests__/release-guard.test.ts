@@ -473,7 +473,7 @@ describe('deploy.sh wires the mail guard (MUT-359)', () => {
 });
 
 /** MUT-368 (D6): once the server mails links, the portal it ships must carry a real Turnstile site key. */
-function siteKeyGuard(o: { mailer?: string; consoleFails?: boolean; key?: string }) {
+function siteKeyGuard(o: { mailer?: string; consoleFails?: boolean; key?: string | undefined }) {
   const bin = join(dir, 'bin');
   spawnSync('mkdir', ['-p', bin]);
   writeFileSync(join(bin, 'terraform'), [
