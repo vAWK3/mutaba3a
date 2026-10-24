@@ -18,6 +18,23 @@
 
 ## Open Debt
 
+### TD-218: The Flutter repo's copy of the analytics contract is still 2.0.0
+**Status**: Open
+**Ticket**: MUT-418
+**Added**: 2026-10-24
+**Priority**: Low (portal-only events)
+**Impact**: `docs/analytics/events.json` is 2.1.0 (three portal-only `trial_card_prompt_*` events). The README's rule is to copy it byte-identical to the Flutter repo's `test/fixtures/analytics/events.json` with its sha256 in the same change; this run didn't touch the Flutter repo. Nothing breaks (no phone emitter), but the copies differ.
+**Fix**: In the next Flutter change (MUT-364 or earlier), copy the file and its 2.1.0 hash into the Flutter fixture and its README.
+
+### TD-219: The privacy policy doesn't yet name the trial-prompt usage notes
+**Status**: Open
+**Ticket**: MUT-418 (D16)
+**Added**: 2026-10-24
+**Priority**: Medium (before the release that ships MUT-418's portal)
+**Impact**: The portal's `usageAnalytics` sentence lists what an opted-in browser sends (opening the portal, saving income, expenses, payments). MUT-418 adds a note when the trial's card prompt shows and how it was answered. Legal text is Basel's, so the sentence wasn't changed; a draft is in `docs/analytics/README.md` and before-release.md.
+**Fix**: Basel approves the wording; publish it with the release (and bump "Last updated").
+
+
 ### TD-216: QA never runs Cloudflare's real Turnstile widget
 **Status**: Open
 **Ticket**: MUT-368 (D11)

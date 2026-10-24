@@ -114,7 +114,16 @@ export function meBody(
   terms: { version: string; accepted: boolean } | null = { version: QA_TERMS_VERSION, accepted: true },
 ) {
   return {
-    user: { id: QA_USER_ID, email: 'nour@office.ps', displayName: 'Nour Haddad', locale: language, malafatSuggestions: suggestions },
+    user: {
+      id: QA_USER_ID,
+      email: 'nour@office.ps',
+      displayName: 'Nour Haddad',
+      locale: language,
+      malafatSuggestions: suggestions,
+      // MUT-418: this person answered the first-run trial step long ago (the portal-live app covers it).
+      trialPrompt: { welcomedAt: '2026-10-01T09:00:00.000Z', welcomeAnswer: 'skipped', bannerSnoozedUntil: null },
+      status: 'ACTIVE',
+    },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },
     terms,

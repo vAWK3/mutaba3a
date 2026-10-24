@@ -6,8 +6,9 @@
  *   1. the sandbox key from the Keychain (service release-kit, account barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY);
  *      a test key only, never printed, never written to disk;
  *   2. a QA database on the test Postgres (`mutaba3a-test-pg`), migrated;
- *   3. the sandbox catalog: the Freelancer product (metadata tier=freelancer) and the four GA test prices by lookup
- *      key, VAT-exclusive; the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
+ *   3. the sandbox catalog: the Freelancer product (metadata tier=freelancer) and the four GA list prices by lookup
+ *      key (₪49 / ₪490 / $16 / $160, MUT-418), VAT-exclusive; a key on another amount moves by lookup-key transfer;
+ *      the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
  *   4. `stripe listen` forwarding to the API, for the webhook secret; the CLI gets the same sandbox key through
  *      STRIPE_API_KEY (never argv), so its own `stripe login`, which expires, is not needed;
  *   5. the API on 127.0.0.1:8790 and the portal (`vite --mode hosted`) on 127.0.0.1:5176, proxying /v1 to it.
@@ -32,12 +33,16 @@ const ADMIN_TOKEN = 'qa-portal-live-admin-token-0123456789abcdef';
 const PEPPER = 'qa-portal-live-session-pepper-0123456789abcdef';
 const KEYCHAIN_ACCOUNT = 'barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY';
 
-/** The GA test prices: the founder figures (a year is 10× a month) under the list lookup keys the server reads. */
-const PRICES = [
-  { lookup_key: 'freelancer_list_monthly_ils', currency: 'ils', unit_amount: 3900, interval: 'month' },
-  { lookup_key: 'freelancer_list_yearly_ils', currency: 'ils', unit_amount: 39000, interval: 'year' },
-  { lookup_key: 'freelancer_list_monthly_usd', currency: 'usd', unit_amount: 1000, interval: 'month' },
-  { lookup_key: 'freelancer_list_yearly_usd', currency: 'usd', unit_amount: 10000, interval: 'year' },
+/**
+ * The GA list prices (Basel, 2026-10-23, MUT-418): ₪49 / $16 a month, a year 10× a month, VAT-exclusive, under the
+ * list lookup keys the server reads. MUT-362 first made them at ₪39 / $10; `ensureCatalog` moves each key to a price
+ * at these amounts with Stripe's lookup-key transfer (the old prices stay, keyless, for subscriptions already on them).
+ */
+export const PRICES = [
+  { lookup_key: 'freelancer_list_monthly_ils', currency: 'ils', unit_amount: 4900, interval: 'month' },
+  { lookup_key: 'freelancer_list_yearly_ils', currency: 'ils', unit_amount: 49000, interval: 'year' },
+  { lookup_key: 'freelancer_list_monthly_usd', currency: 'usd', unit_amount: 1600, interval: 'month' },
+  { lookup_key: 'freelancer_list_yearly_usd', currency: 'usd', unit_amount: 16000, interval: 'year' },
 ];
 const PRODUCT_ID = 'mutaba3a_qa_freelancer';
 /** HANDLED_EVENT_TYPES in server/src/billing/stripe/sync.ts. */
@@ -77,7 +82,19 @@ async function stripe(key, method, endpoint, params) {
   return { status: res.status, json };
 }
 
-async function ensureCatalog(key) {
+/** A price already under its key is right only at the wanted amount, currency, interval and product, VAT-exclusive. */
+export function priceMatches(listed, wanted, productId = PRODUCT_ID) {
+  const product = typeof listed.product === 'string' ? listed.product : listed.product?.id;
+  return (
+    listed.unit_amount === wanted.unit_amount &&
+    listed.currency === wanted.currency &&
+    listed.recurring?.interval === wanted.interval &&
+    listed.tax_behavior === 'exclusive' &&
+    product === productId
+  );
+}
+
+export async function ensureCatalog(key) {
   const product = await stripe(key, 'GET', `products/${PRODUCT_ID}`);
   if (product.status === 404) {
     await stripe(key, 'POST', 'products', { id: PRODUCT_ID, name: 'Freelancer (QA)', 'metadata[tier]': 'freelancer' });
@@ -85,13 +102,21 @@ async function ensureCatalog(key) {
   const query = new URLSearchParams({ active: 'true', limit: '10' });
   for (const p of PRICES) query.append('lookup_keys[]', p.lookup_key);
   const listed = await fetch(`https://api.stripe.com/v1/prices?${query}`, { headers: { authorization: `Bearer ${key}` } }).then((r) => r.json());
-  const have = new Set((listed.data ?? []).map((p) => p.lookup_key));
-  for (const p of PRICES.filter((x) => !have.has(x.lookup_key))) {
-    await stripe(key, 'POST', 'prices', { product: PRODUCT_ID, currency: p.currency, unit_amount: String(p.unit_amount), 'recurring[interval]': p.interval, lookup_key: p.lookup_key, tax_behavior: 'exclusive' });
-  }
-  // The server sells only VAT-exclusive prices (MUT-362 review); Stripe lets an unspecified one be set once.
-  for (const p of (listed.data ?? []).filter((x) => x.tax_behavior === 'unspecified')) {
-    await stripe(key, 'POST', `prices/${p.id}`, { tax_behavior: 'exclusive' });
+  const byKey = new Map((listed.data ?? []).map((p) => [p.lookup_key, p]));
+  for (const wanted of PRICES) {
+    const current = byKey.get(wanted.lookup_key);
+    if (current && priceMatches(current, wanted)) continue;
+    // Missing, or at another amount (MUT-362's ₪39 / $10): a new price takes the key over (MUT-418, D12).
+    const made = await stripe(key, 'POST', 'prices', {
+      product: PRODUCT_ID,
+      currency: wanted.currency,
+      unit_amount: String(wanted.unit_amount),
+      'recurring[interval]': wanted.interval,
+      lookup_key: wanted.lookup_key,
+      transfer_lookup_key: 'true',
+      tax_behavior: 'exclusive',
+    });
+    console.log(`[portal-live] ${wanted.lookup_key} → ${made.json.id} (${wanted.unit_amount} ${wanted.currency}${current ? `, was ${current.id} at ${current.unit_amount}` : ''})`);
   }
   const portal = await stripe(key, 'GET', 'billing_portal/configurations', { is_default: 'true', limit: '1' });
   if (!portal.json.data?.length) {
@@ -121,8 +146,15 @@ function webhookSecret(key) {
   return secret;
 }
 
+/** `node qa/support/billing-live.mjs --catalog-only`: set the sandbox catalog and stop (MUT-418's one-time price move). */
+const CATALOG_ONLY = process.argv.includes('--catalog-only');
+
 async function main() {
   const key = sandboxKey();
+  if (CATALOG_ONLY) {
+    await ensureCatalog(key);
+    return;
+  }
   ensureDatabase();
   await ensureCatalog(key);
   const whsec = webhookSecret(key);
@@ -162,6 +194,15 @@ async function main() {
       PORTAL_ORIGIN,
       STRIPE_SECRET_KEY: key,
       STRIPE_WEBHOOK_SECRET: whsec,
+      // MUT-418: the trial flows start at a real signup: the memory mailer (read through GET /admin/v1/dev-outbox), the
+      // fixture domain checker (business.example opens at once) and the always-pass Turnstile test secret
+      // (config.ts's development default). Each spec sends its own X-Forwarded-For, so the per-IP budget never adds up.
+      MAILER: 'memory',
+      SELF_SIGNUP_ENABLED: 'true',
+      EMAIL_DOMAIN_CHECKER: 'fixture',
+      TRUSTED_PROXY_HOPS: '1',
+      SIGNUP_RESPONSE_FLOOR_MS: '100',
+      RECOVERY_RESPONSE_FLOOR_MS: '100',
     },
   });
   run('npm', ['run', 'dev:hosted', '--', '--port', String(PORTAL_PORT), '--strictPort'], {

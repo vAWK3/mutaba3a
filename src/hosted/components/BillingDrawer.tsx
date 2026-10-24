@@ -30,6 +30,7 @@ import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
 import { ME_KEY, useMe } from '../session/me';
+import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
 import { SUPPORT_EMAIL } from '../terms';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -680,6 +681,9 @@ function WelcomeBody({ welcome }: { welcome: TrialWelcome }) {
     headline.current?.focus();
     if (shown.current) return;
     shown.current = true;
+    // Shown, however it was opened (/setup's first-run link, or the shell): the shell's one offer is spent, so closing
+    // it never has the shell open it again before the answer reaches the cached /v1/me (release-QA finding).
+    takeTrialWelcomeOffer();
     void trackPortal('trial_card_prompt_shown', { prompt: 'first_run' });
   }, []);
   return (

@@ -92,6 +92,16 @@ describe('the first-run trial step (AC1, AC2, AC4)', () => {
     await waitFor(() => expect(actions()).toEqual(['welcome-skipped']));
   });
 
+  it('opened by /setup’s first-run link, Not now closes it for good: the shell never reopens it (release-QA finding)', async () => {
+    const { user, router } = portal(`/p/${ORG_B}?billing=true&step=welcome`);
+    const dialog = await screen.findByRole('dialog', { name: 'Your free trial' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(locationOf(router)).toBe(`/p/${ORG_B}`);
+  });
+
   it('Add a card now records the answer and replaces the step with Subscribe (Back never returns to it)', async () => {
     const { user, router, actions, history } = portal(`/p/${ORG_B}`);
     const dialog = await screen.findByRole('dialog', { name: 'Your free trial' });

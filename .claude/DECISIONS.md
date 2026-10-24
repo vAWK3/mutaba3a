@@ -4874,3 +4874,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The real widget is first seen at go-live (TD-216).
 - The doors follow configuration, not mail health (TD-217).
 - The ticket's QA paths moved from `qa/features/portal/` to `qa/features/portal-selfservice/`.
+
+## ADR-180: The Trial Asks for a Card Once Per Person, on the Server's Record; Consumers May Buy Everywhere (MUT-418)
+
+**Status:** Accepted for the build (2026-10-24, MUT-418, unattended run on Basel's "go"). Decisions D1–D16 in `.claude/designs/mut-418-trial-start.md` §4 are **pending Basel's confirmation**. Builds on ADR-160 (card-free trial), ADR-170 R-D2 (a card added in the trial keeps it) and ADR-179.
+
+**Context:** a new trial saw no card prompt until it ran out. The prompt has to be once per person (also for webmail signups the operator approves later, who never pass /setup) and honest when nothing can be sold. Separately, Basel decided no business tax ID is needed in any country.
+
+**Decision:**
+1. **The step is a Billing drawer step** (`?billing=true&step=welcome`), not a page: "Your 14-day free trial has started", Add a card now (recommended) → Subscribe → Checkout with `trial_end`, Not now → Home. With no price pair: "Subscriptions open soon" and Continue only. It opens only while ≥ 48 h of trial remain (Checkout's `trial_end` minimum).
+2. **"Once" is the server's record** (`users.trialPrompt`, `PATCH /v1/me/trial-prompt`, the MUT-191 preference pattern): the first welcome answer wins, the banner snooze is 3 days, both cross-device; no audit row. The answer doubles as the funnel count, since first-run analytics rarely flow (ADR-090 opt-in).
+3. **Two openers, one offer per page:** `firstRunPath` after /setup, `TrialWelcomeOpener` for any other first sign-in; showing the step spends the page's offer, so closing it never reopens it before the answer lands.
+4. **The trial is the person's:** step and banner read the personal profile's entitlement (TRIAL ACTIVE = no covering subscription).
+5. **Consumers everywhere:** `"consumerCountries": "*"`; `GET /v1/billing` says `countries.consumerEverywhere`. Buying For a business always proves it is one (Stripe's tax ID where supported, our required number field in IL/JO); a person never sees the field.
+6. **GA list prices** ₪49 / $16 a month, 10× a year, VAT-exclusive, by lookup key. QA's sandbox moved by lookup-key transfer; live is an operator step.
+
+**Consequences:**
+- Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
+- `/` keeps the drawer keys, so mails (MUT-419) and the lapse gate (MUT-361) can link `/?billing=true&step=subscribe`.
+- The privacy sentence for the new usage notes waits on Basel (TD-219); the Flutter contract copy lags (TD-218).

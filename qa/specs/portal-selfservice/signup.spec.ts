@@ -23,6 +23,10 @@ const COPY = {
     terms: /terms of service/,
     create: 'Create account',
     home: 'Overview',
+    trial: 'Your free trial',
+    trialStarted: 'Your 14-day free trial has started',
+    openSoon: /Subscriptions open soon/,
+    trialContinue: 'Continue',
     review: "We're reviewing your account",
     reviewBody: "We'll email you within 2 working days.",
   },
@@ -36,6 +40,10 @@ const COPY = {
     terms: /شروط الخدمة/,
     create: 'أنشئ الحساب',
     home: 'نظرة عامة',
+    trial: 'تجربتك المجانية',
+    trialStarted: 'بدأت تجربتك المجانية لمدة 14 يومًا',
+    openSoon: /يُفتح الاشتراك قريبًا/,
+    trialContinue: 'متابعة',
     review: 'نراجع حسابك',
     reviewBody: 'سنراسلك خلال يومَي عمل.',
   },
@@ -62,7 +70,17 @@ async function finishSetup(page: Page, email: string, language: Language) {
   return mail;
 }
 
+/**
+ * MUT-418: a new trial's first sign-in opens on "Your 14-day free trial has started". This API has no Stripe, so it
+ * is the honest variant (subscriptions open soon, Continue only, no card). Continue lands on Home, once.
+ */
 async function expectHome(page: Page, language: Language) {
+  const trial = page.getByRole('dialog', { name: COPY[language].trial });
+  await expect(trial.getByRole('heading', { name: COPY[language].trialStarted })).toBeVisible();
+  await expect(trial.getByText(COPY[language].openSoon)).toBeVisible();
+  await expect(trial.getByRole('button', { name: /Add a card|أضف بطاقة/ })).toHaveCount(0);
+  await trial.getByRole('button', { name: COPY[language].trialContinue, exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { level: 1, name: COPY[language].home })).toBeVisible();
 }
