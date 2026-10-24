@@ -2423,6 +2423,14 @@ async function replaceCategories(tx: Tx, organizationId: string, preset: readonl
  * inbox-entry delete commit or roll back together.
  */
 /** The row as the port types it: the two JSON columns carry `ReceiptSuggestion` / `ApprovedReceiptFields` (validated on the way in). */
+function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): ExpenseReceiptRecord {
+  return { ...row, suggested: row.suggested as unknown as ReceiptSuggestion | null, approved: row.approved as unknown as ApprovedReceiptFields | null };
+}
+
+function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | null): ExpenseReceiptRecord | null {
+  return row ? toExpenseReceipt(row) : null;
+}
+
 /** MUT-254: the stored `registrationKey` is an index column, not part of the record. */
 function toVendor(row: Prisma.VendorGetPayload<object>): VendorRecord {
   const { registrationKey: _key, ...record } = row;
@@ -2432,14 +2440,6 @@ function toVendor(row: Prisma.VendorGetPayload<object>): VendorRecord {
 
 function toVendorName(row: Prisma.VendorNameGetPayload<object>): VendorNameRecord {
   return { id: row.id, organizationId: row.organizationId, vendorId: row.vendorId, name: row.name, nameKey: row.nameKey, createdAt: row.createdAt };
-}
-
-function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): ExpenseReceiptRecord {
-  return { ...row, suggested: row.suggested as unknown as ReceiptSuggestion | null, approved: row.approved as unknown as ApprovedReceiptFields | null };
-}
-
-function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | null): ExpenseReceiptRecord | null {
-  return row ? toExpenseReceipt(row) : null;
 }
 
 function createExpenseRow(tx: Tx | PrismaClient, input: CreateExpenseInput, at: Date): Promise<ExpenseRecord> {

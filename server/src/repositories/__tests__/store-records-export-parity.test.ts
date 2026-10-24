@@ -17,7 +17,7 @@ const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const AT = new Date('2026-10-01T08:00:00.000Z');
 const LATER = new Date('2026-10-05T08:00:00.000Z');
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
-const FIELDS: readonly ProfileExportField[] = ['custs', 'projs', 'refs', 'rates', 'agrs', 'insts', 'charges', 'recs', 'supps', 'versions', 'pays', 'allocs', 'credits', 'counters', 'props', 'exps', 'expCats', 'expReceipts', 'convs', 'expGroups', 'groupMarks'];
+const FIELDS: readonly ProfileExportField[] = ['custs', 'projs', 'refs', 'rates', 'agrs', 'insts', 'charges', 'recs', 'supps', 'versions', 'pays', 'allocs', 'credits', 'counters', 'props', 'exps', 'expCats', 'expReceipts', 'convs', 'expGroups', 'groupMarks', 'vendors', 'vendorNames'];
 
 async function seed(store: LedgerStore) {
   const tag = randomUUID().slice(0, 8);
@@ -59,10 +59,14 @@ async function seed(store: LedgerStore) {
   const second = await store.projects.create({ organizationId: org, customerId: customer.id, name: 'Logo', currency: 'ILS' }, AT);
   await store.feeProposals.create({ organizationId: org, projectId: second.id, customerId: customer.id, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 30_000n, proposedOn: '2026-10-02', note: null, requestId: null }, AT);
   const category = await store.expenseCategories.create(org, { name: 'Travel export', color: '#00aa00' }, AT);
+  const yellow = (await store.vendors.resolve({ organizationId: org, name: 'Yellow', registrationNo: '516667276', phone: '+970 2 555 0100', email: null }, AT))!;
+  await store.vendors.resolve({ organizationId: org, name: 'Yellow Taxi', registrationNo: '516667276' }, AT);
+  await store.vendors.resolve({ organizationId: org, name: 'Corner Shop' }, AT);
   const expenses = [];
   for (const title of ['Taxi', 'Hotel', 'Lunch']) {
-    expenses.push(await store.expenses.create({ organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title, vendor: 'Yellow', categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id }, AT));
+    expenses.push(await store.expenses.create({ organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title, vendor: 'Yellow', vendorId: yellow.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id }, AT));
   }
+  await store.vendors.touch(org, yellow.id, { categoryId: category.id }, LATER);
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expenses[0]!.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-11', uploadedByUserId: user.id, requestId: null }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.complete(org, receipt.id, AT);
@@ -124,6 +128,8 @@ if (!url) {
       expect(postgres.out.counters!.keys).toEqual([`${postgres.org}:2025`, `${postgres.org}:2026`]);
       expect(postgres.out.groupMarks!.rows).toHaveLength(6);
       expect(postgres.out.custs!.rows).toHaveLength(1);
+      expect(postgres.out.vendors!.rows).toHaveLength(2);
+      expect(postgres.out.vendorNames!.rows).toHaveLength(3);
     });
 
     it('finds only a READY, undeleted receipt of the profile', async () => {
