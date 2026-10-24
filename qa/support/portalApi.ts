@@ -388,6 +388,8 @@ export interface FakeApiSeed {
   billingStanding?: 'open' | 'read-only' | 'locked' | null;
   /** MUT-361: GET /v1/billing's answer (Settings › Billing, and whether a payment would cover a profile). */
   billing?: Json;
+  /** MUT-333: the account is already closing (signing in during the grace): /v1/me carries it. */
+  closure?: { requestedAt: string; deleteAfter: string };
 }
 
 export type SetupLinkState = 'valid' | 'expired' | 'used' | 'superseded' | 'invalid';
@@ -434,6 +436,8 @@ export class FakeApi {
   private termsVersion = QA_TERMS_VERSION;
   /** MUT-373: profiles the person lost access to elsewhere; a request naming one answers 404, as the server does. */
   private readonly gone = new Set<string>();
+  /** MUT-333: set while the account is closing; then only Me, Keep my account and sign-out answer (403 ACCOUNT_CLOSING). */
+  closure: { requestedAt: string; deleteAfter: string } | null;
 
   constructor(seed: FakeApiSeed) {
     this.signedIn = seed.signedIn ?? true;
@@ -458,6 +462,7 @@ export class FakeApi {
     this.setupLink = seed.setupLink ?? null;
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
     this.termsAccepted = seed.termsAccepted ?? true;
+    this.closure = seed.closure ?? null;
   }
 
   /** The setup link changed behind the page's back: a lost answer that committed, a newer link, an expiry. */
@@ -494,6 +499,7 @@ export class FakeApi {
     );
     return {
       ...body,
+      user: { ...body.user, closure: this.closure },
       billingStanding: this.billingStanding,
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
@@ -579,6 +585,15 @@ export class FakeApi {
       }
     }
     if (resource === 'me' && method === 'GET' && !id) return json(this.me(language));
+    // MUT-333: Close my account and Keep my account; while closing, nothing else answers (the server's D3).
+    if (resource === 'me' && id === 'closure' && method === 'DELETE') {
+      this.closure = null;
+      return json({ billingNeedsAttention: false });
+    }
+    if (this.closure && !(resource === 'device-sessions' && method === 'DELETE')) {
+      return json({ error: { code: 'ACCOUNT_CLOSING', message: 'closing', details: { deleteAfter: this.closure.deleteAfter } } }, 403);
+    }
+    if (resource === 'me' && id === 'closure' && method === 'POST') return this.closeAnswer(e.body as { password?: string } | null);
     if (resource === 'billing' && method === 'GET' && !id && this.billingOverview) return json(this.billingOverview);
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
@@ -639,6 +654,14 @@ export class FakeApi {
   }
 
   /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */
+  /** MUT-333: 30 days from now, as the server counts it. */
+  private closeAnswer(body: { password?: string } | null) {
+    if (body?.password !== this.currentPassword) return json({ error: { code: 'CURRENT_PASSWORD_WRONG', message: 'Current password is wrong' } }, 403);
+    const now = new Date();
+    this.closure = { requestedAt: now.toISOString(), deleteAfter: new Date(now.getTime() + 30 * 86_400_000).toISOString() };
+    return json({ closure: this.closure, subscriptionsEnded: 0, subscriptionsCancelled: 0 });
+  }
+
   private changePasswordAnswer(body: { currentPassword?: string; newPassword?: string } | null) {
     if (body?.currentPassword !== this.currentPassword) return json({ error: { code: 'CURRENT_PASSWORD_WRONG', message: 'Current password is wrong' } }, 403);
     this.currentPassword = body.newPassword ?? this.currentPassword;
