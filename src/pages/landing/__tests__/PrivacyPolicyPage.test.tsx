@@ -31,6 +31,8 @@ describe('PrivacyPolicyPage', () => {
     const intro = document.querySelector('.privacy-policy-intro')?.textContent ?? '';
     expect(intro).toContain('iPhone');
     expect(intro).toContain('Android');
+    // MUT-150 review: the website is in scope, since the policy describes what it sends
+    expect(intro).toContain("Mutaba3a's website");
     expect(intro).not.toMatch(/\bMac\b|\bWindows\b/);
   });
 
@@ -96,7 +98,7 @@ describe('PrivacyPolicyPage', () => {
     expect(reports).toMatch(/the hosted portal sends one when a page crashes in your browser/);
     // MUT-150 (eng D8): what the website really sends, and that the free web app sends nothing
     expect(reports).toMatch(/Our website sends a report when one of its pages crashes or hits an error/);
-    expect(reports).toMatch(/These reports include no account at all, and the free web app you open from the website never sends one/);
+    expect(reports).toMatch(/The website's reports include no account at all, and the free web app you open from the website never sends one/);
     expect(reports).not.toMatch(/fails to load/);
     const noTracking = body(/No ads, no tracking/);
     expect(noTracking).not.toMatch(/crash reporting/);
@@ -105,7 +107,8 @@ describe('PrivacyPolicyPage', () => {
     expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
     expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to Mutaba3a's servers, to Sentry for error reports/);
     expect(body(/What reaches the network/)).toMatch(/The hosted portal also sends the error reports described under "Error reports" to Sentry/);
-    expect(body(/What reaches the network/)).toMatch(/when you press Send\. Our website also sends the error reports described under "Error reports" to Sentry\./);
+    // One sentence for what the website sends, not two "also"s (review D2)
+    expect(body(/What reaches the network/)).toMatch(/The website also sends the error reports described under "Error reports" to Sentry and the anonymous visit counts described under "Anonymous usage counts" to PostHog\./);
     // MUT-151's phone and MUT-155's PostHog sentences stay (regression contract)
     expect(body(/What reaches the network/)).toMatch(/hosted portal connects to Mutaba3a's servers and, if you turned on anonymous usage, to PostHog/);
   });
@@ -120,9 +123,9 @@ describe('PrivacyPolicyPage', () => {
     expect(noTracking).not.toContain('أو تقارير الأعطال أو');
     expect(noTracking).toContain('يرسل موقعنا وخوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
     expect(reports).toContain('يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً');
-    expect(reports).toContain('ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا');
+    expect(reports).toContain('ولا تتضمن تقارير الموقع أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا');
     const network = screen.getByRole('heading', { level: 2, name: 'ما يصل إلى الشبكة' }).parentElement?.textContent ?? '';
-    expect(network).toContain('ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry.');
+    expect(network).toContain('ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry، وإحصاءات الزيارات المجهولة الموضّحة في قسم «إحصاءات استخدام مجهولة» إلى PostHog.');
     expect(reports).toContain('وترسل البوابة المستضافة تقريرًا عندما تتعطّل صفحة في متصفحك');
   });
 

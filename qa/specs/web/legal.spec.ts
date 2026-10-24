@@ -135,7 +135,8 @@ test('the privacy policy says the website, our servers, the portal and the phone
     await expect(noTracking).not.toContainText('crash reporting');
     await expect(noTracking).toContainText('Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports');
     await expect(noTracking).toContainText('The free apps on Mac, Windows, and in the browser never send them');
-    await expect(section(privacy.en.network.title)).toContainText('Our website also sends the error reports described under "Error reports" to Sentry');
+    await expect(section(privacy.en.network.title)).toContainText('The website also sends the error reports described under "Error reports" to Sentry and the anonymous visit counts');
+    await expect(page.locator('.privacy-policy-intro')).toContainText("Mutaba3a's website");
     await expect(section(privacy.en.sharing.title)).toContainText('Sentry, hosted in the EU, receives the error reports');
     await expect(section(privacy.en.network.title)).toContainText("The mobile apps connect to Mutaba3a's servers, to Sentry for error reports");
     await expect(section(privacy.en.network.title)).toContainText('The hosted portal also sends the error reports described under "Error reports" to Sentry');

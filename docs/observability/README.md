@@ -358,10 +358,13 @@ our servers, the hosted portal, and the iPhone and Android apps send error repor
 **`errorReports` sentence** (eng D8: "crashes or hits an error", not "fails to load", which the
 website mostly can't report).
 
-- EN: "Our website sends a report when one of its pages crashes or hits an error. These reports include no account at all, and the free web app you open from the website never sends one."
-- AR: «يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً. لا تتضمن هذه التقارير أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا.»
+- EN: "Our website sends a report when one of its pages crashes or hits an error. The website's reports include no account at all, and the free web app you open from the website never sends one."
+- AR: «ويرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً، ولا تتضمن تقارير الموقع أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا.»
 
-**`network.body`.** Add after the request-form sentence: EN "Our website also sends the error reports described under "Error reports" to Sentry." AR «ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry.»
+The intro names the website as covered (review D2): EN "This policy covers Mutaba3a's website, its hosted web
+portal and its iPhone and Android apps.", AR «تغطي هذه السياسة موقع متابعة، وبوابتها المستضافة على الويب، وتطبيقيها…».
+
+**`network.body`.** The website's PostHog sentence becomes one sentence for both (review D2): EN "The website also sends the error reports described under "Error reports" to Sentry and the anonymous visit counts described under "Anonymous usage counts" to PostHog." AR «ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry، وإحصاءات الزيارات المجهولة الموضّحة في قسم «إحصاءات استخدام مجهولة» إلى PostHog.»
 
 ### Phone app (MUT-151)
 
