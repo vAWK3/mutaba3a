@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-24 — Trial reminder mails: ending within 3 days, read-only, locking within 3 days (MUT-419, ADR-182)
+
+**Why:** ADR-160 D3's trial runs out whether or not the person opens the portal. Someone who never signs in got no warning before losing write access or before the lock.
+
+### Added
+- `server/src/billing/trial-mail.ts`: `trialMailStageOf` (stages are windows from `trialTimelineOf`: day 11–14 `ending-soon`, 14–27 `ended`, 27–30 `locking-soon`), `runTrialMail` (one person at a time, key `trial:<userId>:<stage>`, 200 s time budget, dry run), `trialMailLinks` (`/?billing=true&step=subscribe`, `/?yourData=true`).
+- Who: only people every one of whose profiles is their own TRIAL profile (so "your account" is what the gate does); skips `paying`, `covered`, `other-profiles`, `suppressed`, `gate-off`.
+- Templates `trial-ending-soon`, `trial-ended`, `trial-locking-soon` (en/ar, "within N days", no amount or date), outside the per-recipient cap.
+- `POST /jobs/v1/billing/trial-mail` (Scheduler, counts only) and `POST /admin/v1/billing/trial-mail` (`{dryRun}`, rows); `npm --prefix server run billing:trial-mail [-- --dry-run]`. 503 without Stripe; production refuses a real run with loopback links (409 `LINK_ORIGIN_LOOPBACK`).
+- `billing.trialMailCandidates` (memory + Prisma, operator-only in the store guard).
+- Terraform `google_cloud_scheduler_job.trial_mail`, daily 10:00 Asia/Jerusalem, only with `mailer = "resend"`, `stripe_enabled` and `billing_gate_enabled`; `tests/trial_mail.tftest.hcl`.
+
+### Changed
+- API `1.61.0-mut419`; `src/hosted/api/schema.d.ts` regenerated.
+
+---
+
 ## [Unreleased] - 2026-10-24 — The lapse gate: read-only and locked accounts on the server and the portal (MUT-361, ADR-181)
 
 **Why:** ADR-160 D3 makes the trial real only if it ends: 14 days free, then read-only with export, then locked from day 30 (Subscribe and Download my records), nothing deleted; a payer who lapses stays read-only for good. `/v1/me` reported these states, but nothing enforced them.

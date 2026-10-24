@@ -26,6 +26,22 @@
 **Impact**: Each profile-scoped session request runs one `billing.factsFor`; the phone's inbox count and Recent polls also load the person's memberships and integrations.
 **Fix**: Cache a person's entitlements for a few seconds per instance (invalidated by the Stripe webhook and grant writes), or carry them on the session row.
 
+### TD-224: The trial-mail run reads each candidate one at a time
+**Status**: Open
+**Ticket**: MUT-419
+**Added**: 2026-10-24
+**Priority**: Low (candidates are only people in days 11–30 of an unpaid trial)
+**Impact**: Per person: memberships, organizations, integrations and billing facts (about four small reads), then one send. At a few hundred a day it stays inside the 200 s budget; beyond that the run reports `incomplete` and the rest go the next day.
+**Fix**: Batch the reads (one `factsFor` across all candidates) and, if needed, run sends with bounded concurrency.
+
+### TD-223: No alert on the trial-mail job, and a rejected send retries daily
+**Status**: Open
+**Ticket**: MUT-419 (R2, R12)
+**Added**: 2026-10-24
+**Priority**: Low
+**Impact**: The reconcile's failed attempts page; the trial-mail job's don't (a missed day catches up inside the window). A Resend 4xx for one address is re-claimed by the mailer every day of its window (up to 13 for `ended`), and each logs `mail provider failed`, which `email.tf`'s WARNING alert matches.
+**Fix**: Add the job to `monitoring.tf`'s Scheduler alert; treat a `rejected` trial send as final (or suppress the address).
+
 ### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
 **Status**: Open
 **Ticket**: MUT-361
