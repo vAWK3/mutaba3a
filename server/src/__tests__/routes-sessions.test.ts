@@ -828,3 +828,64 @@ describe('Malafat suggestions on the account (MUT-191)', () => {
   });
 });
 
+describe('PATCH /v1/me/trial-prompt (MUT-418)', () => {
+  const EMPTY = { welcomedAt: null, welcomeAnswer: null, bannerSnoozedUntil: null };
+  const patch = (token: string, body: unknown, extra: Record<string, string> = SAME_ORIGIN) =>
+    ({ method: 'PATCH', headers: { 'content-type': 'application/json', ...withSession(token, extra) }, body: JSON.stringify(body) });
+
+  it('starts empty on /v1/me, keeps the first welcome answer from any session, and snoozes the banner 3 days', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const a = await signIn(h, p.email, p.password);
+    const b = await signIn(h, p.email, p.password);
+    expect((await read(await h.app.request('/v1/me', { headers: withSession(a.token) }))).user.trialPrompt).toEqual(EMPTY);
+    let res = await h.app.request('/v1/me/trial-prompt', patch(a.token, { action: 'welcome-skipped' }));
+    expect(res.status).toBe(200);
+    const answered = await read(res);
+    expect(answered).toMatchObject({ welcomeAnswer: 'skipped', bannerSnoozedUntil: null });
+    res = await h.app.request('/v1/me/trial-prompt', patch(b.token, { action: 'welcome-accepted' }));
+    expect(await read(res)).toEqual(answered);
+    res = await h.app.request('/v1/me/trial-prompt', patch(b.token, { action: 'banner-snoozed' }));
+    const snoozed = await read(res);
+    expect(Date.parse(snoozed.bannerSnoozedUntil) - Date.parse(answered.welcomedAt)).toBeGreaterThanOrEqual(3 * 24 * 60 * 60 * 1000);
+    expect((await read(await h.app.request('/v1/me', { headers: withSession(a.token) }))).user.trialPrompt).toEqual(snoozed);
+  });
+
+  it('works from the phone app too, and only ever for the caller', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const q = await person(h, f.org.id);
+    const { token } = await deviceSignIn(h, p.email, p.password);
+    const res = await h.app.request('/v1/me/trial-prompt', { method: 'PATCH', headers: { 'content-type': 'application/json', ...withDevice(token) }, body: JSON.stringify({ action: 'banner-snoozed' }) });
+    expect(res.status).toBe(200);
+    const other = await signIn(h, q.email, q.password);
+    expect((await read(await h.app.request('/v1/me', { headers: withSession(other.token) }))).user.trialPrompt).toEqual(EMPTY);
+  });
+
+  it.each([[{}], [{ action: 'welcome' }], [{ action: 'banner-snoozed', extra: 1 }], [{ action: 3 }]])('refuses %j with 422', async (body) => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    expect((await h.app.request('/v1/me/trial-prompt', patch(token, body))).status).toBe(422);
+  });
+
+  it('refuses a cross-site write, an API key and no session, and writes no audit row', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await person(h, f.org.id);
+    const { token } = await signIn(h, p.email, p.password);
+    const cross = await h.app.request('/v1/me/trial-prompt', patch(token, { action: 'banner-snoozed' }, { origin: 'https://evil.example' }));
+    expect((await read(cross)).error.code).toBe('CROSS_SITE_REQUEST');
+    const byKey = await h.app.request('/v1/me/trial-prompt', json({ action: 'banner-snoozed' }, f.auth, 'PATCH'));
+    expect((await read(byKey)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    expect((await h.app.request('/v1/me/trial-prompt', json({ action: 'banner-snoozed' }, SAME_ORIGIN, 'PATCH'))).status).toBe(401);
+    const everyRow = () => (h.store as unknown as { events: unknown[] }).events.length;
+    const before = everyRow();
+    expect((await h.app.request('/v1/me/trial-prompt', patch(token, { action: 'welcome-accepted' }))).status).toBe(200);
+    expect(everyRow()).toBe(before);
+  });
+});
+

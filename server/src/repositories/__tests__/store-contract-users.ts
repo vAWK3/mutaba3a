@@ -156,6 +156,37 @@ export function describeLedgerStoreUsersContract(name: string, makeStore: () => 
       expect((await store.users.getById(user.id))?.malafatSuggestions).toEqual({ off: true, dismissed: ['client-threshold', 'second-business'] });
     });
 
+    it('stores the trial prompt: none at first, the first welcome answer kept, a snooze moved on (MUT-418)', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const { user } = await store.users.create(input(o.id));
+      expect((await store.users.getById(user.id))?.trialPrompt).toBeNull();
+      expect((await store.users.updateTrialPrompt(user.id, 'welcome-skipped', at(1)))?.trialPrompt).toEqual({
+        welcomedAt: at(1).toISOString(),
+        welcomeAnswer: 'skipped',
+        bannerSnoozedUntil: null,
+      });
+      await store.users.updateTrialPrompt(user.id, 'welcome-accepted', at(2));
+      await store.users.updateTrialPrompt(user.id, 'banner-snoozed', at(3));
+      expect((await store.users.getById(user.id))?.trialPrompt).toEqual({
+        welcomedAt: at(1).toISOString(),
+        welcomeAnswer: 'skipped',
+        bannerSnoozedUntil: new Date(at(3).getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      expect(await store.users.updateTrialPrompt('00000000-0000-4000-8000-000000000000', 'banner-snoozed', at(3))).toBeNull();
+    });
+
+    it('two devices answering the welcome at once keep exactly one answer (MUT-418)', async () => {
+      const store = await makeStore();
+      const o = await org(store);
+      const { user } = await store.users.create(input(o.id));
+      await Promise.all([store.users.updateTrialPrompt(user.id, 'welcome-accepted', at(1)), store.users.updateTrialPrompt(user.id, 'banner-snoozed', at(1)), store.users.updateTrialPrompt(user.id, 'welcome-skipped', at(1))]);
+      const stored = (await store.users.getById(user.id))?.trialPrompt;
+      expect(stored?.welcomedAt).toBe(at(1).toISOString());
+      expect(['accepted', 'skipped']).toContain(stored?.welcomeAnswer);
+      expect(stored?.bannerSnoozedUntil).not.toBeNull();
+    });
+
     it('setStatus toggles ACTIVE and DISABLED', async () => {
       const store = await makeStore();
       const o = await org(store);

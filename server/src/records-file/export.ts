@@ -27,7 +27,9 @@ export function localPersonOf(person: UserRecord): UserRecord {
   // Field by field, never a spread: a column the account gains later (a role, a plan) must not reach a device unasked.
   return {
     id: person.id, email: LOCAL_PERSON_EMAIL, displayName: person.displayName, passwordHash: null, locale: person.locale, status: 'ACTIVE', failedSignIns: 0,
-    lockedUntil: null, passwordChangedAt: person.passwordChangedAt, lastSignInAt: null, emailVerifiedAt: null, malafatSuggestions: person.malafatSuggestions, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    lockedUntil: null, passwordChangedAt: person.passwordChangedAt, lastSignInAt: null, emailVerifiedAt: null, malafatSuggestions: person.malafatSuggestions,
+    // MUT-418: the trial's card prompt is the hosted account's; a device has no trial.
+    trialPrompt: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 

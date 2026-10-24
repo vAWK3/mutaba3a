@@ -1225,9 +1225,25 @@ export interface UserRecord {
   emailVerifiedAt: Date | null;
   /** MUT-191: the Malafat suggestion preferences; null until the person first changes them (= on, nothing dismissed). */
   malafatSuggestions: MalafatSuggestionsRecord | null;
+  /** MUT-418: the person's answers to the trial's card prompt; null until the first one (billing/trial-prompt.ts). */
+  trialPrompt: TrialPromptRecord | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** MUT-418: the first-run step's answer. "Not now" and closing the step are both `skipped` (D13). */
+export type TrialWelcomeAnswer = 'accepted' | 'skipped';
+
+/** MUT-418 (D1, D2): JSON on the user row, so its instants are ISO strings. */
+export interface TrialPromptRecord {
+  /** When the person answered the first-run step; null until then. Set once: the first answer wins. */
+  welcomedAt: string | null;
+  welcomeAnswer: TrialWelcomeAnswer | null;
+  /** The Home banner stays hidden until then (the portal still shows it in the trial's last 3 days). */
+  bannerSnoozedUntil: string | null;
+}
+
+export type TrialPromptAction = 'welcome-accepted' | 'welcome-skipped' | 'banner-snoozed';
 
 /** A contextual Malafat suggestion a person can retire (MUT-189). */
 export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
@@ -1298,6 +1314,8 @@ export interface UserRepository {
    * devices or tabs never undo each other's dismissals. Null for an unknown user.
    */
   updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
+  /** MUT-418: applies one trial-prompt action under a row lock (billing/trial-prompt.ts). Null for an unknown user. */
+  updateTrialPrompt(id: string, action: TrialPromptAction, at: Date): Promise<UserRecord | null>;
   /**
    * MUT-237: a signed-in person changes their own password. One transaction under the same row-lock
    * discipline ADR-088 §7a added for `--lock`/redeem: sets the password (clearing any lockout), revokes

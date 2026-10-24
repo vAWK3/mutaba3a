@@ -18,7 +18,10 @@ import {
   SignInRequestSchema,
   TermsAcceptanceRequestSchema,
   TermsStatusSchema,
+  TrialPromptChangeSchema,
+  TrialPromptSchema,
 } from '../schemas.js';
+import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { buildMe } from './me.js';
@@ -51,6 +54,7 @@ export interface SessionRouteOptions {
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
   'PATCH /v1/me/malafat-suggestions',
+  'PATCH /v1/me/trial-prompt',
   'POST /v1/me/terms-acceptance',
   'DELETE /v1/sessions/current',
   'POST /v1/me/password',
@@ -147,6 +151,32 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const change = { ...(body.off === undefined ? {} : { off: body.off }), ...(body.dismiss === undefined ? {} : { dismiss: body.dismiss }) };
       const user = await store.users.updateMalafatSuggestions(c.get('identity').user.id, change, c.get('now')());
       return c.json(resolveMalafatSuggestions(user?.malafatSuggestions ?? null), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/me/trial-prompt',
+      tags: ['Sessions'],
+      summary: "The person's answers to the free trial's card prompt (MUT-418)",
+      description:
+        '`welcome-accepted` / `welcome-skipped` answer the first-run "Your free trial has started" step; the first answer wins, so ' +
+        'two devices never undo each other. `banner-snoozed` hides the Home trial banner for 3 days from now (server clock). Idempotent ' +
+        'by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      request: { body: { required: true, content: { 'application/json': { schema: TrialPromptChangeSchema } } } },
+      responses: {
+        200: { description: 'The answers now stored', content: { 'application/json': { schema: TrialPromptSchema } } },
+        422: errorResponse('Invalid body'),
+        401: errorResponse('No valid session'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST'),
+      },
+    }),
+    async (c) => {
+      const { action } = c.req.valid('json');
+      const user = await store.users.updateTrialPrompt(c.get('identity').user.id, action, c.get('now')());
+      return c.json(resolveTrialPrompt(user?.trialPrompt ?? null), 200);
     },
   );
 

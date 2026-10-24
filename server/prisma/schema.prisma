@@ -299,6 +299,9 @@ model User {
   emailVerifiedAt    DateTime?
   /// MUT-191: `{ off, dismissed[] }` for the Malafat suggestions; NULL = on, nothing dismissed.
   malafatSuggestions Json?
+  /// MUT-418: `{ welcomedAt, welcomeAnswer, bannerSnoozedUntil }`, the person's answers to the trial's card prompt
+  /// (server/src/billing/trial-prompt.ts); NULL = nothing answered yet.
+  trialPrompt        Json?
   createdAt          DateTime
   updatedAt          DateTime
 

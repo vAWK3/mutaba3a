@@ -29,6 +29,7 @@ const CLIENT_CALLS: readonly ClientCall[] = [
   { method: 'POST', path: '/v1/account-setup/check', local: false }, // 5 — remote only (/setup is a public server page)
   { method: 'POST', path: '/v1/account-setup', local: false }, // 6 — remote only
   { method: 'PATCH', path: '/v1/me/malafat-suggestions', local: false }, // 7 — not served locally; Malafat surfaces are hidden on local profiles
+  { method: 'PATCH', path: '/v1/me/trial-prompt', local: false }, // 7d — remote only (MUT-418): a device has no trial, so nothing asks
   { method: 'POST', path: '/v1/me/terms-acceptance', local: false }, // 7a — remote only (MUT-324): signed out, /v1/me says terms: null and nothing asks
   { method: 'GET', path: '/v1/records-export', local: false }, // 7b — remote only (MUT-325): signed out, Your data writes the same file from the device
   { method: 'GET', path: '/v1/records-export/receipts/:receiptId', local: false }, // 7c — remote only (MUT-325)
@@ -102,9 +103,9 @@ describe('PORTAL_ROUTES coverage (MUT-286)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318), the terms acceptance (MUT-324) and the records export (MUT-325): 54 calls, 9 remote-only', () => {
-    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(54);
-    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(9);
+  it('matches the brief §3 table plus the client and matter creates (MUT-286, MUT-318), the terms acceptance (MUT-324), the records export (MUT-325) and the trial prompt (MUT-418): 55 calls, 10 remote-only', () => {
+    expect(CLIENT_CALLS.filter((call) => call.path !== '/v1/summaries/expenses')).toHaveLength(55);
+    expect(CLIENT_CALLS.filter((call) => !call.local)).toHaveLength(10);
   });
 
   it('never serves the signed-in records export locally (MUT-325)', () => {
