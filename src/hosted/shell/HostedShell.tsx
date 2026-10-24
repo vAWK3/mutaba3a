@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { syncPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
@@ -10,14 +10,16 @@ import { billingGateOf } from '../data/trialPrompt';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
+import { DESTINATIONS, destinationOf, destinationPath } from './destinations';
 import { ProfileDrawers } from './ProfileDrawers';
 import { TrialWelcomeOpener } from './TrialWelcomeOpener';
 import { YouLinks } from './YouLinks';
 
 /**
  * `HostedShell` (hosted-portal.md §7.1): wordmark, the open profile's link to
- * the You page, the five read sections plus Expenses (MUT-44 — the portal's
- * only write), the avatar's link to the You page (MUT-425: both were menus),
+ * the You page, the four destinations (MUT-424, ADR-190: Owed, Paid, Spent,
+ * Clients; everything else one level in), Reports until its corner icon
+ * (MUT-426), the avatar's link to the You page (MUT-425: both were menus),
  * and the page. There is still no "+ Add" menu: the one create action
  * in the portal is the expense drawer, opened from the Expenses list itself.
  * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
@@ -28,23 +30,13 @@ import { YouLinks } from './YouLinks';
 /** The sidebar's lockup: the Arabic name beside it at 16px (design D3). */
 const SIDEBAR_MARK_SIZE = 32;
 
-const SECTIONS = [
-  { path: '', key: 'overview', exact: true },
-  // MUT-175 (X2): a nav item until MUT-426 moves Reports to the shell's corner icon
-  { path: '/reports', key: 'reports', exact: false },
-  { path: '/clients', key: 'clients', exact: false },
-  { path: '/receivables', key: 'receivables', exact: false },
-  { path: '/payments', key: 'payments', exact: false },
-  { path: '/documents', key: 'documents', exact: false },
-  { path: '/expenses', key: 'expenses', exact: false },
-  { path: '/conversions', key: 'conversions', exact: false },
-] as const;
-
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
   const local = useIsLocalMode();
+  // MUT-424 (E6): one map lights the destination, so /receivables lights Owed without being nested under it
+  const lit = destinationOf(useLocation({ select: (location) => location.pathname }));
   // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
     if (!local) void syncPortalUsage(userId);
@@ -62,18 +54,29 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <YouLinks profile={profile} position="top" />
         {/* MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between. */}
         {profile && billingGateOf(me, profile) !== 'locked' && (
-          <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
-            {SECTIONS.map((section) => (
-              <Link
-                key={section.key}
-                to={`/p/${profile.id}${section.path}`}
-                activeOptions={{ exact: section.exact }}
-                activeProps={{ className: 'hp-nav-on', 'aria-current': 'page' }}
-              >
-                {t(`hosted.shell.nav.${section.key}`)}
+          <>
+            <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
+              {DESTINATIONS.map((destination) => (
+                <Link
+                  key={destination.key}
+                  to={destinationPath(profile.id, destination.key)}
+                  // TanStack adds aria-current to any active link; exact keeps that to the destination's own page,
+                  // where `lit` agrees, so Owed's bare /p/:id isn't lit on every page under it.
+                  activeOptions={{ exact: true, includeSearch: false }}
+                  className={lit === destination.key ? 'hp-nav-on' : undefined}
+                  aria-current={lit === destination.key ? 'page' : undefined}
+                >
+                  {t(`hosted.destinations.${destination.key}`)}
+                </Link>
+              ))}
+            </nav>
+            {/* MUT-175 (X2): one link away until MUT-426 moves Reports to the shell's corner icon (eng review R2) */}
+            <div className="hp-nav">
+              <Link to={`/p/${profile.id}/reports`} activeProps={{ className: 'hp-nav-on', 'aria-current': 'page' }}>
+                {t('hosted.reports.title')}
               </Link>
-            ))}
-          </nav>
+            </div>
+          </>
         )}
         <div className="hp-spacer" />
         {/* MUT-425: the avatar opens You › Account (was the account menu) */}

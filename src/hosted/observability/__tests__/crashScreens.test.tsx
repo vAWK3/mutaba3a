@@ -92,7 +92,7 @@ describe('a page crash (design D3: inline, the shell stays)', () => {
     const { user } = renderPortal(`/p/${ORG_A}/clients`);
     await screen.findByRole('heading', { name: COPY.en.title });
     crash.page = false;
-    await user.click(screen.getByRole('link', { name: 'Receivables' }));
+    await user.click(screen.getByRole('link', { name: 'Paid' }));
     await waitFor(() => expect(screen.queryByRole('heading', { name: COPY.en.title })).not.toBeInTheDocument());
   });
 });

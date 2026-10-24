@@ -127,7 +127,7 @@ describe('the first-run trial step (AC1, AC2, AC4)', () => {
     for (const opts of [{ prompt: { ...UNANSWERED, welcomedAt: iso(-1), welcomeAnswer: 'skipped' as const } }, { billing: { ...trial(14), source: 'STRIPE' as const } }, { billing: trial(1.5) }]) {
       resetTrialWelcomeOffer();
       const { unmount } = portal(`/p/${ORG_B}`, opts);
-      await screen.findByRole('heading', { level: 1, name: 'Overview' });
+      await screen.findByRole('heading', { level: 1, name: 'Owed' });
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       unmount();
     }
@@ -195,7 +195,7 @@ describe('the Home trial banner (AC3)', () => {
 
   it('is gone once a card is on file, and offers no card while nothing can be sold', async () => {
     const paid = portal(`/p/${ORG_B}`, { prompt: answered, billing: { ...trial(14), source: 'STRIPE' } });
-    await screen.findByRole('heading', { level: 1, name: 'Overview' });
+    await screen.findByRole('heading', { level: 1, name: 'Owed' });
     expect(screen.queryByRole('region', { name: 'Your free trial' })).not.toBeInTheDocument();
     paid.unmount();
     portal(`/p/${ORG_B}`, { prompt: answered, overview: overview({ configured: false, catalog: { ILS: null, USD: null } }) });

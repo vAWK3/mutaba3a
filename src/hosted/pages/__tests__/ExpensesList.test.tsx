@@ -102,8 +102,9 @@ describe('ExpensesList', () => {
     await waitFor(() => expect(locationOf(router)).not.toContain('newExpense'));
   });
 
-  it('has an Expenses entry in the sidebar nav', async () => {
+  it('is the Spent destination in the sidebar nav, at the same URL (MUT-424)', async () => {
     portal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('link', { name: 'Expenses' })).toBeInTheDocument();
+    const nav = await screen.findByRole('navigation', { name: 'Sections' });
+    expect(within(nav).getByRole('link', { name: 'Spent' })).toHaveAttribute('href', `/p/${ORG_A}/expenses`);
   });
 });

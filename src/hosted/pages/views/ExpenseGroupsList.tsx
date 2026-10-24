@@ -78,7 +78,7 @@ export function ExpenseGroupsList({ search, setSearch }: ExpenseGroupsListProps)
 
   return (
     <>
-      <PageHeader title={t('hosted.expenses.title')}>{newButton}</PageHeader>
+      <PageHeader title={t('hosted.destinations.spent')}>{newButton}</PageHeader>
       <SectionTabs {...tabs} />
       <QueryView
         queries={[groups]}

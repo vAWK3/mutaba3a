@@ -14,7 +14,7 @@ import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../..
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
-import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
+import { NoMatch, PageHeader, ShowMore, StatusBadge, useBackTo } from './shared';
 
 /**
  * Receivables (hosted-portal.md §7.3): what each client owes. Open by default.
@@ -189,6 +189,8 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
   const { writable } = useWriteGate();
   const { kinds, canSettle } = incomeAffordancesFor(profile, writable);
   const redate = redateAffordancesFor(profile, writable);
+  // MUT-424: every open entry sits one level in under Owed
+  const back = useBackTo('owed');
   // The header copy carries ADD_BUTTON_ATTR (focus returns there after a save); the empty state reuses it without.
   const openAdd = () => setSearch({ ...filters, newIncome: kinds.includes('owed') ? 'owed' : kinds[0] });
   const addButton = (header: boolean) =>
@@ -199,7 +201,9 @@ export function ReceivablesPage({ search, setSearch }: { search: ReceivablesPage
     ) : undefined;
   return (
     <>
-      <PageHeader title={t('hosted.receivables.title')}>{addButton(true)}</PageHeader>
+      <PageHeader title={t('hosted.receivables.title')} back={back}>
+        {addButton(true)}
+      </PageHeader>
       <ReceivablesList
         filters={filters}
         setFilters={setSearch}

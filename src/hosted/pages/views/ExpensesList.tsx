@@ -123,8 +123,8 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
 
   return (
     <>
-      <PageHeader title={t('hosted.expenses.title')}>{recordButton}</PageHeader>
-      {/* MUT-268 (1A): Expenses · Groups under the one Expenses heading */}
+      <PageHeader title={t('hosted.destinations.spent')}>{recordButton}</PageHeader>
+      {/* MUT-268 (1A): Expenses · Groups under the one heading, Spent since MUT-424 (the tabs name the lists) */}
       <SectionTabs {...tabs} />
       <FilterBar>
         <ClientFilter value={filters.customerId} options={customers.data} onChange={(customerId) => patch({ customerId })} />

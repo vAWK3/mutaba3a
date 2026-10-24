@@ -37,7 +37,7 @@ describe('FirmOnBanner (MUT-300, DR5)', () => {
 
   it('stays hidden while firm features are off', async () => {
     portal([{ ...studio, firm: false, role: null }]);
-    await screen.findByRole('heading', { name: 'Overview' });
+    await screen.findByRole('heading', { name: 'Owed' });
     expect(screen.queryByText(TEXT)).toBeNull();
   });
 
@@ -49,7 +49,7 @@ describe('FirmOnBanner (MUT-300, DR5)', () => {
     unmount();
     vi.unstubAllGlobals();
     portal();
-    await screen.findByRole('heading', { name: 'Overview' });
+    await screen.findByRole('heading', { name: 'Owed' });
     expect(screen.queryByText(TEXT)).toBeNull();
   });
 

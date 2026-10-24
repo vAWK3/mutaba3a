@@ -15,7 +15,7 @@ import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile, useWriteGate } from '../../session/me';
 import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
-import { NoMatch, PageHeader, ShowMore } from './shared';
+import { NoMatch, PageHeader, ShowMore, useBackTo } from './shared';
 
 /**
  * Conversions (MUT-161), the hosted counterpart of the local app's
@@ -57,6 +57,8 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
   // MUT-361: a read-only profile lists and opens conversions, but offers nothing to log, change or delete.
   const { writable } = useWriteGate();
   const { t, language } = useLanguage();
+  // MUT-424: conversions sit one level in under Paid
+  const back = useBackTo('paid');
   const list = useConversions(profile.id, filters);
 
   const rows = useMemo(() => (list.data ? shape(list.data, language) : undefined), [list.data, language]);
@@ -95,7 +97,9 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
 
   return (
     <>
-      <PageHeader title={t('hosted.conversions.title')}>{recordButton}</PageHeader>
+      <PageHeader title={t('hosted.conversions.title')} back={back}>
+        {recordButton}
+      </PageHeader>
       <FilterBar>
         <CurrencyFilter value={filters.currency} onChange={(currency) => patch({ currency })} />
         <DateFilter label={t('hosted.filters.from')} value={filters.from} onChange={(from) => patch({ from })} />
