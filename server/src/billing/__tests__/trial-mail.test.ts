@@ -312,4 +312,25 @@ describe('runTrialMail (MUT-419)', () => {
     expect(rest.summary).toMatchObject({ incomplete: false, sent: 1, duplicate: 1 });
     expect(h.outbox.list().map((m) => m.to)).toEqual([first.user.email, second.user.email]);
   });
+
+  it('one person whose reads fail costs only their own mail: the run goes on and counts it not sent', async () => {
+    const h = harness();
+    const broken = await h.person({ trialStart: new Date(START.getTime() - HOUR) });
+    const fine = await h.person();
+    const memberships = h.store.memberships;
+    const listByUser = memberships.listByUser.bind(memberships);
+    memberships.listByUser = async (userId: string) => {
+      if (userId === broken.user.id) throw new Error('connection reset');
+      return listByUser(userId);
+    };
+    h.setClock(jobAt(20));
+    const { rows, summary } = await h.run({ now: jobAt(20) });
+    expect(rows.map((r) => [r.userId, r.outcome])).toEqual([
+      [broken.user.id, 'failed'],
+      [fine.user.id, 'sent'],
+    ]);
+    expect(summary).toMatchObject({ due: 2, sent: 1, notSent: 1 });
+    expect(h.outbox.list().map((m) => m.to)).toEqual([fine.user.email]);
+  });
 });
+

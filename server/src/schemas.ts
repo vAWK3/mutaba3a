@@ -508,7 +508,7 @@ export const TrialMailSummarySchema = z
     duplicate: z.number().int().openapi({ description: 'Already mailed for this stage' }),
     notSent: z.number().int().openapi({ description: 'Due but not sent: mail off, capped, provider failure, refused or suppressed' }),
     skipped: z.object({
-      paying: z.number().int(),
+      paying: z.number().int().openapi({ description: 'A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed' }),
       covered: z.number().int(),
       otherProfiles: z.number().int(),
       suppressed: z.number().int(),

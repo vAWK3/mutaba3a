@@ -16942,6 +16942,7 @@ export interface components {
             /** @description Due but not sent: mail off, capped, provider failure, refused or suppressed */
             notSent: number;
             skipped: {
+                /** @description A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed */
                 paying: number;
                 covered: number;
                 otherProfiles: number;

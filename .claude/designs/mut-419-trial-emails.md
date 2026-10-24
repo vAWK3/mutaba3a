@@ -356,6 +356,22 @@ the store contract for `trialMailCandidates`; Terraform: no job without Stripe o
 
 Approval readiness: PASS (D-structure, R1-R3 and R4-R11 accepted, R12 rejected; unattended-run defaults pending Basel).
 
+## 14. Code review (2026-10-24, /review inside /qa-reconcile)
+
+Core pass: no defects (template column VARCHAR(40) with no enum; no approval classes or banned terms; gate hunks are
+the API-version pin bumps and one `any` pragma in a new test, the suite's existing pattern). Native adversarial pass:
+nothing critical; seven informational findings:
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | One person's failing read failed the whole run | **Fixed**: per-person try/catch, outcome `failed`, test added |
+| 2 | No alert on the job | TD-223 (already) |
+| 3 | Key ignores the trial start (an operator restart within 30 days gets no repeat) | Noted on TD-223 (the ticket fixes the key) |
+| 4 | `paying` also counts paid-and-lapsed | **Fixed**: documented in the type and the OpenAPI description |
+| 5 | Oldest-first drops the newest (ending-soon) under overload | Noted on TD-223 |
+| 6 | An UNCERTAIN send can repeat the next day (existing mailer behaviour) | Noted on TD-223 |
+| 7 | A comment moved above the wrong CLI handler | **Fixed** |
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |

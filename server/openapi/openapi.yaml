@@ -7526,6 +7526,7 @@ components:
           properties:
             paying:
               type: integer
+              description: "A Stripe subscription resolves one of their own profiles: paying now, or paid and lapsed"
             covered:
               type: integer
             otherProfiles:

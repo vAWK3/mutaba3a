@@ -375,7 +375,7 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
       else if (check.flagged === null && check.country !== null) out(`  ${check.stripeCustomerId}: couldn't ask Stripe for tax IDs; country check skipped`);
     }
   },
-  // MUT-361 (comment 12278): before the gate goes live, nobody active may be held by it by mistake.
+  // MUT-419: today's trial reminders, or (--dry-run) who they would mail and why the others are skipped.
   'billing-trial-mail': async ({ client, flag, out }) => {
     const dryRun = flag('dry-run');
     type Row = { email: string; stage: string; action: 'send' | 'skip'; skip: string | null; outcome: string | null };
@@ -387,6 +387,7 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     if (s.incomplete) out('Stopped at its time budget; run it again to continue.');
     out(dryRun ? `Dry run: ${s.due} would be mailed; ${skipped}` : `Sent ${s.sent}, already sent ${s.duplicate}, not sent ${s.notSent}; ${skipped}`);
   },
+  // MUT-361 (comment 12278): before the gate goes live, nobody active may be held by it by mistake.
   'billing-uncovered': async ({ client, out }) => {
     const { profiles } = await client.call<{ profiles: { organizationId: string; name: string; billing: { state: string; source: string; until: string | null }; people: { userId: string; email: string }[] }[] }>('GET', '/admin/v1/billing/uncovered');
     if (profiles.length === 0) return out('Nobody active is held read-only or locked.');

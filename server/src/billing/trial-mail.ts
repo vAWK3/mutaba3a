@@ -31,6 +31,10 @@ export type TrialMailStage = (typeof TRIAL_MAIL_STAGES)[number];
 export const TRIAL_REMINDER_DAYS = 3;
 /** R1: stop starting sends after this long; the Scheduler's attempt deadline is 280 s (main.tf), like the reconcile's. */
 export const TRIAL_MAIL_TIME_BUDGET_MS = 200_000;
+/**
+ * Why someone isn't mailed. `paying`: a Stripe subscription resolves one of their own profiles, whether they pay now
+ * or paid and lapsed (paid-lapse mail is Stripe's dunning, out of scope). `covered`: Malafat or an operator grant.
+ */
 export type TrialMailSkip = 'paying' | 'covered' | 'other-profiles' | 'suppressed' | 'gate-off';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -121,9 +125,18 @@ export async function runTrialMail(options: TrialMailRunOptions): Promise<{ summ
     }
     const stage = trialMailStageOf(candidate.trialStartedAt, now);
     if (!stage) continue;
-    const skip = await skipReason(options, candidate.userId, candidate.email);
-    const row: TrialMailRow = { userId: candidate.userId, email: candidate.email, locale: candidate.locale, ...stage, action: skip ? 'skip' : 'send', skip, outcome: null };
-    if (!skip && !dryRun) row.outcome = (await send(options, row)).status;
+    const row: TrialMailRow = { userId: candidate.userId, email: candidate.email, locale: candidate.locale, ...stage, action: 'send', skip: null, outcome: null };
+    try {
+      row.skip = await skipReason(options, candidate.userId, candidate.email);
+      if (row.skip) row.action = 'skip';
+      else if (!dryRun) row.outcome = (await send(options, row)).status;
+    } catch (err) {
+      // One person's failure costs only their mail (review): the rest still go, and tomorrow's run retries them.
+      options.logger.error({ err, stage: row.stage }, 'trial mail failed for one person; the next run tries again');
+      row.action = 'send';
+      row.skip = null;
+      row.outcome = 'failed';
+    }
     rows.push(row);
   }
 

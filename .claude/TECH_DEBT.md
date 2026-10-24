@@ -40,7 +40,8 @@
 **Added**: 2026-10-24
 **Priority**: Low
 **Impact**: The reconcile's failed attempts page; the trial-mail job's don't (a missed day catches up inside the window). A Resend 4xx for one address is re-claimed by the mailer every day of its window (up to 13 for `ended`), and each logs `mail provider failed`, which `email.tf`'s WARNING alert matches.
-**Fix**: Add the job to `monitoring.tf`'s Scheduler alert; treat a `rejected` trial send as final (or suppress the address).
+**Also (code review, 2026-10-24):** the key `trial:<userId>:<stage>` ignores the trial start, so an operator who restarts a trial (`setTrialStart`) within 30 days of a stage's mail gets no repeat of that stage; a send the mailer recorded UNCERTAIN (a timeout Resend actually accepted) can go out again on the next day's run; under sustained overload the oldest-first order drops the newest trials (the 3-day ending-soon window) first.
+**Fix**: Add the job to `monitoring.tf`'s Scheduler alert; treat a `rejected` trial send as final (or suppress the address); put the trial start in the key if trials are ever restarted.
 
 ### TD-222: A write retried with its Idempotency-Key after a lapse is refused, not replayed
 **Status**: Open
