@@ -48,6 +48,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)
   'src/hosted/pages/auth/EmailLinkForm.tsx': { ltr: 1 }, // the email on /signup and /recover (MUT-368)
   'src/hosted/components/ChangePasswordDrawer.tsx': { ltr: 2 }, // passwords
+  'src/hosted/components/CloseAccountDrawer.tsx': { ltr: 2 }, // the password, and the address being closed inside the sentence (MUT-333)
   'src/hosted/components/FilterControls.tsx': { ltr: 1 }, // date input
   'src/pages/landing/components/HostedRequestForm.tsx': { ltr: 2 }, // email, phone
   // A′: Expenses' "coming up" amounts, left to right before MUT-109 and kept so (brief D2)
