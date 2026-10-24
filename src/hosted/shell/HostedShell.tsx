@@ -11,6 +11,7 @@ import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
 import { ProfileDrawers } from './ProfileDrawers';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { TrialWelcomeOpener } from './TrialWelcomeOpener';
 import { UserMenu } from './UserMenu';
 
 /**
@@ -80,6 +81,8 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
       <ProfileDrawers active={profile} />
       {/* MUT-237: Change password, opened by URL from the account menu. */}
       <AccountDrawers />
+      {/* MUT-418: the first-run trial step for a first sign-in that didn't come through /setup. */}
+      {profile && <TrialWelcomeOpener />}
     </div>
   );
 }

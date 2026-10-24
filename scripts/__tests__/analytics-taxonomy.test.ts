@@ -21,6 +21,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '1.1.0': '2654fb1f1dde9896c359d58356c478181c0f8b8f7fa43a1b56f1d6b6986ad099',
   '1.2.0': 'cf7e4022ee0ce261ebf945c32e5374eafc543467d6b2902922507fb8265e8ff7',
   '2.0.0': '966de5d11f64413086408c1d870a3dd42d91c892fdbbb081f30bd9eda8c662e9',
+  // MUT-418: the trial's card prompt (portal only).
+  '2.1.0': '0f4724d88bc4e745b3892fb39f03cab16855c10ed5c645941a731d9cbb1e831c',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -203,6 +205,9 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       income_recorded: ['portal', 'ios', 'android'],
       expense_recorded: ['portal', 'ios', 'android'],
       payment_recorded: ['portal', 'ios', 'android'],
+      trial_card_prompt_shown: ['portal'],
+      trial_card_prompt_accepted: ['portal'],
+      trial_card_prompt_skipped: ['portal'],
     });
   });
 

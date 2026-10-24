@@ -998,7 +998,8 @@
         "coveredByMalafat": "Covered by your firm's Malafat plan",
         "ownedByOthers": "Your profiles are covered by their owners",
         "none": "Subscribe to keep adding records",
-        "pending": "Your first payment hasn't gone through yet"
+        "pending": "Your first payment hasn't gone through yet",
+        "activeTrial": "Card added. Your first charge is on {date}"
       },
       "context": {
         "trial": "After that your records stay readable and downloadable, but you can't add new ones until you subscribe.",
@@ -1017,7 +1018,8 @@
         "none": "Your records stay readable and downloadable.",
         "pending": "If your bank asked you to approve it, finish it in Manage billing. You're not subscribed until it does.",
         "activeMonth": "Billed monthly.",
-        "activeYear": "Billed yearly."
+        "activeYear": "Billed yearly.",
+        "activeTrial": "Your free trial continues until then. Cancel any time before it from Manage billing."
       },
       "action": {
         "subscribe": "Subscribe",
@@ -1044,9 +1046,9 @@
         "countryHint": "Sets the currency: shekels in Israel, dollars elsewhere.",
         "buyer": "You're buying",
         "person": "For yourself",
-        "personNote": "No tax number needed",
+        "personNote": "No tax number needed, in any country",
         "business": "For a business",
-        "businessNote": "Stripe asks for its tax number",
+        "businessNote": "Your invoices carry its tax number",
         "interval": "Pay",
         "monthly": "Monthly",
         "yearly": "Yearly",
@@ -1078,7 +1080,23 @@
         "changed": "Your billing changed since you opened this. Go back to see where you stand."
       },
       "mailSubject": "MTB3A billing",
-      "coOwnedNote": "Shared profiles you co-own are covered by their creator's plan."
+      "coOwnedNote": "Shared profiles you co-own are covered by their creator's plan.",
+      "welcome": {
+        "title": "Your free trial",
+        "headline": "Your 14-day free trial has started",
+        "endsOn": "It ends on {date}.",
+        "pitch": "Add a card now so nothing stops when it ends. You won't be charged until {date}. Cancel any time before then.",
+        "addCard": "Add a card now (recommended)",
+        "notNow": "Not now",
+        "continue": "Continue",
+        "later": "Your trial stays the same either way. You can add a card any time from Billing in the account menu."
+      },
+      "trialBanner": {
+        "label": "Your free trial",
+        "addCard": "Add a card",
+        "hide": "Hide for 3 days",
+        "endsOn": "Ends on {date}. You won't be charged until then."
+      }
     },
     "selfService": {
       "checking": "Checking that you're a person…",

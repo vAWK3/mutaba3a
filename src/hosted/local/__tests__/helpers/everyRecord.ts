@@ -199,6 +199,8 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   await store.accountSetup.redeem({ tokenDigest: mailed.tokenDigest, passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3', at: AT, audit: [], terms: { version: '2026-10-19', locale: 'ar', textSha256: 'e'.repeat(64), surface: 'portal', clientRelease: null }, termsAudit: [] });
   await store.users.recordFailedSignIn(other.id, LATER, new Date('2026-10-05T08:15:00.000Z'));
   await store.users.updateMalafatSuggestions(other.id, { off: true }, LATER);
+  // MUT-418: the trial prompt answered (a hosted person's; the export writes null for a device)
+  await store.users.updateTrialPrompt(other.id, 'welcome-skipped', LATER);
 
   // ints: a connection that was later disconnected (on the other person's profile: one connection per profile and provider)
   const [otherMembership] = await store.memberships.listByUser(other.id);

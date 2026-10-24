@@ -80,6 +80,21 @@
 .hp-banner-info .hp-banner-icon { color: var(--accent-2); }
 .hp-banner-icon { flex: none; width: 16px; height: 16px; margin-top: var(--space-0-5); }
 
+/* MUT-418: the free trial's days left on Home, with Add a card and (outside the last 3 days) Hide for 3 days */
+.hp-trial-banner { align-items: flex-start; }
+.hp-trial-banner-body { display: grid; gap: var(--space-1); min-width: 0; flex: 1; }
+.hp-trial-banner-body p { margin: 0; }
+.hp-trial-banner-title { font-weight: var(--weight-medium); }
+.hp-trial-banner-note { color: var(--muted); font-size: var(--text-label); }
+.hp-trial-banner-hide { flex: none; white-space: nowrap; }
+@media (max-width: 480px) {
+  .hp-trial-banner { flex-wrap: wrap; }
+  .hp-trial-banner-hide { flex-basis: 100%; text-align: start; }
+}
+
+/* MUT-418: the first-run trial step's pitch, the one line that recommends a card */
+.hp-billing-welcome-pitch { margin: 0; font-weight: var(--weight-medium); }
+
 /* MUT-155: the one-time usage question, inline at the top of the page */
 .hp-usage-prompt-body { display: grid; gap: var(--space-2); min-width: 0; }
 .hp-usage-prompt-body .hp-usage-prompt-title { margin: 0; font-size: var(--text-body); font-weight: 600; color: var(--text); }
