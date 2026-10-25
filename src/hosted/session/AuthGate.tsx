@@ -38,9 +38,13 @@ export function AuthGate() {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 
-  // Whether the portal has been shown this visit (adjusted during render, not in an effect, react-hooks v7)
-  const [shellShown, setShellShown] = useState(false);
-  if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && !shellShown) setShellShown(true);
+  // Whom the portal has been shown to since /v1/me last had an answer (adjusted during render, not in an effect,
+  // react-hooks v7). A session that starts over (the cache cleared by another tab's sign-in) starts it over too.
+  const [shownFor, setShownFor] = useState<string | null>(null);
+  const userId = me.data?.user.id ?? null;
+  if (!me.data && shownFor !== null) setShownFor(null);
+  if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && shownFor !== userId) setShownFor(userId);
+  const shellShown = userId !== null && shownFor === userId;
 
   // MUT-333: a closing account sees only the closing page (the server refuses everything else); before the terms,
   // since a person leaving needn't accept new ones to keep or leave.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY } from '../me';
@@ -84,6 +84,31 @@ describe('terms bumped mid-session (MUT-346)', () => {
     await user.keyboard('{Escape}');
     expect(screen.getByLabelText('Current password')).toHaveValue('half typed');
     expect(screen.getByRole('dialog', { name: "We've updated our terms", hidden: true })).toBeInTheDocument();
+  });
+
+  it('when /v1/me answers for someone else (records restored, every query reset), a person behind is asked on the full page, not over a fresh portal (review)', async () => {
+    const other = { ...me([profile()]), user: { ...me([profile()]).user, id: '88888888-8888-4888-8888-888888888888' }, terms: { version: NEWER, accepted: false } };
+    let answer = me([profile()]);
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(answer) });
+    const { queryClient } = renderPortal(`/p/${ORG_A}`);
+    await screen.findByRole('navigation', { name: 'Sections' });
+
+    // restoredHome.ts: the restored person's /v1/me, read from nothing
+    answer = other;
+    await act(() => queryClient.resetQueries());
+    expect(await screen.findByRole('heading', { level: 1, name: "We've updated our terms" })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: "We've updated our terms" })).not.toBeInTheDocument();
+  });
+
+  it('a failed Sign out says so inside the dialog, where it can be seen (review)', async () => {
+    const { user, bumpTerms } = portal(`/p/${ORG_A}`);
+    await screen.findByRole('navigation', { name: 'Sections' });
+    await bumpTerms();
+    const step = await screen.findByRole('dialog', { name: "We've updated our terms" });
+
+    await user.click(within(step).getByRole('button', { name: 'Sign out' }));
+    expect(await within(step).findByRole('alert')).toHaveTextContent(/sign out/i);
+    expect(within(step).getByRole('button', { name: 'Sign out' })).toBeEnabled();
   });
 
   it('at boot the step is still the full page, with no portal behind it (MUT-324)', async () => {

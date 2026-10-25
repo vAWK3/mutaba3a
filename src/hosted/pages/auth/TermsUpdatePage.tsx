@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../../lib/i18n/core';
 import { BlockingDialog } from '../../../components/ui/BlockingDialog';
@@ -53,9 +53,11 @@ function TermsUpdateStep({ version: current, heading }: { version: string; headi
   const t = useT();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const { signOut, signingOut } = useSignOut();
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<'failed' | 'changed' | null>(null);
+  const [problem, setProblem] = useState<'failed' | 'changed' | 'signOutFailed' | null>(null);
+  // Said in the step's own banner: in the dialog, a toast would sit behind it in the inert app (MUT-346 review)
+  const onSignOutFailed = useCallback(() => setProblem('signOutFailed'), []);
+  const { signOut, signingOut } = useSignOut({ onFailed: onSignOutFailed });
   // The version this step shows and accepts. A different one from /v1/me is a change the person
   // must be told about, adjusted during render (not in an effect, react-hooks v7).
   const [version, setVersion] = useState(current);
@@ -99,7 +101,7 @@ function TermsUpdateStep({ version: current, heading }: { version: string; headi
       {problem && (
         <div className="hp-banner hp-banner-error" role="alert">
           <AlertIcon />
-          <span>{t(problem === 'changed' ? 'hosted.terms.changed' : 'hosted.terms.failed')}</span>
+          <span>{t(problem === 'changed' ? 'hosted.terms.changed' : problem === 'signOutFailed' ? 'hosted.auth.signOutFailed' : 'hosted.terms.failed')}</span>
         </div>
       )}
       {link && (

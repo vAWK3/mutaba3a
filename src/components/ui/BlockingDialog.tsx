@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useDrawerFocus } from './drawer/useDrawerFocus';
 import './BlockingDialog.css';
@@ -30,6 +30,8 @@ export function BlockingDialog({ labelledBy, children, className }: BlockingDial
   // Before paint, so nothing behind is reachable for even a frame.
   useLayoutEffect(() => {
     const root = rootRef.current;
+    // Focus leaves the app before it is hidden, so nothing focused is ever inert or aria-hidden, even for a frame
+    panelRef.current?.focus({ preventScroll: true });
     const hidden = Array.from(document.body.children).filter((element): element is HTMLElement => element !== root && element instanceof HTMLElement);
     // The attributes, not the `inert` property: the same in browsers, and what jsdom can see
     const before = hidden.map((element) => ({ element, inert: element.getAttribute('inert'), ariaHidden: element.getAttribute('aria-hidden') }));
@@ -53,7 +55,8 @@ export function BlockingDialog({ labelledBy, children, className }: BlockingDial
     };
   }, [trigger]);
 
-  useEffect(() => {
+  // From the first frame: a passive effect could leave Escape to the drawer underneath for a tick
+  useLayoutEffect(() => {
     function swallowEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       event.preventDefault();
