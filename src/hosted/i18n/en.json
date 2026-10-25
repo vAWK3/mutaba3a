@@ -111,7 +111,12 @@
         "lastUsed": "Last used {when}",
         "neverUsed": "Never used",
         "today": "today",
-        "rowLabel": "{name}, {meta}"
+        "rowLabel": "{name}, {meta}",
+        "done": "Done",
+        "review": {
+          "password": "Your password is changed. These passkeys still sign in to your account. Remove any you don’t recognise.",
+          "recovery": "Your new password is set. These passkeys still sign in to your account. Remove any you don’t recognise."
+        }
       }
     },
     "closeAccount": {

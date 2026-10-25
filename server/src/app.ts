@@ -26,6 +26,7 @@ import { devOutboxRoutes } from './routes/dev-outbox.js';
 import { devAttachmentRoutes } from './routes/dev-attachments.js';
 import type { LocalAttachmentStorage } from './attachments/local-storage.js';
 import { createMailer } from './email/mailer.js';
+import { passkeyAddedEvents } from './email/passkey-notice.js';
 import type { Mailer } from './email/ports.js';
 import type { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
@@ -96,7 +97,7 @@ export interface AppDependencies {
   signInIpLimiter?: RateLimiter;
   /** MUT-115: the WebAuthn relying party (WEBAUTHN_RP_ID). Null or absent = no passkeys: every passkey route answers 404. */
   webauthn?: WebauthnConfig | null;
-  /** MUT-115: told after a passkey is added (MUT-414's mail plugs in here). Absent = nothing happens. */
+  /** MUT-115: told after a passkey is added. Absent = MUT-414's "a passkey was added" mail through `mailer`. */
   passkeyEvents?: PasskeyEvents;
   /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
   portal?: { distDir: string } | null;
@@ -345,7 +346,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       settings: sessions,
       ipLimiter: signInIpLimiter,
       webauthn: deps.webauthn ?? null,
-      ...(deps.passkeyEvents ? { events: deps.passkeyEvents } : {}),
+      // MUT-414: the "a passkey was added" mail, unless a test brings its own events.
+      events: deps.passkeyEvents ?? passkeyAddedEvents(mailer, deps.logger, sessions),
     }),
   );
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).

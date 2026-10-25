@@ -38,6 +38,8 @@ export function useAccountDrawers() {
     openCloseAccount: () => go({ closeAccount: true }, false),
     /** MUT-115: Passkeys (`?passkeys=true`). */
     openPasskeys: () => go({ passkeys: true }, false),
+    /** MUT-415: the review after a password change, in Change password's place (Back doesn't reopen the form). */
+    reviewPasskeys: () => go({ passkeys: true, review: 'password' }, true),
     close: () => go({}, true),
   };
 }
@@ -46,12 +48,12 @@ export function useAccountDrawers() {
 export function AccountDrawers() {
   const drawers = useAccountDrawers();
   const local = useIsLocalMode();
-  if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} />;
+  if (drawers.state.changePassword && !local) return <ChangePasswordDrawer onClose={drawers.close} onReviewPasskeys={drawers.reviewPasskeys} />;
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   // MUT-333: an account's, never this device's; Download my records opens Your data in its place.
   if (drawers.state.closeAccount && !local) return <CloseAccountDrawer onClose={drawers.close} onDownload={drawers.openYourData} />;
   // MUT-115: an account's, and only where passkeys work on this host (never the legacy run.app portal).
-  if (drawers.state.passkeys && !local && passkeySupport()) return <PasskeysDrawer onClose={drawers.close} />;
+  if (drawers.state.passkeys && !local && passkeySupport()) return <PasskeysDrawer review={drawers.state.review} onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }

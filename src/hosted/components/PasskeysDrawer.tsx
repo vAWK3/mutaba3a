@@ -20,13 +20,16 @@ import { useToast } from './Toast';
  *
  * MUT-370's seam: `addPasskeyFlow` (passkeys/addPasskey.ts) is the whole "add" ceremony with its outcomes, so the "suggest a passkey"
  * card after first sign-in can run the same flow without this drawer.
+ *
+ * MUT-415: `review` opens it as the step after a password change or a recovery: the intro says these passkeys still
+ * sign in and to remove any the person doesn't recognise, and Done takes Add's place. The list is the same.
  */
 const FORM_ID = 'hosted-passkeys-step-up';
 const NAME_MAX = 64;
 
 type Banner = 'addFailed' | 'wrongPassword' | 'renameFailed' | 'removeFailed' | 'unreachable';
 
-export function PasskeysDrawer({ onClose }: { onClose: () => void }) {
+export function PasskeysDrawer({ onClose, review }: { onClose: () => void; review?: 'password' | 'recovery' | undefined }) {
   const t = useT();
   const showToast = useToast();
   const queryClient = useQueryClient();
@@ -94,15 +97,23 @@ export function PasskeysDrawer({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       closeLabel={t('common.close')}
       footer={
-        <div className="drawer-footer-right">
-          {atLimit && <p className="form-hint hp-passkey-limit">{t('hosted.account.passkeys.limit', { limit })}</p>}
-          <Button ref={addRef} type={stepUp ? 'submit' : 'button'} form={stepUp ? FORM_ID : undefined} onClick={stepUp ? undefined : () => void add()} disabled={atLimit} aria-disabled={adding || undefined} aria-busy={adding}>
-            {addLabel}
-          </Button>
-        </div>
+        review ? (
+          <div className="drawer-footer-right">
+            <Button ref={addRef} type="button" onClick={onClose}>
+              {t('hosted.account.passkeys.done')}
+            </Button>
+          </div>
+        ) : (
+          <div className="drawer-footer-right">
+            {atLimit && <p className="form-hint hp-passkey-limit">{t('hosted.account.passkeys.limit', { limit })}</p>}
+            <Button ref={addRef} type={stepUp ? 'submit' : 'button'} form={stepUp ? FORM_ID : undefined} onClick={stepUp ? undefined : () => void add()} disabled={atLimit} aria-disabled={adding || undefined} aria-busy={adding}>
+              {addLabel}
+            </Button>
+          </div>
+        )
       }
     >
-      <p className="hp-muted hp-passkey-intro">{t('hosted.account.passkeys.intro')}</p>
+      <p className="hp-muted hp-passkey-intro">{t(review ? `hosted.account.passkeys.review.${review}` : 'hosted.account.passkeys.intro')}</p>
       {banner && (
         <div className="hp-banner hp-banner-error" role="alert" id={bannerId}>
           <AlertIcon />

@@ -38,11 +38,11 @@ import {
  */
 
 /**
- * MUT-414's seam: told after a passkey is added (committed), never able to change the answer. The default does
- * nothing; the "a passkey was added to your account" mail plugs in here once the mailer is live (MUT-359).
+ * Told after a passkey is added (committed), never able to change the answer. The app plugs in MUT-414's "a passkey
+ * was added to your account" mail (email/passkey-notice.ts); tests pass their own.
  */
 export interface PasskeyEvents {
-  added(event: { user: UserRecord; passkey: PasskeyRecord; requestId: string | null }): Promise<void>;
+  added(event: { user: UserRecord; passkey: PasskeyRecord; requestId: string | null; requestUrl: string }): Promise<void>;
 }
 
 export const NO_PASSKEY_EVENTS: PasskeyEvents = { added: async () => {} };
@@ -219,7 +219,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
         if (err instanceof UniqueViolation) throw new ApiError('CONFLICT', 'This passkey is already registered', { reason: 'PASSKEY_EXISTS' });
         throw err;
       }
-      await events.added({ user, passkey, requestId: c.get('requestId') });
+      await events.added({ user, passkey, requestId: c.get('requestId'), requestUrl: c.req.url });
       return c.json(passkeyJson(passkey), 201);
     },
   );

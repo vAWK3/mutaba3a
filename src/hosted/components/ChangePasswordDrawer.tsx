@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { api, ApiError } from '../api/client';
+import { passkeysToReview } from '../passkeys/review';
 import { NEW_PASSWORD_POLICY, passwordProblem, type PasswordProblem } from '../pages/auth/setupLink';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -16,6 +17,9 @@ import { useToast } from './Toast';
  * failure mode a toggle exists to prevent. A wrong current password is a
  * banner, not a field error — it isn't this field that's invalid, the
  * account doesn't recognise it.
+ *
+ * MUT-415: a person with passkeys goes on to the passkey review in this
+ * drawer's place, since passkeys survive the change; without any, it closes.
  */
 
 const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLICY.maxLength };
@@ -24,7 +28,7 @@ const FORM_ID = 'hosted-change-password-form';
 type FieldError = PasswordProblem;
 type Banner = { kind: 'wrongCurrent' } | { kind: 'unreachable' };
 
-export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
+export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: () => void; onReviewPasskeys?: () => void }) {
   const t = useT();
   const showToast = useToast();
   const currentRef = useRef<HTMLInputElement>(null);
@@ -53,8 +57,10 @@ export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
       await api.changePassword({ currentPassword, newPassword });
       // MUT-262: whatever failed on the old cookie while the change was in flight is read again under the new one.
       void queryClient.invalidateQueries();
+      const review = onReviewPasskeys ? await passkeysToReview(queryClient) : false;
       showToast(t('hosted.account.changePassword.success'), { tone: 'info' });
-      onClose();
+      if (review) onReviewPasskeys?.();
+      else onClose();
     } catch (error) {
       if (error instanceof ApiError && error.code === 'CURRENT_PASSWORD_WRONG') {
         setBanner({ kind: 'wrongCurrent' });

@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — A passkey added is mailed to the owner; passkeys are reviewed after a password change or a recovery (MUT-414, MUT-415)
+
+**Why:** passkeys survive a password change by design (MUT-115). Someone who knew the password could plant one, and someone resetting a password they think was stolen kept every passkey without seeing them.
+
+### Added
+- Server: `passkey-added` mail (en/ar, `email/templates/copy.ts`), sent by `email/passkey-notice.ts` through the `PasskeyEvents.added` seam (now the app's default; the event carries `requestUrl`). Names the passkey, says it was just added (no time: ADR-159 §5), keyed `passkey-added:<passkeyId>`, outside the per-recipient cap like the password notice; suppression is the mailer's; a mail failure never fails the add.
+- Portal: `passkeys/review.ts` (`passkeysToReview`: only where passkeys work and the account has one; seeds the drawer's list). Change password goes on to the Passkeys drawer with `?review=password` in its place; a non-signup setup-link redeem lands on `/?passkeys=true&review=recovery`. The drawer's `review` mode: its own intro, Done in Add's place. `review` joins the shell overlay keys. Strings `hosted.account.passkeys.{done,review.password,review.recovery}` en/ar.
+- Tests: see TEST_PLAN. No API change (no version bump).
+
+---
+
 ## [Unreleased] - 2026-10-25 — Mail is sent from notify.<apex>, the Resend domain (ADR-174 amendment 1)
 
 **Why:** Basel verified `notify.mtb3a.com` in Resend, not the apex, so the sender and Resend's DNS records must sit under it.

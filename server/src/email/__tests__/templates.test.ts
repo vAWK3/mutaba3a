@@ -24,6 +24,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'trial-ended': { subscribeLink: SUBSCRIBE, exportLink: EXPORT },
   'trial-locking-soon': { daysLeft: 2, subscribeLink: SUBSCRIBE, exportLink: EXPORT },
   'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: 'https://portal.example.test/sign-in' },
+  'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: 'https://portal.example.test/' },
 };
 /** Numbers a template may print, from its own count vars; anything else numeric is a defect. */
 const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {

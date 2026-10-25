@@ -127,6 +127,8 @@ test('Changing the password keeps the passkey', { tag: '@portal-selfservice.pass
     await dialog.getByLabel('New password').fill('a brand new long passphrase');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByText('Password changed')).toBeVisible();
+    // MUT-415: the passkey review follows; keeping the passkey is pressing Done.
+    await page.getByRole('dialog', { name: 'Passkeys' }).getByRole('button', { name: 'Done' }).click();
   });
   await step('Sign out and Sign in with a passkey', async () => {
     await signOut(page, authenticator);
@@ -134,6 +136,77 @@ test('Changing the password keeps the passkey', { tag: '@portal-selfservice.pass
   });
   await step('Signed in with the passkey', async () => {
     await expect(page).toHaveURL(HOME);
+  });
+});
+
+test('Adding a passkey mails the account owner', { tag: '@portal-selfservice.passkeys.added-mail' }, async ({ page, step }) => {
+  const { email } = await signedIn(page);
+  await step('Add a passkey', async () => {
+    await addPasskey(page);
+  });
+  await step('A "passkey added" mail arrives, naming it and saying what to do if it wasn’t you', async () => {
+    const mail = await mailTo(email, 'passkey-added');
+    expect(mail.subject).toBe('A passkey was added to your MTB3A account');
+    const rename = await page.getByRole('dialog', { name: 'Passkeys' }).getByRole('button', { name: /^Rename / }).getAttribute('aria-label');
+    expect(mail.text).toContain(`“${rename?.replace(/^Rename /, '')}”`);
+    expect(mail.text).toContain('Not you? Sign in, change your password, then remove this passkey');
+  });
+});
+
+test('After a password change, your passkeys are listed and one is removed in place', { tag: '@portal-selfservice.passkeys.review-after-password' }, async ({ page, step }) => {
+  await signedIn(page);
+  await step('Add a passkey and close Passkeys', async () => {
+    await addPasskey(page);
+    await page.getByRole('dialog', { name: 'Passkeys' }).getByRole('button', { name: 'Close' }).click();
+  });
+  await step('Change the password from You › Account', async () => {
+    await youRow(page, 'Change password').click();
+    const dialog = page.getByRole('dialog', { name: 'Change password' });
+    await dialog.getByLabel('Current password').fill(PASSWORD);
+    await dialog.getByLabel('New password').fill('a brand new long passphrase');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Password changed')).toBeVisible();
+  });
+  const review = page.getByRole('dialog', { name: 'Passkeys' });
+  await step('The passkey review lists the passkey', async () => {
+    await expect(review.getByText('Your password is changed. These passkeys still sign in to your account. Remove any you don’t recognise.')).toBeVisible();
+    await expect(review.getByRole('listitem')).toHaveCount(1);
+    await expect(review.getByRole('button', { name: 'Add a passkey' })).toHaveCount(0);
+  });
+  await step('Press Remove on it and confirm', async () => {
+    await review.getByRole('button', { name: /^Remove / }).click();
+    await review.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(page.getByText('Passkey removed. Devices signed in with it are signed out.')).toBeVisible();
+    await expect(review.getByRole('listitem')).toHaveCount(0);
+  });
+  await step('Done closes the review', async () => {
+    await review.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+});
+
+test('After a recovery, your passkeys are listed', { tag: '@portal-selfservice.passkeys.review-after-recovery' }, async ({ page, step }) => {
+  const { email, authenticator } = await signedIn(page);
+  await stubTurnstile(page, 'pass');
+  await step('Add a passkey, then sign out', async () => {
+    await addPasskey(page);
+    await signOut(page, authenticator);
+  });
+  await step('Forgot your password?: open the mail’s link and choose a new password', async () => {
+    await page.getByRole('link', { name: 'Forgot your password?' }).click();
+    await page.getByLabel('Email').fill(email);
+    await page.getByRole('button', { name: 'Send link' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Check your email' })).toBeVisible();
+    await page.goto(setupLinkIn(await mailTo(email, 'reset-password')));
+    await page.getByLabel('New password').fill('a brand new long passphrase');
+    await page.getByRole('checkbox', { name: /terms of service/ }).check();
+    await page.getByRole('button', { name: 'Save and sign in' }).click();
+  });
+  await step('Signed in, the passkey review lists the passkey', async () => {
+    const review = page.getByRole('dialog', { name: 'Passkeys' });
+    await expect(review.getByText('Your new password is set. These passkeys still sign in to your account. Remove any you don’t recognise.')).toBeVisible();
+    await expect(review.getByRole('listitem')).toHaveCount(1);
+    await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}\?passkeys=true&review=recovery$/);
   });
 });
 
