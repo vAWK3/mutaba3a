@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 /**
  * MUT-359 (ADR-159 §5, D4, D21): is Mutaba3a's sending domain ready, and is tracking off?
  *
- *   npm --prefix server run email:check            DNS only, no key: DKIM, the return-path MX and SPF, DMARC.
+ *   npm --prefix server run email:check            DNS only, no key: DKIM, Forge's return-path CNAMEs, DMARC.
  *                                                  The release preflight runs this when production.tfvars says
  *                                                  mailer = "resend".
  *   npm --prefix server run email:check -- --api   Also reads the domain through Resend's API: verified, every record
@@ -18,13 +18,20 @@ import { pathToFileURL } from 'node:url';
  * One `[email] …` line per problem; exit 1 on any.
  */
 export const SENDING_REGION = 'eu-west-1';
+/**
+ * Resend Forge (turned on 2026-10-25) replaced SES's return path (MX + SPF on `send.`) with two CNAMEs into Forge;
+ * the regional one names the region in short. Resend's dashboard shows both as "SPF". Keep in step with the frontdoor
+ * stack's email.tf.
+ */
+const FORGE_REGION_CODE: Record<string, string> = { 'eu-west-1': 'euw1' };
 const RESEND_API = 'https://api.resend.com';
 const TIMEOUT_MS = 15_000;
 
 export interface DnsLookup {
   /** TXT records with their chunks joined; [] when there are none. */
   txt(name: string): Promise<string[]>;
-  mx(name: string): Promise<{ exchange: string; priority: number }[]>;
+  /** The CNAME target, as published; [] when there is none. */
+  cname(name: string): Promise<string[]>;
 }
 
 export interface ResendDomain {
@@ -53,9 +60,9 @@ export const systemDns: DnsLookup = {
       throw err;
     }
   },
-  async mx(name) {
+  async cname(name) {
     try {
-      return await dnsPromises.resolveMx(name);
+      return await dnsPromises.resolveCname(name);
     } catch (err) {
       if (NO_RECORD.has((err as { code?: string }).code ?? '')) return [];
       throw err;
@@ -68,14 +75,23 @@ export async function checkEmailDns(domain: string, dns: DnsLookup, region = SEN
   const problems: string[] = [];
   const dkim = await dns.txt(`resend._domainkey.${domain}`);
   if (!dkim.some((r) => /(^|;)\s*p=[A-Za-z0-9+/=]{20,}/.test(r))) problems.push(`no DKIM key at resend._domainkey.${domain} (TXT "p=…")`);
-  const returnPath = `feedback-smtp.${region}.amazonses.com`;
-  const mx = await dns.mx(`send.${domain}`);
-  if (mx.length === 0) problems.push(`no return-path MX at send.${domain}`);
-  else if (!mx.some((r) => r.exchange.replace(/\.$/, '').toLowerCase() === returnPath)) problems.push(`the return-path MX at send.${domain} isn't ${returnPath} (sending region ${region})`);
-  const spf = await dns.txt(`send.${domain}`);
-  if (!spf.some((r) => r.startsWith('v=spf1') && r.includes('include:amazonses.com'))) problems.push(`no SPF at send.${domain} (TXT "v=spf1 include:amazonses.com ~all")`);
+  for (const [label, target] of forgeReturnPath(region)) {
+    const found = (await dns.cname(`${label}.${domain}`)).map((t) => t.replace(/\.$/, '').toLowerCase());
+    if (!found.includes(target)) {
+      problems.push(`the return path at ${label}.${domain} isn't CNAME ${target} (Resend Forge, sending region ${region})${found.length ? `: it points at ${found.join(', ')}` : ''}`);
+    }
+  }
   if (!(await hasDmarc(domain, dns))) problems.push(`no DMARC record at _dmarc.${domain} or a parent domain (TXT "v=DMARC1; p=none")`);
   return problems;
+}
+
+/** Forge's return-path CNAMEs, label → target. An unmapped region yields an impossible target, so the check fails loudly. */
+function forgeReturnPath(region: string): [string, string][] {
+  const code = FORGE_REGION_CODE[region] ?? `unknown-region-${region}`;
+  return [
+    ['send', 'send.forge.rmta.net'],
+    ['rsend', `rsend-${code}.forge.rmta.net`],
+  ];
 }
 
 /** DMARC on the domain or, for a mail subdomain, on a parent: the record that governs it (RFC 7489 §6.6.3). */
@@ -148,7 +164,7 @@ export async function emailCheckMain(io: EmailCheckIo): Promise<number> {
   }
   for (const p of problems) io.console.error(`[email] ${p}`);
   if (problems.length > 0) return 1;
-  io.console.log(`[email] ok: ${domain} publishes DKIM, the return path (${SENDING_REGION}) and DMARC${withApi ? `, and Resend says verified in ${SENDING_REGION} with tracking off` : ''}`);
+  io.console.log(`[email] ok: ${domain} publishes DKIM, the Forge return path (${SENDING_REGION}) and DMARC${withApi ? `, and Resend says verified in ${SENDING_REGION} with tracking off` : ''}`);
   return 0;
 }
 

@@ -1305,7 +1305,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 | `MAILER` | `infrastructure/terraform` var `mailer` (`noop` / `resend`) | `noop`: nothing is sent, and the password notice resolves to `disabled` |
 | Secrets `mutaba3a-api-resend-api-key`, `mutaba3a-api-resend-webhook-secret` | `infrastructure/terraform/email.tf` | Exist, empty. Terraform never writes their values. Mounted only with `mailer = "resend"` |
 | Sender, reply-to, cap | `MAIL_FROM_ADDRESS = no-reply@<mail domain>` (`npm run hosts -- get mailDomain`, from `config/hosts.json`), vars `mail_reply_to` and `mail_daily_cap` | Not set |
-| DNS: DKIM, the `send.` return path (MX + SPF), DMARC `p=none` | `infrastructure/frontdoor/email.tf`, var `resend_dkim_value` | Not created |
+| DNS: DKIM, the Resend Forge return path (CNAMEs on `send.` and `rsend.`), DMARC `p=none` | `infrastructure/frontdoor/email.tf`, var `resend_dkim_value` | Not created |
 | Bounce webhook `POST /v1/email/resend/webhook` | The API | Answers 503 `MAILER_NOT_CONFIGURED` until `RESEND_WEBHOOK_SECRET` is set. It keeps only events sent from our domain (the account is shared) |
 | Alerts "Mail cap reached" and "Mail provider failing" | `email.tf`, on the §6b channels | Don't exist. Created with `mailer = "resend"` |
 | `guard_mailer_release` | `scripts/lib/release-guard.sh` | Refuses a release that would switch mail off while the service mounts `RESEND_API_KEY` (`SKIP_MAILER_GUARD=1` to mean it) |
@@ -1317,7 +1317,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 #### Go live (Basel, at the end of the run)
 
 1. **Privacy first.** MUT-369's privacy-policy paragraph is live: Resend is a processor and keeps records in the US. Mail carries links, never money records.
-2. **Resend:** on the Barmajiyat account, add the mail domain from `config/hosts.json` (`npm run hosts -- get mailDomain`: `<mailSubdomain>.<apex>`). DKIM and the `send.` records go under it; DMARC stays on the apex, which governs the subdomain. Pick region **eu-west-1**, and turn **open tracking and click tracking off** (Domains › the domain › Configuration).
+2. **Resend:** on the Barmajiyat account, add the mail domain from `config/hosts.json` (`npm run hosts -- get mailDomain`: `<mailSubdomain>.<apex>`). DKIM and Forge's `send.` and `rsend.` CNAMEs go under it (Forge on since 2026-10-25; it replaced SES's MX + SPF on `send.`); DMARC stays on the apex, which governs the subdomain. Pick region **eu-west-1**, and turn **open tracking and click tracking off** (Domains › the domain › Configuration).
 3. **DNS:** copy the DKIM value Resend shows (`p=MIGf…`) into `infrastructure/frontdoor/production.tfvars` as `resend_dkim_value`, plus `dmarc_report_address` if you want DMARC reports. An address off the apex needs that domain's authorization record. Then:
    ```bash
    cd infrastructure/frontdoor && terraform plan -var-file=production.tfvars
