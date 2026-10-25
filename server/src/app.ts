@@ -494,7 +494,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
   app.route('/', oauthCleanupRoutes(deps.store));
-  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), version: deps.version }));
+  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), version: deps.version }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',

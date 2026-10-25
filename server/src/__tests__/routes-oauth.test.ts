@@ -32,7 +32,7 @@ describe('discovery', () => {
 });
 
 describe('sign-in end to end (AC1)', () => {
-  it('registers, authorizes, consents, exchanges and initializes /mcp with no tools (D10)', async () => {
+  it('registers, authorizes, consents, exchanges, initializes /mcp and lists its tools (D10; tools since MUT-435)', async () => {
     const h = harness();
     const p = await person(h);
     const { bearer } = await connect(h, p);
@@ -42,7 +42,7 @@ describe('sign-in end to end (AC1)', () => {
     const tools = await h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) });
     expect(tools.status).toBe(200);
     const body = await read(tools);
-    expect(body.result?.tools ?? []).toEqual([]);
+    expect((body.result.tools as Array<{ name: string }>).map((t) => t.name)).toContain('list_profiles');
   });
 
   it('a refresh rotates and the new access token works', async () => {

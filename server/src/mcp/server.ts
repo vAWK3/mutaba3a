@@ -1,19 +1,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AgentIdentity } from '../auth/middleware.js';
+import type { ErrorReporter } from '../observability/reporter.js';
 import type { LedgerStore } from '../repositories/ports.js';
+import { registerReadTools } from './read-tools.js';
 
 export const MCP_SERVER_NAME = 'mtb3a';
 
 /**
- * MUT-434: the MCP server one /mcp request talks to, built per request for the authenticated agent (stateless).
- * It registers no tools yet (D10): MUT-435 adds the read tools here and MUT-436 the write tools, each opening its store
- * methods in the agent guard deliberately. `agent` and `store` are the seam they build on.
+ * MUT-434/435: the MCP server one /mcp request talks to, built per request for the authenticated agent (stateless).
+ * MUT-435 registers the read tools (a grant with the read scope); MUT-436 adds the write tools. Every tool reads through
+ * `store`, the request-scoped store, so the agent guard (AGENT_STORE_METHODS) applies to each call.
  */
-export function createMcpServer(context: { agent: AgentIdentity; store: LedgerStore; version: string }): McpServer {
-  void context.agent;
-  void context.store;
-  return new McpServer(
+export function createMcpServer(context: { agent: AgentIdentity; store: LedgerStore; reporter: ErrorReporter; version: string }): McpServer {
+  const server = new McpServer(
     { name: MCP_SERVER_NAME, version: context.version },
-    { instructions: 'MTB3A keeps a freelancer’s income and expenses. Show the person what you found and ask before you write anything.' },
+    {
+      instructions:
+        'MTB3A keeps a freelancer’s income and expenses. Show the person what you found and ask before you write anything. ' +
+        'Never choose a profile for them, and check find_similar_expenses before adding an expense so a purchase is recorded once.',
+    },
   );
+  registerReadTools(server, { agent: context.agent, store: context.store, reporter: context.reporter });
+  return server;
 }

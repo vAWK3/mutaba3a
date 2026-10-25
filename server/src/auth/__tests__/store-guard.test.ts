@@ -4,7 +4,7 @@ import { contextStorage } from 'hono/context-storage';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { AppEnv } from '../middleware.js';
-import { STORE_ACCESS, principalStoreGuard, requestScopedStore, storeRefusal, unguarded, type MethodAccess } from '../store-guard.js';
+import { AGENT_STORE_METHODS, STORE_ACCESS, agentStoreGuard, principalStoreGuard, requestScopedStore, storeRefusal, unguarded, type MethodAccess } from '../store-guard.js';
 import { PROFILE_DEPENDENT_DOMAINS, WRITABILITY_MATRIX, type Access, type Domain } from '../writability.js';
 
 type Entry = [repo: string, method: string, access: MethodAccess];
@@ -209,6 +209,42 @@ describe('per-user feature flags (MUT-433)', () => {
     expect(access).toBe('sessionOnly');
     expect(storeRefusal('session', null, access)).toBeNull();
     expect(storeRefusal('apiKey', null, access)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+describe('the MCP agent guard (MUT-435)', () => {
+  const guard = agentStoreGuard();
+
+  it('opens exactly the methods the read tools call, nothing else', () => {
+    expect([...AGENT_STORE_METHODS].sort()).toEqual([
+      'customers.list',
+      'expenseCategories.list',
+      'expenses.list',
+      'inboxEntries.list',
+      'memberships.find',
+      'memberships.listByUser',
+      'organizations.getById',
+      'vendors.search',
+    ]);
+  });
+
+  it('allows every listed method and refuses every other classified one, read class included', () => {
+    for (const [repo, method] of entries) {
+      expect(outcome(guard, repo, method), `${repo}.${method}`).toBe(AGENT_STORE_METHODS.has(`${repo}.${method}`) ? 'allowed' : 'PRINCIPAL_NOT_ACCEPTED:null');
+    }
+  });
+
+  it('lists only classified methods, none of them operator-only', () => {
+    for (const name of AGENT_STORE_METHODS) {
+      const [repo, method] = name.split('.') as [string, string];
+      const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess>>)[repo]?.[method];
+      expect(access, name).toBeDefined();
+      expect(access, name).not.toBe('operator');
+    }
+  });
+
+  it('still throws on a method nobody classified', () => {
+    expect(() => guard.assertCanCall('expenses', 'notAMethod')).toThrow('Unclassified store method expenses.notAMethod');
   });
 });
 

@@ -3,11 +3,14 @@ import { Hono } from 'hono';
 import { authenticateAgent, type AgentAuthOptions } from '../auth/agent-auth.js';
 import type { AppEnv } from '../auth/middleware.js';
 import { createMcpServer } from '../mcp/server.js';
+import type { ErrorReporter } from '../observability/reporter.js';
 import type { LedgerStore } from '../repositories/ports.js';
 
 export interface McpRouteOptions extends AgentAuthOptions {
   /** The guarded store tools will read through (the agent guard set by authenticateAgent applies). */
   guardedStore: LedgerStore;
+  /** MUT-435: where a tool's unexpected failure goes (the agent only sees a retry message). */
+  reporter: ErrorReporter;
   version: string;
 }
 
@@ -26,7 +29,7 @@ export function mcpRoutes(options: McpRouteOptions): Hono<AppEnv> {
   });
 
   app.post('/mcp', async (c) => {
-    const server = createMcpServer({ agent: c.get('agent'), store: options.guardedStore, version: options.version });
+    const server = createMcpServer({ agent: c.get('agent'), store: options.guardedStore, reporter: options.reporter, version: options.version });
     // No sessionIdGenerator: stateless mode, a fresh server per request.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);

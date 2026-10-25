@@ -1,0 +1,77 @@
+import type { IsoDate } from '../dates.js';
+import { FUZZY_SUGGESTION_FLOOR, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
+
+/**
+ * MUT-435 (AC2, epic MUT-432 decision 4): the one rule for "this is probably the same purchase" — same currency, same
+ * amount, dated within MATCH_DATE_WINDOW_DAYS either side, and a similar vendor ranking it higher. A missing vendor on
+ * either side never excludes a candidate (a receipt or a statement line often has none); it only ranks lower.
+ * `find_similar_expenses` uses it now; MUT-437 (statement ↔ receipt matching) imports it and must not redefine it.
+ */
+export const MATCH_DATE_WINDOW_DAYS = 3;
+
+export interface MatchProbe {
+  amountMinor: bigint;
+  currency: string;
+  occurredOn: IsoDate;
+  vendor?: string | null | undefined;
+}
+
+export interface MatchCandidate {
+  amountMinor: bigint;
+  currency: string;
+  occurredOn: IsoDate;
+  vendor: string | null;
+}
+
+export type MatchReason = 'currency' | 'amount' | 'date' | 'vendor';
+
+export interface MatchResult {
+  matches: boolean;
+  /** Higher is a better match: a similar vendor first, then the nearest date. Meaningless when `matches` is false. */
+  score: number;
+  daysApart: number;
+  reasons: MatchReason[];
+}
+
+const DAY_MS = 86_400_000;
+
+function dayNumber(date: IsoDate): number {
+  return Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / DAY_MS;
+}
+
+function isoOf(day: number): IsoDate {
+  return new Date(day * DAY_MS).toISOString().slice(0, 10);
+}
+
+/** The inclusive date range a candidate must fall in: the store's `from`/`to` filter for a probe. */
+export function dateWindow(occurredOn: IsoDate): { from: IsoDate; to: IsoDate } {
+  const day = dayNumber(occurredOn);
+  return { from: isoOf(day - MATCH_DATE_WINDOW_DAYS), to: isoOf(day + MATCH_DATE_WINDOW_DAYS) };
+}
+
+/** Typeahead scoring is one-directional (query prefix of a name); a match reads both ways. */
+function vendorSimilarity(a: string | null | undefined, b: string | null | undefined): number {
+  const ka = a ? vendorNameKey(a) : '';
+  const kb = b ? vendorNameKey(b) : '';
+  if (!ka || !kb) return 0;
+  return Math.max(scoreVendorName(ka, kb), scoreVendorName(kb, ka));
+}
+
+export function matchScore(probe: MatchProbe, candidate: MatchCandidate): MatchResult {
+  const daysApart = Math.abs(dayNumber(candidate.occurredOn) - dayNumber(probe.occurredOn));
+  const matches = probe.currency === candidate.currency && probe.amountMinor === candidate.amountMinor && daysApart <= MATCH_DATE_WINDOW_DAYS;
+  const vendor = vendorSimilarity(probe.vendor, candidate.vendor);
+  const reasons: MatchReason[] = ['currency', 'amount', 'date'];
+  if (vendor >= FUZZY_SUGGESTION_FLOOR) reasons.push('vendor');
+  // Vendor similarity dominates; a nearer date breaks ties (0..1 over the window).
+  const score = (vendor >= FUZZY_SUGGESTION_FLOOR ? 1 + vendor : 0) + (MATCH_DATE_WINDOW_DAYS + 1 - daysApart) / (MATCH_DATE_WINDOW_DAYS + 1);
+  return { matches, score, daysApart, reasons: matches ? reasons : [] };
+}
+
+/** The candidates that match, best first. */
+export function rankMatches<T extends MatchCandidate>(probe: MatchProbe, candidates: readonly T[]): Array<{ item: T; match: MatchResult }> {
+  return candidates
+    .map((item) => ({ item, match: matchScore(probe, item) }))
+    .filter((r) => r.match.matches)
+    .sort((a, b) => b.match.score - a.match.score);
+}
