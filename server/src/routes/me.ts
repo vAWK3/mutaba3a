@@ -86,8 +86,9 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       locale: user.locale,
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
-      // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
-      passkeyPrompt: passkeyPrompt && passkeysAt ? passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt) : null,
+      // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none. Never to a closing
+      // account, which reaches no passkey route (MUT-333).
+      passkeyPrompt: passkeyPrompt && passkeysAt ? suggestion(passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt), user.closure !== null) : null,
       status: user.status,
       // MUT-333: while closing, the clients show only Keep my account and Sign out.
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
@@ -98,6 +99,10 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     terms: termsNow,
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
   };
+}
+
+function suggestion<T extends { due: boolean }>(view: T, closing: boolean): T {
+  return closing ? { ...view, due: false } : view;
 }
 
 /** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */

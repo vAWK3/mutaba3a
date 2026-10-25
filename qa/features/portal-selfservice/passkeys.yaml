@@ -124,8 +124,8 @@ features:
       - Sign in, add a passkey from You › Account › Passkeys and close the drawer
       - Go Home, then reload
     expect:
-      - The card leaves as soon as the passkey is added
-      - No card on Home, then or after a reload
+      - Home suggests a passkey before one is added
+      - No card on Home once one is added, then or after a reload
   - id: suggest-arabic-phone
     title: The passkey suggestion in Arabic on a 375 px phone
     steps:

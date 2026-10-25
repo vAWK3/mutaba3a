@@ -451,5 +451,6 @@ describe('the "Add a passkey" suggestion (MUT-370)', () => {
     const res = await notNow(h, withSession(token));
     expect(res.status).toBe(403);
     expect((await read(res)).error.code).toBe('ACCOUNT_CLOSING');
+    expect((await me(h, withSession(token))).due).toBe(false);
   });
 });
