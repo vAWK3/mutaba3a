@@ -51,6 +51,9 @@ locals {
   secret_stripe_secret_key     = "mutaba3a-api-stripe-secret-key${local.suffix}"
   secret_stripe_webhook_secret = "mutaba3a-api-stripe-webhook-secret${local.suffix}"
   secret_job_token             = "mutaba3a-api-job-token${local.suffix}"
+  # MUT-434: generated here, like the job token.
+  secret_oauth_derive_key = "mutaba3a-api-oauth-derive-key${local.suffix}"
+  oauth_cleanup_job       = "mutaba3a-oauth-cleanup${local.suffix}"
   # By name, so monitoring.tf's alert on its failed attempts never plans the job itself.
   stripe_reconcile_job = "mutaba3a-stripe-reconcile${local.suffix}"
   account_purge_job    = "mutaba3a-account-purge${local.suffix}"
@@ -408,6 +411,35 @@ resource "google_secret_manager_secret_version" "job_token" {
   secret_data = random_password.job_token.result
 }
 
+# MUT-434 (D19): the key an MCP agent's renewed tokens are derived under, so a retried refresh gets the same pair.
+# Generated here, never a tfvars value. Rotating it (-replace=random_password.oauth_derive_key) only breaks retries
+# inside the 30-second window; rotating the session pepper is what signs agents out.
+resource "random_password" "oauth_derive_key" {
+  length  = 64
+  special = false
+}
+
+resource "google_secret_manager_secret" "oauth_derive_key" {
+  project   = var.project_id
+  secret_id = local.secret_oauth_derive_key
+  labels    = local.labels
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_version" "oauth_derive_key" {
+  secret      = google_secret_manager_secret.oauth_derive_key.id
+  secret_data = random_password.oauth_derive_key.result
+}
+
 # ============================================================================
 # Service account and least-privilege IAM
 # ============================================================================
@@ -462,6 +494,13 @@ resource "google_secret_manager_secret_iam_member" "api_reads_stripe_webhook_sec
 resource "google_secret_manager_secret_iam_member" "api_reads_job_token" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.job_token.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "api_reads_oauth_derive_key" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.oauth_derive_key.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.api.email}"
 }
@@ -565,6 +604,20 @@ resource "google_cloud_run_v2_service" "api" {
           secret_key_ref {
             secret  = google_secret_manager_secret.job_token.secret_id
             version = "latest"
+          }
+        }
+      }
+
+      # MUT-434: OAuth for MCP agents stays off (503) until oauth_enabled; the key always holds a version.
+      dynamic "env" {
+        for_each = var.oauth_enabled ? toset(["OAUTH_DERIVE_KEY"]) : toset([])
+        content {
+          name = env.value
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.oauth_derive_key.secret_id
+              version = "latest"
+            }
           }
         }
       }
@@ -745,6 +798,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_version.admin_token,
     google_secret_manager_secret_version.session_pepper,
     google_secret_manager_secret_version.job_token,
+    google_secret_manager_secret_version.oauth_derive_key,
+    google_secret_manager_secret_iam_member.api_reads_oauth_derive_key,
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
     google_secret_manager_secret_iam_member.api_reads_session_pepper,
@@ -861,6 +916,34 @@ resource "google_cloud_scheduler_job" "account_purge" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/accounts/purge"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-434: the nightly OAuth housekeeping — expired consent requests and codes, tokens of grants that ended a week ago,
+# and registered clients that never got a grant after 30 days. Only with oauth_enabled. A retry re-runs it safely.
+resource "google_cloud_scheduler_job" "oauth_cleanup" {
+  count            = var.oauth_enabled ? 1 : 0
+  project          = var.project_id
+  name             = local.oauth_cleanup_job
+  region           = var.region
+  description      = "Nightly OAuth housekeeping for MCP agents (MUT-434)."
+  schedule         = "40 3 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "120s"
+
+  retry_config {
+    retry_count = 2
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/oauth/cleanup"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

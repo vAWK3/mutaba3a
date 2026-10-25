@@ -170,6 +170,7 @@ const app = createApp({
   publicFxIpLimiter,
   stripe,
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
+  oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY } : null,
   stripeWebhookIpLimiter,
   billingSessionLimiter,
   mailer,

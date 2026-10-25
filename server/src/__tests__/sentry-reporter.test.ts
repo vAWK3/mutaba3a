@@ -125,6 +125,7 @@ describe('shutdownAndFlush (MUT-148 AC6)', () => {
     const reporter: ErrorReporter = {
       enabled: true,
       captureException: () => undefined,
+      captureMessage: () => undefined,
       flush: async (timeoutMs) => {
         order.push(`flush ${timeoutMs}`);
         return true;
@@ -141,7 +142,7 @@ describe('shutdownAndFlush (MUT-148 AC6)', () => {
 
   it('still flushes and exits when the database disconnect fails', async () => {
     const order: string[] = [];
-    const reporter: ErrorReporter = { enabled: true, captureException: () => undefined, flush: async () => (order.push('flush'), false) };
+    const reporter: ErrorReporter = { enabled: true, captureException: () => undefined, captureMessage: () => undefined, flush: async () => (order.push('flush'), false) };
     await shutdownAndFlush({
       stopAccepting: () => undefined,
       disconnect: async () => {
@@ -161,6 +162,7 @@ describe('runScript (MUT-148: post-roll and pre-roll report their crashes)', () 
     const reporter: ErrorReporter = {
       enabled: true,
       captureException: (error) => void captured.push(error),
+      captureMessage: () => undefined,
       flush: vi.fn(async () => true),
     };
     return { captured, reporter };

@@ -160,6 +160,15 @@ describe('portal serving — enabled', () => {
     expect(res.headers.get('cache-control')).not.toContain('immutable');
   });
 
+  it('serves the SPA for the consent page, and never for /mcp, /oauth/* or the OAuth discovery documents (MUT-434 R1)', async () => {
+    const consent = await app.request('/connect/approve?request=00000000-0000-4000-8000-000000000000');
+    expect(await consent.text()).toContain('portal shell');
+    for (const path of ['/mcp', '/oauth/authorize', '/oauth/token', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp']) {
+      const res = await app.request(path);
+      expect(res.headers.get('content-type'), path).toContain('application/json');
+    }
+  });
+
   it('falls back to index.html for the bare root path', async () => {
     const res = await app.request('/');
     expect(res.status).toBe(200);

@@ -15,7 +15,7 @@ type Report = { error: unknown; context: ErrorContext | undefined };
 
 function recordingReporter(): ErrorReporter & { reports: Report[] } {
   const reports: Report[] = [];
-  return { enabled: true, reports, captureException: (error, context) => void reports.push({ error, context }), flush: async () => true };
+  return { enabled: true, reports, captureException: (error, context) => void reports.push({ error, context }), captureMessage: () => undefined, flush: async () => true };
 }
 
 /** The API shell with one route that throws whatever the test hands it. */

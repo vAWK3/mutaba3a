@@ -955,7 +955,12 @@ export const DeviceSessionSchema = MeSchema.extend({
   token: z.string(),
 }).openapi('DeviceSession');
 
-export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
+export const RevokeSessionsResponseSchema = z
+  .object({
+    revoked: z.number().int().min(0),
+    agentGrantsRevoked: z.number().int().min(0).openapi({ description: 'MUT-434 (D12): connected agents disconnected too' }),
+  })
+  .openapi('RevokeSessionsResponse');
 
 // ---- Per-user feature flags (MUT-433, ADR-196) ------------------------------
 
@@ -3328,3 +3333,47 @@ export const EntrySchema = z
   .openapi('Entry');
 
 export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');
+
+// ---- MUT-434: connecting an agent (OAuth for MCP clients) -------------------------
+
+const OAuthClientTrustSchema = z.enum(['VERIFIED', 'LOOPBACK', 'UNVERIFIED']).openapi({
+  description: 'From the redirect the code goes to, never the client’s own name: VERIFIED = Claude (claude.ai/claude.com), LOOPBACK = an app on this computer (e.g. Claude Code), UNVERIFIED = anyone else',
+});
+
+export const OAuthAuthorizationRequestSchema = z
+  .object({
+    id: z.string().uuid(),
+    client: z.object({
+      name: z.string().openapi({ description: 'The client’s self-declared name; show it with dir="auto" and never as proof of who it is' }),
+      kind: z.enum(['DCR', 'CIMD']),
+      trust: OAuthClientTrustSchema,
+      redirectHost: z.string().openapi({ description: 'Where the code will be sent, e.g. claude.ai or 127.0.0.1' }),
+    }),
+    scopes: z.array(z.enum(['read', 'write'])),
+    expiresAt: z.string().datetime(),
+    agentAccess: z.boolean().openapi({ description: 'Whether this person may approve it (the agent_access feature); false = show the refusal' }),
+  })
+  .openapi('OAuthAuthorizationRequest');
+
+export const OAuthDecisionRequestSchema = z.object({ decision: z.enum(['approve', 'deny']) }).openapi('OAuthDecisionRequest');
+
+export const OAuthDecisionSchema = z
+  .object({ redirectTo: z.string().url().openapi({ description: 'Send the browser here: the client’s redirect with a code, or with error=access_denied' }) })
+  .openapi('OAuthDecision');
+
+export const OAuthGrantSchema = z
+  .object({
+    id: z.string().uuid(),
+    clientName: z.string(),
+    clientKind: z.enum(['DCR', 'CIMD']),
+    trust: OAuthClientTrustSchema,
+    scopes: z.array(z.enum(['read', 'write'])),
+    connectedAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime().nullable(),
+    expiresAt: z.string().datetime(),
+  })
+  .openapi('OAuthGrant');
+
+export const OAuthGrantListSchema = z
+  .object({ items: z.array(OAuthGrantSchema), mcpUrl: z.string().url().openapi({ description: 'The address to paste into Claude' }) })
+  .openapi('OAuthGrantList');

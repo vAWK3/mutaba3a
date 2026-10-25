@@ -104,8 +104,12 @@ const REPORTS_OPERATIONS = ['GET /v1/summaries/activity'];
 /** MUT-362: Settings › Billing — session-only, naming no X-Mutaba3a-Profile (the person pays, like /v1/me). */
 const BILLING_OPERATIONS = ['GET /v1/billing', 'POST /v1/billing/checkout-session', 'POST /v1/billing/portal-session'];
 
+/** MUT-434: the consent page and Connected apps — the portal's cookie session only (no device session, no key). */
+const AGENT_CONSENT_OPERATIONS = ['GET /v1/oauth/requests/{requestId}', 'POST /v1/oauth/requests/{requestId}/decision', 'GET /v1/oauth/grants', 'DELETE /v1/oauth/grants/{grantId}'];
+
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
 const SESSION_OPERATIONS = [
+  ...AGENT_CONSENT_OPERATIONS,
   ...BILLING_OPERATIONS,
   ...REPORTS_OPERATIONS,
   ...EXPENSE_OPERATIONS,
@@ -162,7 +166,8 @@ const SESSION_OPERATIONS = [
   'POST /v1/projects',
 ].sort();
 /** MUT-64: the same surface, minus cookie-only sign-out, plus the device-only sign-out. A device token gets exactly a cookie session's reach. */
-const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current'), 'DELETE /v1/device-sessions/current'].sort();
+// MUT-434: connecting an agent is the portal's (cookie) alone; the phone has no consent page.
+const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DELETE /v1/sessions/current' && !AGENT_CONSENT_OPERATIONS.includes(k)), 'DELETE /v1/device-sessions/current'].sort();
 /** Sign-in (MUT-38, MUT-64), the setup-link pair (MUT-235), the public FX snapshot (MUT-287), the Stripe webhook (MUT-360, signed by Stripe) and the Resend webhook (MUT-359, signed by Svix): no session or key. */
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup', 'GET /v1/public/fx-rates', 'POST /v1/billing/stripe/webhook', 'POST /v1/email/resend/webhook', 'POST /v1/signups', 'POST /v1/account-recovery', 'GET /v1/self-service',
   // MUT-115: passkey sign-in and its challenge, public like the password sign-in.
@@ -304,7 +309,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

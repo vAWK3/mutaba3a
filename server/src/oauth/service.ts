@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { sessionDigest } from '../auth/sessions.js';
 import type { AuditActorType, AuditEventInput, LedgerStore, OAuthClientRecord, OAuthGrantRecord, OAuthGrantRevokedReason, OAuthTokenInput, OAuthTokenRecord } from '../repositories/ports.js';
 import { canonicalResource, isValidCodeChallenge, mcpResourceUrl, parseScopeParam, redirectMatches, validateDcrRequest, verifyS256 } from './protocol.js';
+import { isAccessToken, isOAuthToken, OAUTH_TOKEN_PREFIX } from './tokens.js';
 import { cimdCacheUntil, isCimdClientId, type CimdFetchResult } from './trust.js';
 
 /**
@@ -24,18 +25,9 @@ export const OAUTH_TTL = {
   reuseGraceMs: 30_000,
 } as const;
 
-const PREFIX = { client: 'mcl_', code: 'mac_', access: 'mat_', refresh: 'mrt_' } as const;
+const PREFIX = OAUTH_TOKEN_PREFIX;
 const RANDOM_BYTES = 32;
 const MAX_STATE_LENGTH = 500;
-
-export function isAccessToken(token: string): boolean {
-  return token.startsWith(PREFIX.access);
-}
-
-/** Any credential this server mints, so /v1 can refuse it explicitly rather than try it as an API key. */
-export function isOAuthToken(token: string): boolean {
-  return token.startsWith(PREFIX.access) || token.startsWith(PREFIX.refresh);
-}
 
 function randomToken(prefix: string): string {
   return prefix + randomBytes(RANDOM_BYTES).toString('base64url');

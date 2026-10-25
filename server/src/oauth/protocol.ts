@@ -121,6 +121,7 @@ const MAX_REDIRECT_URIS = 5;
 export const MAX_CLIENT_NAME_LENGTH = 100;
 const DEFAULT_CLIENT_NAME = 'MCP client';
 /** C0/C1 controls and the bidi overrides/isolates, which could make a consent screen lie about a name. */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point: they are stripped from names.
 const UNSAFE_CHARS = /[\u0000-\u001F\u007F-\u009F‎‏‪-‮⁦-⁩]/g;
 
 export function sanitizeClientName(raw: unknown): string {

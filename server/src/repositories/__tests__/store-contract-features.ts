@@ -64,9 +64,9 @@ export function describeLedgerStoreFeaturesContract(name: string, makeStore: () 
       const { user, personalOrganization: personal } = await store.users.create(userInput());
       await store.features.grant(grantOf(personal.id, user.id, 1));
 
-      expect(await store.features.revoke(revokeOf(personal.id, user.id, 2))).toEqual({ revoked: true });
+      expect(await store.features.revoke(revokeOf(personal.id, user.id, 2))).toEqual({ revoked: true, agentGrantsRevoked: 0 });
       expect(await store.features.activeFor(user.id)).toEqual([]);
-      expect(await store.features.revoke(revokeOf(personal.id, user.id, 3))).toEqual({ revoked: false });
+      expect(await store.features.revoke(revokeOf(personal.id, user.id, 3))).toEqual({ revoked: false, agentGrantsRevoked: 0 });
 
       const reopened = await store.features.grant(grantOf(personal.id, user.id, 4));
       expect(reopened).toMatchObject({ granted: true, grant: { grantedAt: at(4), revokedAt: null } });
@@ -77,7 +77,7 @@ export function describeLedgerStoreFeaturesContract(name: string, makeStore: () 
     it('a revoke of a feature never granted changes nothing and audits nothing', async () => {
       const store = await makeStore();
       const { user, personalOrganization: personal } = await store.users.create(userInput());
-      expect(await store.features.revoke(revokeOf(personal.id, user.id, 1))).toEqual({ revoked: false });
+      expect(await store.features.revoke(revokeOf(personal.id, user.id, 1))).toEqual({ revoked: false, agentGrantsRevoked: 0 });
       expect(await featureAudit(store, personal.id)).toEqual([]);
     });
 

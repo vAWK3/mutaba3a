@@ -62,6 +62,12 @@ variable "cmek_stage" {
   }
 }
 
+variable "oauth_enabled" {
+  description = "MUT-434 (ADR-197): mounts OAUTH_DERIVE_KEY (generated here) into Cloud Run, turning on OAuth for MCP agents (/oauth/*, the OAuth discovery documents, /mcp), and creates the nightly OAuth cleanup job. false (default) = those routes answer 503. Agents still need the per-user agent_access flag (MUT-433)."
+  type        = bool
+  default     = false
+}
+
 variable "stripe_enabled" {
   description = "MUT-360: mounts the Stripe secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) into Cloud Run and creates the nightly reconcile Cloud Scheduler job. false (default) = the secrets exist empty and the Stripe routes answer 503. Turn it on only after both secrets hold a version (DEPLOYMENT.md §6e), or the new revision fails to start."
   type        = bool

@@ -86,6 +86,17 @@ describe('device-session bearer dispatch (MUT-64)', () => {
     expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
   });
 
+  it('an OAuth agent token (mat_/mrt_) is refused as itself, not tried as an API key (MUT-434 R1)', async () => {
+    const h = harness();
+    for (const token of [`mat_${'a'.repeat(43)}`, `mrt_${'a'.repeat(43)}`]) {
+      const res = await h.app.request('/v1/me', { headers: { authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(403);
+      expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+    }
+    // API keys keep their own refusal (R1: unchanged).
+    expect((await read(await h.app.request('/v1/audit', { headers: { authorization: 'Bearer mut_test_nope' } }))).error.code).toBe('INVALID_API_KEY');
+  });
+
   it('an unknown mds_ token (right shape, no matching digest) is SESSION_EXPIRED', async () => {
     const h = harness();
     const res = await h.app.request('/v1/me', { headers: { authorization: `Bearer ${generateDeviceSessionToken()}` } });

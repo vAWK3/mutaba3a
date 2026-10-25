@@ -10,6 +10,7 @@ import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
+import { NOOP_REPORTER, type ErrorReporter } from '../observability/reporter.js';
 import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
 import { SETUP_LINK_STATUSES, type AuditEventInput, type JsonObject, type LedgerStore, type Organization, type PersonSetupLinkPurpose, type UserRecord } from '../repositories/ports.js';
 import {
@@ -52,6 +53,8 @@ export interface AdminUserOptions {
   sessions: Pick<SessionSettings, 'pepper' | 'portalOrigin'>;
   /** MUT-324: the current terms, for the operator's acceptance report. */
   terms: CurrentTerms;
+  /** MUT-434 (D14): forced agent disconnects are noted here. Absent = nowhere. */
+  reporter?: ErrorReporter;
 }
 
 const adminErrors = {
@@ -92,6 +95,7 @@ type AuditAction =
   | 'user.enabled'
   | 'user.feature_granted'
   | 'user.feature_revoked'
+  | 'user.agent_disconnected'
   | 'membership.granted'
   | 'membership.revoked';
 
@@ -110,6 +114,7 @@ function resolvePersonalSettings(
 
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
   const { store, logger, sessions, terms } = options;
+  const reporter = options.reporter ?? NOOP_REPORTER;
   const app = new OpenAPIHono<AppEnv>();
 
   function auditEvents(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject): AuditEventInput[] {
@@ -123,6 +128,14 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       ...(metadata ? { metadata } : {}),
       requestId: c.get('requestId'),
     }));
+  }
+
+  /** MUT-434 (D12, D14): an operator-forced disconnect of every agent, audited on each profile and noted in Sentry. */
+  async function revokeAgentGrants(c: Context<AppEnv>, userId: string, reason: 'disabled' | 'operator'): Promise<number> {
+    const organizationIds = await memberOrganizations(userId);
+    const count = await store.oauth.revokeAllForUser({ userId, reason, at: c.get('now')(), audit: auditEvents(c, organizationIds, userId, 'user.agent_disconnected', { reason }) });
+    if (count > 0) reporter.captureMessage('info', 'OAuth grants revoked', { reason, count: String(count) });
+    return count;
   }
 
   /** MUT-373 (ADR-163): the pilot's one way to add a co-owner (design review DR11: at most MAX_PROFILE_OWNERS). */
@@ -488,7 +501,10 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         const now = c.get('now')();
         const user = await store.users.setStatus(existing.id, status, now);
         if (!user) throw new ApiError('NOT_FOUND', 'User not found');
-        if (status === 'DISABLED') await store.sessions.revokeAllForUser(user.id, 'disabled', now);
+        if (status === 'DISABLED') {
+          await store.sessions.revokeAllForUser(user.id, 'disabled', now);
+          await revokeAgentGrants(c, user.id, 'disabled');
+        }
         if (existing.status !== status) await audit(c, await memberOrganizations(user.id), user.id, action);
         return c.json({ user: serializeUser(user) }, 200);
       },
@@ -560,14 +576,17 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const user = await mustGetUser(params.userId);
       const organizationIds = await memberOrganizations(user.id);
       if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_revoked' }, 'account change on a user with no memberships; no organization to audit');
-      const { revoked } = await goneIsNotFound(() =>
+      const { revoked, agentGrantsRevoked } = await goneIsNotFound(() =>
         store.features.revoke({
           userId: user.id,
           feature,
           at: c.get('now')(),
           audit: auditEvents(c, organizationIds, user.id, 'user.feature_revoked', { feature }),
+          // MUT-434 AC7: taking agent access away disconnects every agent, in the same transaction (OV10).
+          ...(feature === 'agent_access' ? { agentGrants: { audit: auditEvents(c, organizationIds, user.id, 'user.agent_disconnected', { reason: 'feature_revoked' }) } } : {}),
         }),
       );
+      if (agentGrantsRevoked > 0) reporter.captureMessage('info', 'OAuth grants revoked', { reason: 'feature_revoked', count: String(agentGrantsRevoked) });
       return c.json({ feature, revoked }, 200);
     },
   );
@@ -610,7 +629,9 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     async (c) => {
       const user = await mustGetUser(c.req.valid('param').userId);
       const revoked = await store.sessions.revokeAllForUser(user.id, 'operator', c.get('now')());
-      return c.json({ revoked }, 200);
+      // MUT-434 (D12): "everywhere" includes connected agents; the flag stays, so the owner can reconnect.
+      const agentGrantsRevoked = await revokeAgentGrants(c, user.id, 'operator');
+      return c.json({ revoked, agentGrantsRevoked }, 200);
     },
   );
 

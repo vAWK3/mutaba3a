@@ -393,7 +393,8 @@ describe('operator actions end sessions', () => {
     const device = await deviceSignIn(h, p.email, p.password);
     const res = await h.app.request(`/admin/v1/users/${p.id}/sessions/revoke`, json({}, admin));
     expect(res.status).toBe(200);
-    expect((await read(res)).revoked).toBe(2);
+    // MUT-434 R1: the sessions count is unchanged; agentGrantsRevoked is additive (D12, none connected here).
+    expect(await read(res)).toEqual({ revoked: 2, agentGrantsRevoked: 0 });
     expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
     expect((await h.app.request('/admin/v1/users/00000000-0000-4000-8000-000000000000/sessions/revoke', json({}, admin))).status).toBe(404);

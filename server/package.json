@@ -73,6 +73,7 @@
     "@google-cloud/storage": "8.3.0",
     "@hono/node-server": "2.1.4",
     "@hono/zod-openapi": "1.6.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@node-rs/argon2": "2.2.1",
     "@prisma/client": "6.19.3",
     "@sentry/node-core": "10.76.2",

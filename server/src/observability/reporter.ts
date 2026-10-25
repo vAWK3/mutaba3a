@@ -9,9 +9,14 @@ export interface ErrorContext {
   route?: string;
 }
 
+/** MUT-434 (D14): tags on a security message. Ids and reasons only, never a token, a name or an email. */
+export type MessageTags = Record<string, string>;
+
 export interface ErrorReporter {
   readonly enabled: boolean;
   captureException(error: unknown, context?: ErrorContext): void;
+  /** MUT-434 (D14): a security event worth seeing in Sentry that is not an error (a refresh token reused, a forced disconnect). */
+  captureMessage(level: 'warning' | 'info', message: string, tags?: MessageTags): void;
   /** Resolves false when events are still pending after `timeoutMs`. */
   flush(timeoutMs: number): Promise<boolean>;
 }
@@ -19,6 +24,7 @@ export interface ErrorReporter {
 export const NOOP_REPORTER: ErrorReporter = Object.freeze({
   enabled: false,
   captureException: () => undefined,
+  captureMessage: () => undefined,
   flush: async () => true,
 });
 

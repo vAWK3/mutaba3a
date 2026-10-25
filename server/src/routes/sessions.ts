@@ -18,6 +18,8 @@ import {
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
+import { NOOP_REPORTER, type ErrorReporter } from '../observability/reporter.js';
+import { agentAuditFor } from '../oauth/audit.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
@@ -65,6 +67,8 @@ export interface SessionRouteOptions {
   logger: Logger;
   /** MUT-115: the WebAuthn relying party; null = no passkeys (POST /v1/sessions/passkey answers 404). */
   webauthn?: WebauthnConfig | null;
+  /** MUT-434 (D14): a password change that disconnects agents is noted here. Absent = nowhere. */
+  reporter?: ErrorReporter;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
@@ -81,6 +85,7 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, settings, throttle, ipLimiter, terms, mailer, logger } = options;
   const webauthn = options.webauthn ?? null;
+  const reporter = options.reporter ?? NOOP_REPORTER;
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
@@ -308,9 +313,13 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       // MUT-262 (D1): the portal ships with this API, so a cookie always rotates; a device build only once it reads the 200.
       const rotated = session.kind === 'cookie' || rotateToken === true ? rotatedToken(session) : null;
       const audit = await changePasswordAudit(store, c.get('requestId'), user, rotated !== null);
+      // MUT-434 (D11): the change disconnects every agent in its transaction; audited, and noted in Sentry (D14).
+      const agentGrantAudit = await agentAuditFor(store)({ userId: user.id, action: 'user.agent_disconnected', metadata: { reason: 'password_changed' }, actor: { actorType: 'USER', actorId: user.id }, requestId: c.get('requestId') });
+      const liveAgents = (await store.oauth.listLiveGrants(user.id, at)).length;
       try {
         const rotation = rotated ? { rotation: { tokenDigest: sessionDigest(settings.pepper, rotated), idleMs: sessionLifetime(session.kind, settings).idleMs } } : {};
-        await store.users.changePassword({ userId: user.id, passwordHash, verifiedPasswordHash, exceptSessionId: session.id, ...rotation, at, audit });
+        await store.users.changePassword({ userId: user.id, passwordHash, verifiedPasswordHash, exceptSessionId: session.id, ...rotation, at, audit, agentGrantAudit });
+        if (liveAgents > 0) reporter.captureMessage('info', 'OAuth grants revoked', { reason: 'password_changed', count: String(liveAgents) });
       } catch (err) {
         // Another change (or an operator lock) committed while this one was hashing: the password just verified no longer
         // works, and this session was signed out by it. Not a failed attempt, so no lockout count (MUT-238 review).

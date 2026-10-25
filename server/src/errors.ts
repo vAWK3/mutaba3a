@@ -59,6 +59,8 @@ export const ERROR_CODES = {
    * source, until (a trial's lock date, else null) }. Never for an API key.
    */
   SUBSCRIPTION_LAPSED: 402,
+  /** MUT-434 (AC6): the person doesn't hold the per-user feature this needs (MUT-433, e.g. `agent_access`); `details.feature`. */
+  FEATURE_NOT_ENABLED: 403,
   NOT_FOUND: 404,
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
@@ -89,6 +91,8 @@ export const ERROR_CODES = {
   MAILER_NOT_CONFIGURED: 503,
   /** MUT-360 D2: no job token on this server; /jobs/* refuses everything rather than compare an empty one. */
   JOBS_NOT_CONFIGURED: 503,
+  /** MUT-434: no PORTAL_ORIGIN (the issuer) or no OAUTH_DERIVE_KEY, so the OAuth endpoints and /mcp are off. */
+  OAUTH_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
   /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */

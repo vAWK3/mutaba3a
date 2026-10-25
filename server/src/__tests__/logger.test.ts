@@ -6,7 +6,26 @@ import { createLogger } from '../logger.js';
  * for logs. pino's `*.x` wildcard matches one level, so the paths are spelled
  * out to the depths our objects reach; this pins every one of them.
  */
-const SECRET_KEYS = ['authorization', 'cookie', 'set-cookie', 'password', 'token', 'secret', 'apiKey', 'key', 'x-admin-token', 'sessionToken', 'stripe-signature', 'x-job-token'];
+const SECRET_KEYS = [
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'password',
+  'token',
+  'secret',
+  'apiKey',
+  'key',
+  'x-admin-token',
+  'sessionToken',
+  'stripe-signature',
+  'x-job-token',
+  // MUT-434 (D16)
+  'code_verifier',
+  'access_token',
+  'refresh_token',
+  'client_secret',
+  'authorization_code',
+];
 
 function capture() {
   const lines: string[] = [];
@@ -29,6 +48,13 @@ describe('createLogger redaction', () => {
     expect(lines[0]).not.toContain(marker);
     expect(lines[0]).toContain('[redacted]');
     expect(lines[0]).toContain('visible');
+  });
+
+  it('keeps a plain `code` and `state` readable (MUT-434 D16: billing logs Stripe error codes)', () => {
+    const { logger, lines } = capture();
+    logger.warn({ code: 'rate_limit', state: 'READ_ONLY' }, 'billing catalog unavailable');
+    expect(lines[0]).toContain('"code":"rate_limit"');
+    expect(lines[0]).toContain('"state":"READ_ONLY"');
   });
 
   it('redacts request cookies and response Set-Cookie headers', () => {

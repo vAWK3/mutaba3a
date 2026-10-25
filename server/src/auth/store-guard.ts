@@ -389,6 +389,21 @@ export function principalStoreGuard(principal: Principal, profileWriter: Profile
   };
 }
 
+/**
+ * MUT-434: the guard for an MCP agent (an OAuth access token on /mcp). It fails closed: only methods classified `read`
+ * (no domain, no person) pass; everything else — `sessionOnly`, domain reads and writes, `control`, `operator` — is
+ * refused until MUT-435/436 open each tool's methods deliberately, with tests. This ticket opens no data.
+ */
+export function agentStoreGuard(): StoreGuard {
+  return {
+    assertCanCall(repo, method) {
+      const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess> | undefined>)[repo]?.[method];
+      if (!access) throw new Error(`Unclassified store method ${repo}.${method}`);
+      if (access !== 'read') throw principalNotAccepted();
+    },
+  };
+}
+
 const BASES = new WeakMap<LedgerStore, LedgerStore>();
 
 /**

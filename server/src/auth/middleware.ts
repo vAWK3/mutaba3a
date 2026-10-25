@@ -5,7 +5,8 @@ import type { PostingActor } from '../agreements/posting.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
+import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
+import { isOAuthToken } from '../oauth/tokens.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
 import { CLOSING_OPEN_ENDPOINTS, closingRefusal, isAccountGone } from '../accounts/closure.js';
@@ -45,6 +46,12 @@ export interface SessionAuth {
 /** What every organization-scoped route can read from the context. */
 export type AuthContext = ApiKeyAuth | SessionAuth;
 
+/** MUT-434: an MCP agent acting for a person through an OAuth access token. */
+export interface AgentIdentity {
+  user: UserRecord;
+  grant: OAuthGrantRecord;
+}
+
 /** The signed-in person, set for every session request (including the organization-independent identity routes). */
 export interface SessionIdentity {
   user: UserRecord;
@@ -56,6 +63,8 @@ export type AppEnv = {
     requestId: string;
     auth: AuthContext;
     identity: SessionIdentity;
+    /** MUT-434: set by authenticateAgent() on /mcp only — the person, their grant and its scopes. */
+    agent: AgentIdentity;
     now: () => Date;
     /** Set by authenticate(); the store guard (store-guard.ts) every repository call consults. Absent on /admin, health and sign-in. */
     storeGuard: StoreGuard;
@@ -168,6 +177,8 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
     }
 
     if (bearer) {
+      // MUT-434: an agent's OAuth token opens /mcp only; refused here explicitly rather than tried as an API key.
+      if (isOAuthToken(bearer)) throw principalNotAccepted();
       if (isDeviceSessionToken(bearer)) {
         const identity = await authenticateDeviceSessionToken(c, bearer, options);
         if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);

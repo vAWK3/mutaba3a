@@ -191,6 +191,9 @@ describe('DELETE /admin/v1/users/{userId}/features/{feature} (AC2, AC3 seam)', (
 
     expect(await read(await revoke(h, p.userId))).toEqual({ feature: 'agent_access', revoked: false });
     expect((await featureAudit(h, p.personalId)).map((e: { action: string }) => e.action).sort()).toEqual(['user.feature_granted', 'user.feature_revoked']);
+    // MUT-434 R1: with no agent connected, the revoke writes no agent rows (and its answer above is unchanged).
+    const all = (await read(await h.app.request(`/admin/v1/organizations/${p.personalId}/audit`, { headers: admin }))).events;
+    expect(all.filter((e: { action: string }) => e.action.startsWith('user.agent_'))).toEqual([]);
   });
 
   it('a grant after a revoke opens it again, from the new instant', async () => {

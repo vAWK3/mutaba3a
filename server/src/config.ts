@@ -130,6 +130,12 @@ const envSchema = z.object({
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: z.string().min(32, 'MUTABA3A_JOB_TOKEN must be at least 32 characters').optional(),
   /**
+   * MUT-434 (D19): the secret an agent's renewed tokens are derived under, so a retried refresh gets the same pair.
+   * Secret Manager. Needs PORTAL_ORIGIN (the issuer). Unset = the OAuth endpoints and /mcp answer 503. Rotating it
+   * breaks only retries inside the 30-second window; rotating SESSION_TOKEN_PEPPER is what signs agents out.
+   */
+  OAUTH_DERIVE_KEY: z.string().min(32, 'OAUTH_DERIVE_KEY must be at least 32 characters').optional(),
+  /**
    * MUT-148 (ADR-091): the api project's DSN (Secret Manager, mounted once sentry_enabled is applied). Unset = no
    * error reports. Only an EU-region DSN starts: a US one would send events outside the region ADR-091 chose (D5).
    */
@@ -224,6 +230,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.FRONT_DOOR_TOKEN && !config.PORTAL_ORIGIN) {
     throw new ConfigError('Invalid configuration:\n  FRONT_DOOR_TOKEN: needs PORTAL_ORIGIN, the origin the front door serves the portal on');
+  }
+  if (config.OAUTH_DERIVE_KEY && !config.PORTAL_ORIGIN) {
+    throw new ConfigError('Invalid configuration:\n  OAUTH_DERIVE_KEY: needs PORTAL_ORIGIN, the OAuth issuer and the origin /mcp is served on');
   }
   try {
     webauthnConfigOf({ rpId: config.WEBAUTHN_RP_ID, origins: config.WEBAUTHN_ORIGINS, portalOrigin: config.PORTAL_ORIGIN });

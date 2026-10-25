@@ -90,6 +90,9 @@ export function createSentryReporter(options: SentryReporterOptions): ErrorRepor
       };
       Sentry.captureException(error, { tags });
     },
+    captureMessage: (level, message, tags = {}) => {
+      Sentry.captureMessage(message, { level, tags });
+    },
     flush: (timeoutMs) => Sentry.flush(timeoutMs),
   };
 }

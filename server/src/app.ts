@@ -38,6 +38,13 @@ import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js'
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { adminUserRoutes } from './routes/admin-users.js';
+import { agentAuditFor } from './oauth/audit.js';
+import { OAuthService } from './oauth/service.js';
+import { fetchClientMetadata, type CimdFetchResult } from './oauth/trust.js';
+import { defaultOAuthLimiters, oauthRoutes, type OAuthLimiters } from './routes/oauth.js';
+import { OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, oauthConsentRoutes } from './routes/oauth-consent.js';
+import { mcpRoutes } from './routes/mcp.js';
+import { oauthCleanupRoutes } from './routes/oauth-cleanup.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
 import { accountPurgeRoutes } from './routes/account-purge.js';
@@ -165,7 +172,16 @@ export interface AppDependencies {
    * (MAIL_REPLY_TO). Absent = no digest, and a placeholder support address (tests).
    */
   signupReview?: { digest: ReviewDigest; supportAddress: string };
+  /**
+   * MUT-434 (ADR-197): the OAuth server for MCP agents. Needs `sessions.portalOrigin` too (the issuer). Null or absent =
+   * the /oauth endpoints, the OAuth discovery documents, /mcp and /v1/oauth/* answer 503 OAUTH_NOT_CONFIGURED.
+   * `fetchMetadata` and the limiters are injected by tests; production uses the guarded CIMD fetch and OAUTH_POLICY.
+   */
+  oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter } | null;
 }
+
+/** MUT-434: requests per minute one agent grant may make on /mcp. */
+export const AGENT_REQUESTS_PER_MINUTE = 120;
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
 
@@ -179,7 +195,7 @@ const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disa
  * still 404 as JSON, never silently serve the SPA shell to an Apple/Google
  * crawler.
  */
-const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/', '/dev/attachments/'];
+const PORTAL_EXCLUDED_PREFIXES = ['/v1/', '/admin/', '/jobs/', '/dev/attachments/', '/oauth/'];
 const PORTAL_EXCLUDED_EXACT = new Set([
   '/health',
   '/ready',
@@ -187,6 +203,11 @@ const PORTAL_EXCLUDED_EXACT = new Set([
   '/dev/attachments',
   '/.well-known/apple-app-site-association',
   '/.well-known/assetlinks.json',
+  // MUT-434: the OAuth discovery documents and the MCP endpoint answer JSON even when OAuth is off, never the SPA.
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/oauth-protected-resource',
+  '/.well-known/oauth-protected-resource/mcp',
+  '/mcp',
 ]);
 
 function isPortalExcludedPath(path: string): boolean {
@@ -237,7 +258,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.73.0-mut433';
+export const API_VERSION = '1.74.0-mut434';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -297,7 +318,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -322,6 +343,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       mailer,
       logger: deps.logger,
       webauthn: deps.webauthn ?? null,
+      reporter,
     }),
   );
   app.route(
@@ -405,7 +427,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
@@ -455,6 +477,24 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   if (deps.devOutbox) app.route('/', devOutboxRoutes(deps.devOutbox));
   if (deps.localAttachments) app.route('/', devAttachmentRoutes(deps.localAttachments));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
+  // MUT-434 (ADR-197): the OAuth server and the MCP endpoint, always mounted so an unconfigured server answers 503, not the SPA.
+  const oauthService =
+    deps.oauth && sessions.portalOrigin
+      ? new OAuthService({
+          store: deps.store,
+          issuer: sessions.portalOrigin,
+          pepper: sessions.pepper,
+          deriveKey: deps.oauth.deriveKey,
+          fetchMetadata: deps.oauth.fetchMetadata ?? ((url) => fetchClientMetadata(url)),
+          captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
+          auditFor: agentAuditFor(deps.store),
+        })
+      : null;
+  const requestPaths = { trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) };
+  app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
+  app.route('/', oauthConsentRoutes({ store, service: oauthService }));
+  app.route('/', oauthCleanupRoutes(deps.store));
+  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), version: deps.version }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',

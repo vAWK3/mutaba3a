@@ -887,14 +887,11 @@ export class MemoryLedgerStore implements LedgerStore {
       const stored = this.oauthTokens.get(digest);
       const grant = stored ? this.oauthGrants.get(stored.grantId) : undefined;
       if (!stored || !grant) return null;
-      const { digest: _digest, ...token } = stored;
-      return { token, grant: { ...grant, scopes: [...grant.scopes] } };
+      return { token: oauthTokenRecordOf(stored), grant: { ...grant, scopes: [...grant.scopes] } };
     },
     findTokenById: async (id) => {
       const stored = [...this.oauthTokens.values()].find((t) => t.id === id);
-      if (!stored) return null;
-      const { digest: _digest, ...token } = stored;
-      return token;
+      return stored ? oauthTokenRecordOf(stored) : null;
     },
     rotateRefresh: async ({ tokenId, successorId, at, tokens }) => {
       const stored = [...this.oauthTokens.values()].find((t) => t.id === tokenId);
@@ -934,11 +931,23 @@ export class MemoryLedgerStore implements LedgerStore {
       let codes = 0;
       let tokens = 0;
       let clients = 0;
-      for (const [id, r] of this.oauthRequests) if (r.expiresAt.getTime() <= at.getTime()) (this.oauthRequests.delete(id), requests++);
-      for (const [digest, c] of this.oauthCodes) if (c.expiresAt.getTime() <= at.getTime()) (this.oauthCodes.delete(digest), codes++);
+      for (const [id, r] of this.oauthRequests) {
+        if (r.expiresAt.getTime() > at.getTime()) continue;
+        this.oauthRequests.delete(id);
+        requests++;
+      }
+      for (const [digest, c] of this.oauthCodes) {
+        if (c.expiresAt.getTime() > at.getTime()) continue;
+        this.oauthCodes.delete(digest);
+        codes++;
+      }
       // A grant ended at its revoke, or else at its absolute expiry.
       const deadGrants = new Set([...this.oauthGrants.values()].filter((g) => (g.revokedAt ?? g.expiresAt).getTime() <= before.getTime()).map((g) => g.id));
-      for (const [digest, t] of this.oauthTokens) if (deadGrants.has(t.grantId) || t.expiresAt.getTime() <= before.getTime()) (this.oauthTokens.delete(digest), tokens++);
+      for (const [digest, t] of this.oauthTokens) {
+        if (!deadGrants.has(t.grantId) && t.expiresAt.getTime() > before.getTime()) continue;
+        this.oauthTokens.delete(digest);
+        tokens++;
+      }
       const granted = new Set([...this.oauthGrants.values()].map((g) => g.clientId));
       for (const [id, c] of this.oauthClients) {
         if (granted.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
@@ -3404,6 +3413,11 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
   if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
   if (r.status !== 'READY') return { kind: 'not_ready' };
   return null;
+}
+
+/** MUT-434: a stored token without its digest, which never leaves the store. */
+function oauthTokenRecordOf(t: OAuthTokenRecord & { digest: string }): OAuthTokenRecord {
+  return { id: t.id, grantId: t.grantId, kind: t.kind, createdAt: t.createdAt, expiresAt: t.expiresAt, rotatedAt: t.rotatedAt, successorId: t.successorId };
 }
 
 function clonePasskey(p: PasskeyRecord): PasskeyRecord {
