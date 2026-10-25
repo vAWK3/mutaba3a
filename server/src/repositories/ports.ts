@@ -1340,7 +1340,8 @@ export interface UserRepository {
    * every other session for this user — web and device, `exceptSessionId` stays live — and appends `audit`.
    * Null for an unknown user. StateConflict('user', 'CREDENTIAL_CHANGED') and nothing written when, under the
    * lock, the stored hash is no longer `verifiedPasswordHash` or `exceptSessionId` is not this person's live
-   * session: another change (or an operator lock) committed first (MUT-238 review).
+   * session: another change (or an operator lock) committed first (MUT-238 review). With `rotation` (MUT-262) the kept
+   * session is replaced by a new one rather than re-stamped.
    */
   changePassword(input: ChangePasswordInput): Promise<UserRecord | null>;
   /**
@@ -1409,6 +1410,13 @@ export interface ChangePasswordInput {
   verifiedPasswordHash: string;
   /** This session keeps working; every other session for this user is revoked. Must be the caller's own live session. */
   exceptSessionId: string;
+  /**
+   * MUT-262 (TD-158): replace the kept session instead of re-stamping it. It is revoked (`password_rotated`) and a new
+   * session opens under `tokenDigest` with its kind, user agent, passkey and absolute deadline; idle is `at + idleMs`,
+   * never past that deadline. A new row, not a digest swap: the middleware's stale path revokes by the old digest's id.
+   * UniqueViolation on a digest already in use, and then nothing is written.
+   */
+  rotation?: { tokenDigest: string; idleMs: number };
   at: Date;
   /** Written in the same transaction. */
   audit: AuditEventInput[];
