@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portal Receipts Layouts</title>
+<style>
+:root {
+  --bg: #f6f5f2; --surface: #ffffff; --surface-3: #eeece7; --border: #dedbd3;
+  --text: #1d1c1a; --muted: #6d6a63; --accent: #2f6b4f; --accent-subtle: #e3efe8;
+  --warn: #9a5b00; --warn-subtle: #fbf0dc; --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1d1c1a; --surface-3: #2a2926; --border: #3a3834;
+    --text: #f1efe9; --muted: #a29f97; --accent: #7cc4a0; --accent-subtle: #1f3329;
+    --warn: #e8b25a; --warn-subtle: #3a2d17;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 16px 64px; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, system-ui, sans-serif; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 40px 0 4px; }
+p.lede, p.note { color: var(--muted); margin: 0 0 12px; max-width: 760px; }
+.frame { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; display: grid; grid-template-columns: 180px 1fr; min-height: 440px; max-width: 1100px; position: relative; }
+.side { border-inline-end: 1px solid var(--border); padding: 14px 10px; background: var(--surface); }
+.side div { padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+.side .on { background: var(--surface-3); color: var(--text); font-weight: 600; }
+.main { padding: 18px 20px; position: relative; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.title { font-size: 17px; font-weight: 600; }
+.btn { border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; background: var(--surface); font-size: 13px; }
+.btn.pri { background: var(--accent); color: #fff; border-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; font-size: 13px; }
+.seg span { padding: 4px 10px; color: var(--muted); }
+.seg .on { background: var(--surface-3); color: var(--text); font-weight: 600; }
+.tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border); margin: 10px 0 12px; font-size: 13px; }
+.tabs span { padding: 6px 0; color: var(--muted); }
+.tabs .on { color: var(--text); border-bottom: 2px solid var(--text); font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+th { text-align: start; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 8px; border-bottom: 1px solid var(--border); }
+.thumb { width: 30px; height: 38px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-3);
+  display: inline-grid; place-items: center; font-size: 9px; color: var(--muted); vertical-align: middle; }
+.badge { font-size: 11px; padding: 2px 7px; border-radius: 99px; background: var(--warn-subtle); color: var(--warn); }
+.badge.ok { background: var(--accent-subtle); color: var(--accent); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; margin-top: 12px; }
+.card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 12px; }
+.card .img { height: 120px; background: var(--surface-3); display: grid; place-items: center; color: var(--muted); }
+.card .meta { padding: 6px 8px; }
+.drawer { position: absolute; inset-block: 0; inset-inline-end: 0; background: var(--surface); border-inline-start: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgba(0,0,0,.08); display: grid; }
+.preview { background: var(--surface-3); display: grid; place-items: center; color: var(--muted); border-inline-end: 1px solid var(--border); position: relative; }
+.paper { width: 62%; height: 72%; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; display: grid; place-items: center; font-size: 12px; }
+.form { padding: 16px; display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
+.field { border: 1px solid var(--border); border-radius: 7px; padding: 6px 9px; }
+.field small { display: block; color: var(--muted); font-size: 11px; }
+.sugg { border-color: var(--accent); background: var(--accent-subtle); }
+.strip { border: 1px dashed var(--warn); background: var(--warn-subtle); color: var(--warn); border-radius: 8px; padding: 8px 12px; margin-top: 12px; font-size: 13px; }
+.split { display: grid; grid-template-columns: 300px 1fr; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: 12px; min-height: 340px; }
+.list div.it { padding: 9px 10px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.list div.sel { background: var(--surface-3); }
+.pros { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 1100px; margin-top: 10px; font-size: 13px; }
+.pros div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.pros b { display: block; margin-bottom: 4px; }
+@media (max-width: 760px) {
+  .frame { grid-template-columns: 1fr; } .side { display: none; }
+  .drawer { position: static; grid-template-columns: 1fr !important; width: auto !important; }
+  .split { grid-template-columns: 1fr; } .pros { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<h1>MUT-260: portal Receipts, three layouts</h1>
+<p class="lede">Each layout covers all four jobs: list a profile's receipts with a To review filter, open the original, upload a receipt without an expense, and review it. Reviewing opens the expense form beside the receipt, with the phone's suggested fields prefilled, and Approve files it. The vendor typeahead (MUT-254) sits in that form in every layout. The green fields came from the phone's reader.</p>
+
+<!-- ============ A ============ -->
+<h2>A · Receipts in the sidebar: a table, and review in a wide drawer</h2>
+<p class="note">A new <b>Receipts</b> nav item after Expenses. A table like Expenses, with To review / Filed / All and a count. Review opens the existing ExpenseDrawer widened to two panes: the receipt on the left, the form on the right.</p>
+<div class="frame">
+  <div class="side"><div>Overview</div><div>Clients</div><div>Payments</div><div>Documents</div><div>Expenses</div><div class="on">Receipts <span class="badge">3</span></div><div>Conversions</div></div>
+  <div class="main">
+    <div class="row between"><span class="title">Receipts</span><span class="btn pri">Upload receipt</span></div>
+    <div class="row" style="margin-top:10px"><span class="seg"><span class="on">To review 3</span><span>Filed 41</span><span>All</span></span><span class="btn">Uploaded: any time ▾</span></div>
+    <table>
+      <tr><th></th><th>File</th><th>Uploaded</th><th>Expense</th><th></th></tr>
+      <tr><td><span class="thumb">IMG</span></td><td>IMG_2231.jpg<br><small style="color:var(--muted)">From phone · Shufersal · ₪84.20</small></td><td>Today</td><td><span class="badge">To review</span></td><td><span class="btn">Review</span></td></tr>
+      <tr><td><span class="thumb">PDF</span></td><td>invoice-1182.pdf</td><td>Yesterday</td><td><span class="badge">To review</span></td><td><span class="btn">Review</span></td></tr>
+      <tr><td><span class="thumb">IMG</span></td><td>receipt.png</td><td>Oct 21</td><td><span class="badge">To review</span></td><td><span class="btn">Review</span></td></tr>
+    </table>
+    <div class="drawer" style="width:68%; grid-template-columns: 1fr 1fr; top:0">
+      <div class="preview"><div class="paper">receipt image<br>(zoom · open full size)</div></div>
+      <div class="form">
+        <div class="row between"><b>Review receipt</b><span>✕</span></div>
+        <div class="field sugg"><small>Vendor · typeahead</small>Shufersal</div>
+        <div class="field sugg"><small>Amount</small>84.20 ILS</div>
+        <div class="field sugg"><small>Date</small>Oct 25, 2026</div>
+        <div class="field"><small>Category</small>Groceries</div>
+        <div class="field"><small>Title</small>&nbsp;</div>
+        <div class="row" style="margin-top:auto"><span class="btn pri">Approve and file</span><span class="btn">Delete receipt</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="pros"><div><b>Good</b>Matches how Expenses already works (table, filters, drawer from the URL), so it's the cheapest to build and test. Easy to find, and the To review count in the nav nudges people.</div><div><b>Cost</b>One more nav item, while MUT-423 plans to shrink the shell to four tabs. A table shows thumbnails small, so it's less of a gallery.</div></div>
+
+<!-- ============ B ============ -->
+<h2>B · Receipts as a tab under Expenses: a gallery, and review as its own page</h2>
+<p class="note">No new nav item: Expenses gets a third tab (Expenses · Groups · <b>Receipts</b>). Receipts show as a thumbnail grid. Review is a full page with the receipt big on one side and the form on the other, with Back returning to the grid.</p>
+<div class="frame">
+  <div class="side"><div>Overview</div><div>Clients</div><div>Payments</div><div>Documents</div><div class="on">Expenses</div><div>Conversions</div></div>
+  <div class="main">
+    <div class="row between"><span class="title">Expenses</span><span class="btn pri">Upload receipt</span></div>
+    <div class="tabs"><span>Expenses</span><span>Groups</span><span class="on">Receipts · 3 to review</span></div>
+    <div class="row"><span class="seg"><span class="on">To review</span><span>Filed</span><span>All</span></span></div>
+    <div class="grid">
+      <div class="card"><div class="img">IMG</div><div class="meta"><span class="badge">To review</span><br>Today</div></div>
+      <div class="card"><div class="img">PDF</div><div class="meta"><span class="badge">To review</span><br>Yesterday</div></div>
+      <div class="card"><div class="img">IMG</div><div class="meta"><span class="badge">To review</span><br>Oct 21</div></div>
+      <div class="card"><div class="img">IMG</div><div class="meta"><span class="badge ok">Filed</span><br>Spinneys · ₪212</div></div>
+      <div class="card"><div class="img">PDF</div><div class="meta"><span class="badge ok">Filed</span><br>Bezeq · ₪99</div></div>
+    </div>
+  </div>
+</div>
+<p class="note" style="margin-top:10px">Review page (/p/…/expenses/receipts/:id):</p>
+<div class="frame" style="grid-template-columns: 1fr 380px; min-height: 360px">
+  <div class="preview"><div class="paper" style="width:46%">receipt, large<br>(zoom · rotate · open)</div></div>
+  <div class="form">
+    <div class="row"><span>← Receipts</span></div>
+    <b>Review receipt</b>
+    <div class="field sugg"><small>Vendor · typeahead</small>Shufersal</div>
+    <div class="field sugg"><small>Amount</small>84.20 ILS</div>
+    <div class="field sugg"><small>Date</small>Oct 25, 2026</div>
+    <div class="field"><small>Category</small>Groceries</div>
+    <div class="row" style="margin-top:auto"><span class="btn pri">Approve and file</span><span class="btn">Next receipt →</span></div>
+  </div>
+</div>
+<div class="pros"><div><b>Good</b>Fits MUT-423's smaller shell: receipts live with expenses, where they end up. The big preview and "Next receipt" make clearing a queue of ten fast.</div><div><b>Cost</b>A new full-page form instead of the drawer. It reuses the drawer's fields, but needs its own route, layout and tests. Hidden one tab deep, so To review is easier to miss.</div></div>
+
+<!-- ============ C ============ -->
+<h2>C · An inbox on Expenses, plus a two-pane Receipts tab</h2>
+<p class="note">The Expenses list shows a "3 receipts to review" strip at the top. That strip and a Receipts tab lead to a two-pane view: the list on the left and the selected receipt on the right. "Review" on the right opens the normal ExpenseDrawer over the preview, prefilled.</p>
+<div class="frame">
+  <div class="side"><div>Overview</div><div>Clients</div><div>Payments</div><div>Documents</div><div class="on">Expenses</div><div>Conversions</div></div>
+  <div class="main">
+    <div class="row between"><span class="title">Expenses</span><span class="btn pri">Upload receipt</span></div>
+    <div class="tabs"><span>Expenses</span><span>Groups</span><span class="on">Receipts</span></div>
+    <div class="split">
+      <div class="list">
+        <div class="it" style="justify-content:space-between"><span class="seg"><span class="on">To review 3</span><span>Filed</span><span>All</span></span></div>
+        <div class="it sel"><span class="thumb">IMG</span><span>IMG_2231.jpg<br><small style="color:var(--muted)">Today · Shufersal ₪84.20</small></span></div>
+        <div class="it"><span class="thumb">PDF</span><span>invoice-1182.pdf<br><small style="color:var(--muted)">Yesterday</small></span></div>
+        <div class="it"><span class="thumb">IMG</span><span>receipt.png<br><small style="color:var(--muted)">Oct 21</small></span></div>
+      </div>
+      <div class="preview" style="border:0"><div class="paper" style="width:50%">receipt preview</div>
+        <div class="row" style="position:absolute; bottom:12px; inset-inline-end:12px"><span class="btn">Open original</span><span class="btn pri">Review</span></div></div>
+    </div>
+  </div>
+</div>
+<p class="note" style="margin-top:10px">The Expenses tab, with the inbox strip:</p>
+<div class="frame" style="min-height:160px">
+  <div class="side"><div class="on">Expenses</div></div>
+  <div class="main"><div class="tabs"><span class="on">Expenses</span><span>Groups</span><span>Receipts</span></div>
+    <div class="strip">3 receipts from your phone are waiting to be reviewed. <u>Review them</u></div></div>
+</div>
+<div class="pros"><div><b>Good</b>To review surfaces where people already look (Expenses), without a new nav item. The two-pane view lets you browse originals quickly, and review keeps the familiar drawer.</div><div><b>Cost</b>Most moving parts: a strip on Expenses, a split view, plus the drawer on top of the preview. On narrow screens the split collapses to list → preview → drawer, three steps.</div></div>
+
+<p class="note" style="margin-top:32px">Same in all three: uploads accept PDF/JPEG/PNG up to 10 MB and land as To review. Filed receipts show their expense, and a deleted expense puts its receipt back in To review. Arabic mirrors the whole layout, so the receipt pane moves to the right.</p>
+</body>
+</html>
