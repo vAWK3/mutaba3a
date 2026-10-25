@@ -461,8 +461,14 @@ describe('vite.config', () => {
     );
 
     it('is defined for the portal build only', () => {
-      expect(resolve('hosted').define?.__TURNSTILE_SITE_KEY__).toBe(JSON.stringify(TURNSTILE_TEST_SITE_KEY));
-      expect(resolve('web').define).not.toHaveProperty('__TURNSTILE_SITE_KEY__');
+      // The Makefile exports deploy.env's real MUTABA3A_TURNSTILE_SITE_KEY during a release; pin it unset here.
+      vi.stubEnv('MUTABA3A_TURNSTILE_SITE_KEY', '');
+      try {
+        expect(resolve('hosted').define?.__TURNSTILE_SITE_KEY__).toBe(JSON.stringify(TURNSTILE_TEST_SITE_KEY));
+        expect(resolve('web').define).not.toHaveProperty('__TURNSTILE_SITE_KEY__');
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
   });
 
