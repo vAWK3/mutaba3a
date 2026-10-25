@@ -10,6 +10,7 @@ import { AlertIcon } from '../../components/Icons';
 import { TimezoneChoice } from '../../components/TimezoneChoice';
 import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES, type HostedCurrency } from '../../format/currencies';
 import { browserTimezone } from '../../format/timezones';
+import { passkeysToReview } from '../../passkeys/review';
 import { firstRunPath } from '../../session/firstRun';
 import { CLOSED_DOORS, selfServiceQuery } from '../../session/selfServiceDoors';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
@@ -244,7 +245,10 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       queryClient.setQueryData(ME_KEY, me);
       adoptAccountLocale(me.user.locale);
       // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
-      void navigate({ ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as never);
+      if (signup) return void navigate({ ...firstRunPath(me), replace: true } as never);
+      // MUT-415: a recovery lands on the passkey review when the account has passkeys; they survive the new password.
+      const review = await passkeysToReview(queryClient);
+      void navigate({ to: '/', ...(review ? { search: { passkeys: true, review: 'recovery' } } : {}), replace: true } as never);
     } catch (error) {
       // MUT-367: the password is right but the operator hasn't approved the account yet
       onOutcome(error instanceof ApiError && error.code === 'ACCOUNT_UNDER_REVIEW' ? { kind: 'underReview' } : otherwise);

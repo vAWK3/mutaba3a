@@ -57,6 +57,43 @@ features:
       - Sign out and sign in with the passkey
     expect:
       - The passkey still signs in
+  # MUT-414: adding a passkey mails the owner (en/ar), so a passkey planted by someone who knew the password is seen.
+  - id: added-mail
+    title: Adding a passkey mails the account owner
+    paths:
+      - server/src/email/passkey-notice.ts
+      - server/src/email/templates/copy.ts
+      - server/src/email/ports.ts
+    steps:
+      - Sign in and add a passkey from You › Account › Passkeys
+    expect:
+      - 'One "A passkey was added to your MTB3A account" mail arrives, naming the passkey'
+      - It says what to do if it wasn’t you
+  # MUT-415: passkeys survive a password change and a recovery, so both go on to the passkey review.
+  - id: review-after-password
+    title: After a password change, your passkeys are listed and one is removed in place
+    paths:
+      - src/hosted/passkeys/review.ts
+      - src/hosted/components/ChangePasswordDrawer.tsx
+      - src/hosted/data/filters.ts
+    steps:
+      - Add a passkey, then change the password from You › Account
+      - On the passkey review, press Remove on the passkey and confirm
+      - Press Done
+    expect:
+      - '"Your password is changed. These passkeys still sign in to your account. Remove any you don’t recognise." with the passkey listed and no Add'
+      - '"Passkey removed. Devices signed in with it are signed out.", and the list is empty'
+      - Done closes the review
+  - id: review-after-recovery
+    title: After a recovery, your passkeys are listed
+    paths:
+      - src/hosted/pages/auth/SetupPage.tsx
+      - src/hosted/passkeys/review.ts
+    steps:
+      - Add a passkey and sign out
+      - Forgot your password?, open the mail’s link and choose a new password
+    expect:
+      - Signed in, the passkey review says "Your new password is set. These passkeys still sign in to your account." and lists the passkey
   - id: autofill
     title: The email field on sign-in offers your passkey (autofill)
     paths:
