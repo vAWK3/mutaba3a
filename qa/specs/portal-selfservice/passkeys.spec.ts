@@ -1,6 +1,8 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { address, chooseLanguage, operatorAccount, signInThroughForm } from '../../support/selfService';
+import { expectNoHorizontalOverflow } from '../../support/brand';
+import { address, chooseLanguage, lapsePasskeyPromptHide, mailTo, operatorAccount, setupLinkIn, signInThroughForm } from '../../support/selfService';
+import { stubTurnstile } from '../../support/turnstile';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from '../../support/passkeys';
 import { openYou, youRow } from '../../support/you';
 
@@ -182,5 +184,125 @@ test('Passkeys in Arabic on a phone: مفاتيح المرور, right to left, t
     await openYou(page, 'account');
     await youRow(page, 'تسجيل الخروج').click();
     await expect(page.getByRole('button', { name: 'تسجيل الدخول بمفتاح المرور' })).toBeVisible();
+  });
+});
+
+// ---- MUT-370: Home suggests a passkey after a sign-in ---------------------------------------------------------------
+
+const SUGGESTION = 'Add a passkey: the more secure way to sign in.';
+const suggestion = (page: Page, title = SUGGESTION) => page.getByRole('region', { name: title });
+
+test('The first sign-in after signup suggests a passkey, after the free trial’s first-run step', { tag: '@portal-selfservice.passkeys.suggest-first-sign-in' }, async ({ page, step }) => {
+  await stubTurnstile(page, 'pass');
+  const email = address('suggest-signup');
+  await step('Sign up: ask for a link, open the mail, choose a password and create the account', async () => {
+    await page.goto('/signup');
+    await page.getByLabel('Email').fill(email);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Check your email' })).toBeVisible();
+    await page.goto(setupLinkIn(await mailTo(email, 'finish-signup')));
+    await page.getByLabel('New password').fill(PASSWORD);
+    await page.getByRole('checkbox', { name: /terms of service/ }).check();
+    await page.getByRole('button', { name: 'Create account' }).click();
+  });
+  await step('The free trial’s first-run step comes first; no passkey card yet', async () => {
+    const trial = page.getByRole('dialog', { name: 'Your free trial' });
+    await expect(trial.getByRole('heading', { name: 'Your 14-day free trial has started' })).toBeVisible();
+    await expect(page.getByText(SUGGESTION)).toHaveCount(0);
+    await trial.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+  await step('Home suggests a passkey: the more secure way to sign in; the password still works', async () => {
+    await expect(page).toHaveURL(HOME);
+    const card = suggestion(page);
+    await expect(card).toBeVisible();
+    await expect(card.getByText('Your password still works.')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Add a passkey' })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Not now' })).toBeVisible();
+  });
+});
+
+test('Not now hides the suggestion for 30 days; after the third Not now it never comes back', { tag: '@portal-selfservice.passkeys.suggest-not-now' }, async ({ page, step }) => {
+  const { email } = await signedIn(page);
+  await step('Press Not now: the card goes at once, and stays gone after a reload', async () => {
+    await suggestion(page).getByRole('button', { name: 'Not now' }).click();
+    await expect(suggestion(page)).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+  });
+  for (const offer of ['second', 'third']) {
+    await step(`30 days later it is back (the ${offer} offer); press Not now again`, async () => {
+      lapsePasskeyPromptHide(email);
+      await page.reload();
+      await expect(suggestion(page)).toBeVisible();
+      await suggestion(page).getByRole('button', { name: 'Not now' }).click();
+      await expect(suggestion(page)).toHaveCount(0);
+    });
+  }
+  await step('30 days after the third Not now: no card, ever', async () => {
+    lapsePasskeyPromptHide(email);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+  });
+});
+
+test('Add a passkey from the suggestion, then sign in with it', { tag: '@portal-selfservice.passkeys.suggest-add' }, async ({ page, step }) => {
+  const { authenticator } = await signedIn(page);
+  await step('Press Add a passkey on the card; the device confirms with no password asked', async () => {
+    await suggestion(page).getByRole('button', { name: 'Add a passkey' }).click();
+    await expect(page.getByText('Passkey added')).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+    await expect(page.getByLabel('Password')).toHaveCount(0);
+    expect(await authenticator.count()).toBe(1);
+  });
+  await step('Sign out', async () => {
+    await signOut(page, authenticator);
+  });
+  await step('Sign in with a passkey: Home, and no card', async () => {
+    await signInWithPasskey(page, authenticator);
+    await expect(page).toHaveURL(HOME);
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+  });
+});
+
+test('Someone who already has a passkey is never shown the suggestion', { tag: '@portal-selfservice.passkeys.suggest-has-passkey' }, async ({ page, step }) => {
+  await signedIn(page);
+  await step('Home suggests a passkey', async () => {
+    await expect(suggestion(page)).toBeVisible();
+  });
+  await step('Add one from You › Account › Passkeys and close the drawer', async () => {
+    const dialog = await addPasskey(page);
+    await dialog.getByRole('button', { name: 'Close' }).click();
+  });
+  await step('Home: no card, then or after a reload', async () => {
+    await page.goto('/');
+    await expect(page).toHaveURL(HOME);
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(suggestion(page)).toHaveCount(0);
+  });
+});
+
+test('The passkey suggestion in Arabic on a 375 px phone', { tag: '@portal-selfservice.passkeys.suggest-arabic-phone' }, async ({ page, step }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await chooseLanguage(page, 'ar');
+  await signedIn(page, 'ar');
+  await step('Home suggests a passkey in Arabic, right to left', async () => {
+    const card = suggestion(page, 'أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول.');
+    await expect(card).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(card.getByText('وتبقى كلمة المرور صالحة.')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'إضافة مفتاح مرور' })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'ليس الآن' })).toBeVisible();
+  });
+  await step('The card fits the phone, nothing scrolls sideways', async () => {
+    await expectNoHorizontalOverflow(page, 'the passkey suggestion at 375 px');
+    const box = await suggestion(page, 'أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول.').boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= 375).toBe(true);
   });
 });

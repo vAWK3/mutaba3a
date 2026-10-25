@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
+**Status**: Accepted
+**Ticket**: MUT-370 (D3)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: `src/hosted/data/passkeyPrompt.ts` repeats 3 offers / 30 days from `server/src/auth/passkey-prompt.ts` so Not now hides the card before the server answers. If the server's numbers change and the portal's don't, the optimistic value is wrong for one round trip; the server's answer replaces it.
+**Fix**: none needed unless the numbers change; then change both, or drop the optimistic count.
+
+### TD-247: No analytics on the passkey suggestion
+**Status**: Accepted
+**Ticket**: MUT-370 (D8)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: There are no `passkey_prompt_*` events, so PostHog can't show the suggestion's funnel. The server has the answer: `users.passkeyPrompt.notNowCount` and the `passkeys` table (which person added one, and when).
+**Fix**: if Basel wants the funnel in PostHog, add `passkey_prompt_{shown,accepted,dismissed}` to the analytics contract (bump, Flutter fixture) on both clients.
+
 ### TD-246: The passkey sign-in challenge writes a row per request
 **Status**: Accepted
 **Ticket**: MUT-115 (D5)

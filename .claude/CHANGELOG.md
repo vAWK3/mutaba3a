@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Suggest a passkey after the first sign-in (MUT-370 portal half, ADR-191, API 1.70.0-mut370)
+
+**Why:** Basel's MUT-331 Q3: a password is required, and a passkey is optional but actively suggested as the more secure way. MUT-115 shipped passkeys; nothing suggested one.
+
+### Added
+- **Server:** `/v1/me` `user.passkeyPrompt {due, notNowCount, hiddenUntil}` (null where the server has no passkeys) and `PATCH /v1/me/passkey-prompt {"action":"not-now"}` (session + device session; 404 without passkeys; refused while closing). Column `users.passkeyPrompt` JSONB (migration `20261025130000_mut370_passkey_prompt`), read and written through `store.passkeys.promptOf/answerPrompt` under the row lock; rules in `server/src/auth/passkey-prompt.ts` (3 offers, Not now hides 30 days, never with a passkey). A `passkeys` context flag in the API shell (from `WEBAUTHN_RP_ID`). API `1.70.0-mut370`.
+- **Portal:** Home's card "Add a passkey: the more secure way to sign in. Your password still works." (`components/PasskeySuggestion.tsx`, `data/passkeyPrompt.ts`, `data/passkeyPromptQueries.ts`) under the trial banner, after MUT-418's first-run step: Add a passkey (MUT-115's `addPasskeyFlow`; a stale sign-in hands over to You › Account › Passkeys) and Not now. `hosted.passkeys.suggest.*` en/ar.
+- **QA:** `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone`; helper `lapsePasskeyPromptHide`.
+
+### Changed
+- `PasskeysDrawer` add/remove also refresh `/v1/me` (`passkeysChanged` in `passkeys/addPasskey.ts`).
+- `buildMe` takes `passkeysAt` (the request clock where passkeys are on).
+
+### Technical
+- **Files:** `server/src/auth/passkey-prompt.ts`, `server/src/routes/{me,passkeys,sessions,device-sessions}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/{app,app-shell}.ts`, `server/prisma/`, `src/hosted/{components/PasskeySuggestion.tsx,data/passkeyPrompt*.ts,passkeys/addPasskey.ts}`, `qa/specs/portal-selfservice/passkeys.spec.ts`.
+- The phone half (Flutter) is built later in the run's phone phase; its contract is §8 of `.claude/designs/mut-370-passkey-suggestion.md`.
+
 ## [Unreleased] - 2026-10-25 — Sign in with a passkey on the portal (MUT-115 web half, ADR-190, API 1.69.0-mut115)
 
 ### Added

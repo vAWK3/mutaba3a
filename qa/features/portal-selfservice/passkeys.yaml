@@ -75,3 +75,61 @@ features:
     expect:
       - The drawer reads right to left and fits the phone
       - Sign-in offers تسجيل الدخول بمفتاح المرور
+  # MUT-370 (ADR-191): Home suggests a passkey after a sign-in: "Add a passkey: the more secure way to sign in. Your
+  # password still works." Not now hides it for 30 days; three offers in all; never with a passkey.
+  - id: suggest-first-sign-in
+    title: The first sign-in after signup suggests a passkey, after the free trial's first-run step
+    tier: core
+    paths:
+      - src/hosted/components/PasskeySuggestion.tsx
+      - src/hosted/data/passkeyPrompt.ts
+      - src/hosted/pages/views/OverviewPage.tsx
+      - server/src/auth/passkey-prompt.ts
+      - server/src/routes/me.ts
+    steps:
+      - Sign up, open the mail's link, choose a password and create the account
+      - Answer the free trial's first-run step with Continue
+    expect:
+      - The card is not shown while the trial step is open
+      - 'On Home: "Add a passkey: the more secure way to sign in." and "Your password still works.", with Add a passkey and Not now'
+  - id: suggest-not-now
+    title: Not now hides the passkey suggestion for 30 days; after the third Not now it never comes back
+    paths:
+      - src/hosted/data/passkeyPromptQueries.ts
+      - server/src/auth/passkey-prompt.ts
+    steps:
+      - Sign in and press Not now on the card
+      - Reload
+      - 30 days later (the QA database's clock), reload; press Not now again, twice more over 60 days
+    expect:
+      - The card is gone at once and after a reload
+      - It is back after 30 days
+      - After the third Not now it never shows again
+  - id: suggest-add
+    title: Add a passkey from the suggestion, then sign in with it
+    paths:
+      - src/hosted/components/PasskeySuggestion.tsx
+      - src/hosted/passkeys/addPasskey.ts
+    steps:
+      - Sign in and press Add a passkey on the card; the device confirms
+      - Sign out, then Sign in with a passkey
+    expect:
+      - '"Passkey added", and the card is gone'
+      - The passkey signs in, and Home shows no card
+  - id: suggest-has-passkey
+    title: Someone who already has a passkey is never shown the suggestion
+    paths:
+      - src/hosted/components/PasskeysDrawer.tsx
+    steps:
+      - Sign in, add a passkey from You › Account › Passkeys and close the drawer
+      - Go Home, then reload
+    expect:
+      - The card leaves as soon as the passkey is added
+      - No card on Home, then or after a reload
+  - id: suggest-arabic-phone
+    title: The passkey suggestion in Arabic on a 375 px phone
+    steps:
+      - In Arabic at phone width, sign in
+    expect:
+      - '"أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول." with إضافة مفتاح مرور and ليس الآن, right to left'
+      - The card fits the phone with nothing scrolling sideways
