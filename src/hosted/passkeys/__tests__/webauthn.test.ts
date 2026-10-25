@@ -6,12 +6,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('hostUnderRpId', () => {
   it('accepts the apex and its subdomains, and nothing else', () => {
-    expect(hostUnderRpId('mtb3a.com', 'mtb3a.com')).toBe(true);
-    expect(hostUnderRpId('app.mtb3a.com', 'mtb3a.com')).toBe(true);
-    expect(hostUnderRpId('APP.MTB3A.COM', 'mtb3a.com')).toBe(true);
-    expect(hostUnderRpId('evilmtb3a.com', 'mtb3a.com')).toBe(false);
-    expect(hostUnderRpId('mutaba3a-api-xyz.a.run.app', 'mtb3a.com')).toBe(false);
-    expect(hostUnderRpId('app.mtb3a.com', '')).toBe(false);
+    expect(hostUnderRpId('placeholder.example', 'placeholder.example')).toBe(true);
+    expect(hostUnderRpId('app.placeholder.example', 'placeholder.example')).toBe(true);
+    expect(hostUnderRpId('APP.PLACEHOLDER.EXAMPLE', 'placeholder.example')).toBe(true);
+    expect(hostUnderRpId('evilplaceholder.example', 'placeholder.example')).toBe(false);
+    expect(hostUnderRpId('service-xyz.a.run.example', 'placeholder.example')).toBe(false);
+    expect(hostUnderRpId('app.placeholder.example', '')).toBe(false);
   });
 });
 
@@ -23,9 +23,9 @@ describe('passkeySupport', () => {
 
   it('needs both the host and a WebAuthn browser', () => {
     vi.stubGlobal('PublicKeyCredential', function PublicKeyCredential() {});
-    expect(passkeySupport('mtb3a.com', 'app.mtb3a.com')).toBe(true);
-    expect(passkeySupport('mtb3a.com', 'mutaba3a-api-xyz.a.run.app')).toBe(false);
+    expect(passkeySupport('placeholder.example', 'app.placeholder.example')).toBe(true);
+    expect(passkeySupport('placeholder.example', 'service-xyz.a.run.example')).toBe(false);
     vi.stubGlobal('PublicKeyCredential', undefined);
-    expect(passkeySupport('mtb3a.com', 'app.mtb3a.com')).toBe(false);
+    expect(passkeySupport('placeholder.example', 'app.placeholder.example')).toBe(false);
   });
 });

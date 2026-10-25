@@ -103,11 +103,11 @@ describe('loadConfig — passkeys (MUT-115 D2)', () => {
   });
 
   it('accepts the apex with the portal on a subdomain', () => {
-    expect(loadConfig({ ...base, WEBAUTHN_RP_ID: 'mtb3a.com', PORTAL_ORIGIN: 'https://app.mtb3a.com' }).WEBAUTHN_RP_ID).toBe('mtb3a.com');
+    expect(loadConfig({ ...base, WEBAUTHN_RP_ID: 'placeholder.example', PORTAL_ORIGIN: 'https://app.placeholder.example' }).WEBAUTHN_RP_ID).toBe('placeholder.example');
   });
 
   it('refuses a portal origin outside the RP ID, and origins without an RP ID', () => {
-    expect(() => loadConfig({ ...base, WEBAUTHN_RP_ID: 'mtb3a.com', PORTAL_ORIGIN: 'https://mutaba3a-api.a.run.app' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, WEBAUTHN_RP_ID: 'placeholder.example', PORTAL_ORIGIN: 'https://service.a.run.example' })).toThrow(ConfigError);
     expect(() => loadConfig({ ...base, WEBAUTHN_ORIGINS: 'http://localhost:5173' })).toThrow(/needs WEBAUTHN_RP_ID/);
   });
 

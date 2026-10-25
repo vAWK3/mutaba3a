@@ -54,7 +54,7 @@ describe('Passkeys drawer (MUT-115)', () => {
   });
 
   it('is not offered on a host outside the passkey RP ID (the legacy run.app portal)', async () => {
-    vi.stubGlobal('__PASSKEY_RP_ID__', 'mtb3a.com');
+    vi.stubGlobal('__PASSKEY_RP_ID__', 'placeholder.example');
     portal(`/p/${ORG_A}/you/account?passkeys=true`, []);
     await screen.findByRole('button', { name: /^Change password/ });
     expect(screen.queryByRole('button', { name: /^Passkeys/ })).toBeNull();

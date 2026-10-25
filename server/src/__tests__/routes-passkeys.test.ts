@@ -12,7 +12,7 @@ import { SoftAuthenticator } from './helpers/soft-authenticator.js';
 /**
  * MUT-115 (ADR-190): passkeys end to end through the real app and the real @simplewebauthn checks, with a soft
  * authenticator. The portal's origin in these tests is http://localhost (app.request's own), the app's is
- * https://localhost: one RP ID, two origins, as production's app.mtb3a.com and mtb3a.com.
+ * https://localhost: one RP ID, two origins, as production's app.placeholder.example and placeholder.example.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;

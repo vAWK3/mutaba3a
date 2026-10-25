@@ -3,10 +3,10 @@ import { SoftAuthenticator } from '../../__tests__/helpers/soft-authenticator.js
 import { deviceLabel, PASSKEY_PROVIDERS, passkeyNameFor, providerName } from '../passkey-names.js';
 import { creationOptions, signInOptions, verifyAssertion, verifyCreation, webauthnConfigOf, type WebauthnConfig } from '../webauthn.js';
 
-const config: WebauthnConfig = webauthnConfigOf({ rpId: 'mtb3a.com', portalOrigin: 'https://app.mtb3a.com' })!;
+const config: WebauthnConfig = webauthnConfigOf({ rpId: 'placeholder.example', portalOrigin: 'https://app.placeholder.example' })!;
 const user = { id: '7f1c2a8e-58a4-4a52-9b3c-0d6c1b1d2e3f', email: 'nour@firm.ps', displayName: 'Nour' };
-const PORTAL = 'https://app.mtb3a.com';
-const APP = 'https://mtb3a.com';
+const PORTAL = 'https://app.placeholder.example';
+const APP = 'https://placeholder.example';
 
 async function enrolled(origin = PORTAL, auth = new SoftAuthenticator()) {
   const options = await creationOptions(config, user, []);
@@ -18,12 +18,12 @@ async function enrolled(origin = PORTAL, auth = new SoftAuthenticator()) {
 describe('webauthnConfigOf (MUT-115 D2)', () => {
   it('is off without an RP ID', () => {
     expect(webauthnConfigOf({})).toBeNull();
-    expect(() => webauthnConfigOf({ origins: 'https://mtb3a.com' })).toThrow(/needs WEBAUTHN_RP_ID/);
+    expect(() => webauthnConfigOf({ origins: 'https://placeholder.example' })).toThrow(/needs WEBAUTHN_RP_ID/);
   });
 
   it('derives the portal origin and the apex (the iOS app) by default', () => {
-    expect(config).toEqual({ rpId: 'mtb3a.com', rpName: 'MTB3A', origins: ['https://app.mtb3a.com', 'https://mtb3a.com'] });
-    expect(webauthnConfigOf({ rpId: 'mtb3a.com' })?.origins).toEqual(['https://mtb3a.com']);
+    expect(config).toEqual({ rpId: 'placeholder.example', rpName: 'MTB3A', origins: ['https://app.placeholder.example', 'https://placeholder.example'] });
+    expect(webauthnConfigOf({ rpId: 'placeholder.example' })?.origins).toEqual(['https://placeholder.example']);
   });
 
   it('takes an explicit list for local development', () => {
@@ -31,18 +31,18 @@ describe('webauthnConfigOf (MUT-115 D2)', () => {
   });
 
   it('refuses an origin outside the RP ID, plain http off localhost, a path, and a bad host', () => {
-    expect(() => webauthnConfigOf({ rpId: 'mtb3a.com', portalOrigin: 'https://mutaba3a-api.run.app' })).toThrow(/not mtb3a.com or a subdomain/);
-    expect(() => webauthnConfigOf({ rpId: 'mtb3a.com', origins: 'https://evilmtb3a.com' })).toThrow(/not mtb3a.com/);
-    expect(() => webauthnConfigOf({ rpId: 'mtb3a.com', origins: 'http://app.mtb3a.com' })).toThrow(/https/);
-    expect(() => webauthnConfigOf({ rpId: 'mtb3a.com', origins: 'https://app.mtb3a.com/portal' })).toThrow(/bare origin/);
-    expect(() => webauthnConfigOf({ rpId: 'https://mtb3a.com' })).toThrow(/not a host name/);
+    expect(() => webauthnConfigOf({ rpId: 'placeholder.example', portalOrigin: 'https://service.run.example' })).toThrow(/not placeholder.example or a subdomain/);
+    expect(() => webauthnConfigOf({ rpId: 'placeholder.example', origins: 'https://evilplaceholder.example' })).toThrow(/not placeholder\.example/);
+    expect(() => webauthnConfigOf({ rpId: 'placeholder.example', origins: 'http://app.placeholder.example' })).toThrow(/https/);
+    expect(() => webauthnConfigOf({ rpId: 'placeholder.example', origins: 'https://app.placeholder.example/portal' })).toThrow(/bare origin/);
+    expect(() => webauthnConfigOf({ rpId: 'https://placeholder.example' })).toThrow(/not a host name/);
   });
 });
 
 describe('creation and assertion (MUT-115)', () => {
   it('creation options ask for a discoverable, user-verified credential and exclude existing ones', async () => {
     const options = await creationOptions(config, user, [{ credentialId: 'abc', transports: ['internal'] }]);
-    expect(options).toMatchObject({ rp: { id: 'mtb3a.com', name: 'MTB3A' }, attestation: 'none', authenticatorSelection: { residentKey: 'required', userVerification: 'required' } });
+    expect(options).toMatchObject({ rp: { id: 'placeholder.example', name: 'MTB3A' }, attestation: 'none', authenticatorSelection: { residentKey: 'required', userVerification: 'required' } });
     expect(options.excludeCredentials).toEqual([{ id: 'abc', type: 'public-key', transports: ['internal'] }]);
     expect(options.pubKeyCredParams.map((p) => p.alg)).toEqual([-7, -257]);
   });
