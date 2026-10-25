@@ -142,6 +142,7 @@ import type {
   PageCursor,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { FEATURES, isFeature } from '../features.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -516,8 +517,9 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   readonly features: FeaturesRepository = {
+    // Review D2: only names the code knows; a retired name is simply off.
     activeFor: async (userId) =>
-      (await this.prisma.userFeatureGrant.findMany({ where: { userId, revokedAt: null }, select: { feature: true }, orderBy: { feature: 'asc' } })).map((r) => r.feature),
+      (await this.prisma.userFeatureGrant.findMany({ where: { userId, revokedAt: null, feature: { in: [...FEATURES] } }, select: { feature: true }, orderBy: { feature: 'asc' } })).map((r) => r.feature),
     grant: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
@@ -533,19 +535,22 @@ export class PrismaLedgerStore implements LedgerStore {
         }),
       ),
     revoke: (input) =>
-      this.prisma.$transaction(async (tx) => {
-        const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
-        if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
-        return { revoked: count > 0 };
-      }),
-    holders: async (feature) =>
-      (
-        await this.prisma.userFeatureGrant.findMany({
-          where: { feature, revokedAt: null },
-          select: { userId: true, grantedAt: true, user: { select: { email: true } } },
-          orderBy: [{ grantedAt: 'asc' }, { userId: 'asc' }],
-        })
-      ).map((r) => ({ userId: r.userId, email: r.user.email, grantedAt: r.grantedAt })),
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
+          if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { revoked: count > 0 };
+        }),
+      ),
+    holders: async (feature) => {
+      if (!isFeature(feature)) return [];
+      const rows = await this.prisma.userFeatureGrant.findMany({
+        where: { feature, revokedAt: null },
+        select: { userId: true, grantedAt: true, user: { select: { email: true } } },
+        orderBy: [{ grantedAt: 'asc' }, { userId: 'asc' }],
+      });
+      return rows.map((r) => ({ userId: r.userId, email: r.user.email, grantedAt: r.grantedAt }));
+    },
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -2655,14 +2660,14 @@ function coOwnedBy(userId: string): Prisma.OrganizationWhereInput {
   return { ownerUserId: { not: null }, personalOwnerUserId: null, profileType: 'BUSINESS', memberships: { some: { userId, role: 'OWNER' } } };
 }
 
-/**
- * Audit rows written together in one createMany. Each gets its own millisecond, in order: `audit.list` sorts on
- * (createdAt, random id), so equal timestamps would list them in any order — unlike the memory store (re-review).
- */
 function toUserFeature(row: { userId: string; feature: string; grantedBy: string; grantedAt: Date; revokedAt: Date | null }): UserFeatureRecord {
   return { userId: row.userId, feature: row.feature, grantedBy: row.grantedBy, grantedAt: row.grantedAt, revokedAt: row.revokedAt };
 }
 
+/**
+ * Audit rows written together in one createMany. Each gets its own millisecond, in order: `audit.list` sorts on
+ * (createdAt, random id), so equal timestamps would list them in any order — unlike the memory store (re-review).
+ */
 function auditRows(events: AuditEventInput[], at: Date): Prisma.AuditEventCreateManyInput[] {
   return events.map((event, i) => ({
     ...event,

@@ -3821,4 +3821,5 @@ Tests written before the code (not run red first: the worktree was still install
 | `server/src/__tests__/routes-account-closure.test.ts` | Route | 1 changed | a flagged person's feature rows go with the purge (C1) |
 | `server/src/scripts/__tests__/users-cli.test.ts` | CLI | +2 | `feature-grant`/`feature-revoke` by email print granted / already on / revoked / already off; `feature-list` prints the holder; `--feature` required; an unknown name fails |
 | `server/src/__tests__/routes-m{3,4,5,6,8}.test.ts` | Contract | changed | API version `1.73.0-mut433` |
+| Pre-landing review (regression-first, each seen failing) | Route + contract + CLI | +6 | a delete racing a grant or revoke answers 404, not 500 (D1); a retired name is off and nobody holds it, on both stores (D2); an API key's `/v1/audit` never lists feature grants while the admin audit does (D3); `feature-list` says `no one holds <feature>` (D5); the disabled-account case asserts the disable; both stores refuse a grant for an unknown person |
 

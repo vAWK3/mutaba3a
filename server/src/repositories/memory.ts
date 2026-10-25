@@ -165,6 +165,7 @@ import type {
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { isFeature } from '../features.js';
 import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
 import { todayIn } from '../dates.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
@@ -646,9 +647,10 @@ export class MemoryLedgerStore implements LedgerStore {
   };
 
   readonly features: FeaturesRepository = {
+    // Review D2: only names the code knows; a retired name is simply off.
     activeFor: async (userId) =>
       [...this.featureGrants.values()]
-        .filter((g) => g.userId === userId && g.revokedAt === null)
+        .filter((g) => g.userId === userId && g.revokedAt === null && isFeature(g.feature))
         .map((g) => g.feature)
         .sort(),
     grant: async ({ userId, feature, grantedBy, at, audit }) => {
@@ -671,7 +673,7 @@ export class MemoryLedgerStore implements LedgerStore {
     // Rows whose person is gone stay listed (email ''), so a purge that forgot them shows here (C1).
     holders: async (feature) =>
       [...this.featureGrants.values()]
-        .filter((g) => g.feature === feature && g.revokedAt === null)
+        .filter((g) => g.feature === feature && g.revokedAt === null && isFeature(g.feature))
         .sort((a, b) => a.grantedAt.getTime() - b.grantedAt.getTime() || a.userId.localeCompare(b.userId))
         .map((g) => ({ userId: g.userId, email: this.people.get(g.userId)?.email ?? '', grantedAt: g.grantedAt })),
   };
@@ -2580,6 +2582,8 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const [id, s] of this.sessionsById) if (s.userId === userId) this.sessionsById.delete(id);
       for (const [key, m] of this.members) if (m.userId === userId) this.members.delete(key);
       for (const [key, a] of this.termsAcceptances) if (a.userId === userId) this.termsAcceptances.delete(key);
+      // MUT-433: Prisma cascades a declined person's feature rows; the memory store drops them the same way.
+      for (const [key, g] of this.featureGrants) if (g.userId === userId) this.featureGrants.delete(key);
       this.trialStarts.delete(userId);
       if (personal) {
         for (let i = this.events.length - 1; i >= 0; i--) if (this.events[i]!.organizationId === personal.id) this.events.splice(i, 1);

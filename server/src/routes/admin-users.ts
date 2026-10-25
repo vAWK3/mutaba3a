@@ -64,6 +64,18 @@ const UserIdParam = z.object({ userId: z.string().uuid().openapi({ param: { name
 const FeatureParam = z.object({ feature: z.string().max(64).openapi({ param: { name: 'feature', in: 'path' }, example: 'agent_access' }) });
 const UserFeatureParams = UserIdParam.extend(FeatureParam.shape);
 
+const unknownUser = { description: 'Unknown user', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } as const;
+
+/** Review D1: the person (or a profile being audited) was deleted between the lookup and the write. */
+async function goneIsNotFound<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'User not found');
+    throw err;
+  }
+}
+
 function featureOf(name: string) {
   if (!isFeature(name)) throw new ApiError('VALIDATION_FAILED', `Unknown feature: ${name}`, { field: 'feature' });
   return name;
@@ -498,7 +510,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       request: { params: UserFeatureParams },
       responses: {
         200: { description: 'The flag is on', content: { 'application/json': { schema: FeatureGrantResponseSchema } } },
-        404: notFound,
+        404: unknownUser,
         409: { description: 'The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         422: { description: 'Unknown feature (VALIDATION_FAILED, details.field feature)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
@@ -514,13 +526,15 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       }
       const organizationIds = await memberOrganizations(user.id);
       if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_granted' }, 'account change on a user with no memberships; no organization to audit');
-      const { grant, granted } = await store.features.grant({
-        userId: user.id,
-        feature,
-        grantedBy: 'admin',
-        at: c.get('now')(),
-        audit: auditEvents(c, organizationIds, user.id, 'user.feature_granted', { feature }),
-      });
+      const { grant, granted } = await goneIsNotFound(() =>
+        store.features.grant({
+          userId: user.id,
+          feature,
+          grantedBy: 'admin',
+          at: c.get('now')(),
+          audit: auditEvents(c, organizationIds, user.id, 'user.feature_granted', { feature }),
+        }),
+      );
       return c.json({ feature, grantedAt: grant.grantedAt.toISOString(), granted }, 200);
     },
   );
@@ -535,7 +549,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       request: { params: UserFeatureParams },
       responses: {
         200: { description: 'The flag is off', content: { 'application/json': { schema: FeatureRevokeResponseSchema } } },
-        404: notFound,
+        404: unknownUser,
         422: { description: 'Unknown feature (VALIDATION_FAILED, details.field feature)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
         ...adminErrors,
       },
@@ -544,12 +558,16 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       const params = c.req.valid('param');
       const feature = featureOf(params.feature);
       const user = await mustGetUser(params.userId);
-      const { revoked } = await store.features.revoke({
-        userId: user.id,
-        feature,
-        at: c.get('now')(),
-        audit: auditEvents(c, await memberOrganizations(user.id), user.id, 'user.feature_revoked', { feature }),
-      });
+      const organizationIds = await memberOrganizations(user.id);
+      if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_revoked' }, 'account change on a user with no memberships; no organization to audit');
+      const { revoked } = await goneIsNotFound(() =>
+        store.features.revoke({
+          userId: user.id,
+          feature,
+          at: c.get('now')(),
+          audit: auditEvents(c, organizationIds, user.id, 'user.feature_revoked', { feature }),
+        }),
+      );
       return c.json({ feature, revoked }, 200);
     },
   );

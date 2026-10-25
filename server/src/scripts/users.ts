@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
+import { FEATURES } from '../features.js';
 
 /**
  * Operator CLI for hosted-portal users (MUT-37, ADR-037). Talks to the admin
@@ -98,7 +99,7 @@ const USAGE = [
   '  feature-grant  --email <email> --feature <name>   (MUT-433: turn a per-user flag on; every flag is off until granted)',
   '  feature-revoke --email <email> --feature <name>   (off at once: seen on their very next request)',
   '  feature-list   --feature <name>   (who holds it now, oldest grant first)',
-  '          features: agent_access (connect their own AI agent over MCP, epic MUT-432)',
+  `          features: ${FEATURES.join(', ')} (server/src/features.ts)`,
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -327,7 +328,9 @@ const FEATURE_HANDLERS: Record<Extract<Command, `feature-${string}`>, (ctx: Hand
     out(`${revoked ? 'revoked' : 'already off'}: ${feature} for ${user.id} (${user.email})`);
   },
   'feature-list': async ({ client, need, out }) => {
-    const { holders } = await client.call<{ holders: { userId: string; email: string; grantedAt: string }[] }>('GET', `/admin/v1/features/${encodeURIComponent(need('feature'))}`);
+    const feature = need('feature');
+    const { holders } = await client.call<{ holders: { userId: string; email: string; grantedAt: string }[] }>('GET', `/admin/v1/features/${encodeURIComponent(feature)}`);
+    if (holders.length === 0) out(`no one holds ${feature}`);
     for (const h of holders) out(`${h.userId}  ${h.email}  ${h.grantedAt}`);
   },
 };

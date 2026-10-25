@@ -14044,7 +14044,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Unknown user or organization */
+                /** @description Unknown user */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -14105,7 +14105,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Unknown user or organization */
+                /** @description Unknown user */
                 404: {
                     headers: {
                         [name: string]: unknown;

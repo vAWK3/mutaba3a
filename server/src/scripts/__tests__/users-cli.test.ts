@@ -350,6 +350,12 @@ describe('billing verbs (MUT-358)', () => {
     expect(await h.store.features.activeFor(user.id)).toEqual([]);
   });
 
+  it('feature-list says so when nobody holds the flag (review D5)', async () => {
+    const h = harness();
+    expect(await h.run(['feature-list', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toEqual(['no one holds agent_access']);
+  });
+
   it('feature commands need --feature, and the server refuses an unknown one', async () => {
     const h = harness();
     await person(h, 'rana@studio.ps');
@@ -358,7 +364,7 @@ describe('billing verbs (MUT-358)', () => {
     expect(await h.run(['feature-list'])).toBe(1);
     h.err.length = 0;
     expect(await h.run(['feature-grant', '--email', 'rana@studio.ps', '--feature', 'time_travel'])).toBe(1);
-    expect(h.err.join('\n')).toMatch(/VALIDATION_FAILED|feature/);
+    expect(h.err).toEqual([expect.stringMatching(/→ 422 VALIDATION_FAILED: Unknown feature: time_travel$/)]);
   });
 
   it('billing-grant needs exactly one target', async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ForeignKeyViolation } from '../memory.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore } from '../ports.js';
 
 /**
@@ -88,6 +89,22 @@ export function describeLedgerStoreFeaturesContract(name: string, makeStore: () 
       const revokes = await Promise.all([store.features.revoke(revokeOf(personal.id, user.id, 2)), store.features.revoke(revokeOf(personal.id, user.id, 2))]);
       expect(revokes.filter((r) => r.revoked)).toHaveLength(1);
       expect((await featureAudit(store, personal.id)).sort()).toEqual(['user.feature_granted', 'user.feature_revoked']);
+    });
+
+    it('refuses a grant for an unknown person and stores nothing (review D1)', async () => {
+      const store = await makeStore();
+      const ghost = '00000000-0000-4000-8000-000000000433';
+      await expect(store.features.grant({ userId: ghost, feature: 'agent_access', grantedBy: 'admin', at: at(1), audit: [] })).rejects.toBeInstanceOf(ForeignKeyViolation);
+      expect(await store.features.activeFor(ghost)).toEqual([]);
+    });
+
+    it('reads only names the code knows: a retired name is off and nobody holds it (review D2)', async () => {
+      const store = await makeStore();
+      const { user, personalOrganization: personal } = await store.users.create(userInput());
+      await store.features.grant({ ...grantOf(personal.id, user.id, 1), feature: 'retired_flag' });
+      await store.features.grant(grantOf(personal.id, user.id, 2));
+      expect(await store.features.activeFor(user.id)).toEqual(['agent_access']);
+      expect(await store.features.holders('retired_flag')).toEqual([]);
     });
 
     it('lists the current holders, oldest grant first, with their email', async () => {

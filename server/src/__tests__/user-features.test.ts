@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
+import { SCOPES } from '../auth/scopes.js';
 import { FEATURES, hasFeature, isFeature } from '../features.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
-import { MemoryLedgerStore } from '../repositories/memory.js';
+import { ForeignKeyViolation, MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -124,7 +125,8 @@ describe('PUT /admin/v1/users/{userId}/features/{feature} (AC2)', () => {
   it('allows a disabled account, both ways: the flag waits until they can sign in (D5)', async () => {
     const h = harness();
     const p = await person(h);
-    await h.app.request(`/admin/v1/users/${p.userId}/disable`, { method: 'POST', headers: admin });
+    expect((await h.app.request(`/admin/v1/users/${p.userId}/disable`, { method: 'POST', headers: admin })).status).toBe(200);
+    expect((await h.store.users.getById(p.userId))?.status).toBe('DISABLED');
     expect((await grant(h, p.userId)).status).toBe(200);
     expect(await hasFeature(h.store, p.userId, 'agent_access')).toBe(true);
     expect((await revoke(h, p.userId)).status).toBe(200);
@@ -140,6 +142,38 @@ describe('PUT /admin/v1/users/{userId}/features/{feature} (AC2)', () => {
     expect((await grant(h, '00000000-0000-4000-8000-000000000000')).status).toBe(404);
     expect((await grant(h, p.userId, 'agent_access', {})).status).toBe(401);
     expect(await hasFeature(h.store, p.userId, 'agent_access')).toBe(false);
+  });
+});
+
+describe('a person deleted while the operator grants or revokes (review D1)', () => {
+  it('answers 404, not 500, when the store refuses the write because the person just went', async () => {
+    const h = harness();
+    const p = await person(h);
+    // The account is deleted (a signup decline, the hourly purge) between the route's lookup and the write.
+    const gone = async () => {
+      throw new ForeignKeyViolation('user_feature_grants_userId_fkey');
+    };
+    Object.assign(h.store.features, { grant: gone, revoke: gone });
+    expect((await grant(h, p.userId)).status).toBe(404);
+    expect((await revoke(h, p.userId)).status).toBe(404);
+  });
+});
+
+describe('integration keys (review D3)', () => {
+  it("an API key's /v1/audit never lists feature grants; the operator's audit does", async () => {
+    const h = harness();
+    const firm = await read(await h.app.request('/admin/v1/organizations', json({ name: 'Haddad Law', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
+    const apiKey = await read(await h.app.request(`/admin/v1/organizations/${firm.id}/api-keys`, json({ name: 'Malafat', scopes: SCOPES }, admin)));
+    const key = { authorization: `Bearer ${apiKey.secret}` };
+    const p = await person(h, firm.id);
+    await grant(h, p.userId);
+    await revoke(h, p.userId);
+
+    expect((await featureAudit(h, firm.id)).map((e: { action: string }) => e.action).sort()).toEqual(['user.feature_granted', 'user.feature_revoked']);
+    const listed = await read(await h.app.request('/v1/audit?limit=200', { headers: key }));
+    expect(listed.items.length).toBeGreaterThan(0);
+    expect(listed.items.filter((e: { action: string }) => e.action.startsWith('user.feature_'))).toEqual([]);
+    expect(await read(await h.app.request('/v1/audit?action=user.feature_granted', { headers: key }))).toMatchObject({ items: [] });
   });
 });
 

@@ -18331,7 +18331,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: Unknown user or organization
+          description: Unknown user
           content:
             application/json:
               schema:
@@ -18382,7 +18382,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: Unknown user or organization
+          description: Unknown user
           content:
             application/json:
               schema:
