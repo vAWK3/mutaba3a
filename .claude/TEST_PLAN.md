@@ -3766,3 +3766,13 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 |---|---|---|
 | Landing unit | `LandingPage.test.tsx`: the request card comes before sign-in and the apps while signup is closed; the note comes before the card while it is open | `npm run test:run` |
 | Release-QA | `web.landing.get-it-form` (card first, two fields a row, no fieldset box, axe light+dark, empty → errors, failure → alert beside Try again, retry → success focused) and `web.landing.get-it-375` (Arabic 375: no overflow, fields stack, 44px pills, full-width send, stacked app tiles). Both passing 2026-10-25 against this checkout's dev server (`QA_CONTEXT` → :5180) | `release-qa run --app web --only get-it-form,get-it-375` |
+
+## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-193)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server | `attachments/__tests__/rules.test.ts` (inline disposition), `local-storage.test.ts` (the `d` claim; absent = attachment), `routes-receipts.test.ts` (`?disposition=inline` signs inline; unknown → 422), `routes-dev-attachments.test.ts` (inline PDF: no sandbox, no portal CSP, nosniff; attachment keeps sandbox), `portal.test.ts` (CSP string) | `npm --prefix server test` |
+| Portal unit | `lib/__tests__/receiptSuggestion.test.ts` (JOD 3dp, ILS 2dp, unsupported currency, missing fields, date only, ignored fields), `data/__tests__/receiptQueries.test.ts` (file rules, filter mapping, next receipt, 404/503 off, the two 429s, upload sequence + cleanup) | `npm run test:run` |
+| Portal pages | `pages/__tests__/Receipts.test.tsx` (21: tab + count, 404/503 hide, gallery filter/counts/PDF tile/lazy image, upload + refusals + 429, read-only, prefill + hints, unsupported currency, inline image/PDF, approve body without `suggested` + next, last → gallery, 409 → Filed view, 422 banner, network keeps the key, filed by link, not found); the drawer's own tests guard the extraction | `npm run test:run` |
+| Release-QA | `portal.receipts.gallery`, `.upload`, `.review-approve`, `.filed`, `.unavailable`, `portal.direction.receipts-review-ar`; `portal.expenses` re-run for the extraction | `release-qa release --only portal.receipts,portal.direction.receipts-review-ar,portal.expenses` |
+

@@ -2929,6 +2929,10 @@ export const ReceiptListItemSchema = ExpenseReceiptSchema.extend({
 
 export const ReceiptPageSchema = z.object({ items: z.array(ReceiptListItemSchema), nextCursor: z.string().nullable() }).openapi('ReceiptPage');
 
+/** MUT-260 (D3): `inline` for the portal's PDF preview; the default `attachment` keeps every existing caller unchanged. */
+export const ReceiptDownloadQuerySchema = z.object({
+  disposition: z.enum(['attachment', 'inline']).default('attachment').openapi({ description: 'How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal\'s PDF preview). Since 1.71.0-mut260.' }),
+});
 export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
 
 export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({

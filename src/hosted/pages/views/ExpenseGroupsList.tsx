@@ -11,6 +11,7 @@ import { useToast } from '../../components/Toast';
 import { GroupDrawer } from '../../components/groups/GroupDrawer';
 import { dayCount, groupStatus, needsEndDate, reachedYear, type GroupStatus } from '../../data/expenseGroups';
 import { useExpenseGroups } from '../../data/expenseGroupQueries';
+import { useReceiptsAvailability } from '../../data/receiptQueries';
 import type { GroupsPageSearch } from '../../data/filters';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay, todayInZone } from '../../format/dates';
@@ -30,11 +31,16 @@ const LIST_SKELETON_ROWS = 3;
 export function useExpensesTabs() {
   const profile = useProfile();
   const { t } = useLanguage();
+  // MUT-260 (D1, D4): Receipts only where the library answers, with its To-review count.
+  const receipts = useReceiptsAvailability(profile.id);
   return {
     label: t('hosted.groups.sectionsLabel'),
     tabs: [
       { to: `/p/${profile.id}/expenses`, label: t('hosted.groups.tabExpenses'), exact: true },
       { to: `/p/${profile.id}/expenses/groups`, label: t('hosted.groups.tabGroups') },
+      ...(receipts.availability === 'on'
+        ? [{ to: `/p/${profile.id}/expenses/receipts`, label: receipts.toReview ? t('hosted.groups.tabReceiptsCount', { count: receipts.toReview }) : t('hosted.groups.tabReceipts') }]
+        : []),
     ],
   };
 }

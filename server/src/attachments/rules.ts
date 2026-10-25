@@ -50,8 +50,15 @@ export function receiptStorageKey(organizationId: string, receiptId: string): st
   return `org/${organizationId}/expense-receipts/${receiptId}`;
 }
 
+/**
+ * MUT-260 (D3): how a signed download is served. `attachment` saves the file (every caller's default); `inline` lets
+ * the portal show a PDF receipt in an iframe, which would otherwise download instead of displaying.
+ */
+export const DOWNLOAD_DISPOSITIONS = ['attachment', 'inline'] as const;
+export type DownloadDisposition = (typeof DOWNLOAD_DISPOSITIONS)[number];
+
 /** `Content-Disposition` for downloads: ASCII fallback + RFC 5987 UTF-8 filename. */
-export function contentDisposition(filename: string): string {
+export function contentDisposition(filename: string, disposition: DownloadDisposition = 'attachment'): string {
   const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }

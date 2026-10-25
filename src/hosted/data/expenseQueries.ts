@@ -78,7 +78,7 @@ export function useVendorSuggestions(profileId: string, q: string) {
   });
 }
 
-function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
+export function invalidateExpenses(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'expenses') });
   // MUT-254: a save may have created a vendor or moved its default category.
   queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'vendors') });
@@ -127,7 +127,7 @@ export function useDeleteExpense(profileId: string) {
  * mut-44-expense-capture.md's CSP note: this PUT needs the bucket's origin in
  * the portal's eventual `connect-src` (MUT-45, not yet drafted).
  */
-async function putToSignedUrl(url: string, headers: Record<string, string>, file: File): Promise<void> {
+export async function putToSignedUrl(url: string, headers: Record<string, string>, file: File): Promise<void> {
   // Signed out (MUT-287): the server's routes run in the page and signed a local-blob URL; the bytes go to this device's IndexedDB.
   if (isLocalBlobUrl(url)) {
     try {

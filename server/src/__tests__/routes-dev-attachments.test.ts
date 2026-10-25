@@ -123,6 +123,29 @@ describe('local receipt storage end to end (MUT-396 AC1)', () => {
   });
 });
 
+describe('inline previews (MUT-260 A6)', () => {
+  const PDF = new TextEncoder().encode('%PDF-1.4\n%%EOF\n');
+  it('an inline PDF is served without the sandbox and without the portal CSP; an attachment keeps the sandbox', async () => {
+    const { app, as } = await setup();
+    const started = await read(await app.request('/v1/receipts/uploads', json({ filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: PDF.length }, { ...as, ...idem() })));
+    expect((await put(app, started.upload, PDF)).status).toBe(200);
+    await app.request(`/v1/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as });
+
+    const inline = await read(await app.request(`/v1/receipts/${started.receipt.id}/download?disposition=inline`, { headers: as }));
+    const shown = await app.request(new URL(inline.url).pathname);
+    expect(shown.status).toBe(200);
+    expect(shown.headers.get('content-type')).toBe('application/pdf');
+    expect(shown.headers.get('content-disposition')?.startsWith('inline;')).toBe(true);
+    expect(shown.headers.get('content-security-policy')).toBeNull();
+    expect(shown.headers.get('x-content-type-options')).toBe('nosniff');
+
+    const saved = await read(await app.request(`/v1/receipts/${started.receipt.id}/download`, { headers: as }));
+    const file = await app.request(new URL(saved.url).pathname);
+    expect(file.headers.get('content-disposition')?.startsWith('attachment;')).toBe(true);
+    expect(file.headers.get('content-security-policy')).toBe('sandbox');
+  });
+});
+
 describe('local downloads (MUT-396 review)', () => {
   it('HEAD answers the headers without a body', async () => {
     const { app, as } = await setup();

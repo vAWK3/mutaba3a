@@ -65,3 +65,16 @@ features:
     expect:
       - The drawer fills the screen edge to edge, its title and buttons whole
       - The page does not scroll sideways
+  - id: receipts-review-ar
+    title: In Arabic, the receipt review page mirrors (the receipt on the right, the form on the left) and stacks on a phone (MUT-260 AC5)
+    tier: secondary
+    tickets: [MUT-260]
+    paths:
+      - src/hosted/pages/views/ReceiptReview.tsx
+    steps:
+      - Open a To-review receipt in Arabic on a desktop-wide window
+      - Narrow the window to a 375px phone
+    expect:
+      - The page is right to left, its labels are Arabic, and the receipt sits to the right of the form
+      - The amount still reads 84.20 left to right
+      - On the phone the receipt stacks above the form and the page does not scroll sideways
