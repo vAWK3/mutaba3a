@@ -3866,4 +3866,5 @@ Tests first for each unit (seen failing: modules missing, or the old script text
 | Manual | Drill | 1 | MUT-327 drill day: roll back to the previous api tag and forward again (Basel) |
 
 Also run by hand, read-only, against the local dev database: `rollback:check` for api-v0.8.0 (0), api-v0.6.0 (2, MUT-333 and MUT-115 counted 0) and HEAD (1, an unapplied migration); every hazard query executes.
+And read-only against production's Artifact Registry (gcloud token): `release-image rollback` found api-v0.8.0's (`8acc5022`) and api-v0.6.0's (`d9edb43f`) images, each warning it has no revision label; `deploy-plan` said `reuse` for `8acc5022` at its own clean commit, refused it from another HEAD with a dirty tree, and said `build` for an unused tag.
 
