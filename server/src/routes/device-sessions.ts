@@ -3,7 +3,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
-import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, requestClientIp, type SignInThrottle } from '../auth/sessions.js';
+import { requestClientIp, sessionLifetime, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
@@ -40,10 +40,7 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
 export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, settings, throttle, ipLimiter, terms } = options;
   const webauthn = options.webauthn ?? null;
-  const deviceLifetime = () => ({
-    idleMs: (settings.deviceIdleDays ?? DEFAULT_DEVICE_IDLE_DAYS) * 86_400_000,
-    absoluteMs: (settings.deviceAbsoluteDays ?? DEFAULT_DEVICE_ABSOLUTE_DAYS) * 86_400_000,
-  });
+  const deviceLifetime = () => sessionLifetime('device', settings);
   const app = new OpenAPIHono<AppEnv>();
   warmDummyHash(passwordHasher);
 

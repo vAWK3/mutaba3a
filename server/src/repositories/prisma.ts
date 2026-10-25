@@ -389,30 +389,55 @@ export class PrismaLedgerStore implements LedgerStore {
     // MUT-237: the same NO KEY UPDATE lock accountSetup.redeem takes, so a sign-in racing this call either
     // commits first (then gets revoked below, unless it is the excepted session) or sees the new hash and refuses.
     changePassword: (input) =>
-      this.prisma.$transaction(async (tx) => {
-        const [person] = await tx.$queryRaw<Array<{ passwordHash: string | null }>>`SELECT "passwordHash" FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
-        if (!person) return null;
-        // MUT-238 review: two changes can each verify the old password before either holds this lock. The one that
-        // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
-        const kept = await tx.session.findFirst({ where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null }, select: { id: true } });
-        if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
-        const user = await tx.user.update({
-          where: { id: input.userId },
-          data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
-        });
-        await tx.session.updateMany({
-          where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
-          data: { revokedAt: input.at, revokedReason: 'password_changed' },
-        });
-        // The kept session just proved the old password and set the new one: verified as of the change, so the
-        // middleware's passwordChangedAt check lets it through. Its deadlines stay where sign-in put them.
-        await tx.session.updateMany({
-          where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
-          data: { credentialsVerifiedAt: input.at },
-        });
-        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
-        return toUser(user);
-      }),
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const [person] = await tx.$queryRaw<Array<{ passwordHash: string | null }>>`SELECT "passwordHash" FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) return null;
+          // MUT-238 review: two changes can each verify the old password before either holds this lock. The one that
+          // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
+          const kept = await tx.session.findFirst({
+            where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
+            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true },
+          });
+          if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
+          const user = await tx.user.update({
+            where: { id: input.userId },
+            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+          });
+          await tx.session.updateMany({
+            where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
+            data: { revokedAt: input.at, revokedReason: 'password_changed' },
+          });
+          if (input.rotation) {
+            // MUT-262: a new row under the new digest, then the old one revoked. A digest collision (P2002) aborts the
+            // whole transaction, so the password and the old token are both left as they were.
+            await tx.session.update({ where: { id: kept.id }, data: { revokedAt: input.at, revokedReason: 'password_rotated' } });
+            await tx.session.create({
+              data: {
+                userId: input.userId,
+                tokenDigest: input.rotation.tokenDigest,
+                kind: kept.kind,
+                createdAt: input.at,
+                credentialsVerifiedAt: input.at,
+                lastSeenAt: input.at,
+                idleExpiresAt: new Date(Math.min(input.at.getTime() + input.rotation.idleMs, kept.absoluteExpiresAt.getTime())),
+                absoluteExpiresAt: kept.absoluteExpiresAt,
+                userAgent: kept.userAgent,
+                passkeyId: kept.passkeyId,
+              },
+            });
+          } else {
+            // The kept session just proved the old password and set the new one: verified as of the change, so the
+            // middleware's passwordChangedAt check lets it through. Its deadlines stay where sign-in put them.
+            await tx.session.updateMany({
+              where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
+              data: { credentialsVerifiedAt: input.at },
+            });
+          }
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return toUser(user);
+          }),
+      ),
     // MUT-333: the same row lock the hard delete's claim takes (R1), so a close, a cancel and a claim serialize.
     requestClosure: (input) =>
       this.prisma.$transaction(async (tx) => {

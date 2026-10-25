@@ -5,17 +5,27 @@ import { verifyCurrentPassword } from '../auth/current-password.js';
 import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
-import { isSamePortalOrigin, requestClientIp, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
+import {
+  generateDeviceSessionToken,
+  generateSessionToken,
+  isSamePortalOrigin,
+  requestClientIp,
+  sessionCookieName,
+  sessionDigest,
+  sessionLifetime,
+  type SignInThrottle,
+} from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
-import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import {
   ChangePasswordRequestSchema,
   ErrorEnvelopeSchema,
   PasskeySignInRequestSchema,
+  PasswordChangedTokenSchema,
   MalafatSuggestionsChangeSchema,
   MalafatSuggestionsSchema,
   MeSchema,
@@ -109,7 +119,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { store, passwordHasher, throttle, pepper: settings.pepper },
         { email, password },
         'cookie',
-        { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
+        sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
       return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
@@ -152,7 +162,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { store, passwordHasher, throttle, pepper: settings.pepper, webauthn },
         { challengeId, response: response as unknown as AuthenticationResponseJSON },
         'cookie',
-        { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
+        sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
       return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
@@ -266,11 +276,18 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       path: '/v1/me/password',
       tags: ['Sessions'],
       summary: 'Change your own password (MUT-237)',
-      description: 'Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.',
+      description:
+        'Revokes every other session, web and device. This session stays signed in under a new token (MUT-262), so a leaked copy of the old one stops working too: ' +
+        'a cookie session always gets a new cookie (204, Set-Cookie, never past the old absolute deadline); a device session gets one only when it sends ' +
+        '`rotateToken: true`, in a 200 body, and otherwise keeps its token (204). A wrong current password counts toward the same lockout a wrong sign-in attempt would.',
       security: [{ session: [] }, { deviceSession: [] }],
       request: { body: { required: true, content: { 'application/json': { schema: ChangePasswordRequestSchema } } } },
       responses: {
-        204: { description: 'Password changed' },
+        200: {
+          description: 'Password changed; a device session that sent `rotateToken: true` continues under this token',
+          content: { 'application/json': { schema: PasswordChangedTokenSchema } },
+        },
+        204: { description: 'Password changed; a cookie session continues under the new cookie set here, a device session that did not ask keeps its token' },
         // Not 401: the session is still valid, and a 401 here would trip the portal's generic session-expired handler.
         403: errorResponse(
           'CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED',
@@ -282,15 +299,18 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       // No same-origin check here: authenticate() already enforces it for the cookie branch (middleware.ts:172),
       // and a device bearer token has no comparable CSRF signal to check (same reasoning as GET /v1/me below).
       const { user, session } = c.get('identity');
-      const { currentPassword, newPassword } = c.req.valid('json');
+      const { currentPassword, newPassword, rotateToken } = c.req.valid('json');
       // MUT-333: the same check closing an account makes (auth/current-password.ts).
       const verifiedPasswordHash = await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword, c.get('now')(), c.get('requestId'));
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
       const passwordHash = await passwordHasher.hash(newPassword);
       const at = c.get('now')();
-      const audit = await changePasswordAudit(store, c.get('requestId'), user);
+      // MUT-262 (D1): the portal ships with this API, so a cookie always rotates; a device build only once it reads the 200.
+      const rotated = session.kind === 'cookie' || rotateToken === true ? rotatedToken(session) : null;
+      const audit = await changePasswordAudit(store, c.get('requestId'), user, rotated !== null);
       try {
-        await store.users.changePassword({ userId: user.id, passwordHash, verifiedPasswordHash, exceptSessionId: session.id, at, audit });
+        const rotation = rotated ? { rotation: { tokenDigest: sessionDigest(settings.pepper, rotated), idleMs: sessionLifetime(session.kind, settings).idleMs } } : {};
+        await store.users.changePassword({ userId: user.id, passwordHash, verifiedPasswordHash, exceptSessionId: session.id, ...rotation, at, audit });
       } catch (err) {
         // Another change (or an operator lock) committed while this one was hashing: the password just verified no longer
         // works, and this session was signed out by it. Not a failed attempt, so no lockout count (MUT-238 review).
@@ -299,13 +319,22 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       }
       // MUT-359 (A5): after the commit, and never able to change this answer.
       await sendPasswordNotice(mailer, logger, user, { first: false, signInLink: signInLinkOf(settings, c.req.url), requestId: c.get('requestId') });
+      if (!rotated) return c.body(null, 204);
+      if (session.kind === 'device') return c.json({ token: rotated }, 200);
+      // D4: the cookie lives as long as the session can, never past the deadline sign-in set.
+      const maxAge = Math.max(0, Math.floor((session.absoluteExpiresAt.getTime() - at.getTime()) / 1000));
+      setCookie(c, cookieName, rotated, { ...cookieOptions, maxAge });
       return c.body(null, 204);
     },
   );
 
   return app;
 
-  async function changePasswordAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord): Promise<AuditEventInput[]> {
+  function rotatedToken(session: SessionRecord): string {
+    return session.kind === 'device' ? generateDeviceSessionToken() : generateSessionToken();
+  }
+
+  async function changePasswordAudit(ledger: LedgerStore, requestId: string | null, person: UserRecord, tokenRotated: boolean): Promise<AuditEventInput[]> {
     return (await ledger.memberships.listByUser(person.id)).map((m) => ({
       organizationId: m.organizationId,
       actorType: 'USER',
@@ -314,6 +343,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       entityType: 'user',
       entityId: person.id,
       requestId,
+      metadata: { tokenRotated },
     }));
   }
 }

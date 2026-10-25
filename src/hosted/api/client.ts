@@ -197,6 +197,37 @@ export function setUnauthorisedHandler(handler: UnauthorisedHandler): () => void
   };
 }
 
+/**
+ * MUT-262 (D3): a password change rotates the session cookie, so a request sent with the old cookie can come back 401
+ * after the change committed. Each request remembers the credential generation it was sent under; a successful change
+ * bumps it. A 401 waits for any change in flight to settle and ends the session only if its generation is still current.
+ * The phone follows the same rule (MUT-208).
+ */
+let credentialGeneration = 0;
+let credentialChange: Promise<void> | null = null;
+
+async function rotatingCredential<T>(call: () => Promise<T>): Promise<T> {
+  const change = call();
+  const settled = change.then(
+    () => {
+      credentialGeneration += 1;
+    },
+    () => undefined,
+  );
+  credentialChange = settled;
+  try {
+    return await change;
+  } finally {
+    await settled;
+    if (credentialChange === settled) credentialChange = null;
+  }
+}
+
+async function reportUnauthorised(error: ApiError, sentUnder: number, waitForChange: boolean): Promise<void> {
+  if (waitForChange && credentialChange) await credentialChange;
+  if (sentUnder === credentialGeneration) unauthorisedHandler?.(error);
+}
+
 type QueryValue = string | number | boolean | null | undefined;
 
 interface RequestOptions {
@@ -214,6 +245,7 @@ const SIGN_IN_PATH = '/v1/sessions';
 /** MUT-115: passkey sign-in; like the password sign-in, its 401 is a refused credential, never an ended session. */
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
 const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
+const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
  * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
  * self-service doors, signup and recovery (MUT-368): the in-page backend has no mailer to send their links. And the
@@ -362,6 +394,7 @@ export async function send(method: Method, path: string, options: RequestOptions
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
 
   const url = withQuery(path, options.query);
+  const sentUnder = credentialGeneration;
   const init: RequestInit = {
     method,
     credentials: 'same-origin',
@@ -397,7 +430,8 @@ export async function send(method: Method, path: string, options: RequestOptions
     const error = await toApiError(response);
     const isSignIn = method === 'POST' && SIGN_IN_PATHS.has(path);
     // A local 401 is the local backend's own business (it re-mints its session); only the server's ends a session.
-    if (error.status === 401 && !isSignIn && wentRemote) unauthorisedHandler?.(error);
+    // The change itself never waits on itself.
+    if (error.status === 401 && !isSignIn && wentRemote) await reportUnauthorised(error, sentUnder, !(method === 'POST' && path === CHANGE_PASSWORD_PATH));
     throw error;
   }
   return response;
@@ -430,8 +464,8 @@ export const api = {
   /** MUT-115: a single-use sign-in challenge (public). */
   passkeyChallenge: (signal?: AbortSignal) => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/passkey-challenges', { signal }),
   signInWithPasskey: (body: Schemas['PasskeySignInRequest']) => request<OkJson<'/v1/sessions/passkey', 'post'>>('POST', PASSKEY_SIGN_IN_PATH, { body }),
-  /** MUT-237: revokes every other session, web and device; this one stays signed in. */
-  changePassword: (body: Schemas['ChangePasswordRequest']) => request<void>('POST', '/v1/me/password', { body }),
+  /** MUT-237: revokes every other session, web and device; this one stays signed in under a new cookie (MUT-262). */
+  changePassword: (body: Schemas['ChangePasswordRequest']) => rotatingCredential(() => request<void>('POST', CHANGE_PASSWORD_PATH, { body })),
   /** MUT-333: starts 30 days of grace; every other session is signed out, this one sees only the closing page. */
   closeAccount: (body: Schemas['CloseAccountRequest']) => request<Schemas['CloseAccountResponse']>('POST', '/v1/me/closure', { body }),
   /** MUT-333: Keep my account, within the grace. Idempotent. */

@@ -557,10 +557,18 @@ export class MemoryLedgerStore implements LedgerStore {
       if (u.passwordHash !== input.verifiedPasswordHash || !kept || kept.userId !== u.id || kept.revokedAt) {
         throw new StateConflict('user', 'CREDENTIAL_CHANGED');
       }
+      // MUT-262: built and checked before anything changes, so a duplicate digest leaves the store untouched (AC5).
+      const rotated = input.rotation ? rotatedSession(kept, input.rotation, input.at) : null;
+      if (rotated && [...this.sessionsById.values()].some((s) => s.tokenDigest === rotated.tokenDigest)) throw new UniqueViolation('sessions.tokenDigest');
       Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
-      // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
-      kept.credentialsVerifiedAt = input.at;
+      if (rotated) {
+        Object.assign(kept, { revokedAt: input.at, revokedReason: 'password_rotated' });
+        this.sessionsById.set(rotated.id, rotated);
+      } else {
+        // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
+        kept.credentialsVerifiedAt = input.at;
+      }
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       return { ...u };
     },
@@ -3013,6 +3021,22 @@ function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
 
 function membershipKey(userId: string, organizationId: string): string {
   return `${userId}:${organizationId}`;
+}
+
+/** MUT-262: the session that replaces `kept` on a rotating password change; never outlives `kept`'s absolute deadline. */
+function rotatedSession(kept: SessionRecord, rotation: { tokenDigest: string; idleMs: number }, at: Date): SessionRecord {
+  const idleExpiresAt = new Date(Math.min(at.getTime() + rotation.idleMs, kept.absoluteExpiresAt.getTime()));
+  return {
+    ...kept,
+    id: randomUUID(),
+    tokenDigest: rotation.tokenDigest,
+    createdAt: at,
+    credentialsVerifiedAt: at,
+    lastSeenAt: at,
+    idleExpiresAt,
+    revokedAt: null,
+    revokedReason: null,
+  };
 }
 
 export class UniqueViolation extends Error {

@@ -3786,3 +3786,18 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal pages | `pages/__tests__/Receipts.test.tsx` (21: tab + count, 404/503 hide, gallery filter/counts/PDF tile/lazy image, upload + refusals + 429, read-only, prefill + hints, unsupported currency, inline image/PDF, approve body without `suggested` + next, last → gallery, 409 → Filed view, 422 banner, network keeps the key, filed by link, not found); the drawer's own tests guard the extraction | `npm run test:run` |
 | Release-QA | `portal.receipts.gallery`, `.upload`, `.review-approve`, `.filed`, `.unavailable`, `portal.direction.receipts-review-ar`; `portal.expenses` re-run for the extraction | `release-qa release --only portal.receipts,portal.direction.receipts-review-ar,portal.expenses` |
 
+## MUT-262 — a password change rotates the caller's session (2026-10-25, ADR-194)
+
+Every new test advances the clock between sign-in and the change (AC6). Each was seen failing before its code.
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/repositories/__tests__/store-contract-change-password.ts` (memory + Postgres) | Contract | +5 each | rotation revokes the kept session `password_rotated` and opens a live one under the new digest with the same kind, agent, passkey and absolute deadline; idle clamped to the absolute deadline; a duplicate digest fails the whole change with nothing written (AC5); the passkey carries over; a second change loses to a rotating first and a rotated-out session can't be kept. The MUT-237 cases stay unedited (no `rotation`) |
+| `server/src/__tests__/routes-sessions.test.ts` | Route | +7, 5 changed | cookie Max-Age = time left to the absolute deadline; cookie rotates with or without `rotateToken`, never a body; device + `rotateToken` → 200 `{token}` (`mds_`), old bearer 401 on `/v1/me` and a profile route, new 200, audit `tokenRotated: true`; device without it → 204 and kept (`tokenRotated: false`); `rotateToken: false` → 422; an old-token request whose session read precedes the commit gets 401 and the new session stays live (D2); a failed change rotates nothing. The five MUT-237 cookie cases now continue on the new cookie |
+| `server/src/__tests__/routes-passkeys.test.ts` | Route | +1, 1 changed | a passkey-opened session rotates and removing that passkey still revokes the new one |
+| `server/src/__tests__/routes-m{2,3,4,5,6,8}.test.ts` | Contract | changed | API version `1.72.0-mut262` |
+| `src/hosted/api/__tests__/client.test.ts` | Unit | +5 | a 401 on a request sent before the change answered is ignored; one landing mid-change is held and ignored on success, passed on if the change fails; a 401 after the change ends the session; the change's own 401 doesn't wait on itself |
+| `src/hosted/components/__tests__/ChangePasswordDrawer.test.tsx` | Component | +1 | a successful change re-reads queries (`GET /v1/me` again) |
+| `qa/specs/portal-selfservice/account.spec.ts` | Release-QA (live API) | 1 | `@portal-selfservice.account.rotate-on-change`: still signed in after the change under a new cookie; the old value gets 401 |
+| Flutter `feature/mut-262-rotate-token` | Unit/widget + iOS QA flow | see that repo | repository (`rotateToken`, 200 → token, 204 → null), `AuthService.changePassword`/`adoptRotatedToken`, `ApiClient.rotating` guard, screen copy; `ios.settings.change-password` expects a rotated token (run owed until a 1.71.0-mut262 server is deployed) |
+

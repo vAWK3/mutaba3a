@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { StateConflict } from '../memory.js';
+import { StateConflict, UniqueViolation } from '../memory.js';
 import type { AuditEventInput, ChangePasswordInput, LedgerStore, UserRecord } from '../ports.js';
 
 /**
@@ -144,6 +144,107 @@ export function describeLedgerStoreChangePasswordContract(name: string, makeStor
       expect((await store.users.getById(user.id))?.passwordHash).toBe(NEW_HASH);
       expect((await store.sessions.findByDigest(portal.tokenDigest))?.revokedAt).toBeNull();
       expect((await store.sessions.findByDigest(phone.tokenDigest))?.revokedReason).toBe('password_changed');
+    });
+
+    // MUT-262 (TD-158): with `rotation`, the kept session is replaced by a new one under a new digest, so a leaked copy
+    // of the caller's own token stops working too. A new row (not a digest swap): the middleware's stale path revokes
+    // by the old digest's id, which must not be the session the person keeps.
+    describe('rotating the kept session (MUT-262)', () => {
+      const IDLE_MS = 3_600_000;
+
+      it('revokes the kept session as password_rotated and opens a live one under the new digest, same kind, agent, passkey and absolute deadline', async () => {
+        const store = await makeStore();
+        const { user } = await person(store, HASH);
+        const current = await store.sessions.create({ userId: user.id, tokenDigest: digest(), kind: 'device', at: at(1), idleExpiresAt: at(2), absoluteExpiresAt: at(9), userAgent: 'MTB3A/1.0' });
+        const other = await openSession(store, user.id, 'cookie');
+        const rotated = digest();
+        await store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id, rotation: { tokenDigest: rotated, idleMs: IDLE_MS } }));
+        const old = await store.sessions.findByDigest(current.tokenDigest);
+        expect(old?.revokedAt?.toISOString()).toBe(at(3).toISOString());
+        expect(old?.revokedReason).toBe('password_rotated');
+        expect((await store.sessions.findByDigest(other.tokenDigest))?.revokedReason).toBe('password_changed');
+        const fresh = await store.sessions.findByDigest(rotated);
+        expect(fresh).toMatchObject({ userId: user.id, kind: 'device', userAgent: 'MTB3A/1.0', passkeyId: null, revokedAt: null, revokedReason: null });
+        expect(fresh?.id).not.toBe(current.id);
+        expect(fresh?.absoluteExpiresAt.toISOString()).toBe(at(9).toISOString());
+        for (const field of ['createdAt', 'credentialsVerifiedAt', 'lastSeenAt'] as const) expect(fresh?.[field].toISOString()).toBe(at(3).toISOString());
+        expect(fresh?.idleExpiresAt.toISOString()).toBe(new Date(at(3).getTime() + IDLE_MS).toISOString());
+      });
+
+      it('never extends the absolute deadline: idle is clamped to it', async () => {
+        const store = await makeStore();
+        const { user } = await person(store, HASH);
+        const current = await store.sessions.create({ userId: user.id, tokenDigest: digest(), kind: 'cookie', at: at(1), idleExpiresAt: at(2), absoluteExpiresAt: at(4), userAgent: null });
+        const rotated = digest();
+        await store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id, rotation: { tokenDigest: rotated, idleMs: 30 * 86_400_000 } }));
+        const fresh = await store.sessions.findByDigest(rotated);
+        expect(fresh?.absoluteExpiresAt.toISOString()).toBe(at(4).toISOString());
+        expect(fresh?.idleExpiresAt.toISOString()).toBe(at(4).toISOString());
+      });
+
+      it('a digest that already exists fails the whole change: password, kept session and other sessions untouched', async () => {
+        const store = await makeStore();
+        const { user, orgIds } = await person(store, HASH);
+        const current = await openSession(store, user.id, 'device');
+        const other = await openSession(store, user.id, 'cookie');
+        await expect(
+          store.users.changePassword(
+            input({ userId: user.id, exceptSessionId: current.id, rotation: { tokenDigest: other.tokenDigest, idleMs: IDLE_MS }, audit: auditFor(orgIds, user.id, 'user.password_changed') }),
+          ),
+        ).rejects.toBeInstanceOf(UniqueViolation);
+        const unchanged = await store.users.getById(user.id);
+        expect(unchanged?.passwordHash).toBe(HASH);
+        expect(unchanged?.passwordChangedAt.toISOString()).toBe(user.passwordChangedAt.toISOString());
+        const kept = await store.sessions.findByDigest(current.tokenDigest);
+        expect(kept?.revokedAt).toBeNull();
+        expect(kept?.credentialsVerifiedAt.toISOString()).toBe(at(1).toISOString());
+        const untouched = await store.sessions.findByDigest(other.tokenDigest);
+        expect(untouched?.revokedAt).toBeNull();
+        expect(untouched?.userId).toBe(user.id);
+        for (const orgId of orgIds) {
+          expect((await store.audit.listByOrganization(orgId, 10)).map((e) => e.action)).not.toContain('user.password_changed');
+        }
+      });
+
+      it('carries the passkey that opened the session, so removing that passkey can still revoke it', async () => {
+        const store = await makeStore();
+        const { user } = await person(store, HASH);
+        const passkey = await store.passkeys.create({
+          userId: user.id,
+          credentialId: unique(),
+          publicKey: new Uint8Array([1, 2, 3]),
+          signCount: 0,
+          transports: [],
+          deviceType: 'multiDevice',
+          backedUp: true,
+          aaguid: '00000000-0000-0000-0000-000000000000',
+          name: 'iPhone',
+          at: at(0),
+          limit: 10,
+          audit: [],
+        });
+        const current = await store.sessions.create({ userId: user.id, tokenDigest: digest(), kind: 'cookie', at: at(1), idleExpiresAt: at(2), absoluteExpiresAt: at(9), userAgent: null, passkeyId: passkey.id });
+        const rotated = digest();
+        await store.users.changePassword(input({ userId: user.id, exceptSessionId: current.id, rotation: { tokenDigest: rotated, idleMs: IDLE_MS } }));
+        expect((await store.sessions.findByDigest(rotated))?.passkeyId).toBe(passkey.id);
+      });
+
+      it('a second change loses to a first that rotated: the first one\'s new session stays live, nothing else is written', async () => {
+        const store = await makeStore();
+        const { user } = await person(store, HASH);
+        const phone = await openSession(store, user.id, 'device');
+        const portal = await openSession(store, user.id, 'cookie');
+        const rotated = digest();
+        const SECOND_HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$c2Vjb25k';
+        await store.users.changePassword(input({ userId: user.id, exceptSessionId: portal.id, rotation: { tokenDigest: rotated, idleMs: IDLE_MS } }));
+        await expect(
+          store.users.changePassword(input({ userId: user.id, exceptSessionId: phone.id, passwordHash: SECOND_HASH, at: at(4), rotation: { tokenDigest: digest(), idleMs: IDLE_MS } })),
+        ).rejects.toBeInstanceOf(StateConflict);
+        expect((await store.users.getById(user.id))?.passwordHash).toBe(NEW_HASH);
+        expect((await store.sessions.findByDigest(rotated))?.revokedAt).toBeNull();
+        // The rotated-out session cannot be named as the one to keep either.
+        await expect(store.users.changePassword(input({ userId: user.id, exceptSessionId: portal.id, verifiedPasswordHash: NEW_HASH, at: at(5) }))).rejects.toBeInstanceOf(StateConflict);
+      });
     });
 
     it('writes its audit rows', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler, type StubRequest, openYou } from '../../__tests__/harness';
 
 /**
@@ -60,6 +60,18 @@ describe('Change password drawer (MUT-237)', () => {
     await screen.findByText('Password changed');
     expect(screen.queryByRole('dialog', { name: 'Change password' })).toBeNull();
     expect(locationOf(router)).toBe(`/p/${ORG_A}`);
+  });
+
+  // MUT-262 (D3): anything that failed on the old cookie while the change was in flight is read again under the new one.
+  it('re-reads every query after a successful change, under the new cookie', async () => {
+    const { user, api } = portal(`/p/${ORG_A}?changePassword=true`, { 'POST /v1/me/password': () => new Response(null, { status: 204 }) });
+    const dialog = await screen.findByRole('dialog', { name: 'Change password' });
+    await user.type(within(dialog).getByLabelText('Current password'), 'the old one');
+    await user.type(within(dialog).getByLabelText('New password'), 'a brand new long password');
+    const before = api.count('GET /v1/me');
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('Password changed');
+    await waitFor(() => expect(api.count('GET /v1/me')).toBeGreaterThan(before));
   });
 
   it('refuses a new password under 12 characters inline, and sends nothing', async () => {

@@ -37,6 +37,23 @@ export function isDeviceSessionToken(token: string): boolean {
 export const DEFAULT_DEVICE_IDLE_DAYS = 30;
 export const DEFAULT_DEVICE_ABSOLUTE_DAYS = 180;
 
+/** The lifetime settings a session kind is opened with (SessionSettings carries them; structural to avoid a cycle). */
+export interface SessionLifetimeSettings {
+  idleMinutes: number;
+  absoluteHours: number;
+  deviceIdleDays?: number;
+  deviceAbsoluteDays?: number;
+}
+
+/** A new session's idle window and absolute lifetime, by kind: sign-in opens one; a password change (MUT-262) rotates one. */
+export function sessionLifetime(kind: SessionKind, settings: SessionLifetimeSettings): { idleMs: number; absoluteMs: number } {
+  if (kind === 'cookie') return { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 };
+  return {
+    idleMs: (settings.deviceIdleDays ?? DEFAULT_DEVICE_IDLE_DAYS) * 86_400_000,
+    absoluteMs: (settings.deviceAbsoluteDays ?? DEFAULT_DEVICE_ABSOLUTE_DAYS) * 86_400_000,
+  };
+}
+
 /**
  * HMAC-SHA256 under SESSION_TOKEN_PEPPER, hex. Random 256-bit tokens need no
  * pepper for secrecy; it exists so that rotating it signs everyone out at once.

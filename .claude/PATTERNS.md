@@ -2795,3 +2795,8 @@ Imported data is never written field by field into the live store. It is mapped 
 - Prove it in a real browser by wrapping `document.startViewTransition` in an init script and reading `getAnimations()` on `::view-transition-new(root)` after `ready`.
 - **First instances:** `src/hosted/shell/pageMotion.ts`, `qa/specs/portal/shell.spec.ts` (`portal.shell.page-motion`).
 
+### Pattern: A 401 for a credential the client no longer holds is not a sign-out (MUT-208, MUT-262)
+- When a client swaps its own credential (a password change rotates the token), requests already sent with the old one can come back 401 after the swap. Judge each 401 by the credential it was sent with, not by when it arrived.
+- Portal: `src/hosted/api/client.ts` stamps each request with a credential generation; the swapping call bumps it on success; a 401 first waits for any swap in flight, then reaches the unauthorised handler only if its generation is still current. The swapping call itself never waits on itself.
+- Phone: `ApiClient.rotating(...)` holds a refused-session check until the new token is in the Keychain; the check then compares against the stored token.
+- **First instances:** the phone's MUT-208 refused-session check; `rotatingCredential` in the portal client (ADR-194).

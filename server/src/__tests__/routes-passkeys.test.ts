@@ -373,8 +373,25 @@ describe('passkey sign-in (MUT-115)', () => {
     expect(changed.status).toBe(204);
     minutes(h, 1);
     expect((await h.app.request('/v1/me', { headers: withDevice(opened) })).status).toBe(401);
-    expect((await read(await h.app.request('/v1/passkeys', { headers: withSession(token) }))).items).toHaveLength(1);
+    // MUT-262: the changing browser carries on under the cookie the change set.
+    expect((await read(await h.app.request('/v1/passkeys', { headers: withSession(cookieOf(changed)) }))).items).toHaveLength(1);
     expect((await passkeySignIn(h, auth)).status).toBe(201);
+  });
+
+  // MUT-262 + D6: the session a password change rotates in still belongs to the passkey that opened the old one.
+  it('a passkey session that changes the password rotates, and removing that passkey still ends the new session', async () => {
+    const h = harness();
+    const { auth, email, password, passkey } = await signedInWithPasskey(h);
+    const opened = cookieOf(await passkeySignIn(h, auth));
+    minutes(h, 3);
+    const changed = await h.app.request('/v1/me/password', json({ currentPassword: password, newPassword: 'a-brand-new-password-123' }, withSession(opened)));
+    expect(changed.status).toBe(204);
+    const rotated = cookieOf(changed);
+    expect((await h.app.request('/v1/me', { headers: withSession(rotated) })).status).toBe(200);
+    minutes(h, 1);
+    const manager = await passwordSignIn(h, email, 'a-brand-new-password-123');
+    expect((await h.app.request(`/v1/passkeys/${passkey.id}`, { method: 'DELETE', headers: withSession(manager) })).status).toBe(204);
+    expect((await h.app.request('/v1/me', { headers: withSession(rotated) })).status).toBe(401);
   });
 });
 

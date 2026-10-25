@@ -52,6 +52,23 @@
 
 ### Technical
 - **Files:** `src/hosted/shell/{HostedShell,YouIsland}.tsx`, `src/hosted/shell/{pageMotion,youRoutes}.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `hosted.html`, `src/hosted/components/{TrialBanner,Icons,Brand}.tsx`, `src/hosted/pages/you/{YouPage,YouApp}.tsx`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/{shell,billing,you,profiles}.yaml`, `qa/specs/portal/*.spec.ts`, `qa/support/you.ts`.
+
+## [Unreleased] - 2026-10-25 — Changing your password gives this session a new token (MUT-262, TD-158, ADR-194, API 1.72.0-mut262)
+
+**Why:** a password change kept the changer's own session and token, so a leaked copy of it survived the change (TD-158; blocks pilot readiness MUT-322).
+
+### Changed
+- **Server:** `POST /v1/me/password` rotates the caller's session in the change's transaction (`users.changePassword` `rotation`, memory + Prisma; old row revoked `password_rotated`, new row keeps kind, agent, passkey and absolute deadline). Cookie: always, 204 + Set-Cookie with Max-Age to the absolute deadline. Device: with `rotateToken: true`, `200 { token }` (`PasswordChangedToken`); without it 204 as before. Audit `metadata.tokenRotated`. `sessionLifetime(kind, settings)` shared by the sign-in routes. API `1.72.0-mut262`.
+- **Portal:** `src/hosted/api/client.ts` credential generation: a 401 on a request sent before the change answered never ends the session; `ChangePasswordDrawer` invalidates every query after success.
+- **Phone (mutaba3a-flutter, branch `feature/mut-262-rotate-token`):** sends `rotateToken: true`, `AuthService.changePassword` adopts the new token inside `ApiClient.rotating`; unknown-outcome copy adds "If you're asked to sign in, use your new password." (en/ar).
+
+### Added
+- QA `portal-selfservice.account.rotate-on-change` (live API: stays signed in, old cookie 401). Flutter `ios.settings.change-password` now expects a rotated token.
+- TD-251 (old phone builds keep their token until MUT-293's floor).
+
+### Fixed
+- TD-158 resolved.
+
 ## [Unreleased] - 2026-10-25 — Landing: Get MTB3A and the request form redesigned
 
 **Why:** when the landing went hosted-only the request form moved inline, but its styles stayed in the deleted `HostedOfferPage.css`, and the section's new wrappers were never styled: the form rendered unstyled (browser fieldset box, raw checkboxes, centred labels over 1800px inputs, a display-size heading) and the app links stacked as two tall cards beside an empty Sign-in card. Design brief: `.claude/designs/landing-get-it-redesign.md`.

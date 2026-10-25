@@ -201,6 +201,99 @@ describe('unauthorised handler', () => {
   });
 });
 
+// MUT-262 (D3): a password change rotates the session cookie. A request the page sent with the old cookie can come
+// back 401 after the change committed; that is not a sign-out. Same rule as the phone's MUT-208.
+describe('a 401 for a cookie the portal no longer holds (MUT-262)', () => {
+  const PASSWORD = { currentPassword: 'old one', newPassword: 'a new long passphrase' };
+  const isChange = (url: string, init: RequestInit) => init.method === 'POST' && url.endsWith('/v1/me/password');
+
+  /** A fetch whose answers the test releases by hand, in any order. */
+  function heldFetch() {
+    const held = new Map<string, (r: Response) => void>();
+    fetchMock.mockImplementation(
+      (url: string, init: RequestInit) =>
+        new Promise<Response>((resolve) => {
+          held.set(isChange(url, init) ? 'change' : `${init.method} ${url}`, resolve);
+        }),
+    );
+    return (key: string, response: Response) => {
+      const resolve = held.get(key);
+      if (!resolve) throw new Error(`nothing in flight for ${key}`);
+      held.delete(key);
+      resolve(response);
+    };
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it('ignores a 401 on a request sent before the change answered', async () => {
+    const handler = vi.fn();
+    const off = setUnauthorisedHandler(handler);
+    const release = heldFetch();
+    const stale = api.me().catch((e: unknown) => e);
+    const change = api.changePassword(PASSWORD);
+    await tick();
+    release('change', new Response(null, { status: 204 }));
+    await change;
+    release('GET /v1/me', json(401, envelope('SESSION_EXPIRED')));
+    expect(await stale).toBeInstanceOf(ApiError);
+    expect(handler).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('holds a 401 that lands while the change is in flight, and ignores it once the change succeeds', async () => {
+    const handler = vi.fn();
+    const off = setUnauthorisedHandler(handler);
+    const release = heldFetch();
+    const stale = api.me().catch((e: unknown) => e);
+    const change = api.changePassword(PASSWORD);
+    await tick();
+    release('GET /v1/me', json(401, envelope('SESSION_EXPIRED')));
+    await tick();
+    expect(handler).not.toHaveBeenCalled();
+    release('change', new Response(null, { status: 204 }));
+    await change;
+    expect(await stale).toBeInstanceOf(ApiError);
+    expect(handler).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('passes that held 401 on when the change fails: the session really ended', async () => {
+    const handler = vi.fn();
+    const off = setUnauthorisedHandler(handler);
+    const release = heldFetch();
+    const stale = api.me().catch((e: unknown) => e);
+    const change = api.changePassword(PASSWORD).catch((e: unknown) => e);
+    await tick();
+    release('GET /v1/me', json(401, envelope('SESSION_EXPIRED')));
+    await tick();
+    release('change', json(403, envelope('CURRENT_PASSWORD_WRONG')));
+    expect(await change).toMatchObject({ code: 'CURRENT_PASSWORD_WRONG' });
+    await stale;
+    expect(handler).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it('ends the session on a 401 for a request sent after the change, as before', async () => {
+    const handler = vi.fn();
+    const off = setUnauthorisedHandler(handler);
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await api.changePassword(PASSWORD);
+    fetchMock.mockResolvedValueOnce(json(401, envelope('SESSION_EXPIRED')));
+    await api.me().catch(() => {});
+    expect(handler).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it("a 401 on the change itself reaches the handler without waiting on itself", async () => {
+    const handler = vi.fn();
+    const off = setUnauthorisedHandler(handler);
+    fetchMock.mockResolvedValueOnce(json(401, envelope('SESSION_EXPIRED')));
+    await expect(api.changePassword(PASSWORD)).rejects.toMatchObject({ code: 'SESSION_EXPIRED' });
+    expect(handler).toHaveBeenCalledTimes(1);
+    off();
+  });
+});
+
 describe('apiErrorReason (MUT-183 R3)', () => {
   const error = (details: unknown) => new ApiError(409, 'CONFLICT', 'm', details);
 

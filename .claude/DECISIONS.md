@@ -5224,3 +5224,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Unit tests reach You through the harness's `openYou(user, part)`; QA through `qa/support/you.ts`'s `openYou` (the island, then the part tab).
 - The iOS keyboard behaviour is proven in Chromium only (TD-252).
 - Pre-landing review (qa-reconcile, 2026-10-25): leaving You for sign-in or setup starts no slide; the glass, not only its links, takes the pointer; the keyboard rule skips checkboxes, radios, buttons, ranges and file inputs; between 761 and 959 px the island's width is `min(240px, 50vw − 216px)` so a long name never covers the pill (Arabic's pill is about 360 px). Accepted: during a slide the chrome's transition group draws above an open drawer for the slide's 220 ms, because it is its own group.
+
+---
+
+## ADR-194: A Password Change Rotates the Caller's Own Session (MUT-262, TD-158)
+
+**Status:** Accepted (2026-10-25, MUT-262; plan `.claude/designs/mut-262-rotate-token-on-password-change.md`, eng review D1–D4 answered by Basel). Amends ADR-088's MUT-237 change-password rule ("this session stays signed in") to "this session stays signed in under a new token".
+
+**Context:** `POST /v1/me/password` revoked every other session and kept the caller's, so a leaked copy of the changer's own token survived the change.
+
+**Decision:**
+1. **Rotate by a new row.** In the change's transaction the kept session is revoked (`password_rotated`) and a new one opens under a new digest with the same kind, user agent, passkey and `absoluteExpiresAt`; idle is `at + idle`, clamped to that deadline. Not a digest swap: the middleware's stale path revokes by the id it read under the old digest, which must not be the session the person keeps. A digest collision aborts the whole change.
+2. **Cookie always, device on request (D1/D2).** A cookie session always rotates (204 + Set-Cookie, Max-Age = time left to the absolute deadline). A device session rotates only with `rotateToken: true` and then gets `200 { token }`; otherwise 204 and kept. Shipped MUT-238 builds keep working, and server and phone ship in any order; the ticket's lock-step release (AC7) is replaced. Old builds' gap: TD-251, closed by MUT-293's floor.
+3. **Clients ignore a 401 for a credential they no longer hold (D3/D4).** The portal's API client keeps a credential generation (a 401 waits for an in-flight change and counts only if its request was sent under the current generation); the drawer invalidates every query after success. The phone wraps the change and the Keychain write in `ApiClient.rotating`, so a stale `SESSION_EXPIRED` cannot sign it out and wipe it mid-swap (MUT-208's rule).
+4. The audit row `user.password_changed` records `metadata.tokenRotated`. API `1.72.0-mut262`.
+
+**Consequences:**
+- `sessionLifetime(kind, settings)` in `server/src/auth/sessions.ts` is the one place a session kind's idle/absolute lifetime is computed (sign-in routes and the change).
+- A change whose answer is lost leaves the phone on a revoked token: its next request signs it out, and the person signs in with the new password (copy says so). No server-side grace for the old token, by design.
+

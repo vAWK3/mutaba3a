@@ -25,6 +25,15 @@
 **Priority**: Low (the rule is plain CSS; the risk is iOS Safari's own fixed-bar bugs)
 **Impact**: `.hp-chrome-bar` hides while a page field has focus (`.hp-shell:has(.hp-page :is(input, textarea, select):focus)`), so iOS can't strand the pill over the keyboard (WebKit 202120/230225, Apple forums 800154). `portal.shell.floating-chrome` checks it at 375 px in Chromium; nobody has typed on a real iPhone yet.
 **Fix**: Basel or a tester types in Clients' search on an iPhone (iOS 26) and checks the pill is gone while typing and back, in place, after the keyboard closes. Record the result in `qa/features/portal/shell.yaml`.
+
+### TD-251: Phone builds from before MUT-262 keep their token through a password change
+**Status**: Open
+**Ticket**: MUT-262 (ADR-194 D1); closes with MUT-293's minimum build
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: device rotation is opt-in (`rotateToken: true`), so a MUT-238 build that changes the password keeps its session and token, the gap TD-158 described, until the person updates the app. Portal sessions and rotating phone builds are covered.
+**Fix**: raise the iOS/Android minimum build (MUT-293, `server/src/auth/minimum-build.ts`) past the first rotating build; then the server may rotate every device change and drop the opt-in.
+
 ### TD-249: Five landing QA specs fail on main, outside Get it
 **Status**: Open
 **Ticket**: none yet (found 2026-10-25 during the Get it redesign)
@@ -795,7 +804,7 @@
 **Fix**: a store-level "write + audit" in one transaction (Prisma `$transaction`; the memory store already applies both synchronously), adopted route by route, starting with the money-moving edits.
 
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
-**Status**: Open
+**Status**: Resolved (2026-10-25, MUT-262, ADR-194: the caller's session is rotated in the change's transaction; cookie always, device on `rotateToken: true`. Old phone builds: TD-251)
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
 **Added**: 2026-10-16
 **Priority**: Low (needs a stolen token, and the person to change the password from the very session that leaked)
