@@ -1,4 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { api, ApiError } from '../api/client';
@@ -28,6 +29,7 @@ export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
   const showToast = useToast();
   const currentRef = useRef<HTMLInputElement>(null);
   const ids = useId();
+  const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
@@ -49,6 +51,8 @@ export function ChangePasswordDrawer({ onClose }: { onClose: () => void }) {
     setPending(true);
     try {
       await api.changePassword({ currentPassword, newPassword });
+      // MUT-262: whatever failed on the old cookie while the change was in flight is read again under the new one.
+      void queryClient.invalidateQueries();
       showToast(t('hosted.account.changePassword.success'), { tone: 'info' });
       onClose();
     } catch (error) {
