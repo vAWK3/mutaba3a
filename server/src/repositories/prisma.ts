@@ -108,6 +108,14 @@ import type {
   PasskeyRepository,
   FeaturesRepository,
   UserFeatureRecord,
+  OAuthAuthorizationRequestRecord,
+  OAuthClientRecord,
+  OAuthCodeRecord,
+  OAuthGrantRecord,
+  OAuthGrantRevokedReason,
+  OAuthRepository,
+  OAuthTokenInput,
+  OAuthTokenRecord,
   UserLocale,
   UserRecord,
   UserRepository,
@@ -438,6 +446,8 @@ export class PrismaLedgerStore implements LedgerStore {
             });
           }
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          // MUT-434 (D11): a password change disconnects every agent too, in this transaction.
+          await revokeOAuthGrantsInTx(tx, input.userId, 'password_changed', input.at, input.agentGrantAudit ?? []);
           return toUser(user);
         }),
       ),
@@ -539,7 +549,9 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$transaction(async (tx) => {
           const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
           if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
-          return { revoked: count > 0 };
+          // MUT-434 AC7 (OV10): the person's agent grants go in the same transaction, even if the flag was already off.
+          const agentGrantsRevoked = input.agentGrants ? await revokeOAuthGrantsInTx(tx, input.userId, 'feature_revoked', input.at, input.agentGrants.audit) : 0;
+          return { revoked: count > 0, agentGrantsRevoked };
         }),
       ),
     holders: async (feature) => {
@@ -551,6 +563,120 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return rows.map((r) => ({ userId: r.userId, email: r.user.email, grantedAt: r.grantedAt }));
     },
+  };
+
+  readonly oauth: OAuthRepository = {
+    createClient: (input) =>
+      translate(async () =>
+        toOAuthClient(await this.prisma.oAuthClient.create({ data: { id: input.id, kind: 'DCR', clientName: input.clientName, redirectUris: input.redirectUris, createdAt: input.at } })),
+      ),
+    upsertCimdClient: async (input) =>
+      toOAuthClient(
+        await this.prisma.oAuthClient.upsert({
+          where: { id: input.id },
+          create: { id: input.id, kind: 'CIMD', clientName: input.clientName, redirectUris: input.redirectUris, createdAt: input.at, metadataFetchedAt: input.at, metadataExpiresAt: input.metadataExpiresAt },
+          update: { clientName: input.clientName, redirectUris: input.redirectUris, metadataFetchedAt: input.at, metadataExpiresAt: input.metadataExpiresAt },
+        }),
+      ),
+    findClient: async (id) => mapNullable(await this.prisma.oAuthClient.findUnique({ where: { id } }), toOAuthClient),
+    createAuthorizationRequest: (input) =>
+      translate(async () =>
+        toOAuthRequest(
+          await this.prisma.oAuthAuthorizationRequest.create({
+            data: { clientId: input.clientId, redirectUri: input.redirectUri, codeChallenge: input.codeChallenge, scopes: input.scopes, state: input.state, resource: input.resource, createdAt: input.createdAt, expiresAt: input.expiresAt },
+          }),
+        ),
+      ),
+    findAuthorizationRequest: async (id) => mapNullable(await this.prisma.oAuthAuthorizationRequest.findUnique({ where: { id } }), toOAuthRequest),
+    decide: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // D6: the claim is the conditional update; a second decision (or an expired request) changes nothing.
+          const { count } = await tx.oAuthAuthorizationRequest.updateMany({
+            where: { id: input.requestId, decidedAt: null, expiresAt: { gt: input.at } },
+            data: { decidedAt: input.at, userId: input.userId },
+          });
+          if (count === 0) return { decided: false as const };
+          const request = await tx.oAuthAuthorizationRequest.findUniqueOrThrow({ where: { id: input.requestId } });
+          let grant: OAuthGrantRecord | null = null;
+          if (input.approve) {
+            const row = await tx.oAuthGrant.create({
+              data: { userId: input.userId, clientId: request.clientId, redirectUri: request.redirectUri, scopes: request.scopes, resource: request.resource, createdAt: input.at, expiresAt: input.approve.grantExpiresAt },
+            });
+            await tx.oAuthCode.create({
+              data: { codeDigest: input.approve.code.digest, grantId: row.id, codeChallenge: request.codeChallenge, redirectUri: request.redirectUri, resource: request.resource, createdAt: input.at, expiresAt: input.approve.code.expiresAt },
+            });
+            await tx.oAuthClient.update({ where: { id: request.clientId }, data: { lastUsedAt: input.at } });
+            grant = toOAuthGrant(row);
+          }
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { decided: true as const, request: toOAuthRequest(request), grant };
+        }),
+      ),
+    findCode: async (digest) => mapNullable(await this.prisma.oAuthCode.findUnique({ where: { codeDigest: digest } }), toOAuthCode),
+    findGrant: async (grantId) => mapNullable(await this.prisma.oAuthGrant.findUnique({ where: { id: grantId } }), toOAuthGrant),
+    exchangeCode: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.oAuthCode.updateMany({ where: { codeDigest: input.digest, consumedAt: null, expiresAt: { gt: input.at } }, data: { consumedAt: input.at } });
+          const code = await tx.oAuthCode.findUnique({ where: { codeDigest: input.digest } });
+          // Lost the claim: a code consumed already is a replay (the caller revokes its grant); anything else is invalid.
+          if (count === 0 || !code) return code?.consumedAt ? { status: 'reused' as const, grantId: code.grantId } : { status: 'invalid' as const };
+          const grant = await tx.oAuthGrant.update({ where: { id: code.grantId }, data: { lastUsedAt: input.at } });
+          await tx.oAuthToken.createMany({ data: oauthTokenRows(grant.id, input.tokens, input.at) });
+          return { status: 'exchanged' as const, code: toOAuthCode(code), grant: toOAuthGrant(grant) };
+        }),
+      ),
+    findToken: async (digest) => {
+      const row = await this.prisma.oAuthToken.findUnique({ where: { tokenDigest: digest }, include: { grant: true } });
+      return row ? { token: toOAuthToken(row), grant: toOAuthGrant(row.grant) } : null;
+    },
+    findTokenById: async (id) => mapNullable(await this.prisma.oAuthToken.findUnique({ where: { id } }), toOAuthToken),
+    rotateRefresh: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.oAuthToken.updateMany({ where: { id: input.tokenId, kind: 'REFRESH', rotatedAt: null }, data: { rotatedAt: input.at, successorId: input.successorId } });
+          if (count === 0) return false;
+          const parent = await tx.oAuthToken.findUniqueOrThrow({ where: { id: input.tokenId } });
+          await tx.oAuthToken.createMany({ data: oauthTokenRows(parent.grantId, input.tokens, input.at) });
+          await tx.oAuthGrant.update({ where: { id: parent.grantId }, data: { lastUsedAt: input.at } });
+          return true;
+        }),
+      ),
+    revokeGrant: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.oAuthGrant.updateMany({
+          where: { id: input.grantId, revokedAt: null, ...(input.userId !== undefined ? { userId: input.userId } : {}) },
+          data: { revokedAt: input.at, revokedReason: input.reason },
+        });
+        if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return count > 0;
+      }),
+    revokeAllForUser: (input) => this.prisma.$transaction((tx) => revokeOAuthGrantsInTx(tx, input.userId, input.reason, input.at, input.audit)),
+    listLiveGrants: async (userId, at) => {
+      const rows = await this.prisma.oAuthGrant.findMany({
+        where: { userId, revokedAt: null, expiresAt: { gt: at } },
+        include: { client: { select: { clientName: true, kind: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      });
+      return rows.map((r) => ({ ...toOAuthGrant(r), clientName: r.client.clientName, clientKind: r.client.kind }));
+    },
+    touchGrant: async (grantId, at) => {
+      await this.prisma.oAuthGrant.updateMany({ where: { id: grantId }, data: { lastUsedAt: at } });
+    },
+    cleanup: ({ at, before, clientsBefore }) =>
+      this.prisma.$transaction(async (tx) => {
+        const requests = (await tx.oAuthAuthorizationRequest.deleteMany({ where: { expiresAt: { lte: at } } })).count;
+        const codes = (await tx.oAuthCode.deleteMany({ where: { expiresAt: { lte: at } } })).count;
+        // A grant ended at its revoke, or else at its absolute expiry.
+        const tokens = (
+          await tx.oAuthToken.deleteMany({
+            where: { OR: [{ expiresAt: { lte: before } }, { grant: { revokedAt: { lte: before } } }, { grant: { revokedAt: null, expiresAt: { lte: before } } }] },
+          })
+        ).count;
+        const clients = (await tx.oAuthClient.deleteMany({ where: { createdAt: { lte: clientsBefore }, grants: { none: {} } } })).count;
+        return { requests, codes, tokens, clients };
+      }),
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -2668,6 +2794,39 @@ function toUserFeature(row: { userId: string; feature: string; grantedBy: string
  * Audit rows written together in one createMany. Each gets its own millisecond, in order: `audit.list` sorts on
  * (createdAt, random id), so equal timestamps would list them in any order — unlike the memory store (re-review).
  */
+// ---- MUT-434: OAuth ----------------------------------------------------------------
+
+/** Every live grant of the person in one UPDATE; `audit` only when there was one. */
+async function revokeOAuthGrantsInTx(tx: Prisma.TransactionClient, userId: string, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
+  const { count } = await tx.oAuthGrant.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
+  if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+  return count;
+}
+
+function oauthTokenRows(grantId: string, tokens: readonly OAuthTokenInput[], at: Date): Prisma.OAuthTokenCreateManyInput[] {
+  return tokens.map((t) => ({ id: t.id, tokenDigest: t.digest, grantId, kind: t.kind, createdAt: at, expiresAt: t.expiresAt }));
+}
+
+function toOAuthClient(row: Prisma.OAuthClientGetPayload<object>): OAuthClientRecord {
+  return { id: row.id, kind: row.kind, clientName: row.clientName, redirectUris: row.redirectUris, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, metadataExpiresAt: row.metadataExpiresAt };
+}
+
+function toOAuthRequest(row: Prisma.OAuthAuthorizationRequestGetPayload<object>): OAuthAuthorizationRequestRecord {
+  return { id: row.id, clientId: row.clientId, redirectUri: row.redirectUri, codeChallenge: row.codeChallenge, scopes: row.scopes, state: row.state, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, decidedAt: row.decidedAt, userId: row.userId };
+}
+
+function toOAuthGrant(row: Prisma.OAuthGrantGetPayload<object>): OAuthGrantRecord {
+  return { id: row.id, userId: row.userId, clientId: row.clientId, redirectUri: row.redirectUri, scopes: row.scopes, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revokedReason: row.revokedReason };
+}
+
+function toOAuthCode(row: Prisma.OAuthCodeGetPayload<object>): OAuthCodeRecord {
+  return { id: row.id, grantId: row.grantId, codeChallenge: row.codeChallenge, redirectUri: row.redirectUri, resource: row.resource, expiresAt: row.expiresAt, consumedAt: row.consumedAt };
+}
+
+function toOAuthToken(row: Prisma.OAuthTokenGetPayload<object>): OAuthTokenRecord {
+  return { id: row.id, grantId: row.grantId, kind: row.kind, createdAt: row.createdAt, expiresAt: row.expiresAt, rotatedAt: row.rotatedAt, successorId: row.successorId };
+}
+
 function auditRows(events: AuditEventInput[], at: Date): Prisma.AuditEventCreateManyInput[] {
   return events.map((event, i) => ({
     ...event,

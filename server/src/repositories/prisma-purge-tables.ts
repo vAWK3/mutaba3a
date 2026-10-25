@@ -61,6 +61,9 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'signup_reviews.userId': 'delete',
   'terms_acceptances.userId': 'delete',
   'user_feature_grants.userId': 'delete',
+  // MUT-434: the person's agent grants (their codes and tokens cascade) and the consent requests they decided.
+  'oauth_grants.userId': 'delete',
+  'oauth_authorization_requests.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
   'conversions.createdByUserId': 'anonymize',

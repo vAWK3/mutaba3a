@@ -120,8 +120,29 @@ export const STORE_ACCESS: StoreAccess = {
     finishStoragePurge: 'operator',
   },
   // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
-  // lists them. MUT-434 must reclassify activeFor for its MCP principal, or read it unguarded (eng review C4).
+  // lists them. MUT-434's agent principal reads activeFor on the raw store, as authenticate() reads sessions (C4).
   features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },
+  // MUT-434: the consent page and Connected apps act through a session; the protocol endpoints (/oauth/*, outside /v1)
+  // and agent authentication run on the raw store like sign-in, so no principal reaches those methods through a guard.
+  oauth: {
+    findClient: 'sessionOnly',
+    findAuthorizationRequest: 'sessionOnly',
+    decide: 'sessionOnly',
+    listLiveGrants: 'sessionOnly',
+    revokeGrant: 'sessionOnly',
+    createClient: 'operator',
+    upsertCimdClient: 'operator',
+    createAuthorizationRequest: 'operator',
+    findCode: 'operator',
+    findGrant: 'operator',
+    exchangeCode: 'operator',
+    findToken: 'operator',
+    findTokenById: 'operator',
+    rotateRefresh: 'operator',
+    revokeAllForUser: 'operator',
+    touchGrant: 'operator',
+    cleanup: 'operator',
+  },
   signupReviews: { list: 'operator', findByUser: 'operator', digestFacts: 'operator', markNotified: 'operator', approve: 'operator', decline: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',

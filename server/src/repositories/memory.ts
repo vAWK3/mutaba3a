@@ -81,6 +81,14 @@ import type {
   PasskeyRecord,
   PasskeyRepository,
   FeaturesRepository,
+  OAuthAuthorizationRequestRecord,
+  OAuthClientRecord,
+  OAuthCodeRecord,
+  OAuthGrantRecord,
+  OAuthGrantRevokedReason,
+  OAuthRepository,
+  OAuthTokenInput,
+  OAuthTokenRecord,
   UserFeatureRecord,
   WebauthnChallengePurpose,
   UserRecord,
@@ -297,6 +305,12 @@ export class MemoryLedgerStore implements LedgerStore {
    * shipped local format.
    */
   private readonly featureGrants = new Map<string, UserFeatureRecord>();
+  /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
+  private readonly oauthClients = new Map<string, OAuthClientRecord>();
+  private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
+  private readonly oauthGrants = new Map<string, OAuthGrantRecord>();
+  private readonly oauthCodes = new Map<string, OAuthCodeRecord>();
+  private readonly oauthTokens = new Map<string, OAuthTokenRecord & { digest: string }>();
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
@@ -579,6 +593,8 @@ export class MemoryLedgerStore implements LedgerStore {
         kept.credentialsVerifiedAt = input.at;
       }
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      // MUT-434 (D11): a password change disconnects every agent too.
+      if (this.revokeOAuthGrantsOf(u.id, 'password_changed', input.at) > 0) this.pushEvents(input.agentGrantAudit ?? [], input.at);
       return { ...u };
     },
     requestClosure: async (input) => {
@@ -663,12 +679,17 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
       return { grant: { ...grant }, granted: true };
     },
-    revoke: async ({ userId, feature, at, audit }) => {
+    revoke: async ({ userId, feature, at, audit, agentGrants }) => {
       const grant = this.featureGrants.get(`${userId}:${feature}`);
-      if (!grant || grant.revokedAt !== null) return { revoked: false };
-      grant.revokedAt = at;
-      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
-      return { revoked: true };
+      const revoked = grant !== undefined && grant.revokedAt === null;
+      if (grant && revoked) {
+        grant.revokedAt = at;
+        this.pushEvents(audit, at);
+      }
+      // MUT-434 AC7 (OV10): the grants go in the same step, even if the flag was already off.
+      const agentGrantsRevoked = agentGrants ? this.revokeOAuthGrantsOf(userId, 'feature_revoked', at) : 0;
+      if (agentGrantsRevoked > 0) this.pushEvents(agentGrants?.audit ?? [], at);
+      return { revoked, agentGrantsRevoked };
     },
     // Rows whose person is gone stay listed (email ''), so a purge that forgot them shows here (C1).
     holders: async (feature) =>
@@ -773,6 +794,161 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const p of this.passkeyMap.values()) if (p.userId === userId) passkeys++;
     return { prompt: resolvePasskeyPrompt(this.passkeyPrompts.get(userId)), passkeys };
   }
+
+  private pushEvents(audit: readonly AuditEventInput[], at: Date): void {
+    for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+  }
+
+  /** MUT-434: every live grant of the person, in one step (the Prisma store's single UPDATE). */
+  private revokeOAuthGrantsOf(userId: string, reason: OAuthGrantRevokedReason, at: Date): number {
+    let count = 0;
+    for (const g of this.oauthGrants.values()) {
+      if (g.userId === userId && g.revokedAt === null) {
+        Object.assign(g, { revokedAt: at, revokedReason: reason });
+        count++;
+      }
+    }
+    return count;
+  }
+
+  private storeOAuthTokens(grantId: string, tokens: readonly OAuthTokenInput[], at: Date): void {
+    for (const t of tokens) {
+      if (this.oauthTokens.has(t.digest)) throw new UniqueViolation('oauth_tokens.tokenDigest');
+    }
+    for (const t of tokens) this.oauthTokens.set(t.digest, { id: t.id, digest: t.digest, grantId, kind: t.kind, createdAt: at, expiresAt: t.expiresAt, rotatedAt: null, successorId: null });
+  }
+
+  readonly oauth: OAuthRepository = {
+    createClient: async ({ id, clientName, redirectUris, at }) => {
+      if (this.oauthClients.has(id)) throw new UniqueViolation('oauth_clients.id');
+      const client: OAuthClientRecord = { id, kind: 'DCR', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null };
+      this.oauthClients.set(id, client);
+      return { ...client, redirectUris: [...client.redirectUris] };
+    },
+    upsertCimdClient: async ({ id, clientName, redirectUris, at, metadataExpiresAt }) => {
+      const existing = this.oauthClients.get(id);
+      const client: OAuthClientRecord = existing
+        ? { ...existing, clientName, redirectUris: [...redirectUris], metadataExpiresAt }
+        : { id, kind: 'CIMD', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt };
+      this.oauthClients.set(id, client);
+      return { ...client, redirectUris: [...client.redirectUris] };
+    },
+    findClient: async (id) => {
+      const c = this.oauthClients.get(id);
+      return c ? { ...c, redirectUris: [...c.redirectUris] } : null;
+    },
+    createAuthorizationRequest: async (input) => {
+      if (!this.oauthClients.has(input.clientId)) throw new ForeignKeyViolation('oauth_authorization_requests.clientId');
+      const request: OAuthAuthorizationRequestRecord = { ...input, scopes: [...input.scopes], id: randomUUID(), decidedAt: null, userId: null };
+      this.oauthRequests.set(request.id, request);
+      return { ...request, scopes: [...request.scopes] };
+    },
+    findAuthorizationRequest: async (id) => {
+      const r = this.oauthRequests.get(id);
+      return r ? { ...r, scopes: [...r.scopes] } : null;
+    },
+    decide: async ({ requestId, userId, at, approve, audit }) => {
+      const r = this.oauthRequests.get(requestId);
+      if (!r || r.decidedAt !== null || r.expiresAt.getTime() <= at.getTime()) return { decided: false };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('oauth_authorization_requests.userId');
+      if (approve && this.oauthCodes.has(approve.code.digest)) throw new UniqueViolation('oauth_codes.codeDigest');
+      Object.assign(r, { decidedAt: at, userId });
+      let grant: OAuthGrantRecord | null = null;
+      if (approve) {
+        grant = { id: randomUUID(), userId, clientId: r.clientId, redirectUri: r.redirectUri, scopes: [...r.scopes], resource: r.resource, createdAt: at, expiresAt: approve.grantExpiresAt, lastUsedAt: null, revokedAt: null, revokedReason: null };
+        this.oauthGrants.set(grant.id, grant);
+        this.oauthCodes.set(approve.code.digest, { id: randomUUID(), grantId: grant.id, codeChallenge: r.codeChallenge, redirectUri: r.redirectUri, resource: r.resource, expiresAt: approve.code.expiresAt, consumedAt: null });
+        const client = this.oauthClients.get(r.clientId);
+        if (client) client.lastUsedAt = at;
+      }
+      this.pushEvents(audit, at);
+      return { decided: true, request: { ...r, scopes: [...r.scopes] }, grant: grant ? { ...grant, scopes: [...grant.scopes] } : null };
+    },
+    findCode: async (digest) => {
+      const code = this.oauthCodes.get(digest);
+      return code ? { ...code } : null;
+    },
+    findGrant: async (grantId) => {
+      const g = this.oauthGrants.get(grantId);
+      return g ? { ...g, scopes: [...g.scopes] } : null;
+    },
+    exchangeCode: async ({ digest, at, tokens }) => {
+      const code = this.oauthCodes.get(digest);
+      if (!code) return { status: 'invalid' };
+      if (code.consumedAt !== null) return { status: 'reused', grantId: code.grantId };
+      const grant = this.oauthGrants.get(code.grantId);
+      if (code.expiresAt.getTime() <= at.getTime() || !grant) return { status: 'invalid' };
+      this.storeOAuthTokens(grant.id, tokens, at);
+      code.consumedAt = at;
+      grant.lastUsedAt = at;
+      return { status: 'exchanged', code: { ...code }, grant: { ...grant, scopes: [...grant.scopes] } };
+    },
+    findToken: async (digest) => {
+      const stored = this.oauthTokens.get(digest);
+      const grant = stored ? this.oauthGrants.get(stored.grantId) : undefined;
+      if (!stored || !grant) return null;
+      const { digest: _digest, ...token } = stored;
+      return { token, grant: { ...grant, scopes: [...grant.scopes] } };
+    },
+    findTokenById: async (id) => {
+      const stored = [...this.oauthTokens.values()].find((t) => t.id === id);
+      if (!stored) return null;
+      const { digest: _digest, ...token } = stored;
+      return token;
+    },
+    rotateRefresh: async ({ tokenId, successorId, at, tokens }) => {
+      const stored = [...this.oauthTokens.values()].find((t) => t.id === tokenId);
+      if (!stored || stored.kind !== 'REFRESH' || stored.rotatedAt !== null) return false;
+      this.storeOAuthTokens(stored.grantId, tokens, at);
+      Object.assign(stored, { rotatedAt: at, successorId });
+      const grant = this.oauthGrants.get(stored.grantId);
+      if (grant) grant.lastUsedAt = at;
+      return true;
+    },
+    revokeGrant: async ({ grantId, userId, reason, at, audit }) => {
+      const g = this.oauthGrants.get(grantId);
+      if (!g || g.revokedAt !== null || (userId !== undefined && g.userId !== userId)) return false;
+      Object.assign(g, { revokedAt: at, revokedReason: reason });
+      this.pushEvents(audit, at);
+      return true;
+    },
+    revokeAllForUser: async ({ userId, reason, at, audit }) => {
+      const count = this.revokeOAuthGrantsOf(userId, reason, at);
+      if (count > 0) this.pushEvents(audit, at);
+      return count;
+    },
+    listLiveGrants: async (userId, at) =>
+      [...this.oauthGrants.values()]
+        .filter((g) => g.userId === userId && g.revokedAt === null && g.expiresAt.getTime() > at.getTime())
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id))
+        .map((g) => {
+          const client = this.oauthClients.get(g.clientId);
+          return { ...g, scopes: [...g.scopes], clientName: client?.clientName ?? '', clientKind: client?.kind ?? 'DCR' };
+        }),
+    touchGrant: async (grantId, at) => {
+      const g = this.oauthGrants.get(grantId);
+      if (g) g.lastUsedAt = at;
+    },
+    cleanup: async ({ at, before, clientsBefore }) => {
+      let requests = 0;
+      let codes = 0;
+      let tokens = 0;
+      let clients = 0;
+      for (const [id, r] of this.oauthRequests) if (r.expiresAt.getTime() <= at.getTime()) (this.oauthRequests.delete(id), requests++);
+      for (const [digest, c] of this.oauthCodes) if (c.expiresAt.getTime() <= at.getTime()) (this.oauthCodes.delete(digest), codes++);
+      // A grant ended at its revoke, or else at its absolute expiry.
+      const deadGrants = new Set([...this.oauthGrants.values()].filter((g) => (g.revokedAt ?? g.expiresAt).getTime() <= before.getTime()).map((g) => g.id));
+      for (const [digest, t] of this.oauthTokens) if (deadGrants.has(t.grantId) || t.expiresAt.getTime() <= before.getTime()) (this.oauthTokens.delete(digest), tokens++);
+      const granted = new Set([...this.oauthGrants.values()].map((g) => g.clientId));
+      for (const [id, c] of this.oauthClients) {
+        if (granted.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
+        for (const [rid, r] of this.oauthRequests) if (r.clientId === id) this.oauthRequests.delete(rid);
+        this.oauthClients.delete(id);
+        clients++;
+      }
+      return { requests, codes, tokens, clients };
+    },
+  };
 
   /** `exceptSessionId` (MUT-237): a person's own session stays live while every other one is revoked. */
   private revokeSessionsOf(userId: string, reason: string, at: Date, exceptSessionId?: string): number {
@@ -2516,6 +2692,14 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, acceptance] of this.termsAcceptances) if (acceptance.userId === id) this.termsAcceptances.delete(key);
     for (const [key, grant] of this.grants) if (grant.userId === id) this.grants.delete(key);
     for (const [key, grant] of this.featureGrants) if (grant.userId === id) this.featureGrants.delete(key);
+    // MUT-434: grants and decided requests cascade with the person; codes and tokens with their grant.
+    for (const [key, g] of this.oauthGrants) {
+      if (g.userId !== id) continue;
+      for (const [digest, code] of this.oauthCodes) if (code.grantId === key) this.oauthCodes.delete(digest);
+      for (const [digest, token] of this.oauthTokens) if (token.grantId === key) this.oauthTokens.delete(digest);
+      this.oauthGrants.delete(key);
+    }
+    for (const [key, r] of this.oauthRequests) if (r.userId === id) this.oauthRequests.delete(key);
     for (const [key, account] of this.billingAccounts) {
       if (account.userId !== id) continue;
       for (const [subKey, sub] of this.billingSubs) if (sub.billingAccountId === account.id) this.billingSubs.delete(subKey);

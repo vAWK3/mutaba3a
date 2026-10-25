@@ -1420,6 +1420,11 @@ export interface ChangePasswordInput {
   at: Date;
   /** Written in the same transaction. */
   audit: AuditEventInput[];
+  /**
+   * MUT-434 (D11): every live OAuth grant is revoked (`password_changed`) in the same transaction, always; these rows
+   * are written only when there was one to revoke.
+   */
+  agentGrantAudit?: AuditEventInput[];
 }
 
 /** MUT-333: what `users.requestClosure` writes. */
@@ -2233,6 +2238,8 @@ export interface LedgerStore {
   passkeys: PasskeyRepository;
   /** MUT-433: per-user feature flags; `/v1/me` reads the person's own (sessionOnly), only the operator writes them. */
   features: FeaturesRepository;
+  /** MUT-434: the OAuth authorization server's clients, requests, grants, codes and tokens. */
+  oauth: OAuthRepository;
 }
 
 // ---- MUT-433: per-user feature flags (ADR-196) -----------------------------
@@ -2261,10 +2268,154 @@ export interface FeaturesRepository {
    * grants change it once (eng review C3). Throws ForeignKeyViolation for an unknown user.
    */
   grant(input: { userId: string; feature: string; grantedBy: string; at: Date; audit: AuditEventInput[] }): Promise<{ grant: UserFeatureRecord; granted: boolean }>;
-  /** One transaction: turns the flag off at `at`, auditing only when it was on. */
-  revoke(input: { userId: string; feature: string; at: Date; audit: AuditEventInput[] }): Promise<{ revoked: boolean }>;
+  /**
+   * One transaction: turns the flag off at `at`, auditing only when it was on. With `agentGrants` (MUT-434 AC7, OV10:
+   * revoking `agent_access`), every live OAuth grant the person holds is revoked (`feature_revoked`) in the same
+   * transaction, and `agentGrants.audit` is written only when there was one.
+   */
+  revoke(input: { userId: string; feature: string; at: Date; audit: AuditEventInput[]; agentGrants?: { audit: AuditEventInput[] } }): Promise<{ revoked: boolean; agentGrantsRevoked: number }>;
   /** Everyone holding the feature now, oldest grant first (then by user id). */
   holders(feature: string): Promise<FeatureHolderRecord[]>;
+}
+
+// ---- MUT-434: OAuth 2.1 for MCP clients (ADR-197) ------------------------------
+
+export type OAuthClientKind = 'DCR' | 'CIMD';
+
+export interface OAuthClientRecord {
+  /** `mcl_…` (DCR) or the metadata document URL (CIMD). */
+  id: string;
+  kind: OAuthClientKind;
+  clientName: string;
+  redirectUris: string[];
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  /** CIMD: when the cached document goes stale; null for DCR. */
+  metadataExpiresAt: Date | null;
+}
+
+export interface OAuthAuthorizationRequestRecord {
+  id: string;
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  scopes: string[];
+  state: string | null;
+  resource: string;
+  createdAt: Date;
+  expiresAt: Date;
+  decidedAt: Date | null;
+  userId: string | null;
+}
+
+/** Why a grant ended; stored in `revokedReason`. */
+export type OAuthGrantRevokedReason = 'user' | 'feature_revoked' | 'disabled' | 'operator' | 'password_changed' | 'refresh_reuse' | 'code_reuse' | 'account_changed';
+
+export interface OAuthGrantRecord {
+  id: string;
+  userId: string;
+  clientId: string;
+  redirectUri: string;
+  scopes: string[];
+  resource: string;
+  createdAt: Date;
+  expiresAt: Date;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+  revokedReason: string | null;
+}
+
+/** A live grant with its client's name, for Connected apps. */
+export interface OAuthGrantListing extends OAuthGrantRecord {
+  clientName: string;
+  clientKind: OAuthClientKind;
+}
+
+export interface OAuthCodeRecord {
+  id: string;
+  grantId: string;
+  codeChallenge: string;
+  redirectUri: string;
+  resource: string;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export type OAuthTokenKind = 'ACCESS' | 'REFRESH';
+
+export interface OAuthTokenRecord {
+  id: string;
+  grantId: string;
+  kind: OAuthTokenKind;
+  createdAt: Date;
+  expiresAt: Date;
+  rotatedAt: Date | null;
+  successorId: string | null;
+}
+
+/** A token to store: only its digest, never the token. `id` is chosen by the caller when it derives the token from it (D19). */
+export interface OAuthTokenInput {
+  id: string;
+  digest: string;
+  kind: OAuthTokenKind;
+  expiresAt: Date;
+}
+
+export interface OAuthRepository {
+  /** DCR (RFC 7591). UniqueViolation on an id already taken. */
+  createClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date }): Promise<OAuthClientRecord>;
+  /** CIMD (OV2): creates the row for a fetched document, or refreshes name, redirects and expiry on a re-fetch. */
+  upsertCimdClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date; metadataExpiresAt: Date }): Promise<OAuthClientRecord>;
+  findClient(id: string): Promise<OAuthClientRecord | null>;
+  createAuthorizationRequest(input: Omit<OAuthAuthorizationRequestRecord, 'id' | 'decidedAt' | 'userId'>): Promise<OAuthAuthorizationRequestRecord>;
+  findAuthorizationRequest(id: string): Promise<OAuthAuthorizationRequestRecord | null>;
+  /**
+   * One transaction: claims an undecided, unexpired request for `userId` (conditional on `decidedAt` being null, so two
+   * decisions can't both win — D6). On approve it also creates the grant and its code; `audit` is written with it.
+   * `decided: false` = already decided, expired or unknown, and nothing was written.
+   */
+  decide(input: {
+    requestId: string;
+    userId: string;
+    at: Date;
+    approve: { grantExpiresAt: Date; code: { digest: string; expiresAt: Date } } | null;
+    audit: AuditEventInput[];
+  }): Promise<{ decided: false } | { decided: true; request: OAuthAuthorizationRequestRecord; grant: OAuthGrantRecord | null }>;
+  /**
+   * The code exchange's single-use claim (D6): sets `consumedAt` only if it was null and the code is unexpired, and in the
+   * same transaction stores `tokens` for its grant. `reused` = it had been consumed before (RFC 6749 §4.1.2: the caller
+   * revokes the grant). `invalid` = unknown or expired.
+   */
+  exchangeCode(input: { digest: string; at: Date; tokens: OAuthTokenInput[] }): Promise<{ status: 'exchanged'; code: OAuthCodeRecord; grant: OAuthGrantRecord } | { status: 'reused'; grantId: string } | { status: 'invalid' }>;
+  /** The code, without claiming it (to check PKCE and the redirect before the claim). */
+  findCode(digest: string): Promise<OAuthCodeRecord | null>;
+  /** A grant by id, live or not. */
+  findGrant(grantId: string): Promise<OAuthGrantRecord | null>;
+  /** A token by digest, with its grant (live or not: the caller decides). */
+  findToken(digest: string): Promise<{ token: OAuthTokenRecord; grant: OAuthGrantRecord } | null>;
+  findTokenById(id: string): Promise<OAuthTokenRecord | null>;
+  /**
+   * The refresh's single-use claim (D6/D19): sets `rotatedAt` and `successorId` on the refresh token only if it was
+   * not rotated yet, and in the same transaction stores the successor `tokens` and touches the grant. False = it was
+   * already rotated, and nothing was written.
+   */
+  rotateRefresh(input: { tokenId: string; successorId: string; at: Date; tokens: OAuthTokenInput[] }): Promise<boolean>;
+  /**
+   * Revokes one live grant (conditional on `revokedAt` null), auditing only when it changed. With `userId`, only that
+   * person's grant (404 otherwise, at the route).
+   */
+  revokeGrant(input: { grantId: string; userId?: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<boolean>;
+  /** Every live grant the person holds, in one statement; `audit` is written only when there was one. */
+  revokeAllForUser(input: { userId: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<number>;
+  /** Live (unrevoked, unexpired) grants, newest first, with the client's name. */
+  listLiveGrants(userId: string, at: Date): Promise<OAuthGrantListing[]>;
+  /** Throttled by the caller; never moves `expiresAt`. */
+  touchGrant(grantId: string, at: Date): Promise<void>;
+  /**
+   * Nightly housekeeping: expired requests and codes, tokens of grants revoked or expired before `before`, and clients
+   * created before `clientsBefore` that never had a grant (OV5).
+   */
+  cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number }>;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

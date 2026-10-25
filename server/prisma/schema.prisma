@@ -337,6 +337,9 @@ model User {
   inboxEntries        InboxEntry[]
   /// MUT-131: this person's idempotency claims for organization-independent writes.
   userIdempotencyKeys UserIdempotencyKey[]
+  /// MUT-434: the agents (MCP clients) this person connected, and the consent requests they decided.
+  oauthGrants         OAuthGrant[]
+  oauthRequests       OAuthAuthorizationRequest[]
 
   /// MUT-358 (ADR-160): when this person's 14-day trial began. NULL = no trial (every operator-issued account);
   /// MUT-331's self-service signup sets it at email verification.
@@ -1585,4 +1588,123 @@ model StoragePurge {
   queuedAt       DateTime
 
   @@map("storage_purges")
+}
+
+/// MUT-434 (ADR-197): how an OAuth client registered. DCR = RFC 7591 at /oauth/register; CIMD = a Client ID Metadata
+/// Document, whose URL is the client id.
+enum OAuthClientKind {
+  DCR
+  CIMD
+}
+
+/// MUT-434: an MCP client known to the authorization server. Anonymous (registration is unauthenticated), so no user
+/// FK and never purged with a person. A client that ever had a grant is kept (OV5: Claude stores its client id).
+model OAuthClient {
+  /// `mcl_…` for DCR, the metadata document URL for CIMD (capped at 2048).
+  id                String          @id @db.VarChar(2048)
+  kind              OAuthClientKind
+  clientName        String          @db.VarChar(100)
+  redirectUris      String[]
+  createdAt         DateTime
+  lastUsedAt        DateTime?
+  /// CIMD only: when the document was fetched and when it goes stale (≤ 24 h, OV2). Null for DCR.
+  metadataFetchedAt DateTime?
+  metadataExpiresAt DateTime?
+
+  requests OAuthAuthorizationRequest[]
+  grants   OAuthGrant[]
+
+  @@index([createdAt])
+  @@map("oauth_clients")
+}
+
+/// MUT-434: one /oauth/authorize request waiting for the person's decision on /connect/approve (30 min, OV7).
+model OAuthAuthorizationRequest {
+  id            String      @id @default(uuid()) @db.Uuid
+  clientId      String      @db.VarChar(2048)
+  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  redirectUri   String      @db.VarChar(2048)
+  codeChallenge String      @db.VarChar(64)
+  scopes        String[]
+  state         String?     @db.VarChar(500)
+  /// The canonical resource the tokens will be bound to (S2a).
+  resource      String      @db.VarChar(2048)
+  createdAt     DateTime
+  expiresAt     DateTime
+  decidedAt     DateTime?
+  /// Who decided it; set with decidedAt.
+  userId        String?     @db.Uuid
+  user          User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("oauth_authorization_requests")
+}
+
+/// MUT-434: one person's consent to one client. Several live grants per client are allowed (OV3). Every access check
+/// reads it, so a revoke takes effect on the next call.
+model OAuthGrant {
+  id            String      @id @default(uuid()) @db.Uuid
+  userId        String      @db.Uuid
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId      String      @db.VarChar(2048)
+  /// OV5: Restrict, so a client with any grant (live or revoked) can't be cleaned up from under it.
+  client        OAuthClient @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  /// The redirect the consent was given for, for the trust label in Connected apps.
+  redirectUri   String      @db.VarChar(2048)
+  scopes        String[]
+  resource      String      @db.VarChar(2048)
+  createdAt     DateTime
+  /// Absolute: 180 days (D13).
+  expiresAt     DateTime
+  lastUsedAt    DateTime?
+  revokedAt     DateTime?
+  revokedReason String?     @db.VarChar(32)
+
+  codes  OAuthCode[]
+  tokens OAuthToken[]
+
+  @@index([userId])
+  @@index([clientId])
+  @@map("oauth_grants")
+}
+
+/// MUT-434: an authorization code (60 s, single use, D6). Only its digest is stored.
+model OAuthCode {
+  id            String     @id @default(uuid()) @db.Uuid
+  codeDigest    String     @unique @db.VarChar(64)
+  grantId       String     @db.Uuid
+  grant         OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  codeChallenge String     @db.VarChar(64)
+  redirectUri   String     @db.VarChar(2048)
+  resource      String     @db.VarChar(2048)
+  createdAt     DateTime
+  expiresAt     DateTime
+  consumedAt    DateTime?
+
+  @@index([grantId])
+  @@map("oauth_codes")
+}
+
+/// MUT-434: what an OAuth token is for.
+enum OAuthTokenKind {
+  ACCESS
+  REFRESH
+}
+
+/// MUT-434: access (1 h) and refresh (45 d idle) tokens, by digest. A refresh token's rotation records `successorId`,
+/// from which the successor pair is derived again on a retry inside 30 s (idempotent rotation, D19).
+model OAuthToken {
+  id          String         @id @default(uuid()) @db.Uuid
+  tokenDigest String         @unique @db.VarChar(64)
+  grantId     String         @db.Uuid
+  grant       OAuthGrant     @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  kind        OAuthTokenKind
+  createdAt   DateTime
+  expiresAt   DateTime
+  rotatedAt   DateTime?
+  successorId String?        @db.Uuid
+
+  @@index([grantId])
+  @@map("oauth_tokens")
 }
