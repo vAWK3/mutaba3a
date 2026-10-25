@@ -66,6 +66,8 @@
     "backfill:vendors": "tsx src/scripts/backfill-vendors.ts",
     "post-roll": "tsx src/scripts/post-roll.ts",
     "pre-roll": "tsx src/scripts/pre-roll.ts",
+    "release-image": "tsx src/scripts/release-image.ts",
+    "rollback:check": "tsx src/scripts/rollback-check.ts",
     "docker:build": "docker build -t mutaba3a-api:local .",
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },
