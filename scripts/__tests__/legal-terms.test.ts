@@ -1,11 +1,13 @@
 // @vitest-environment node
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { CURRENT_TERMS } from '../../server/src/legal';
 import serverPkg from '../../server/package.json';
-import { HOSTS } from '../../config/hosts';
-import { getValue } from '../hosts';
+import rawHosts from '../../config/hosts.json';
+import { HOSTS, parseHostsConfig } from '../../config/hosts';
+import { getValue, main as hostsMain } from '../hosts';
 import { DEFAULT_PUBLIC_ORIGIN } from '../../vite.config';
 import { termsManifest } from '../../src/content/legal/termsManifest';
 import { LATEST_TERMS_VERSION, TERMS_VERSIONS } from '../../src/content/legal/terms';
@@ -55,6 +57,58 @@ describe('legal terms (MUT-324)', () => {
   it('the deploy check reads the same public site the landing is built for (both from config/hosts.json, MUT-326)', () => {
     expect(serverPkg.scripts['terms:check-live']).toContain('hosts -- get landingOrigin');
     expect(getValue(HOSTS, 'landingOrigin')).toBe(DEFAULT_PUBLIC_ORIGIN);
+  });
+});
+
+/**
+ * MUT-347: a release checks its own environment's site. deploy.sh and preflight.sh pass their ENVIRONMENT as
+ * MUTABA3A_ENVIRONMENT; the npm scripts resolve hosts for it, and a hosts lookup that fails stops the script.
+ */
+describe('the release checks resolve hosts for their own environment (MUT-347)', () => {
+  const ROOT = join(__dirname, '../..');
+  const ENV_FLAG = '--env "${MUTABA3A_ENVIRONMENT:-production}"';
+  const run = (script: string, env: Record<string, string>) => {
+    const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
+    delete childEnv.MUTABA3A_PUBLIC_ORIGIN;
+    delete childEnv.MAIL_DOMAIN;
+    return spawnSync('sh', ['-c', serverPkg.scripts[script as keyof typeof serverPkg.scripts]], {
+      cwd: join(ROOT, 'server'),
+      encoding: 'utf8',
+      env: childEnv,
+    });
+  };
+
+  it.each(['terms:check-live', 'email:check'])('%s passes the environment to the hosts lookup', (script) => {
+    expect(serverPkg.scripts[script as keyof typeof serverPkg.scripts]).toContain(ENV_FLAG);
+  });
+
+  it('production resolves to the landing origin config/hosts.json names', () => {
+    const out: string[] = [];
+    const code = hostsMain(['get', 'landingOrigin', '--env', 'production'], parseHostsConfig(rawHosts), {
+      out: (s) => out.push(s),
+      err: () => {},
+    });
+    expect(code).toBe(0);
+    expect(out.join('').trim()).toBe(HOSTS.landingOrigin);
+  });
+
+  it.each(['terms:check-live', 'email:check'])(
+    '%s for an environment hosts.json lacks stops on the hosts error, never "origin not set"',
+    (script) => {
+      const r = run(script, { MUTABA3A_ENVIRONMENT: 'staging' });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('config/hosts.json: no "staging" environment');
+      expect(r.stderr).not.toMatch(/is not set/);
+    },
+    30_000,
+  );
+
+  it('deploy.sh and the server preflight pass their ENVIRONMENT to both checks', () => {
+    const deploySh = readFileSync(join(ROOT, 'server/scripts/deploy.sh'), 'utf8');
+    const preflight = readFileSync(join(ROOT, 'scripts/preflight.sh'), 'utf8');
+    expect(deploySh).toMatch(/MUTABA3A_ENVIRONMENT="\$\{ENVIRONMENT\}" npm --prefix "\$\{SERVER_DIR\}" run --silent terms:check-live/);
+    expect(preflight).toMatch(/MUTABA3A_ENVIRONMENT="\$ENVIRONMENT" npm --prefix server run --silent terms:check-live/);
+    expect(preflight).toMatch(/MUTABA3A_ENVIRONMENT="\$ENVIRONMENT" RESEND_CHECK_API_KEY="\$CHECK_KEY" npm --prefix server run --silent email:check/);
   });
 });
 

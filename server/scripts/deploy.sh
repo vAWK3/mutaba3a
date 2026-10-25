@@ -106,7 +106,7 @@ fi
 if [[ "${SKIP_TERMS_CHECK:-}" == "1" ]]; then
   info "WARNING: skipping the terms check (SKIP_TERMS_CHECK=1)"
 else
-  npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms check failed (above); if the version isn't listed yet, release web first (make release web)"
+  MUTABA3A_ENVIRONMENT="${ENVIRONMENT}" npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms check failed (above); if the version isn't listed yet, release web first (make release web)"
 fi
 
 info "environment=${ENVIRONMENT} project=${GCP_PROJECT_ID} region=${GCP_REGION} tag=${SHORT_SHA}"
