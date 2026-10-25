@@ -8,6 +8,9 @@ import { openYou, youRow } from '../../support/you';
  * MUT-115: passkeys on the portal, against the live dev API's real WebAuthn checks (support/selfservice-live.mjs:
  * http://localhost:8791, WEBAUTHN_RP_ID=localhost). Chromium's virtual authenticator answers the system sheet
  * (support/passkeys.ts), so Add and Sign in with a passkey run end to end.
+ *
+ * The virtual authenticator also answers the email field's autofill at once, so signing out would sign straight back
+ * in: the device is "away" (no presence) while a spec signs out, and back when it presses the button.
  */
 
 const PASSWORD = 'the first long passphrase';
@@ -29,19 +32,21 @@ async function addPasskey(page: Page) {
   await expect(dialog.getByText('No passkeys yet')).toBeVisible();
   await dialog.getByRole('button', { name: 'Add a passkey' }).click();
   await expect(page.getByText('Passkey added')).toBeVisible();
-  await expect(dialog.locator('.hp-passkey-row')).toHaveCount(1);
+  await expect(dialog.getByRole('listitem')).toHaveCount(1);
   return dialog;
 }
 
-async function signOut(page: Page) {
+async function signOut(page: Page, authenticator: VirtualAuthenticator) {
+  await authenticator.setPresence(false);
   await page.goto('/');
   await openYou(page, 'account');
   await youRow(page, 'Sign out').click();
   await expect(page).toHaveURL(/\/sign-in/);
 }
 
-async function signInWithPasskey(page: Page) {
+async function signInWithPasskey(page: Page, authenticator: VirtualAuthenticator) {
   await page.goto('/sign-in');
+  await authenticator.setPresence(true);
   await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
 }
 
@@ -62,16 +67,16 @@ test('Add a passkey from You › Account, right after signing in, with no passwo
 });
 
 test('Sign in with a passkey, after signing out', { tag: '@portal-selfservice.passkeys.sign-in' }, async ({ page, step }) => {
-  await signedIn(page);
+  const { authenticator } = await signedIn(page);
   await step('Add a passkey', async () => {
     await addPasskey(page);
   });
   await step('Sign out', async () => {
-    await signOut(page);
+    await signOut(page, authenticator);
   });
   await step('On sign-in press Sign in with a passkey', async () => {
     await expect(page.getByRole('separator')).toHaveText('or');
-    await signInWithPasskey(page);
+    await signInWithPasskey(page, authenticator);
   });
   await step('Signed in, on Home, with no password typed', async () => {
     await expect(page).toHaveURL(HOME);
@@ -85,7 +90,7 @@ test('Sign in with a passkey, after signing out', { tag: '@portal-selfservice.pa
 });
 
 test('Removing a passkey stops it signing in', { tag: '@portal-selfservice.passkeys.remove' }, async ({ page, step }) => {
-  await signedIn(page);
+  const { authenticator } = await signedIn(page);
   await step('Add a passkey', async () => {
     await addPasskey(page);
   });
@@ -98,8 +103,8 @@ test('Removing a passkey stops it signing in', { tag: '@portal-selfservice.passk
     await expect(dialog.getByText('No passkeys yet')).toBeVisible();
   });
   await step('Sign out, then try Sign in with a passkey', async () => {
-    await signOut(page);
-    await signInWithPasskey(page);
+    await signOut(page, authenticator);
+    await signInWithPasskey(page, authenticator);
   });
   await step('Refused: "That passkey didn’t work", still on sign-in', async () => {
     await expect(page.getByRole('alert')).toHaveText('That passkey didn’t work. Try again, or sign in with your password.');
@@ -108,7 +113,7 @@ test('Removing a passkey stops it signing in', { tag: '@portal-selfservice.passk
 });
 
 test('Changing the password keeps the passkey', { tag: '@portal-selfservice.passkeys.password-change-keeps' }, async ({ page, step }) => {
-  await signedIn(page);
+  const { authenticator } = await signedIn(page);
   await step('Add a passkey', async () => {
     await addPasskey(page);
     await page.getByRole('dialog', { name: 'Passkeys' }).getByRole('button', { name: 'Close' }).click();
@@ -122,8 +127,8 @@ test('Changing the password keeps the passkey', { tag: '@portal-selfservice.pass
     await expect(page.getByText('Password changed')).toBeVisible();
   });
   await step('Sign out and Sign in with a passkey', async () => {
-    await signOut(page);
-    await signInWithPasskey(page);
+    await signOut(page, authenticator);
+    await signInWithPasskey(page, authenticator);
   });
   await step('Signed in with the passkey', async () => {
     await expect(page).toHaveURL(HOME);
@@ -131,17 +136,20 @@ test('Changing the password keeps the passkey', { tag: '@portal-selfservice.pass
 });
 
 test('The email field offers the passkey (autofill)', { tag: '@portal-selfservice.passkeys.autofill' }, async ({ page, step }) => {
-  await signedIn(page);
+  const { authenticator } = await signedIn(page);
   await step('Add a passkey and sign out', async () => {
     await addPasskey(page);
-    await signOut(page);
+    await signOut(page, authenticator);
   });
   await step('Open sign-in: the email field asks for passkeys too', async () => {
     await page.goto('/sign-in');
     await expect(page.getByLabel('Email')).toHaveAttribute('autocomplete', 'username webauthn');
   });
-  await step('Pick the passkey the field offers (the virtual device answers at once)', async () => {
+  await step('Pick the passkey the field offers (the virtual device answers the field at once), without pressing anything', async () => {
+    await authenticator.setPresence(true);
+    await page.reload();
     await expect(page).toHaveURL(HOME, { timeout: 15_000 });
+    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
   });
 });
 
@@ -150,7 +158,7 @@ test('Passkeys in Arabic on a phone: مفاتيح المرور, right to left, t
   await chooseLanguage(page, 'ar');
   const email = address('passkey-ar');
   await operatorAccount(email, 'ar', PASSWORD);
-  await addVirtualAuthenticator(page);
+  const authenticator = await addVirtualAuthenticator(page);
   await signInThroughForm(page, email, PASSWORD, 'ar');
   await expect(page).toHaveURL(HOME);
   await step('Open أنت › الحساب › مفاتيح المرور and add one', async () => {
@@ -163,12 +171,13 @@ test('Passkeys in Arabic on a phone: مفاتيح المرور, right to left, t
   });
   await step('The drawer reads right to left and fits the phone', async () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    const row = page.locator('.hp-passkey-row').first();
+    const row = page.getByRole('dialog', { name: 'مفاتيح المرور' }).getByRole('listitem').first();
     await expect(row).toBeVisible();
     const box = await row.boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= 375).toBe(true);
   });
   await step('Sign out: the sign-in page offers تسجيل الدخول بمفتاح المرور', async () => {
+    await authenticator.setPresence(false);
     await page.goto('/');
     await openYou(page, 'account');
     await youRow(page, 'تسجيل الخروج').click();
