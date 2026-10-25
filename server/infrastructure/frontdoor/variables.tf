@@ -54,7 +54,7 @@ variable "resend_dkim_value" {
 }
 
 variable "resend_sending_region" {
-  description = "MUT-359 (ADR-159 §5): the Resend sending region; the return-path MX follows it. eu-west-1, as ADR-159 decided."
+  description = "MUT-359 (ADR-159 §5): the Resend sending region; Forge's regional return-path CNAME follows it. eu-west-1, as ADR-159 decided."
   type        = string
   default     = "eu-west-1"
 }

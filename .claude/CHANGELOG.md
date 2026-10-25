@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — The mail check and the frontdoor DNS follow Resend Forge
+
+**Why:** Basel turned Resend Forge on for `notify.mtb3a.com`. Forge's return path is two CNAMEs (`send.` → `send.forge.rmta.net`, `rsend.` → `rsend-euw1.forge.rmta.net`) instead of SES's MX + SPF on `send.`. The release preflight's `email:check` still asked for the SES records and refused the api 0.8.0 release, and the hand-made `send.` CNAME sat beside Terraform's MX + TXT on the same name, which DNS doesn't allow.
+
+### Fixed
+- `email:check` (server/src/scripts/email-check.ts): reads Forge's two CNAMEs instead of the SES MX and SPF; `DnsLookup` swaps `mx` for `cname`. Tests in `email-check.test.ts`.
+- Frontdoor `email.tf`: `return_path` and `return_path_regional` CNAMEs replace `return_path_mx` and `return_path_spf`. DEPLOYMENT.md §6f updated.
+
+**Operator:** import the two hand-made CNAMEs before the next frontdoor apply (`docs/operations/before-release.md`).
+
+---
+
 ## [Unreleased] - 2026-10-25 — Per-user feature flags, operator-granted, starting with agent_access (MUT-433, ADR-196)
 
 **Why:** epic MUT-432 lets a person connect their own Claude over MCP. Basel decides who gets it: every flag is off until the operator grants it.
