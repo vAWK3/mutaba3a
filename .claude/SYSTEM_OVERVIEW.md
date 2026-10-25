@@ -614,3 +614,4 @@ mini-crm/
 - **Manage:** You › Account › Passkeys: add (a sign-in under 10 minutes old, else the password), rename, remove (signs out the sessions it opened). At most 10. A password change keeps passkeys.
 - **Infra:** `WEBAUTHN_RP_ID` from stage live; the apex proxies the portal's AASA for iOS `webcredentials`.
 - **Phone:** not built yet (the run's phone phase): it ports Malafat's `WebAuthnService` on the `passkeys` package against the same routes.
+- **Suggestion (MUT-370, ADR-191):** after a sign-in, Home shows "Add a passkey: the more secure way to sign in" while `/v1/me` `user.passkeyPrompt.due` (no passkey, fewer than 3 Not nows, not hidden 30 days; stored on `users.passkeyPrompt`, `PATCH /v1/me/passkey-prompt`). It waits for the trial's first-run step. The phone half reads the same field.

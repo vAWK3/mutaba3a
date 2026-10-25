@@ -1,5 +1,7 @@
 import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
+import type { QueryClient } from '@tanstack/react-query';
 import { api, ApiError, type Passkey, type Schemas } from '../api/client';
+import { ME_KEY } from '../session/me';
 import { createPasskey } from './webauthn';
 
 /**
@@ -7,6 +9,14 @@ import { createPasskey } from './webauthn';
  * MUT-370's "suggest a passkey" card right after first sign-in (no step-up then: the sign-in is under 10 minutes old).
  */
 export const PASSKEYS_KEY = ['passkeys'] as const;
+
+/**
+ * After a passkey is added or removed: the list, and /v1/me, whose `passkeyPrompt` the server recomputes (MUT-370, eng
+ * review E3), so the Home suggestion goes when one is added anywhere and may return when the last one is removed.
+ */
+export function passkeysChanged(queryClient: QueryClient): Promise<void> {
+  return Promise.all([queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY }), queryClient.invalidateQueries({ queryKey: ME_KEY })]).then(() => undefined);
+}
 
 export type AddPasskeyOutcome =
   | { kind: 'added'; passkey: Passkey }

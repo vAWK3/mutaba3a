@@ -305,6 +305,9 @@ model User {
   /// MUT-418: `{ welcomedAt, welcomeAnswer, bannerSnoozedUntil }`, the person's answers to the trial's card prompt
   /// (server/src/billing/trial-prompt.ts); NULL = nothing answered yet.
   trialPrompt        Json?
+  /// MUT-370: `{ notNowCount, hiddenUntil }`, the "Add a passkey" suggestion's state (server/src/auth/passkey-prompt.ts);
+  /// NULL = never answered. Read and written through the passkeys port, never part of the person's record.
+  passkeyPrompt      Json?
   createdAt          DateTime
   updatedAt          DateTime
 

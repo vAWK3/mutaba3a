@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
+import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -76,6 +77,7 @@ import type {
   SignupLinkRecord,
   UserStatus,
   SessionRepository,
+  PasskeyPromptState,
   PasskeyRecord,
   PasskeyRepository,
   WebauthnChallengePurpose,
@@ -297,6 +299,8 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-115: passkeys and their challenges, outside the snapshot too (local mode has no sign-in). */
   private readonly passkeyMap = new Map<string, PasskeyRecord>();
   private readonly challenges = new Map<string, { challenge: string; purpose: WebauthnChallengePurpose; userId: string | null; expiresAt: Date; consumedAt: Date | null }>();
+  /** MUT-370: the "Add a passkey" suggestion's state by person (`users.passkeyPrompt`), outside the snapshot like passkeys. */
+  private readonly passkeyPrompts = new Map<string, unknown>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -706,7 +710,20 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       return count;
     },
+    promptOf: async (userId) => (this.people.has(userId) ? this.passkeyPromptState(userId) : null),
+    answerPrompt: async (userId, _action, at) => {
+      if (!this.people.has(userId)) return null;
+      const { passkeys } = this.passkeyPromptState(userId);
+      this.passkeyPrompts.set(userId, applyPasskeyNotNow(this.passkeyPrompts.get(userId), at, passkeys));
+      return this.passkeyPromptState(userId);
+    },
   };
+
+  private passkeyPromptState(userId: string): PasskeyPromptState {
+    let passkeys = 0;
+    for (const p of this.passkeyMap.values()) if (p.userId === userId) passkeys++;
+    return { prompt: resolvePasskeyPrompt(this.passkeyPrompts.get(userId)), passkeys };
+  }
 
   /** `exceptSessionId` (MUT-237): a person's own session stays live while every other one is revoked. */
   private revokeSessionsOf(userId: string, reason: string, at: Date, exceptSessionId?: string): number {
@@ -2442,6 +2459,7 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, m] of this.members) if (m.userId === id) this.members.delete(key);
     for (const [key, s] of this.sessionsById) if (s.userId === id) this.sessionsById.delete(key);
     for (const [key, p] of this.passkeyMap) if (p.userId === id) this.passkeyMap.delete(key);
+    this.passkeyPrompts.delete(id);
     for (const [key, c] of this.challenges) if (c.userId === id) this.challenges.delete(key);
     for (const [key, link] of this.setupLinks) if (('userId' in link && link.userId === id) || (link.purpose === 'SIGNUP' && 'email' in link && link.email === person.email)) this.setupLinks.delete(key);
     for (const [key, entry] of this.inbox) if (entry.userId === id) this.inbox.delete(key);

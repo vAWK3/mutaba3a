@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.69.0-mut115
+  version: 1.70.0-mut370
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -202,6 +202,8 @@ components:
               $ref: "#/components/schemas/MalafatSuggestions"
             trialPrompt:
               $ref: "#/components/schemas/TrialPrompt"
+            passkeyPrompt:
+              $ref: "#/components/schemas/PasskeyPrompt"
             status:
               $ref: "#/components/schemas/UserStatus"
             closure:
@@ -213,6 +215,7 @@ components:
             - locale
             - malafatSuggestions
             - trialPrompt
+            - passkeyPrompt
             - status
             - closure
         profiles:
@@ -303,6 +306,24 @@ components:
         - welcomedAt
         - welcomeAnswer
         - bannerSnoozedUntil
+    PasskeyPrompt:
+      type: object
+      nullable: true
+      properties:
+        due:
+          type: boolean
+        notNowCount:
+          type: integer
+          minimum: 0
+          maximum: 3
+        hiddenUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - due
+        - notNowCount
+        - hiddenUntil
     UserStatus:
       type: string
       enum:
@@ -775,6 +796,16 @@ components:
         - lastUsedAt
         - deviceType
         - backedUp
+    PasskeyPromptChange:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - not-now
+      required:
+        - action
+      additionalProperties: false
     PasskeyCreationChallenge:
       type: object
       properties:
@@ -9039,6 +9070,52 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: VALIDATION_FAILED; reason PASSKEY_NOT_VERIFIED when the challenge was used, expired or not yours, or the response did not verify (origin, RP ID, user verification)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/passkey-prompt:
+    patch:
+      tags:
+        - Passkeys
+      summary: Answer the "Add a passkey" suggestion with Not now (MUT-370)
+      description: "`not-now` spends the current offer and hides the suggestion for 30 days (server clock); the third retires it. While it is already hidden a Not now changes nothing, so two devices answering one offer spend it once. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees. `/v1/me` `user.passkeyPrompt` says when to show it."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyPromptChange"
+      responses:
+        "200":
+          description: The suggestion as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyPrompt"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
           content:
             application/json:
               schema:

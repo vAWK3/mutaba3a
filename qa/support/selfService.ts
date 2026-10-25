@@ -106,6 +106,17 @@ export function expireSignupLinks(email: string): void {
   execFileSync('docker', ['exec', container, 'psql', '-U', 'mutaba3a', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
 }
 
+/**
+ * MUT-370: "30 days later" for the passkey suggestion. Moves the hide that Not now set into the past for `email`, in
+ * the QA database (no clock route), so the next offer is due.
+ */
+export function lapsePasskeyPromptHide(email: string): void {
+  const { container, database } = liveState();
+  const past = `to_jsonb(to_char((now() - interval '1 minute') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))`;
+  const sql = `UPDATE users SET "passkeyPrompt" = jsonb_set("passkeyPrompt", '{hiddenUntil}', ${past}) WHERE email = '${email.replace(/'/g, "''")}' AND "passkeyPrompt" IS NOT NULL`;
+  execFileSync('docker', ['exec', container, 'psql', '-U', 'mutaba3a', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
+}
+
 /** Sign a page's browser in through the portal's own form. */
 export async function signInThroughForm(page: Page, email: string, password: string, language: 'en' | 'ar' = 'en'): Promise<void> {
   await page.goto('/sign-in');

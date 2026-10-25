@@ -1,8 +1,10 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
 import { personStanding } from '../billing/gate.js';
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
+import { passkeyPromptView } from '../auth/passkey-prompt.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
@@ -11,6 +13,9 @@ import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
 import { ownsProfile } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
+
+/** MUT-370 (D9): `buildMe`'s `passkeysAt`: the request's clock where this server offers passkeys, else null. */
+export const passkeysClockOf = (c: Context<AppEnv>): Date | null => (c.get('passkeys') ? c.get('now')() : null);
 
 /** GET /v1/me, acting on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ME_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me']);
@@ -39,7 +44,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate')), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c)), 200),
   );
 
   return app;
@@ -49,9 +54,11 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
  * Exported for routes/device-sessions.ts (MUT-64): both sign-in surfaces return the same Me shape.
  * `terms` is null where no terms apply (MUT-324: the portal's signed-out mode). `billingAt` is null there too
  * (MUT-358), and every profile's `billing` is then null; otherwise it is the request's clock. MUT-361:
- * `billingStanding` is the lapse gate's verdict on the person (gate.ts), null wherever the gate is off.
+ * `billingStanding` is the lapse gate's verdict on the person (gate.ts), null wherever the gate is off. MUT-370:
+ * `passkeysAt` is the request's clock where this server offers passkeys (null elsewhere, the local mode included);
+ * only then is the suggestion read (`user.passkeyPrompt`, else null).
  */
-export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false) {
+export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false, passkeysAt: Date | null = null) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
   // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
@@ -70,7 +77,11 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow] = await Promise.all([store.organizations.countOwnedBy(user.id), terms && termsStatus(store, user.id, terms)]);
+  const [ownedProfiles, termsNow, passkeyPrompt] = await Promise.all([
+    store.organizations.countOwnedBy(user.id),
+    terms && termsStatus(store, user.id, terms),
+    passkeysAt ? store.passkeys.promptOf(user.id) : null,
+  ]);
   return {
     user: {
       id: user.id,
@@ -79,6 +90,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       locale: user.locale,
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
+      // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
+      passkeyPrompt: passkeyPrompt && passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt!, user.closure !== null),
       status: user.status,
       // MUT-333: while closing, the clients show only Keep my account and Sign out.
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,

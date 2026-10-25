@@ -6,7 +6,7 @@ import type { Language } from '../../lib/i18n/types';
 import { api, ApiError, type Passkey, type Schemas } from '../api/client';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
-import { addPasskeyFlow, PASSKEYS_KEY } from '../passkeys/addPasskey';
+import { addPasskeyFlow, PASSKEYS_KEY, passkeysChanged } from '../passkeys/addPasskey';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
 import { QueryView } from './QueryView';
@@ -60,7 +60,7 @@ export function PasskeysDrawer({ onClose }: { onClose: () => void }) {
         setStepUp(false);
         setPassword('');
         queryClient.setQueryData<Schemas['PasskeyList']>(PASSKEYS_KEY, (list) => (list ? { ...list, items: [...list.items, outcome.passkey] } : list));
-        void queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY });
+        void passkeysChanged(queryClient);
         setFocusId(outcome.passkey.id);
         showToast(t('hosted.account.passkeys.added'), { tone: 'info' });
         return;
@@ -263,7 +263,7 @@ function PasskeyRow({
     try {
       await api.removePasskey(passkey.id);
       onRemoved();
-      await queryClient.invalidateQueries({ queryKey: PASSKEYS_KEY });
+      await passkeysChanged(queryClient);
       showToast(t('hosted.account.passkeys.removed'), { tone: 'info' });
     } catch {
       onBanner('removeFailed');

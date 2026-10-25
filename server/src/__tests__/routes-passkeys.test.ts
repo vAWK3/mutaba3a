@@ -377,3 +377,80 @@ describe('passkey sign-in (MUT-115)', () => {
     expect((await passkeySignIn(h, auth)).status).toBe(201);
   });
 });
+
+describe('the "Add a passkey" suggestion (MUT-370)', () => {
+  const DAY = 24 * 60;
+  const me = async (h: Harness, headers: Record<string, string>) => (await read(await h.app.request('/v1/me', { headers }))).user.passkeyPrompt;
+  const notNow = (h: Harness, headers: Record<string, string>, body: unknown = { action: 'not-now' }) =>
+    h.app.request('/v1/me/passkey-prompt', json(body, headers, 'PATCH'));
+
+  it('is due for a person with no passkey, on /v1/me and in the sign-in response', async () => {
+    const h = harness();
+    const p = await person(h);
+    const signIn = await h.app.request('/v1/sessions', json({ email: p.email, password: p.password }, SAME_ORIGIN));
+    expect((await read(signIn)).user.passkeyPrompt).toEqual({ due: true, notNowCount: 0, hiddenUntil: null });
+    expect(await me(h, withSession(cookieOf(signIn)))).toEqual({ due: true, notNowCount: 0, hiddenUntil: null });
+  });
+
+  it('is never due once a passkey exists, and comes back when every passkey is removed (D11)', async () => {
+    const h = harness();
+    const { token, passkey } = await signedInWithPasskey(h);
+    expect((await me(h, withSession(token))).due).toBe(false);
+    expect((await h.app.request(`/v1/passkeys/${passkey.id}`, { method: 'DELETE', headers: withSession(token) })).status).toBe(204);
+    expect((await me(h, withSession(token))).due).toBe(true);
+  });
+
+  it('Not now hides it for 30 days on every device; the third Not now retires it', async () => {
+    const h = harness();
+    const p = await person(h);
+    const token = await passwordSignIn(h, p.email, p.password);
+    const device = (await read(await h.app.request('/v1/device-sessions', json({ email: p.email, password: p.password })))).token as string;
+    const first = await notNow(h, withSession(token));
+    expect(first.status).toBe(200);
+    const hiddenUntil = new Date(h.clock.now.getTime() + 30 * DAY * 60_000).toISOString();
+    expect(await read(first)).toEqual({ due: false, notNowCount: 1, hiddenUntil });
+    expect(await me(h, withDevice(device))).toEqual({ due: false, notNowCount: 1, hiddenUntil });
+    // The phone answering the same offer spends nothing more
+    expect(await read(await notNow(h, withDevice(device)))).toMatchObject({ notNowCount: 1 });
+    // Sessions don't last 30 days: each later offer meets a fresh sign-in
+    for (const count of [2, 3]) {
+      minutes(h, 30 * DAY);
+      const later = withSession(await passwordSignIn(h, p.email, p.password));
+      expect((await me(h, later)).due).toBe(true);
+      expect(await read(await notNow(h, later))).toMatchObject({ due: false, notNowCount: count });
+    }
+    minutes(h, 365 * DAY);
+    expect(await me(h, withSession(await passwordSignIn(h, p.email, p.password)))).toMatchObject({ due: false, notNowCount: 3 });
+  });
+
+  it('refuses another action, needs a session and a same-origin request, and writes no audit row', async () => {
+    const h = harness();
+    const p = await person(h);
+    const token = await passwordSignIn(h, p.email, p.password);
+    expect((await notNow(h, withSession(token), { action: 'never' })).status).toBe(422);
+    expect((await notNow(h, {})).status).toBe(401);
+    expect((await notNow(h, withSession(token, { origin: 'https://evil.example' }))).status).toBe(403);
+    await notNow(h, withSession(token));
+    expect((await h.store.audit.listByOrganization(p.orgId, 50)).filter((e) => e.action.includes('passkey'))).toEqual([]);
+  });
+
+  it('a server with no passkeys says null on /v1/me and answers 404 (D9)', async () => {
+    const h = harness({ webauthn: null });
+    const p = await person(h);
+    const token = await passwordSignIn(h, p.email, p.password);
+    expect(await me(h, withSession(token))).toBeNull();
+    expect((await notNow(h, withSession(token))).status).toBe(404);
+  });
+
+  it('a closing account cannot answer it (MUT-333)', async () => {
+    const h = harness();
+    const p = await person(h);
+    const token = await passwordSignIn(h, p.email, p.password);
+    const session = await h.store.sessions.findByDigest(sessionDigest(PEPPER, token));
+    await h.store.users.requestClosure({ userId: p.id, at: h.clock.now, deleteAfter: closureDeadline(h.clock.now), endedSubscriptionIds: [], exceptSessionId: session!.id, audit: [] });
+    const res = await notNow(h, withSession(token));
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.code).toBe('ACCOUNT_CLOSING');
+    expect((await me(h, withSession(token))).due).toBe(false);
+  });
+});

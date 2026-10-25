@@ -1499,6 +1499,14 @@
         "typicallySameDay": "typically the same day",
         "biggestChange": "biggest change"
       }
+    },
+    "passkeys": {
+      "suggest": {
+        "title": "Add a passkey: the more secure way to sign in.",
+        "note": "Your password still works.",
+        "add": "Add a passkey",
+        "notNow": "Not now"
+      }
     }
   }
 }

@@ -27,6 +27,9 @@ export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
 export type TrialPromptAction = Schemas['TrialPromptChange']['action'];
+/** MUT-370: the "Add a passkey" suggestion, as the server decides it. */
+export type PasskeyPrompt = Schemas['PasskeyPrompt'];
+export type PasskeyPromptAction = Schemas['PasskeyPromptChange']['action'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
@@ -414,6 +417,8 @@ export const api = {
   renamePasskey: (id: string, name: string) => request<Schemas['Passkey']>('PATCH', `/v1/passkeys/${encodeURIComponent(id)}`, { body: { name } }),
   /** MUT-115 (A2): also signs out every other session this passkey opened. */
   removePasskey: (id: string) => request<void>('DELETE', `/v1/passkeys/${encodeURIComponent(id)}`),
+  /** MUT-370: Not now on the passkey suggestion (hidden 30 days; the third retires it). */
+  changePasskeyPrompt: (action: PasskeyPromptAction) => request<PasskeyPrompt>('PATCH', '/v1/me/passkey-prompt', { body: { action } }),
   /** MUT-115: a single-use sign-in challenge (public). */
   passkeyChallenge: (signal?: AbortSignal) => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/passkey-challenges', { signal }),
   signInWithPasskey: (body: Schemas['PasskeySignInRequest']) => request<OkJson<'/v1/sessions/passkey', 'post'>>('POST', PASSKEY_SIGN_IN_PATH, { body }),

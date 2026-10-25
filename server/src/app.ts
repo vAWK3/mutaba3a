@@ -232,7 +232,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.69.0-mut115';
+export const API_VERSION = '1.70.0-mut370';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -243,7 +243,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn) });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());

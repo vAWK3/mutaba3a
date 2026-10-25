@@ -126,6 +126,48 @@ export function describeLedgerStorePasskeysContract(name: string, makeStore: () 
       expect(await store.passkeys.remove({ userId: user.id, id: p.id, exceptSessionId: caller.id, at: at(11), audit: [] })).toBeNull();
     });
 
+    describe('the "Add a passkey" suggestion (MUT-370)', () => {
+      const HIDDEN_UNTIL = new Date(at(4).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      it('a person who never answered: nothing stored, no passkeys; an unknown person: null', async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        expect(await store.passkeys.promptOf(user.id)).toEqual({ prompt: { notNowCount: 0, hiddenUntil: null }, passkeys: 0 });
+        expect(await store.passkeys.promptOf('00000000-0000-4000-8000-000000000000')).toBeNull();
+        expect(await store.passkeys.answerPrompt('00000000-0000-4000-8000-000000000000', 'not-now', at(4))).toBeNull();
+      });
+
+      it('Not now is stored, and the passkey count comes with it', async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        const answered = await store.passkeys.answerPrompt(user.id, 'not-now', at(4));
+        expect(answered).toEqual({ prompt: { notNowCount: 1, hiddenUntil: HIDDEN_UNTIL }, passkeys: 0 });
+        expect(await store.passkeys.promptOf(user.id)).toEqual(answered);
+      });
+
+      it('a Not now while the person holds a passkey spends nothing, and the count says so', async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        await store.passkeys.create(passkey(user.id));
+        expect(await store.passkeys.answerPrompt(user.id, 'not-now', at(4))).toEqual({ prompt: { notNowCount: 0, hiddenUntil: null }, passkeys: 1 });
+      });
+
+      it('two concurrent Not nows spend one offer', async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        await Promise.all([1, 2, 3].map(() => store.passkeys.answerPrompt(user.id, 'not-now', at(4))));
+        expect((await store.passkeys.promptOf(user.id))?.prompt).toEqual({ notNowCount: 1, hiddenUntil: HIDDEN_UNTIL });
+      });
+
+      it("one person's answer is never another's", async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        const other = await person(store);
+        await store.passkeys.answerPrompt(user.id, 'not-now', at(4));
+        expect((await store.passkeys.promptOf(other.user.id))?.prompt).toEqual({ notNowCount: 0, hiddenUntil: null });
+      });
+    });
+
     describe('challenges', () => {
       it('consumes a sign-in challenge once, and never after it expires', async () => {
         const store = await makeStore();

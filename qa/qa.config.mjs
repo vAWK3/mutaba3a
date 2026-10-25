@@ -76,7 +76,9 @@ export default {
         // MUT-291: the carry-over's pages and mapping are the carry-over app's (they need the old app's origin too).
         '!src/hosted/pages/carry-over/**', '!src/hosted/local/carryOver/**',
         // MUT-115: passkeys need a real WebAuthn relying party: the portal-selfservice app's.
-        '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx'],
+        '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx',
+        // MUT-370: the passkey suggestion is the portal-selfservice app's too.
+        '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -149,6 +151,11 @@ export default {
         'server/src/routes/passkeys.ts',
         'server/src/auth/webauthn.ts',
         'server/src/auth/passkey-names.ts',
+        // MUT-370: the passkey suggestion on Home needs the same relying party.
+        'src/hosted/components/PasskeySuggestion.tsx',
+        'src/hosted/data/passkeyPrompt.ts',
+        'src/hosted/data/passkeyPromptQueries.ts',
+        'server/src/auth/passkey-prompt.ts',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
       ],

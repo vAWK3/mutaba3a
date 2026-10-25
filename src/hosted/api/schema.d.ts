@@ -930,6 +930,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/passkey-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Answer the "Add a passkey" suggestion with Not now (MUT-370)
+         * @description `not-now` spends the current offer and hides the suggestion for 30 days (server clock); the third retires it. While it is already hidden a Not now changes nothing, so two devices answering one offer spend it once. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees. `/v1/me` `user.passkeyPrompt` says when to show it.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasskeyPromptChange"];
+                };
+            };
+            responses: {
+                /** @description The suggestion as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeyPrompt"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/v1/passkeys/creation-options": {
         parameters: {
             query?: never;
@@ -15182,6 +15261,7 @@ export interface components {
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
                 trialPrompt: components["schemas"]["TrialPrompt"];
+                passkeyPrompt: components["schemas"]["PasskeyPrompt"];
                 status: components["schemas"]["UserStatus"];
                 closure: components["schemas"]["AccountClosure"];
             };
@@ -15220,6 +15300,12 @@ export interface components {
             /** Format: date-time */
             bannerSnoozedUntil: string | null;
         };
+        PasskeyPrompt: {
+            due: boolean;
+            notNowCount: number;
+            /** Format: date-time */
+            hiddenUntil: string | null;
+        } | null;
         /** @enum {string} */
         UserStatus: "ACTIVE" | "DISABLED" | "PENDING_REVIEW";
         AccountClosure: {
@@ -15376,6 +15462,10 @@ export interface components {
              */
             deviceType: "singleDevice" | "multiDevice";
             backedUp: boolean;
+        };
+        PasskeyPromptChange: {
+            /** @enum {string} */
+            action: "not-now";
         };
         PasskeyCreationChallenge: {
             /** Format: uuid */

@@ -49,6 +49,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/passkeys': 'open',
   'PATCH /v1/passkeys/:passkeyId': 'open',
   'DELETE /v1/passkeys/:passkeyId': 'open',
+  // MUT-370: the person's answer to the passkey suggestion, identity like the trial prompt.
+  'PATCH /v1/me/passkey-prompt': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',

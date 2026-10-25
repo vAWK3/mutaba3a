@@ -3739,3 +3739,14 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Infra / build | `tests/domain.tftest.hcl` (`WEBAUTHN_RP_ID` from stage live), `scripts/__tests__/vite-config.test.ts` (apex AASA 200 rewrite), `hosts.test.ts` | `terraform test`, `test:run` |
 | Portal | `PasskeysDrawer.test.tsx` (12), `SignInPasskey.test.tsx` (8), `passkeys/__tests__/webauthn.test.ts` | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.add` (core), `.sign-in` (core), `.remove`, `.password-change-keeps`, `.autofill`, `.arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys` |
+
+## MUT-370 — passkey suggestion, portal half (2026-10-25, ADR-191)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `server/src/auth/__tests__/passkey-prompt.test.ts` (12: resolve, Not now counts/hides/caps/no-op while hidden, view due/not due, D11) | `npm --prefix server test` |
+| Store contract | `store-contract-passkeys.ts` › suggestion (memory + Prisma): default, stored with the passkey count, concurrent Not nows spend one offer, per person | `test`, `test:db` |
+| Routes | `routes-passkeys.test.ts` › suggestion (6): due on sign-in and /v1/me, not due with a passkey and back after removal, 30 days × 3 across devices, 422/401/403 and no audit, null + 404 without passkeys, closing refused; `route-security`, `portal-routes-coverage` | `npm --prefix server test` |
+| Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
+| Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
+

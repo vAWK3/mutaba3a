@@ -1645,6 +1645,33 @@ export interface PasskeyRepository {
   consumeChallenge(id: string, purpose: WebauthnChallengePurpose, userId: string | null, now: Date): Promise<{ challenge: string } | null>;
   /** Deletes challenges that expired before `before`; returns how many. */
   pruneChallenges(before: Date): Promise<number>;
+  /**
+   * MUT-370 (D1): the "Add a passkey" suggestion's stored state and how many passkeys the person holds, in one read.
+   * Null for an unknown person.
+   */
+  promptOf(userId: string): Promise<PasskeyPromptState | null>;
+  /**
+   * MUT-370 (D2): "Not now", applied under the person's row lock (auth/passkey-prompt.ts `applyPasskeyNotNow`), so two
+   * devices answering one offer spend it once, and an answer while the person holds a passkey spends nothing. Null for an
+   * unknown person.
+   */
+  answerPrompt(userId: string, action: PasskeyPromptAction, at: Date): Promise<PasskeyPromptState | null>;
+}
+
+/** MUT-370 (D1): JSON on the user row (`users.passkeyPrompt`), so its instant is an ISO string. */
+export interface PasskeyPromptRecord {
+  /** How many offers the person answered with Not now (0–3). */
+  notNowCount: number;
+  /** The suggestion stays hidden until then; null when it isn't hidden. */
+  hiddenUntil: string | null;
+}
+
+export type PasskeyPromptAction = 'not-now';
+
+export interface PasskeyPromptState {
+  prompt: PasskeyPromptRecord;
+  /** How many passkeys the person holds now. */
+  passkeys: number;
 }
 
 // ---- MUT-235: one-time setup links (ADR-088) --------------------------------

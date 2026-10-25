@@ -5148,3 +5148,21 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Release order: web (the AASA rewrite), then server (turns passkeys on), then the phone once Apple's CDN has the apex file.
 - MUT-370's suggestion card runs `addPasskeyFlow` (`src/hosted/passkeys/addPasskey.ts`) right after first sign-in, with no step-up. MUT-414's mail plugs into `PasskeyEvents.added`.
 - Debt: TD-242 (no "passkey added" mail), TD-243 (no operator tools), TD-244 (drawn icon), TD-245 (seed AAGUID list), TD-246 (a row per challenge).
+
+## ADR-191: Suggest a Passkey After Sign-In — Three Offers, Decided by the Server (MUT-370, Portal Half)
+
+**Status:** Accepted for the build (2026-10-25, MUT-370, unattended run). D1–D11 in `.claude/designs/mut-370-passkey-suggestion.md` §2 are **pending Basel's confirmation**. Builds on ADR-159 (decision 9: password required, passkey suggested), ADR-180 (the trial prompt pattern), ADR-190 (passkeys).
+
+**Context:** MUT-331 Q3 asks for a dismissible "Add a passkey: the more secure way to sign in" after the first sign-in: Not now hides it for 30 days, at most three offers, never once a passkey exists, on the portal and the phone alike.
+
+**Decision:**
+1. **The server stores and decides.** `users.passkeyPrompt` JSONB `{notNowCount, hiddenUntil}`, through the passkeys port (not `UserRecord`, so the local snapshot and the records export are untouched). `/v1/me` `user.passkeyPrompt {due, notNowCount, hiddenUntil}`; `due` = no passkey, fewer than 3 Not nows, not hidden. Null where the server offers no passkeys (and in the portal's local mode).
+2. **An offer lasts until answered.** Each Not now (`PATCH /v1/me/passkey-prompt`) spends one offer and hides the suggestion 30 days; a Not now while hidden changes nothing (two devices, one offer), under the user row lock. Views are not counted.
+3. **Clients add only their own checks:** device support (`passkeySupport()` on the portal) and their first-run order. On the portal MUT-418's trial step comes first; the card then sits on Home under the trial banner.
+4. **Adding** runs MUT-115's flow with no password; a stale sign-in hands over to You › Account › Passkeys. Adding or removing a passkey anywhere refreshes `/v1/me`.
+5. Pilot and operator-issued accounts follow the same rules.
+
+**Consequences:**
+- The phone half reads the same field and calls the same route (no counting logic of its own).
+- No analytics events (TD-247). The 30-day and three-offer numbers live on the server; the portal mirrors them only for its optimistic hide (TD-248).
+

@@ -10,7 +10,7 @@ import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { DeviceSessionSchema, ErrorEnvelopeSchema, PasskeySignInRequestSchema, SignInRequestSchema } from '../schemas.js';
-import { buildMe } from './me.js';
+import { buildMe, passkeysClockOf } from './me.js';
 
 /**
  * Native-app sign-in and sign-out (MUT-64): the bearer-token mirror of
@@ -73,7 +73,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
 
       const { email, password } = c.req.valid('json');
       const { user, token } = await signIn(c, { store, passwordHasher, throttle, pepper: settings.pepper }, { email, password }, 'device', deviceLifetime());
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c));
       return c.json({ ...me, token }, 201);
     },
   );
@@ -113,7 +113,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         'device',
         deviceLifetime(),
       );
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c));
       return c.json({ ...me, token }, 201);
     },
   );
