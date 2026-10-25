@@ -47,6 +47,13 @@ export const ERROR_CODES = {
   /** MUT-333 (R18): a profile the person created has other members and no co-owner; closing would delete their work. */
   ACCOUNT_CLOSE_BLOCKED: 409,
   /**
+   * MUT-115 (D4): adding a passkey needs a sign-in at most 10 minutes old, or the current password in the request.
+   * Not 401, for the same reason as CURRENT_PASSWORD_WRONG: the session is still valid.
+   */
+  RECENT_SIGN_IN_REQUIRED: 403,
+  /** MUT-115 (D12): the person already holds the most passkeys allowed (10); remove one to add another. */
+  PASSKEY_LIMIT: 409,
+  /**
    * MUT-361 (ADR-181): a session asked a READ_ONLY or LOCKED profile (or a person whose profiles all are) for something
    * its plan no longer allows. `details`: { profileId (null for a person-level refusal), state READ_ONLY|LOCKED,
    * source, until (a trial's lock date, else null) }. Never for an API key.

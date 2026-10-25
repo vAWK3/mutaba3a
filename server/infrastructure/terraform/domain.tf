@@ -6,7 +6,10 @@
 #   - reads the front-door token secret by name (plan fails loudly if the frontdoor stack
 #     hasn't been applied yet), and lets the API's service account read it;
 #   - gives Cloud Run PORTAL_ORIGIN and FRONT_DOOR_TOKEN (and PORTAL_LEGACY_REDIRECT at
-#     stage "redirect").
+#     stage "redirect");
+#   - from stage "live", gives it WEBAUTHN_RP_ID = the apex (MUT-115, ADR-190): the passkey
+#     relying party. Passkeys are bound to it for life, so it is never set before the apex
+#     serves the portal's apple-app-site-association (vite.config.ts netlifyRedirects).
 # While the domain is null (today) nothing here exists and the plan is unchanged.
 # config/hosts.ts derives the same values; both are tested against config/fixtures/.
 
@@ -30,6 +33,7 @@ locals {
   front_door_env = merge(
     local.front_door_enabled ? { PORTAL_ORIGIN = local.front_door_portal_origin } : {},
     local.domain_stage == "redirect" ? { PORTAL_LEGACY_REDIRECT = "true" } : {},
+    contains(["live", "redirect"], local.domain_stage) ? { WEBAUTHN_RP_ID = local.domain } : {},
   )
 
   # What users reach the portal on: the new host from stage live on, else the legacy one

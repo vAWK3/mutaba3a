@@ -8,7 +8,8 @@
  *   1. a QA database of its own on the test Postgres (`mutaba3a-test-pg`), named per launch and migrated;
  *   2. the built portal (`vite build --mode hosted`), served by the API itself as production serves it, so the
  *      real PORTAL_CSP applies (review P1-4);
- *   3. the API on 127.0.0.1:8791, which is also the portal's origin.
+ *   3. the API on localhost:8791, which is also the portal's origin. `localhost`, not 127.0.0.1: MUT-115's passkey
+ *      flows need a WebAuthn relying-party ID, and an IP address can't be one (WEBAUTHN_RP_ID=localhost here).
  *
  * Cloudflare's widget script is answered by the specs themselves (support/turnstile.ts), never fetched.
  * It writes qa/.state/portal-selfservice.json (origin, admin token, database name) for the specs, and drops the
@@ -21,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 export const API_PORT = 8791;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ORIGIN = `http://127.0.0.1:${API_PORT}`;
+const ORIGIN = `http://localhost:${API_PORT}`;
 const PG_CONTAINER = 'mutaba3a-test-pg';
 const DB_NAME = `mutaba3a_qa_selfservice_${process.pid}`;
 const DATABASE_URL = `postgresql://mutaba3a:mutaba3a@localhost:54329/${DB_NAME}`;
@@ -34,7 +35,7 @@ const PEPPER = 'qa-portal-selfservice-session-pepper-0123456789';
 /** A shell that exports APPLE_TEAM_ID for fastlane would half-set the API's app association, which it refuses. */
 const APP_ASSOCIATION_VARS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'];
 /** Anything mail- or signup-shaped in the operator's shell would change what the QA server does. */
-const SELF_SERVICE_VARS = ['MAILER', 'TURNSTILE_SECRET', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'SELF_SIGNUP_ENABLED', 'EMAIL_DOMAIN_CHECKER', 'OPERATOR_ALERT_EMAIL'];
+const SELF_SERVICE_VARS = ['WEBAUTHN_RP_ID', 'WEBAUTHN_ORIGINS', 'MAILER', 'TURNSTILE_SECRET', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'SELF_SIGNUP_ENABLED', 'EMAIL_DOMAIN_CHECKER', 'OPERATOR_ALERT_EMAIL'];
 const cleanEnv = (env) => Object.fromEntries(Object.entries(env).filter(([name]) => !APP_ASSOCIATION_VARS.includes(name) && !SELF_SERVICE_VARS.includes(name)));
 
 function psql(sql) {
@@ -64,6 +65,8 @@ function buildPortal() {
   // No PostHog key and no Sentry DSN: nothing leaves the machine. No Turnstile key: Cloudflare's always-pass test key.
   const env = { ...process.env };
   for (const name of ['MUTABA3A_POSTHOG_KEY', 'MUTABA3A_SENTRY_DSN', 'SENTRY_AUTH_TOKEN', 'MUTABA3A_TURNSTILE_SITE_KEY']) delete env[name];
+  // MUT-115: passkeys on this origin (the portal offers them only on a host under its RP ID).
+  env.MUTABA3A_PASSKEY_RP_ID = 'localhost';
   execFileSync('npx', ['vite', 'build', '--mode', 'hosted', '--outDir', DIST, '--emptyOutDir'], { cwd: ROOT, env, stdio: 'inherit' });
 }
 
@@ -92,6 +95,9 @@ async function main() {
       EMAIL_DOMAIN_CHECKER: 'fixture',
       SIGNUP_RESPONSE_FLOOR_MS: '100',
       RECOVERY_RESPONSE_FLOOR_MS: '100',
+      // MUT-115: passkeys, checked by Chromium's virtual authenticator (support/passkeys.ts).
+      WEBAUTHN_RP_ID: 'localhost',
+      WEBAUTHN_ORIGINS: ORIGIN,
     },
   });
   const stop = (code = 0) => {

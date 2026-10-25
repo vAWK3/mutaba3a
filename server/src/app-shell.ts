@@ -15,6 +15,8 @@ export interface ApiShellDependencies {
   reporter?: ErrorReporter;
   /** MUT-361: whether the lapse gate is enforced (billing/gate.ts). Absent = off (tests, the portal's local mode). */
   billingGate?: boolean;
+  /** MUT-370 (D9): whether this server offers passkeys (WEBAUTHN_RP_ID set). Absent = off (the portal's local mode). */
+  passkeys?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('requestId', requestId);
     c.set('now', now);
     c.set('billingGate', deps.billingGate ?? false);
+    c.set('passkeys', deps.passkeys ?? false);
     await next();
   });
 

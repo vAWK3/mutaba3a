@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-190)
+## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-192)
 
 **Why:** seven peer sections made the portal read like a dashboard (epic MUT-423). This is the regroup MUT-426's pill needs; every URL stays, so the phone's universal links, the mail and Stripe landings and bookmarks keep working.
 
@@ -48,6 +48,40 @@
 - The eight `hosted.shell.nav.*` keys.
 
 ---
+
+## [Unreleased] - 2026-10-25 — Suggest a passkey after the first sign-in (MUT-370 portal half, ADR-191, API 1.70.0-mut370)
+
+**Why:** Basel's MUT-331 Q3: a password is required, and a passkey is optional but actively suggested as the more secure way. MUT-115 shipped passkeys; nothing suggested one.
+
+### Added
+- **Server:** `/v1/me` `user.passkeyPrompt {due, notNowCount, hiddenUntil}` (null where the server has no passkeys) and `PATCH /v1/me/passkey-prompt {"action":"not-now"}` (session + device session; 404 without passkeys; refused while closing). Column `users.passkeyPrompt` JSONB (migration `20261025130000_mut370_passkey_prompt`), read and written through `store.passkeys.promptOf/answerPrompt` under the row lock; rules in `server/src/auth/passkey-prompt.ts` (3 offers, Not now hides 30 days, never with a passkey). A `passkeys` context flag in the API shell (from `WEBAUTHN_RP_ID`). API `1.70.0-mut370`.
+- **Portal:** Home's card "Add a passkey: the more secure way to sign in. Your password still works." (`components/PasskeySuggestion.tsx`, `data/passkeyPrompt.ts`, `data/passkeyPromptQueries.ts`) under the trial banner, after MUT-418's first-run step: Add a passkey (MUT-115's `addPasskeyFlow`; a stale sign-in hands over to You › Account › Passkeys) and Not now. `hosted.passkeys.suggest.*` en/ar.
+- **QA:** `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone`; helper `lapsePasskeyPromptHide`.
+
+### Changed
+- `PasskeysDrawer` add/remove also refresh `/v1/me` (`passkeysChanged` in `passkeys/addPasskey.ts`).
+- `buildMe` takes `passkeysAt` (the request clock where passkeys are on).
+
+### Technical
+- **Files:** `server/src/auth/passkey-prompt.ts`, `server/src/routes/{me,passkeys,sessions,device-sessions}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/{app,app-shell}.ts`, `server/prisma/`, `src/hosted/{components/PasskeySuggestion.tsx,data/passkeyPrompt*.ts,passkeys/addPasskey.ts}`, `qa/specs/portal-selfservice/passkeys.spec.ts`.
+- The phone half (Flutter) is built later in the run's phone phase; its contract is §8 of `.claude/designs/mut-370-passkey-suggestion.md`.
+
+## [Unreleased] - 2026-10-25 — Sign in with a passkey on the portal (MUT-115 web half, ADR-190, API 1.69.0-mut115)
+
+### Added
+- **Server:** WebAuthn relying party `mtb3a.com` (`WEBAUTHN_RP_ID`, Terraform from stage live; `WEBAUTHN_ORIGINS` for local). `GET/POST /v1/passkeys`, `POST /v1/passkeys/creation-options`, `PATCH/DELETE /v1/passkeys/{id}`; public `POST /v1/passkey-challenges`, `POST /v1/sessions/passkey` (cookie), `POST /v1/device-sessions/passkey` (token). Tables `passkeys`, `webauthn_challenges`, column `sessions.passkeyId` (migration `20261025090000_mut115_passkeys`). Error codes `RECENT_SIGN_IN_REQUIRED` (403), `PASSKEY_LIMIT` (409); reasons `PASSKEY_NOT_VERIFIED` (422), `PASSKEY_EXISTS` (409). `npm --prefix server run passkey-providers:update`.
+- **Portal:** "Sign in with a passkey" and passkey autofill on /sign-in; You › Account › Passkeys (`?passkeys=true`): list, add (password only when the sign-in is over 10 minutes old), rename, remove with an in-row confirm. en/ar (مفتاح المرور).
+- **Apex AASA:** the web build's `_redirects` proxies `https://<apex>/.well-known/apple-app-site-association` to the portal's with a 200, from stage live.
+
+### Changed
+- `auth/sign-in.ts` shares `recordSignInFailure` and `issueSession`; `user.signed_in`/`user.locked_out` audits carry `method` (`password`|`passkey`) and `passkeyId`.
+- The `portal-selfservice` QA app runs on `http://localhost:8791` (an IP can't be a WebAuthn RP ID).
+
+### Technical
+- **Why:** passkeys are faster and phishing-proof; they wait for the custom domain because they're bound to their RP ID for life (MUT-112).
+- **Files:** `server/src/auth/{webauthn,passkey-names,sign-in}.ts`, `server/src/routes/{passkeys,sessions,device-sessions}.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/prisma/`, `server/infrastructure/terraform/domain.tf`, `vite.config.ts`, `src/hosted/passkeys/`, `src/hosted/components/PasskeysDrawer.tsx`, `src/hosted/pages/auth/SignInPage.tsx`, `qa/specs/portal-selfservice/passkeys.spec.ts`.
+- The iOS half (Flutter) is built later in the run's phone phase.
+
 ## [Unreleased] - 2026-10-24 — Portal Reports (MUT-175, ADR-189, API 1.68.0-mut175)
 
 **Why:** the portal had no reports, and MUT-292 can't retire the web Insights page until it does (MUT-322 GA gate). Basel wants a screen people come back to weekly: what came in, where it went, who paid, and what the history says.

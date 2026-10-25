@@ -43,6 +43,8 @@ import { accountPurgeRoutes } from './routes/account-purge.js';
 import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
+import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
+import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
@@ -92,6 +94,10 @@ export interface AppDependencies {
   signInThrottle?: SignInThrottle;
   /** Per-IP sign-in attempt budget. */
   signInIpLimiter?: RateLimiter;
+  /** MUT-115: the WebAuthn relying party (WEBAUTHN_RP_ID). Null or absent = no passkeys: every passkey route answers 404. */
+  webauthn?: WebauthnConfig | null;
+  /** MUT-115: told after a passkey is added (MUT-414's mail plugs in here). Absent = nothing happens. */
+  passkeyEvents?: PasskeyEvents;
   /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
   portal?: { distDir: string } | null;
   /** iOS/Android app-association files (MUT-111). Null or absent = neither well-known path exists. */
@@ -226,7 +232,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.68.0-mut175';
+export const API_VERSION = '1.70.0-mut370';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -237,7 +243,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn) });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -286,7 +292,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   app.use('/admin/*', adminAuth(deps.adminToken));
@@ -310,6 +316,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       terms,
       mailer,
       logger: deps.logger,
+      webauthn: deps.webauthn ?? null,
     }),
   );
   app.route(
@@ -321,6 +328,20 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       throttle: signInThrottle,
       ipLimiter: signInIpLimiter,
       terms,
+      webauthn: deps.webauthn ?? null,
+    }),
+  );
+  // MUT-115: a person's passkeys, and the public sign-in challenge (the sign-in IP limiter, under its own key).
+  app.route(
+    '/',
+    passkeyRoutes({
+      store,
+      passwordHasher,
+      throttle: signInThrottle,
+      settings: sessions,
+      ipLimiter: signInIpLimiter,
+      webauthn: deps.webauthn ?? null,
+      ...(deps.passkeyEvents ? { events: deps.passkeyEvents } : {}),
     }),
   );
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
@@ -500,6 +521,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Expenses (MUT-42) are a hosted profile\'s own record, written by the signed-in person: /v1/expenses*, /v1/expense-categories* and /v1/summaries/expenses accept sessions only, never an API key, and nothing about them appears in any operation an API key can call (audit and operations included). Each expense keeps its original amount and currency; summaries are per currency. Receipts use the attachments bucket and signed-URL lifetime. The expenses:read / expenses:write scopes are session-only and cannot be issued to a key.',
         '',
+        'Passkeys (MUT-115, ADR-190): one WebAuthn relying party, the apex domain, for the portal (https://app.<apex>) and the iOS app (https://<apex>). A signed-in person adds a passkey with POST /v1/passkeys/creation-options then POST /v1/passkeys (a sign-in at most 10 minutes old, else `currentPassword`: 403 RECENT_SIGN_IN_REQUIRED; at most 10, 409 PASSKEY_LIMIT), renames and removes it under /v1/passkeys/{id}; removing one signs out the sessions it opened. Sign-in: POST /v1/passkey-challenges, then POST /v1/sessions/passkey (cookie) or /v1/device-sessions/passkey (token), with the password sign-in\'s throttle, lockout and single 401. A password change keeps passkeys. Without WEBAUTHN_RP_ID every passkey operation answers 404.',
+        '',
         'Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.',
         '',
         'Income (MUT-65): on a personal profile (no CONNECTED Malafat integration), a session may write customers, projects and payments — the three rows hosted-portal.md §5 marks "read-write on a personal profile" — through the same routes a Malafat-fed profile only reads, plus two new ones: POST /v1/income (kind: received|owed; Owed requires a customerId, explicit or resolved from projectId) and DELETE /v1/income/{id} (undo, 404 for anything not this session\'s own ADJUSTMENT receivable or unallocated payment). POST /v1/receivables/{id}/settle records a payment against one receivable without the preview/allocation dance. A Malafat-fed profile keeps today\'s read-only behaviour on all of it (403 READ_ONLY_PROFILE) except what MUT-61 opens below.',
@@ -527,6 +550,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Receivables', description: 'What is owed, and credits against it' },
       { name: 'Payments', description: 'Money received, its allocations, reversals, and the operations lookup' },
       { name: 'Sessions', description: 'Hosted-portal sign-in, sign-out and the signed-in person' },
+      { name: 'Passkeys', description: 'A signed-in person\'s passkeys, and the challenge passkey sign-in starts from (MUT-115)' },
       { name: 'Profiles', description: 'A signed-in person\'s own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)' },
       { name: 'Expenses', description: 'A hosted profile\'s expenses, categories, receipts and expense summary (sessions only)' },
       { name: 'Receipts', description: 'The receipts library (MUT-255/389): receipts that wait To review before their expense (sessions only). Mounted only where the deployment turns RECEIPTS_LIBRARY on; elsewhere every /v1/receipts path answers 404' },

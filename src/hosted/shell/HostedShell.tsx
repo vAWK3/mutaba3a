@@ -17,7 +17,7 @@ import { YouLinks } from './YouLinks';
 
 /**
  * `HostedShell` (hosted-portal.md §7.1): wordmark, the open profile's link to
- * the You page, the four destinations (MUT-424, ADR-190: Owed, Paid, Spent,
+ * the You page, the four destinations (MUT-424, ADR-192: Owed, Paid, Spent,
  * Clients; everything else one level in), Reports until its corner icon
  * (MUT-426), the avatar's link to the You page (MUT-425: both were menus),
  * and the page. There is still no "+ Add" menu: the one create action

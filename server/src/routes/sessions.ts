@@ -2,7 +2,9 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
-import { signIn, warmDummyHash } from '../auth/sign-in.js';
+import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
+import type { WebauthnConfig } from '../auth/webauthn.js';
+import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { isSamePortalOrigin, requestClientIp, sessionCookieName, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { ApiError } from '../errors.js';
@@ -13,6 +15,7 @@ import type { AuditEventInput, LedgerStore, UserRecord } from '../repositories/p
 import {
   ChangePasswordRequestSchema,
   ErrorEnvelopeSchema,
+  PasskeySignInRequestSchema,
   MalafatSuggestionsChangeSchema,
   MalafatSuggestionsSchema,
   MeSchema,
@@ -25,7 +28,7 @@ import {
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
-import { buildMe } from './me.js';
+import { buildMe, passkeysClockOf } from './me.js';
 import { signInLinkOf } from './account-setup.js';
 import type { Mailer } from '../email/ports.js';
 import { sendPasswordNotice } from '../email/password-notice.js';
@@ -50,6 +53,8 @@ export interface SessionRouteOptions {
   /** MUT-359: mails "your password was changed" after POST /v1/me/password (never changes the answer). */
   mailer: Mailer;
   logger: Logger;
+  /** MUT-115: the WebAuthn relying party; null = no passkeys (POST /v1/sessions/passkey answers 404). */
+  webauthn?: WebauthnConfig | null;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
@@ -65,6 +70,7 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
 
 export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv> {
   const { store, passwordHasher, settings, throttle, ipLimiter, terms, mailer, logger } = options;
+  const webauthn = options.webauthn ?? null;
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
@@ -106,7 +112,50 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate')), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/sessions/passkey',
+      tags: ['Sessions'],
+      summary: 'Sign in with a passkey (sets the session cookie) (MUT-115)',
+      description:
+        'Send the `challengeId` from POST /v1/passkey-challenges and the platform\'s assertion (WebAuthn JSON). The same same-origin check, IP budget, throttle and lockout as the password sign-in: a failed assertion counts toward the account\'s lockout, and every refusal is the same 401.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: PasskeySignInRequestSchema } } } },
+      responses: {
+        201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
+        401: errorResponse('INVALID_CREDENTIALS — the same answer for every refusal'),
+        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in)'),
+        404: errorResponse('NOT_FOUND — passkeys are not configured on this server'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      if (!webauthn) throw new ApiError('NOT_FOUND', 'Passkeys are not available on this server');
+      if (!isSamePortalOrigin(c.req, settings)) {
+        throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the MTB3A portal itself');
+      }
+      const now = c.get('now')();
+      const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
+      if (!ip.allowed) {
+        c.header('Retry-After', String(ip.retryAfterSeconds));
+        throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+      }
+      const { challengeId, response } = c.req.valid('json');
+      const { user, token } = await signInWithPasskey(
+        c,
+        { store, passwordHasher, throttle, pepper: settings.pepper, webauthn },
+        { challengeId, response: response as unknown as AuthenticationResponseJSON },
+        'cookie',
+        { idleMs: settings.idleMinutes * 60_000, absoluteMs: settings.absoluteHours * 3_600_000 },
+      );
+      setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
     },
   );
 

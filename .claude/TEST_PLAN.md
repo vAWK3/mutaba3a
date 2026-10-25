@@ -3728,7 +3728,29 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `CloseAccountDrawer.test.tsx` (impact, menu → drawer, download, wrong password, Stripe down, close → closing page, keep, Arabic, before the terms step), `queryClient.test.ts` (ACCOUNT_CLOSING re-reads me), local `migrations.test.ts` 6 → 7 | `npm run test:run` |
 | Release-QA | `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` | `release-qa run --only portal.account.close` |
 
-## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-190)
+## MUT-115 — passkeys, web half (2026-10-25, ADR-190)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `auth/__tests__/webauthn.test.ts` (config cross-check, options, creation/assertion verify, A1 cross-origin pair, refusals, counter regression, names), `sign-in-audit.test.ts` (R1 audit actors + `method`), `scripts/__tests__/passkey-providers-update.test.ts`, `config.test.ts` | `npm --prefix server test` |
+| Store contract | `store-contract-passkeys.ts` (memory + Prisma): cap, duplicate, rename, remove revokes its sessions but the caller's, atomic single-use challenge, concurrent consume, prune | `test` / `test:db` |
+| Catalog | `prisma-account-purge-catalog.test.ts`: passkeys and challenges are deleted with the person | `test:db` |
+| Routes | `routes-passkeys.test.ts` (19: auth, 404 unconfigured, step-up, wrong password counts, cap, refused creations, rename/remove ownership, closing, cookie + device sign-in, A1, A2, A3 shared lockout, operator lock / disabled / pending / closed, counter, unknown credential, replay, purpose crossing, IP budget, A4), `front-door-sign-in.test.ts` (passkey sign-in through the front door), `no-self-registration`, `route-security`, `billing-gate-routes`, `store-guard` | `test` |
+| Infra / build | `tests/domain.tftest.hcl` (`WEBAUTHN_RP_ID` from stage live), `scripts/__tests__/vite-config.test.ts` (apex AASA 200 rewrite), `hosts.test.ts` | `terraform test`, `test:run` |
+| Portal | `PasskeysDrawer.test.tsx` (12), `SignInPasskey.test.tsx` (8), `passkeys/__tests__/webauthn.test.ts` | `npm run test:run` |
+| Release-QA | `portal-selfservice.passkeys.add` (core), `.sign-in` (core), `.remove`, `.password-change-keeps`, `.autofill`, `.arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys` |
+
+## MUT-370 — passkey suggestion, portal half (2026-10-25, ADR-191)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `server/src/auth/__tests__/passkey-prompt.test.ts` (12: resolve, Not now counts/hides/caps/no-op while hidden, view due/not due, D11) | `npm --prefix server test` |
+| Store contract | `store-contract-passkeys.ts` › suggestion (memory + Prisma): default, stored with the passkey count, concurrent Not nows spend one offer, per person | `test`, `test:db` |
+| Routes | `routes-passkeys.test.ts` › suggestion (6): due on sign-in and /v1/me, not due with a passkey and back after removal, 30 days × 3 across devices, 422/401/403 and no audit, null + 404 without passkeys, closing refused; `route-security`, `portal-routes-coverage` | `npm --prefix server test` |
+| Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
+| Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
+
+## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-192)
 
 | Layer | Tests | Command |
 |---|---|---|
@@ -3737,3 +3759,4 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Component (real router) | `pages/__tests__/destinations.test.tsx` (exactly four links, the lit one for pages one level in, Reports beside them lighting none, Arabic names, destination titles, `DeeperLinks` rows, back links, All clients via `PageHeader back`) | `npx vitest run src/hosted/pages` |
 | Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
 | Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |
+

@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
 import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
@@ -792,6 +793,20 @@ export const TrialPromptChangeSchema = z
   .strict()
   .openapi('TrialPromptChange');
 
+/** MUT-370 (D2, D3): the "Add a passkey" suggestion, as the server decides it. */
+export const PasskeyPromptSchema = z
+  .object({
+    /** Show the suggestion now: the person holds no passkey, has an offer left (3 in all) and hasn't hidden it. */
+    due: z.boolean(),
+    /** How many offers the person answered with Not now (0–3); the third retires the suggestion. */
+    notNowCount: z.number().int().min(0).max(PASSKEY_PROMPT_MAX_OFFERS),
+    /** Not now hides it until then (30 days); null when it isn't hidden. */
+    hiddenUntil: z.string().datetime().nullable(),
+  })
+  .openapi('PasskeyPrompt');
+
+export const PasskeyPromptChangeSchema = z.object({ action: z.enum(['not-now']) }).strict().openapi('PasskeyPromptChange');
+
 /** MUT-324 T1: GET /admin/v1/terms-acceptance — every user and the terms version they last accepted. */
 export const TermsReportSchema = z
   .object({
@@ -840,6 +855,8 @@ export const MeSchema = z
       malafatSuggestions: MalafatSuggestionsSchema,
       /** MUT-418: the trial's card prompt (all null until the person answers). Additive since 1.59.0-mut418. */
       trialPrompt: TrialPromptSchema,
+      /** MUT-370: whether to suggest adding a passkey; null on a server that offers no passkeys. Additive since 1.70.0-mut370. */
+      passkeyPrompt: PasskeyPromptSchema.nullable(),
       /**
        * MUT-367 (D16): the account's status, for billing to read. Behind a session it is always ACTIVE: a
        * PENDING_REVIEW or DISABLED account can't sign in. Additive since 1.57.0-mut367.
@@ -1179,6 +1196,107 @@ export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySche
 
 export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
 
+// ---- MUT-115: passkeys (ADR-190) ------------------------------------------------------
+// The WebAuthn JSON shapes are the W3C Level 3 serializations (PublicKeyCredential.toJSON / parse*OptionsFromJSON),
+// passed straight to @simplewebauthn/browser on the portal and the `passkeys` package on iOS. Only the fields the
+// server reads are named; the rest passes through.
+
+const Base64UrlSchema = z.string().min(1).max(16_384).regex(/^[A-Za-z0-9_-]+$/, 'base64url');
+const TransportsSchema = z.array(z.string().max(32)).max(10);
+const CredentialDescriptorSchema = z.object({ id: z.string(), type: z.literal('public-key'), transports: TransportsSchema.optional() });
+
+export const PasskeyCreationOptionsSchema = z
+  .looseObject({
+    challenge: z.string(),
+    rp: z.object({ id: z.string().optional(), name: z.string() }),
+    user: z.object({ id: z.string(), name: z.string(), displayName: z.string() }),
+    pubKeyCredParams: z.array(z.object({ type: z.literal('public-key'), alg: z.number().int() })),
+    timeout: z.number().int().optional(),
+    excludeCredentials: z.array(CredentialDescriptorSchema).optional(),
+    authenticatorSelection: z.record(z.string(), z.unknown()).optional(),
+    attestation: z.string().optional(),
+  })
+  .openapi('PasskeyCreationOptions');
+
+export const PasskeyRequestOptionsSchema = z
+  .looseObject({
+    challenge: z.string(),
+    rpId: z.string().optional(),
+    timeout: z.number().int().optional(),
+    allowCredentials: z.array(CredentialDescriptorSchema).optional(),
+    userVerification: z.string().optional(),
+  })
+  .openapi('PasskeyRequestOptions');
+
+export const PasskeyCreationChallengeSchema = z
+  .object({ challengeId: z.string().uuid(), publicKey: PasskeyCreationOptionsSchema })
+  .openapi('PasskeyCreationChallenge');
+
+export const PasskeySignInChallengeSchema = z
+  .object({ challengeId: z.string().uuid(), publicKey: PasskeyRequestOptionsSchema })
+  .openapi('PasskeySignInChallenge');
+
+const StepUpPasswordSchema = z
+  .string()
+  .min(1)
+  .max(PRESENTED_PASSWORD_MAX_LENGTH)
+  .optional()
+  .openapi({ description: 'Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise)' });
+
+export const PasskeyCreationOptionsRequestSchema = z.object({ currentPassword: StepUpPasswordSchema }).strict().openapi('PasskeyCreationOptionsRequest');
+
+export const PasskeyRegistrationResponseSchema = z
+  .looseObject({
+    id: Base64UrlSchema,
+    rawId: Base64UrlSchema,
+    type: z.literal('public-key'),
+    response: z.looseObject({ clientDataJSON: Base64UrlSchema, attestationObject: Base64UrlSchema, transports: TransportsSchema.optional() }),
+    clientExtensionResults: z.record(z.string(), z.unknown()),
+    authenticatorAttachment: z.string().optional(),
+  })
+  .openapi('PasskeyRegistrationResponse');
+
+export const PasskeyAuthenticationResponseSchema = z
+  .looseObject({
+    id: Base64UrlSchema,
+    rawId: Base64UrlSchema,
+    type: z.literal('public-key'),
+    response: z.looseObject({ clientDataJSON: Base64UrlSchema, authenticatorData: Base64UrlSchema, signature: Base64UrlSchema, userHandle: Base64UrlSchema.optional() }),
+    clientExtensionResults: z.record(z.string(), z.unknown()),
+    authenticatorAttachment: z.string().optional(),
+  })
+  .openapi('PasskeyAuthenticationResponse');
+
+export const AddPasskeyRequestSchema = z
+  .object({ challengeId: z.string().uuid(), response: PasskeyRegistrationResponseSchema, currentPassword: StepUpPasswordSchema })
+  .strict()
+  .openapi('AddPasskeyRequest');
+
+export const PasskeySignInRequestSchema = z
+  .object({ challengeId: z.string().uuid(), response: PasskeyAuthenticationResponseSchema })
+  .strict()
+  .openapi('PasskeySignInRequest');
+
+export const PasskeySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().openapi({ description: 'Named from its provider (AAGUID) or the device it was added from; renamable. Shown with dir="auto".' }),
+    createdAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime().nullable(),
+    deviceType: z.enum(['singleDevice', 'multiDevice']).openapi({ description: 'multiDevice = synced (e.g. iCloud Keychain)' }),
+    backedUp: z.boolean(),
+  })
+  .openapi('Passkey');
+
+export const PasskeyListSchema = z
+  .object({ items: z.array(PasskeySchema), limit: z.number().int().openapi({ description: 'The most passkeys a person may hold (409 PASSKEY_LIMIT past it)' }) })
+  .openapi('PasskeyList');
+
+export const RenamePasskeyRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(64).regex(/^[^\p{Cc}]*$/u, 'no control characters') })
+  .strict()
+  .openapi('RenamePasskeyRequest');
+
 // ---- Milestone 2: customers, projects, import --------------------------------
 
 export const ProviderSchema = z.enum(['MALAFAT']).openapi('Provider');
@@ -1440,6 +1558,8 @@ export const CONFLICT_REASONS = [
   'COVERED_BY_GRANT',
   'NO_BILLING_ACCOUNT',
   'BILLING_ACCOUNT_NEEDS_HELP',
+  // MUT-115: this credential is already registered (to anyone).
+  'PASSKEY_EXISTS',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1530,6 +1650,9 @@ export const VALIDATION_REASONS = [
   'SAME_CURRENCY',
   // MUT-362: a person (no tax ID) in a country not yet open to consumers (billing-countries.json); a business can buy.
   'COUNTRY_NEEDS_BUSINESS',
+  // MUT-115: the passkey registration didn't verify (challenge used, expired or not the caller's; origin, RP ID or user
+  // verification wrong).
+  'PASSKEY_NOT_VERIFIED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

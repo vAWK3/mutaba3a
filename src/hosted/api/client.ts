@@ -18,6 +18,8 @@ export type Me = Schemas['Me'];
 export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
 type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
+/** MUT-115: one of the person's passkeys. */
+export type Passkey = Schemas['Passkey'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type RemoveProfileOwnerResponse = Schemas['RemoveProfileOwnerResponse'];
 export type ProfileOwner = Schemas['ProfileOwner'];
@@ -25,6 +27,9 @@ export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
 export type TrialPromptAction = Schemas['TrialPromptChange']['action'];
+/** MUT-370: the "Add a passkey" suggestion, as the server decides it. */
+export type PasskeyPrompt = Schemas['PasskeyPrompt'];
+export type PasskeyPromptAction = Schemas['PasskeyPromptChange']['action'];
 export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
@@ -198,11 +203,15 @@ interface RequestOptions {
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
+/** MUT-115: passkey sign-in; like the password sign-in, its 401 is a refused credential, never an ended session. */
+const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
+const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
 /**
  * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
- * self-service doors, signup and recovery (MUT-368): the in-page backend has no mailer to send their links.
+ * self-service doors, signup and recovery (MUT-368): the in-page backend has no mailer to send their links. And the
+ * passkey sign-in challenge (MUT-115), asked for while signed out.
  */
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery)(\/|\?|$)/;
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges)(\/|\?|$)/;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
@@ -378,7 +387,7 @@ export async function send(method: Method, path: string, options: RequestOptions
 
   if (!response.ok) {
     const error = await toApiError(response);
-    const isSignIn = method === 'POST' && path === SIGN_IN_PATH;
+    const isSignIn = method === 'POST' && SIGN_IN_PATHS.has(path);
     // A local 401 is the local backend's own business (it re-mints its session); only the server's ends a session.
     if (error.status === 401 && !isSignIn && wentRemote) unauthorisedHandler?.(error);
     throw error;
@@ -399,6 +408,20 @@ export const api = {
   me: (options: { signal?: AbortSignal } = {}) => request<Get<'/v1/me'>>('GET', '/v1/me', { signal: options.signal }),
   signIn: (body: Schemas['SignInRequest']) => request<OkJson<'/v1/sessions', 'post'>>('POST', SIGN_IN_PATH, { body }),
   signOut: () => request<void>('DELETE', '/v1/sessions/current'),
+  /** MUT-115: the person's passkeys, oldest first, and the most they may hold. */
+  listPasskeys: (signal?: AbortSignal) => request<Schemas['PasskeyList']>('GET', '/v1/passkeys', { signal }),
+  /** MUT-115 (D4): 403 RECENT_SIGN_IN_REQUIRED past 10 minutes since sign-in unless `currentPassword` is sent. */
+  passkeyCreationOptions: (currentPassword?: string) =>
+    request<Schemas['PasskeyCreationChallenge']>('POST', '/v1/passkeys/creation-options', { body: currentPassword === undefined ? {} : { currentPassword } }),
+  addPasskey: (body: Schemas['AddPasskeyRequest']) => request<Schemas['Passkey']>('POST', '/v1/passkeys', { body }),
+  renamePasskey: (id: string, name: string) => request<Schemas['Passkey']>('PATCH', `/v1/passkeys/${encodeURIComponent(id)}`, { body: { name } }),
+  /** MUT-115 (A2): also signs out every other session this passkey opened. */
+  removePasskey: (id: string) => request<void>('DELETE', `/v1/passkeys/${encodeURIComponent(id)}`),
+  /** MUT-370: Not now on the passkey suggestion (hidden 30 days; the third retires it). */
+  changePasskeyPrompt: (action: PasskeyPromptAction) => request<PasskeyPrompt>('PATCH', '/v1/me/passkey-prompt', { body: { action } }),
+  /** MUT-115: a single-use sign-in challenge (public). */
+  passkeyChallenge: (signal?: AbortSignal) => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/passkey-challenges', { signal }),
+  signInWithPasskey: (body: Schemas['PasskeySignInRequest']) => request<OkJson<'/v1/sessions/passkey', 'post'>>('POST', PASSKEY_SIGN_IN_PATH, { body }),
   /** MUT-237: revokes every other session, web and device; this one stays signed in. */
   changePassword: (body: Schemas['ChangePasswordRequest']) => request<void>('POST', '/v1/me/password', { body }),
   /** MUT-333: starts 30 days of grace; every other session is signed out, this one sees only the closing page. */

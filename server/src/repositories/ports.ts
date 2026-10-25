@@ -1525,6 +1525,8 @@ export interface SessionRecord {
   revokedAt: Date | null;
   revokedReason: string | null;
   userAgent: string | null;
+  /** MUT-115 (A2/D6): the passkey that opened this session, else null; removing that passkey revokes it. */
+  passkeyId: string | null;
 }
 
 export interface CreateSessionInput {
@@ -1541,6 +1543,8 @@ export interface CreateSessionInput {
    * lock or redeem to commit. Otherwise StateConflict('user', 'CREDENTIAL_CHANGED') and nothing is written.
    */
   verifiedPasswordHash?: string;
+  /** MUT-115: set on a passkey sign-in, so removing the passkey can revoke this session. */
+  passkeyId?: string;
 }
 
 export interface SessionRepository {
@@ -1552,6 +1556,122 @@ export interface SessionRepository {
   revoke(id: string, reason: string, at: Date): Promise<SessionRecord | null>;
   /** Revokes the user's live sessions; returns how many. */
   revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
+}
+
+// ---- MUT-115: passkeys (ADR-190) ---------------------------------------------
+
+export type PasskeyDeviceType = 'singleDevice' | 'multiDevice';
+
+/** A person's WebAuthn credential. Only the public key is stored; `credentialId` is base64url. */
+export interface PasskeyRecord {
+  id: string;
+  userId: string;
+  credentialId: string;
+  publicKey: Uint8Array;
+  /** The authenticator's signature counter (uint32); 0 for authenticators that don't count (most synced passkeys). */
+  signCount: number;
+  transports: string[];
+  deviceType: PasskeyDeviceType;
+  backedUp: boolean;
+  aaguid: string;
+  name: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
+export interface CreatePasskeyInput {
+  userId: string;
+  credentialId: string;
+  publicKey: Uint8Array;
+  signCount: number;
+  transports: string[];
+  deviceType: PasskeyDeviceType;
+  backedUp: boolean;
+  aaguid: string;
+  name: string;
+  at: Date;
+  /** D12: the most passkeys a person may hold; counted under the person's row lock. */
+  limit: number;
+  audit: AuditEventInput[];
+}
+
+export type WebauthnChallengePurpose = 'creation' | 'authentication';
+
+export interface CreateWebauthnChallengeInput {
+  challenge: string;
+  purpose: WebauthnChallengePurpose;
+  /** Required for a creation challenge (the person who asked), null for a sign-in challenge. */
+  userId: string | null;
+  at: Date;
+  expiresAt: Date;
+}
+
+export interface RemovePasskeyInput {
+  userId: string;
+  id: string;
+  /** The caller's own session stays signed in, even if this passkey opened it (A2). */
+  exceptSessionId: string;
+  at: Date;
+  audit: AuditEventInput[];
+}
+
+/**
+ * MUT-115 (D5, §11.6): passkeys and their single-use challenges, one port. Session-only like the identity routes,
+ * and the public sign-in runs unguarded, like password sign-in.
+ */
+export interface PasskeyRepository {
+  /** Oldest first. */
+  listByUser(userId: string): Promise<PasskeyRecord[]>;
+  findByCredentialId(credentialId: string): Promise<PasskeyRecord | null>;
+  /**
+   * UniqueViolation on a credential id already stored (anyone's); StateConflict('passkey', 'PASSKEY_LIMIT') when the
+   * person already holds `limit`; ForeignKeyViolation on an unknown person. Writes `audit` in the same transaction.
+   */
+  create(input: CreatePasskeyInput): Promise<PasskeyRecord>;
+  /** Only the person's own passkey; null otherwise. */
+  rename(userId: string, id: string, name: string): Promise<PasskeyRecord | null>;
+  /**
+   * One transaction: revokes the sessions this passkey opened (reason `passkey_removed`) except `exceptSessionId`,
+   * deletes the passkey and writes `audit`. Null when the person has no such passkey (nothing written).
+   */
+  remove(input: RemovePasskeyInput): Promise<{ passkey: PasskeyRecord; revokedSessions: number } | null>;
+  /** After a verified assertion: the new counter and when it was used. */
+  recordUse(id: string, signCount: number, at: Date): Promise<void>;
+  createChallenge(input: CreateWebauthnChallengeInput): Promise<{ id: string }>;
+  /**
+   * Atomic (one conditional UPDATE): marks the challenge consumed and returns it only if it exists, has this purpose,
+   * is unconsumed, unexpired at `now`, and (for a creation) belongs to `userId`. Anything else: null, nothing written.
+   */
+  consumeChallenge(id: string, purpose: WebauthnChallengePurpose, userId: string | null, now: Date): Promise<{ challenge: string } | null>;
+  /** Deletes challenges that expired before `before`; returns how many. */
+  pruneChallenges(before: Date): Promise<number>;
+  /**
+   * MUT-370 (D1): the "Add a passkey" suggestion's stored state and how many passkeys the person holds, in one read.
+   * Null for an unknown person.
+   */
+  promptOf(userId: string): Promise<PasskeyPromptState | null>;
+  /**
+   * MUT-370 (D2): "Not now", applied under the person's row lock (auth/passkey-prompt.ts `applyPasskeyNotNow`), so two
+   * devices answering one offer spend it once, and an answer while the person holds a passkey spends nothing. Null for an
+   * unknown person.
+   */
+  answerPrompt(userId: string, action: PasskeyPromptAction, at: Date): Promise<PasskeyPromptState | null>;
+}
+
+/** MUT-370 (D1): JSON on the user row (`users.passkeyPrompt`), so its instant is an ISO string. */
+export interface PasskeyPromptRecord {
+  /** How many offers the person answered with Not now (0–3). */
+  notNowCount: number;
+  /** The suggestion stays hidden until then; null when it isn't hidden. */
+  hiddenUntil: string | null;
+}
+
+export type PasskeyPromptAction = 'not-now';
+
+export interface PasskeyPromptState {
+  prompt: PasskeyPromptRecord;
+  /** How many passkeys the person holds now. */
+  passkeys: number;
 }
 
 // ---- MUT-235: one-time setup links (ADR-088) --------------------------------
@@ -2101,6 +2221,8 @@ export interface LedgerStore {
   signupReviews: SignupReviewRepository;
   /** MUT-333: the hard delete of closed accounts (operator only: the hourly job and the admin route). */
   accountPurge: AccountPurgeRepository;
+  /** MUT-115: passkeys and their challenges; the person's own (sessionOnly), sign-in reads them unguarded. */
+  passkeys: PasskeyRepository;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

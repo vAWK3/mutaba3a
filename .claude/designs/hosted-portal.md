@@ -253,7 +253,7 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** a sidebar with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-190), Reports beside them until MUT-426's corner icon, and the page. Everything else sits one level below a destination, at the URL it always had:
+- **`HostedShell`:** a sidebar with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-192), Reports beside them until MUT-426's corner icon, and the page. Everything else sits one level below a destination, at the URL it always had:
 
   | Destination | Its page | One level in |
   |---|---|---|

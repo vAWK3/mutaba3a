@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { MalafatCreatedNote } from '../../components/MalafatPortal';
 import { FirmOnBanner } from '../../components/FirmOnBanner';
 import { TrialBanner } from '../../components/TrialBanner';
+import { PasskeySuggestion } from '../../components/PasskeySuggestion';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -62,6 +63,8 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
       <PageHeader title={t('hosted.destinations.owed')} headingRef={heading} />
       {/* MUT-418: the free trial's days left, until a card is on file */}
       <TrialBanner />
+      {/* MUT-370: suggest a passkey, after the trial's first-run step and under its banner (D4) */}
+      <PasskeySuggestion />
       {/* Right after a business profile is created, once (MUT-191); dismissed, focus goes to the heading */}
       <MalafatCreatedNote onGone={() => heading.current?.focus()} />
       {/* MUT-300 (DR5): once firm features are on, until dismissed */}

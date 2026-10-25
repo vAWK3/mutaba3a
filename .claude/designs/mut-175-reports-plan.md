@@ -118,7 +118,7 @@ See §10.
 ## 9. Out of scope / noted for Basel
 
 - Pace against last month, ▲/▼ chips and the last-month line (not chosen in B4).
-- **CSV export of reports.** Web Insights has it and MUT-292 deletes it. MUT-314's pack covers firms only. **Decide before MUT-292:** accept the loss for freelancers, or add a CSV story.
+- **CSV export of reports.** Web Insights has it and MUT-292 deletes it. MUT-314's pack covers firms only. **Decided 2026-10-25 (Basel):** accept the loss; MUT-292 may delete it, and export comes back later when the flows are rethought.
 - A converted total at historical rates (B5 uses today's rate, labelled as such).
 - VAT (MUT-313) and the accountant pack (MUT-314).
 - Forecasts (ADR-036 removed them by Basel's choice).

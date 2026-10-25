@@ -1,5 +1,5 @@
 /**
- * The portal's four destinations (MUT-424, ADR-190): Owed, Paid, Spent, Clients. Every URL stays as it was (E1: the
+ * The portal's four destinations (MUT-424, ADR-192): Owed, Paid, Spent, Clients. Every URL stays as it was (E1: the
  * phone's universal links, the mail and Stripe landings and bookmarks all point at them), so a destination is a map
  * from a path's first segment under `/p/:id`, not a URL prefix: `/receivables` lights Owed without being nested
  * under it. Pure, so every rule is a unit test; the interim sidebar uses it, and MUT-426's pill reuses it unchanged.

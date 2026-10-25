@@ -43,6 +43,14 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/billing/portal-session': 'open',
   // Reference rates: no record of anyone's.
   'GET /v1/fx-rates': 'open',
+  // MUT-115: a person's own passkeys are identity, like the password (the sign-in routes are public, never gated).
+  'GET /v1/passkeys': 'open',
+  'POST /v1/passkeys/creation-options': 'open',
+  'POST /v1/passkeys': 'open',
+  'PATCH /v1/passkeys/:passkeyId': 'open',
+  'DELETE /v1/passkeys/:passkeyId': 'open',
+  // MUT-370: the person's answer to the passkey suggestion, identity like the trial prompt.
+  'PATCH /v1/me/passkey-prompt': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',

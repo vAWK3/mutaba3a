@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
+import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -76,6 +77,10 @@ import type {
   SignupLinkRecord,
   UserStatus,
   SessionRepository,
+  PasskeyPromptState,
+  PasskeyRecord,
+  PasskeyRepository,
+  WebauthnChallengePurpose,
   UserRecord,
   UserRepository,
   CreateFeeProposalInput,
@@ -291,6 +296,11 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly reviews = new Map<string, SignupReviewRecord>();
   /** MUT-360: Stripe webhook events by id (processedAt null until handled), also outside the snapshot. */
   private readonly stripeEvents = new Map<string, { type: string; receivedAt: Date; processedAt: Date | null; error: string | null }>();
+  /** MUT-115: passkeys and their challenges, outside the snapshot too (local mode has no sign-in). */
+  private readonly passkeyMap = new Map<string, PasskeyRecord>();
+  private readonly challenges = new Map<string, { challenge: string; purpose: WebauthnChallengePurpose; userId: string | null; expiresAt: Date; consumedAt: Date | null }>();
+  /** MUT-370: the "Add a passkey" suggestion's state by person (`users.passkeyPrompt`), outside the snapshot like passkeys. */
+  private readonly passkeyPrompts = new Map<string, unknown>();
 
   readonly organizations: OrganizationRepository = {
     create: async (input: CreateOrganizationInput) => {
@@ -600,6 +610,7 @@ export class MemoryLedgerStore implements LedgerStore {
         revokedAt: null,
         revokedReason: null,
         userAgent: input.userAgent,
+        passkeyId: input.passkeyId ?? null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -617,6 +628,102 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
   };
+
+  readonly passkeys: PasskeyRepository = {
+    listByUser: async (userId) =>
+      [...this.passkeyMap.values()]
+        .filter((p) => p.userId === userId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .map(clonePasskey),
+    findByCredentialId: async (credentialId) => {
+      const found = [...this.passkeyMap.values()].find((p) => p.credentialId === credentialId);
+      return found ? clonePasskey(found) : null;
+    },
+    create: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('passkeys.userId');
+      for (const p of this.passkeyMap.values()) if (p.credentialId === input.credentialId) throw new UniqueViolation('passkeys.credentialId');
+      if ([...this.passkeyMap.values()].filter((p) => p.userId === input.userId).length >= input.limit) throw new StateConflict('passkey', 'PASSKEY_LIMIT');
+      const record: PasskeyRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        credentialId: input.credentialId,
+        publicKey: Uint8Array.from(input.publicKey),
+        signCount: input.signCount,
+        transports: [...input.transports],
+        deviceType: input.deviceType,
+        backedUp: input.backedUp,
+        aaguid: input.aaguid,
+        name: input.name,
+        createdAt: input.at,
+        lastUsedAt: null,
+      };
+      this.passkeyMap.set(record.id, record);
+      for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
+      return clonePasskey(record);
+    },
+    rename: async (userId, id, name) => {
+      const p = this.passkeyMap.get(id);
+      if (!p || p.userId !== userId) return null;
+      p.name = name;
+      return clonePasskey(p);
+    },
+    remove: async ({ userId, id, exceptSessionId, at, audit }) => {
+      const p = this.passkeyMap.get(id);
+      if (!p || p.userId !== userId) return null;
+      let revokedSessions = 0;
+      for (const s of this.sessionsById.values()) {
+        if (s.passkeyId !== id) continue;
+        if (!s.revokedAt && s.id !== exceptSessionId) {
+          Object.assign(s, { revokedAt: at, revokedReason: 'passkey_removed' });
+          revokedSessions++;
+        }
+        s.passkeyId = null; // ON DELETE SET NULL
+      }
+      this.passkeyMap.delete(id);
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { passkey: clonePasskey(p), revokedSessions };
+    },
+    recordUse: async (id, signCount, at) => {
+      const p = this.passkeyMap.get(id);
+      if (p) Object.assign(p, { signCount, lastUsedAt: at });
+    },
+    createChallenge: async (input) => {
+      if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('webauthn_challenges.userId');
+      if ((input.purpose === 'creation') !== (input.userId !== null)) throw new Error('A creation challenge names its person; a sign-in challenge names no one');
+      const id = randomUUID();
+      this.challenges.set(id, { challenge: input.challenge, purpose: input.purpose, userId: input.userId, expiresAt: input.expiresAt, consumedAt: null });
+      return { id };
+    },
+    consumeChallenge: async (id, purpose, userId, now) => {
+      const c = this.challenges.get(id);
+      if (!c || c.consumedAt || c.purpose !== purpose || c.expiresAt.getTime() <= now.getTime() || c.userId !== userId) return null;
+      c.consumedAt = now;
+      return { challenge: c.challenge };
+    },
+    pruneChallenges: async (before) => {
+      let count = 0;
+      for (const [id, c] of this.challenges) {
+        if (c.expiresAt.getTime() < before.getTime()) {
+          this.challenges.delete(id);
+          count++;
+        }
+      }
+      return count;
+    },
+    promptOf: async (userId) => (this.people.has(userId) ? this.passkeyPromptState(userId) : null),
+    answerPrompt: async (userId, _action, at) => {
+      if (!this.people.has(userId)) return null;
+      const { passkeys } = this.passkeyPromptState(userId);
+      this.passkeyPrompts.set(userId, applyPasskeyNotNow(this.passkeyPrompts.get(userId), at, passkeys));
+      return this.passkeyPromptState(userId);
+    },
+  };
+
+  private passkeyPromptState(userId: string): PasskeyPromptState {
+    let passkeys = 0;
+    for (const p of this.passkeyMap.values()) if (p.userId === userId) passkeys++;
+    return { prompt: resolvePasskeyPrompt(this.passkeyPrompts.get(userId)), passkeys };
+  }
 
   /** `exceptSessionId` (MUT-237): a person's own session stays live while every other one is revoked. */
   private revokeSessionsOf(userId: string, reason: string, at: Date, exceptSessionId?: string): number {
@@ -2351,6 +2458,9 @@ export class MemoryLedgerStore implements LedgerStore {
     const id = person.id;
     for (const [key, m] of this.members) if (m.userId === id) this.members.delete(key);
     for (const [key, s] of this.sessionsById) if (s.userId === id) this.sessionsById.delete(key);
+    for (const [key, p] of this.passkeyMap) if (p.userId === id) this.passkeyMap.delete(key);
+    this.passkeyPrompts.delete(id);
+    for (const [key, c] of this.challenges) if (c.userId === id) this.challenges.delete(key);
     for (const [key, link] of this.setupLinks) if (('userId' in link && link.userId === id) || (link.purpose === 'SIGNUP' && 'email' in link && link.email === person.email)) this.setupLinks.delete(key);
     for (const [key, entry] of this.inbox) if (entry.userId === id) this.inbox.delete(key);
     for (const [key, claim] of this.userIdem) if (claim.userId === id) this.userIdem.delete(key);
@@ -3042,6 +3152,10 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
   if (r.filingStatus === 'FILED') return { kind: 'already_filed' };
   if (r.status !== 'READY') return { kind: 'not_ready' };
   return null;
+}
+
+function clonePasskey(p: PasskeyRecord): PasskeyRecord {
+  return { ...p, publicKey: Uint8Array.from(p.publicKey), transports: [...p.transports] };
 }
 
 function cloneReview(review: SignupReviewRecord): SignupReviewRecord {

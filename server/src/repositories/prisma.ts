@@ -15,6 +15,7 @@ import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } 
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
+import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -102,6 +103,9 @@ import type {
   MembershipRepository,
   SessionRecord,
   SessionRepository,
+  PasskeyDeviceType,
+  PasskeyRecord,
+  PasskeyRepository,
   UserLocale,
   UserRecord,
   UserRepository,
@@ -456,6 +460,7 @@ export class PrismaLedgerStore implements LedgerStore {
         idleExpiresAt: input.idleExpiresAt,
         absoluteExpiresAt: input.absoluteExpiresAt,
         userAgent: input.userAgent,
+        ...(input.passkeyId === undefined ? {} : { passkeyId: input.passkeyId }),
       };
       const { verifiedPasswordHash } = input;
       if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
@@ -481,6 +486,90 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) =>
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
+  };
+
+  readonly passkeys: PasskeyRepository = {
+    listByUser: async (userId) =>
+      (await this.prisma.passkey.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toPasskey),
+    findByCredentialId: async (credentialId) => mapNullable(await this.prisma.passkey.findUnique({ where: { credentialId } }), toPasskey),
+    create: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // D12: counted under the person's row lock, so two concurrent adds can't both slip under the cap.
+          const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('passkeys.userId');
+          if ((await tx.passkey.count({ where: { userId: input.userId } })) >= input.limit) throw new StateConflict('passkey', 'PASSKEY_LIMIT');
+          const row = await tx.passkey.create({
+            data: {
+              userId: input.userId,
+              credentialId: input.credentialId,
+              publicKey: Buffer.from(input.publicKey),
+              signCount: BigInt(input.signCount),
+              transports: input.transports,
+              deviceType: input.deviceType,
+              backedUp: input.backedUp,
+              aaguid: input.aaguid,
+              name: input.name,
+              createdAt: input.at,
+            },
+          });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return toPasskey(row);
+        }),
+      ),
+    rename: async (userId, id, name) => {
+      const { count } = await this.prisma.passkey.updateMany({ where: { id, userId }, data: { name } });
+      return count === 0 ? null : mapNullable(await this.prisma.passkey.findUnique({ where: { id } }), toPasskey);
+    },
+    remove: ({ userId, id, exceptSessionId, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const row = await tx.passkey.findFirst({ where: { id, userId } });
+        if (!row) return null;
+        // A2: the sessions it opened end with it; the caller's own stays. Revoked before the delete nulls passkeyId.
+        const { count } = await tx.session.updateMany({
+          where: { passkeyId: id, revokedAt: null, id: { not: exceptSessionId } },
+          data: { revokedAt: at, revokedReason: 'passkey_removed' },
+        });
+        await tx.passkey.delete({ where: { id } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { passkey: toPasskey(row), revokedSessions: count };
+      }),
+    recordUse: async (id, signCount, at) => {
+      await this.prisma.passkey.updateMany({ where: { id }, data: { signCount: BigInt(signCount), lastUsedAt: at } });
+    },
+    createChallenge: async (input) =>
+      translate(async () => {
+        const row = await this.prisma.webauthnChallenge.create({
+          data: { challenge: input.challenge, purpose: input.purpose, userId: input.userId, createdAt: input.at, expiresAt: input.expiresAt },
+          select: { id: true },
+        });
+        return { id: row.id };
+      }),
+    consumeChallenge: async (id, purpose, userId, now) => {
+      // D5: one conditional UPDATE, so of two presentations of the same challenge exactly one gets it.
+      const rows = await this.prisma.$queryRaw<Array<{ challenge: string }>>`
+        UPDATE webauthn_challenges SET "consumedAt" = ${now}
+        WHERE id = ${id}::uuid AND purpose = ${purpose}::"WebauthnChallengePurpose" AND "consumedAt" IS NULL AND "expiresAt" > ${now}
+          AND "userId" IS NOT DISTINCT FROM ${userId}::uuid
+        RETURNING challenge`;
+      return rows[0] ?? null;
+    },
+    pruneChallenges: async (before) => (await this.prisma.webauthnChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    // MUT-370 (D1): the suggestion's state and the passkey count, one read.
+    promptOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { passkeyPrompt: true, _count: { select: { passkeys: true } } } });
+      return row && { prompt: resolvePasskeyPrompt(row.passkeyPrompt), passkeys: row._count.passkeys };
+    },
+    // MUT-370 (D2): under the person's row lock, so a Not now on two devices spends one offer.
+    answerPrompt: async (userId, _action, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ passkeyPrompt: unknown }>>`SELECT "passkeyPrompt" FROM "users" WHERE "id" = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!locked) return null;
+        const passkeys = await tx.passkey.count({ where: { userId } });
+        const prompt = applyPasskeyNotNow(locked.passkeyPrompt, at, passkeys);
+        await tx.user.update({ where: { id: userId }, data: { passkeyPrompt: prompt as unknown as Prisma.InputJsonValue } });
+        return { prompt, passkeys };
+      }),
   };
 
   /**
@@ -2233,6 +2322,9 @@ export class PrismaLedgerStore implements LedgerStore {
         // D9, R4: the person's own rows, then the person.
         await tx.membership.deleteMany({ where: { userId } });
         await tx.session.deleteMany({ where: { userId } });
+        // MUT-115: the person's passkeys and any creation challenge of theirs (also ON DELETE CASCADE).
+        await tx.passkey.deleteMany({ where: { userId } });
+        await tx.webauthnChallenge.deleteMany({ where: { userId } });
         await tx.accountSetupToken.deleteMany({ where: { OR: [{ userId }, { purpose: 'SIGNUP', email: locked.email }] } });
         await tx.inboxEntry.deleteMany({ where: { userId } });
         await tx.userIdempotencyKey.deleteMany({ where: { userId } });
@@ -3135,6 +3227,24 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     revokedAt: row.revokedAt,
     revokedReason: row.revokedReason,
     userAgent: row.userAgent,
+    passkeyId: row.passkeyId,
+  };
+}
+
+function toPasskey(row: Prisma.PasskeyGetPayload<object>): PasskeyRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    credentialId: row.credentialId,
+    publicKey: new Uint8Array(row.publicKey),
+    signCount: Number(row.signCount),
+    transports: row.transports,
+    deviceType: row.deviceType as PasskeyDeviceType,
+    backedUp: row.backedUp,
+    aaguid: row.aaguid,
+    name: row.name,
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt,
   };
 }
 

@@ -873,3 +873,32 @@ Unresolved Decisions: none.
 - **VERDICT:** DESIGN CLEARED (9/10, 0 unresolved). Eng review complete with mapped work (issues_open, 0 unresolved); eng review required: satisfied by decisions D1–D12, not CLEAR.
 
 NO UNRESOLVED DECISIONS
+
+---
+
+## 13. Build record (MUT-115 web half, 2026-10-25)
+
+Built on `feature/mut-115-passkeys` by /eng-build in Basel's unattended self-service portal run. ADR-190 (MUT-175 took ADR-189), API **1.69.0-mut115** (MUT-175 took 1.68.0), migration `20261025090000_mut115_passkeys`, TD-242..246. The iOS half (§5, T7, T8, DT4) is the run's phone phase.
+
+**Build decisions B1–B14 — pending Basel's confirmation:**
+
+| # | Decision | Why |
+|---|---|---|
+| B1 | `verifyCurrentPassword` stays in `auth/current-password.ts`: MUT-333 had already extracted it for change-password and close. §11.7 is met by reuse; the step-up calls it. | No third copy, no move of a just-hardened file |
+| B2 | ADR-190 and API 1.69.0-mut115 | ADR-189 / 1.68.0 were taken by MUT-175 |
+| B3 | A registration that doesn't verify is 422 `VALIDATION_FAILED` reason `PASSKEY_NOT_VERIFIED`; a credential already registered is 409 `CONFLICT` reason `PASSKEY_EXISTS`. Only `RECENT_SIGN_IN_REQUIRED` and `PASSKEY_LIMIT` are new codes (§11.12). | New codes are a contract change Malafat maps |
+| B4 | `passkey-providers.json` is a 14-entry seed written by hand; `passkey-providers:update -- --commit <sha>` refreshes it from the community list (TD-245). | The build downloads nothing |
+| B5 | `PasskeyIcon` is a drawn person-and-key glyph, not the FIDO symbol (TD-244). | The official artwork needs a download and its usage terms confirmed |
+| B6 | The portal QA flows are `portal-selfservice.passkeys.*` (live API), not `portal.passkey.*`; the `portal-selfservice` app moved from 127.0.0.1 to `localhost:8791`. | Passkeys need the real WebAuthn checks; an IP can't be an RP ID |
+| B7 | The portal's RP ID is a build value `__PASSKEY_RP_ID__` (from `config/hosts.json` at stage live/redirect; `MUTABA3A_PASSKEY_RP_ID` overrides it for QA), and passkeys show only on a host under it. | Same source as Terraform's `WEBAUTHN_RP_ID`; hides passkeys on run.app |
+| B8 | A closing account: passkey management gets ADR-188's 403 `ACCOUNT_CLOSING`; passkey sign-in works during the grace (to reach Keep my account), and past the deadline is 401 with no failure counted, exactly like the password. | Parity with the password path (the run's instruction) |
+| B9 | A verified assertion for a PENDING_REVIEW account is 403 `ACCOUNT_UNDER_REVIEW`, like the right password. | Parity (such an account can't add a passkey anyway) |
+| B10 | The five management routes are `open` in MUT-361's `PERSON_LEVEL_GATE`. | They are identity, like the password |
+| B11 | A backwards counter is checked against a counter of 0 first: only a genuine signature audits `user.passkey_counter_regressed`; either way the sign-in is refused and counted. | A forged body can't fill the audit log |
+| B12 | A passkey added from a device session is named "iPhone"; from the browser, "<Browser> on <OS>" when the AAGUID is unknown. | The phone half adds passkeys on iOS only |
+| B13 | `issueSession` refuses a person with no password hash outright (unreachable on the password path). | D6: no password, no passkey sign-in |
+| B14 | The minimum-build gate does not exempt the passkey routes. | A phone below the floor has no passkey button |
+
+**Seams:** MUT-414's mail → `PasskeyEvents.added` (`createApp({ passkeyEvents })`, after the commit). MUT-370's card → `addPasskeyFlow()` in `src/hosted/passkeys/addPasskey.ts` (no step-up within 10 minutes of sign-in) and `passkeySupport()`; invalidate `PASSKEYS_KEY` after adding.
+
+**What the iOS half needs** (see the Jira comment): the routes and bodies in §3.2 as built (`POST /v1/passkey-challenges` → `{challengeId, publicKey}`; `POST /v1/device-sessions/passkey {challengeId, response}` → `{...Me, token}`; `GET/POST /v1/passkeys`, `POST /v1/passkeys/creation-options {currentPassword?}`, `PATCH/DELETE /v1/passkeys/{id}`), RP ID `mtb3a.com`, the app's origin `https://mtb3a.com`, the entitlement `webcredentials:mtb3a.com`, and Apple's CDN copy of the apex AASA before the phone release.

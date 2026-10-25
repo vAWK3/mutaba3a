@@ -161,6 +161,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with a passkey (sets the session cookie) (MUT-115)
+         * @description Send the `challengeId` from POST /v1/passkey-challenges and the platform's assertion (WebAuthn JSON). The same same-origin check, IP budget, throttle and lockout as the password sign-in: a failed assertion counts toward the account's lockout, and every refusal is the same 401.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasskeySignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the same answer for every refusal */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/current": {
         parameters: {
             query?: never;
@@ -567,6 +655,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/device-sessions/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in from a native app with a passkey (returns a bearer token) (MUT-115)
+         * @description Send the `challengeId` from POST /v1/passkey-challenges and the platform's assertion (WebAuthn JSON; on iOS the origin is https://<rp id>). The same IP budget, throttle and lockout as the password sign-in; every refusal is the same 401.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasskeySignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the same answer for every refusal */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device-sessions/current": {
         parameters: {
             query?: never;
@@ -614,6 +790,493 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your passkeys (MUT-115) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Oldest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeyList"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Finish adding a passkey (MUT-115)
+         * @description Send the `challengeId` from creation-options and the platform's registration response (WebAuthn JSON). The same recent-sign-in rule applies again (the options call is not trusted). The passkey is named from its provider, or from the device it was added from; rename it with PATCH.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AddPasskeyRequest"];
+                };
+            };
+            responses: {
+                /** @description Added */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Passkey"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RECENT_SIGN_IN_REQUIRED, CURRENT_PASSWORD_WRONG, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PASSKEY_LIMIT — you already have 10 passkeys; CONFLICT — this passkey is already registered */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED; reason PASSKEY_NOT_VERIFIED when the challenge was used, expired or not yours, or the response did not verify (origin, RP ID, user verification) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/passkey-prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Answer the "Add a passkey" suggestion with Not now (MUT-370)
+         * @description `not-now` spends the current offer and hides the suggestion for 30 days (server clock); the third retires it. While it is already hidden a Not now changes nothing, so two devices answering one offer spend it once. Idempotent by construction, so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees. `/v1/me` `user.passkeyPrompt` says when to show it.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasskeyPromptChange"];
+                };
+            };
+            responses: {
+                /** @description The suggestion as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeyPrompt"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/passkeys/creation-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start adding a passkey: the options for navigator.credentials.create() (MUT-115)
+         * @description Needs a sign-in (or password change) at most 10 minutes old; otherwise send `currentPassword` (403 RECENT_SIGN_IN_REQUIRED without it, 403 CURRENT_PASSWORD_WRONG when wrong, counted toward the sign-in lockout). The challenge is single-use, bound to this person, and lives 5 minutes. `excludeCredentials` lists your own passkeys.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["PasskeyCreationOptionsRequest"];
+                };
+            };
+            responses: {
+                /** @description Pass `publicKey` to the platform; send `challengeId` back with the result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeyCreationChallenge"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RECENT_SIGN_IN_REQUIRED, CURRENT_PASSWORD_WRONG, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PASSKEY_LIMIT — you already have 10 passkeys */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/passkeys/{passkeyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one of your passkeys (MUT-115)
+         * @description It stops signing in at once, and every session it opened is signed out, except the one making this request.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    passkeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such passkey of yours (or passkeys are not configured) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Rename one of your passkeys (MUT-115) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    passkeyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RenamePasskeyRequest"];
+                };
+            };
+            responses: {
+                /** @description Renamed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Passkey"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such passkey of yours (or passkeys are not configured) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a name is 1–64 characters) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/passkey-challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a passkey sign-in: the options for navigator.credentials.get() (MUT-115)
+         * @description No email first: `allowCredentials` is empty, so the platform offers every passkey it holds for this site. Single-use, 5 minutes. Then POST /v1/sessions/passkey (portal) or /v1/device-sessions/passkey (app).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A sign-in challenge */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeySignInChallenge"];
+                    };
+                };
+                /** @description NOT_FOUND — passkeys are not configured on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many challenges from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14598,6 +15261,7 @@ export interface components {
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
                 trialPrompt: components["schemas"]["TrialPrompt"];
+                passkeyPrompt: components["schemas"]["PasskeyPrompt"];
                 status: components["schemas"]["UserStatus"];
                 closure: components["schemas"]["AccountClosure"];
             };
@@ -14636,6 +15300,12 @@ export interface components {
             /** Format: date-time */
             bannerSnoozedUntil: string | null;
         };
+        PasskeyPrompt: {
+            due: boolean;
+            notNowCount: number;
+            /** Format: date-time */
+            hiddenUntil: string | null;
+        } | null;
         /** @enum {string} */
         UserStatus: "ACTIVE" | "DISABLED" | "PENDING_REVIEW";
         AccountClosure: {
@@ -14711,7 +15381,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -14720,6 +15390,31 @@ export interface components {
         SignInRequest: {
             email: string;
             password: string;
+        };
+        PasskeySignInRequest: {
+            /** Format: uuid */
+            challengeId: string;
+            response: components["schemas"]["PasskeyAuthenticationResponse"];
+        };
+        PasskeyAuthenticationResponse: {
+            id: string;
+            rawId: string;
+            /** @enum {string} */
+            type: "public-key";
+            response: {
+                clientDataJSON: string;
+                authenticatorData: string;
+                signature: string;
+                userHandle?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            clientExtensionResults: {
+                [key: string]: unknown;
+            };
+            authenticatorAttachment?: string;
+        } & {
+            [key: string]: unknown;
         };
         MalafatSuggestionsChange: {
             off?: boolean;
@@ -14746,6 +15441,118 @@ export interface components {
         NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
+        };
+        PasskeyList: {
+            items: components["schemas"]["Passkey"][];
+            /** @description The most passkeys a person may hold (409 PASSKEY_LIMIT past it) */
+            limit: number;
+        };
+        Passkey: {
+            /** Format: uuid */
+            id: string;
+            /** @description Named from its provider (AAGUID) or the device it was added from; renamable. Shown with dir="auto". */
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+            /**
+             * @description multiDevice = synced (e.g. iCloud Keychain)
+             * @enum {string}
+             */
+            deviceType: "singleDevice" | "multiDevice";
+            backedUp: boolean;
+        };
+        PasskeyPromptChange: {
+            /** @enum {string} */
+            action: "not-now";
+        };
+        PasskeyCreationChallenge: {
+            /** Format: uuid */
+            challengeId: string;
+            publicKey: components["schemas"]["PasskeyCreationOptions"];
+        };
+        PasskeyCreationOptions: {
+            challenge: string;
+            rp: {
+                id?: string;
+                name: string;
+            };
+            user: {
+                id: string;
+                name: string;
+                displayName: string;
+            };
+            pubKeyCredParams: {
+                /** @enum {string} */
+                type: "public-key";
+                alg: number;
+            }[];
+            timeout?: number;
+            excludeCredentials?: {
+                id: string;
+                /** @enum {string} */
+                type: "public-key";
+                transports?: string[];
+            }[];
+            authenticatorSelection?: {
+                [key: string]: unknown;
+            };
+            attestation?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        PasskeyCreationOptionsRequest: {
+            /** @description Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise) */
+            currentPassword?: string;
+        };
+        AddPasskeyRequest: {
+            /** Format: uuid */
+            challengeId: string;
+            response: components["schemas"]["PasskeyRegistrationResponse"];
+            /** @description Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise) */
+            currentPassword?: string;
+        };
+        PasskeyRegistrationResponse: {
+            id: string;
+            rawId: string;
+            /** @enum {string} */
+            type: "public-key";
+            response: {
+                clientDataJSON: string;
+                attestationObject: string;
+                transports?: string[];
+            } & {
+                [key: string]: unknown;
+            };
+            clientExtensionResults: {
+                [key: string]: unknown;
+            };
+            authenticatorAttachment?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        RenamePasskeyRequest: {
+            name: string;
+        };
+        PasskeySignInChallenge: {
+            /** Format: uuid */
+            challengeId: string;
+            publicKey: components["schemas"]["PasskeyRequestOptions"];
+        };
+        PasskeyRequestOptions: {
+            challenge: string;
+            rpId?: string;
+            timeout?: number;
+            allowCredentials?: {
+                id: string;
+                /** @enum {string} */
+                type: "public-key";
+                transports?: string[];
+            }[];
+            userVerification?: string;
+        } & {
+            [key: string]: unknown;
         };
         CloseAccountResponse: {
             closure: components["schemas"]["AccountClosure"];
