@@ -80,6 +80,8 @@ import type {
   PasskeyPromptState,
   PasskeyRecord,
   PasskeyRepository,
+  FeaturesRepository,
+  UserFeatureRecord,
   WebauthnChallengePurpose,
   UserRecord,
   UserRepository,
@@ -288,6 +290,12 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly billingAccounts = new Map<string, BillingAccountRecord>();
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
+  /**
+   * MUT-433, keyed `${userId}:${feature}`. Deliberately not in snapshot()/restore() (eng review C5): the portal's
+   * local mode has no operator and no flags (its /v1/me says `features: []`), and a new snapshot map would change the
+   * shipped local format.
+   */
+  private readonly featureGrants = new Map<string, UserFeatureRecord>();
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
@@ -635,6 +643,37 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...s };
     },
     revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
+  };
+
+  readonly features: FeaturesRepository = {
+    activeFor: async (userId) =>
+      [...this.featureGrants.values()]
+        .filter((g) => g.userId === userId && g.revokedAt === null)
+        .map((g) => g.feature)
+        .sort(),
+    grant: async ({ userId, feature, grantedBy, at, audit }) => {
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('user_feature_grants.userId');
+      const key = `${userId}:${feature}`;
+      const existing = this.featureGrants.get(key);
+      if (existing && existing.revokedAt === null) return { grant: { ...existing }, granted: false };
+      const grant: UserFeatureRecord = { userId, feature, grantedBy, grantedAt: at, revokedAt: null };
+      this.featureGrants.set(key, grant);
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { grant: { ...grant }, granted: true };
+    },
+    revoke: async ({ userId, feature, at, audit }) => {
+      const grant = this.featureGrants.get(`${userId}:${feature}`);
+      if (!grant || grant.revokedAt !== null) return { revoked: false };
+      grant.revokedAt = at;
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return { revoked: true };
+    },
+    // Rows whose person is gone stay listed (email ''), so a purge that forgot them shows here (C1).
+    holders: async (feature) =>
+      [...this.featureGrants.values()]
+        .filter((g) => g.feature === feature && g.revokedAt === null)
+        .sort((a, b) => a.grantedAt.getTime() - b.grantedAt.getTime() || a.userId.localeCompare(b.userId))
+        .map((g) => ({ userId: g.userId, email: this.people.get(g.userId)?.email ?? '', grantedAt: g.grantedAt })),
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -2474,6 +2513,7 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, claim] of this.userIdem) if (claim.userId === id) this.userIdem.delete(key);
     for (const [key, acceptance] of this.termsAcceptances) if (acceptance.userId === id) this.termsAcceptances.delete(key);
     for (const [key, grant] of this.grants) if (grant.userId === id) this.grants.delete(key);
+    for (const [key, grant] of this.featureGrants) if (grant.userId === id) this.featureGrants.delete(key);
     for (const [key, account] of this.billingAccounts) {
       if (account.userId !== id) continue;
       for (const [subKey, sub] of this.billingSubs) if (sub.billingAccountId === account.id) this.billingSubs.delete(subKey);

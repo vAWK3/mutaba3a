@@ -106,6 +106,8 @@ import type {
   PasskeyDeviceType,
   PasskeyRecord,
   PasskeyRepository,
+  FeaturesRepository,
+  UserFeatureRecord,
   UserLocale,
   UserRecord,
   UserRepository,
@@ -511,6 +513,39 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) =>
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
+  };
+
+  readonly features: FeaturesRepository = {
+    activeFor: async (userId) =>
+      (await this.prisma.userFeatureGrant.findMany({ where: { userId, revokedAt: null }, select: { feature: true }, orderBy: { feature: 'asc' } })).map((r) => r.feature),
+    grant: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { userId, feature, grantedBy, at } = input;
+          // Eng review C3: no exception path, because a unique violation aborts a Postgres transaction. ON CONFLICT DO
+          // NOTHING creates the row, else a conditional update re-opens a revoked one; two racing grants change it once.
+          const created = await tx.userFeatureGrant.createMany({ data: [{ userId, feature, grantedBy, grantedAt: at }], skipDuplicates: true });
+          const reopened = created.count > 0 ? { count: 0 } : await tx.userFeatureGrant.updateMany({ where: { userId, feature, revokedAt: { not: null } }, data: { revokedAt: null, grantedAt: at, grantedBy } });
+          const granted = created.count + reopened.count > 0;
+          if (granted && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, at) });
+          const row = await tx.userFeatureGrant.findUniqueOrThrow({ where: { userId_feature: { userId, feature } } });
+          return { grant: toUserFeature(row), granted };
+        }),
+      ),
+    revoke: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
+        if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return { revoked: count > 0 };
+      }),
+    holders: async (feature) =>
+      (
+        await this.prisma.userFeatureGrant.findMany({
+          where: { feature, revokedAt: null },
+          select: { userId: true, grantedAt: true, user: { select: { email: true } } },
+          orderBy: [{ grantedAt: 'asc' }, { userId: 'asc' }],
+        })
+      ).map((r) => ({ userId: r.userId, email: r.user.email, grantedAt: r.grantedAt })),
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -2624,6 +2659,10 @@ function coOwnedBy(userId: string): Prisma.OrganizationWhereInput {
  * Audit rows written together in one createMany. Each gets its own millisecond, in order: `audit.list` sorts on
  * (createdAt, random id), so equal timestamps would list them in any order — unlike the memory store (re-review).
  */
+function toUserFeature(row: { userId: string; feature: string; grantedBy: string; grantedAt: Date; revokedAt: Date | null }): UserFeatureRecord {
+  return { userId: row.userId, feature: row.feature, grantedBy: row.grantedBy, grantedAt: row.grantedAt, revokedAt: row.revokedAt };
+}
+
 function auditRows(events: AuditEventInput[], at: Date): Prisma.AuditEventCreateManyInput[] {
   return events.map((event, i) => ({
     ...event,

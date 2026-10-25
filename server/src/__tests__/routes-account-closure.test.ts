@@ -285,6 +285,8 @@ describe('the hard delete doors (MUT-333 D11)', () => {
     const h = harness();
     const p = await person(h);
     const { auth } = await deviceSession(h, p);
+    // MUT-433 (C1): a flagged person's feature rows go with them.
+    expect((await h.app.request(`/admin/v1/users/${p.userId}/features/agent_access`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
     await close(h, auth, p.password);
     h.setNow(new Date(T0.getTime() + 30 * DAY + 60_000));
 
@@ -300,6 +302,7 @@ describe('the hard delete doors (MUT-333 D11)', () => {
     expect(res.status).toBe(200);
     expect(await read(res)).toMatchObject({ dryRun: false, due: 1, purged: 1, failed: 0 });
     expect(await h.store.users.getById(p.userId)).toBeNull();
+    expect((await h.store.features.holders('agent_access')).map((holder) => holder.userId)).not.toContain(p.userId);
     const signIn = await h.app.request('/v1/device-sessions', json({ email: p.email, password: p.password }));
     expect(signIn.status).toBe(401);
   });

@@ -345,6 +345,8 @@ model User {
   billingAccount    BillingAccount?
   /// MUT-358: operator grants covering this person's own profiles.
   entitlementGrants EntitlementGrant[]
+  /// MUT-433 (ADR-196): operator-granted feature flags (server/src/features.ts).
+  featureGrants     UserFeatureGrant[]
   /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
   signupReview      SignupReview?
 
@@ -1496,6 +1498,25 @@ model EntitlementGrant {
   @@index([userId])
   @@index([organizationId])
   @@map("entitlement_grants")
+}
+
+/// MUT-433 (ADR-196): a per-user feature flag the operator turned on. One row per person and feature: a grant after a
+/// revoke re-opens it (revokedAt null, grantedAt the new instant); the history is in audit_events. Names are the closed
+/// set in server/src/features.ts, stored as text so a new flag needs no migration.
+model UserFeatureGrant {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature   String    @db.VarChar(64)
+  /// `admin` for the admin API and CLI.
+  grantedBy String    @db.VarChar(64)
+  grantedAt DateTime
+  /// Set while the flag is off; null while it is on.
+  revokedAt DateTime?
+
+  @@unique([userId, feature])
+  @@index([feature])
+  @@map("user_feature_grants")
 }
 
 /// MUT-358: Stripe webhook events already handled, for idempotency and replay. MUT-360 writes it.

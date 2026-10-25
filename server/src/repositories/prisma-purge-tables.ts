@@ -60,6 +60,7 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'sessions.userId': 'delete',
   'signup_reviews.userId': 'delete',
   'terms_acceptances.userId': 'delete',
+  'user_feature_grants.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
   'conversions.createdByUserId': 'anonymize',

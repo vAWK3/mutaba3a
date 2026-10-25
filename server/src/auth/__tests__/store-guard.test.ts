@@ -120,6 +120,10 @@ describe('STORE_ACCESS', () => {
       'email.suppress',
       // MUT-255: the receipt-scanning success measure, across every profile (counts only).
       'expenseReceipts.editRates',
+      // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
+      'features.grant',
+      'features.holders',
+      'features.revoke',
       'memberships.grant',
       // MUT-373: co-owners are added by the operator only (the pilot path; invites are MUT-306).
       'memberships.grantOwner',
@@ -183,6 +187,15 @@ describe('owned profiles (MUT-182)', () => {
     }
     // Firms and Malafat tenants still come only from the operator (ADR-037 decision 1, MUT-182 amendment).
     expect(storeRefusal('session', null, STORE_ACCESS.organizations.create)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+describe('per-user feature flags (MUT-433)', () => {
+  it("lets a session read its own flags for /v1/me and refuses an API key; MUT-434's MCP principal must be added here", () => {
+    const access = STORE_ACCESS.features.activeFor;
+    expect(access).toBe('sessionOnly');
+    expect(storeRefusal('session', null, access)).toBeNull();
+    expect(storeRefusal('apiKey', null, access)?.code).toBe('PRINCIPAL_NOT_ACCEPTED');
   });
 });
 

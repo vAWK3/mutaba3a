@@ -328,6 +328,39 @@ describe('billing verbs (MUT-358)', () => {
     expect(h.out[0]).toMatch(/^already revoked: /);
   });
 
+  it('feature-grant turns a flag on by email; feature-list shows it; feature-revoke turns it off once (MUT-433)', async () => {
+    const h = harness();
+    const user = await person(h, 'rana@studio.ps');
+    expect(await h.run(['feature-grant', '--email', 'rana@studio.ps', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toEqual([`granted: agent_access for ${user.id} (rana@studio.ps)`]);
+    expect(await h.store.features.activeFor(user.id)).toEqual(['agent_access']);
+    h.out.length = 0;
+    expect(await h.run(['feature-grant', '--email', 'rana@studio.ps', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toEqual([`already on: agent_access for ${user.id} (rana@studio.ps)`]);
+    h.out.length = 0;
+    expect(await h.run(['feature-list', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toHaveLength(1);
+    expect(h.out[0]).toMatch(new RegExp(`^${user.id}\\s+rana@studio\\.ps\\s+\\d{4}-\\d{2}-\\d{2}T`));
+    h.out.length = 0;
+    expect(await h.run(['feature-revoke', '--email', 'rana@studio.ps', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toEqual([`revoked: agent_access for ${user.id} (rana@studio.ps)`]);
+    h.out.length = 0;
+    expect(await h.run(['feature-revoke', '--email', 'rana@studio.ps', '--feature', 'agent_access'])).toBe(0);
+    expect(h.out).toEqual([`already off: agent_access for ${user.id} (rana@studio.ps)`]);
+    expect(await h.store.features.activeFor(user.id)).toEqual([]);
+  });
+
+  it('feature commands need --feature, and the server refuses an unknown one', async () => {
+    const h = harness();
+    await person(h, 'rana@studio.ps');
+    expect(await h.run(['feature-grant', '--email', 'rana@studio.ps'])).toBe(1);
+    expect(h.err[0]).toMatch(/--feature/);
+    expect(await h.run(['feature-list'])).toBe(1);
+    h.err.length = 0;
+    expect(await h.run(['feature-grant', '--email', 'rana@studio.ps', '--feature', 'time_travel'])).toBe(1);
+    expect(h.err.join('\n')).toMatch(/VALIDATION_FAILED|feature/);
+  });
+
   it('billing-grant needs exactly one target', async () => {
     const h = harness();
     expect(await h.run(['billing-grant', '--tier', 'FIRM', '--reason', 'x'])).toBe(1);

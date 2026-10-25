@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.72.0-mut262
+  version: 1.73.0-mut433
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -208,6 +208,10 @@ components:
               $ref: "#/components/schemas/UserStatus"
             closure:
               $ref: "#/components/schemas/AccountClosure"
+            features:
+              type: array
+              items:
+                type: string
           required:
             - id
             - email
@@ -218,6 +222,7 @@ components:
             - passkeyPrompt
             - status
             - closure
+            - features
         profiles:
           type: array
           items:
@@ -7826,6 +7831,55 @@ components:
           $ref: "#/components/schemas/UserSummary"
       required:
         - user
+    FeatureGrantResponse:
+      type: object
+      properties:
+        feature:
+          type: string
+        grantedAt:
+          type: string
+          format: date-time
+        granted:
+          type: boolean
+      required:
+        - feature
+        - grantedAt
+        - granted
+    FeatureRevokeResponse:
+      type: object
+      properties:
+        feature:
+          type: string
+        revoked:
+          type: boolean
+      required:
+        - feature
+        - revoked
+    FeatureHolders:
+      type: object
+      properties:
+        feature:
+          type: string
+        holders:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              email:
+                type: string
+              grantedAt:
+                type: string
+                format: date-time
+            required:
+              - userId
+              - email
+              - grantedAt
+      required:
+        - feature
+        - holders
     RevokeSessionsResponse:
       type: object
       properties:
@@ -18237,6 +18291,138 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: "The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW): approve or decline it instead (MUT-367)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/features/{feature}:
+    put:
+      tags:
+        - Admin
+      summary: Turn a feature on for a person (idempotent); audited on every profile they belong to
+      description: Every feature is off until the operator grants it (features.ts). A second grant changes nothing and keeps the first grantedAt. A signup waiting for review is refused; a disabled account may hold a flag, which waits until it can sign in.
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            maxLength: 64
+            example: agent_access
+          required: true
+          name: feature
+          in: path
+      responses:
+        "200":
+          description: The flag is on
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureGrantResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Unknown feature (VALIDATION_FAILED, details.field feature)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Admin
+      summary: Turn a feature off for a person (idempotent); seen on their very next request
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            maxLength: 64
+            example: agent_access
+          required: true
+          name: feature
+          in: path
+      responses:
+        "200":
+          description: The flag is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureRevokeResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user or organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Unknown feature (VALIDATION_FAILED, details.field feature)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/features/{feature}:
+    get:
+      tags:
+        - Admin
+      summary: Everyone holding a feature now, oldest grant first
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 64
+            example: agent_access
+          required: true
+          name: feature
+          in: path
+      responses:
+        "200":
+          description: The holders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureHolders"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Unknown feature (VALIDATION_FAILED, details.field feature)
           content:
             application/json:
               schema:
