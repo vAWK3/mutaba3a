@@ -1832,9 +1832,9 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `data/download.ts` (MUT-287) | `downloadNavigator.open(url, filename)` (signed URL: top-level navigation; `local-blob:`: object URL + `<a download>`), `localFiles.put`/`read` (the local backend's receipt files) | `ReceiptUploader`, `DocumentsList`, `expenseQueries.putToSignedUrl` |
 | `components/expenseApiErrors.ts` (MUT-44) | `applyExpenseApiError` (MUT-42's `VALIDATION_FAILED`/`CONFLICT` reasons → `setError(..., {type:'manual'})` or a toast) | `ExpenseDrawer` |
 | `components/Brand.tsx`, `Icons.tsx` | `Wordmark`, `LanguageSwitch` (explicit, persisted), `InfoIcon`, `AlertIcon`, `LockIcon` | sign-in, shell |
-| `shell/` | `HostedShell` (nav now incl. Expenses, MUT-44), `YouLinks` (MUT-425: the profile name and the avatar as links into the You page, TD-236), `youRoutes` (`YOU_PARTS`, `youPath`, `isYouPath`, `sectionOf`, `parseYouSearch`, `switchTarget`), `initialsOf`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import; groups use it) | `ProfileLayout` |
+| `shell/` | `HostedShell` (MUT-424: the four destinations, lit by `destinationOf`, plus Reports until MUT-426), `destinations` (MUT-424, ADR-192: `DESTINATIONS`, `destinationOf`, `destinationPath`, `NO_DESTINATION`; pure, reused by MUT-426's pill), `YouLinks` (MUT-425: the profile name and the avatar as links into the You page, TD-236), `youRoutes` (`YOU_PARTS`, `youPath`, `isYouPath`, `sectionOf`, `parseYouSearch`, `switchTarget`), `initialsOf`, `usePopover` (the portal's twin of `useMenuButton`, which it may not import; groups use it) | `ProfileLayout` |
 | `pages/you/` (MUT-425, ADR-187) | `YouPage({ part, profile, search })` with `YouProfiles`, `YouAccount`, `YouApp`: the page that replaced the switcher and the account menu; every row opens the shell's drawers by URL key | router (`/p/:id/you…`, `/you…`) |
-| `components/YouRows.tsx` (MUT-425) | `RowGroup`, `RowButton` (`inert` = focusable but does nothing, `current`, `tone`), `RowLink` (new tab), `RowSwitch` (`role=switch`), `RowNote` | You page, `MalafatRows`, `UsageSwitchRow`, `AppDownloadRows` |
+| `components/YouRows.tsx` (MUT-425) | `RowGroup`, `RowButton` (`inert` = focusable but does nothing, `current`, `tone`), `RowLink` (new tab), `RowNavLink` (MUT-424: a router link row with a bidi-mirrored ›), `RowSwitch` (`role=switch`), `RowNote` | You page, `MalafatRows`, `UsageSwitchRow`, `AppDownloadRows` |
 | `components/ProfileKindLine.tsx` (MUT-425, eng D9) | the kind and shared cue under a profile's name (`useProfileKind`) | You › Profiles, Manage profiles |
 | `session/` | `meQuery`, `profileKey(id, …)`, `useMe`, `useProfile`, `AuthGate`, `HomeRedirect`, `CaptureRedirect` (MUT-111, shares `FirstProfileRedirect` with `HomeRedirect`), `ProfileLayout`, `SessionBridge`, `endSession`, `useSignOut`, `safeNext`, `announceSignedOut` / `onSignedOutElsewhere` | router |
 | `data/queries.ts` | query hooks (`useOrganizationSummary`, `useCustomerSummary`, `useCustomer`, `useCustomerDirectory`, `useProjectDirectory`, `useReceivables`, `usePayments`, `useAttachments`), `useCursorList` (exported for reuse), filter models and parsers | views, router, `data/expenseQueries.ts` |
@@ -1842,7 +1842,7 @@ The portal reuses the app's tokens, `Button`, `Badge`, `Card` CSS, `SegmentedTab
 | `components/conversionFormSchema.ts` (MUT-161, JOD MUT-194) | `conversionFormSchema` (USD/ILS/EUR/JOD, per-leg decimals by `currencyExponent`, SAME_CURRENCY), `CURRENCY_OPTIONS`, `impliedRate` | `ConversionDrawer` |
 | `data/conversionQueries.ts` (MUT-161, MUT-194) | `useConversions`, `useConversion`, `conversionKey`, `useCreateConversion`, `useUpdateConversion`, `useDeleteConversion` | `ConversionsList`, `ConversionDrawer` |
 | `data/expenseQueries.ts` (MUT-44) | `useExpenses`, `useExpense`, `useExpenseCategories`, `useCreateExpense`/`useUpdateExpense`/`useDeleteExpense`, `useAddReceipt`/`useDeleteReceipt` — the portal's only mutations | `ExpensesList`, `ExpenseDrawer`, `ReceiptUploader` |
-| `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `ExpensesList`/`Page` (MUT-44), `StatusBadge`, `ShowMore`, `PageHeader`, `NoMatch` | router |
+| `pages/views/` | `OverviewPage`, `ClientsPage`, `ClientDetailPage`, `ReceivablesList`/`Page`, `PaymentsList`/`Page`, `DocumentsList`/`Page` (lists take `fixedCustomerId` for client tabs), `ExpensesList`/`Page` (MUT-44), `StatusBadge`, `ShowMore`, `PageHeader` (MUT-424: `back?: { to, label }`), `useBackTo(destination)`, `NoMatch` | router |
 
 ### Portal sign-in request link (MUT-188)
 **Location**: `src/hosted/pages/auth/SignInPage.tsx` (no new component)
@@ -2099,6 +2099,10 @@ await importProfileFile(file, existing ? { mode: 'merge', profileId: existing.id
 `GO_HOSTED_SNOOZE_DAYS`, `GO_HOSTED_DISMISSED_KEY`, `isGoHostedCardDue(dismissedAt, now)`, `readDismissedAt()`, `writeDismissedAt(at)`, `goHostedEnabled()`, `hostedPortalUrl()`. Reuse `goHostedEnabled()`'s typeof-guard shape for any other web-only UI (MUT-190, MUT-90) rather than a bare `__BUILD_MODE__` read.
 
 ## Expense groups (portal) — MUT-268
+
+### DeeperLinks — `src/hosted/components/DeeperLinks.tsx`
+**Purpose**: MUT-424's "one level in": a `<nav aria-label="More in <destination>">` box of `RowNavLink` rows (label, one-line description, ›) at the bottom of a destination page, outside its `QueryView`. Props: `destination`, `links: { key: 'receivables' | 'conversions' | 'documents', to }[]` (copy from `hosted.deeper.<key>`). No counts or figures. Used by Owed, Paid and Clients.
+Tests: `src/hosted/pages/__tests__/destinations.test.tsx`; QA `portal.shell.one-level-in`.
 
 ### SectionTabs — `src/hosted/components/SectionTabs.tsx`
 **Purpose**: sub-pages of one section as underlined router links in a labelled `<nav>`, `aria-current="page"` on the lit one (17A). Props: `label`, `tabs: { to, label, exact?, search? }[]` (`exact` for the parent route's own tab; `search` carried by the link, MUT-425's `from`), `variant?: 'underline' | 'segmented'` (MUT-425: the You page's Profiles · Account · App pill). Not a tablist: each tab is a route. `useExpensesTabs()` (ExpenseGroupsList.tsx) builds Expenses · Groups.

@@ -22,7 +22,7 @@ async function openPortal(page: Page, api: FakeApi) {
   // As an ordinary browser, so a silence can't be posthog-js's bot filter
   await actAsPerson(page);
   await api.open(page, `/p/${OFFICE_A}/payments`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
 }
 
 async function nextEvent(analytics: AnalyticsSpy, name: string): Promise<SentEvent> {

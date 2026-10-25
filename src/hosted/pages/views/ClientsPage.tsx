@@ -11,6 +11,7 @@ import { DecimalAmount, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { MalafatClientsCard } from '../../components/MalafatPortal';
 import { useProfile } from '../../session/me';
+import { DeeperLinks } from '../../components/DeeperLinks';
 import { PageHeader, ShowMore, StatusBadge, laterDay } from './shared';
 
 /**
@@ -78,6 +79,8 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
           </>
         )}
       </QueryView>
+      {/* MUT-423 D2: every document, including the ones with no client, one level in */}
+      <DeeperLinks destination="clients" links={[{ key: 'documents', to: `/p/${profile.id}/documents` }]} />
     </>
   );
 }

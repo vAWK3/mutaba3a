@@ -172,7 +172,7 @@ test('Carrying into a device that already has records warns, offers a download f
 
   await step('Have records on the new address already', async () => {
     await page.goto(`${NEW_ADDRESS}/`);
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
     await page.getByRole('button', { name: '+ Add income' }).first().click();
     const drawer = page.getByRole('dialog', { name: 'New income' });
     await drawer.getByRole('radio', { name: 'Received' }).click();
@@ -215,7 +215,7 @@ test('Carrying into a device that already has records warns, offers a download f
   await step('The device now holds the carried records, not the earlier payment', async () => {
     await receiver.getByRole('button', { name: 'Open MTB3A' }).click();
     await expect(receiver.getByRole('navigation', { name: 'Sections' })).toBeVisible();
-    await receiver.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await receiver.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
     await expect(receiver.getByRole('table', { name: 'Payments' })).toContainText('100.00');
     await expect(receiver.getByText('99.00')).toHaveCount(0);
   });
@@ -227,7 +227,7 @@ test('The old address\'s signed-out records go to the new address, and the old l
   let paymentsPath = '';
   await step('Signed out on the old address, add money received', async () => {
     await page.goto(`${OLD_ADDRESS}/`);
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
     await page.getByRole('button', { name: '+ Add income' }).first().click();
     const drawer = page.getByRole('dialog', { name: 'New income' });
     await drawer.getByRole('radio', { name: 'Received' }).click();

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 
 /**
@@ -76,6 +77,21 @@ export function RowSwitch({ label, on, onToggle }: { label: string; on: boolean;
       <RowText label={label} />
       <span className="hp-you-switch" aria-hidden="true" />
     </button>
+  );
+}
+
+/**
+ * A link to another portal page (MUT-424's one-level-in rows): a real link, so it deep-links and Back works. The ›
+ * is bidi-mirrored by the browser in Arabic, so it needs no CSS flip (that would point it backwards).
+ */
+export function RowNavLink({ label, sub, to }: { label: ReactNode; sub?: ReactNode; to: string }) {
+  return (
+    <Link className="hp-you-row press" to={to}>
+      <RowText label={label} sub={sub} />
+      <span className="hp-you-row-tail" aria-hidden="true">
+        ›
+      </span>
+    </Link>
   );
 }
 

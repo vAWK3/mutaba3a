@@ -1,4 +1,12 @@
 {
+  "0.2.1": {
+    "en": [
+      "Behind-the-scenes groundwork on the website for signing in to your MTB3A account with a passkey."
+    ],
+    "ar": [
+      "تحضيرات في الموقع لتسجيل الدخول إلى حسابك في «متابعة» بمفتاح المرور."
+    ]
+  },
   "0.2.0": {
     "en": [
       "MTB3A has a new web address. The web app offers to carry your records to the new address in one step, or to download them as a file you can restore there.",

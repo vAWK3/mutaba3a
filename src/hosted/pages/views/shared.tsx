@@ -1,8 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { ReactNode, Ref } from 'react';
+import { Link } from '@tanstack/react-router';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { useT } from '../../../lib/i18n/core';
+import { useProfile } from '../../session/me';
+import { destinationPath, type Destination } from '../../shell/destinations';
 
 /** Status words and the "show more" footer shared by the list views. */
 
@@ -42,9 +45,22 @@ export function ShowMore({ hasMore, loading, onMore }: { hasMore: boolean; loadi
   );
 }
 
-export function PageHeader({ title, children, headingRef }: { title: string; children?: ReactNode; headingRef?: Ref<HTMLHeadingElement> }) {
+interface PageHeaderProps {
+  title: string;
+  children?: ReactNode;
+  headingRef?: Ref<HTMLHeadingElement>;
+  /** A page one level in links back to where it sits (MUT-424 E5: Receivables → Owed; a client → All clients). */
+  back?: { to: string; label: string };
+}
+
+export function PageHeader({ title, children, headingRef, back }: PageHeaderProps) {
   return (
     <header className="hp-page-header">
+      {back && (
+        <Link to={back.to} className="hp-back">
+          {back.label}
+        </Link>
+      )}
       {/* A heading that takes focus (tabIndex -1) only when a caller needs somewhere to send it */}
       <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
         {title}
@@ -52,6 +68,13 @@ export function PageHeader({ title, children, headingRef }: { title: string; chi
       {children}
     </header>
   );
+}
+
+/** The back link of a page one level in (MUT-424 E5): its destination's word, to its destination's page. */
+export function useBackTo(destination: Destination): { to: string; label: string } {
+  const t = useT();
+  const profile = useProfile();
+  return { to: destinationPath(profile.id, destination), label: t(`hosted.destinations.${destination}`) };
 }
 
 export function NoMatch({ onClear }: { onClear: () => void }) {

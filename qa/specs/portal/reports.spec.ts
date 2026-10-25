@@ -63,7 +63,7 @@ test('With no records, Reports is one block that starts the first payment or exp
 
   await step('Open Reports on a profile with no payments or expenses', async () => {
     await api.open(page, `/p/${OFFICE_A}`);
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Reports' }).click();
+    await page.getByRole('link', { name: 'Reports', exact: true }).click();
   });
 
   await step('One block invites the first payment or expense, with nothing else around it', async () => {
@@ -283,7 +283,7 @@ test('Signed out on this device, Reports runs on the records kept in the browser
 
   await step('Signed out, open Reports', async () => {
     await page.goto('/');
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Reports' }).click();
+    await page.getByRole('link', { name: 'Reports', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your reports start with your first payment or expense' })).toBeVisible();
   });
 
@@ -294,7 +294,7 @@ test('Signed out on this device, Reports runs on the records kept in the browser
     await drawer.getByLabel('Amount').fill('250.00');
     await drawer.getByRole('button', { name: 'Save income' }).click();
     await expect(drawer).toBeHidden();
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Reports' }).click();
+    await page.getByRole('link', { name: 'Reports', exact: true }).click();
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪250');
   });
 

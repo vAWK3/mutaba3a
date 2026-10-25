@@ -14,6 +14,7 @@ import type { OverviewFilters } from '../../data/filters';
 import { DecimalAmount, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile } from '../../session/me';
+import { DeeperLinks } from '../../components/DeeperLinks';
 import { PageHeader, StatusBadge } from './shared';
 
 /**
@@ -58,7 +59,8 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
 
   return (
     <>
-      <PageHeader title={t('hosted.overview.title')} headingRef={heading} />
+      {/* MUT-424: today's Overview is the Owed destination */}
+      <PageHeader title={t('hosted.destinations.owed')} headingRef={heading} />
       {/* MUT-418: the free trial's days left, until a card is on file */}
       <TrialBanner />
       {/* MUT-370: suggest a passkey, after the trial's first-run step and under its banner (D4) */}
@@ -78,6 +80,7 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
           <OverviewBody summary={s} names={names} currency={filters.currency} onCurrency={(currency) => setFilters({ ...filters, currency })} />
         )}
       </QueryView>
+      <DeeperLinks destination="owed" links={[{ key: 'receivables', to: `/p/${profile.id}/receivables` }]} />
     </>
   );
 }
@@ -145,7 +148,7 @@ function OverviewBody({ summary, names, currency, onCurrency }: OverviewBodyProp
         )}
       </div>
       <p className="hp-asof">{t('hosted.overview.asOf', { date: formatDay(summary.asOf, language) })}</p>
-      {rows.length > 0 && <HostedTable label={t('hosted.overview.title')} columns={columns} rows={rows} rowKey={(row) => row.id} />}
+      {rows.length > 0 && <HostedTable label={t('hosted.destinations.owed')} columns={columns} rows={rows} rowKey={(row) => row.id} />}
     </>
   );
 }

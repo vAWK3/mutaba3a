@@ -12,7 +12,7 @@ import { DOCUMENT_KINDS, isNarrowed, type DocumentFilters } from '../../data/fil
 import { useAttachments, useCustomerDirectory } from '../../data/queries';
 import { formatInstant, formatSize } from '../../format/dates';
 import { useProfile } from '../../session/me';
-import { NoMatch, PageHeader, ShowMore } from './shared';
+import { NoMatch, PageHeader, ShowMore, useBackTo } from './shared';
 
 /**
  * Documents (hosted-portal.md §7.3): invoices and receipts, download only. A
@@ -157,9 +157,11 @@ function shape(a: Attachment, customers: Map<string, Customer>, language: 'en' |
 
 export function DocumentsPage(props: Omit<DocumentsListProps, 'fixedCustomerId'>) {
   const { t } = useLanguage();
+  // MUT-424 (MUT-423 D2): all documents, with or without a client, sit one level in under Clients
+  const back = useBackTo('clients');
   return (
     <>
-      <PageHeader title={t('hosted.documents.title')} />
+      <PageHeader title={t('hosted.documents.title')} back={back} />
       <DocumentsList {...props} />
     </>
   );

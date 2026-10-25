@@ -3750,6 +3750,16 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
+## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-192)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `shell/__tests__/destinations.test.ts` (every route segment → its destination, search stripped, exceptions and unknowns → null, the four in order at their URLs) | `npx vitest run src/hosted/shell` |
+| Route coverage (eng R3) | `shell/__tests__/destinations.routes.test.ts`: walks `createPortalRouter().routesByPath`; every `/p/$profileId` route maps to a destination or is in `NO_DESTINATION` | same |
+| Component (real router) | `pages/__tests__/destinations.test.tsx` (exactly four links, the lit one for pages one level in, Reports beside them lighting none, Arabic names, destination titles, `DeeperLinks` rows, back links, All clients via `PageHeader back`) | `npx vitest run src/hosted/pages` |
+| Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
+| Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |
+
 ## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-193)
 
 | Layer | Tests | Command |

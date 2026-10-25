@@ -144,6 +144,16 @@ describe('LandingPage Get it (hosted-only)', () => {
     expect(within(getIt).getByRole('form')).toBeInTheDocument();
   });
 
+  it('puts the request form before sign-in and the apps, so focus order follows the page', () => {
+    vi.stubGlobal('__PORTAL_URL__', 'https://portal.test');
+    renderLanding('en');
+    const getIt = part('get-it');
+    const request = getIt.querySelector('[data-part="get-it-request"]')!;
+    const options = getIt.querySelector('.landing-get-it-options')!;
+    expect(request.compareDocumentPosition(options) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
   it('offers sign-in only when the build set a portal URL', () => {
     vi.stubGlobal('__PORTAL_URL__', 'https://portal.test');
     renderLanding('en');
@@ -454,6 +464,10 @@ describe('LandingPage self-service signup (MUT-369)', () => {
     expect(within(getIt).getByRole('heading', { name: 'Want us to set it up for you?' })).toBeInTheDocument();
     expect(within(getIt).getByRole('form')).toBeInTheDocument();
     expect(getIt).not.toHaveTextContent(/no public sign-up/);
+    // The note says "ask us below": the options and note sit above the form
+    const request = getIt.querySelector('[data-part="get-it-request"]')!;
+    const note = getIt.querySelector('.landing-get-it-note')!;
+    expect(note.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('points the phone chapter and the free-plan answer at signing up', async () => {
