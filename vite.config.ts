@@ -115,6 +115,20 @@ export function turnstileSiteKey(override: string | undefined): string {
   return override;
 }
 
+/**
+ * MUT-115 (ADR-190): the passkey relying-party ID the portal offers passkeys under, the same value Terraform gives the
+ * server (`WEBAUTHN_RP_ID`, from config/hosts.json at stage live/redirect). "" = no passkeys in this build (stages
+ * legacy/proxy). `MUTABA3A_PASSKEY_RP_ID` overrides it for local QA (`localhost`). The portal shows passkeys only on
+ * a host under it, so the legacy run.app host never makes one that would be useless.
+ */
+export function passkeyRpId(hosts: Pick<ResolvedHosts, "stage" | "domain">, override: string | undefined): string {
+  if (override !== undefined && override !== "") {
+    if (!/^[a-z0-9.-]+$/.test(override)) throw new Error("MUTABA3A_PASSKEY_RP_ID must be a bare host name, e.g. localhost");
+    return override;
+  }
+  return (hosts.stage === "live" || hosts.stage === "redirect") && hosts.domain ? hosts.domain : "";
+}
+
 /** The Sentry org and projects the browser surfaces report to, and where their source maps go (MUT-149/150, ADR-091). */
 const SENTRY_ORG = "barmajiyat-ltd";
 const SENTRY_PORTAL_PROJECT = "mutaba3a-web";
@@ -657,6 +671,8 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
       // The bot check on /signup and /recover (MUT-368); public, never the secret
       __TURNSTILE_SITE_KEY__: JSON.stringify(turnstileSiteKey(process.env.MUTABA3A_TURNSTILE_SITE_KEY)),
+      // The passkey relying party (MUT-115); "" = no passkeys in this build
+      __PASSKEY_RP_ID__: JSON.stringify(passkeyRpId(HOSTS, process.env.MUTABA3A_PASSKEY_RP_ID)),
       // The carry-over's origins (MUT-291): the receiver's accepted old origins and the new portal
       __CARRY_OVER__: JSON.stringify(carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { release: command === "build" })),
       // Crash reports, signed in only (MUT-149, ADR-091 am.11); no DSN compiles them out

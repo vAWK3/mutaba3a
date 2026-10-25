@@ -230,6 +230,11 @@
 
 .hp-block { width: 100%; margin-top: var(--space-1); justify-content: center; }
 .hp-inline-spinner { position: static; margin-inline-end: var(--space-2); }
+/* MUT-115 (DR1): the "or" rule between the password form and the passkey button */
+.hp-divider { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); color: var(--muted); font-size: var(--text-label); }
+.hp-divider::before, .hp-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+/* DR9: decorative, never mirrored in RTL */
+.hp-passkey-icon { flex: none; }
 .hp-help { max-width: var(--hp-card-width); text-align: center; font-size: var(--text-label); color: var(--muted); margin: 0; }
 .hp-help + .hp-help { margin-top: var(--space-2); }
 /* A link inside running text needs more than colour to stand out (axe link-in-text-block, MUT-188) */
@@ -871,6 +876,23 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 /* Always visible, 44px tall: no hover-only actions (AD10); trailing, so it mirrors in RTL. */
 /* .hp-link-button sets the accent colour later in this file; the owner actions are destructive. */
 .hp-link-button.hp-danger { color: var(--error); }
+/* MUT-115 (DR2, DR11): You › Account › Passkeys. Row actions wrap under the meta line at 375 px; targets ≥ 44 px. */
+.hp-passkey-intro { margin: 0 0 var(--space-3); }
+.hp-passkey-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-passkey-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); padding: var(--space-3); }
+.hp-passkey-row + .hp-passkey-row { border-top: 1px solid var(--border); }
+.hp-passkey-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-passkey-text { min-width: 0; flex: 1 1 12rem; }
+.hp-passkey-name { display: block; font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.hp-passkey-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.hp-passkey-actions .hp-link-button { display: inline-flex; align-items: center; min-height: 44px; }
+.hp-passkey-rename, .hp-passkey-confirm { flex: 1 1 100%; }
+.hp-passkey-confirm p { margin: 0 0 var(--space-2); }
+.hp-passkey-empty h3 { margin: 0 0 var(--space-1); font-size: var(--text-body); }
+.hp-passkey-empty p { margin: 0; }
+.hp-passkey-stepup { margin-top: var(--space-4); }
+.hp-passkey-stepup > p { margin: 0 0 var(--space-2); }
+.hp-passkey-limit { margin: 0; margin-inline-end: auto; }
 .hp-owner-action { flex: none; min-height: 44px; padding-inline: var(--space-2); justify-self: start; }
 .hp-owner-confirm { margin-block: var(--space-2); }
 .hp-owner-add { margin: 0; }

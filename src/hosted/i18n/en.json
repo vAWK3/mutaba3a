@@ -66,6 +66,11 @@
       "create": {
         "lead": "No account?",
         "link": "Create an account"
+      },
+      "passkey": {
+        "button": "Sign in with a passkey",
+        "or": "or",
+        "invalid": "That passkey didn’t work. Try again, or sign in with your password."
       }
     },
     "account": {
@@ -77,6 +82,36 @@
         "saving": "Saving…",
         "success": "Password changed",
         "wrongCurrent": "Current password is wrong."
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "rowSub": "Sign in with Face ID, Touch ID or your screen lock",
+        "intro": "Sign in with Face ID, Touch ID or your device’s screen lock. Your password still works.",
+        "add": "Add a passkey",
+        "continue": "Continue",
+        "stepUp": "For your security, enter your password to add a passkey.",
+        "added": "Passkey added",
+        "addFailed": "Couldn’t add the passkey. Try again.",
+        "limit": "You can have up to {limit} passkeys. Remove one to add another.",
+        "emptyTitle": "No passkeys yet",
+        "emptyBody": "A passkey lets you sign in with Face ID, Touch ID or your device’s screen lock instead of typing your password.",
+        "rename": "Rename",
+        "renameLabel": "Rename {name}",
+        "remove": "Remove",
+        "removeLabel": "Remove {name}",
+        "confirm": "Remove “{name}”? You won’t be able to sign in with it, and devices signed in with it will be signed out.",
+        "removed": "Passkey removed. Devices signed in with it are signed out.",
+        "removeFailed": "Couldn’t remove the passkey. Try again.",
+        "renamed": "Name saved",
+        "renameFailed": "Couldn’t save the name. Try again.",
+        "nameLabel": "Name",
+        "nameInvalid": "Use 1–{max} characters.",
+        "save": "Save",
+        "addedOn": "Added {date}",
+        "lastUsed": "Last used {when}",
+        "neverUsed": "Never used",
+        "today": "today",
+        "rowLabel": "{name}, {meta}"
       }
     },
     "closeAccount": {
