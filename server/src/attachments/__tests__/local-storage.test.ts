@@ -55,6 +55,19 @@ describe('LocalAttachmentStorage', () => {
     expect(await bytesOf(opened.body)).toEqual(PNG);
   });
 
+  it('signs an inline download only when asked; a token without the claim stays an attachment (MUT-260 A12)', async () => {
+    const s = storage();
+    const { token } = await signPut(s);
+    await s.acceptUpload(token, { contentType: 'image/png', contentLength: PNG.length, body: body(PNG) }, NOW);
+    const plain = await s.openDownload(tokenOf((await s.signDownload(KEY, { filename: 'r.pdf', mimeType: 'application/pdf', ttlSeconds: 900, now: NOW })).url), NOW, { withBody: false });
+    expect(plain.disposition).toBe('attachment');
+    expect(plain.contentDisposition.startsWith('attachment;')).toBe(true);
+    const inline = await s.openDownload(tokenOf((await s.signDownload(KEY, { filename: 'r.pdf', mimeType: 'application/pdf', ttlSeconds: 900, now: NOW, disposition: 'inline' })).url), NOW, { withBody: false });
+    expect(inline.disposition).toBe('inline');
+    expect(inline.contentDisposition.startsWith('inline;')).toBe(true);
+    expect(inline.mimeType).toBe('application/pdf');
+  });
+
   it('judges expiry on the injected clock', async () => {
     const s = storage();
     const { token } = await signPut(s);

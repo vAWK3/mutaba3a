@@ -42,17 +42,19 @@ export function devAttachmentRoutes(storage: LocalAttachmentStorage): Hono<AppEn
     try {
       // Hono routes HEAD here too: answer from the file's handle without opening a stream.
       const file = await storage.openDownload(c.req.param('token'), c.get('now')(), { withBody: c.req.method !== 'HEAD' });
-      return new Response(file.body, {
-        status: 200,
-        headers: {
-          'content-type': file.mimeType,
-          'content-length': String(file.sizeBytes),
-          'content-disposition': file.contentDisposition,
-          // A download, not a page: no scripts, whatever the file claims to be.
-          'content-security-policy': 'sandbox',
-          'cache-control': 'no-store',
-        },
-      });
+      const headers: Record<string, string> = {
+        'content-type': file.mimeType,
+        'content-length': String(file.sizeBytes),
+        'content-disposition': file.contentDisposition,
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'no-store',
+      };
+      // A download, not a page: no scripts, whatever the file claims to be. MUT-260 (A6): an inline preview goes
+      // without it, because a sandboxed PDF won't render in the portal's iframe, and without the portal's CSP (whose
+      // frame-ancestors 'none' would refuse the frame): a raw Response never picks that header up. The type is still
+      // the stored one (PDF, JPEG or PNG only), so nothing here can run script.
+      if (file.disposition === 'attachment') headers['content-security-policy'] = 'sandbox';
+      return new Response(file.body, { status: 200, headers });
     } catch (error) {
       return fail(error);
     }

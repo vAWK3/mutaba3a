@@ -25,6 +25,7 @@ import {
   IfMatchHeaderSchema,
   ListReceiptsQuerySchema,
   ReceiptCountsSchema,
+  ReceiptDownloadQuerySchema,
   ReceiptIdParamSchema,
   ReceiptPageSchema,
   ReceiptSuggestionSchema,
@@ -243,9 +244,10 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       path: '/v1/receipts/{receiptId}/download',
       tags: ['Receipts'],
       summary: 'A short-lived signed download URL for a READY receipt',
+      description: '`disposition=inline` (MUT-260) signs a URL that displays the file instead of saving it, for the portal\'s preview. The response type is always the stored one: PDF, JPEG or PNG.',
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
-      request: { params: ReceiptIdParamSchema },
+      request: { params: ReceiptIdParamSchema, query: ReceiptDownloadQuerySchema },
       responses: { 200: { description: 'Signed URL', content: { 'application/json': { schema: AttachmentDownloadSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
@@ -253,7 +255,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       const { organization } = sessionAuth(c);
       const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
       if (receipt.status !== 'READY') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
-      const signed = await s.signDownload(receipt.storageKey, { filename: receipt.filename, mimeType: receipt.mimeType, ttlSeconds: options.urlTtlSeconds, now: c.get('now')() });
+      const { disposition } = c.req.valid('query');
+      const signed = await s.signDownload(receipt.storageKey, { filename: receipt.filename, mimeType: receipt.mimeType, ttlSeconds: options.urlTtlSeconds, now: c.get('now')(), disposition });
       return c.json({ url: signed.url, expiresAt: signed.expiresAt.toISOString(), filename: receipt.filename, mimeType: receipt.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png' }, 200);
     },
   );
