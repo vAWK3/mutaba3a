@@ -3750,6 +3750,14 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
+## MUT-346 — terms that change mid-session ask in a dialog; an open drawer keeps its draft (2026-10-25)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `components/ui/__tests__/BlockingDialog.test.tsx` (10: labelled modal outside the app, app inert + aria-hidden; focus in and Tab wrap; Escape swallowed before document listeners; on close the app is given back and focus returns; focus returns even after the browser dropped it to `<body>`; earlier attribute values restored; review: page scroll locked and given back; `<body>` children added while open go inert and come back; two dialogs, only the newest reachable, either closes first; without native inert, focus behind is brought back) | `npx vitest run src/components/ui/__tests__/BlockingDialog.test.tsx` |
+| Portal | `session/__tests__/AuthGate.terms.test.tsx` (6: bump mid-session → dialog, drawer keeps its draft through I agree; app inert/aria-hidden while open and given back; Escape doesn't close the drawer; review: /v1/me answering for someone else asks on the full page; a failed Sign out is said inside the dialog; boot keeps the full page). `TermsUpdatePage.test.tsx` unchanged (boot path) | `npx vitest run src/hosted/session/__tests__/AuthGate.terms.test.tsx` |
+| Release-QA | `portal.terms.bumped-mid-session-keeps-draft` (core, new: real browser proves inert, Escape/Tab/Save blocked, focus back in the drawer field, the draft saves); the other 6 `portal.terms.*` still pass | `release-qa release --only portal.terms` |
+
 ## MUT-414 / MUT-415 — passkey added mail, passkey review after a password change or recovery (2026-10-25)
 
 | Layer | Tests | Command |

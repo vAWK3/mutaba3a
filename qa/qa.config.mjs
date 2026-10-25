@@ -45,6 +45,8 @@ export default {
         '!src/hooks/useTauriUpdater.ts',
         // Only the hosted portal renders it; it is in the portal app's watch instead.
         '!src/components/filters/SegmentedTabs.tsx',
+        // MUT-346: only the portal renders it (the Updated-terms dialog); the portal app's watch has it.
+        '!src/components/ui/{BlockingDialog.*,blockingLayer.ts}',
         // MUT-291: the carry-over spans both apps; the carry-over app owns it.
         '!src/pages/carryOver/**',
         '!src/lib/carryOver/**',
@@ -68,7 +70,7 @@ export default {
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
       // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/components/ui/{BlockingDialog.*,blockingLayer.ts}', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
         '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
         '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts',
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/Button';
 import { ApiError } from '../api/client';
 import { useAdoptAccountLocale } from '../i18n/HostedLanguageProvider';
 import { BootUnreachable, CheckingSession, LocalUnavailable, ReloadToContinue } from '../pages/auth/BootScreens';
-import { TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
+import { TermsUpdateDialog, TermsUpdatePage } from '../pages/auth/TermsUpdatePage';
 import { AccountClosingPage } from '../pages/auth/AccountClosingPage';
 import { HostedShell } from '../shell/HostedShell';
 import { isYouPath } from '../shell/youRoutes';
@@ -38,15 +38,26 @@ export function AuthGate() {
     if (locale) adoptAccountLocale(locale);
   }, [locale, adoptAccountLocale]);
 
+  // Whom the portal has been shown to since /v1/me last had an answer (adjusted during render, not in an effect,
+  // react-hooks v7). A session that starts over (the cache cleared by another tab's sign-in) starts it over too.
+  const [shownFor, setShownFor] = useState<string | null>(null);
+  const userId = me.data?.user.id ?? null;
+  if (!me.data && shownFor !== null) setShownFor(null);
+  if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && shownFor !== userId) setShownFor(userId);
+  const shellShown = userId !== null && shownFor === userId;
+
   // MUT-333: a closing account sees only the closing page (the server refuses everything else); before the terms,
   // since a person leaving needn't accept new ones to keep or leave.
   if (me.data?.user.closure) return <AccountClosingPage me={me.data} />;
-  // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks
-  if (me.data?.terms?.accepted === false) return <TermsUpdatePage version={me.data.terms.version} />;
+  // MUT-324: someone behind on the terms reads and accepts them before anything else; null (signed out) never asks.
+  // MUT-346: once the portal has been open, terms that change ask in a dialog above it instead, so an open drawer
+  // and its draft survive. Before that (boot, sign-in) the step stays the page, with nothing loading behind it.
+  if (me.data?.terms?.accepted === false && !shellShown) return <TermsUpdatePage version={me.data.terms.version} />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>
         <Outlet />
+        {me.data.terms?.accepted === false && <TermsUpdateDialog version={me.data.terms.version} />}
       </MeProvider>
     );
   }

@@ -13,7 +13,8 @@ import { setMode } from './mode';
  * server can end the session: if `DELETE` fails, the person is told and stays
  * signed in rather than being shown a sign-out that didn't happen.
  */
-export function useSignOut(): { signOut: () => Promise<void>; signingOut: boolean } {
+export function useSignOut(options: { onFailed?: () => void } = {}): { signOut: () => Promise<void>; signingOut: boolean } {
+  const { onFailed } = options;
   const queryClient = useQueryClient();
   const router = useRouter();
   const toast = useToast();
@@ -26,14 +27,16 @@ export function useSignOut(): { signOut: () => Promise<void>; signingOut: boolea
       await api.signOut();
     } catch {
       setSigningOut(false);
-      toast(t('hosted.auth.signOutFailed'));
+      // MUT-346: a caller above the inert app (the Updated-terms dialog) says it where it can be seen
+      if (onFailed) onFailed();
+      else toast(t('hosted.auth.signOutFailed'));
       return;
     }
     // Signed out, this device is the local app again (MUT-286); another tab reads the same hint.
     setMode('local');
     announceSignedOut();
     endSession(queryClient, router, { reason: 'signed_out' });
-  }, [queryClient, router, toast, t]);
+  }, [queryClient, router, toast, t, onFailed]);
 
   return { signOut, signingOut };
 }

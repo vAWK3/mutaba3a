@@ -43,6 +43,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Terms that change mid-session ask in a dialog above the portal; an open drawer keeps its draft (MUT-346)
+
+**Why:** a terms bump picked up by a `/v1/me` refetch replaced the whole portal with the Updated-terms page, unmounting any open drawer and its half-typed entry. MUT-382's coming terms version would hit every open portal.
+
+### Added
+- `src/components/ui/BlockingDialog.tsx` (+ `.css`): a portaled modal that must be answered; every other `<body>` child is `inert` + `aria-hidden` while open, Escape is swallowed in the capture phase, focus via `useDrawerFocus`. Pattern in PATTERNS.md.
+- `TermsUpdateDialog`: the same step body as `TermsUpdatePage` (now a shared `TermsUpdateStep`), in a `BlockingDialog` with an h2.
+
+### Changed
+- `AuthGate`: once the portal has been shown this visit, `terms.accepted === false` renders the dialog over the still-mounted Outlet; at boot and sign-in the full page is unchanged. The closing page still comes first.
+- Tests: see TEST_PLAN. No API change.
+
+---
+
 ## [Unreleased] - 2026-10-25 — A passkey added is mailed to the owner; passkeys are reviewed after a password change or a recovery (MUT-414, MUT-415)
 
 **Why:** passkeys survive a password change by design (MUT-115). Someone who knew the password could plant one, and someone resetting a password they think was stolen kept every passkey without seeing them.
