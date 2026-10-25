@@ -111,6 +111,13 @@ Scope challenge: scope accepted as-is (one field, one route, one card; reuses MU
 Outside voice: skipped (unattended run, no second model available).
 Failure modes: 0 critical gaps.
 
+## 11. Build record (2026-10-25)
+
+- Built as planned. `buildMe` takes `passkeysAt` (`passkeysClockOf(c)`), the request clock where passkeys are on.
+- Code review fixes: a Not now while the person holds a passkey spends nothing (a stale card in another tab); a refused Not now keeps the optimistic hide for the visit (no refetch on failure); after `added` the card is done at once (no second ceremony on a slow refetch); Add and Not now guard each other; the closing-account rule lives in `passkeyPromptView`; `PasskeyPromptSchema` takes its maximum from `PASSKEY_PROMPT_MAX_OFFERS`.
+- Not taken from review: carrying `passkeyPrompt` on `UserRecord` to save the row read (D1 keeps it off the record so the local snapshot and the records export don't change; one indexed read per `/v1/me`).
+- The D4 order is proven live after all: the `portal-selfservice` app's signups get a trial (the honest "open soon" step), so `suggest-first-sign-in` records the trial step first, then the card.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
