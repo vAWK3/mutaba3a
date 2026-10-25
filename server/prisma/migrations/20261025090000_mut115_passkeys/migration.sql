@@ -1,4 +1,4 @@
--- MUT-115 (ADR-189): passkeys. Two new tables and one nullable column; no backfill.
+-- MUT-115 (ADR-190): passkeys. Two new tables and one nullable column; no backfill.
 
 -- 1. A person's WebAuthn credentials. Deleted with the person (and explicitly by the account purge, MUT-333).
 CREATE TABLE "passkeys" (

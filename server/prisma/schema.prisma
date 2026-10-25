@@ -354,7 +354,7 @@ model User {
   purgeStartedAt            DateTime?
   purgeLastTriedAt          DateTime?
 
-  /// MUT-115 (ADR-189): this person's passkeys, and the creation challenges they asked for.
+  /// MUT-115 (ADR-190): this person's passkeys, and the creation challenges they asked for.
   passkeys            Passkey[]
   webauthnChallenges  WebauthnChallenge[]
 
@@ -542,7 +542,7 @@ model Session {
   @@map("sessions")
 }
 
-/// MUT-115 (ADR-189): a WebAuthn credential that signs its person in (portal and iOS app, RP ID = the apex domain).
+/// MUT-115 (ADR-190): a WebAuthn credential that signs its person in (portal and iOS app, RP ID = the apex domain).
 /// Only the public key is stored. A password change keeps passkeys; removing one revokes the sessions it opened.
 model Passkey {
   id           String    @id @default(uuid()) @db.Uuid
