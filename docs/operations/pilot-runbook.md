@@ -564,7 +564,8 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 
 1. **Acknowledge.** Note the time you knew.
 2. **Contain:**
-   - a release caused it: roll back with `IMAGE_TAG=<old sha> ./scripts/deploy.sh`. After the MUT-381
+   - a release caused it: roll back with `make rollback-server SHA=<the previous api-v tag>` (DEPLOYMENT.md §6
+     "Roll back the service": no build, no migration; it refuses when a "Roll back past" count is above 0). After the MUT-381
      cutover never shift Cloud Run traffic to a revision from before it: those mount only `mutaba3a-pg`
      and fail every request (DEPLOYMENT.md §6d);
    - access is at risk: lock or rotate (above);
