@@ -1,0 +1,288 @@
+import { useMemo, useState, type ReactNode } from 'react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '../../../components/ui/Button';
+import { BrandLoader } from '../../../components/brand/BrandLoader';
+import { useLanguage } from '../../../lib/i18n/core';
+import { useSavedFlashStore } from '../../../lib/savedFlashStore';
+import { trackPortal } from '../../analytics/portalAnalytics';
+import { ApiError, apiErrorReason, type ExpenseReceipt, type HostedProfile } from '../../api/client';
+import { ReadOnlyFields } from '../../components/Drawer';
+import { Empty } from '../../components/QueryView';
+import { ReceiptPreview } from '../../components/ReceiptPreview';
+import { useToast } from '../../components/Toast';
+import { AlertIcon, LockIcon } from '../../components/Icons';
+import { applyExpenseApiError } from '../../components/expenseApiErrors';
+import { HostedExpenseFields, type HostedExpenseHintField } from '../../components/expenseForm/HostedExpenseFields';
+import { createExpenseBody, useHostedExpenseForm, type HostedExpenseFormValues } from '../../components/expenseForm/useHostedExpenseForm';
+import { useAttemptKey } from '../../data/attemptKey';
+import { useExpense } from '../../data/expenseQueries';
+import { canAddClient } from '../../data/incomeAffordances';
+import { cachedListItem, invalidateReceipts, nextReceiptId, useApproveReceipt, useReceipt, useReceipts, useReceiptsAvailability } from '../../data/receiptQueries';
+import { DecimalAmount } from '../../format/DecimalAmount';
+import { HOSTED_CURRENCIES } from '../../format/currencies';
+import { formatDay } from '../../format/dates';
+import { LOW_CONFIDENCE, suggestionToFormValues } from '../../lib/receiptSuggestion';
+import { useProfile, useWriteGate } from '../../session/me';
+import { ReceiptsUnavailable } from './ReceiptsGallery';
+import { PageHeader } from './shared';
+
+/**
+ * One receipt's review page (MUT-260 D1, layout B): the original large on one side, the expense form on the other
+ * (the drawer's own fields, D6), prefilled from the receipt's suggestion with each filled field marked (D7). Approve
+ * records the expense and files the receipt in one call (D8), then moves to the next receipt To review. A filed
+ * receipt opens read-only with its expense (D10, A3). Arabic mirrors it (logical CSS), and under 760 px the
+ * preview stacks above the form (D12).
+ */
+export interface ReceiptReviewPageProps {
+  receiptId: string;
+}
+
+const FORM_ID = 'hosted-receipt-form';
+
+export function ReceiptReviewPage({ receiptId }: ReceiptReviewPageProps) {
+  const profile = useProfile();
+  const { t } = useLanguage();
+  const { availability } = useReceiptsAvailability(profile.id);
+  const galleryPath = `/p/${profile.id}/expenses/receipts`;
+
+  const back = (
+    <Link to={galleryPath} className="hp-link hp-receipt-back">
+      <span aria-hidden="true" className="hp-receipt-back-arrow">
+        ←
+      </span>{' '}
+      {t('hosted.receipts.review.back')}
+    </Link>
+  );
+
+  if (availability === 'off') {
+    return (
+      <>
+        <PageHeader title={t('hosted.receipts.review.title')} />
+        <ReceiptsUnavailable />
+      </>
+    );
+  }
+  return <ReceiptReviewBody receiptId={receiptId} profile={profile} back={back} />;
+}
+
+function ReceiptReviewBody({ receiptId, profile, back }: { receiptId: string; profile: HostedProfile; back: ReactNode }) {
+  const { t } = useLanguage();
+  const receipt = useReceipt(profile.id, receiptId);
+
+  if (receipt.isError) {
+    const gone = receipt.error instanceof ApiError && receipt.error.status === 404;
+    return (
+      <>
+        {back}
+        <PageHeader title={t('hosted.receipts.review.title')} />
+        {gone ? (
+          <Empty title={t('hosted.receipts.review.notFound.title')} body={t('hosted.receipts.review.notFound.body')} />
+        ) : (
+          <Empty title={t('hosted.states.unreachable.title')} body={t('hosted.states.unreachable.body')} action={<Button variant="secondary" size="sm" onClick={() => void receipt.refetch()}>{t('hosted.states.unreachable.retry')}</Button>} />
+        )}
+      </>
+    );
+  }
+  if (!receipt.data) {
+    return (
+      <>
+        {back}
+        <div className="loading loading--section">
+          <BrandLoader size={40} />
+        </div>
+      </>
+    );
+  }
+
+  const filed = receipt.data.filingStatus === 'FILED';
+  return (
+    <>
+      {back}
+      <PageHeader title={t(filed ? 'hosted.receipts.review.filedTitle' : 'hosted.receipts.review.title')} />
+      <div className="hp-receipt-review" data-filing-status={receipt.data.filingStatus}>
+        <section className="hp-receipt-review-preview">
+          <ReceiptPreview profileId={profile.id} receipt={receipt.data} />
+        </section>
+        <section className="hp-receipt-review-form">
+          {filed ? <FiledSummary profile={profile} receipt={receipt.data} /> : <ReviewForm key={receipt.data.id} profile={profile} receipt={receipt.data} />}
+        </section>
+      </div>
+    </>
+  );
+}
+
+function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: ExpenseReceipt }) {
+  const { t } = useLanguage();
+  const showToast = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { writable } = useWriteGate();
+  const queue = useReceipts(profile.id, 'to_review');
+  const approve = useApproveReceipt(profile.id);
+  // A2: one attempt per mounted receipt (the form is keyed on its id).
+  const attempt = useAttemptKey();
+  const [banner, setBanner] = useState<string | null>(null);
+
+  const prefill = useMemo(() => suggestionToFormValues(receipt.suggested, { currencies: HOSTED_CURRENCIES }), [receipt.suggested]);
+  const expenseForm = useHostedExpenseForm({ profileId: profile.id, timezone: profile.timezone, initialValues: prefill.values });
+  const { form, categoriesLoading, errorLabels, picks } = expenseForm;
+
+  const hints = useMemo(() => {
+    const out: Partial<Record<HostedExpenseHintField, string>> = {};
+    for (const [field, confidence] of Object.entries(prefill.prefilled) as [HostedExpenseHintField, number][]) {
+      out[field] = t(confidence < LOW_CONFIDENCE ? 'hosted.receipts.review.fromReceiptUnsure' : 'hosted.receipts.review.fromReceipt');
+    }
+    if (prefill.unsupported) {
+      // A14: what the receipt said, beside the amount the form leaves empty.
+      out.amount = prefill.unsupported.amount
+        ? t('hosted.receipts.review.receiptSays', { currency: prefill.unsupported.currency, amount: prefill.unsupported.amount })
+        : t('hosted.receipts.review.receiptSaysCurrency', { currency: prefill.unsupported.currency });
+    }
+    return out;
+  }, [prefill, t]);
+
+  const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
+
+  const goNext = (next: string | null) => void navigate({ to: next ? reviewPath(next) : `/p/${profile.id}/expenses/receipts` });
+
+  const onSubmit = async (values: HostedExpenseFormValues) => {
+    setBanner(null);
+    // A1: no `suggested` (approve would replace the stored one, and the portal reads nothing); A13: no captureSource.
+    const body = createExpenseBody(values);
+    // A13: the next receipt from the list as it stands, before approving invalidates it.
+    const next = nextReceiptId(queue.data, receipt.id);
+    try {
+      const result = await approve.mutateAsync({ receiptId: receipt.id, body, idempotencyKey: attempt.keyFor({ receiptId: receipt.id, body }) });
+      attempt.succeeded();
+      // A14: the same opt-in count as the drawer's new expense, its currency and nothing else.
+      void trackPortal('expense_recorded', { currency: values.currency });
+      useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [result.expense.id], profileId: profile.id });
+      showToast(t('hosted.receipts.review.filed'), { tone: 'info' });
+      goNext(next);
+    } catch (error) {
+      // A2: the server keeps a 4xx answer as final under its key, so the next try needs a new one; a network error or a
+      // 5xx keeps the key, so a retry that already landed replays instead of filing twice.
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) attempt.succeeded();
+      // A10: before the expense mapper, which would show a 409 as a stale version.
+      if (error instanceof ApiError && error.code === 'CONFLICT' && apiErrorReason(error) === 'RECEIPT_ALREADY_FILED') {
+        const expenseId = (error.details as { expenseId?: unknown } | null)?.expenseId;
+        showToast(
+          t('hosted.receipts.review.alreadyFiled'),
+          typeof expenseId === 'string'
+            ? { action: { label: t('hosted.receipts.review.openExpense'), onAction: () => void navigate({ to: `/p/${profile.id}/expenses`, search: { expense: expenseId } }) } }
+            : undefined,
+        );
+        // The receipt refetches into its Filed view.
+        invalidateReceipts(queryClient, profile.id);
+        return;
+      }
+      if (error instanceof ApiError && error.code === 'VALIDATION_FAILED' && apiErrorReason(error) === 'ATTACHMENT_NOT_READY') {
+        setBanner(t('hosted.receipts.errors.notReady'));
+        return;
+      }
+      applyExpenseApiError(error, form.setError, errorLabels, showToast);
+    }
+  };
+
+  if (categoriesLoading) {
+    return (
+      <div className="loading loading--section">
+        <BrandLoader size={40} />
+      </div>
+    );
+  }
+
+  const next = nextReceiptId(queue.data, receipt.id);
+  return (
+    <>
+      {banner && (
+        <div className="hp-banner hp-banner-error" role="alert">
+          <AlertIcon />
+          <span>{banner}</span>
+        </div>
+      )}
+      {!writable && (
+        <p className="hp-readonly" role="note">
+          <LockIcon />
+          <span>{t('hosted.billing.gate.drawerNote')}</span>
+        </p>
+      )}
+      {/* noValidate, as the drawer: the schema and the server say what is wrong at the field. */}
+      <form id={FORM_ID} onSubmit={picks.guard(form.handleSubmit(onSubmit))} noValidate>
+        <ReadOnlyFields readOnly={!writable}>
+          <HostedExpenseFields
+            expenseForm={expenseForm}
+            profileId={profile.id}
+            timezone={profile.timezone}
+            canAddClient={canAddClient(profile)}
+            readOnly={!writable}
+            idPrefix="hosted-receipt"
+            hints={hints}
+          />
+        </ReadOnlyFields>
+      </form>
+      <div className="hp-receipt-actions">
+        {writable && (
+          <Button type="submit" form={FORM_ID} disabled={approve.isPending || picks.pending}>
+            {t(approve.isPending ? 'hosted.receipts.review.approving' : 'hosted.receipts.review.approve')}
+          </Button>
+        )}
+        {next && (
+          <Link to={reviewPath(next)} className="hp-link hp-receipt-next">
+            {t('hosted.receipts.review.next')} <span aria-hidden="true" className="hp-receipt-next-arrow">→</span>
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** D10, A3: the expense a filed receipt sits on, from the gallery's list item when cached, else the expense itself. */
+function FiledSummary({ profile, receipt }: { profile: HostedProfile; receipt: ExpenseReceipt }) {
+  const { t, language } = useLanguage();
+  const queryClient = useQueryClient();
+  const listed = cachedListItem(queryClient, profile.id, receipt.id)?.expense ?? null;
+  const fetched = useExpense(profile.id, listed ? '' : (receipt.expenseId ?? ''));
+  const shown = listed ?? fetched.data ?? null;
+  const expenseId = receipt.expenseId;
+
+  return (
+    <div className="hp-receipt-filed">
+      <h2 className="hp-receipt-filed-title">{t('hosted.receipts.review.onExpense')}</h2>
+      {shown ? (
+        <dl className="hp-receipt-filed-facts">
+          {(shown.vendor || shown.title) && (
+            <div>
+              <dt>{t(shown.vendor ? 'hosted.expenses.drawer.vendor' : 'hosted.expenses.drawer.title')}</dt>
+              <dd>
+                <bdi>{shown.vendor ?? shown.title}</bdi>
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt>{t('hosted.expenses.drawer.amount')}</dt>
+            <dd>
+              <DecimalAmount value={shown.amount} currency={shown.currency} />
+            </dd>
+          </div>
+          <div>
+            <dt>{t('hosted.expenses.drawer.date')}</dt>
+            <dd>{formatDay(shown.occurredOn, language)}</dd>
+          </div>
+        </dl>
+      ) : (
+        fetched.isLoading && (
+          <div className="loading loading--section">
+            <BrandLoader size={24} />
+          </div>
+        )
+      )}
+      {expenseId && (
+        <Link to={`/p/${profile.id}/expenses`} search={{ expense: expenseId }} className="hp-link" data-testid="receipt-open-expense">
+          {t('hosted.receipts.review.openExpense')}
+        </Link>
+      )}
+    </div>
+  );
+}
