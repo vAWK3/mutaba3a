@@ -48,6 +48,25 @@ features:
       - The step shows before any navigation, with Read the terms (that version, ?lang in the page language), I agree, Sign out and the support email
       - Agreeing records the version in the page language with the web release that showed it (MUT-354), and opens Overview
       - After reloading, the step doesn't come back
+  - id: bumped-mid-session-keeps-draft
+    title: Terms that change while the portal is open ask in a dialog above it; an expense half typed in its drawer survives, can't be touched until the person agrees, and saves after (MUT-346)
+    tier: core
+    paths:
+      - src/hosted/session/AuthGate.tsx
+      - src/hosted/pages/auth/TermsUpdatePage.tsx
+      - src/components/ui/BlockingDialog.tsx
+      - src/components/ui/BlockingDialog.css
+      - src/components/ui/blockingLayer.ts
+    steps:
+      - Open Expenses, choose Record expense and type an amount and a title
+      - A server release names newer terms, and the portal reads /v1/me again (back to the tab after a minute)
+      - Press Escape, Tab around, and try Save behind the dialog
+      - Press I agree, then Save
+    expect:
+      - The Updated-terms step opens as a dialog above the portal; the drawer stays open behind it with what was typed
+      - Escape doesn't close the drawer, Tab stays in the dialog, and nothing behind it can be pressed
+      - I agree records the newer version; the dialog goes, focus is back in the drawer field, and the draft is intact
+      - Save records the expense
   - id: changed-mid-step
     title: If the terms change again while the Updated-terms step is open, I agree says so, the step names the new version, and the retry accepts it (MUT-324 review fix 4)
     tier: secondary

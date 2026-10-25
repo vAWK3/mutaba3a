@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useId, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../../lib/i18n/core';
+import { BlockingDialog } from '../../../components/ui/BlockingDialog';
 import { ApiError, api, type Me } from '../../api/client';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { AlertIcon } from '../../components/Icons';
@@ -18,13 +19,45 @@ import { SUPPORT_EMAIL, TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
  * Read tab) or the server refuses the old one (409 TERMS_VERSION_STALE names it,
  * so a failed refetch can't leave the step resending the stale version).
  */
-export function TermsUpdatePage({ version: current }: { version: string }) {
+export function TermsUpdatePage({ version }: { version: string }) {
+  return (
+    <div className="hp-signin">
+      <div className="hp-signin-top">
+        <LanguageSwitch />
+      </div>
+      <main className="hp-signin-body">
+        <Wordmark />
+        <div className="hp-card hp-signin-card">
+          <TermsUpdateStep version={version} heading={(title) => <h1>{title}</h1>} />
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * MUT-346: the same step when the terms change while the portal is open. It asks in a dialog above
+ * the portal, which stays mounted but unreachable behind it, so an open drawer keeps its draft and
+ * gets focus back once the person agrees. Signing out or writing to us stay the ways out.
+ */
+export function TermsUpdateDialog({ version }: { version: string }) {
+  const titleId = useId();
+  return (
+    <BlockingDialog labelledBy={titleId} className="hp-card hp-signin-card hp-terms-dialog">
+      <TermsUpdateStep version={version} heading={(title) => <h2 id={titleId}>{title}</h2>} />
+    </BlockingDialog>
+  );
+}
+
+function TermsUpdateStep({ version: current, heading }: { version: string; heading: (title: string) => ReactNode }) {
   const t = useT();
   const { language } = useLanguage();
   const queryClient = useQueryClient();
-  const { signOut, signingOut } = useSignOut();
   const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<'failed' | 'changed' | null>(null);
+  const [problem, setProblem] = useState<'failed' | 'changed' | 'signOutFailed' | null>(null);
+  // Said in the step's own banner: in the dialog, a toast would sit behind it in the inert app (MUT-346 review)
+  const onSignOutFailed = useCallback(() => setProblem('signOutFailed'), []);
+  const { signOut, signingOut } = useSignOut({ onFailed: onSignOutFailed });
   // The version this step shows and accepts. A different one from /v1/me is a change the person
   // must be told about, adjusted during render (not in an effect, react-hooks v7).
   const [version, setVersion] = useState(current);
@@ -62,44 +95,36 @@ export function TermsUpdatePage({ version: current }: { version: string }) {
   }
 
   return (
-    <div className="hp-signin">
-      <div className="hp-signin-top">
-        <LanguageSwitch />
-      </div>
-      <main className="hp-signin-body">
-        <Wordmark />
-        <div className="hp-card hp-signin-card">
-          <h1>{t('hosted.terms.title')}</h1>
-          <p className="hp-setup-lead">{t('hosted.terms.lead')}</p>
-          {problem && (
-            <div className="hp-banner hp-banner-error" role="alert">
-              <AlertIcon />
-              <span>{t(problem === 'changed' ? 'hosted.terms.changed' : 'hosted.terms.failed')}</span>
-            </div>
-          )}
-          {link && (
-            <p>
-              <a href={link} target="_blank" rel="noopener">
-                {t('hosted.terms.read')}
-              </a>
-            </p>
-          )}
-          <button type="button" className="btn btn-primary btn-md hp-block" disabled={saving || signingOut} aria-busy={saving} onClick={() => void agree()}>
-            {saving && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
-            <span>{t(saving ? 'hosted.terms.agreeing' : 'hosted.terms.agree')}</span>
-          </button>
-          <button type="button" className="btn btn-secondary btn-md hp-block" disabled={saving || signingOut} onClick={() => void signOut()}>
-            {t('hosted.auth.signOut')}
-          </button>
-          <p className="hp-field-hint">
-            {beforeEmail}
-            <a href={`mailto:${SUPPORT_EMAIL}`}>
-              <bdi>{SUPPORT_EMAIL}</bdi>
-            </a>
-            {afterEmail}
-          </p>
+    <>
+      {heading(t('hosted.terms.title'))}
+      <p className="hp-setup-lead">{t('hosted.terms.lead')}</p>
+      {problem && (
+        <div className="hp-banner hp-banner-error" role="alert">
+          <AlertIcon />
+          <span>{t(problem === 'changed' ? 'hosted.terms.changed' : problem === 'signOutFailed' ? 'hosted.auth.signOutFailed' : 'hosted.terms.failed')}</span>
         </div>
-      </main>
-    </div>
+      )}
+      {link && (
+        <p>
+          <a href={link} target="_blank" rel="noopener">
+            {t('hosted.terms.read')}
+          </a>
+        </p>
+      )}
+      <button type="button" className="btn btn-primary btn-md hp-block" disabled={saving || signingOut} aria-busy={saving} onClick={() => void agree()}>
+        {saving && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
+        <span>{t(saving ? 'hosted.terms.agreeing' : 'hosted.terms.agree')}</span>
+      </button>
+      <button type="button" className="btn btn-secondary btn-md hp-block" disabled={saving || signingOut} onClick={() => void signOut()}>
+        {t('hosted.auth.signOut')}
+      </button>
+      <p className="hp-field-hint">
+        {beforeEmail}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>
+          <bdi>{SUPPORT_EMAIL}</bdi>
+        </a>
+        {afterEmail}
+      </p>
+    </>
   );
 }

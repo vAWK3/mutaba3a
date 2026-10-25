@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, QA_CLIENT_RELEASE, QA_TERMS_VERSION, office } from '../../support/portal';
-import { FakeApi } from '../../support/portalApi';
+import { FakeApi, category } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -144,5 +144,62 @@ test('You › App and the sign-in page link the terms of service', { tag: '@port
     await page.goto('about:blank');
     await api.open(page, '/sign-in', 'en');
     await expect(page.getByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', /\/terms\?lang=en$/);
+  });
+});
+
+test('terms that change while the portal is open ask in a dialog above it, and a half-typed expense survives and saves', { tag: '@portal.terms.bumped-mid-session-keeps-draft' }, async ({ page, step }) => {
+  const NEWER = '2027-01-01';
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [category(1, 'Office supplies')] });
+  // The drawer and its fields, reached by CSS: while the dialog is up the app is aria-hidden, so role queries can't see it
+  const drawer = page.locator('.drawer');
+  const dialog = page.getByRole('dialog', { name: "We've updated our terms" });
+
+  await step('Open Expenses, choose Record expense and type an amount and a title', async () => {
+    // A minute must pass for /v1/me to be read again on return to the tab (staleTime 60 s): the clock is ours
+    await page.clock.install();
+    await api.open(page, `/p/${OFFICE_A}/expenses`, 'en');
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(page.getByRole('dialog', { name: 'Record expense' })).toBeVisible();
+    await drawer.getByLabel('Amount').fill('12.50');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByLabel('Title').fill('Printer paper');
+  });
+
+  await step('A release names newer terms; back on the tab a minute later, the step opens as a dialog above the drawer', async () => {
+    api.bumpTerms(NEWER);
+    await page.clock.fastForward('01:01');
+    // As the browser does on return to a tab: on document, bubbling to window, where TanStack Query listens
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })));
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', new RegExp(`/terms/${NEWER}\\?lang=en$`));
+    await expect(drawer.getByLabel('Amount')).toHaveValue('12.50');
+    await expect(drawer.getByLabel('Title')).toHaveValue('Printer paper');
+  });
+
+  await step('Escape, Tab and Save behind it do nothing: the portal can’t be reached until the person agrees', async () => {
+    await expect(page.locator('#root')).toHaveAttribute('inert', '');
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(1);
+    for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await expect(drawer.getByRole('button', { name: 'Save', includeHidden: true }).click({ timeout: 1500 })).rejects.toThrow();
+    expect(api.calls('POST', /^\/v1\/expenses$/)).toHaveLength(0);
+  });
+
+  await step('I agree: the newer version is recorded, the dialog goes, and focus is back in the drawer with the draft intact', async () => {
+    await dialog.getByRole('button', { name: 'I agree' }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: NEWER, locale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
+    await expect(page.locator('#root')).not.toHaveAttribute('inert');
+    const form = page.getByRole('dialog', { name: 'Record expense' });
+    await expect(form.getByLabel('Title')).toBeFocused();
+    await expect(form.getByLabel('Amount')).toHaveValue('12.50');
+  });
+
+  await step('Save: the expense is recorded', async () => {
+    const form = page.getByRole('dialog', { name: 'Record expense' });
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(form).toHaveCount(0);
+    expect(api.calls('POST', /^\/v1\/expenses$/)).toHaveLength(1);
   });
 });
