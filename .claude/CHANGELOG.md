@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Sign in with a passkey on the portal (MUT-115 web half, ADR-190, API 1.69.0-mut115)
+
+### Added
+- **Server:** WebAuthn relying party `mtb3a.com` (`WEBAUTHN_RP_ID`, Terraform from stage live; `WEBAUTHN_ORIGINS` for local). `GET/POST /v1/passkeys`, `POST /v1/passkeys/creation-options`, `PATCH/DELETE /v1/passkeys/{id}`; public `POST /v1/passkey-challenges`, `POST /v1/sessions/passkey` (cookie), `POST /v1/device-sessions/passkey` (token). Tables `passkeys`, `webauthn_challenges`, column `sessions.passkeyId` (migration `20261025090000_mut115_passkeys`). Error codes `RECENT_SIGN_IN_REQUIRED` (403), `PASSKEY_LIMIT` (409); reasons `PASSKEY_NOT_VERIFIED` (422), `PASSKEY_EXISTS` (409). `npm --prefix server run passkey-providers:update`.
+- **Portal:** "Sign in with a passkey" and passkey autofill on /sign-in; You › Account › Passkeys (`?passkeys=true`): list, add (password only when the sign-in is over 10 minutes old), rename, remove with an in-row confirm. en/ar (مفتاح المرور).
+- **Apex AASA:** the web build's `_redirects` proxies `https://<apex>/.well-known/apple-app-site-association` to the portal's with a 200, from stage live.
+
+### Changed
+- `auth/sign-in.ts` shares `recordSignInFailure` and `issueSession`; `user.signed_in`/`user.locked_out` audits carry `method` (`password`|`passkey`) and `passkeyId`.
+- The `portal-selfservice` QA app runs on `http://localhost:8791` (an IP can't be a WebAuthn RP ID).
+
+### Technical
+- **Why:** passkeys are faster and phishing-proof; they wait for the custom domain because they're bound to their RP ID for life (MUT-112).
+- **Files:** `server/src/auth/{webauthn,passkey-names,sign-in}.ts`, `server/src/routes/{passkeys,sessions,device-sessions}.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/prisma/`, `server/infrastructure/terraform/domain.tf`, `vite.config.ts`, `src/hosted/passkeys/`, `src/hosted/components/PasskeysDrawer.tsx`, `src/hosted/pages/auth/SignInPage.tsx`, `qa/specs/portal-selfservice/passkeys.spec.ts`.
+- The iOS half (Flutter) is built later in the run's phone phase.
+
 ## [Unreleased] - 2026-10-24 — Portal Reports (MUT-175, ADR-189, API 1.68.0-mut175)
 
 **Why:** the portal had no reports, and MUT-292 can't retire the web Insights page until it does (MUT-322 GA gate). Basel wants a screen people come back to weekly: what came in, where it went, who paid, and what the history says.
