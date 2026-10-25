@@ -1652,7 +1652,8 @@ export interface PasskeyRepository {
   promptOf(userId: string): Promise<PasskeyPromptState | null>;
   /**
    * MUT-370 (D2): "Not now", applied under the person's row lock (auth/passkey-prompt.ts `applyPasskeyNotNow`), so two
-   * devices answering one offer spend it once. Null for an unknown person.
+   * devices answering one offer spend it once, and an answer while the person holds a passkey spends nothing. Null for an
+   * unknown person.
    */
   answerPrompt(userId: string, action: PasskeyPromptAction, at: Date): Promise<PasskeyPromptState | null>;
 }

@@ -713,7 +713,8 @@ export class MemoryLedgerStore implements LedgerStore {
     promptOf: async (userId) => (this.people.has(userId) ? this.passkeyPromptState(userId) : null),
     answerPrompt: async (userId, _action, at) => {
       if (!this.people.has(userId)) return null;
-      this.passkeyPrompts.set(userId, applyPasskeyNotNow(this.passkeyPrompts.get(userId), at));
+      const { passkeys } = this.passkeyPromptState(userId);
+      this.passkeyPrompts.set(userId, applyPasskeyNotNow(this.passkeyPrompts.get(userId), at, passkeys));
       return this.passkeyPromptState(userId);
     },
   };

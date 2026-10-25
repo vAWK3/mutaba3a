@@ -59,8 +59,8 @@ describe('passkeySuggestionShows', () => {
     expect(shows(me({ trialPrompt: OPEN_TRIAL }))).toBe(false);
   });
 
-  it('honors a hide the portal has just written, before the server answers', () => {
-    expect(shows(me({ prompt: { due: true, notNowCount: 1, hiddenUntil: inDays(30) } }))).toBe(false);
+  it('honors a Not now the portal has just written, before the server answers', () => {
+    expect(shows(me({ prompt: optimisticPasskeyPrompt(DUE, NOW) }))).toBe(false);
   });
 });
 

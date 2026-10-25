@@ -38,16 +38,20 @@ function SuggestionCard() {
   const drawers = useAccountDrawers();
   const answer = useAnswerPasskeyPrompt();
   const [adding, setAdding] = useState(false);
+  // Code review: once added, the card is done, even before /v1/me says so (no second ceremony on a slow refetch)
+  const [added, setAdded] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
+  const busy = adding || answer.isPending;
 
   async function add() {
-    if (adding) return;
+    if (busy) return;
     setProblem(null);
     setAdding(true);
     const outcome = await addPasskeyFlow();
     setAdding(false);
     switch (outcome.kind) {
       case 'added':
+        setAdded(true);
         showToast(t('hosted.account.passkeys.added'), { tone: 'info' });
         await passkeysChanged(queryClient);
         return;
@@ -66,6 +70,7 @@ function SuggestionCard() {
   }
 
   const titleId = `${ids}-title`;
+  if (added) return null;
   return (
     <section className="hp-banner hp-banner-info hp-passkey-suggest" aria-labelledby={titleId}>
       <PasskeyIcon />
@@ -80,10 +85,10 @@ function SuggestionCard() {
           </p>
         )}
         <div className="hp-passkey-suggest-actions">
-          <Button size="sm" onClick={() => void add()} isLoading={adding} keepLabelWhileLoading aria-busy={adding}>
+          <Button size="sm" onClick={() => void add()} isLoading={adding} keepLabelWhileLoading aria-busy={adding} disabled={answer.isPending}>
             {t('hosted.passkeys.suggest.add')}
           </Button>
-          <button type="button" className="hp-link-button" onClick={() => answer.mutate('not-now')} disabled={adding}>
+          <button type="button" className="hp-link-button" onClick={() => answer.mutate('not-now')} disabled={busy}>
             {t('hosted.passkeys.suggest.notNow')}
           </button>
         </div>

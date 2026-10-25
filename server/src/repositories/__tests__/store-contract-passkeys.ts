@@ -140,10 +140,16 @@ export function describeLedgerStorePasskeysContract(name: string, makeStore: () 
       it('Not now is stored, and the passkey count comes with it', async () => {
         const store = await makeStore();
         const { user } = await person(store);
-        await store.passkeys.create(passkey(user.id));
         const answered = await store.passkeys.answerPrompt(user.id, 'not-now', at(4));
-        expect(answered).toEqual({ prompt: { notNowCount: 1, hiddenUntil: HIDDEN_UNTIL }, passkeys: 1 });
+        expect(answered).toEqual({ prompt: { notNowCount: 1, hiddenUntil: HIDDEN_UNTIL }, passkeys: 0 });
         expect(await store.passkeys.promptOf(user.id)).toEqual(answered);
+      });
+
+      it('a Not now while the person holds a passkey spends nothing, and the count says so', async () => {
+        const store = await makeStore();
+        const { user } = await person(store);
+        await store.passkeys.create(passkey(user.id));
+        expect(await store.passkeys.answerPrompt(user.id, 'not-now', at(4))).toEqual({ prompt: { notNowCount: 0, hiddenUntil: null }, passkeys: 1 });
       });
 
       it('two concurrent Not nows spend one offer', async () => {

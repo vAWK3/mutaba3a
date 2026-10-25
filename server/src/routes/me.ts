@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
 import { personStanding } from '../billing/gate.js';
@@ -12,6 +13,9 @@ import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
 import { ownsProfile } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES } from './profiles.js';
+
+/** MUT-370 (D9): `buildMe`'s `passkeysAt`: the request's clock where this server offers passkeys, else null. */
+export const passkeysClockOf = (c: Context<AppEnv>): Date | null => (c.get('passkeys') ? c.get('now')() : null);
 
 /** GET /v1/me, acting on the person rather than an organization: no X-Mutaba3a-Profile. */
 export const ME_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/me']);
@@ -40,7 +44,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), c.get('passkeys') ? c.get('now')() : null), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c)), 200),
   );
 
   return app;
@@ -86,9 +90,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       locale: user.locale,
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
-      // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none. Never to a closing
-      // account, which reaches no passkey route (MUT-333).
-      passkeyPrompt: passkeyPrompt && passkeysAt ? suggestion(passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt), user.closure !== null) : null,
+      // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
+      passkeyPrompt: passkeyPrompt && passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt!, user.closure !== null),
       status: user.status,
       // MUT-333: while closing, the clients show only Keep my account and Sign out.
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
@@ -99,10 +102,6 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     terms: termsNow,
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
   };
-}
-
-function suggestion<T extends { due: boolean }>(view: T, closing: boolean): T {
-  return closing ? { ...view, due: false } : view;
 }
 
 /** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */

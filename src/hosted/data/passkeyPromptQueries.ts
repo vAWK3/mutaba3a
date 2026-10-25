@@ -19,7 +19,10 @@ export function useAnswerPasskeyPrompt() {
       await queryClient.cancelQueries({ queryKey: ME_KEY });
       write((current) => optimisticPasskeyPrompt(current, new Date()));
     },
-    onSuccess: (stored) => write(() => stored),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ME_KEY }),
+    // Code review: on a failure, no refetch, so the optimistic hide holds for this visit instead of the card popping back
+    onSuccess: (stored) => {
+      write(() => stored);
+      return queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
   });
 }

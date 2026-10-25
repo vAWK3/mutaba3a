@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
 import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
@@ -798,7 +799,7 @@ export const PasskeyPromptSchema = z
     /** Show the suggestion now: the person holds no passkey, has an offer left (3 in all) and hasn't hidden it. */
     due: z.boolean(),
     /** How many offers the person answered with Not now (0–3); the third retires the suggestion. */
-    notNowCount: z.number().int().min(0).max(3),
+    notNowCount: z.number().int().min(0).max(PASSKEY_PROMPT_MAX_OFFERS),
     /** Not now hides it until then (30 days); null when it isn't hidden. */
     hiddenUntil: z.string().datetime().nullable(),
   })

@@ -125,6 +125,16 @@ describe('the "Add a passkey" card on Home (MUT-370)', () => {
     expect(calls(api.calls, 'PATCH', '/v1/me/passkey-prompt').map((c) => c.body)).toEqual([{ action: 'not-now' }]);
   });
 
+  it('a Not now the server refuses still hides the card for this visit (code review)', async () => {
+    const { user } = portal({ routes: { 'PATCH /v1/me/passkey-prompt': () => fail(503, 'UNAVAILABLE') } });
+    const region = await card();
+    await user.click(within(region).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByText(TITLE)).toBeNull());
+    // Give a refetch the chance to bring it back: none is made on a failure
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(TITLE)).toBeNull();
+  });
+
   it('Add a passkey runs the ceremony with no password, says "Passkey added", and the card goes', async () => {
     const { user, api } = portal();
     const region = await card();

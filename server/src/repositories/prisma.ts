@@ -565,9 +565,10 @@ export class PrismaLedgerStore implements LedgerStore {
       this.prisma.$transaction(async (tx) => {
         const [locked] = await tx.$queryRaw<Array<{ passkeyPrompt: unknown }>>`SELECT "passkeyPrompt" FROM "users" WHERE "id" = ${userId}::uuid FOR NO KEY UPDATE`;
         if (!locked) return null;
-        const prompt = applyPasskeyNotNow(locked.passkeyPrompt, at);
+        const passkeys = await tx.passkey.count({ where: { userId } });
+        const prompt = applyPasskeyNotNow(locked.passkeyPrompt, at, passkeys);
         await tx.user.update({ where: { id: userId }, data: { passkeyPrompt: prompt as unknown as Prisma.InputJsonValue } });
-        return { prompt, passkeys: await tx.passkey.count({ where: { userId } }) };
+        return { prompt, passkeys };
       }),
   };
 

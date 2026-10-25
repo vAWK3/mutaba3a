@@ -23,12 +23,11 @@ export interface SuggestionContext {
 /**
  * Show the card: the server says due, this device can make a passkey, the account isn't closing, and MUT-418's
  * first-run trial step has been answered (D4: the trial step comes first; the card then sits under the trial banner).
- * A hide written a moment ago (optimistic) counts before the server's answer arrives.
+ * A Not now written a moment ago (optimistic, `due: false`) hides it before the server's answer arrives.
  */
 export function passkeySuggestionShows(me: Me, { supported, local, now }: SuggestionContext): boolean {
   const prompt = me.user.passkeyPrompt;
   if (!supported || local || !prompt?.due || me.user.closure) return false;
-  if (prompt.hiddenUntil && new Date(prompt.hiddenUntil).getTime() > now.getTime()) return false;
   return !trialWelcomeDue(me, now);
 }
 

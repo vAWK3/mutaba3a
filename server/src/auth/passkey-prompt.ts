@@ -29,19 +29,23 @@ export function resolvePasskeyPrompt(stored: unknown): PasskeyPromptRecord {
 }
 
 /**
- * Not now: spends the current offer and hides the card for 30 days from `at`. While the card is already hidden it
- * changes nothing, so two devices answering the same offer spend it once; past the last offer nothing changes either.
+ * Not now: spends the current offer and hides the card for 30 days from `at`. Only a due offer is spent: while the
+ * card is already hidden (two devices answering one offer), past the last offer, or once the person holds a passkey (a
+ * stale card in another tab), nothing changes.
  */
-export function applyPasskeyNotNow(stored: unknown, at: Date): PasskeyPromptRecord {
+export function applyPasskeyNotNow(stored: unknown, at: Date, passkeys: number): PasskeyPromptRecord {
   const current = resolvePasskeyPrompt(stored);
-  if (current.notNowCount >= PASSKEY_PROMPT_MAX_OFFERS || isHidden(current, at)) return current;
+  if (!passkeyPromptView(current, passkeys, at).due) return current;
   return { notNowCount: current.notNowCount + 1, hiddenUntil: new Date(at.getTime() + PASSKEY_PROMPT_HIDE_DAYS * DAY_MS).toISOString() };
 }
 
-/** What /v1/me says. `passkeys`: how many the person holds now (D11: removing every one brings the offer back). */
-export function passkeyPromptView(stored: unknown, passkeys: number, now: Date): PasskeyPromptView {
+/**
+ * What /v1/me says. `passkeys`: how many the person holds now (D11: removing every one brings the offer back). Never
+ * due to a closing account, which reaches no passkey route (MUT-333).
+ */
+export function passkeyPromptView(stored: unknown, passkeys: number, now: Date, closing = false): PasskeyPromptView {
   const record = resolvePasskeyPrompt(stored);
-  const due = passkeys === 0 && record.notNowCount < PASSKEY_PROMPT_MAX_OFFERS && !isHidden(record, now);
+  const due = !closing && passkeys === 0 && record.notNowCount < PASSKEY_PROMPT_MAX_OFFERS && !isHidden(record, now);
   return { due, ...record };
 }
 
