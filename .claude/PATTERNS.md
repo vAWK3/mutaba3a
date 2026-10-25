@@ -2806,3 +2806,13 @@ Imported data is never written field by field into the live store. It is mapped 
 - `BlockingDialog` portals to `<body>` and opens on one shared layer (`blockingLayer.ts`): every `<body>` child but the newest dialog is `inert` + `aria-hidden` (the app root, so toasts too; children that join later too, via a MutationObserver), dialogs close in any order, the page doesn't scroll behind (`<html>` overflow hidden, scrollbar room kept), and without native `inert` (iOS < 15.5) a focus guard brings focus back to the top dialog. It swallows Escape in the window capture phase so a drawer's document listener never closes, reuses `useDrawerFocus` for focus in and Tab wrap, and returns focus itself once the app is reachable again, whenever nothing else holds it (its own button disables itself while saving, and the browser drops focus to `<body>` before the dialog goes). It sets the attributes, not the `inert` property (jsdom doesn't reflect it).
 - jsdom has no `inert` behaviour: unit tests assert the attributes; reachability and focus return are proven in Playwright.
 - **First instance:** the Updated-terms step (`TermsUpdateDialog`, AuthGate).
+
+### Pattern: A new credential principal starts with a fail-closed store guard (MUT-434)
+- A new kind of caller (an MCP agent's OAuth token) gets its own guard that refuses every store method except `read`-class ones (`agentStoreGuard`, `server/src/auth/store-guard.ts`), instead of borrowing the session's. Each feature that needs data opens the exact methods it uses, with tests, in its own ticket.
+- Its authentication reads the raw store (like `authenticate()` reads sessions) and re-checks the flag, the account's status and closure on every request: no cached decision outlives a revoke.
+- **First instance:** `authenticateAgent` on `/mcp` (MUT-434); MUT-435/436 widen it per tool.
+
+### Pattern: A retried single-use credential returns the same answer, derived, not stored (MUT-434)
+- When a once-only exchange (a refresh rotation) can be retried by an honest client (a lost response, parallel calls), make the successor a deterministic function of the presented secret and a recorded id — `HMAC(key, parent ∥ successorId)` — so any re-presentation inside a short window re-derives the identical answer without storing plaintext. Outside the window, re-presentation is the theft signal.
+- Pair it with a conditional claim (`UPDATE … WHERE rotatedAt IS NULL`, proceed on one changed row) so exactly one request records the successor id.
+- **First instance:** `OAuthService.refresh` (`server/src/oauth/service.ts`, D19).

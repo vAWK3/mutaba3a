@@ -2362,3 +2362,11 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - Test helper: `server/src/__tests__/helpers/soft-authenticator.ts` (`SoftAuthenticator`: a real ES256 authenticator on node:crypto).
 - Portal: `src/hosted/passkeys/webauthn.ts` (`passkeySupport`, `hostUnderRpId`, `createPasskey`, `assertPasskey`, `cancelPasskeyCeremony`), `usePasskeySignIn` (button + autofill), `addPasskeyFlow` / `PASSKEYS_KEY` (`addPasskey.ts`, MUT-370's seam), `PasskeysDrawer` (`src/hosted/components/`), `PasskeyIcon` (`Icons.tsx`), CSS `hp-divider`, `hp-passkey-*`.
 - QA: `qa/support/passkeys.ts` (`addVirtualAuthenticator`: Chromium's CDP WebAuthn authenticator).
+
+### OAuth for MCP agents — MUT-434 (ADR-197)
+- `server/src/oauth/protocol.ts`: `OAUTH_SCOPES`, `parseScopeParam`, `verifyS256`, `s256Challenge`, `canonicalResource`, `mcpResourceUrl`, `isAcceptableRedirectUri`, `redirectMatches` (any-port loopback), `validateDcrRequest`, `sanitizeClientName`, `authorizationServerMetadata`, `protectedResourceMetadata`.
+- `server/src/oauth/trust.ts`: `clientTrust` (by redirect host), `isCimdClientId`, `parseCimdUrl`, `isPublicUnicastAddress`, `validateClientMetadata`, `cimdCacheUntil`, `fetchClientMetadata` (SSRF-guarded).
+- `server/src/oauth/service.ts`: `OAuthService` (`register`, `startAuthorization`, `describeRequest`, `decide`, `token`, `authenticateAccess`, `revokeToken`), `OAUTH_TTL`, `isLive`. `server/src/oauth/tokens.ts`: `OAUTH_TOKEN_PREFIX`, `isAccessToken`, `isOAuthToken` (no imports: bundled into the portal's local mode). `server/src/oauth/audit.ts`: `agentAuditFor`, `AGENT_CONNECTED`, `AGENT_DISCONNECTED`.
+- `OAuthRepository` (`store.oauth`, memory + Prisma); `authenticateAgent` (`server/src/auth/agent-auth.ts`); `agentStoreGuard`; `createMcpServer` (`server/src/mcp/server.ts`, MUT-435/436's seam for tools); routes `oauth.ts`, `oauth-consent.ts`, `oauth-cleanup.ts`, `mcp.ts`.
+- `ErrorReporter.captureMessage` (`server/src/observability/reporter.ts`) for security events.
+- Portal: `CopyField` (`src/hosted/components/CopyField.tsx`: read-only LTR value + Copy, polite status), `ConnectClaudeDrawer`, `ConsentPage` + `consentSearch.ts` (`parseConsentSearch`, `consentNavigation` seam), `useHasFeature` (`src/hosted/session/features.ts`), `OAUTH_GRANTS_KEY`. CSS `hp-copy-*`, `hp-connect-*`, `hp-consent-*`.

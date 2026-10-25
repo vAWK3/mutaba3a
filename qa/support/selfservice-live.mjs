@@ -35,7 +35,7 @@ const PEPPER = 'qa-portal-selfservice-session-pepper-0123456789';
 /** A shell that exports APPLE_TEAM_ID for fastlane would half-set the API's app association, which it refuses. */
 const APP_ASSOCIATION_VARS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'];
 /** Anything mail- or signup-shaped in the operator's shell would change what the QA server does. */
-const SELF_SERVICE_VARS = ['WEBAUTHN_RP_ID', 'WEBAUTHN_ORIGINS', 'MAILER', 'TURNSTILE_SECRET', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'SELF_SIGNUP_ENABLED', 'EMAIL_DOMAIN_CHECKER', 'OPERATOR_ALERT_EMAIL'];
+const SELF_SERVICE_VARS = ['WEBAUTHN_RP_ID', 'WEBAUTHN_ORIGINS', 'MAILER', 'TURNSTILE_SECRET', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO', 'SELF_SIGNUP_ENABLED', 'EMAIL_DOMAIN_CHECKER', 'OPERATOR_ALERT_EMAIL', 'OAUTH_DERIVE_KEY'];
 const cleanEnv = (env) => Object.fromEntries(Object.entries(env).filter(([name]) => !APP_ASSOCIATION_VARS.includes(name) && !SELF_SERVICE_VARS.includes(name)));
 
 function psql(sql) {
@@ -98,6 +98,8 @@ async function main() {
       // MUT-115: passkeys, checked by Chromium's virtual authenticator (support/passkeys.ts).
       WEBAUTHN_RP_ID: 'localhost',
       WEBAUTHN_ORIGINS: ORIGIN,
+      // MUT-434: OAuth for MCP agents (connect.spec.ts), with PORTAL_ORIGIN above as the issuer.
+      OAUTH_DERIVE_KEY: 'qa-portal-selfservice-oauth-derive-key-0123456789',
     },
   });
   const stop = (code = 0) => {

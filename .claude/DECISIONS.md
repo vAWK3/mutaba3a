@@ -5266,3 +5266,28 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - MUT-434 owns enforcement (moved there by D3): 403 `FEATURE_NOT_ENABLED` on every MCP/OAuth request, revoking OAuth grants on revoke, and applying the closure and status gates. It must reclassify `features.activeFor` for its MCP principal (Principal is `apiKey | session` today) or read it unguarded.
 - One indexed read per `/v1/me`.
+
+## ADR-197: MTB3A Is Its Own OAuth 2.1 Authorization Server for MCP Agents; MTB3A Still Sends Nothing to an LLM (MUT-434, epic MUT-432)
+
+**Status:** Accepted (2026-10-25, MUT-434; plan and eng review `.claude/designs/mut-434-mcp-oauth.md`, decisions D1–D20 answered by Basel).
+
+**Context:** A person with `agent_access` (ADR-196) may connect their own Claude (Claude.ai connector, Claude Code) to MTB3A over MCP. MCP clients sign in with OAuth 2.1 (MCP authorization spec 2026-07-28: CIMD SHOULD, DCR deprecated but supported, RFC 8707 resource MUST, RFC 9207 `iss` SHOULD). The API had only sessions and API keys.
+
+**Decision:**
+1. **Clarifies, doesn't override, the MUT-252 rule:** MTB3A never sends data to an LLM. The person brings their own agent; MTB3A only exposes scoped MCP tools to it.
+2. **A hand-rolled authorization server on the portal origin** (`PORTAL_ORIGIN` is the issuer; `<issuer>/mcp` the one resource): `server/src/oauth/{protocol,trust,service,tokens,audit}.ts`, public clients only, PKCE S256 only, opaque tokens stored as `sessionDigest` digests (rotating `SESSION_TOKEN_PEPPER` signs agents out). No OAuth library (D9): every rule below is explicit and tested.
+3. **Registration: DCR and CIMD** (D2, D18). CIMD documents are fetched with SSRF guards ported from Malafat MAL-176 (https only, public address at connect, no redirects, 5 s, 10 KB, JSON, `client_id` = URL) and stored as `oauth_clients` rows (`kind`, fetch and stale times ≤ 24 h, OV2). Trust shown on consent is keyed on the **redirect host** (claude.ai/claude.com = Claude; loopback = an app on this computer), never the client's name (MAL-224).
+4. **Every once-only step is a conditional claim** (D6): a consent decision, a code exchange, a refresh rotation. A replayed code revokes its grant (RFC 6749 §4.1.2).
+5. **Idempotent refresh rotation** (D19, replacing D7): the successor pair is `HMAC(OAUTH_DERIVE_KEY, parent ∥ successorId)`; any re-presentation within 30 s returns the identical pair, so retries and races never disconnect an honest client; after 30 s it revokes the grant and warns Sentry.
+6. **Tokens are bound to the resource** (D3, normalised OV4); redirects carry `iss` (D4); loopback redirects match on any port (D8); `read write` are advertised and granted up front (D5 — a deliberate deviation from the spec's "minimal scopes_supported" SHOULD, because writing expenses is the epic's purpose and step-up support in Claude.ai is unproven; a read-only grant stays possible and MUT-436 enforces it).
+7. **Lifetimes** (D13, OV7): code 60 s, request 30 min, access 1 h, refresh 45 d idle, grant 180 d absolute. Several live grants per client (OV3); a client that ever had a grant is never cleaned up (OV5).
+8. **`/mcp` authenticates per request, uncached:** a live grant for this resource, an ACTIVE person whose account isn't gone (else the grant is revoked), no closure in progress, the `agent_access` flag (403 `FEATURE_NOT_ENABLED`, no step-up hint, OV8). Agents get a **fail-closed store guard** (`agentStoreGuard`: only `read`-class methods); MUT-435/436 open each tool's methods deliberately. `/mcp` is stateless (GET/DELETE 405) and has **no tools** in this ticket (D10). Agent tokens are refused on `/v1` (`PRINCIPAL_NOT_ACCEPTED`).
+9. **Revocation:** the person (You › Account › Connect Claude), the flag's revoke (in `features.revoke`'s transaction, OV10), a password change (D11), operator disable and sign-out-everywhere (D12), RFC 7009 `/oauth/revoke`. Audited per membership (`user.agent_connected` / `user.agent_disconnected`, session-only on `/v1/audit`); Sentry hears only refresh/code reuse (warning) and forced revokes (info) (D14).
+10. **Ships dark:** Terraform `oauth_enabled` (default false) mounts `OAUTH_DERIVE_KEY` (generated) and schedules the nightly `/jobs/v1/oauth/cleanup`. API `1.74.0-mut434`.
+11. **The lapse gate (ADR-181) never blocks connecting or disconnecting:** the four `/v1/oauth/*` routes are `open` in `PERSON_LEVEL_GATE`, like passkeys (identity, no record written). What an agent writes is gated per profile at the tool (MUT-436). Found by the live release-QA run, which signs in people with no billing coverage.
+
+**Consequences:**
+- Per `/mcp` call: one indexed token lookup, one feature read, a once-a-minute touch.
+- The protocol endpoints rate-limit per Cloud Run instance, like sign-in (TD-253).
+- Account recovery, operator `rotate:password` and setup-link locks set a password without revoking grants (TD-254).
+- MUT-435 must decide firm-owner consent (ADR-196 deferred) before a read tool reaches firm data.

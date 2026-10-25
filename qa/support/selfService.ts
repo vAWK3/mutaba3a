@@ -88,6 +88,12 @@ export async function operatorAccount(email: string, locale: 'en' | 'ar', passwo
   return { id: created.user.id, setupUrl: created.setupLink.url };
 }
 
+/** MUT-433/434: the operator turns a per-user feature on (agent_access lets the person connect an agent). */
+export async function grantFeature(userId: string, feature = 'agent_access'): Promise<void> {
+  const res = await fetch(`${liveState().origin}/admin/v1/users/${userId}/features/${feature}`, { method: 'PUT', headers: admin() });
+  expect(res.status, `grant ${feature} ${await res.clone().text()}`).toBe(200);
+}
+
 /** The operator approves or declines the waiting signup for `email` (/admin/v1/signup-reviews). */
 export async function decideReview(email: string, decision: 'approve' | 'decline'): Promise<void> {
   const { origin } = liveState();

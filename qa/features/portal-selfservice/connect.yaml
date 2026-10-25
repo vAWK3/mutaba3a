@@ -1,0 +1,76 @@
+app: portal-selfservice
+area: connect
+title: Connect Claude (OAuth sign-in for MCP agents)
+tier: secondary
+# MUT-434 (ADR-197): an agent such as Claude signs in to MTB3A with OAuth 2.1 and uses /mcp. Runs against the live dev
+# API (support/selfservice-live.mjs) with OAUTH_DERIVE_KEY set: the spec plays the agent's half with fetch (registration,
+# PKCE, the token exchange, /mcp) and the person's half in the browser (consent, You › Account › Connect Claude). The
+# agent's redirect is a loopback address the page routes, as Claude Code's own local listener would answer it.
+paths:
+  - server/src/oauth/**
+  - server/src/routes/oauth.ts
+  - server/src/routes/oauth-consent.ts
+  - server/src/routes/oauth-cleanup.ts
+  - server/src/routes/mcp.ts
+  - server/src/mcp/**
+  - server/src/auth/agent-auth.ts
+  - src/hosted/pages/connect/**
+  - src/hosted/components/ConnectClaudeDrawer.tsx
+  - src/hosted/components/CopyField.tsx
+  - src/hosted/session/features.ts
+  - src/hosted/data/oauthQueries.ts
+features:
+  - id: approve
+    title: An agent signs in through the consent page and initializes /mcp
+    tier: core
+    paths:
+      - src/hosted/router.tsx
+      - server/src/app.ts
+    steps:
+      - The agent registers and opens the sign-in link
+      - Sign in, and on Connect an app press Allow
+      - The agent exchanges its code and calls /mcp
+    expect:
+      - The consent page names Claude as "an app on your own computer" and lists read and write
+      - The browser lands on the agent's redirect with a code and MTB3A's issuer
+      - /mcp answers the agent's initialize as mtb3a
+  - id: refused
+    title: Without agent access, the consent page refuses and sends the person back to the agent
+    tier: secondary
+    steps:
+      - As a person without agent access, open the agent's sign-in link
+      - Press Back to the agent
+    expect:
+      - '"Connecting apps isn’t on for you", with no Allow button'
+      - The agent's redirect receives error=access_denied
+  - id: revoke
+    title: Disconnecting from You › Account ends the agent's access on its next call
+    tier: core
+    paths:
+      - src/hosted/pages/you/YouAccount.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+      - src/hosted/data/filters.ts
+    steps:
+      - Connect an agent
+      - Open You › Account › Connect Claude, press Disconnect on it and confirm
+      - The agent calls /mcp again
+    expect:
+      - The drawer shows the MCP address and the connected app, then "disconnected"
+      - The agent's next call is refused (401)
+  - id: row-hidden
+    title: Connect Claude is offered only to a person with agent access
+    tier: secondary
+    steps:
+      - As a person without agent access, open You › Account
+    expect:
+      - There is no Connect Claude row
+  - id: real-clients
+    title: Claude.ai and Claude Code connect for real
+    tier: core
+    manual: true
+    steps:
+      - On the deployed portal, add MTB3A as a custom connector in Claude.ai and approve it
+      - Run claude mcp add --transport http mtb3a <the MCP address> and approve it in the browser
+    expect:
+      - Both show MTB3A connected (no tools yet; MUT-435 adds them)
+      - Record which registration path each used (DCR or CIMD) in the release notes

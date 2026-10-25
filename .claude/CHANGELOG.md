@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — OAuth 2.1 sign-in for MCP agents, a consent page and Connect Claude (MUT-434, ADR-197)
+
+**Why:** epic MUT-432 lets a person with `agent_access` connect their own Claude (Claude.ai, Claude Code) to MTB3A over MCP. MCP clients sign in with OAuth 2.1; the API had only sessions and keys.
+
+### Added
+- Server: `server/src/oauth/` (protocol rules, client trust + guarded CIMD fetch, the service with conditional claims and idempotent refresh rotation, token prefixes, agent audit), migration `20261025200000_mut434_oauth` (5 tables, additive), `store.oauth` (memory + Prisma), `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource[/mcp]`, `/oauth/register|authorize|token|revoke`, `/v1/oauth/requests/{id}[/decision]`, `/v1/oauth/grants[/{id}]`, `/mcp` (MCP SDK 1.32.1, stateless, no tools), `authenticateAgent` + `agentStoreGuard`, `/jobs/v1/oauth/cleanup`, `FEATURE_NOT_ENABLED` / `OAUTH_NOT_CONFIGURED`, `ErrorReporter.captureMessage`, `OAUTH_DERIVE_KEY`. API `1.74.0-mut434`.
+- Portal: `/connect/approve` (consent, refusal, errors), You › Account › Connect Claude (`?connectClaude=true`): MCP address in `CopyField`, how-tos, Connected apps with Disconnect. en + ar.
+- Terraform: `oauth_enabled` (default false) — generated `OAUTH_DERIVE_KEY` secret and the nightly cleanup Scheduler job.
+- QA: `portal-selfservice.connect.*` (approve, refused, revoke, row-hidden; real-clients manual).
+
+### Changed
+- Revoking `agent_access`, a password change, operator disable and sign-out-everywhere also revoke agent grants; `POST /admin/v1/users/{id}/sessions/revoke` answers `agentGrantsRevoked` too (additive).
+- `/v1` refuses `mat_`/`mrt_` bearers with `PRINCIPAL_NOT_ACCEPTED`. Log redaction adds OAuth-only keys (never bare `code`/`state`).
+
+**Operator:** see `docs/operations/before-release.md` (MUT-434).
+
+---
+
 ## [Unreleased] - 2026-10-25 — Per-user feature flags, operator-granted, starting with agent_access (MUT-433, ADR-196)
 
 **Why:** epic MUT-432 lets a person connect their own Claude over MCP. Basel decides who gets it: every flag is off until the operator grants it.

@@ -80,7 +80,9 @@ export default {
         // MUT-115: passkeys need a real WebAuthn relying party: the portal-selfservice app's.
         '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx',
         // MUT-370: the passkey suggestion is the portal-selfservice app's too.
-        '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts'],
+        '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts',
+        // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
+        '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -158,6 +160,19 @@ export default {
         'src/hosted/data/passkeyPrompt.ts',
         'src/hosted/data/passkeyPromptQueries.ts',
         'server/src/auth/passkey-prompt.ts',
+        // MUT-434: OAuth for MCP agents needs the live API (its issuer, tokens and /mcp).
+        'server/src/oauth/**',
+        'server/src/routes/oauth.ts',
+        'server/src/routes/oauth-consent.ts',
+        'server/src/routes/oauth-cleanup.ts',
+        'server/src/routes/mcp.ts',
+        'server/src/mcp/**',
+        'server/src/auth/agent-auth.ts',
+        'src/hosted/pages/connect/**',
+        'src/hosted/components/ConnectClaudeDrawer.tsx',
+        'src/hosted/components/CopyField.tsx',
+        'src/hosted/session/features.ts',
+        'src/hosted/data/oauthQueries.ts',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
       ],

@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-255: CIMD client registration has no live end-to-end test
+**Status**: Open
+**Ticket**: MUT-434 (OV6)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: the guarded fetch refuses loopback and plain-http metadata URLs by design, so the live QA app can't serve a test document; CIMD is proven by `oauth/__tests__/trust.test.ts` (every rejection path, injected DNS/request) and the route suite (injected fetcher), not against a real client.
+**Fix**: during the `portal-selfservice.connect.real-clients` hand check, note whether Claude.ai used CIMD; if a hosted test document becomes worth it, publish one on an https host and add a live case.
+
+### TD-254: Recovery, operator password rotation and setup-link locks don't disconnect agents
+**Status**: Open
+**Ticket**: MUT-434 (D11 covers the person's own password change only)
+**Added**: 2026-10-25
+**Priority**: Medium
+**Impact**: `users.setPassword` (operator `rotate:password`), setup-link `issue` with a lock and `redeem` (recovery) revoke sessions but leave OAuth grants live, so an agent connected by someone who knew the old password survives a recovery.
+**Fix**: revoke grants (`password_changed`, audited) in those three store transactions, as `changePassword` does; decide with Basel whether the setup link for a brand-new account counts.
+
+### TD-253: The OAuth endpoints' rate limits are per Cloud Run instance
+**Status**: Open
+**Ticket**: MUT-434 (AC5)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: `/oauth/register|authorize|token|revoke` and `/mcp` use `SlidingWindowRateLimiter`, like sign-in, so each instance counts on its own; with N instances an address gets N times the budget.
+**Fix**: a shared limiter (Postgres or Redis) for every auth surface at once, when instance counts grow.
+
 ### TD-252: The phone's bottom bar stepping aside for the keyboard is proven in Chromium, not on an iPhone
 **Status**: Open
 **Ticket**: MUT-426 (eng C1/D9)
