@@ -74,7 +74,9 @@ export default {
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
         '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts',
         // MUT-291: the carry-over's pages and mapping are the carry-over app's (they need the old app's origin too).
-        '!src/hosted/pages/carry-over/**', '!src/hosted/local/carryOver/**'],
+        '!src/hosted/pages/carry-over/**', '!src/hosted/local/carryOver/**',
+        // MUT-115: passkeys need a real WebAuthn relying party: the portal-selfservice app's.
+        '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -141,15 +143,22 @@ export default {
         'server/src/auth/turnstile.ts',
         'server/src/routes/admin-signup-reviews.ts',
         'server/src/email/domains/**',
+        // MUT-115: passkeys need a real WebAuthn relying party, so their flows run here (Chromium's virtual authenticator).
+        'src/hosted/passkeys/**',
+        'src/hosted/components/PasskeysDrawer.tsx',
+        'server/src/routes/passkeys.ts',
+        'server/src/auth/webauthn.ts',
+        'server/src/auth/passkey-names.ts',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
       ],
       // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both.
-      baseURL: 'http://127.0.0.1:8791',
-      attachURL: 'http://127.0.0.1:8791',
+      // `localhost`, not 127.0.0.1: the passkey flows (MUT-115) need it as their WebAuthn RP ID.
+      baseURL: 'http://localhost:8791',
+      attachURL: 'http://localhost:8791',
       start: { cmd: `${HEAP_CAPPED} node qa/support/selfservice-live.mjs` },
       // Answers only once the API is up with signup open (not just once something listens).
-      ready: 'http://127.0.0.1:8791/v1/self-service',
+      ready: 'http://localhost:8791/v1/self-service',
       personas: {},
     },
     'carry-over': {

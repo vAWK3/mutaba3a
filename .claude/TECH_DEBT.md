@@ -18,6 +18,46 @@
 
 ## Open Debt
 
+### TD-246: The passkey sign-in challenge writes a row per request
+**Status**: Accepted
+**Ticket**: MUT-115 (D5)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: `POST /v1/passkey-challenges` is public and stores a 5-minute challenge row; the sign-in page re-arms autofill every 4.5 minutes while open. Bounded by the sign-in IP limiter (20/min per address) and the hourly prune.
+**Fix**: if abuse shows, a stateless signed challenge plus a short replay cache (TD-017's shared store).
+
+### TD-245: The AAGUID provider list is a hand-written seed
+**Status**: Open
+**Ticket**: MUT-115 (DR8)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: `server/src/auth/passkey-providers.json` names 14 well-known providers; any other authenticator is named from the browser ("Chrome on Mac") or "iPhone". The build fetched nothing from the network.
+**Fix**: `npm --prefix server run passkey-providers:update -- --commit <sha of passkeydeveloper/passkey-authenticator-aaguids>`, review, commit.
+
+### TD-244: The passkey mark is a drawn stand-in, not the FIDO Alliance symbol
+**Status**: Open
+**Ticket**: MUT-115 (DR9)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: `PasskeyIcon` (`src/hosted/components/Icons.tsx`) is a person-and-key glyph in currentColor. DR9 asked for the official symbol with its usage terms in `docs/brand/README.md`.
+**Fix**: Basel downloads the FIDO passkey icon and confirms its terms; swap the path and record it in the brand README (the iOS half uses the same asset).
+
+### TD-243: No operator passkey tools
+**Status**: Accepted
+**Ticket**: MUT-115
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: The operator can't list or remove a person's passkeys. An operator `--lock` nulls the password hash, and passkey sessions are bound to it (D6), so a locked account can't sign in with a passkey either.
+**Fix**: an admin route if support needs it.
+
+### TD-242: No mail when a passkey is added
+**Status**: Open
+**Ticket**: MUT-414 (blocked by MUT-359's go-live)
+**Added**: 2026-10-25
+**Priority**: Medium
+**Impact**: Someone with a stolen session under 10 minutes old (or the password) can add a passkey without the person being told.
+**Fix**: plug the `passkey-added` mail into `PasskeyEvents.added` (`server/src/routes/passkeys.ts`, passed as `createApp({ passkeyEvents })`); it runs after the commit and can't change the answer.
+
 ### TD-241: Reports' activity summary aggregates in memory
 **Status**: Accepted (for now)
 **Ticket**: MUT-175 (plan §4.2, eng review F2; the plan called it TD-221 before that number was taken)

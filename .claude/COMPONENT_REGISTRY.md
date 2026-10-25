@@ -2338,3 +2338,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `AttachmentStorage.removePrefix(prefix)` and `profileStoragePrefix(organizationId)` (`server/src/attachments/`).
 - `server/src/repositories/prisma-purge-tables.ts`: `PURGE_PROFILE_TABLES`, `PURGE_USER_COLUMNS`, `PURGE_UNKEYED_USER_COLUMNS`.
 - Portal: `CloseAccountDrawer` (`src/hosted/components/`), `AccountClosingPage` (`src/hosted/pages/auth/`), `closeAccountImpactOf` / `closingDayLabel` (`src/hosted/data/closeAccount.ts`); `useAccountDrawers().openCloseAccount`.
+
+### Passkeys — MUT-115 (ADR-190)
+- `server/src/auth/webauthn.ts`: `webauthnConfigOf`, `creationOptions`, `signInOptions`, `verifyCreation`, `verifyAssertion` (`verified` / `refused` / `counter-regressed`), `CHALLENGE_TTL_MS`, `STEP_UP_WINDOW_MS`, `PASSKEY_LIMIT`.
+- `server/src/auth/passkey-names.ts`: `passkeyNameFor`, `providerName`, `deviceLabel` (+ `passkey-providers.json`, refreshed by `passkey-providers:update`).
+- `server/src/auth/sign-in.ts`: `signInWithPasskey`, `recordSignInFailure`, `issueSession`, `invalidCredentials`, `isLocked`.
+- `PasskeyRepository` (`store.passkeys`, memory + Prisma) with the challenge methods; `server/src/routes/passkeys.ts` (`passkeyRoutes`, `PasskeyEvents` — MUT-414's seam).
+- Test helper: `server/src/__tests__/helpers/soft-authenticator.ts` (`SoftAuthenticator`: a real ES256 authenticator on node:crypto).
+- Portal: `src/hosted/passkeys/webauthn.ts` (`passkeySupport`, `hostUnderRpId`, `createPasskey`, `assertPasskey`, `cancelPasskeyCeremony`), `usePasskeySignIn` (button + autofill), `addPasskeyFlow` / `PASSKEYS_KEY` (`addPasskey.ts`, MUT-370's seam), `PasskeysDrawer` (`src/hosted/components/`), `PasskeyIcon` (`Icons.tsx`), CSS `hp-divider`, `hp-passkey-*`.
+- QA: `qa/support/passkeys.ts` (`addVirtualAuthenticator`: Chromium's CDP WebAuthn authenticator).

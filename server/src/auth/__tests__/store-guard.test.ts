@@ -129,6 +129,10 @@ describe('STORE_ACCESS', () => {
       'organizations.declineFirmRequest',
       'organizations.listFirmRequests',
       'organizations.setFirm',
+      // MUT-115: passkey sign-in's own reads and writes run on the public routes, unguarded; no credential calls them.
+      'passkeys.findByCredentialId',
+      'passkeys.pruneChallenges',
+      'passkeys.recordUse',
       'sessions.revokeAllForUser',
       // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
       'signupReviews.approve',

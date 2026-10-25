@@ -816,6 +816,26 @@ stack. Cloud Run reads the token secret by name, so deleting it first breaks the
   Manager could link the two hosts through web↔web statements in `assetlinks.json`, an API
   contract change left to MUT-112. Say so in MUT-112's release note.
 
+### Passkeys (MUT-115, ADR-190)
+
+Passkeys are bound to their relying-party ID **for life**, so it is the apex (`mtb3a.com`), never a
+subdomain or the run.app host. One RP ID serves both the portal (origin `https://app.<apex>`) and the iOS
+app (native assertions carry `https://<apex>`).
+
+- **Server:** Terraform's `domain.tf` sets `WEBAUTHN_RP_ID = <apex>` from stage `live`. The allowed origins
+  default to `PORTAL_ORIGIN` and `https://<apex>`; the server refuses to start if either is outside the RP ID.
+  Unset (stages `legacy`/`proxy`, or staging), every passkey route answers 404 and the portal hides passkeys.
+  The portal also hides them on the legacy run.app host (a passkey made there would be useless).
+- **Apex `apple-app-site-association`:** iOS checks `webcredentials` on the RP ID itself. The apex is the
+  Netlify landing, so the web build's `_redirects` proxies `https://<apex>/.well-known/apple-app-site-association`
+  to the portal's own file with a **200** (Apple refuses a redirect). The server's `APPLE_TEAM_ID` /
+  `APPLE_BUNDLE_ID` stay the one source. Check after a web release:
+  `curl -sI https://<apex>/.well-known/apple-app-site-association` (200, `application/json`), and before a
+  phone release Apple's CDN copy: `curl -s https://app-site-association.cdn-apple.com/a/v1/<apex>`.
+- **Local dev and QA:** `WEBAUTHN_RP_ID=localhost` and `WEBAUTHN_ORIGINS=http://localhost:<port>,https://localhost`.
+- **Order:** web (the AASA rewrite), then server (turns passkeys on), then the phone once Apple's CDN shows
+  the apex file.
+
 ## 6. Day-2 operations
 
 | Task | Command |

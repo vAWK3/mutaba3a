@@ -15,6 +15,7 @@ import configFn, {
   appVersion,
   netlifyFormsHtml,
   netlifyRedirects,
+  APPLE_APP_SITE_ASSOCIATION_PATH,
   carryOverBuild,
   LEGACY_LANDING_PATHS,
   portalUrl,
@@ -202,14 +203,21 @@ describe('vite.config', () => {
     });
 
     it('live: the apex sends /app back to the old host, where the free web app\'s data is', () => {
-      expect(lines('live')).toEqual([
+      expect(lines('live').slice(0, 2)).toEqual([
         'https://placeholder.example/app https://old.netlify.example/app 302!',
         'https://placeholder.example/app/* https://old.netlify.example/app/:splat 302!',
       ]);
     });
 
+    it('live: the apex proxies the portal\'s apple-app-site-association with a 200, never a redirect (MUT-115)', () => {
+      const aasa = 'https://placeholder.example/.well-known/apple-app-site-association https://app.placeholder.example/.well-known/apple-app-site-association 200!';
+      expect(lines('live')).toEqual([expect.any(String), expect.any(String), aasa]);
+      expect(lines('redirect')).toContain(aasa);
+      expect(APPLE_APP_SITE_ASSOCIATION_PATH).toBe('/.well-known/apple-app-site-association');
+    });
+
     it('redirect: also sends the old host\'s landing pages, and only those, on to the apex', () => {
-      expect(lines('redirect').slice(2)).toEqual([
+      expect(lines('redirect').slice(3)).toEqual([
         'https://old.netlify.example/ https://placeholder.example/ 302!',
         'https://old.netlify.example/download https://placeholder.example/download 302!',
         'https://old.netlify.example/privacy https://placeholder.example/privacy 302!',

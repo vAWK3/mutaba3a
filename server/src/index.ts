@@ -32,6 +32,7 @@ import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/
 import { createFixtureDomainChecker } from './email/domains/fixture-checker.js';
 import { createRdapClient } from './email/domains/rdap.js';
 import { createReviewDigest, msUntilNextSweep } from './email/review-digest.js';
+import { webauthnConfigOf } from './auth/webauthn.js';
 
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
@@ -111,6 +112,9 @@ const reviewDigest = createReviewDigest({ store, mailer, logger, now: () => new 
 /** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
 const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;
 
+// MUT-115 (D2): config has already refused an origin outside the RP ID; null = no passkeys.
+const webauthn = webauthnConfigOf({ rpId: config.WEBAUTHN_RP_ID, origins: config.WEBAUTHN_ORIGINS, portalOrigin: config.PORTAL_ORIGIN });
+
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
   ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
@@ -162,6 +166,7 @@ const app = createApp({
   },
   signInThrottle,
   signInIpLimiter,
+  webauthn,
   publicFxIpLimiter,
   stripe,
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
@@ -204,6 +209,7 @@ if (!config.TURNSTILE_SECRET) logger.warn('TURNSTILE_SECRET is not set; signup a
 if (!config.RESEND_WEBHOOK_SECRET) logger.warn('RESEND_WEBHOOK_SECRET is not set; the Resend webhook answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
 if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
+if (!webauthn) logger.info('WEBAUTHN_RP_ID is not set; passkey routes answer 404');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
@@ -230,6 +236,8 @@ pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {
   void store.email.pruneDeliveries(new Date(Date.now() - MAIL_LOG_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'mail send log prune failed'));
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
+  // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
+  void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);
 mailPruneTimer.unref();
 // MUT-367 (D27): aligned to the UTC hour, so a review waits at most about an hour to be announced.

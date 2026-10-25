@@ -1,0 +1,77 @@
+app: portal-selfservice
+area: passkeys
+title: Passkeys (sign in with Face ID, Touch ID or the screen lock)
+tier: secondary
+# MUT-115 (ADR-190): add, use, remove and keep passkeys on the portal, against the live dev API's real WebAuthn checks
+# (WEBAUTHN_RP_ID=localhost). Chromium's virtual authenticator (support/passkeys.ts) answers the system sheet. The iOS
+# app's flows (ios.passkey.*) live in the Flutter repo's catalog.
+paths:
+  - src/hosted/passkeys/**
+  - src/hosted/components/PasskeysDrawer.tsx
+  - server/src/routes/passkeys.ts
+  - server/src/auth/webauthn.ts
+  - server/src/auth/passkey-names.ts
+features:
+  - id: add
+    title: Add a passkey from You › Account right after signing in, with no password prompt
+    tier: core
+    paths:
+      - src/hosted/pages/you/YouAccount.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+    steps:
+      - Sign in with your password
+      - Open You › Account › Passkeys and press Add a passkey
+      - Confirm on the device
+    expect:
+      - '"Passkey added", and the passkey is listed as added today and never used'
+      - No password was asked for
+  - id: sign-in
+    title: Sign in with a passkey after signing out
+    tier: core
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - server/src/auth/sign-in.ts
+      - server/src/routes/sessions.ts
+    steps:
+      - Add a passkey, then sign out
+      - On sign-in press Sign in with a passkey
+    expect:
+      - You land on Home without typing a password
+      - Passkeys shows it was last used today
+  - id: remove
+    title: Removing a passkey stops it signing in
+    steps:
+      - Add a passkey
+      - Press Remove on it and confirm
+      - Sign out and try Sign in with a passkey
+    expect:
+      - '"Passkey removed. Devices signed in with it are signed out."'
+      - The passkey sign-in is refused with "That passkey didn’t work"
+  - id: password-change-keeps
+    title: Changing the password keeps the passkey working
+    paths:
+      - server/src/routes/sessions.ts
+    steps:
+      - Add a passkey
+      - Change the password from You › Account
+      - Sign out and sign in with the passkey
+    expect:
+      - The passkey still signs in
+  - id: autofill
+    title: The email field on sign-in offers your passkey (autofill)
+    paths:
+      - src/hosted/passkeys/usePasskeySignIn.ts
+    steps:
+      - Add a passkey and sign out
+      - Open sign-in and pick the passkey the email field offers
+    expect:
+      - The email field asks for passkeys (autocomplete "username webauthn")
+      - You land on Home
+  - id: arabic-phone
+    title: Passkeys in Arabic on a 375 px phone (مفاتيح المرور, right to left)
+    steps:
+      - In Arabic at phone width, sign in and open أنت › الحساب › مفاتيح المرور
+      - Add a passkey, then sign out
+    expect:
+      - The drawer reads right to left and fits the phone
+      - Sign-in offers تسجيل الدخول بمفتاح المرور

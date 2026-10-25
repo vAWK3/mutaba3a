@@ -14,7 +14,9 @@ import { AuthLayout } from './AuthLayout';
 import { CheckingSession } from './BootScreens';
 import { EMAIL_SHAPE } from './selfService';
 import { UnderReviewNotice } from './UnderReviewNotice';
-import { AlertIcon, InfoIcon } from '../../components/Icons';
+import { AlertIcon, InfoIcon, PasskeyIcon } from '../../components/Icons';
+import { PasskeyCeremonyError, usePasskeySignIn } from '../../passkeys/usePasskeySignIn';
+import type { Me } from '../../api/client';
 
 /**
  * `/sign-in` (hosted-portal.md §7.6, mut-43-auth-states.md S3–S10). Email and
@@ -37,7 +39,7 @@ interface SignInPageProps {
 }
 
 type FieldError = 'emailRequired' | 'emailInvalid' | 'passwordRequired';
-type Banner = { kind: 'invalid' } | { kind: 'rateLimited'; minutes: number } | { kind: 'unreachable' };
+type Banner = { kind: 'invalid' } | { kind: 'passkeyInvalid' } | { kind: 'rateLimited'; minutes: number } | { kind: 'unreachable' };
 
 /**
  * The landing's public /hosted page, the one outward link on this page
@@ -48,10 +50,12 @@ type Banner = { kind: 'invalid' } | { kind: 'rateLimited'; minutes: number } | {
 function hostedOfferHref(): string {
   return typeof __HOSTED_OFFER_URL__ !== 'undefined' ? __HOSTED_OFFER_URL__ : '';
 }
-function bannerFor(error: unknown): Banner | 'underReview' {
+function bannerFor(error: unknown, via: 'password' | 'passkey' = 'password'): Banner | 'underReview' {
   // MUT-367: only the right password on a pending account gets this, so it reveals nothing to anyone else.
   if (error instanceof ApiError && error.code === 'ACCOUNT_UNDER_REVIEW') return 'underReview';
-  if (error instanceof ApiError && error.status === 401) return { kind: 'invalid' };
+  // MUT-115 (DR4): a refused passkey (or a platform error) points back to the password.
+  if (error instanceof PasskeyCeremonyError) return { kind: 'passkeyInvalid' };
+  if (error instanceof ApiError && error.status === 401) return { kind: via === 'passkey' ? 'passkeyInvalid' : 'invalid' };
   if (error instanceof ApiError && error.status === 429) return { kind: 'rateLimited', minutes: retryMinutes(error) };
   return { kind: 'unreachable' };
 }
@@ -87,29 +91,39 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const [underReview, setUnderReview] = useState(false);
   const doors = useSelfServiceDoors();
 
+  /** One success path for the password and the passkey (MUT-115 §11.11): remote mode, the account's language, `next`. */
+  function onSignedIn(me: Me) {
+    setMode('remote');
+    // Nothing cached on this device (the local person, their figures) belongs to the account.
+    queryClient.removeQueries();
+    queryClient.setQueryData(ME_KEY, me);
+    // The account's language before the first signed-in frame (MUT-209)
+    adoptAccountLocale(me.user.locale);
+    void navigate({ to: safeNext(next), replace: true });
+  }
+
+  function showRefusal(error: unknown, via: 'password' | 'passkey') {
+    const refusal = bannerFor(error, via);
+    if (refusal === 'underReview') {
+      setPassword('');
+      setUnderReview(true);
+      return;
+    }
+    setBanner(refusal);
+    if (refusal.kind === 'invalid') {
+      setPassword('');
+      passwordRef.current?.focus();
+    }
+  }
+
+  const passkey = usePasskeySignIn({ onSignedIn, onError: (error) => showRefusal(error, 'passkey') });
+
   const signIn = useMutation({
     mutationFn: api.signIn,
-    onSuccess: (me) => {
-      setMode('remote');
-      // Nothing cached on this device (the local person, their figures) belongs to the account.
-      queryClient.removeQueries();
-      queryClient.setQueryData(ME_KEY, me);
-      // The account's language before the first signed-in frame (MUT-209)
-      adoptAccountLocale(me.user.locale);
-      void navigate({ to: safeNext(next), replace: true });
-    },
+    onSuccess: onSignedIn,
     onError: (error) => {
-      const next = bannerFor(error);
-      if (next === 'underReview') {
-        setPassword('');
-        setUnderReview(true);
-        return;
-      }
-      setBanner(next);
-      if (next.kind === 'invalid') {
-        setPassword('');
-        passwordRef.current?.focus();
-      }
+      showRefusal(error, 'password');
+      passkey.resume();
     },
   });
 
@@ -127,8 +141,9 @@ function SignInForm({ next, reason }: SignInPageProps) {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (signIn.isPending || !validate()) return;
+    if (signIn.isPending || passkey.pending || !validate()) return;
     setBanner(null);
+    passkey.pause();
     signIn.mutate({ email: email.trim(), password });
   }
 
@@ -147,7 +162,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
 
   if (underReview) return <UnderReviewNotice onLeave={leaveReview} />;
 
-  const pending = signIn.isPending;
+  const pending = signIn.isPending || passkey.pending;
   const offerUrl = hostedOfferHref();
   const termsLink = termsHref(language);
   const bannerId = `${ids}-banner`;
@@ -171,6 +186,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
             <AlertIcon />
             <span>
               {banner.kind === 'invalid' && t('hosted.auth.invalid')}
+              {banner.kind === 'passkeyInvalid' && t('hosted.auth.passkey.invalid')}
               {banner.kind === 'rateLimited' && tp('hosted.auth.rateLimited', banner.minutes)}
               {banner.kind === 'unreachable' && t('hosted.auth.unreachable')}
             </span>
@@ -185,7 +201,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
             className={`input hp-ltr-input ${fieldErrors.email ? 'input-error' : ''}`}
             type="email"
             inputMode="email"
-            autoComplete="username"
+            autoComplete={passkey.supported ? 'username webauthn' : 'username'}
             autoCapitalize="none"
             spellCheck={false}
             dir="ltr"
@@ -236,10 +252,32 @@ function SignInForm({ next, reason }: SignInPageProps) {
           )}
         </div>
 
-        <button type="submit" className="btn btn-primary btn-md hp-block" disabled={pending} aria-busy={pending}>
-          {pending && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
-          <span>{t(pending ? 'hosted.auth.submitting' : 'hosted.auth.submit')}</span>
+        <button type="submit" className="btn btn-primary btn-md hp-block" disabled={pending} aria-busy={signIn.isPending}>
+          {signIn.isPending && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
+          <span>{t(signIn.isPending ? 'hosted.auth.submitting' : 'hosted.auth.submit')}</span>
         </button>
+
+        {/* MUT-115 (DR1): only where passkeys work on this host; the password stays the primary path */}
+        {passkey.supported && (
+          <>
+            <div className="hp-divider" role="separator">
+              <span>{t('hosted.auth.passkey.or')}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-md hp-block"
+              disabled={pending}
+              aria-busy={passkey.pending}
+              onClick={() => {
+                setBanner(null);
+                void passkey.start();
+              }}
+            >
+              {passkey.pending ? <span className="btn-spinner hp-inline-spinner" aria-hidden="true" /> : <PasskeyIcon />}
+              <span>{t('hosted.auth.passkey.button')}</span>
+            </button>
+          </>
+        )}
       </form>
       {/* D14: the door shows once the server can really mail a link; until then, who to ask */}
       {doors.recovery ? (

@@ -4,6 +4,8 @@ import { omitShellOverlay, parseProfileDrawer, type ProfileDrawerSearch } from '
 import { BillingDrawer } from '../components/BillingDrawer';
 import { ChangePasswordDrawer } from '../components/ChangePasswordDrawer';
 import { CloseAccountDrawer } from '../components/CloseAccountDrawer';
+import { PasskeysDrawer } from '../components/PasskeysDrawer';
+import { passkeySupport } from '../passkeys/webauthn';
 import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
@@ -34,6 +36,8 @@ export function useAccountDrawers() {
     leaveBillingStep: () => go({ billing: true }, true),
     /** MUT-333: Close my account. */
     openCloseAccount: () => go({ closeAccount: true }, false),
+    /** MUT-115: Passkeys (`?passkeys=true`). */
+    openPasskeys: () => go({ passkeys: true }, false),
     close: () => go({}, true),
   };
 }
@@ -46,6 +50,8 @@ export function AccountDrawers() {
   if (drawers.state.yourData) return local ? <YourDataDrawer onClose={drawers.close} /> : <HostedYourDataDrawer onClose={drawers.close} />;
   // MUT-333: an account's, never this device's; Download my records opens Your data in its place.
   if (drawers.state.closeAccount && !local) return <CloseAccountDrawer onClose={drawers.close} onDownload={drawers.openYourData} />;
+  // MUT-115: an account's, and only where passkeys work on this host (never the legacy run.app portal).
+  if (drawers.state.passkeys && !local && passkeySupport()) return <PasskeysDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }

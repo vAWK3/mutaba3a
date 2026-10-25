@@ -2778,3 +2778,8 @@ Imported data is never written field by field into the live store. It is mapped 
 - List every table the delete knows in one module (`prisma-purge-tables.ts`); a test:db reads `information_schema`/`pg_constraint` and fails on a table or foreign key it doesn't classify, so a new table can't be forgotten.
 - After a seeded delete, scan every text, uuid, JSON and array column of every table for the subject's id, email and name, with named exemptions only (the audit tombstone). Keys alone miss columns with no foreign key.
 - **First instance:** `server/src/repositories/__tests__/prisma-account-purge-catalog.test.ts`.
+
+### Pattern: Test WebAuthn with a real soft authenticator, never a mocked verifier (MUT-115)
+- Server: `SoftAuthenticator` makes attestation-`none` credentials and ES256 assertions for any origin on node:crypto, so `@simplewebauthn/server`'s real checks run; knobs flip one fact to refuse (no UV, wrong RP ID, counter, user handle).
+- Browser QA: Chromium's virtual authenticator over CDP (`qa/support/passkeys.ts`) against the live API on `localhost` (an IP can't be an RP ID). It answers conditional mediation at once, so a spec turns presence off while signing out.
+- **First instances:** `server/src/__tests__/routes-passkeys.test.ts`, `qa/specs/portal-selfservice/passkeys.spec.ts`.

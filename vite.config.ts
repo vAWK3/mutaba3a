@@ -115,6 +115,20 @@ export function turnstileSiteKey(override: string | undefined): string {
   return override;
 }
 
+/**
+ * MUT-115 (ADR-190): the passkey relying-party ID the portal offers passkeys under, the same value Terraform gives the
+ * server (`WEBAUTHN_RP_ID`, from config/hosts.json at stage live/redirect). "" = no passkeys in this build (stages
+ * legacy/proxy). `MUTABA3A_PASSKEY_RP_ID` overrides it for local QA (`localhost`). The portal shows passkeys only on
+ * a host under it, so the legacy run.app host never makes one that would be useless.
+ */
+export function passkeyRpId(hosts: Pick<ResolvedHosts, "stage" | "domain">, override: string | undefined): string {
+  if (override !== undefined && override !== "") {
+    if (!/^[a-z0-9.-]+$/.test(override)) throw new Error("MUTABA3A_PASSKEY_RP_ID must be a bare host name, e.g. localhost");
+    return override;
+  }
+  return (hosts.stage === "live" || hosts.stage === "redirect") && hosts.domain ? hosts.domain : "";
+}
+
 /** The Sentry org and projects the browser surfaces report to, and where their source maps go (MUT-149/150, ADR-091). */
 const SENTRY_ORG = "barmajiyat-ltd";
 const SENTRY_PORTAL_PROJECT = "mutaba3a-web";
@@ -466,8 +480,13 @@ function redirectLine(fromOrigin: string, path: string, toOrigin: string): strin
  * Host-scoped, so deploy previews are untouched.
  * - From stage "live": the apex's `/app` goes back to the old host, where the free web
  *   app's data is (the landing links to `/app` relatively); MUT-291 retires this.
+ * - From stage "live": the apex serves the portal's apple-app-site-association (MUT-115, ADR-190) by a 200
+ *   proxy rewrite, so iOS trusts the apex, the passkey RP ID, for `webcredentials`. One source of truth: the
+ *   server's APPLE_TEAM_ID/APPLE_BUNDLE_ID; never a redirect, which Apple refuses.
  * - At stage "redirect": the old host's landing pages go on to the apex.
  */
+export const APPLE_APP_SITE_ASSOCIATION_PATH = "/.well-known/apple-app-site-association";
+
 export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "frontDoor">): string {
   if (!hosts.legacy || !hosts.frontDoor || (hosts.stage !== "live" && hosts.stage !== "redirect")) return "";
   const apex = `https://${hosts.frontDoor.landingHost}`;
@@ -475,6 +494,7 @@ export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" |
   const lines = [
     redirectLine(apex, "/app", old),
     redirectLine(apex, "/app/*", old),
+    `${apex}${APPLE_APP_SITE_ASSOCIATION_PATH} https://${hosts.frontDoor.portalHost}${APPLE_APP_SITE_ASSOCIATION_PATH} 200!`,
     ...(hosts.stage === "redirect" ? LEGACY_LANDING_PATHS.map((path) => redirectLine(old, path, apex)) : []),
   ];
   return `${lines.join("\n")}\n`;
@@ -651,6 +671,8 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
       __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
       // The bot check on /signup and /recover (MUT-368); public, never the secret
       __TURNSTILE_SITE_KEY__: JSON.stringify(turnstileSiteKey(process.env.MUTABA3A_TURNSTILE_SITE_KEY)),
+      // The passkey relying party (MUT-115); "" = no passkeys in this build
+      __PASSKEY_RP_ID__: JSON.stringify(passkeyRpId(HOSTS, process.env.MUTABA3A_PASSKEY_RP_ID)),
       // The carry-over's origins (MUT-291): the receiver's accepted old origins and the new portal
       __CARRY_OVER__: JSON.stringify(carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { release: command === "build" })),
       // Crash reports, signed in only (MUT-149, ADR-091 am.11); no DSN compiles them out

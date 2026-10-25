@@ -8,10 +8,11 @@ import { useMe } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { useSignOut } from '../../session/useSignOut';
 import { useAccountDrawers } from '../../shell/AccountDrawers';
+import { passkeySupport } from '../../passkeys/webauthn';
 
 /**
  * You › Account (MUT-425; was the account menu, hosted-portal.md §7.1): Billing with the trial or the open profile's
- * lapse state (eng D6), Your data, Change password, and Sign out set apart; MUT-333's Close my account last, on its own.
+ * lapse state (eng D6), Your data, Change password, Passkeys (MUT-115), and Sign out set apart; MUT-333's Close my account last, on its own.
  * Signed out on this device (MUT-286) there
  * is no account: Sign in and Your data instead, nothing that needs one.
  */
@@ -36,6 +37,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         {/* MUT-325: the account's own Download my records */}
         <RowButton label={t('hosted.yourData.title')} sub={t('hosted.local.data.download')} onClick={drawers.openYourData} />
         <RowButton label={t('hosted.auth.changePassword')} onClick={drawers.open} />
+        {/* MUT-115 (DR2): directly after Change password, where passkeys work on this host */}
+        {passkeySupport() && <RowButton label={t('hosted.account.passkeys.title')} sub={t('hosted.account.passkeys.rowSub')} onClick={drawers.openPasskeys} />}
       </RowGroup>
       <SignOutGroup />
       {/* MUT-333: set apart, last: it can't be undone after 30 days */}

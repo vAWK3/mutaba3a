@@ -607,3 +607,10 @@ mini-crm/
 - **Grace**: a closing session reaches only `GET /v1/me`, `DELETE /v1/me/closure` (Keep my account) and sign-out; anything else is 403 `ACCOUNT_CLOSING`. The portal's AuthGate shows the closing page. Past the deadline the account no longer signs in.
 - **Hard delete**: Cloud Scheduler hourly → `POST /jobs/v1/accounts/purge` (operator: `npm run accounts:purge [-- --dry-run]`): claim → delete the Stripe customers → one transaction (own profiles deleted; a shared one passes to a co-owner; records elsewhere anonymized; audit scrubbed to a tombstone; the person's own rows deleted) → empty the deleted profiles' bucket prefixes (`storage_purges` queue). At most 25 a run.
 - **Phone**: not built yet (MUT-371/364 phase); the contract is §7 of `.claude/designs/mut-333-close-account.md`.
+
+## MUT-115 — Passkeys (2026-10-25, ADR-190, web half)
+
+- **Sign in:** /sign-in offers "Sign in with a passkey" and passkeys in the email field's autofill, where passkeys work on the host (RP ID `mtb3a.com`). `POST /v1/passkey-challenges` → the platform sheet → `POST /v1/sessions/passkey` (portal cookie) or `/v1/device-sessions/passkey` (phone token). Same throttle, lockout and 401 as the password.
+- **Manage:** You › Account › Passkeys: add (a sign-in under 10 minutes old, else the password), rename, remove (signs out the sessions it opened). At most 10. A password change keeps passkeys.
+- **Infra:** `WEBAUTHN_RP_ID` from stage live; the apex proxies the portal's AASA for iOS `webcredentials`.
+- **Phone:** not built yet (the run's phone phase): it ports Malafat's `WebAuthnService` on the `passkeys` package against the same routes.

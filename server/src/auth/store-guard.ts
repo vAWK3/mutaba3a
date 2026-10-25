@@ -88,6 +88,20 @@ export const STORE_ACCESS: StoreAccess = {
   // checks run inside removeOwner's transaction). The owners list is read on /v1/me.
   memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
   sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
+  // MUT-115: a person's own passkeys, written by their session (identity row, like changePassword). Sign-in finds a
+  // credential, stamps its use and consumes its challenge on the public routes, which run with no guard, so those
+  // methods are refused to every principal; pruning is the server's timer.
+  passkeys: {
+    listByUser: 'sessionOnly',
+    findByCredentialId: 'operator',
+    create: { write: 'identity' },
+    rename: { write: 'identity' },
+    remove: { write: 'identity' },
+    recordUse: 'operator',
+    createChallenge: 'sessionOnly',
+    consumeChallenge: 'sessionOnly',
+    pruneChallenges: 'operator',
+  },
   // MUT-235: issued by /admin, redeemed by the two public setup routes; both run with no guard, so every principal is refused here.
   // MUT-366: the self-service routes are public, so they run with no guard (like redeem); no credential may call these.
   accountSetup: { issue: 'operator', findByDigest: 'operator', redeem: 'operator', issueSignup: 'operator', redeemSignup: 'operator', pruneSignupLinks: 'operator' },

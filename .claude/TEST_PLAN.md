@@ -3727,3 +3727,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Mail / CLI / infra | `templates.test.ts` (`account-closing`, the date exemption), `users-cli.test.ts` (`accounts-purge`), `tests/account_purge.tftest.hcl` | `test`, `terraform test` |
 | Portal | `CloseAccountDrawer.test.tsx` (impact, menu → drawer, download, wrong password, Stripe down, close → closing page, keep, Arabic, before the terms step), `queryClient.test.ts` (ACCOUNT_CLOSING re-reads me), local `migrations.test.ts` 6 → 7 | `npm run test:run` |
 | Release-QA | `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` | `release-qa run --only portal.account.close` |
+
+## MUT-115 — passkeys, web half (2026-10-25, ADR-190)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `auth/__tests__/webauthn.test.ts` (config cross-check, options, creation/assertion verify, A1 cross-origin pair, refusals, counter regression, names), `sign-in-audit.test.ts` (R1 audit actors + `method`), `scripts/__tests__/passkey-providers-update.test.ts`, `config.test.ts` | `npm --prefix server test` |
+| Store contract | `store-contract-passkeys.ts` (memory + Prisma): cap, duplicate, rename, remove revokes its sessions but the caller's, atomic single-use challenge, concurrent consume, prune | `test` / `test:db` |
+| Catalog | `prisma-account-purge-catalog.test.ts`: passkeys and challenges are deleted with the person | `test:db` |
+| Routes | `routes-passkeys.test.ts` (19: auth, 404 unconfigured, step-up, wrong password counts, cap, refused creations, rename/remove ownership, closing, cookie + device sign-in, A1, A2, A3 shared lockout, operator lock / disabled / pending / closed, counter, unknown credential, replay, purpose crossing, IP budget, A4), `front-door-sign-in.test.ts` (passkey sign-in through the front door), `no-self-registration`, `route-security`, `billing-gate-routes`, `store-guard` | `test` |
+| Infra / build | `tests/domain.tftest.hcl` (`WEBAUTHN_RP_ID` from stage live), `scripts/__tests__/vite-config.test.ts` (apex AASA 200 rewrite), `hosts.test.ts` | `terraform test`, `test:run` |
+| Portal | `PasskeysDrawer.test.tsx` (12), `SignInPasskey.test.tsx` (8), `passkeys/__tests__/webauthn.test.ts` | `npm run test:run` |
+| Release-QA | `portal-selfservice.passkeys.add` (core), `.sign-in` (core), `.remove`, `.password-change-keeps`, `.autofill`, `.arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys` |

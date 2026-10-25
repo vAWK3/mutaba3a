@@ -1972,6 +1972,8 @@ holds).
 
 ---
 
+**Amendment (MUT-115, 2026-10-25)**: passkeys are a second sign-in method beside the password, never instead of it (ADR-159 decision 9: every account keeps a password). Three public operations join sign-in: `POST /v1/passkey-challenges`, `POST /v1/sessions/passkey` and `POST /v1/device-sessions/passkey`; none creates an account, invites anyone or resets a password, and `no-self-registration.test.ts` pins them. A passkey is added only by a signed-in person. A passkey sign-in shares the password's throttle, lockout, single 401 and same-origin rule, and its session is bound to the current password hash. See ADR-190.
+
 ## ADR-038: A Transaction's paidAt Is Derived From Its Payment Records; Future-Dated Payments Are Rejected; Mark Paid Routes to the Dated Drawer
 
 **Status**: Active
@@ -5125,3 +5127,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The restricted Stripe key needs **Write on Subscriptions** (D14); without it close answers 502.
 - Co-owners whose shared profile was covered by the closer's subscription get no notice and may lose coverage during the grace (TD-237). `email_suppressions` keep the address (TD-238). `profile-rows.sh purge-user` duplicates part of the purge (TD-239). The purge's per-person text scans are accepted at pilot volume (TD-240).
 - The privacy policy's 30-day/14-day promise is now true by code; its "Deleting your account" paragraph still says to email us: Basel rewords it (before-release).
+
+## ADR-190: Passkeys — One Relying Party on the Apex, a Second Sign-In Beside the Password, Bound to It (MUT-115, Web Half)
+
+**Status:** Accepted for the build (2026-10-25, MUT-115, unattended run on Basel's "go"). Basel approved the plan's D1–D12 and DR1–DR12 on 2026-10-23 (`.claude/designs/mut-115-passkeys.md` §11–§12); the build's own choices B1–B14 (§13 there) are **pending Basel's confirmation**. Amends ADR-037 (sign-in methods). Builds on ADR-155 (the custom domain), ADR-159 (self-service), ADR-181 (the lapse gate), ADR-188 (closing accounts).
+
+**Context:** Passwords were the only way in. Passkeys are bound to their relying-party ID for life, so they waited for `mtb3a.com` (MUT-112). The portal is on `app.mtb3a.com`; the iOS app asserts with the apex as its origin.
+
+**Decision:**
+1. **RP ID = the apex** (`WEBAUTHN_RP_ID`, Terraform from `config/hosts.json` at stages live/redirect). Origins: `PORTAL_ORIGIN` and `https://<apex>`; the server refuses to start on an origin outside the RP ID. Unset = every passkey route answers 404 and the portal hides passkeys (also on the legacy run.app host, by its build-time RP ID).
+2. **Attestation `none`, discoverable credentials, user verification required, ES256 + RS256** (`@simplewebauthn/server` 13.3.3 / `browser` 13.3.0, pinned).
+3. **Challenges in Postgres** (`webauthn_challenges`): single-use, 5 minutes, consumed by one conditional UPDATE; a creation challenge is bound to its person, purposes never cross.
+4. **One sign-in core:** `signInWithPasskey` in `auth/sign-in.ts` shares `recordSignInFailure` (one counter per email for passwords and passkeys) and `issueSession` (bound to the current password hash; `sessions.passkeyId`). PENDING_REVIEW → 403 `ACCOUNT_UNDER_REVIEW`; a closed account past its deadline → 401 with no failure counted; during the grace it signs in, as with the password. A counter that went backwards is refused and audited once the signature proves genuine.
+5. **Adding needs a recent sign-in:** `credentialsVerifiedAt` ≤ 10 minutes, else `currentPassword` through `verifyCurrentPassword` (403 `RECENT_SIGN_IN_REQUIRED` / `CURRENT_PASSWORD_WRONG`). At most 10 (409 `PASSKEY_LIMIT`). Named from the AAGUID's provider or the device; renamable.
+6. **Removing a passkey signs out the sessions it opened** (except the caller's), in one transaction. A password change keeps passkeys and revokes sessions exactly as before.
+7. **Identity routes:** the five management routes are `open` in the lapse gate and closed to a closing account (ADR-188's 403). The purge deletes passkeys and creation challenges.
+8. **Apex AASA:** the landing's `_redirects` proxies the portal's `apple-app-site-association` with a 200, so iOS trusts the apex for `webcredentials`; one source (the server's `APPLE_TEAM_ID`/`APPLE_BUNDLE_ID`).
+
+**Consequences:**
+- Release order: web (the AASA rewrite), then server (turns passkeys on), then the phone once Apple's CDN has the apex file.
+- MUT-370's suggestion card runs `addPasskeyFlow` (`src/hosted/passkeys/addPasskey.ts`) right after first sign-in, with no step-up. MUT-414's mail plugs into `PasskeyEvents.added`.
+- Debt: TD-242 (no "passkey added" mail), TD-243 (no operator tools), TD-244 (drawn icon), TD-245 (seed AAGUID list), TD-246 (a row per challenge).

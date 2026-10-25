@@ -97,6 +97,25 @@ describe('loadConfig — custom-domain front door (MUT-326)', () => {
   });
 });
 
+describe('loadConfig — passkeys (MUT-115 D2)', () => {
+  it('has no passkeys by default', () => {
+    expect(loadConfig(base).WEBAUTHN_RP_ID).toBeUndefined();
+  });
+
+  it('accepts the apex with the portal on a subdomain', () => {
+    expect(loadConfig({ ...base, WEBAUTHN_RP_ID: 'placeholder.example', PORTAL_ORIGIN: 'https://app.placeholder.example' }).WEBAUTHN_RP_ID).toBe('placeholder.example');
+  });
+
+  it('refuses a portal origin outside the RP ID, and origins without an RP ID', () => {
+    expect(() => loadConfig({ ...base, WEBAUTHN_RP_ID: 'placeholder.example', PORTAL_ORIGIN: 'https://service.a.run.example' })).toThrow(ConfigError);
+    expect(() => loadConfig({ ...base, WEBAUTHN_ORIGINS: 'http://localhost:5173' })).toThrow(/needs WEBAUTHN_RP_ID/);
+  });
+
+  it('takes an explicit localhost list for local QA', () => {
+    expect(loadConfig({ ...base, WEBAUTHN_RP_ID: 'localhost', WEBAUTHN_ORIGINS: 'http://localhost:8791,https://localhost' }).WEBAUTHN_ORIGINS).toBe('http://localhost:8791,https://localhost');
+  });
+});
+
 describe('loadConfig — receipts library switch (MUT-389)', () => {
   it('enforces the lapse gate unless BILLING_GATE is exactly "false" (MUT-361 D7 kill switch)', () => {
     expect(loadConfig(base).BILLING_GATE).toBe(true);

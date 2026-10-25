@@ -354,6 +354,10 @@ model User {
   purgeStartedAt            DateTime?
   purgeLastTriedAt          DateTime?
 
+  /// MUT-115 (ADR-190): this person's passkeys, and the creation challenges they asked for.
+  passkeys            Passkey[]
+  webauthnChallenges  WebauthnChallenge[]
+
   @@map("users")
 }
 
@@ -529,9 +533,63 @@ model Session {
   revokedReason         String?
   /// Truncated to 200 characters; for the operator's eyes only.
   userAgent             String?     @db.VarChar(200)
+  /// MUT-115 (A2/D6): the passkey that opened this session; removing the passkey revokes it.
+  passkeyId             String?     @db.Uuid
+  passkey               Passkey?    @relation(fields: [passkeyId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([passkeyId])
   @@map("sessions")
+}
+
+/// MUT-115 (ADR-190): a WebAuthn credential that signs its person in (portal and iOS app, RP ID = the apex domain).
+/// Only the public key is stored. A password change keeps passkeys; removing one revokes the sessions it opened.
+model Passkey {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// base64url credential id, as the authenticator reports it.
+  credentialId String    @unique @db.VarChar(1366)
+  /// COSE public key.
+  publicKey    Bytes
+  /// SC2: the WebAuthn signature counter is a uint32, beyond Int's range.
+  signCount    BigInt
+  transports   String[]
+  /// 'singleDevice' | 'multiDevice' (synced, e.g. iCloud Keychain).
+  deviceType   String    @db.VarChar(16)
+  backedUp     Boolean
+  aaguid       String    @db.VarChar(36)
+  /// Named from the AAGUID's provider or the User-Agent (DR8); the person may rename it. 1–64 characters.
+  name         String    @db.VarChar(64)
+  createdAt    DateTime
+  lastUsedAt   DateTime?
+
+  sessions Session[]
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+enum WebauthnChallengePurpose {
+  creation
+  authentication
+}
+
+/// MUT-115 (D5): a single-use WebAuthn challenge, valid 5 minutes, consumed by one conditional UPDATE. A creation
+/// challenge is bound to the person who asked; an authentication challenge (sign-in) to no one.
+model WebauthnChallenge {
+  id         String                   @id @default(uuid()) @db.Uuid
+  challenge  String                   @db.VarChar(128)
+  purpose    WebauthnChallengePurpose
+  userId     String?                  @db.Uuid
+  user       User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("webauthn_challenges")
 }
 
 /// A binding between an organization and an external system's tenant.
