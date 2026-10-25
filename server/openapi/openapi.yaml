@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.70.0-mut370
+  version: 1.71.0-mut262
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -727,6 +727,14 @@ components:
         - version
         - locale
       additionalProperties: false
+    PasswordChangedToken:
+      type: object
+      properties:
+        token:
+          type: string
+          description: The new device-session bearer token; the one that made the request no longer works
+      required:
+        - token
     ChangePasswordRequest:
       type: object
       properties:
@@ -735,6 +743,11 @@ components:
           maxLength: 1024
         newPassword:
           $ref: "#/components/schemas/NewPassword"
+        rotateToken:
+          type: boolean
+          enum:
+            - true
+          description: "MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says."
       required:
         - currentPassword
         - newPassword
@@ -8850,7 +8863,7 @@ paths:
       tags:
         - Sessions
       summary: Change your own password (MUT-237)
-      description: Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.
+      description: "Revokes every other session, web and device. This session stays signed in under a new token (MUT-262), so a leaked copy of the old one stops working too: a cookie session always gets a new cookie (204, Set-Cookie, never past the old absolute deadline); a device session gets one only when it sends `rotateToken: true`, in a 200 body, and otherwise keeps its token (204). A wrong current password counts toward the same lockout a wrong sign-in attempt would."
       security:
         - session: []
         - deviceSession: []
@@ -8861,8 +8874,14 @@ paths:
             schema:
               $ref: "#/components/schemas/ChangePasswordRequest"
       responses:
+        "200":
+          description: "Password changed; a device session that sent `rotateToken: true` continues under this token"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordChangedToken"
         "204":
-          description: Password changed
+          description: Password changed; a cookie session continues under the new cookie set here, a device session that did not ask keeps its token
         "403":
           description: CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED
           content:

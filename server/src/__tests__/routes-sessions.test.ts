@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
-import { SIGN_IN_POLICY, sessionDigest } from '../auth/sessions.js';
+import { SIGN_IN_POLICY, isDeviceSessionToken, sessionDigest } from '../auth/sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from '../auth/users.js';
 import { sessionAccess } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -80,6 +80,8 @@ async function signIn(h: Harness, email: string, password: string, headers: Reco
 }
 
 const withSession = (token: string, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, ...extra });
+/** MUT-262: the session cookie a response set (a password change rotates it). */
+const cookieOf = (res: Response) => new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
 
 /** MUT-64: a device-session token for the same person, so "operator actions end sessions" can prove it covers both kinds. */
 async function deviceSignIn(h: Harness, email: string, password: string) {
@@ -498,11 +500,15 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     const res = await h.app.request('/v1/me/password', change(current.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
     expect(res.status).toBe(204);
 
-    expect((await h.app.request('/v1/me', { headers: withSession(current.token) })).status).toBe(200);
+    // MUT-262: this browser stays signed in under a new cookie; the old value is refused.
+    const rotated = cookieOf(res);
+    expect(rotated).not.toBe('');
+    expect(rotated).not.toBe(current.token);
+    expect((await h.app.request('/v1/me', { headers: withSession(rotated) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(current.token) })).status).toBe(401);
     // Keeping the session never extends its life: the absolute deadline is the one sign-in set.
-    const after = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, current.token)))!;
+    const after = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, rotated)))!;
     expect(after.absoluteExpiresAt.toISOString()).toBe(before.absoluteExpiresAt.toISOString());
-    expect(after.createdAt.toISOString()).toBe(before.createdAt.toISOString());
     expect((await h.app.request('/v1/me', { headers: withSession(other.token) })).status).toBe(401);
     expect((await h.app.request('/v1/me', { headers: withDevice(device.token) })).status).toBe(401);
 
@@ -542,14 +548,16 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     const p = await person(h, f.org.id);
     const first = await signIn(h, p.email, p.password);
     minutes(h, 5);
-    expect((await h.app.request('/v1/me/password', change(first.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }))).status).toBe(204);
+    const once = await h.app.request('/v1/me/password', change(first.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+    expect(once.status).toBe(204);
     minutes(h, 5);
     const second = await signIn(h, p.email, NEW_PASSWORD);
     expect((await h.app.request('/v1/me', { headers: withSession(second.token) })).status).toBe(200);
     minutes(h, 5);
     // The first session changes the password again: the second (which signed in after the first change) is signed out.
-    expect((await h.app.request('/v1/me/password', change(first.token, { currentPassword: NEW_PASSWORD, newPassword: `${NEW_PASSWORD} again` }))).status).toBe(204);
-    expect((await h.app.request('/v1/me', { headers: withSession(first.token) })).status).toBe(200);
+    const twice = await h.app.request('/v1/me/password', change(cookieOf(once), { currentPassword: NEW_PASSWORD, newPassword: `${NEW_PASSWORD} again` }));
+    expect(twice.status).toBe(204);
+    expect((await h.app.request('/v1/me', { headers: withSession(cookieOf(twice)) })).status).toBe(200);
     expect((await h.app.request('/v1/me', { headers: withSession(second.token) })).status).toBe(401);
   });
 
@@ -571,7 +579,7 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     minutes(h, SIGN_IN_POLICY.lockMs / 60_000);
     const ok = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
     expect(ok.status).toBe(204);
-    expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(cookieOf(ok)) })).status).toBe(200);
   });
 
   // MUT-238 review (red team): the phone sends concurrent requests on one token (resume revalidate, outbox retry, the
@@ -616,13 +624,16 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     const { token } = await deviceSignIn(h, p.email, p.password);
     minutes(h, 5);
     const findByDigest = h.store.sessions.findByDigest;
+    let rotated = '';
     vi.spyOn(h.store.sessions, 'findByDigest').mockImplementationOnce(async (digest) => {
       const seen = await findByDigest(digest);
-      expect((await h.app.request('/v1/me/password', change(changer.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }))).status).toBe(204);
+      const res = await h.app.request('/v1/me/password', change(changer.token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+      expect(res.status).toBe(204);
+      rotated = cookieOf(res);
       return seen;
     });
     expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(401);
-    expect((await h.app.request('/v1/me', { headers: withSession(changer.token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(rotated) })).status).toBe(200);
   });
 
   // MUT-238 review (adversarial): the phone and the portal each verify the old password before either takes the lock.
@@ -635,9 +646,12 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     minutes(h, 5);
     const PORTAL_PASSWORD = 'the portal chose this passphrase';
     const commit = h.store.users.changePassword;
+    let portalCookie = '';
     vi.spyOn(h.store.users, 'changePassword').mockImplementationOnce(async (input) => {
       // The portal's change commits while the phone's has verified the old password but not yet taken the lock.
-      expect((await h.app.request('/v1/me/password', change(portal.token, { currentPassword: p.password, newPassword: PORTAL_PASSWORD }))).status).toBe(204);
+      const won = await h.app.request('/v1/me/password', change(portal.token, { currentPassword: p.password, newPassword: PORTAL_PASSWORD }));
+      expect(won.status).toBe(204);
+      portalCookie = cookieOf(won);
       return commit(input);
     });
 
@@ -649,7 +663,7 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     expect(res.status).toBe(403);
     expect((await read(res)).error.code).toBe('CURRENT_PASSWORD_WRONG');
 
-    expect((await h.app.request('/v1/me', { headers: withSession(portal.token) })).status).toBe(200);
+    expect((await h.app.request('/v1/me', { headers: withSession(portalCookie) })).status).toBe(200);
     expect((await h.app.request('/v1/me', { headers: withDevice(phone.token) })).status).toBe(401);
     expect((await signIn(h, p.email, NEW_PASSWORD)).res.status).toBe(401);
     expect((await signIn(h, p.email, PORTAL_PASSWORD)).res.status).toBe(201);
@@ -657,6 +671,131 @@ describe('POST /v1/me/password — change your own password (MUT-237)', () => {
     expect((await h.store.users.getById(p.id))?.failedSignIns).toBe(0);
     const events = (await h.store.audit.list(f.org.id, { entityType: 'user', action: 'user.password_changed' }, { limit: 10, cursor: null })).items;
     expect(events).toHaveLength(1);
+  });
+
+  describe('the caller gets a new token (MUT-262, TD-158)', () => {
+    const deviceChange = (token: string, body: unknown) =>
+      ({ method: 'POST', headers: { 'content-type': 'application/json', ...withDevice(token) }, body: JSON.stringify(body) }) as const;
+
+    it("the cookie's Max-Age is the time left to the session's absolute deadline, not a fresh lifetime", async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await signIn(h, p.email, p.password);
+      minutes(h, 90);
+      const res = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+      expect(res.status).toBe(204);
+      const setCookie = res.headers.get('set-cookie') ?? '';
+      // 12 h absolute, 90 minutes spent.
+      expect(setCookie).toContain(`Max-Age=${12 * 3600 - 90 * 60}`);
+      expect(setCookie).toContain('HttpOnly');
+      expect(setCookie).toContain('SameSite=Strict');
+      const fresh = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, cookieOf(res))))!;
+      expect(fresh.idleExpiresAt.toISOString()).toBe(new Date(h.clock.now.getTime() + 120 * 60_000).toISOString());
+    });
+
+    it('a cookie session rotates whether or not the body asks; rotateToken never puts the token in a body', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await signIn(h, p.email, p.password);
+      minutes(h, 5);
+      const res = await h.app.request('/v1/me/password', change(token, { currentPassword: p.password, newPassword: NEW_PASSWORD, rotateToken: true }));
+      expect(res.status).toBe(204);
+      expect(await res.text()).toBe('');
+      expect((await h.app.request('/v1/me', { headers: withSession(token) })).status).toBe(401);
+      expect((await h.app.request('/v1/me', { headers: withSession(cookieOf(res)) })).status).toBe(200);
+    });
+
+    it('a device that asks gets 200 { token }: the old bearer is refused everywhere, the new one works', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await deviceSignIn(h, p.email, p.password);
+      minutes(h, 5);
+      const before = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, token)))!;
+      const res = await h.app.request('/v1/me/password', deviceChange(token, { currentPassword: p.password, newPassword: NEW_PASSWORD, rotateToken: true }));
+      expect(res.status).toBe(200);
+      expect(res.headers.get('set-cookie')).toBeNull();
+      const body = (await read(res)) as { token: string };
+      expect(Object.keys(body)).toEqual(['token']);
+      expect(isDeviceSessionToken(body.token)).toBe(true);
+      expect(body.token).not.toBe(token);
+
+      const profile = { ...withDevice(token), 'x-mutaba3a-profile': p.personalId };
+      expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(401);
+      expect((await h.app.request('/v1/customers', { headers: profile })).status).toBe(401);
+      expect((await h.app.request('/v1/me', { headers: withDevice(body.token) })).status).toBe(200);
+      expect((await h.app.request('/v1/customers', { headers: { ...withDevice(body.token), 'x-mutaba3a-profile': p.personalId } })).status).toBe(200);
+
+      const fresh = (await h.store.sessions.findByDigest(sessionDigest(PEPPER, body.token)))!;
+      expect(fresh.kind).toBe('device');
+      expect(fresh.absoluteExpiresAt.toISOString()).toBe(before.absoluteExpiresAt.toISOString());
+      expect(fresh.idleExpiresAt.toISOString()).toBe(new Date(h.clock.now.getTime() + 30 * 86_400_000).toISOString());
+      expect((await h.store.sessions.findByDigest(before.tokenDigest))?.revokedReason).toBe('password_rotated');
+      const events = (await h.store.audit.list(f.org.id, { entityType: 'user', action: 'user.password_changed' }, { limit: 10, cursor: null })).items;
+      expect(events[0]?.metadata).toEqual({ tokenRotated: true });
+    });
+
+    it('a device that does not ask (a build from before MUT-262) keeps its session: 204, same bearer', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await deviceSignIn(h, p.email, p.password);
+      minutes(h, 5);
+      const res = await h.app.request('/v1/me/password', deviceChange(token, { currentPassword: p.password, newPassword: NEW_PASSWORD }));
+      expect(res.status).toBe(204);
+      expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+      const events = (await h.store.audit.list(f.org.id, { entityType: 'user', action: 'user.password_changed' }, { limit: 10, cursor: null })).items;
+      expect(events[0]?.metadata).toEqual({ tokenRotated: false });
+    });
+
+    it('refuses rotateToken: false (only true is a request)', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await deviceSignIn(h, p.email, p.password);
+      const res = await h.app.request('/v1/me/password', deviceChange(token, { currentPassword: p.password, newPassword: NEW_PASSWORD, rotateToken: false }));
+      expect(res.status).toBe(422);
+    });
+
+    // D2: the middleware's stale path revokes by the id it read under the old digest. With a new row that id is the
+    // already-revoked old session, so the stray request is a harmless 401 and the new session stays live.
+    it('a request on the old token that read it just before the change committed gets 401, and the new session stays live', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await deviceSignIn(h, p.email, p.password);
+      minutes(h, 5);
+      const findByDigest = h.store.sessions.findByDigest;
+      let rotated = '';
+      vi.spyOn(h.store.sessions, 'findByDigest').mockImplementationOnce(async (digest) => {
+        const seen = await findByDigest(digest);
+        const res = await h.app.request('/v1/me/password', deviceChange(token, { currentPassword: p.password, newPassword: NEW_PASSWORD, rotateToken: true }));
+        expect(res.status).toBe(200);
+        rotated = ((await read(res)) as { token: string }).token;
+        return seen;
+      });
+      expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(401);
+      expect((await h.store.sessions.findByDigest(sessionDigest(PEPPER, rotated)))?.revokedAt).toBeNull();
+      expect((await h.app.request('/v1/me', { headers: withDevice(rotated) })).status).toBe(200);
+    });
+
+    it('a failed change (wrong current password) rotates nothing', async () => {
+      const h = harness();
+      const f = await firm(h);
+      const p = await person(h, f.org.id);
+      const { token } = await deviceSignIn(h, p.email, p.password);
+      const cookie = await signIn(h, p.email, p.password);
+      minutes(h, 5);
+      const res = await h.app.request('/v1/me/password', deviceChange(token, { currentPassword: 'wrong', newPassword: NEW_PASSWORD, rotateToken: true }));
+      expect(res.status).toBe(403);
+      const web = await h.app.request('/v1/me/password', change(cookie.token, { currentPassword: 'wrong', newPassword: NEW_PASSWORD }));
+      expect(web.status).toBe(403);
+      expect(web.headers.get('set-cookie')).toBeNull();
+      expect((await h.app.request('/v1/me', { headers: withDevice(token) })).status).toBe(200);
+      expect((await h.app.request('/v1/me', { headers: withSession(cookie.token) })).status).toBe(200);
+    });
   });
 
   it('refuses a current password over 1024 characters with 422 before hashing anything, as sign-in does', async () => {

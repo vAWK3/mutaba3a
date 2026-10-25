@@ -531,7 +531,7 @@ export interface paths {
         put?: never;
         /**
          * Change your own password (MUT-237)
-         * @description Revokes every other session, web and device; this one stays signed in. A wrong current password counts toward the same lockout a wrong sign-in attempt would.
+         * @description Revokes every other session, web and device. This session stays signed in under a new token (MUT-262), so a leaked copy of the old one stops working too: a cookie session always gets a new cookie (204, Set-Cookie, never past the old absolute deadline); a device session gets one only when it sends `rotateToken: true`, in a 200 body, and otherwise keeps its token (204). A wrong current password counts toward the same lockout a wrong sign-in attempt would.
          */
         post: {
             parameters: {
@@ -546,7 +546,16 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Password changed */
+                /** @description Password changed; a device session that sent `rotateToken: true` continues under this token */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasswordChangedToken"];
+                    };
+                };
+                /** @description Password changed; a cookie session continues under the new cookie set here, a device session that did not ask keeps its token */
                 204: {
                     headers: {
                         [name: string]: unknown;
@@ -15433,9 +15442,18 @@ export interface components {
              */
             clientRelease?: string;
         };
+        PasswordChangedToken: {
+            /** @description The new device-session bearer token; the one that made the request no longer works */
+            token: string;
+        };
         ChangePasswordRequest: {
             currentPassword: string;
             newPassword: components["schemas"]["NewPassword"];
+            /**
+             * @description MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says.
+             * @enum {boolean}
+             */
+            rotateToken?: true;
         };
         /** @description 12 to 128 characters; no composition rules. */
         NewPassword: string;

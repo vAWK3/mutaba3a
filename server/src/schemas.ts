@@ -1141,8 +1141,23 @@ export const SignupReviewDecisionSchema = z
  * old password. It has sign-in's ceiling, so the hasher never sees more.
  */
 export const ChangePasswordRequestSchema = z
-  .object({ currentPassword: z.string().max(PRESENTED_PASSWORD_MAX_LENGTH), newPassword: NewPasswordSchema })
+  .object({
+    currentPassword: z.string().max(PRESENTED_PASSWORD_MAX_LENGTH),
+    newPassword: NewPasswordSchema,
+    rotateToken: z
+      .literal(true)
+      .optional()
+      .openapi({
+        description:
+          'MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says.',
+      }),
+  })
   .openapi('ChangePasswordRequest');
+
+/** MUT-262: a device session's new bearer token after a rotating password change, shown once. */
+export const PasswordChangedTokenSchema = z
+  .object({ token: z.string().openapi({ description: 'The new device-session bearer token; the one that made the request no longer works' }) })
+  .openapi('PasswordChangedToken');
 
 // ---- MUT-333: close my account (ADR-188) -------------------------------------------
 
