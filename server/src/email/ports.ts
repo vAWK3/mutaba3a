@@ -23,6 +23,7 @@ export const TEMPLATE_IDS = [
   'trial-ended',
   'trial-locking-soon',
   'account-closing',
+  'passkey-added',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -50,6 +51,9 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'trial-locking-soon',
   // MUT-333: sent once per close, which the password gates, like the password notice.
   'account-closing',
+  // MUT-414: adding a passkey needs a recent sign-in or the password, like the password notice; a stranger asking for
+  // signup links to the address must not cap away the one mail that reports a planted passkey.
+  'passkey-added',
 ]);
 
 export interface TemplateVars {
@@ -81,6 +85,11 @@ export interface TemplateVars {
    * accounts/closure.ts deletionDayOf) unless they sign in and keep it.
    */
   'account-closing': { deleteOn: CalendarDay; signInLink: string };
+  /**
+   * MUT-414: a passkey was added to the account, named as the Passkeys list names it. No time: the mail goes out as
+   * the passkey is added and says so (ADR-159 §5, no dates in mail).
+   */
+  'passkey-added': { passkeyName: string; signInLink: string };
 }
 
 /** MUT-333: a calendar day, formatted by the template in the mail's own language. */

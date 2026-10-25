@@ -309,6 +309,27 @@ const accountClosing: Copy<'account-closing'> = {
   }),
 };
 
+const passkeyAdded: Copy<'passkey-added'> = {
+  en: ({ passkeyName, signInLink }) => ({
+    subject: 'A passkey was added to your MTB3A account',
+    intro: [
+      ['A passkey named “', passkeyName, '” was just added to your MTB3A account. It can sign in without your password.'],
+      ['If this was you, there is nothing else to do.'],
+    ],
+    action: { label: 'Sign in', href: signInLink },
+    outro: [["Not you? Sign in, change your password, then remove this passkey from Passkeys in your account. Reply to this email if you need help."]],
+  }),
+  ar: ({ passkeyName, signInLink }) => ({
+    subject: 'أُضيف مفتاح مرور إلى حسابك في متابعة',
+    intro: [
+      ['أُضيف للتو مفتاح مرور باسم «', passkeyName, '» إلى حسابك في متابعة. يمكنه تسجيل الدخول دون كلمة المرور.'],
+      ['إذا كنت أنت من قام بذلك، فلا حاجة لأي إجراء آخر.'],
+    ],
+    action: { label: 'تسجيل الدخول', href: signInLink },
+    outro: [['لم تكن أنت؟ سجّل الدخول وغيّر كلمة المرور، ثم احذف مفتاح المرور هذا من «مفاتيح المرور» في حسابك. ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -323,4 +344,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'trial-ended': trialEnded,
   'trial-locking-soon': trialLockingSoon,
   'account-closing': accountClosing,
+  'passkey-added': passkeyAdded,
 };
