@@ -94,4 +94,74 @@ describe('BlockingDialog (MUT-346)', () => {
     await user.click(screen.getByRole('button', { name: 'Last' }));
     expect(container).toHaveAttribute('aria-hidden', 'false');
   });
+
+  it('stops the page behind from scrolling while open, and gives the scroll back after (review)', async () => {
+    const user = userEvent.setup();
+    const html = document.documentElement;
+    html.style.overflow = 'auto';
+    render(<Page initiallyOpen={false} />);
+    await user.click(screen.getByRole('button', { name: 'Behind' }));
+    expect(html.style.overflow).toBe('hidden');
+    await user.click(screen.getByRole('button', { name: 'Last' }));
+    expect(html.style.overflow).toBe('auto');
+    html.style.overflow = '';
+  });
+
+  it('makes whatever joins <body> while it is open unreachable too, and gives it back after (review)', async () => {
+    const user = userEvent.setup();
+    render(<Page initiallyOpen={false} />);
+    await user.click(screen.getByRole('button', { name: 'Behind' }));
+    const late = document.createElement('div');
+    document.body.appendChild(late);
+    await vi.waitFor(() => expect(late).toHaveAttribute('inert'));
+    expect(late).toHaveAttribute('aria-hidden', 'true');
+    await user.click(screen.getByRole('button', { name: 'Last' }));
+    expect(late).not.toHaveAttribute('inert');
+    expect(late).not.toHaveAttribute('aria-hidden');
+    late.remove();
+  });
+
+  it('with two open, only the newest is reachable, and either can close first (review)', () => {
+    function Two({ first, second }: { first: boolean; second: boolean }) {
+      return (
+        <>
+          {first && (
+            <BlockingDialog labelledBy="one">
+              <h2 id="one">One</h2>
+            </BlockingDialog>
+          )}
+          {second && (
+            <BlockingDialog labelledBy="two">
+              <h2 id="two">Two</h2>
+            </BlockingDialog>
+          )}
+        </>
+      );
+    }
+    const { container, rerender } = render(<Two first second={false} />);
+    const one = () => screen.getByRole('dialog', { name: 'One', hidden: true }).parentElement!;
+    rerender(<Two first second />);
+    const two = () => screen.getByRole('dialog', { name: 'Two' }).parentElement!;
+    expect(one()).toHaveAttribute('inert');
+    expect(two()).not.toHaveAttribute('inert');
+
+    rerender(<Two first={false} second />); // the older one closes first
+    expect(container).toHaveAttribute('inert');
+    expect(two()).not.toHaveAttribute('inert');
+
+    rerender(<Two first={false} second={false} />);
+    expect(container).not.toHaveAttribute('inert');
+    expect(container).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('where the browser has no inert (iOS before 15.5, jsdom), focus that lands behind is brought back (review)', async () => {
+    const user = userEvent.setup();
+    render(<Page initiallyOpen={false} />);
+    const behind = screen.getByRole('button', { name: 'Behind' });
+    await user.click(behind);
+    const dialog = screen.getByRole('dialog', { name: 'Answer me' });
+    behind.focus();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
 });
+

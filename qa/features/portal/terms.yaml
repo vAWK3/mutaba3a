@@ -56,6 +56,7 @@ features:
       - src/hosted/pages/auth/TermsUpdatePage.tsx
       - src/components/ui/BlockingDialog.tsx
       - src/components/ui/BlockingDialog.css
+      - src/components/ui/blockingLayer.ts
     steps:
       - Open Expenses, choose Record expense and type an amount and a title
       - A server release names newer terms, and the portal reads /v1/me again (back to the tab after a minute)

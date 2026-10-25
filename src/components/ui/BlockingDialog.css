@@ -13,6 +13,8 @@
   position: absolute;
   inset: 0;
   background: var(--overlay);
+  /* A drag on the backdrop moves nothing (iOS rubber-band included); the page is locked by blockingLayer */
+  touch-action: none;
 }
 
 .blocking-dialog {
