@@ -58,7 +58,7 @@ export default {
       // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
       // answers every PostHog request locally, so nothing is ever sent.
       // MUT-150: the landing's error reports run on the same dummy DSN; every spec answers Sentry locally
-      start: { cmd: `${HEAP_CAPPED} npm run dev -- --port 5173 --strictPort`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN } },
+      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --port 5173 --strictPort`, env: { QA_VITE_ROLE: 'web', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN } },
       ready: 'http://localhost:5173',
       personas: {}, // no auth — local-first, single-user
     },
@@ -85,7 +85,7 @@ export default {
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: `${HEAP_CAPPED} npm run dev:hosted`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
+      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --mode hosted`, env: { QA_VITE_ROLE: 'portal', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },

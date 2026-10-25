@@ -205,9 +205,10 @@ async function main() {
       RECOVERY_RESPONSE_FLOOR_MS: '100',
     },
   });
-  run('npm', ['run', 'dev:hosted', '--', '--port', String(PORTAL_PORT), '--strictPort'], {
+  // Its own Vite cache (support/qa.vite.ts, MUT-440): the portal app's server runs at the same time
+  run('npx', ['vite', '--config', 'qa/support/qa.vite.ts', '--mode', 'hosted', '--port', String(PORTAL_PORT), '--strictPort'], {
     cwd: ROOT,
-    env: { ...process.env, MUTABA3A_API_ORIGIN: API_ORIGIN, MUTABA3A_POSTHOG_KEY: 'phc_releaseQaDummyKeyNeverSent000000' },
+    env: { ...process.env, QA_VITE_ROLE: 'portal-live', MUTABA3A_API_ORIGIN: API_ORIGIN, MUTABA3A_POSTHOG_KEY: 'phc_releaseQaDummyKeyNeverSent000000' },
   });
 
   mkdirSync(path.join(ROOT, 'qa', '.state'), { recursive: true });
