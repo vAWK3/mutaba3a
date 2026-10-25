@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-249: Portal receipt thumbnails are the full-size originals
+**Status**: Open
+**Ticket**: MUT-260 (D5)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: Each image card in Expenses › Receipts loads the receipt's original (a phone photo, often 2–4 MB) once it scrolls into view. Lazy loading and the 24-card page keep it bounded, but a slow connection pays for full photos to draw 160px tiles.
+**Fix**: server-side thumbnails (a small JPEG made at complete time, its own signed URL), used by the gallery; the review page keeps the original.
+
 ### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
 **Status**: Accepted
 **Ticket**: MUT-370 (D3)

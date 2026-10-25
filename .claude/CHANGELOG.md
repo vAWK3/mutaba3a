@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Portal receipts: gallery, To review, upload and review (MUT-260, ADR-192, API 1.71.0-mut260)
+
+**Why:** receipts shared from the phone waited in the library as To review with nowhere on the web to see or file them. The last web piece of MUT-252; with MUT-258 it unblocks turning `receipts_library_enabled` on.
+
+### Added
+- **Portal:** Expenses › Receipts (a third tab when `GET /v1/receipts/counts` answers, "Receipts · N to review"): a thumbnail gallery with To review / Filed / All and counts, Upload receipt (PDF/JPEG/PNG ≤ 10 MB, several at once, one at a time), and a review page per receipt: the original large (image Fit/Actual size, PDF iframe, Open full size) beside the expense form prefilled from the phone's suggestion and marked "From the receipt"; Approve and file, then the next receipt. A filed receipt shows its expense. Read-only profiles browse without Upload or Approve. Library off (404/503): no tab, and its links say so. `hosted.receipts.*` en/ar.
+- **Server:** `GET /v1/receipts/{id}/download?disposition=inline|attachment` (default attachment); both storage drivers sign it. API `1.71.0-mut260`.
+- **QA:** `portal.receipts.{gallery,upload,review-approve,filed,unavailable}`, `portal.direction.receipts-review-ar`; FakeApi receipts library with real 1×1 images.
+
+### Changed
+- **CSP:** `img-src` and `frame-src` name `https://storage.googleapis.com` (and `frame-src 'self'`), ADR-192.
+- **Local driver:** an inline download is served without `content-security-policy: sandbox`; attachments keep it.
+- **Portal:** the expense drawer's form moved to `components/expenseForm/` (`useHostedExpenseForm`, `HostedExpenseFields`), shared with the review page; behaviour unchanged. The shared `ExpenseFormFields` gains optional `hints`. `ReceiptUploader` uses the shared `receiptFileRules` (now also the server's filename rule).
+
+### Technical
+- TD-249 (thumbnails are full originals). Runbook: the CSP note and the library turn-on row's staging check (A7).
+
+---
+
 ## [Unreleased] - 2026-10-25 — Suggest a passkey after the first sign-in (MUT-370 portal half, ADR-191, API 1.70.0-mut370)
 
 **Why:** Basel's MUT-331 Q3: a password is required, and a passkey is optional but actively suggested as the more secure way. MUT-115 shipped passkeys; nothing suggested one.
