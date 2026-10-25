@@ -67,6 +67,23 @@ run "noop_by_default_sends_nothing_and_mounts_no_resend_secret" {
   }
 }
 
+run "a_mail_subdomain_is_the_sender_domain" {
+  command = plan
+
+  variables {
+    hosts_file     = "../../../config/fixtures/hosts.mail-subdomain.json"
+    mailer         = "resend"
+    mail_reply_to  = "help@example.com"
+    mail_daily_cap = 90
+    alert_email    = "ops@example.com"
+  }
+
+  assert {
+    condition     = one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "MAIL_FROM_ADDRESS"]) == "no-reply@notify.placeholder.example"
+    error_message = "Basel 2026-10-25: with mailSubdomain the sender is no-reply@<mailSubdomain>.<domain>, the domain verified in Resend."
+  }
+}
+
 run "resend_mounts_the_secrets_and_sends_from_the_domain" {
   command = plan
 

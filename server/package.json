@@ -31,7 +31,7 @@
     "provision:user": "tsx src/scripts/users.ts create",
     "grant:user": "tsx src/scripts/users.ts grant",
     "terms:report": "tsx src/scripts/users.ts terms",
-    "email:check": "MAIL_DOMAIN=\"${MAIL_DOMAIN:-$(npm --prefix .. run --silent hosts -- get domain)}\" tsx src/scripts/email-check.ts",
+    "email:check": "MAIL_DOMAIN=\"${MAIL_DOMAIN:-$(npm --prefix .. run --silent hosts -- get mailDomain)}\" tsx src/scripts/email-check.ts",
     "email-domains:update": "tsx src/scripts/email-domains-update.ts",
     "passkey-providers:update": "tsx src/scripts/passkey-providers-update.ts",
     "terms:check-live": "MUTABA3A_PUBLIC_ORIGIN=\"${MUTABA3A_PUBLIC_ORIGIN:-$(npm --prefix .. run --silent hosts -- get landingOrigin)}\" tsx src/scripts/check-terms-live.ts",

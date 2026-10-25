@@ -29,6 +29,8 @@ export interface EnvironmentHosts {
   domain: string | null;
   /** The portal and API live on this label under the apex. */
   portalSubdomain: string;
+  /** Mail is sent from this label under the apex (the Resend domain); null = the apex itself. */
+  mailSubdomain: string | null;
   stage: Stage;
   /** Where the landing and the portal answer today; they keep answering after the move. */
   legacy: LegacyOrigins;
@@ -52,6 +54,8 @@ export interface ResolvedHosts {
   environment: string;
   domain: string | null;
   stage: Stage;
+  /** The domain mail is sent from (no-reply@<mailDomain>): <mailSubdomain>.<apex>, the apex without one, null without a domain. */
+  mailDomain: string | null;
   /** What builds, links and the phone use: the new hosts from stage live on, the legacy ones before. */
   landingOrigin: string;
   portalOrigin: string;
@@ -77,12 +81,16 @@ function fail(env: string, field: string, value: unknown, rule: string): never {
 function parseEnvironment(env: string, value: unknown): EnvironmentHosts {
   const v = (value ?? {}) as Record<string, unknown>;
   const { domain, portalSubdomain, stage } = v;
+  const mailSubdomain = v.mailSubdomain ?? null;
   const legacy = (v.legacy ?? {}) as Record<string, unknown>;
   if (domain !== null && (typeof domain !== 'string' || !DOMAIN.test(domain))) {
     fail(env, 'domain', domain, 'must be null or a bare lowercase domain such as "example.com"');
   }
   if (typeof portalSubdomain !== 'string' || !LABEL.test(portalSubdomain)) {
     fail(env, 'portalSubdomain', portalSubdomain, 'must be one lowercase DNS label');
+  }
+  if (mailSubdomain !== null && (typeof mailSubdomain !== 'string' || !LABEL.test(mailSubdomain) || mailSubdomain === portalSubdomain)) {
+    fail(env, 'mailSubdomain', mailSubdomain, 'must be absent, null, or one lowercase DNS label other than portalSubdomain');
   }
   if (!(STAGES as readonly unknown[]).includes(stage)) fail(env, 'stage', stage, `must be one of ${STAGES.join(', ')}`);
   if ((domain === null) !== (stage === 'legacy')) fail(env, 'stage', stage, 'is "legacy" exactly when domain is null');
@@ -96,7 +104,7 @@ function parseEnvironment(env: string, value: unknown): EnvironmentHosts {
   if (domain !== null && Object.values(legacyOrigins).some((origin) => underDomain(new URL(origin).hostname))) {
     fail(env, 'domain', domain, 'must differ from the legacy hosts');
   }
-  return { domain: domain as string | null, portalSubdomain, stage: stage as Stage, legacy: legacyOrigins };
+  return { domain: domain as string | null, portalSubdomain, mailSubdomain: mailSubdomain as string | null, stage: stage as Stage, legacy: legacyOrigins };
 }
 
 /** Validates the file's shape; throws naming the bad field. Keys starting with `$` are comments. */
@@ -110,13 +118,14 @@ export function parseHostsConfig(raw: unknown): HostsConfig {
 export function resolveHosts(config: HostsConfig, environment = 'production'): ResolvedHosts {
   const env = config[environment];
   if (!env) throw new Error(`config/hosts.json: no "${environment}" environment`);
-  const { domain, portalSubdomain, stage, legacy } = env;
+  const { domain, portalSubdomain, mailSubdomain, stage, legacy } = env;
   const legacyPortalHost = new URL(legacy.portal).hostname;
   if (domain === null) {
     return {
       environment,
       domain,
       stage,
+      mailDomain: null,
       landingOrigin: legacy.landing,
       portalOrigin: legacy.portal,
       legacy: null,
@@ -134,6 +143,7 @@ export function resolveHosts(config: HostsConfig, environment = 'production'): R
     environment,
     domain,
     stage,
+    mailDomain: mailSubdomain === null ? domain : `${mailSubdomain}.${domain}`,
     landingOrigin: live ? newLanding : legacy.landing,
     portalOrigin: live ? newPortal : legacy.portal,
     legacy: { landingOrigin: legacy.landing, portalOrigin: legacy.portal },

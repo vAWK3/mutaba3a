@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Mail is sent from notify.<apex>, the Resend domain (ADR-174 amendment 1)
+
+**Why:** Basel verified `notify.mtb3a.com` in Resend, not the apex, so the sender and Resend's DNS records must sit under it.
+
+### Changed
+- `config/hosts.json` gains an optional `mailSubdomain` (`notify` in production). `config/hosts.ts` resolves `mailDomain` (`<mailSubdomain>.<apex>`, the apex when unset, null without a domain); `npm run hosts -- get mailDomain` prints it.
+- Terraform: the API's `MAIL_FROM_ADDRESS` is `no-reply@<mail domain>` (`domain.tf`, `email.tf`); the frontdoor stack puts DKIM and the `send.` MX/SPF under the mail domain and keeps DMARC on the apex.
+- `email:check` defaults to the mail domain and accepts DMARC on a parent domain (RFC 7489 §6.6.3).
+- Tests: hosts parse/resolve and CLI cases, an email-check parent-DMARC case, a frontdoor and an API-stack Terraform run on the new fixture `config/fixtures/hosts.mail-subdomain.json`.
+- Docs: `server/DEPLOYMENT.md` §6f and `docs/operations/before-release.md`.
+
+**Operator:** the next frontdoor apply moves the three Resend records from the apex to `notify.` (DMARC unchanged); the API stack picks up the new sender with `mailer = "resend"`.
+
+---
+
 ## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-195)
 
 **Why:** the last step of epic MUT-423. The sidebar took 240 px from every page and put a dashboard's chrome in front of one figure; the new shell is four words in a floating pill, one island for you and your books, and a Reports icon.

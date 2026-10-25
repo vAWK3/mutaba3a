@@ -1,7 +1,7 @@
 /**
  * MUT-326 (ADR-155): the command-line face of config/hosts.json.
  *
- *   npm run --silent hosts -- get <landingOrigin|portalOrigin|domain> [--env production]
+ *   npm run --silent hosts -- get <landingOrigin|portalOrigin|domain|mailDomain> [--env production]
  *       One value, for shell scripts (scripts/preflight.sh, server/scripts/*.sh).
  *   npm run domain:plan [-- --domain <apex> [--stage proxy|live|redirect]] [--env production]
  *       The dry run: every place a host is used, its value now and with the domain set
@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 import raw from '../config/hosts.json';
 import { parseHostsConfig, resolveHosts, type HostsConfig, type ResolvedHosts, type Stage } from '../config/hosts';
 
-const GET_KEYS = ['landingOrigin', 'portalOrigin', 'domain'] as const;
+const GET_KEYS = ['landingOrigin', 'portalOrigin', 'domain', 'mailDomain'] as const;
 
 export function getValue(hosts: ResolvedHosts, key: string): string {
   if (!(GET_KEYS as readonly string[]).includes(key)) throw new Error(`unknown key ${JSON.stringify(key)}; use one of ${GET_KEYS.join(', ')}`);

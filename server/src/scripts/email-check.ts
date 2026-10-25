@@ -13,7 +13,8 @@ import { pathToFileURL } from 'node:url';
  *                                                  Keychain; the server's sending key can't read domains and is never
  *                                                  used here.
  *
- * MAIL_DOMAIN names the domain; the npm script fills it from config/hosts.json (`npm run hosts -- get domain`).
+ * MAIL_DOMAIN names the sending domain; the npm script fills it from config/hosts.json (`npm run hosts -- get mailDomain`:
+ * <mailSubdomain>.<apex>, or the apex). DMARC may sit on it or on a parent domain, as receivers look it up.
  * One `[email] …` line per problem; exit 1 on any.
  */
 export const SENDING_REGION = 'eu-west-1';
@@ -73,9 +74,17 @@ export async function checkEmailDns(domain: string, dns: DnsLookup, region = SEN
   else if (!mx.some((r) => r.exchange.replace(/\.$/, '').toLowerCase() === returnPath)) problems.push(`the return-path MX at send.${domain} isn't ${returnPath} (sending region ${region})`);
   const spf = await dns.txt(`send.${domain}`);
   if (!spf.some((r) => r.startsWith('v=spf1') && r.includes('include:amazonses.com'))) problems.push(`no SPF at send.${domain} (TXT "v=spf1 include:amazonses.com ~all")`);
-  const dmarc = await dns.txt(`_dmarc.${domain}`);
-  if (!dmarc.some((r) => r.startsWith('v=DMARC1'))) problems.push(`no DMARC record at _dmarc.${domain} (TXT "v=DMARC1; p=none")`);
+  if (!(await hasDmarc(domain, dns))) problems.push(`no DMARC record at _dmarc.${domain} or a parent domain (TXT "v=DMARC1; p=none")`);
   return problems;
+}
+
+/** DMARC on the domain or, for a mail subdomain, on a parent: the record that governs it (RFC 7489 §6.6.3). */
+async function hasDmarc(domain: string, dns: DnsLookup): Promise<boolean> {
+  const labels = domain.split('.');
+  for (let i = 0; i < labels.length - 1; i += 1) {
+    if ((await dns.txt(`_dmarc.${labels.slice(i).join('.')}`)).some((r) => r.startsWith('v=DMARC1'))) return true;
+  }
+  return false;
 }
 
 /** Resend's own view. A tracking field Resend doesn't report counts as on: it must say it is off. */
