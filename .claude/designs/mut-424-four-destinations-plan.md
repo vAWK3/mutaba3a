@@ -1,6 +1,12 @@
 # MUT-424 — Portal: regroup 7 sections into Owed, Paid, Spent and Clients
 
-Epic MUT-423 · blocks MUT-426 · design: `.claude/designs/portal-shell-concepts.html` (round 4, variation 3) · status: **planned, not built**
+Epic MUT-423 · blocks MUT-426 · design: `.claude/designs/portal-shell-concepts.html` (round 4, variation 3) · status: **built** (2026-10-25, branch `feature/mut-424-four-destinations`, ADR-190)
+
+**Build notes (where the build differs from the plan, and why):**
+- **Reports stays in the interim sidebar**, as its own link beside the four destinations and outside the "Sections" nav. MUT-175 merged after this plan with Reports as a sidebar item "until MUT-426's corner icon"; dropping it now would make Reports unreachable until MUT-426 (AC 2). It lights no destination (`NO_DESTINATION` has `reports` and `you` from the start, since both routes now exist).
+- **The chevron is the › glyph, not a `flip` class** (test 3): the portal's rule (hosted.css, MUT-175 review, verified on video) is that the browser bidi-mirrors ‹ ›, and a CSS flip points them backwards.
+- **`DeeperLinks` reuses the You page's row styling** (`RowNavLink` in `YouRows`, `.hp-you-box`), so `.hp-deeper` only sets the spacing above the list.
+- **The destination links pass `activeOptions={{ exact: true }}`:** TanStack sets `aria-current` on any active link, and Owed's `/p/:id` is active on every page of the profile.
 
 ## Goal
 

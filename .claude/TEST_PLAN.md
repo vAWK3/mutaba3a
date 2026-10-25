@@ -3727,3 +3727,13 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Mail / CLI / infra | `templates.test.ts` (`account-closing`, the date exemption), `users-cli.test.ts` (`accounts-purge`), `tests/account_purge.tftest.hcl` | `test`, `terraform test` |
 | Portal | `CloseAccountDrawer.test.tsx` (impact, menu → drawer, download, wrong password, Stripe down, close → closing page, keep, Arabic, before the terms step), `queryClient.test.ts` (ACCOUNT_CLOSING re-reads me), local `migrations.test.ts` 6 → 7 | `npm run test:run` |
 | Release-QA | `portal.account.close`, `.close-cancel`, `.close-locked`, `.close-arabic-phone` | `release-qa run --only portal.account.close` |
+
+## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-190)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `shell/__tests__/destinations.test.ts` (every route segment → its destination, search stripped, exceptions and unknowns → null, the four in order at their URLs) | `npx vitest run src/hosted/shell` |
+| Route coverage (eng R3) | `shell/__tests__/destinations.routes.test.ts`: walks `createPortalRouter().routesByPath`; every `/p/$profileId` route maps to a destination or is in `NO_DESTINATION` | same |
+| Component (real router) | `pages/__tests__/destinations.test.tsx` (exactly four links, the lit one for pages one level in, Reports beside them lighting none, Arabic names, destination titles, `DeeperLinks` rows, back links, All clients via `PageHeader back`) | `npx vitest run src/hosted/pages` |
+| Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
+| Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |

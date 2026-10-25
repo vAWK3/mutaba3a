@@ -253,17 +253,27 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** a sidebar with Overview, Clients, Receivables, Payments and Documents (plus Expenses from MUT-44), and the page. Since MUT-425 (ADR-187) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
+- **`HostedShell`:** a sidebar with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-190), Reports beside them until MUT-426's corner icon, and the page. Everything else sits one level below a destination, at the URL it always had:
+
+  | Destination | Its page | One level in |
+  |---|---|---|
+  | Owed | `/p/:id` (the overview, titled Owed) | `/receivables` (a row at the bottom of Owed) |
+  | Paid | `/payments` | `/conversions` (a row at the bottom of Paid) |
+  | Spent | `/expenses` | `/expenses/groups…` (the Expenses · Groups tabs) |
+  | Clients | `/clients` | `/clients/:customerId` (its Documents tab), `/documents` (a row at the bottom of Clients: every document, with or without a client) |
+
+  `destinationOf(pathname)` (`shell/destinations.ts`) decides which tab is lit; Reports and the You page light none (`NO_DESTINATION`), and a test walks every route under `/p/$profileId` so a new page can't ship unmapped. The pages one level in keep their names and link back to their destination (`PageHeader back`); the rows are `DeeperLinks`. Since MUT-425 (ADR-187) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
 - **Routes** (TanStack Router, code-based like `src/router.tsx`; base `/`):
   - `/sign-in`
   - `/setup#<token>` (MUT-236): a setup link's page, public like sign-in; the token is stripped from the address bar on arrival (ADR-088 §8)
   - `/` (redirects to the first profile)
-  - `/p/$profileId/` (overview)
+  - `/p/$profileId/` (overview: the Owed destination)
   - `…/clients` and `…/clients/$customerId`
   - `…/receivables`
   - `…/payments`
   - `…/documents`
-  - `…/expenses` (MUT-44)
+  - `…/expenses` (MUT-44), `…/expenses/groups`, `…/expenses/groups/$groupId` (MUT-268)
+  - `…/conversions`, `…/reports` (MUT-175), `…/you…` (MUT-425)
 - **The active hosted profile is in the URL** (`/p/$profileId`). It is deep-linkable and safe across tabs. The typed client copies it into `X-Mutaba3a-Profile`. Nothing is persisted to `localStorage` except the language.
 - **Auth guard:** a root `beforeLoad` resolves `GET /v1/me` through TanStack Query.
   - A 401 redirects to `/sign-in?next=<path>`. `next` is validated as a same-origin relative path.
@@ -281,7 +291,7 @@ Tests generated from the table (MUT-39):
 
 | View | Calls | Notes |
 |---|---|---|
-| Overview | `GET /v1/summaries/organization` + `GET /v1/customers` (names) | M8 IA adapted: strip Owed · Overdue · Proposed per currency; currency segment only when >1 currency non-zero (M8 D13); table of customers with outstanding/overdue/last payment/status; sort overdue → outstanding → quiet → name. Summary rows carry ids only, so names join client-side in the shaping `useMemo` |
+| Owed (the overview; titled Overview until MUT-424) | `GET /v1/summaries/organization` + `GET /v1/customers` (names) | M8 IA adapted: strip Owed · Overdue · Proposed per currency; currency segment only when >1 currency non-zero (M8 D13); table of customers with outstanding/overdue/last payment/status; sort overdue → outstanding → quiet → name. Summary rows carry ids only, so names join client-side in the shaping `useMemo` |
 | Clients | `GET /v1/customers` + organization summary rows | Paginated by cursor |
 | Client detail | `GET /v1/summaries/customers/{id}` + `GET /v1/projects?customerId=` | Tabs: Summary (per-currency + project summaries), Receivables, Payments, Documents (each a filtered list view below) |
 | Receivables | `GET /v1/receivables` | Filters: customer, project, currency, status OPEN\|SETTLED, due range. Columns: client, matter, due, gross, paid, outstanding, status (server's `ItemStatus`, rendered as words) |

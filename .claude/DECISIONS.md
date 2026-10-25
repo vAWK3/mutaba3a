@@ -5125,3 +5125,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The restricted Stripe key needs **Write on Subscriptions** (D14); without it close answers 502.
 - Co-owners whose shared profile was covered by the closer's subscription get no notice and may lose coverage during the grace (TD-237). `email_suppressions` keep the address (TD-238). `profile-rows.sh purge-user` duplicates part of the purge (TD-239). The purge's per-person text scans are accepted at pilot volume (TD-240).
 - The privacy policy's 30-day/14-day promise is now true by code; its "Deleting your account" paragraph still says to email us: Basel rewords it (before-release).
+
+## ADR-190: The Portal Is Four Destinations — Owed, Paid, Spent, Clients — With Every URL Unchanged (MUT-424, epic MUT-423)
+
+**Status:** Accepted (2026-10-25, MUT-424; plan `.claude/designs/mut-424-four-destinations-plan.md`, eng review D1–D3 answered by Basel). The second step of the MUT-423 shell (round 4 variation 3); MUT-426 replaces the interim sidebar with the pill. Supersedes the seven-item sidebar list in `hosted-portal.md` §7.1.
+
+**Context:** seven peer sections (eight with Reports) made the portal read like a dashboard. People come for four things: who owes them, what came in, what went out, and their clients.
+
+**Decision:**
+1. **Four destinations:** Owed = `/p/:id` (the overview), Paid = `/payments`, Spent = `/expenses`, Clients = `/clients`. Receivables sits one level in under Owed, Conversions under Paid, Groups under Spent (its existing tabs), Documents and client detail under Clients (MUT-423 D2: unattached documents are a row at the bottom of Clients).
+2. **Every URL stays as it is (E1).** The phone's universal links claim `/p/*/expenses` and `/p/*/payments` (MUT-111/113), mail and Stripe land on `/p/:id`, and PostHog page views and bookmarks stay comparable. "One level in" is navigation and wayfinding, not URL nesting, so no redirects are needed: the ticket's "old URLs redirect" line is met by construction.
+3. **One map lights the tab (E2):** `destinationOf(pathname)` in `src/hosted/shell/destinations.ts`, pure, keyed by the first segment under `/p/:id`. `NO_DESTINATION` names the pages that light none: `reports` (it opens from its own corner icon, eng R2, MUT-426) and `you` (MUT-425). A test walks every route under `/p/$profileId` and fails on an unmapped one (R3).
+4. **Titles follow the tab word (E3):** Overview → Owed, Payments → Paid, Expenses (and its Groups tab) → Spent. Pages one level in keep their names and get a back link (`PageHeader back`); tables keep their content names, except Owed's own list.
+5. **The way in is a quiet row list (E4, D1):** `DeeperLinks` at the bottom of Owed, Paid and Clients, outside the page's `QueryView`, with no counts or figures.
+6. **Until MUT-426,** Reports stays a link beside the four destinations, outside the "Sections" nav, so nothing reachable becomes unreachable.
+
+**Consequences:**
+- MUT-426's pill reuses `DESTINATIONS` and `destinationOf` unchanged; it owns the Reports corner icon. MUT-175's AC 1 ("a Reports section in the portal nav") becomes "opens from the Reports icon".
+- The destination links pass `activeOptions={{ exact: true }}`: TanStack adds `aria-current` to any active link, and Owed's bare `/p/:id` is active under every page of the profile.
+- The Arabic for Spent (المصروف) awaits Basel's sign-off; the alternative is المصاريف.
