@@ -1,6 +1,23 @@
 # MUT-426 — Portal: floating tab pill and You island replace the sidebar
 
-Epic MUT-423 · blocked by MUT-424 (merged, shipped web-v0.2.1) and MUT-425 (merged, shipped web-v0.2.0) · design: `.claude/designs/portal-shell-concepts.html` (round 4, variation 3) · status: **planned** (2026-10-25), not built
+Epic MUT-423 · blocked by MUT-424 (merged, shipped web-v0.2.1) and MUT-425 (merged, shipped web-v0.2.0) · design: `.claude/designs/portal-shell-concepts.html` (round 4, variation 3) · status: **planned + eng-reviewed** (2026-10-25), not built
+
+**Approved amendments (eng review D1–D9, Basel 2026-10-25). These override the plan text below where they differ. The full records are in the Decision ledger at the end.**
+- **D1 (structure):** the pill and the Reports icon stay inline in `HostedShell.tsx`. `ringColorOf` is exported from `YouIsland.tsx`. There are no `ShellTabs.tsx`, `ReportsCorner.tsx` or `profileRing.ts` files.
+- **D2 (B1):** the ring colour is a stable hash of the profile id over 6 brand-checked colours, client only.
+- **D3 (B2):** no wordmark in the chrome. `Wordmark` moves to the top of You › App, and `mtb3a-name` is reworded.
+- **D4 (B3):** one muted line: "N days left in your free trial · Add a card · Hide for 3 days". The date line goes, and the MUT-418 rules are unchanged.
+- **D5 (B4):** on a phone the island is ring-only, with the name in its label.
+- **D6 (A1):** page motion is **TanStack Router view transitions** (`defaultViewTransition: { types }`, from the pure `pageMotionOf`). It is enabled only when view-transition types are supported. CSS keyframes run on the root pseudo-elements, and the chrome has its own `view-transition-name`. Reduced motion is a cross-fade. **No `lib/motion/pageEnter.ts` and no `useEffect` player.**
+- **D7 (A3):** the island's second press returns to the exact page through a new `back` param: path only, same profile, known segment, otherwise the section. Profile switching still keeps only the section.
+- **D8 (A2):** `reports` joins `SECTION_SEGMENTS`.
+- **D9 (C1):** on a phone, the bottom pill and island hide while a field in `.hp-page` has focus (CSS `:has()`).
+- **Corrections:**
+  - S1: the fade bands use `--bg`.
+  - S2: on a phone, the page reserves both a top row and the bottom.
+  - S3: the motion table is first-match-wins.
+  - C2: below 360px, the tab padding tightens and labels never truncate.
+- **Carried forward (C3):** the MUT-425 regression contract for everything `YouLinks` did.
 
 ## Goal
 
@@ -557,3 +574,124 @@ Findings: no new test choices. All the proof above is required proof of approved
 ## Section 4 — Performance
 
 No issues found. No server calls, queries or caches change. `backdrop-filter` covers three small fixed surfaces. A view transition takes one viewport-sized snapshot per pathname change and none on search-only changes (D6). The fade bands are static gradients. Scale: once per navigation, `[estimated]` well under one frame of main-thread work.
+
+## Outside voice
+
+Outside voice unavailable: the Codex CLI is not installed, and the native Plan fallback gave no complete report within five minutes, so it was stopped. Fix: install Codex (`codex login`) for future reviews. Missing coverage, no clean-review credit (OUTSIDE_VOICE_UNAVAILABLE).
+
+## Final planning decisions
+
+TODOS.md: none proposed. A person-chosen, server-stored profile colour was considered and not proposed: D2 chose the hash knowingly, and nothing asks for it yet.
+
+Approval readiness: PASS. Checked D1 (structure, Basel), D2/B1, D3/B2, D4/B3, D5/B4, D6/A1, D7/A3, D8/A2, D9/C1, each answered by Basel on 2026-10-25. S1–S3 and C2 are corrections that change no approved behaviour. C3 carries forward MUT-425's approved regression contract.
+
+## NOT in scope
+- Search (epic D3), the Flutter app and the retiring local web app (epic D4): ticket scope (out).
+- A server-stored profile colour: D2 chose the client-side hash.
+- Keeping list filters when the island returns: D7 keeps the path only.
+- Motion in browsers without view-transition types: D6 accepts an instant swap there.
+- Any change to the You page's own content beyond the Wordmark on You › App (D3).
+
+## What already exists
+- `shell/destinations.ts` (`DESTINATIONS`, `destinationOf`, `destinationPath`, `NO_DESTINATION`): reused unchanged for the pill and the lit state.
+- `shell/youRoutes.ts` (`youPath`, `isYouPath`, `sectionOf`, `parseYouSearch`, `switchTarget`): reused. It gains `reports` (D8) and the `back` parse (D7).
+- `shell/initials.ts`, `AccountDrawers`, `ProfileDrawers`, `TrialWelcomeOpener`, `UsagePrompt`, `TrialBanner` rules (MUT-418): reused.
+- TanStack Router's `defaultViewTransition` (`router-core` 1.144.0): the built-in motion path (D6), instead of the planned `motion` player.
+- The landing page's `prefers-reduced-transparency` rule (`LandingPage.css:71`): the same pattern for the glass.
+- `qa/support/motion.ts` `traceExit`: not needed. D6 proves motion with `document.getAnimations()` instead.
+
+## Diagrams
+
+```
+Navigation ─► router.navigate ─► defaultViewTransition.types(from, to)
+                                   │  (set only if VT types supported, D6)
+                                   ├─ !pathChanged ───────────► false ─► plain update (drawers, filters)
+                                   └─ pageMotionOf(from, to)  (first match wins, S3)
+                                        none ─► false
+                                        island/forward/back/fade ─► document.startViewTransition({ types })
+                                              ::view-transition-old/new(root) keyframes (RTL-mirrored)
+                                              .hp-chrome has its own view-transition-name → holds still
+                                              prefers-reduced-motion → cross-fade
+
+Island press:
+  off You ─► /p/:id/you?from=<section>&back=<this path>        (no profile: /you?from=…)
+  on You  ─► back (validated: same profile, known segment) ─► else switchTarget(id, from) ─► else /p/:id or /
+  You › Profiles row ─► switchTarget(other, from)   (back ignored: section only, MUT-425 D3/D4)
+```
+
+## Failure modes
+- **The browser has view transitions but no types:** the gate leaves `defaultViewTransition` unset, so there's no motion, rather than a cross-fade on every drawer open. Covered by the `viewTransitionOption` unit test. Silent but harmless.
+- **A crafted `back` link** (another profile, `//host`, `/you`): the parse drops it and the island falls back to the section. Covered by unit rejects. Nothing user-visible.
+- **iOS keyboard over the bottom pill:** the pill hides while a page field has focus (D9). QA checks it at 375px in Chromium; the real iPhone check is manual.
+- **Arabic pill overflow at 320px:** tighter padding below 360px (C2). The QA step at 320px fails loudly if it overflows.
+- **Glass unreadable over busy content:** AAA inks, an axe check on a scrolled page, and the reduced-transparency solid fallback.
+- **Critical gaps** (no test, no handling, silent): none.
+
+## Worktree parallelization strategy
+Sequential implementation, no parallelization opportunity. One primary module (`src/hosted/shell` + `hosted.css`), and the router motion, island and CSS all touch the same shell.
+
+## Implementation Tasks
+Synthesized from this review's findings. Each task derives from a specific finding above. Effort assumption: features at about 30× and tests at about 50× between human and CC.
+
+- [ ] **T1 (P1, human: ~1 day / CC: ~40min)** — router + shell — Page motion via TanStack view transitions, gated on types support
+  - Surfaced by: Section 1, A1 / D6
+  - Files: `src/hosted/shell/pageMotion.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/shell/__tests__/pageMotion.test.ts`, `qa/specs/portal/shell.spec.ts`
+  - Verify: `npm run test:run -- pageMotion`; `release-qa run --attach --only page-motion`
+- [ ] **T2 (P1, human: ~4h / CC: ~25min)** — shell — The island with ring colour, `from` + `back`, lit state, phone ring-only
+  - Surfaced by: Scope, B1/B4 (D2, D5); Section 1, A3 (D7); Section 2, C3
+  - Files: `src/hosted/shell/YouIsland.tsx`, `src/hosted/shell/youRoutes.ts`, `src/hosted/shell/__tests__/youRoutes.test.ts`, `src/hosted/shell/__tests__/YouIsland.test.tsx`; `YouLinks.tsx` deleted
+  - Verify: `npm run test:run -- shell`; `release-qa run --attach --only island`
+- [ ] **T3 (P2, human: ~15min / CC: ~3min)** — youRoutes — `reports` in `SECTION_SEGMENTS`
+  - Surfaced by: Section 1, A2 / D8
+  - Files: `src/hosted/shell/youRoutes.ts`, `src/hosted/shell/__tests__/youRoutes.test.ts`, `qa/specs/portal/you.spec.ts`
+  - Verify: `npm run test:run -- youRoutes`
+- [ ] **T4 (P2, human: ~1h / CC: ~10min)** — CSS — Phone layout fixes: top + bottom reserve (S2), `--bg` fade (S1), 320px Arabic fit (C2), keyboard hide (D9)
+  - Surfaced by: Scope S1/S2; Section 2, C1/C2
+  - Files: `src/hosted/hosted.css`, `hosted.html` (`viewport-fit=cover`), `qa/specs/portal/shell.spec.ts`
+  - Verify: `release-qa run --attach --only floating-chrome`
+- [ ] **T5 (P2, human: ~1h / CC: ~10min)** — wordmark + trial — Wordmark on You › App; one-line trial notice
+  - Surfaced by: Scope, B2/B3 (D3, D4)
+  - Files: `src/hosted/pages/you/YouPage.tsx`, `src/hosted/components/TrialBanner.tsx` + test, `qa/features/portal/shell.yaml` (`mtb3a-name`), `qa/features/portal/billing.yaml`, the i18n files
+  - Verify: `npm run test:run -- TrialBanner YouPage`; `release-qa lint`
+
+## Completion summary
+- Step 0: Scope Challenge — scope accepted as-is (smaller arrangement, D1)
+- Reality rows: 7/7 applicable rows emitted, 0 unverified premises (C2's width is `[estimated]` and is proven by QA)
+- Architecture Review: 3 issues found (A1, A2, A3)
+- Code Quality Review: 3 issues found (C1, C2, C3)
+- Test Review: diagram produced, 0 unplanned gaps (every new path has a planned test)
+- Performance Review: 0 issues found
+- NOT in scope: written
+- What already exists: written
+- TODOS.md updates: 0 items proposed to user
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 0 in this review (المصروف sign-off carried from MUT-424, not this review's)
+- Outside voice: codex, unavailable (CLI not installed; native Plan fallback no report within 5 min)
+- Parallelization: 1 lane, 0 parallel / 1 sequential
+- Lake Score: 2/3 (D7 B and D8 A picked 10/10 options; D9 A is 9/10, the top-scored option)
+
+REALITY: premise-table pass every factual claim carries a receipt (schema.d.ts HostedProfile, youRoutes.ts:16, router-core router.js:766-790, theme.css:335); unverified=0 `.claude/designs/mut-426-floating-shell-plan.md`
+REALITY: already-done pass `git log origin/main --since=2026-10-24 -- src/hosted/shell …` shows only MUT-424/425/115/370 work; nothing implements MUT-426 `src/hosted/shell/HostedShell.tsx:1`
+REALITY: surface-check pass `defaultViewTransition`/`ViewTransitionOptions.types` exist in router-core 1.144.0 `node_modules/@tanstack/router-core/dist/esm/router.d.ts:144`
+REALITY: binding-decisions pass MUT-424 eng decisions honoured (URLs unchanged, Reports corner icon, NO_DESTINATION); MUT-425 D3/D4 kept for switching `src/hosted/shell/destinations.ts:31`
+REALITY: numbers finding C2 pill width ~300px vs 288px is `[estimated]`; QA at 320px is the measure `src/hosted/i18n/ar.json`
+REALITY: deferred-asks pass every ticket AC and comment 12498/12527 item is mapped in "Acceptance criteria → proof"; search/Flutter out by epic D3/D4 `.claude/designs/mut-426-floating-shell-plan.md`
+REALITY: pr-count pass one branch, one merge (no ship-policy; default one PR per wave) `.gstack/ship-policy.json`
+
+## Suppressed findings (appendix)
+- (confidence 4/10) There is no skip link in the portal, so keyboard users tab through 6 chrome controls before the content. Today's sidebar puts about 8 there, so this is not a regression. Left as is.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | codex `/plan-eng-review` outside voice | Independent 2nd opinion | 1 | unavailable | CLI not installed; native fallback gave no report in 5 min |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open | 6 issues, 0 critical gaps; all resolved by D1–D9 (Basel) |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** codex, plan-review phase, unavailable (CLI not installed; the native Plan fallback was stopped at the five-minute limit with no complete report). No findings recorded.
+- **VERDICT:** no review CLEAR. The Eng Review has issues_open (6 found, all resolved into approved scope D1–D9 and tasks T1–T5, 0 unresolved). A design review is recommended for this UI-heavy ticket. eng review required
+
+NO UNRESOLVED DECISIONS
