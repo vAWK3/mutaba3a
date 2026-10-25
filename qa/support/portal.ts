@@ -194,6 +194,8 @@ export async function openSignedInPortal(
     if (method === 'GET' && pathname === '/v1/customers') {
       return route.fulfill(json({ items: Array.from({ length: clients }, (_, i) => customer(i)), nextCursor: null }));
     }
+    // MUT-260: no receipts library unless a spec turns it on (FakeApi `receipts`), as on a server with it off.
+    if (pathname.startsWith('/v1/receipts')) return route.fulfill(json({ error: { code: 'NOT_FOUND', message: 'Not stubbed' } }, 404));
     if (method === 'GET') return route.fulfill(json({ items: [], nextCursor: null }));
     return route.fulfill(json({ error: { code: 'NOT_FOUND', message: 'Not stubbed' } }, 404));
   });
