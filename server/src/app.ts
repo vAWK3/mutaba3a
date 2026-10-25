@@ -211,7 +211,7 @@ function isLegacyPageVisit(method: string, path: string): boolean {
 // PostHog's EU ingestion host for the portal's opt-in usage counts (MUT-155,
 // ADR-090): the SDK loads from the portal's own bundle, so script-src stays 'self'.
 // And the Sentry org's EU ingest host, for the portal's crash reports (MUT-149 AC5).
-// MUT-260 (ADR-192): img-src and frame-src name the same storage host, so the Receipts tab shows a receipt's original
+// MUT-260 (ADR-193): img-src and frame-src name the same storage host, so the Receipts tab shows a receipt's original
 // inline (an <img>, or an <iframe> of a PDF signed with disposition=inline). Signed URLs are short-lived and on their
 // own origin, so a receipt can never script the portal. In dev the local driver's URLs are same-origin ('self').
 // MUT-368: Cloudflare Turnstile on /signup and /recover: its script (explicit render) and its challenge frame. Both

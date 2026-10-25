@@ -515,7 +515,7 @@ cookies or CORS beyond what MUT-38 already built:
   `PATH_STYLED_HOST`, `virtualHostedStyle` not set) — and `connect-src` governs
   that call. Receipt *downloads* need no entry here: `downloadNavigator.open()`
   is a top-level navigation, which `connect-src` does not restrict. MUT-260
-  (ADR-192) adds the same host to `img-src` and `frame-src` (plus `'self'` in
+  (ADR-193) adds the same host to `img-src` and `frame-src` (plus `'self'` in
   `frame-src` for the dev server's same-origin local driver): the Receipts tab
   shows a receipt's original inline, an `<img>` or an `<iframe>` of a PDF signed
   with `?disposition=inline`. Signed URLs live minutes on their own origin, so a

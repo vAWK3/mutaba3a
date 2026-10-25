@@ -5166,7 +5166,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The phone half reads the same field and calls the same route (no counting logic of its own).
 - No analytics events (TD-247). The 30-day and three-offer numbers live on the server; the portal mirrors them only for its optimistic hide (TD-248).
 
-## ADR-192: Portal Receipts Show Their Original Inline — Storage Origin in img-src/frame-src, an Inline Download Disposition, and a Shared Expense Form (MUT-260)
+## ADR-193: Portal Receipts Show Their Original Inline — Storage Origin in img-src/frame-src, an Inline Download Disposition, and a Shared Expense Form (MUT-260)
 
 **Status:** Accepted (2026-10-25, MUT-260, plan `.claude/designs/mut-260-receipts-portal.md` D1–D12 with eng-review amendments A1–A14). Builds on ADR-167 (the receipts library, MUT-255) and the MUT-45 CSP (§4c of `server/DEPLOYMENT.md`).
 

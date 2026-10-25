@@ -3750,7 +3750,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
-## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-192)
+## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-193)
 
 | Layer | Tests | Command |
 |---|---|---|

@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-25 — Portal receipts: gallery, To review, upload and review (MUT-260, ADR-192, API 1.71.0-mut260)
+## [Unreleased] - 2026-10-25 — Portal receipts: gallery, To review, upload and review (MUT-260, ADR-193, API 1.71.0-mut260)
 
 **Why:** receipts shared from the phone waited in the library as To review with nowhere on the web to see or file them. The last web piece of MUT-252; with MUT-258 it unblocks turning `receipts_library_enabled` on.
 
@@ -38,7 +38,7 @@
 - **QA:** `portal.receipts.{gallery,upload,review-approve,filed,unavailable}`, `portal.direction.receipts-review-ar`; FakeApi receipts library with real 1×1 images.
 
 ### Changed
-- **CSP:** `img-src` and `frame-src` name `https://storage.googleapis.com` (and `frame-src 'self'`), ADR-192.
+- **CSP:** `img-src` and `frame-src` name `https://storage.googleapis.com` (and `frame-src 'self'`), ADR-193.
 - **Local driver:** an inline download is served without `content-security-policy: sandbox`; attachments keep it.
 - **Portal:** the expense drawer's form moved to `components/expenseForm/` (`useHostedExpenseForm`, `HostedExpenseFields`), shared with the review page; behaviour unchanged. The shared `ExpenseFormFields` gains optional `hints`. `ReceiptUploader` uses the shared `receiptFileRules` (now also the server's filename rule).
 
