@@ -436,7 +436,7 @@ export class PrismaLedgerStore implements LedgerStore {
           }
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
           return toUser(user);
-          }),
+        }),
       ),
     // MUT-333: the same row lock the hard delete's claim takes (R1), so a close, a cancel and a claim serialize.
     requestClosure: (input) =>
