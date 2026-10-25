@@ -1,0 +1,27 @@
+/* MUT-346: above drawers (200/201) and popovers; below nothing the app draws. */
+.blocking-dialog-root {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.blocking-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--overlay);
+}
+
+.blocking-dialog {
+  position: relative;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.blocking-dialog:focus {
+  outline: none;
+}
