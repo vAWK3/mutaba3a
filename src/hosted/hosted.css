@@ -274,7 +274,8 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
    scroll restoration, scrollIntoView and the drawers work as before. Above the page and its popovers' anchors, below
    .hp-popover (20), the toasts (50) and the drawers (200). Nothing in it has a border: glass, a lift and a fade. */
 .hp-chrome { position: fixed; inset: 0; z-index: 15; pointer-events: none; view-transition-name: hp-chrome; }
-.hp-chrome a { pointer-events: auto; }
+/* The glass itself takes the click too, so a press in the pill's padding never lands on the page beneath */
+.hp-chrome a, .hp-chrome .hp-glass { pointer-events: auto; }
 /* The fade where content meets the chrome: the document scrolls, so a band, not a mask (eng S1: the page's --bg). */
 .hp-fade { position: absolute; inset-inline: 0; pointer-events: none; }
 .hp-fade-top { top: 0; height: var(--hp-chrome-top); background: linear-gradient(to bottom, var(--bg), transparent); }
@@ -347,6 +348,10 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
   transition: background-color var(--duration-toggle) var(--ease-spring), color var(--duration-toggle) var(--ease-spring);
 }
 .hp-island-named { padding-inline-start: var(--space-3); }
+/* A tablet's desktop layout: the island gives way to the centred pill (about 360px wide in Arabic), cutting the name sooner */
+@media (min-width: 761px) and (max-width: 959px) {
+  .hp-island { max-width: min(240px, calc(50vw - 216px)); }
+}
 .hp-island-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
 /* D2: the profile's ring token comes inline (YouIsland ringColorOf); no profile, a neutral ring */
 .hp-island-avatar { width: 32px; height: 32px; margin: var(--space-0-5); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--hp-ring, var(--border-strong)); }
@@ -587,7 +592,8 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
   .hp-island { position: static; flex: none; padding: var(--space-1); }
   .hp-island-name { display: none; }
   /* D9: iOS misplaces fixed bottom bars around the keyboard, so the bar steps aside while a page field has focus */
-  .hp-shell:has(.hp-page :is(input, textarea, select):focus) .hp-chrome-bar { visibility: hidden; }
+  /* Only fields that open a keyboard or a picker: a switch or a checkbox takes focus on Android with neither */
+  .hp-shell:has(.hp-page :is(input:not([type='checkbox'], [type='radio'], [type='button'], [type='submit'], [type='range'], [type='file']), textarea, select):focus) .hp-chrome-bar { visibility: hidden; }
   .hp-stat { padding: 0 var(--space-3); }
   .hp-filter { min-width: calc(50% - var(--space-3)); }
   .hp-toast { inset-inline: var(--hp-gutter); inset-block-end: var(--hp-chrome-bottom); max-width: none; }

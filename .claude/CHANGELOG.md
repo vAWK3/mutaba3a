@@ -32,6 +32,9 @@
 
 **Why:** the last step of epic MUT-423. The sidebar took 240 px from every page and put a dashboard's chrome in front of one figure; the new shell is four words in a floating pill, one island for you and your books, and a Reports icon.
 
+### Fixed (pre-landing review)
+- Leaving You for sign-in or setup no longer slides back (`pageMotionOf`); a press in the pill's padding no longer reaches the page beneath; a switch or checkbox on a phone no longer hides the bottom bar; on a 768–959 px tablet a long profile name no longer covers the pill (new `floating-chrome` step at 768 px, en/ar).
+
 ### Added
 - `shell/YouIsland.tsx`: the You island (profile name + avatar ringed by `ringColorOf`, six brand ring colours; ring-only on a phone), linking into You with `?from=` and `?back=`, lit on You, and back to the exact page on a second press.
 - `shell/pageMotion.ts`: `depthOf`, `pageMotionOf`, `viewTransitionOption`, `supportsViewTransitionTypes`; the router's `defaultViewTransition`. `hosted.css` view-transition keyframes per type, RTL-mirrored, cross-fade under reduced motion.

@@ -163,6 +163,7 @@ features:
       - Open it on a 375 px phone, focus the search field, then leave it
       - Open it in Arabic on the phone
       - Open it at 320 px in English and in Arabic
+      - Open a profile with a long name on a 768 px tablet, in English and in Arabic
     expect:
       - No aside and no header outside the page; Reports is top start, the pill top centre and the island top end, 16 px from the edges
       - Scrolled, the list runs under the glass and axe finds nothing new, in light and in dark
@@ -170,6 +171,7 @@ features:
       - On the phone the pill and the island circle are at the bottom (the name only in the island's label) and Reports is top end; the bar hides while the search has focus and returns after (D9; a real iPhone keyboard is a manual check)
       - In Arabic on the phone, Reports is top start and the island sits left of the pill
       - At 320 px nothing scrolls sideways and no tab label is cut, in either language
+      - At 768 px the island keeps the long name (cut with an ellipsis) and never covers the pill, in either language
   - id: island
     title: The You island names the profile with its ring, opens You › Profiles lit, a second press returns to the exact page, any tab leaves, and switching from Reports keeps Reports (MUT-426 D2, D7, D8)
     tier: secondary

@@ -393,7 +393,12 @@ test('sign-in, the tab title and You › App name the product MTB3A in English a
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 375, height: 812 };
 const NARROW = { width: 320, height: 640 };
+/** An iPad in portrait: the narrowest width with the desktop layout. */
+const TABLET = { width: 768, height: 1024 };
+/** A name long enough to fill the island to its widest. */
+const LONG_NAME = 'Nour Accounting and Architecture Studio';
 type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 const boxOf = async (page: Page, selector: string): Promise<Box> => {
   const box = await page.locator(selector).boundingBox();
   if (!box) throw new Error(`${selector} has no box`);
@@ -404,7 +409,7 @@ const GAP = 16;
 const NEAR = 2;
 
 function crowded() {
-  return new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, 'Nour Accounting')], clients: 40 });
+  return new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, LONG_NAME)], clients: 40 });
 }
 
 async function noSidewaysScroll(page: Page): Promise<boolean> {
@@ -491,6 +496,18 @@ test('the pill, the You island and Reports float over the page at every width, m
       expect(bar.x).toBeGreaterThanOrEqual(0);
       expect(bar.x + bar.width).toBeLessThanOrEqual(NARROW.width);
       await attachScreenshot(page, `portal-chrome-320-${language}`);
+    });
+  }
+
+  for (const language of ['en', 'ar'] as const) {
+    await step(`On a 768px tablet in ${language === 'en' ? 'English' : 'Arabic'}, a long profile name never covers the pill`, async () => {
+      await page.setViewportSize(TABLET);
+      await api.open(page, `/p/${OFFICE_B}/clients`, language);
+      const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-pill'), await boxOf(page, '.hp-island')];
+      expect([overlaps(island, pill), overlaps(reports, pill)]).toEqual([false, false]);
+      await expect(page.locator('.hp-island-name')).toBeVisible();
+      expect(await noSidewaysScroll(page)).toBe(true);
+      await attachScreenshot(page, `portal-chrome-768-${language}`);
     });
   }
 });
