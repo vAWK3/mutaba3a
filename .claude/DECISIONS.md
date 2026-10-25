@@ -5344,3 +5344,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Override log — ADR-099 §8 (partial) and MUT-252's on-device-only reading**: *What*: "there is no server or LLM reading". *Replaced by*: the server may re-read a stored original with self-hosted OCR to fill empty fields; LLM reading stays rejected. *Why*: on-device engines miss Android Arabic dates and the browser, and the original is already on our server. *Date*: 2026-10-26.
 
+## ADR-200: An Agent Reaches Only Profiles Its Person Owns or Co-Owns, Through an Explicit Store Allow-List; One Same-Purchase Rule (MUT-435, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-435; plan and eng review `.claude/designs/mut-435-mcp-read-tools.md`, P1 and D1 answered by Basel).
+
+**Context:** MUT-434 gave `/mcp` sign-in and a fail-closed agent guard with no tools. MUT-435 adds the read tools a person's own Claude needs before it writes (MUT-436). ADR-196 deferred two questions to this ticket: what an agent may read of a firm, and auditing a flag a person brings into a firm.
+
+**Decision:**
+1. **Owned or co-owned profiles only (P1).** A tool reaches a profile through `agentProfile` (`server/src/mcp/context.ts`): a membership AND `ownsProfile` (creator, or a co-owner of a Business profile, MUT-373). A firm or Malafat-fed profile the person only belongs to, another person's profile and an unknown id all answer the same `NOT_FOUND`. An owned profile with firm features on is still reachable: its owner is the firm owner. This closes ADR-196 Deferred (a) and (b) for v1: no firm data a member merely belongs to is reachable, so neither firm-owner consent nor audit-on-join is needed until firms are opened to agents (a future ticket).
+2. **The agent guard is an explicit allow-list.** `AGENT_STORE_METHODS` (`server/src/auth/store-guard.ts`) names every store method an agent's tools may call; a method's class alone opens nothing, `read` included (tighter than MUT-434's "any `read`-class method"). A test pins the exact set. Tools run inside the `/mcp` request, so every call passes the guard; their tests drive the real `/mcp` with an OAuth token for that reason.
+3. **Read tools need the `read` scope**; without it none is registered. Each description ends by telling the agent to show the person what it found before writing (AC3).
+4. **One same-purchase rule** (`server/src/expenses/similarity.ts`): same currency, same amount, dated within 3 days either side; a similar vendor (`scoreVendorName` both ways ≥ 0.6) ranks first, then the nearer date. A missing vendor never excludes. `find_similar_expenses` uses it across one profile, or every reachable profile plus the inbox; MUT-437 imports it and must not redefine it.
+5. **Reads write nothing.** `list_categories` never seeds the preset (the REST read does); an empty profile answers `[]` with a hint.
+6. **Lists page with opaque cursors, at most 50 a page** (vendors: a typeahead of at most 25; look-alikes: 10, from at most 200 candidate rows per source, flagged `truncated`). Amounts are decimal strings in the currency's own digits (JOD 3).
+7. **Failures:** an API refusal reaches the agent as `CODE: message`; anything unexpected goes to Sentry and the agent gets "MTB3A had a problem…". No REST or OpenAPI change, so `API_VERSION` stays `1.74.0-mut434`.
+
+**Consequences:**
+- A stored vendor name or note reaches the agent as data. MTB3A never acts on it; the server instructions and tool descriptions keep the person in the loop.
+- `find_similar_expenses` reads at most (reachable profiles + inbox) × 2 pages of 100 indexed rows a call.
+- MUT-436 adds its write methods to the allow-list, each with a test.
+
+**Alternatives considered:** every membership plus an audit row on join (rejected for v1: firm owners get no say); firm owner opt-in (deferred: new setting and UI); keeping "any `read` method" open (rejected: it would expose `audit.list`, `users.getById` and the like to an agent for no tool).

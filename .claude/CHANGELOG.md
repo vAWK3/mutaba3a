@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Claude's read tools on /mcp (MUT-435, ADR-200)
+
+**Why:** a person's own Claude needs to see where an expense would go, how to file it and whether it is already recorded, before MUT-436 lets it write.
+
+### Added
+- Six MCP tools for a grant with the `read` scope (`server/src/mcp/read-tools.ts`): `list_profiles`, `list_categories`, `list_clients`, `list_vendors`, `list_inbox`, `find_similar_expenses`. Each tells the agent to show the person what it found before writing.
+- `server/src/mcp/context.ts`: `agentProfile` (owned or co-owned profiles only, ADR-200 §1), tool results and errors (unexpected failures to Sentry, a plain retry message to the agent), cursor paging (≤ 50).
+- `server/src/expenses/similarity.ts`: the one same-purchase rule (same currency and amount, ±3 days, a similar vendor ranked first), for MUT-437 to reuse.
+- Release-QA `portal-selfservice.mcp.read-tools` (`qa/features/portal-selfservice/mcp.yaml`, `qa/specs/portal-selfservice/mcp.spec.ts`); the agent's half of connecting moved to `qa/support/agent.ts`, shared with `connect.spec.ts`.
+
+### Changed
+- The agent store guard is an explicit allow-list (`AGENT_STORE_METHODS`): only the eight methods the read tools call; MUT-434's "any `read`-class method" is closed.
+- `/mcp` passes the error reporter to the tools; the server instructions add "never choose a profile; check find_similar_expenses first".
+
+### Technical
+- `server/src/__tests__/helpers/oauth-agent.ts`: the OAuth test harness, shared by `routes-oauth.test.ts` and `mcp-read-tools.test.ts`.
+- No REST or OpenAPI change: `API_VERSION` stays `1.74.0-mut434`.
+
+---
+
 ## [Unreleased] - 2026-10-25 — MUT-434 review fixes (qa-reconcile, 7 findings)
 
 **Why:** the pre-landing review of MUT-434 found one critical and six smaller holes in the OAuth server.

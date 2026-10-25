@@ -34,6 +34,22 @@
 **Impact**: `users.setPassword` (operator `rotate:password`), setup-link `issue` with a lock and `redeem` (recovery) revoke sessions but leave OAuth grants live, so an agent connected by someone who knew the old password survives a recovery.
 **Fix**: revoke grants (`password_changed`, audited) in those three store transactions, as `changePassword` does; decide with Basel whether the setup link for a brand-new account counts.
 
+### TD-257: `list_vendors` is a typeahead, not a vendor list
+**Status**: Open
+**Ticket**: MUT-435
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: an agent can only find vendors by part of a name (`vendors.search`, at most 25); it can't list every saved vendor of a profile.
+**Fix**: add a paged `vendors.list` to the store (and the allow-list) if an agent flow needs the whole list.
+
+### TD-256: `find_similar_expenses` filters the amount in memory
+**Status**: Open
+**Ticket**: MUT-435 (ADR-200)
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: `ExpenseFilter` has no amount, so the tool reads a profile's whole ±3-day window in one currency (at most 200 rows, then `truncated: true`) and keeps the equal amounts in JS. Fine at freelancer volumes; a profile with hundreds of same-currency expenses in a week would be cut.
+**Fix**: an `amountMinor` filter on `expenses.list` (memory + Prisma, uses the `(organizationId, occurredOn)` index), when a profile gets near the cap.
+
 ### TD-253: The OAuth endpoints' rate limits are per Cloud Run instance
 **Status**: Open
 **Ticket**: MUT-434 (AC5)

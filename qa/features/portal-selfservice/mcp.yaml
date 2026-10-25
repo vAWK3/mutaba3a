@@ -1,0 +1,27 @@
+app: portal-selfservice
+area: mcp
+title: Claude's tools in MTB3A (MCP)
+tier: secondary
+# MUT-435 (ADR-200): a connected agent reads what it needs before it writes: the person's profiles, categories,
+# clients, vendors, inbox and look-alike expenses. Same live dev API as connect.yaml; the spec plays the agent with
+# fetch (support/agent.ts) and the person in the browser.
+paths:
+  - server/src/mcp/**
+  - server/src/expenses/similarity.ts
+  - server/src/auth/store-guard.ts
+features:
+  - id: read-tools
+    title: A connected Claude lists my profiles and finds an expense I already recorded
+    tier: secondary
+    paths:
+      - server/src/mcp/read-tools.ts
+      - server/src/mcp/context.ts
+    steps:
+      - Connect an agent
+      - Record a 45.90 ILS expense at Carrefour on the personal profile
+      - The agent lists its tools and my profiles
+      - The agent asks whether a 45.90 ILS purchase at carrefour on the same day is already recorded
+    expect:
+      - The agent is offered the six read tools, each telling it to show me what it found before writing
+      - My personal profile is listed with its default currency
+      - The Carrefour expense comes back as the look-alike, matched on currency, amount, date and vendor

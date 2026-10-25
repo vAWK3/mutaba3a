@@ -3832,6 +3832,18 @@ Tests written before the code (not run red first: the worktree was still install
 | Pre-landing review (regression-first, each seen failing) | Route + contract + CLI | +6 | a delete racing a grant or revoke answers 404, not 500 (D1); a retired name is off and nobody holds it, on both stores (D2); an API key's `/v1/audit` never lists feature grants while the admin audit does (D3); `feature-list` says `no one holds <feature>` (D5); the disabled-account case asserts the disable; both stores refuse a grant for an unknown person |
 
 
+## MUT-435 — MCP read tools (2026-10-26, ADR-200)
+
+Tests written first (seen failing: no tools registered; `AGENT_STORE_METHODS` missing), then the tools.
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/expenses/__tests__/similarity.test.ts` | Unit | 9 | same currency and amount only; ±3 days inclusive, not 4; across month/year; a missing vendor matches without the vendor reason and ranks lower; spacing/case/suffix vendor match, unrelated vendor no reason; Arabic/Hebrew as typed; ranking order; the date window |
+| `server/src/auth/__tests__/store-guard.test.ts` (agent block) | Unit | 4 | the exact allow-list; every classified method allowed iff listed (read class included); listed methods classified and never operator; unclassified still throws |
+| `server/src/__tests__/mcp-read-tools.test.ts` | Route (real /mcp + OAuth) | 13 | six tools, each with the show-first sentence and an output schema (AC3); none for a write-only grant; profiles = owned + co-owned, never member-only (AC1); every profile-scoped tool answers "Profile not found" for a member-only, a stranger's and an unknown profile (AC1); categories with/without archived, a read never seeds; clients paged, limit 51 and a bad cursor refused (AC4); Arabic vendor found as typed; inbox newest first, paged, own entries only; look-alikes across profiles and inbox, best first with reasons, a firm's row unseen, profile-scoped search (AC2); JOD 3 digits; the guard refuses a de-listed method inside a tool (OV1); an unexpected failure hides its internals |
+| `server/src/__tests__/routes-oauth.test.ts` | Route | changed 1 | sign-in end to end now lists the tools (was: none, D10) |
+| `qa/specs/portal-selfservice/mcp.spec.ts` | Release-QA (live API) | 1 | a connected agent lists its tools and profiles and finds the person's expense as the look-alike |
+
 ## MUT-434 — OAuth 2.1 sign-in for MCP agents (2026-10-25, ADR-197)
 
 Tests written first for the pure rules and the service (seen failing: modules missing), then for routes and portal.

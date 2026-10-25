@@ -94,6 +94,16 @@ export async function grantFeature(userId: string, feature = 'agent_access'): Pr
   expect(res.status, `grant ${feature} ${await res.clone().text()}`).toBe(200);
 }
 
+/** MUT-358: the operator comps a person's own profiles (a pilot grant), so their writes pass the lapse gate (ADR-181). */
+export async function grantCoverage(userId: string): Promise<void> {
+  const res = await fetch(`${liveState().origin}/admin/v1/billing/grants`, {
+    method: 'POST',
+    headers: { ...admin(), 'content-type': 'application/json' },
+    body: JSON.stringify({ userId, tier: 'FREELANCER', reason: 'release-QA pilot comp' }),
+  });
+  expect(res.status, `grant coverage ${await res.clone().text()}`).toBe(201);
+}
+
 /** The operator approves or declines the waiting signup for `email` (/admin/v1/signup-reviews). */
 export async function decideReview(email: string, decision: 'approve' | 'decline'): Promise<void> {
   const { origin } = liveState();
