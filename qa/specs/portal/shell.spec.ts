@@ -1,16 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
 import { OFFICE_A, OFFICE_B, customer, malafatFirm, office, openSignedInPortal } from '../../support/portal';
 import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
 import { openYou } from '../../support/you';
+import { expectOnlyKnownAxeViolations } from '../../support/axe';
 
 /**
  * The signed-in portal's shell (hosted-portal.md §7.1): Owed (the overview), the
- * four destinations and what sits one level in (MUT-424), the profile switcher and client detail. Every /v1 call is
- * answered by the in-memory API in qa/support/portalApi.ts.
+ * four destinations and what sits one level in (MUT-424), the profile switcher and client detail, and the floating
+ * chrome (MUT-426: the pill, the You island, the Reports corner icon, page motion). Every /v1 call is answered by
+ * the in-memory API in qa/support/portalApi.ts.
  */
 
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
@@ -86,7 +89,7 @@ test('signed in, the portal opens on Owed for the first profile, and each of the
     await expect(page.getByRole('table', { name: 'Owed' }).getByRole('row')).toHaveCount(2);
   });
 
-  await step('Visit each of the four destinations from the sidebar', async () => {
+  await step('Visit each of the four destinations from the pill', async () => {
     const nav = page.getByRole('navigation', { name: 'Sections' });
     await expect(nav.getByRole('link')).toHaveText([...DESTINATIONS]);
     for (const destination of DESTINATIONS) {
@@ -178,7 +181,7 @@ test('switching profile from You › Profiles keeps the section, and a profile t
   await step('Switch to Nour Accounting: back on Payments, now for that profile', async () => {
     await main.getByRole('button', { name: /Nour Accounting/ }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/payments$`));
-    await expect(page.getByRole('link', { name: 'Switch profile: Nour Accounting' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'You · Nour Accounting' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await expect.poll(() => api.last('GET', /^\/v1\/payments$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_B);
   });
@@ -325,7 +328,7 @@ test('once firm features are on, the Overview shows one note that Dismiss keeps 
 /** The logotype's mask file, in the dev server (/src/assets/…) or a build (/assets/wordmark-<hash>.svg). */
 const WORDMARK_FILE = /\/wordmark[^/]*\.svg$/;
 
-test('sign-in and the sidebar name the product MTB3A in English and متابعة in Arabic, and the tab follows', { tag: '@portal.shell.mtb3a-name' }, async ({ page, step }) => {
+test('sign-in, the tab title and You › App name the product MTB3A in English and متابعة in Arabic', { tag: '@portal.shell.mtb3a-name' }, async ({ page, step }) => {
   const wordmarkFetches: string[] = [];
   page.on('request', (request) => {
     if (WORDMARK_FILE.test(new URL(request.url()).pathname)) wordmarkFetches.push(request.url());
@@ -372,13 +375,312 @@ test('sign-in and the sidebar name the product MTB3A in English and متابعة
     await attachScreenshot(page, 'mtb3a-signin-ar');
   });
 
-  await step('Sign in at desktop width: the sidebar shows a 32px mark with the MTB3A logotype', async () => {
+  await step('Sign in at desktop width: the chrome has no wordmark, the tab says MTB3A, and You › App shows a 32px mark', async () => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     await openSignedInPortal(page, { profiles: [office(OFFICE_A, 'Sader Office')], path: '/' });
-    const sidebar = page.locator('.hp-side-wordmark');
-    await expect(sidebar.getByRole('img', { name: 'MTB3A' })).toBeVisible();
-    await expect(sidebar.locator('img')).toHaveAttribute('width', '32');
+    await expect(page.locator('.hp-chrome .hp-wordmark')).toHaveCount(0);
     await expect(page).toHaveTitle('MTB3A');
-    await attachScreenshot(page, 'mtb3a-sidebar-en');
+    await openYou(page, 'app');
+    const lockup = page.locator('.hp-you-wordmark');
+    await expect(lockup.getByRole('img', { name: 'MTB3A' })).toBeVisible();
+    await expect(lockup.locator('img')).toHaveAttribute('width', '32');
+    await attachScreenshot(page, 'mtb3a-you-app-en');
+  });
+});
+
+/* ---------- MUT-426: the floating chrome ---------- */
+
+const DESKTOP = { width: 1280, height: 800 };
+const PHONE = { width: 375, height: 812 };
+const NARROW = { width: 320, height: 640 };
+type Box = { x: number; y: number; width: number; height: number };
+const boxOf = async (page: Page, selector: string): Promise<Box> => {
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`${selector} has no box`);
+  return box;
+};
+/** The edge offset of the chrome's objects (--hp-chrome-gap = --space-4). */
+const GAP = 16;
+const NEAR = 2;
+
+function crowded() {
+  return new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, 'Nour Accounting')], clients: 40 });
+}
+
+async function noSidewaysScroll(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+}
+
+test('the pill, the You island and Reports float over the page at every width, mirrored in Arabic, with no sidebar or header bar', { tag: '@portal.shell.floating-chrome' }, async ({ page, step }) => {
+  const api = crowded();
+
+  await step('On a desktop, Reports is top start, the pill top centre and the island top end', async () => {
+    await page.setViewportSize(DESKTOP);
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Clients' })).toBeVisible();
+    expect(await page.evaluate(() => ({ aside: document.querySelectorAll('aside').length, bars: [...document.querySelectorAll('header')].filter((h) => !h.closest('main')).length }))).toEqual({ aside: 0, bars: 0 });
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    expect(Math.abs(reports.x - GAP)).toBeLessThan(NEAR);
+    expect(Math.abs(pill.x + pill.width / 2 - DESKTOP.width / 2)).toBeLessThan(NEAR);
+    expect(Math.abs(DESKTOP.width - GAP - (island.x + island.width))).toBeLessThan(NEAR);
+    for (const box of [reports, pill, island]) expect(Math.abs(box.y - GAP)).toBeLessThan(NEAR);
+    await attachScreenshot(page, 'portal-chrome-desktop-en');
+  });
+
+  await step('Scrolled, the list runs under the glass and the page stays axe-clean', async () => {
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    await expectOnlyKnownAxeViolations(page, 'portalSignedIn');
+    await attachScreenshot(page, 'portal-chrome-desktop-scrolled-en');
+  });
+
+  await step('In dark mode the glass and the ring keep their contrast', async () => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expectOnlyKnownAxeViolations(page, 'portalSignedIn');
+    await attachScreenshot(page, 'portal-chrome-desktop-dark');
+    await page.emulateMedia({ colorScheme: 'light' });
+  });
+
+  await step('In Arabic on a desktop, Reports and the island swap sides', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    const [reports, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-island')];
+    expect(Math.abs(DESKTOP.width - GAP - (reports.x + reports.width))).toBeLessThan(NEAR);
+    expect(Math.abs(island.x - GAP)).toBeLessThan(NEAR);
+    await attachScreenshot(page, 'portal-chrome-desktop-ar');
+  });
+
+  await step('On a 375px phone, the pill and the island circle sit at the bottom and Reports at the top end', async () => {
+    await page.setViewportSize(PHONE);
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    expect(Math.abs(PHONE.width - GAP - (reports.x + reports.width))).toBeLessThan(NEAR);
+    expect(Math.abs(reports.y - GAP)).toBeLessThan(NEAR);
+    expect(Math.abs(PHONE.height - GAP - (pill.y + pill.height))).toBeLessThan(island.height);
+    expect(island.x).toBeGreaterThan(pill.x + pill.width - NEAR);
+    await expect(page.locator('.hp-island-name')).toBeHidden();
+    await expect(page.locator('.hp-island')).toHaveAttribute('aria-label', 'You · Nour Studio');
+    expect(await noSidewaysScroll(page)).toBe(true);
+    await attachScreenshot(page, 'portal-chrome-phone-en');
+  });
+
+  await step('Typing in the page search hides the bottom bar for the keyboard; leaving the field brings it back', async () => {
+    const bar = page.locator('.hp-chrome-bar');
+    await page.getByRole('main').getByRole('searchbox').focus();
+    await expect(bar).toBeHidden();
+    await page.getByRole('main').getByRole('searchbox').blur();
+    await expect(bar).toBeVisible();
+  });
+
+  await step('In Arabic on the phone, Reports moves to the top start and the island to the pill’s left', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`, 'ar');
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    expect(Math.abs(reports.x - GAP)).toBeLessThan(NEAR);
+    expect(island.x + island.width).toBeLessThan(pill.x + NEAR);
+    await attachScreenshot(page, 'portal-chrome-phone-ar');
+  });
+
+  for (const language of ['en', 'ar'] as const) {
+    await step(`At 320px in ${language === 'en' ? 'English' : 'Arabic'}, nothing scrolls sideways and no tab label is cut`, async () => {
+      await page.setViewportSize(NARROW);
+      await api.open(page, `/p/${OFFICE_A}/clients`, language);
+      expect(await noSidewaysScroll(page)).toBe(true);
+      const cut = await page.locator('.hp-tabs a').evaluateAll((links) => links.filter((link) => link.scrollWidth > link.clientWidth).map((link) => link.textContent));
+      expect(cut).toEqual([]);
+      const bar = await boxOf(page, '.hp-chrome-bar');
+      expect(bar.x).toBeGreaterThanOrEqual(0);
+      expect(bar.x + bar.width).toBeLessThanOrEqual(NARROW.width);
+      await attachScreenshot(page, `portal-chrome-320-${language}`);
+    });
+  }
+});
+
+test('the You island names the profile, opens You › Profiles lit, and a second press returns to the exact page', { tag: '@portal.shell.island' }, async ({ page, step }) => {
+  const api = seeded();
+  const island = page.locator('.hp-island');
+
+  await step('Open a client: the island shows the profile name and its ring', async () => {
+    await page.setViewportSize(DESKTOP);
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    await expect(page.locator('.hp-island-name')).toHaveText('Nour Studio');
+    expect(await page.locator('.hp-island-avatar').evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/rgb/);
+    await expect(island).not.toHaveAttribute('aria-current', 'page');
+  });
+
+  await step('Press the island: You › Profiles opens and the island is lit', async () => {
+    await island.click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you\\?from=clients&back=`));
+    await expect(island).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('nav.hp-section-tabs--segmented').getByRole('link').first()).toHaveAttribute('aria-current', 'page');
+    await attachScreenshot(page, 'portal-island-on-en');
+  });
+
+  await step('Press it again: back on that client, not the Clients list', async () => {
+    await island.click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/clients/${C1}$`));
+    await expect(island).not.toHaveAttribute('aria-current', 'page');
+  });
+
+  await step('Open You again, then leave it from a tab', async () => {
+    await island.click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/payments$`));
+    await expect(island).not.toHaveAttribute('aria-current', 'page');
+  });
+
+  await step('From Reports, switching profile lands on the other profile’s Reports', async () => {
+    await page.locator('.hp-reports').click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/reports$`));
+    await expect(page.locator('.hp-reports')).toHaveAttribute('aria-current', 'page');
+    await openYou(page, 'profiles');
+    await page.getByRole('main').getByRole('button', { name: /Nour Accounting/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/reports$`));
+  });
+});
+
+/**
+ * The view transitions the router starts, read in the page: the type it named and the animation on the incoming
+ * page's snapshot (`::view-transition-new(root)`). jsdom has no view transitions, so this is the motion's proof (D6).
+ */
+async function watchViewTransitions(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const log: { types: string[]; incoming: string[] }[] = [];
+    (window as unknown as { __qaVt: typeof log }).__qaVt = log;
+    const start = document.startViewTransition?.bind(document);
+    if (!start) return;
+    document.startViewTransition = ((arg: StartViewTransitionOptions | ViewTransitionUpdateCallback) => {
+      const transition = start(arg as StartViewTransitionOptions);
+      const entry = { types: typeof arg === 'object' && arg.types ? [...arg.types] : [], incoming: [] as string[] };
+      log.push(entry);
+      void transition.ready.then(() => {
+        entry.incoming = document
+          .getAnimations()
+          .filter((animation) => (animation.effect as KeyframeEffect | null)?.pseudoElement === '::view-transition-new(root)')
+          .map((animation) => (animation as CSSAnimation).animationName);
+      });
+      return transition;
+    }) as typeof document.startViewTransition;
+  });
+}
+
+const transitions = (page: Page) => page.evaluate(() => (window as unknown as { __qaVt: { types: string[]; incoming: string[] }[] }).__qaVt);
+const lastTransition = async (page: Page) => {
+  await expect.poll(async () => (await transitions(page)).at(-1)?.incoming.length ?? 0).toBeGreaterThan(0);
+  return (await transitions(page)).at(-1);
+};
+
+test('pages slide by depth, mirrored in Arabic, the You page grows from the island, and reduced motion cross-fades', { tag: '@portal.shell.page-motion' }, async ({ page, step }) => {
+  const api = seeded();
+  await watchViewTransitions(page);
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+
+  await step('Open Owed: the browser takes view-transition types, as the router checks them', async () => {
+    await page.setViewportSize(DESKTOP);
+    await api.open(page, `/p/${OFFICE_A}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    expect(await page.evaluate(() => [CSS.supports('selector(:active-view-transition-type(a))'), CSS.supports('selector(:active-view-transition-type(a)')])).toEqual([true, true]);
+  });
+
+  await step('Owed → Receivables slides forward, in from the inline end', async () => {
+    await page.getByRole('navigation', { name: 'More in Owed' }).getByRole('link', { name: /^Receivables/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Receivables' })).toBeVisible();
+    expect(await lastTransition(page)).toEqual({ types: ['forward'], incoming: ['hp-vt-in-from-right'] });
+  });
+
+  await step('Its back link slides the other way', async () => {
+    await page.getByRole('main').getByRole('link', { name: 'Owed', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    expect(await lastTransition(page)).toEqual({ types: ['back'], incoming: ['hp-vt-in-from-left'] });
+  });
+
+  await step('Tab to tab cross-fades', async () => {
+    await nav.getByRole('link', { name: 'Paid', exact: true }).click();
+    expect(await lastTransition(page)).toEqual({ types: ['fade'], incoming: ['hp-vt-fade-in'] });
+  });
+
+  await step('The You page grows out of the island', async () => {
+    await page.locator('.hp-island').click();
+    expect(await lastTransition(page)).toEqual({ types: ['island'], incoming: ['hp-vt-grow-from-right'] });
+  });
+
+  await step('Opening a drawer starts no transition: drawers never fade the page', async () => {
+    await page.locator('nav.hp-section-tabs--segmented').getByRole('link').nth(1).click();
+    const before = (await transitions(page)).length;
+    await page.getByRole('button', { name: /^Billing/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Billing' })).toBeVisible();
+    expect((await transitions(page)).length).toBe(before);
+    await page.keyboard.press('Escape');
+  });
+
+  await step('In Arabic, forward comes in from the left and back from the right', async () => {
+    await api.open(page, `/p/${OFFICE_A}`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.locator(`a[href="/p/${OFFICE_A}/receivables"]`).first().click();
+    expect(await lastTransition(page)).toEqual({ types: ['forward'], incoming: ['hp-vt-in-from-left'] });
+    await page.getByRole('main').getByRole('link', { name: AR_HOSTED.destinations.owed, exact: true }).click();
+    expect(await lastTransition(page)).toEqual({ types: ['back'], incoming: ['hp-vt-in-from-right'] });
+  });
+
+  await step('With reduced motion, the same move only cross-fades', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await api.open(page, `/p/${OFFICE_A}`);
+    await page.locator(`a[href="/p/${OFFICE_A}/receivables"]`).first().click();
+    expect(await lastTransition(page)).toEqual({ types: ['forward'], incoming: ['hp-vt-fade-in'] });
+  });
+});
+
+test('with reduced transparency the pill and the island are solid, with no blur', { tag: '@portal.shell.reduced-transparency' }, async ({ page, step }) => {
+  const api = seeded();
+  const glass = () => page.locator('.hp-tabs').evaluate((el) => ({ filter: getComputedStyle(el).backdropFilter, background: getComputedStyle(el).backgroundColor }));
+  const alphaOf = (color: string) => {
+    const parts = /rgba?\(([^)]+)\)|color\([^ ]+ ([^)]+)\)/.exec(color);
+    const values = (parts?.[1] ?? parts?.[2] ?? '').split(/[ ,/]+/).filter(Boolean);
+    return values.length === 4 ? Number(values[3]) : 1;
+  };
+
+  await step('By default the pill is glass: blurred and see-through', async () => {
+    await page.setViewportSize(DESKTOP);
+    await api.open(page, `/p/${OFFICE_A}`);
+    const { filter, background } = await glass();
+    expect(filter).toContain('blur');
+    expect(alphaOf(background)).toBeLessThan(1);
+  });
+
+  await step('Ask for reduced transparency (Chromium, through the DevTools protocol): solid, no blur', async () => {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
+    await expect.poll(async () => (await glass()).filter).toBe('none');
+    expect(alphaOf((await glass()).background)).toBe(1);
+    await attachScreenshot(page, 'portal-chrome-reduced-transparency');
+  });
+});
+
+test('the keyboard meets Reports, the four tabs, then the island, each with a visible focus ring', { tag: '@portal.shell.keyboard' }, async ({ page, step }) => {
+  const api = seeded();
+  const focused = () =>
+    page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return { name: el?.getAttribute('aria-label') ?? el?.textContent ?? '', current: el?.getAttribute('aria-current') ?? null, ring: el ? getComputedStyle(el).boxShadow : 'none' };
+    });
+
+  await step('Tab from the top of Payments', async () => {
+    await page.setViewportSize(DESKTOP);
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    const seen = [];
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press('Tab');
+      const now = await focused();
+      expect(now.ring, `${now.name} shows a focus ring`).not.toBe('none');
+      seen.push(now);
+    }
+    expect(seen.map((item) => item.name)).toEqual(['Reports', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Nour Studio']);
+    expect(seen.map((item) => item.current)).toEqual([null, null, 'page', null, null, null]);
+  });
+
+  await step('Enter on the island opens You, where the island is aria-current', async () => {
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.hp-island')).toHaveAttribute('aria-current', 'page');
   });
 });

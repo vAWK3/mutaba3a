@@ -89,12 +89,12 @@ test('on a 375px phone in Arabic, each part of the You page and the top bar fit 
   const api = new FakeApi({ profiles: [long, office(OFFICE_B, 'Nour Accounting')], locale: 'ar' });
   const noSidewaysScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-  await step('Open Payments on a profile with a long Arabic name: the top bar fits', async () => {
+  await step('Open Payments on a profile with a long Arabic name: the bottom pill and the island fit', async () => {
     await api.open(page, `/p/${OFFICE_A}/payments`, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    const side = page.locator('.hp-side');
-    await expect(side).toBeVisible();
-    expect(await side.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    const bar = page.locator('.hp-chrome-bar');
+    await expect(bar).toBeVisible();
+    expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     expect(await noSidewaysScroll()).toBe(true);
   });
 

@@ -2,6 +2,7 @@ import { test, expect } from '../../support/qa';
 import { OFFICE_A, OFFICE_B, office } from '../../support/portal';
 import { FakeApi, expense } from '../../support/portalApi';
 import { openYou, youRow } from '../../support/you';
+import { attachScreenshot } from '../../support/brand';
 
 /**
  * MUT-362 (design review DR4/DR5): Settings › Billing on a server without Stripe or GA prices. The live sandbox
@@ -174,5 +175,58 @@ test('A cancelled subscription leaves the profile read-only for good, and says i
     await expect(banner.getByText(/Your subscription has ended\..*Nothing is deleted\./)).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Subscribe' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add income' })).toHaveCount(0);
+  });
+});
+
+test('On Owed, a running trial is one quiet line: the days left, Add a card and Hide for 3 days', { tag: '@portal.billing.trial-line' }, async ({ page, step }) => {
+  const trialEnds = new Date(Date.now() + 9.5 * DAY).toISOString();
+  const personal = { ...office(OFFICE_A, 'Personal'), isPersonalDefault: true, billing: { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnds } };
+  const api = new FakeApi({ profiles: [personal] });
+  const routeBilling = () =>
+    page.route('**/v1/billing', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          configured: true,
+          subscription: null,
+          canManage: false,
+          trial: { startedAt: new Date(Date.now() - 4 * DAY).toISOString(), endsAt: trialEnds, lockAt: new Date(Date.now() + 24 * DAY).toISOString() },
+          catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
+          countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
+          coveredProfileIds: [],
+        }),
+      }),
+    );
+  const line = page.getByRole('region', { name: 'Your free trial' });
+
+  await step('Open Owed during the trial: one muted line, no icon, no box and no end date (MUT-426 D4)', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    await routeBilling();
+    await page.reload();
+    await expect(line.getByRole('button', { name: 'Add a card' })).toBeVisible();
+    await expect(line).toHaveText('10 days left in your free trial · Add a card · Hide for 3 days');
+    await expect(line.locator('p')).toHaveCount(1);
+    await expect(line.locator('svg')).toHaveCount(0);
+    expect(await line.evaluate((el) => ({ border: getComputedStyle(el).borderTopStyle, background: getComputedStyle(el).backgroundColor }))).toEqual({ border: 'none', background: 'rgba(0, 0, 0, 0)' });
+    await attachScreenshot(page, 'portal-trial-line-en');
+  });
+
+  await step('Add a card opens Billing’s Subscribe step', async () => {
+    await line.getByRole('button', { name: 'Add a card' }).click();
+    await expect(page).toHaveURL(/billing=true&step=subscribe/);
+    await page.keyboard.press('Escape');
+  });
+
+  await step('On a 375px phone in Arabic it still reads as one line of text, right to left', async () => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await api.open(page, `/p/${OFFICE_A}`, 'ar');
+    await routeBilling();
+    await page.reload();
+    const arLine = page.getByRole('region', { name: 'تجربتك المجانية' });
+    await expect(arLine.getByRole('button', { name: 'إخفاء لمدة 3 أيام' })).toBeVisible();
+    await expect(arLine.locator('p')).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await attachScreenshot(page, 'portal-trial-line-ar-375');
   });
 });

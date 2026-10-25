@@ -107,3 +107,18 @@ features:
     expect:
       - The banner says the subscription ended, nothing is deleted, and Subscribe starts it again
       - There is no Add income
+  - id: trial-line
+    title: On Owed a running trial is one quiet line, "N days left in your free trial · Add a card · Hide for 3 days", in English and in Arabic on a phone (MUT-426 D4)
+    tier: secondary
+    paths:
+      - src/hosted/components/TrialBanner.tsx
+      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/data/trialPrompt.ts
+    steps:
+      - Sign in during the free trial on a server that can take a card, and open Owed
+      - Press Add a card
+      - Open Owed in Arabic on a 375 px phone
+    expect:
+      - Owed shows one muted line "10 days left in your free trial · Add a card · Hide for 3 days", with no icon, no box and no end date
+      - Add a card opens Billing's Subscribe step
+      - In Arabic the line reads right to left with إخفاء لمدة 3 أيام, and nothing scrolls sideways

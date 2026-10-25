@@ -12,7 +12,7 @@ paths:
   - src/hosted/components/YouRows.tsx
   - src/hosted/components/SectionTabs.tsx
   - src/hosted/components/ProfileKindLine.tsx
-  - src/hosted/shell/YouLinks.tsx
+  - src/hosted/shell/YouIsland.tsx
   - src/hosted/shell/youRoutes.ts
   - src/hosted/shell/initials.ts
 features:
@@ -20,7 +20,7 @@ features:
     title: Every row on the You page opens today's drawer by its URL key, over the page, and Back closes it
     tier: secondary
     steps:
-      - From Payments, open You › Account from the avatar
+      - From Payments, open You › Account from the island
       - Open Billing, Your data and Change password in turn, pressing Back after each
       - Open You › Profiles and do the same with New profile and Manage profiles
     expect:

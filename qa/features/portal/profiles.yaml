@@ -29,7 +29,7 @@ features:
       - The list shows the used count, Open now, each kind, and the Malafat firm locked
       - The pane shows Name, Currency and the time zone, and Save waits for a change
       - The stale save (If-Match 1) shows "This profile was changed elsewhere…" with Reload; Reload shows the name it has now
-      - The save sends If-Match 2 with only name and currency; "Profile saved", and the list and the sidebar show the new name
+      - The save sends If-Match 2 with only name and currency; "Profile saved", and the list and the island show the new name
   - id: type-change
     title: Change a profile's type; the cards say what each seeds, the confirm counts the expenses that lose a category, and the note leads to Expenses
     tier: secondary
@@ -153,4 +153,4 @@ features:
       - Rename the shared profile in Manage profiles
     expect:
       - The client, the income, the payment and the expense are each sent for the shared profile
-      - The rename sends PATCH {name} only, says Profile saved, and the sidebar shows the new name
+      - The rename sends PATCH {name} only, says Profile saved, and the island shows the new name

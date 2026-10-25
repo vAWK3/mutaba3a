@@ -101,7 +101,7 @@ features:
       - Add a card (a trialing subscription through Stripe's API), then reload
     expect:
       - The trial step reads right to left in Arabic with nothing overflowing sideways
-      - Not now lands on Home with the days left in the trial and أضف بطاقة (AC3); the step never returns
+      - Not now lands on Home with one quiet line of the days left in the trial and أضف بطاقة (AC3, MUT-426 D4); the step never returns
       - Hidden, the banner stays hidden after a reload (the snooze is stored on the account)
       - In the last 3 days it shows again ("بقي يومان من تجربتك المجانية") with no way to hide it
       - Once a card is on file the banner is gone (AC3)

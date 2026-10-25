@@ -64,11 +64,11 @@ test('Edit a profile’s name and currency; a change made elsewhere first asks f
     expect(patch?.body).toEqual({ name: 'Nour Design Studio', defaultCurrency: 'USD' });
   });
 
-  await step('Back on the list: saved, under its new name and currency, and the sidebar says so too', async () => {
+  await step('Back on the list: saved, under its new name and currency, and the island says so too', async () => {
     const list = page.getByRole('dialog', { name: 'Profiles' });
     await expect(page.getByTestId('toast-live')).toHaveText(/Profile saved/);
     await expect(list.getByRole('button', { name: /Nour Design Studio/ })).toContainText('USD');
-    await expect(page.getByRole('link', { name: 'Switch profile: Nour Design Studio' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'You · Nour Design Studio' })).toBeVisible();
   });
 });
 
@@ -169,7 +169,7 @@ test('New profile: name and type are asked for, the zone can be changed, and the
 
   await step('The new profile opens, and the server got exactly what was chosen', async () => {
     await expect(page.getByTestId('toast-live')).toHaveText(/Home is ready/);
-    await expect(page.getByRole('link', { name: 'Switch profile: Home' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'You · Home' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
     const post = api.last('POST', /^\/v1\/profiles$/);
     expect(post?.body).toEqual({ name: 'Home', type: 'PERSONAL', defaultCurrency: 'JOD', timezone: 'Asia/Amman' });
@@ -376,7 +376,7 @@ test('Someone removed while working on the shared profile lands on their persona
 
   await step('Work on the shared profile’s Clients', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`);
-    await expect(page.locator('.hp-you-link-profile')).toContainText('Sader & Haddad');
+    await expect(page.locator('.hp-island-name')).toHaveText('Sader & Haddad');
   });
 
   await step('Meanwhile Basel removes you; open Expenses', async () => {
@@ -437,7 +437,7 @@ test('A co-owner adds a client, records a payment and an expense, and renames th
     expect(asShared('POST', /^\/v1\/expenses$/)).toBe(OFFICE_A);
   });
 
-  await step('Rename the shared profile in Manage profiles; the sidebar shows the new name', async () => {
+  await step('Rename the shared profile in Manage profiles; the island shows the new name', async () => {
     await page.goto(`/p/${OFFICE_A}/expenses?editProfile=${OFFICE_A}`);
     const pane = page.getByRole('dialog', { name: 'Sader & Haddad' });
     await pane.getByLabel('Name').fill('S&H Studio');
@@ -445,6 +445,6 @@ test('A co-owner adds a client, records a payment and an expense, and renames th
     await expect(page.getByTestId('toast-live')).toHaveText('Profile saved');
     const patch = api.last('PATCH', new RegExp(`^/v1/profiles/${OFFICE_A}$`));
     expect(patch?.body).toEqual({ name: 'S&H Studio' });
-    await expect(page.locator('.hp-you-link-profile')).toContainText('S&H Studio');
+    await expect(page.locator('.hp-island-name')).toHaveText('S&H Studio');
   });
 });

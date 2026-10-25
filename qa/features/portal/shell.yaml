@@ -17,6 +17,7 @@ paths:
   - src/hosted/format/DecimalAmount.tsx
   - src/hosted/format/dates.ts
   - src/hosted/shell/HostedShell.tsx
+  - src/hosted/shell/YouIsland.tsx
   - src/hosted/shell/usePopover.ts
   - src/hosted/pages/views/shared.tsx
   - src/hosted/components/HostedTable.tsx
@@ -40,12 +41,12 @@ features:
     steps:
       - Sign in and open the portal at /
       - Read the overview, then switch it to USD
-      - Visit each of the four destinations from the sidebar
+      - Visit each of the four destinations from the pill
       - Open You › App, choose عربي, then go to Conversions through Paid
     expect:
       - / lands on the first profile's Owed page (today's overview) with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
       - USD shows the USD block and puts currency=USD in the URL
-      - The sidebar holds exactly Owed, Paid, Spent and Clients; each page's heading is its tab's word and its link is aria-current
+      - The pill holds exactly Owed, Paid, Spent and Clients; each page's heading is its tab's word and its link is aria-current
       - The page turns rtl with the Arabic destination names
       - Every profile call carried X-Mutaba3a-Profile for that profile
       - A screenshot of the shell is attached in English and in Arabic, for spacing review
@@ -72,11 +73,11 @@ features:
     tier: secondary
     paths:
       - src/hosted/pages/you/YouProfiles.tsx
-      - src/hosted/shell/YouLinks.tsx
+      - src/hosted/shell/YouIsland.tsx
       - src/hosted/shell/youRoutes.ts
       - src/hosted/data/profileRules.ts
     steps:
-      - Open Payments on one office and open You › Profiles from the profile name
+      - Open Payments on one office and open You › Profiles from the island
       - Switch to the second office
       - Open a profile id that is not on the account, then Go to the first profile
     expect:
@@ -126,11 +127,12 @@ features:
       - Dismiss removes it, and it stays gone after the reload
       - In Arabic the page is right to left and the note reads "ميزات المكتب مفعّلة لملف …" with إغلاق
   - id: mtb3a-name
-    title: Sign-in and the sidebar name the product MTB3A in English and متابعة in Arabic, and the tab title follows (MUT-402)
+    title: Sign-in, the tab title and You › App name the product MTB3A in English and متابعة in Arabic; the floating chrome has no wordmark (MUT-402, MUT-426 D3)
     tier: secondary
     legacy: [MUT-402]
     paths:
       - src/hosted/components/Brand.tsx
+      - src/hosted/pages/you/YouApp.tsx
       - src/hosted/HostedApp.tsx
       - src/hosted/shell/HostedShell.tsx
       - src/hosted/hosted.css
@@ -140,8 +142,96 @@ features:
     steps:
       - Open sign-in in English on a cold load
       - Switch to Arabic
-      - Sign in at desktop width and look at the sidebar
+      - Sign in at desktop width, look at the chrome, then open You › App
     expect:
       - Sign-in shows a 40px mark with the MTB3A logotype, the tab says MTB3A, and the logotype file is fetched once (the preload is used; Chromium only)
       - In Arabic the lockup writes متابعة as live text with no logotype, and the tab says متابعة
-      - The sidebar shows a 32px mark with the MTB3A logotype
+      - The chrome shows no wordmark, the tab says MTB3A, and You › App shows a 32px mark with the MTB3A logotype
+  - id: floating-chrome
+    title: The pill, the You island and the Reports icon float over every page with no sidebar or header bar; the pill sits at the bottom on a phone, Arabic mirrors every position, and nothing scrolls sideways at 320 px (MUT-426)
+    tier: core # every signed-in page is reached through this chrome
+    paths:
+      - src/hosted/shell/HostedShell.tsx
+      - src/hosted/shell/YouIsland.tsx
+      - src/hosted/components/Icons.tsx
+      - src/hosted/hosted.css
+      - hosted.html
+    steps:
+      - Open Clients on a 1280 px desktop
+      - Scroll the list under the chrome, then switch to dark mode
+      - Open it in Arabic
+      - Open it on a 375 px phone, focus the search field, then leave it
+      - Open it in Arabic on the phone
+      - Open it at 320 px in English and in Arabic
+    expect:
+      - No aside and no header outside the page; Reports is top start, the pill top centre and the island top end, 16 px from the edges
+      - Scrolled, the list runs under the glass and axe finds nothing new, in light and in dark
+      - In Arabic, Reports and the island swap sides
+      - On the phone the pill and the island circle are at the bottom (the name only in the island's label) and Reports is top end; the bar hides while the search has focus and returns after (D9; a real iPhone keyboard is a manual check)
+      - In Arabic on the phone, Reports is top start and the island sits left of the pill
+      - At 320 px nothing scrolls sideways and no tab label is cut, in either language
+  - id: island
+    title: The You island names the profile with its ring, opens You › Profiles lit, a second press returns to the exact page, any tab leaves, and switching from Reports keeps Reports (MUT-426 D2, D7, D8)
+    tier: secondary
+    paths:
+      - src/hosted/shell/YouIsland.tsx
+      - src/hosted/shell/youRoutes.ts
+      - src/hosted/pages/you/YouPage.tsx
+    steps:
+      - Open a client
+      - Press the island
+      - Press it again
+      - Press it, then Paid in the pill
+      - Open Reports from its corner icon, then switch profile from You › Profiles
+    expect:
+      - The island shows Nour Studio and the avatar ringed in the profile's colour, not current
+      - You › Profiles opens with from=clients and back= in the URL, and the island is aria-current
+      - The second press lands back on that client, not the Clients list
+      - Paid leaves You and the island is no longer current
+      - Reports is aria-current on its icon, and switching lands on the other profile's Reports
+  - id: page-motion
+    title: Going deeper slides forward, back slides the other way, mirrored in Arabic; the You page grows from the island; tabs cross-fade; drawers start no transition; reduced motion only cross-fades (MUT-426 D6)
+    tier: secondary
+    paths:
+      - src/hosted/shell/pageMotion.ts
+      - src/hosted/router.tsx
+      - src/hosted/hosted.css
+    steps:
+      - Open Owed in Chromium
+      - Open Receivables from the row at the bottom, then go back from its link
+      - Press Paid in the pill
+      - Press the island, then open Billing from You › Account
+      - In Arabic, open Receivables and go back
+      - With reduced motion, open Receivables
+    expect:
+      - The browser takes view-transition types under both the portal's and the router's checks
+      - Receivables arrives as forward (in from the right), and its back link as back (in from the left)
+      - Tab to tab is a fade
+      - The You page is an island transition, growing from the island's corner
+      - Opening the Billing drawer starts no view transition
+      - In Arabic forward comes in from the left and back from the right
+      - With reduced motion the forward move is only a cross-fade
+  - id: reduced-transparency
+    title: With reduced transparency the floating pill is solid, with no blur (MUT-426)
+    tier: secondary
+    paths:
+      - src/hosted/hosted.css
+    steps:
+      - Open Owed on a desktop
+      - Ask the browser for reduced transparency (Chromium's DevTools protocol; Playwright has no option for it)
+    expect:
+      - By default the pill's backdrop is blurred and its background see-through
+      - With reduced transparency its backdrop-filter is none and its background opaque
+  - id: keyboard
+    title: From the top of a page, Tab reaches Reports, Owed, Paid, Spent, Clients, then the island, each with a visible focus ring; aria-current marks the lit tab, and the island on You (MUT-426)
+    tier: secondary
+    paths:
+      - src/hosted/shell/HostedShell.tsx
+      - src/hosted/shell/YouIsland.tsx
+      - src/hosted/hosted.css
+    steps:
+      - Open Paid and press Tab six times
+      - Press Enter on the island
+    expect:
+      - Focus goes Reports, Owed, Paid, Spent, Clients, You · Nour Studio, each with a focus ring; only Paid is aria-current
+      - You opens and the island is aria-current

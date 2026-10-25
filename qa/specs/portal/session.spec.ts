@@ -95,7 +95,8 @@ test('Sign out: a failure keeps you signed in and says so; then it ends the sess
     const before = api.calls('GET', /^\/v1\//).length;
     await page.goto(`/p/${OFFICE_A}/payments`);
     await expect(page.getByRole('heading', { name: "This profile isn't available" })).toBeVisible();
-    await expect(page.locator('.hp-you-link-account')).toContainText('On this device');
+    // No profile is open on this device, so the island is only You (MUT-426)
+    await expect(page.locator('.hp-island')).toHaveAttribute('aria-label', 'You');
     await expect(page.getByText('PAY-0001')).toHaveCount(0);
     expect(api.calls('GET', /^\/v1\//)).toHaveLength(before);
   });

@@ -104,8 +104,8 @@ test('A first visit opens the app on this device in Arabic, with no sign-in and 
   });
 
   await step('You is this device\'s: Sign in and Your data, then Language and the terms, nothing that needs an account', async () => {
-    await expect(page.locator('.hp-you-link-account')).toContainText('على هذا الجهاز');
     await openYou(page, 'account');
+    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('على هذا الجهاز');
     const rows = page.getByRole('main').locator('.hp-you-row');
     await expect(rows).toHaveText(['تسجيل الدخول', /^بياناتك/]);
     // MUT-324: the terms are a link in either mode; MUT-425: on You › App, beside the language
@@ -360,7 +360,8 @@ test('When a signed-in session ends, the portal offers Sign in or Continue on th
 
   await step('Continue on this device: this device\'s own app, with none of the account\'s figures', async () => {
     await page.getByRole('button', { name: 'Continue on this device' }).click();
-    await expect(page.locator('.hp-you-link-account')).toContainText('On this device');
+    // The island names this device's own profile now (MUT-426)
+    await expect(page.locator('.hp-island')).toHaveAttribute('aria-label', /^You · /);
     await expect(page.getByText('PAY-0001')).toHaveCount(0);
     await expect(page.getByText('Nour Studio')).toHaveCount(0);
   });
