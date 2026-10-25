@@ -44,7 +44,7 @@ function phoneLines(next: ResolvedHosts): string[] {
     `   ios/Flutter/AssociatedDomains.xcconfig: MUTABA3A_LINK_HOST = ${hosts[0]}`,
     '   ios/Runner/Runner.entitlements com.apple.developer.associated-domains, one pair per host:',
     ...hosts.flatMap((h) => [`     applinks:${h}$(MUTABA3A_LINK_MODE)`, `     webcredentials:${h}$(MUTABA3A_LINK_MODE)`]),
-    ...(next.domain ? [`     webcredentials:${next.domain}$(MUTABA3A_LINK_MODE)   (apex: MUT-115 passkeys; needs the apex AASA first)`] : []),
+    ...(next.domain ? [`     webcredentials:${next.domain}$(MUTABA3A_LINK_MODE)   (apex: MUT-115 passkeys; the apex proxies the portal's AASA from stage live)`] : []),
     '   android/app/src/main/AndroidManifest.xml App Links intent-filter, per host and per path (/p/.*/expenses.*, /p/.*/payments.*, /capture.*):',
     ...hosts.map((h) => `     android:host="${h}"`),
     '   android/app/src/main/res/values/strings.xml asset_statements:',
@@ -67,6 +67,7 @@ export function domainPlan(now: ResolvedHosts, next: ResolvedHosts): string {
   const live = next.stage === 'live' || next.stage === 'redirect';
   const redirectRules = [
     ...(live ? [`${fd.landingHost}/app/* → ${next.legacy!.landingOrigin}/app (the free web app's data stays there)`] : []),
+    ...(live ? [`${fd.landingHost}/.well-known/apple-app-site-association ← ${fd.portalHost} (200 proxy; MUT-115 passkeys)`] : []),
     ...(next.redirectLegacy ? [`${next.legacy!.landingOrigin} /, /download, /privacy, /terms* → ${next.landingOrigin}`] : []),
   ].join('; ') || 'none';
   return [
@@ -87,6 +88,7 @@ export function domainPlan(now: ResolvedHosts, next: ResolvedHosts): string {
     row('PORTAL_ORIGIN', 'unset', fd.portalOrigin),
     row('FRONT_DOOR_TOKEN', 'unset', 'secret mutaba3a-api-front-door-token (frontdoor stack)'),
     row('PORTAL_LEGACY_REDIRECT', 'unset', next.redirectLegacy ? 'true' : 'unset (stage redirect only)'),
+    row('WEBAUTHN_RP_ID', 'unset', live ? `${next.domain} (MUT-115 passkeys)` : 'unset (from stage live)'),
     row('TRUSTED_PROXY_HOPS', '1', '1 (the front door hands over the client IP itself)'),
     '',
     '4. Front door (terraform: server/infrastructure/frontdoor/, applied by the operator)',

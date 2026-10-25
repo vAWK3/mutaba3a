@@ -466,8 +466,13 @@ function redirectLine(fromOrigin: string, path: string, toOrigin: string): strin
  * Host-scoped, so deploy previews are untouched.
  * - From stage "live": the apex's `/app` goes back to the old host, where the free web
  *   app's data is (the landing links to `/app` relatively); MUT-291 retires this.
+ * - From stage "live": the apex serves the portal's apple-app-site-association (MUT-115, ADR-190) by a 200
+ *   proxy rewrite, so iOS trusts the apex, the passkey RP ID, for `webcredentials`. One source of truth: the
+ *   server's APPLE_TEAM_ID/APPLE_BUNDLE_ID; never a redirect, which Apple refuses.
  * - At stage "redirect": the old host's landing pages go on to the apex.
  */
+export const APPLE_APP_SITE_ASSOCIATION_PATH = "/.well-known/apple-app-site-association";
+
 export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "frontDoor">): string {
   if (!hosts.legacy || !hosts.frontDoor || (hosts.stage !== "live" && hosts.stage !== "redirect")) return "";
   const apex = `https://${hosts.frontDoor.landingHost}`;
@@ -475,6 +480,7 @@ export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" |
   const lines = [
     redirectLine(apex, "/app", old),
     redirectLine(apex, "/app/*", old),
+    `${apex}${APPLE_APP_SITE_ASSOCIATION_PATH} https://${hosts.frontDoor.portalHost}${APPLE_APP_SITE_ASSOCIATION_PATH} 200!`,
     ...(hosts.stage === "redirect" ? LEGACY_LANDING_PATHS.map((path) => redirectLine(old, path, apex)) : []),
   ];
   return `${lines.join("\n")}\n`;
