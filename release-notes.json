@@ -1,4 +1,12 @@
 {
+  "0.2.2": {
+    "en": [
+      "Enable self service portal"
+    ],
+    "ar": [
+      "Enable self service portal"
+    ]
+  },
   "0.2.1": {
     "en": [
       "Behind-the-scenes groundwork on the website for signing in to your MTB3A account with a passkey."
