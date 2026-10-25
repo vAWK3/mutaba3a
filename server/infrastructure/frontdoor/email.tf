@@ -3,17 +3,20 @@
 # Resend's DKIM value into resend_dkim_value (DEPLOYMENT.md §6f), so merging changes no plan.
 #
 #   resend._domainkey.<mail>  TXT  the DKIM key Resend shows
-#   send.<mail>               MX   feedback-smtp.<region>.amazonses.com (10)   the bounce return path
-#   send.<mail>               TXT  v=spf1 include:amazonses.com ~all             SPF for the return path
+#   send.<mail>               CNAME  send.forge.rmta.net                      the return path (Resend Forge)
+#   rsend.<mail>              CNAME  rsend-<region code>.forge.rmta.net       the regional return path (Forge)
 #   _dmarc.<apex>             TXT  v=DMARC1; p=none[; rua=mailto:<address>]   reporting only, for now
 #
 # <mail> is the Resend domain: <mailSubdomain>.<apex> from config/hosts.json (production: "notify", Basel 2026-10-25), or
 # the apex without one. DMARC stays on the apex, where it also covers the mail subdomain. The apex keeps its own
 # records: Resend's MX and SPF sit on `send.`. `npm --prefix server run email:check` reads
-# them back. DMARC moves to p=quarantine after 30 clean days (a later, deliberate change).
+# them back. Basel turned Resend Forge on 2026-10-25: it replaced SES's MX + SPF on `send.` with the two CNAMEs, which
+# Resend's dashboard lists as "SPF". A CNAME can't share its name, so the old MX + TXT go. DMARC moves to p=quarantine after 30 clean days (a later, deliberate change).
 
 locals {
-  email_dns_enabled = local.enabled && var.resend_dkim_value != null
+  # Forge's short region names, as its CNAME targets spell them. Only the region ADR-159 chose.
+  forge_region_codes = { "eu-west-1" = "euw1" }
+  email_dns_enabled  = local.enabled && var.resend_dkim_value != null
   email_dns = local.email_dns_enabled ? {
     dkim = {
       name     = "resend._domainkey.${local.mail_domain}"
@@ -21,16 +24,16 @@ locals {
       content  = var.resend_dkim_value
       priority = null
     }
-    return_path_mx = {
+    return_path = {
       name     = "send.${local.mail_domain}"
-      type     = "MX"
-      content  = "feedback-smtp.${var.resend_sending_region}.amazonses.com"
-      priority = 10
+      type     = "CNAME"
+      content  = "send.forge.rmta.net"
+      priority = null
     }
-    return_path_spf = {
-      name     = "send.${local.mail_domain}"
-      type     = "TXT"
-      content  = "v=spf1 include:amazonses.com ~all"
+    return_path_regional = {
+      name     = "rsend.${local.mail_domain}"
+      type     = "CNAME"
+      content  = "rsend-${local.forge_region_codes[var.resend_sending_region]}.forge.rmta.net"
       priority = null
     }
     dmarc = {

@@ -4,21 +4,22 @@ import { checkEmailApi, checkEmailDns, createResendDomainsApi, emailCheckMain, t
 /**
  * MUT-359 A2 (D4, D21): `npm --prefix server run email:check`. The DNS mode needs no key and is what the release
  * preflight runs; `--api` reads the domain through Resend's API (a stub here, never the network) and fails while
- * open or click tracking is on, a record isn't verified, or the region isn't eu-west-1.
+ * open or click tracking is on, a record isn't verified, or the region isn't eu-west-1. Resend Forge (2026-10-25) moved
+ * the return path from SES's MX + SPF on `send.` to two CNAMEs into forge.rmta.net.
  */
 const DOMAIN = 'mail.example.test';
 
-function dns(overrides: Partial<Record<string, string[] | { exchange: string; priority: number }[]>> = {}): DnsLookup {
-  const records: Record<string, unknown> = {
+function dns(overrides: Partial<Record<string, string[]>> = {}): DnsLookup {
+  const records: Record<string, string[]> = {
     [`txt:resend._domainkey.${DOMAIN}`]: ['p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC'],
-    [`mx:send.${DOMAIN}`]: [{ exchange: 'feedback-smtp.eu-west-1.amazonses.com', priority: 10 }],
-    [`txt:send.${DOMAIN}`]: ['v=spf1 include:amazonses.com ~all'],
+    [`cname:send.${DOMAIN}`]: ['send.forge.rmta.net'],
+    [`cname:rsend.${DOMAIN}`]: ['rsend-euw1.forge.rmta.net'],
     [`txt:_dmarc.${DOMAIN}`]: ['v=DMARC1; p=none;'],
   };
-  for (const [key, value] of Object.entries(overrides)) records[key] = value;
+  for (const [key, value] of Object.entries(overrides)) records[key] = value ?? [];
   return {
-    txt: async (name) => (records[`txt:${name}`] as string[] | undefined) ?? [],
-    mx: async (name) => (records[`mx:${name}`] as { exchange: string; priority: number }[] | undefined) ?? [],
+    txt: async (name) => records[`txt:${name}`] ?? [],
+    cname: async (name) => records[`cname:${name}`] ?? [],
   };
 }
 
@@ -41,15 +42,20 @@ const api = (domain: Partial<ResendDomain> | null = {}, others: ResendDomain[] =
 });
 
 describe('email:check — DNS (keyless, the preflight’s)', () => {
-  it('passes when DKIM, the return-path MX and SPF, and DMARC are published', async () => {
+  it("passes when DKIM, Forge's two return-path CNAMEs and DMARC are published", async () => {
     expect(await checkEmailDns(DOMAIN, dns())).toEqual([]);
+  });
+
+  it('accepts a CNAME target written with its trailing dot or in capitals', async () => {
+    expect(await checkEmailDns(DOMAIN, dns({ [`cname:send.${DOMAIN}`]: ['SEND.forge.rmta.net.'] }))).toEqual([]);
   });
 
   it.each([
     [`txt:resend._domainkey.${DOMAIN}`, [], 'DKIM'],
-    [`mx:send.${DOMAIN}`, [], 'MX'],
-    [`mx:send.${DOMAIN}`, [{ exchange: 'feedback-smtp.us-east-1.amazonses.com', priority: 10 }], 'eu-west-1'],
-    [`txt:send.${DOMAIN}`, ['v=spf1 -all'], 'SPF'],
+    [`cname:send.${DOMAIN}`, [], 'send.forge.rmta.net'],
+    [`cname:send.${DOMAIN}`, ['feedback-smtp.eu-west-1.amazonses.com'], 'send.forge.rmta.net'],
+    [`cname:rsend.${DOMAIN}`, [], 'rsend-euw1.forge.rmta.net'],
+    [`cname:rsend.${DOMAIN}`, ['rsend-use1.forge.rmta.net'], 'eu-west-1'],
     [`txt:_dmarc.${DOMAIN}`, [], 'DMARC'],
   ] as const)('fails when %s is %j', async (key, value, word) => {
     const problems = await checkEmailDns(DOMAIN, dns({ [key]: value as never }));
