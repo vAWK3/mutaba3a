@@ -92,6 +92,15 @@
   .hp-trial-banner-hide { flex-basis: 100%; text-align: start; }
 }
 
+/* MUT-370: Home's "Add a passkey" suggestion, under the trial banner. The actions wrap under the text on a phone. */
+.hp-passkey-suggest .hp-passkey-icon { flex: none; color: var(--accent-2); }
+.hp-passkey-suggest-body { display: grid; gap: var(--space-1); min-width: 0; flex: 1; }
+.hp-passkey-suggest-body p { margin: 0; }
+.hp-passkey-suggest-title { font-weight: var(--weight-medium); }
+.hp-passkey-suggest-note { color: var(--muted); font-size: var(--text-label); }
+.hp-passkey-suggest-problem { color: var(--error); font-size: var(--text-label); }
+.hp-passkey-suggest-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-block-start: var(--space-1); }
+
 /* MUT-361: the lapse gate. A failed payment (warning) or a read-only profile above every page; a locked profile's one page. */
 .hp-banner-warning { background: var(--warning-subtle); border: 1px solid var(--warning-muted); }
 .hp-banner-warning .hp-banner-icon { color: var(--warning); }
