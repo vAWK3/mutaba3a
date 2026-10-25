@@ -18,13 +18,29 @@
 
 ## Open Debt
 
-### TD-249: Phone builds from before MUT-262 keep their token through a password change
+### TD-251: Phone builds from before MUT-262 keep their token through a password change
 **Status**: Open
-**Ticket**: MUT-262 (ADR-193 D1); closes with MUT-293's minimum build
+**Ticket**: MUT-262 (ADR-194 D1); closes with MUT-293's minimum build
 **Added**: 2026-10-25
 **Priority**: Low
 **Impact**: device rotation is opt-in (`rotateToken: true`), so a MUT-238 build that changes the password keeps its session and token, the gap TD-158 described, until the person updates the app. Portal sessions and rotating phone builds are covered.
 **Fix**: raise the iOS/Android minimum build (MUT-293, `server/src/auth/minimum-build.ts`) past the first rotating build; then the server may rotate every device change and drop the opt-in.
+
+### TD-249: Five landing QA specs fail on main, outside Get it
+**Status**: Open
+**Ticket**: none yet (found 2026-10-25 during the Get it redesign)
+**Added**: 2026-10-25
+**Priority**: Medium
+**Impact**: Run against this checkout's dev server, `web.landing.375` (EN 375: "wordmark clipped: 105px in 90px" in the bar), `web.landing.phone` (EN and AR: `Cannot read properties of undefined (reading 'platform')` in the spec's store-link setup) and `web.brand.link-hover` landing cases (light and dark: `a.hero-cta-alt` now matches 3 links, strict mode) fail. None touch Get it; all other landing specs pass.
+**Fix**: shrink or let the bar's MTB3A wordmark breathe at 375 EN; update the phone spec to the current `MOBILE_APP_LINKS` shape; scope the hover spec's hero alt link (`.first()` or by name).
+
+### TD-250: Portal receipt thumbnails are the full-size originals
+**Status**: Open
+**Ticket**: MUT-260 (D5)
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: Each image card in Expenses › Receipts loads the receipt's original (a phone photo, often 2–4 MB) once it scrolls into view. Lazy loading and the 24-card page keep it bounded, but a slow connection pays for full photos to draw 160px tiles.
+**Fix**: server-side thumbnails (a small JPEG made at complete time, its own signed URL), used by the gallery; the review page keeps the original.
 
 ### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
 **Status**: Accepted
@@ -788,7 +804,7 @@
 **Fix**: a store-level "write + audit" in one transaction (Prisma `$transaction`; the memory store already applies both synchronously), adopted route by route, starting with the money-moving edits.
 
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
-**Status**: Resolved (2026-10-25, MUT-262, ADR-193: the caller's session is rotated in the change's transaction; cookie always, device on `rotateToken: true`. Old phone builds: TD-249)
+**Status**: Resolved (2026-10-25, MUT-262, ADR-194: the caller's session is rotated in the change's transaction; cookie always, device on `rotateToken: true`. Old phone builds: TD-251)
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
 **Added**: 2026-10-16
 **Priority**: Low (needs a stolen token, and the person to change the password from the very session that leaked)

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Input, Select, Textarea } from '../../../components/ui/Input';
-import '../../../components/ui/Button.css';
 import { useLanguage, useT } from '../../../lib/i18n';
 import { isolate } from '../../../lib/utils';
 import {
@@ -217,7 +216,7 @@ export function HostedRequestForm({ titleId }: { titleId: string }) {
           {t(`${T}.form.errorAlert`)}
         </p>
       )}
-      <button type="submit" className="btn btn-primary btn-lg hosted-submit" disabled={sending}>
+      <button type="submit" className="hosted-submit" disabled={sending}>
         {t(`${T}.form.${sending ? 'sending' : status === 'error' ? 'retry' : 'send'}`)}
       </button>
       <p className="hosted-notice">

@@ -331,7 +331,7 @@ test('the download page renders with the landing bar and footer, not the app’s
   expect(errors).toEqual([]);
 });
 
-test('the hosted offer page explains the trade, then takes a request through every state (MUT-186)', { tag: '@web.landing.hosted' }, async ({ page, step }) => {
+test('Get it takes a request through every state in its card: two fields a row, errors, retry, success (MUT-186, redesign 2026-10-25)', { tag: '@web.landing.get-it-form' }, async ({ page, step }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const posts: string[] = [];
@@ -340,30 +340,36 @@ test('the hosted offer page explains the trade, then takes a request through eve
     posts.push(route.request().postData() ?? '');
     await route.fulfill({ status: answer, body: '' });
   });
+  const getIt = page.locator('[data-part="get-it"]');
+  const card = getIt.locator('[data-part="get-it-request"]');
 
-  await preferLanguage(page, 'en');
-
-  await step('it renders in landing chrome and passes axe in light and dark', async () => {
+  await step('Open the landing at Get MTB3A: the request card comes before sign-in and the apps, and passes axe in light and dark', async () => {
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
-      await page.goto('/hosted');
-      await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
-      await expect(page.getByRole('table')).toBeVisible();
-      await expect(page.locator('.topbar')).toHaveCount(0);
+      await openLanding(page, 'en');
+      await card.scrollIntoViewIfNeeded();
+      await expect(card.getByRole('heading', { name: en.landing.getIt.requestCta })).toBeVisible();
       await expectOnlyKnownAxeViolations(page, 'landing');
     }
     await page.emulateMedia({ colorScheme: 'light' });
-    await attachScreenshot(page, 'hosted-en');
+    const cardBox = (await card.boundingBox())!;
+    const tiles = getIt.locator('a.landing-get-it-option');
+    if ((await tiles.count()) > 0) expect((await tiles.first().boundingBox())!.y).toBeGreaterThan(cardBox.y + cardBox.height);
+    const name = (await page.getByLabel('Name', { exact: true }).boundingBox())!;
+    const email = (await page.getByLabel('Email', { exact: true }).boundingBox())!;
+    expect(Math.round(name.y)).toBe(Math.round(email.y));
+    await expect(page.locator('.hosted-devices-field')).toHaveCSS('border-top-style', 'none');
+    await attachScreenshot(page, 'get-it-form-en');
   });
 
-  await step('an empty request is stopped with both errors and focus on the name', async () => {
+  await step('Press Send request with nothing filled in: both errors show and the name is focused', async () => {
     await page.getByRole('button', { name: 'Send request' }).click();
     await expect(page.getByText('Enter your name.')).toBeVisible();
     await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
     expect(posts).toHaveLength(0);
   });
 
-  await step('a failed send keeps the answers and shows the alert beside Try again', async () => {
+  await step('Fill in a name and email and send while the server fails: the answers stay and the alert shows beside Try again', async () => {
     answer = 500;
     await page.getByLabel('Name', { exact: true }).fill('QA Visitor');
     await page.getByLabel('Email', { exact: true }).fill('qa.visitor@example.test');
@@ -371,9 +377,10 @@ test('the hosted offer page explains the trade, then takes a request through eve
     await expect(page.getByRole('alert')).toContainText("Couldn't send");
     await expect(page.getByRole('button', { name: 'Try again' })).toBeInViewport();
     await expect(page.getByRole('alert')).toBeInViewport();
+    await attachScreenshot(page, 'get-it-form-error-en');
   });
 
-  await step('a retry that lands confirms with the visitor’s own email, focused', async () => {
+  await step('Press Try again once the server answers: the card confirms with the visitor’s own email, focused', async () => {
     answer = 200;
     await page.getByRole('button', { name: 'Try again' }).click();
     const heading = page.getByRole('heading', { name: 'Request sent.' });
@@ -383,75 +390,43 @@ test('the hosted offer page explains the trade, then takes a request through eve
     expect(body.get('form-name')).toBe('hosted-request');
     expect(body.get('language')).toBe('en');
     expect(posts).toHaveLength(2);
+    await attachScreenshot(page, 'get-it-form-sent-en');
   });
 
   expect(errors).toEqual([]);
 });
 
-test('at 375 in Arabic the hosted page fits, stacks the comparison and keeps 44px device pills', { tag: '@web.landing.hosted-375' }, async ({ page }) => {
-  await page.setViewportSize({ width: 375, height: 812 });
-  await page.addInitScript(() => localStorage.setItem('mutaba3a-language', 'ar'));
-  await page.goto('/hosted');
-  await expect(page.getByRole('heading', { level: 1, name: ar.landing.hostedOffer.hero.title })).toBeVisible();
-  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await expectNoHorizontalOverflow(page, 'hosted 375 ar');
-  await expect(page.locator('.hosted-devices-laptop')).toBeHidden();
-  await expect(page.locator('.hosted-devices-phone')).toBeVisible();
-  await expect(page.locator('.hosted-compare-table thead')).toBeHidden();
-  const rowHeader = page.getByRole('rowheader').first();
-  const row = rowHeader.locator('xpath=..');
-  expect(Math.round((await rowHeader.boundingBox())!.width)).toBe(Math.round((await row.boundingBox())!.width));
-  for (const pill of await page.locator('.hosted-device-pill').all()) {
-    expect((await pill.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-  }
-  await attachScreenshot(page, 'hosted-ar-375');
+test('At 375 in Arabic, Get it fits: one field a row, 44px device pills, a full-width send and stacked app tiles', { tag: '@web.landing.get-it-375' }, async ({ page, step }) => {
+  await step('Open the landing in Arabic at 375 px and scroll to the request card', async () => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openLanding(page, 'ar');
+    await page.locator('[data-part="get-it-request"]').scrollIntoViewIfNeeded();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expectNoHorizontalOverflow(page, 'get it 375 ar');
+  });
+
+  await step('Fields stack one a row; the device pills and the send button are touch-sized', async () => {
+    const name = (await page.locator('#hosted-name').boundingBox())!;
+    const email = (await page.locator('#hosted-email').boundingBox())!;
+    expect(email.y).toBeGreaterThan(name.y + name.height);
+    for (const pill of await page.locator('.hosted-device-pill').all()) {
+      expect((await pill.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    const send = (await page.locator('.hosted-submit').boundingBox())!;
+    const form = (await page.locator('.hosted-form').boundingBox())!;
+    expect(send.height).toBeGreaterThanOrEqual(44);
+    expect(Math.round(send.width)).toBe(Math.round(form.width));
+  });
+
+  await step('The app tiles stack under the card, each a full row', async () => {
+    const tiles = page.locator('.landing-get-it-apps a.landing-get-it-option');
+    if ((await tiles.count()) === 2) {
+      const [first, second] = [(await tiles.nth(0).boundingBox())!, (await tiles.nth(1).boundingBox())!];
+      expect(second.y).toBeGreaterThan(first.y + first.height - 1);
+    }
+    await attachScreenshot(page, 'get-it-ar-375');
+  });
 });
-
-test('a /hosted link that gained a trailing slash still opens the offer page', { tag: '@web.landing.hosted-slash' }, async ({ page }) => {
-  await preferLanguage(page, 'en');
-  await page.goto('/hosted/');
-  await expect(page.getByRole('heading', { level: 1, name: 'Your records, on every device.' })).toBeVisible();
-  await expect(page.locator('input[name="bot-field"]')).toBeHidden();
-});
-
-for (const language of ['en', 'ar'] as const) {
-  test(
-    `${language === 'en' ? 'English' : 'Arabic'}: Get it states the paid half and its button opens /hosted (MUT-172)`,
-    { tag: '@web.landing.get-it-paid' },
-    async ({ page, step }) => {
-      const copy = (language === 'ar' ? ar : en).landing.getIt.paid as { lead: string; cta: string };
-      const block = page.locator('[data-part="get-it-paid"]');
-      const cta = block.getByRole('link', { name: copy.cta });
-
-      await step('The lines under the three app cards state the split', async () => {
-        await openLanding(page, language);
-        await block.scrollIntoViewIfNeeded();
-        await expect(block.getByText(copy.lead)).toBeVisible();
-        await expect(block.getByRole('link')).toHaveCount(1);
-        await expect(cta).toHaveAttribute('href', '/hosted');
-        await expect(cta).not.toHaveAttribute('target', /./);
-        expect((await cta.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-        await attachScreenshot(page, `get-it-paid-${language}`);
-      });
-
-      await step('The button presses and keeps its colour on hover, like every landing control', async () => {
-        await expectPressed(page, cta, 'scale', PRESSED, 'paid CTA');
-        const before = await readColours(cta);
-        await cta.hover();
-        await expect.poll(() => cta.evaluate((el) => el.matches(':hover'))).toBe(true);
-        const after = await readColours(cta);
-        expect(after.color).toBe(before.color);
-        expect(after.decoration).toBe('none');
-      });
-
-      await step('It opens /hosted in the same tab', async () => {
-        await cta.click();
-        await expect(page).toHaveURL(/\/hosted$/);
-        await expect(page.locator('#hosted-title')).toBeVisible();
-      });
-    },
-  );
-}
 
 for (const language of ['en', 'ar'] as const) {
   test(

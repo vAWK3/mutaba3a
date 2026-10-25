@@ -436,6 +436,19 @@ describe('access and configuration', () => {
     expect((await h.app.request('/v1/receipts/00000000-0000-4000-8000-0000000000dd', { method: 'DELETE', headers: as() })).status).toBe(404);
   });
 
+  it('signs an inline URL only when asked (MUT-260 D3), and refuses an unknown disposition', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as());
+    const plain = await read(await h.app.request(`/v1/receipts/${receipt.id}/download`, { headers: as() }));
+    expect(plain.url).not.toContain('disposition=inline');
+    const attachment = await read(await h.app.request(`/v1/receipts/${receipt.id}/download?disposition=attachment`, { headers: as() }));
+    expect(attachment.url).not.toContain('disposition=inline');
+    const inline = await read(await h.app.request(`/v1/receipts/${receipt.id}/download?disposition=inline`, { headers: as() }));
+    expect(inline).toMatchObject({ filename: 'cafe.jpg', mimeType: 'image/jpeg' });
+    expect(inline.url).toContain('disposition=inline');
+    expect((await h.app.request(`/v1/receipts/${receipt.id}/download?disposition=frame`, { headers: as() })).status).toBe(422);
+  });
+
   it('keeps the MUT-44 flow: a receipt attached to an existing expense is FILED from the start (AC4)', async () => {
     const { h, as } = await setup();
     const expense = await read(await h.app.request('/v1/expenses', json(approveBody, { ...as(), ...idem() })));

@@ -58,6 +58,14 @@ export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
 export type UpdateExpenseRequest = Schemas['UpdateExpenseRequest'];
 export type CreateReceiptUploadRequest = Schemas['CreateReceiptUploadRequest'];
 export type CreateReceiptUploadResponse = Schemas['CreateReceiptUploadResponse'];
+/** MUT-260: the receipts library (MUT-255's /v1/receipts). */
+export type ReceiptListItem = Schemas['ReceiptListItem'];
+export type ReceiptCounts = Schemas['ReceiptCounts'];
+export type ReceiptFilingStatus = Schemas['ReceiptFilingStatus'];
+export type ReceiptDisposition = 'attachment' | 'inline';
+export type ApproveReceiptRequest = Schemas['ApproveReceiptRequest'];
+export type ApproveReceiptResponse = Schemas['ApproveReceiptResponse'];
+export type CreateLibraryReceiptUploadRequest = Schemas['CreateLibraryReceiptUploadRequest'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
 export type UpdateConversionRequest = Schemas['UpdateConversionRequest'];
@@ -567,6 +575,28 @@ export const api = {
       `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId },
     ),
+
+  // The receipts library (MUT-260 over MUT-255's routes): session-only, hosted only (404 signed out or with the
+  // library off, which is how the portal learns it is off, D4). Upload start and approve carry Idempotency-Keys.
+  listReceipts: (profileId: string, query: Query<'/v1/receipts'> = {}) =>
+    request<Get<'/v1/receipts'>>('GET', '/v1/receipts', { profileId, query }),
+  receiptCounts: (profileId: string) => request<ReceiptCounts>('GET', '/v1/receipts/counts', { profileId }),
+  getReceipt: (profileId: string, receiptId: string) =>
+    request<ExpenseReceipt>('GET', `/v1/receipts/${encodeURIComponent(receiptId)}`, { profileId }),
+  libraryReceiptDownload: (profileId: string, receiptId: string, disposition: ReceiptDisposition = 'attachment') =>
+    request<Get<'/v1/receipts/{receiptId}/download'>>('GET', `/v1/receipts/${encodeURIComponent(receiptId)}/download`, {
+      profileId,
+      query: disposition === 'inline' ? { disposition } : {},
+    }),
+  startLibraryUpload: (profileId: string, body: CreateLibraryReceiptUploadRequest, idempotencyKey: string) =>
+    request<CreateReceiptUploadResponse>('POST', '/v1/receipts/uploads', { profileId, body, idempotencyKey }),
+  completeLibraryReceipt: (profileId: string, receiptId: string) =>
+    request<ExpenseReceipt>('POST', `/v1/receipts/${encodeURIComponent(receiptId)}/complete`, { profileId }),
+  /** A4: the best-effort cleanup after a failed PUT or complete, so a PENDING row doesn't hold the pending cap. */
+  deleteLibraryReceipt: (profileId: string, receiptId: string) =>
+    request<void>('DELETE', `/v1/receipts/${encodeURIComponent(receiptId)}`, { profileId }),
+  approveReceipt: (profileId: string, receiptId: string, body: ApproveReceiptRequest, idempotencyKey: string) =>
+    request<ApproveReceiptResponse>('POST', `/v1/receipts/${encodeURIComponent(receiptId)}/approve`, { profileId, body, idempotencyKey }),
 
   // Income (MUT-133) — personal profiles only (data/incomeAffordances.ts). Both writes carry an
   // attempt-scoped Idempotency-Key (data/attemptKey.ts), never one minted per click.

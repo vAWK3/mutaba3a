@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.71.0-mut262
+  version: 1.72.0-mut262
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -17187,6 +17187,7 @@ paths:
       tags:
         - Receipts
       summary: A short-lived signed download URL for a READY receipt
+      description: "`disposition=inline` (MUT-260) signs a URL that displays the file instead of saving it, for the portal's preview. The response type is always the stored one: PDF, JPEG or PNG."
       security:
         - session: []
         - deviceSession: []
@@ -17197,6 +17198,17 @@ paths:
           required: true
           name: receiptId
           in: path
+        - schema:
+            type: string
+            enum:
+              - attachment
+              - inline
+            default: attachment
+            description: "How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260."
+          required: false
+          description: "How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260."
+          name: disposition
+          in: query
       responses:
         "200":
           description: Signed URL

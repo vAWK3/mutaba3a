@@ -526,10 +526,12 @@
           "download": "Download",
           "preparing": "Preparing…",
           "invalidType": "Receipts must be a PDF, JPEG or PNG file.",
+          "empty": "Receipts can't be empty files.",
           "tooLarge": "Receipts can be at most 10 MB.",
           "uploadFailed": "Couldn't upload the receipt. Try again.",
           "downloadFailed": "Couldn't prepare the download. Try again.",
-          "deleteFailed": "Couldn't remove the receipt. Try again."
+          "deleteFailed": "Couldn't remove the receipt. Try again.",
+          "badName": "This file's name can't be used. Rename it (no slashes, at most 200 characters) and try again."
         }
       },
       "errors": {
@@ -831,6 +833,8 @@
       "sectionsLabel": "Expenses pages",
       "tabExpenses": "Expenses",
       "tabGroups": "Groups",
+      "tabReceipts": "Receipts",
+      "tabReceiptsCount": "Receipts · {count} to review",
       "new": "New group",
       "listLabel": "Expense groups",
       "status": {
@@ -990,6 +994,81 @@
       },
       "nothingYet": "nothing yet",
       "crumbLabel": "Breadcrumb"
+    },
+    "receipts": {
+      "listLabel": "Receipts",
+      "upload": "Upload receipt",
+      "uploading": "Uploading…",
+      "uploadingName": "Uploading {name}",
+      "status": {
+        "to_review": "To review",
+        "filed": "Filed",
+        "all": "All"
+      },
+      "pdf": "PDF",
+      "received": "Uploaded {date}",
+      "open": "Open {name}",
+      "empty": {
+        "to_review": {
+          "title": "Nothing to review",
+          "body": "Receipts you share from your phone or upload here wait in To review until you file them."
+        },
+        "filed": {
+          "title": "No filed receipts yet",
+          "body": "A receipt moves here once you approve it into an expense."
+        },
+        "all": {
+          "title": "No receipts yet",
+          "body": "Share a receipt from your phone, or upload a PDF, JPEG or PNG here."
+        }
+      },
+      "unavailable": {
+        "title": "Receipts aren't available here",
+        "body": "The receipts library isn't turned on for this account."
+      },
+      "uploaded": {
+        "one": "{count} receipt added to To review",
+        "other": "{count} receipts added to To review"
+      },
+      "errors": {
+        "invalidType": "{name}: receipts must be a PDF, JPEG or PNG file.",
+        "empty": "{name}: the file is empty.",
+        "tooLarge": "{name}: receipts can be at most 10 MB.",
+        "badName": "{name}: this file's name can't be used. Rename it (no slashes, at most 200 characters).",
+        "tooManyPending": "Too many unfinished uploads. Finish or remove them, then try again.",
+        "rateLimited": "Too many uploads at once. Try again in {seconds} s.",
+        "storage": "Receipt storage isn't available right now. Try again later.",
+        "uploadFailed": "Couldn't upload {name}. Try again.",
+        "notReady": "This receipt hasn't finished uploading, so it can't be filed yet. Try again in a moment.",
+        "previewFailed": "Couldn't load the receipt."
+      },
+      "review": {
+        "back": "Receipts",
+        "title": "Review receipt",
+        "filedTitle": "Filed receipt",
+        "fromReceipt": "From the receipt",
+        "fromReceiptUnsure": "From the receipt — check it",
+        "receiptSays": "The receipt says {currency} {amount}",
+        "receiptSaysCurrency": "The receipt says {currency}",
+        "approve": "Approve and file",
+        "approving": "Filing…",
+        "next": "Next receipt",
+        "filed": "Filed",
+        "alreadyFiled": "This receipt is already filed.",
+        "openExpense": "Open expense",
+        "onExpense": "Filed on this expense",
+        "notFound": {
+          "title": "This receipt isn't here",
+          "body": "It may have been deleted, or it belongs to another profile."
+        }
+      },
+      "preview": {
+        "label": "Receipt {name}",
+        "fit": "Fit to screen",
+        "actual": "Actual size",
+        "openFull": "Open full size",
+        "pdfTitle": "Receipt {name} (PDF)"
+      }
     },
     "firm": {
       "banner": {

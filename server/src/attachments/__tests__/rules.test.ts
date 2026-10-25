@@ -25,6 +25,11 @@ describe('attachment rules', () => {
     expect(storageKey('org1', 'att1')).not.toContain('.pdf');
     expect(contentDisposition('فاتورة "A".pdf')).toBe(`attachment; filename="______ _A_.pdf"; filename*=UTF-8''${encodeURIComponent('فاتورة "A".pdf')}`);
   });
+
+  it('an inline disposition keeps the same filename parts (MUT-260 D3)', () => {
+    expect(contentDisposition('r.pdf', 'inline')).toBe(`inline; filename="r.pdf"; filename*=UTF-8''r.pdf`);
+    expect(contentDisposition('r.pdf', 'attachment')).toBe(contentDisposition('r.pdf'));
+  });
 });
 
 describe('file rules shared with expense receipts (MUT-42)', () => {

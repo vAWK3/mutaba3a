@@ -13,7 +13,7 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ReportsPage } from './pages/views/ReportsPage';
 import { ClientsPage } from './pages/views/ClientsPage';
@@ -25,6 +25,8 @@ import { ExpensesPage } from './pages/views/ExpensesList';
 import { ConversionsPage } from './pages/views/ConversionsList';
 import { ExpenseGroupsPage } from './pages/views/ExpenseGroupsList';
 import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
+import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
+import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { HostedShell } from './shell/HostedShell';
 import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
@@ -224,6 +226,28 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
+  /** Expenses › Receipts (MUT-260 D1): the library's gallery, a tab inside Expenses like Groups. */
+  const receiptsRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/expenses/receipts',
+    validateSearch: parseReceiptsPage,
+    component: function Receipts() {
+      return <ReceiptsGallery search={omitShellOverlay(receiptsRoute.useSearch())} setSearch={useReplaceSearch()} />;
+    },
+  });
+
+  const receiptRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/expenses/receipts/$receiptId',
+    component: function Receipt() {
+      const { receiptId } = receiptRoute.useParams();
+      // Keyed: another receipt starts a fresh form and attempt key (A2)
+      return <ReceiptReviewPage key={receiptId} receiptId={receiptId} />;
+    },
+  });
+
   const conversionsRoute = createRoute({
     getParentRoute: () => profileRoute,
     ...PAGE_CRASH,
@@ -288,6 +312,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         expensesRoute,
         groupsRoute,
         groupRoute,
+        receiptsRoute,
+        receiptRoute,
         conversionsRoute,
         ...youRoutes.map((route) => route.inProfile),
       ]),

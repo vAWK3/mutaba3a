@@ -3760,7 +3760,23 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
 | Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |
 
-## MUT-262 — a password change rotates the caller's session (2026-10-25, ADR-193)
+## Landing Get it redesign (2026-10-25)
+
+| Layer | Coverage | Run |
+|---|---|---|
+| Landing unit | `LandingPage.test.tsx`: the request card comes before sign-in and the apps while signup is closed; the note comes before the card while it is open | `npm run test:run` |
+| Release-QA | `web.landing.get-it-form` (card first, two fields a row, no fieldset box, axe light+dark, empty → errors, failure → alert beside Try again, retry → success focused) and `web.landing.get-it-375` (Arabic 375: no overflow, fields stack, 44px pills, full-width send, stacked app tiles). Both passing 2026-10-25 against this checkout's dev server (`QA_CONTEXT` → :5180) | `release-qa run --app web --only get-it-form,get-it-375` |
+
+## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-193)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server | `attachments/__tests__/rules.test.ts` (inline disposition), `local-storage.test.ts` (the `d` claim; absent = attachment), `routes-receipts.test.ts` (`?disposition=inline` signs inline; unknown → 422), `routes-dev-attachments.test.ts` (inline PDF: no sandbox, no portal CSP, nosniff; attachment keeps sandbox), `portal.test.ts` (CSP string) | `npm --prefix server test` |
+| Portal unit | `lib/__tests__/receiptSuggestion.test.ts` (JOD 3dp, ILS 2dp, unsupported currency, missing fields, date only, ignored fields), `data/__tests__/receiptQueries.test.ts` (file rules, filter mapping, next receipt, 404/503 off, the two 429s, upload sequence + cleanup) | `npm run test:run` |
+| Portal pages | `pages/__tests__/Receipts.test.tsx` (21: tab + count, 404/503 hide, gallery filter/counts/PDF tile/lazy image, upload + refusals + 429, read-only, prefill + hints, unsupported currency, inline image/PDF, approve body without `suggested` + next, last → gallery, 409 → Filed view, 422 banner, network keeps the key, filed by link, not found); the drawer's own tests guard the extraction | `npm run test:run` |
+| Release-QA | `portal.receipts.gallery`, `.upload`, `.review-approve`, `.filed`, `.unavailable`, `portal.direction.receipts-review-ar`; `portal.expenses` re-run for the extraction | `release-qa release --only portal.receipts,portal.direction.receipts-review-ar,portal.expenses` |
+
+## MUT-262 — a password change rotates the caller's session (2026-10-25, ADR-194)
 
 Every new test advances the clock between sign-in and the change (AC6). Each was seen failing before its code.
 
@@ -3769,7 +3785,7 @@ Every new test advances the clock between sign-in and the change (AC6). Each was
 | `server/src/repositories/__tests__/store-contract-change-password.ts` (memory + Postgres) | Contract | +5 each | rotation revokes the kept session `password_rotated` and opens a live one under the new digest with the same kind, agent, passkey and absolute deadline; idle clamped to the absolute deadline; a duplicate digest fails the whole change with nothing written (AC5); the passkey carries over; a second change loses to a rotating first and a rotated-out session can't be kept. The MUT-237 cases stay unedited (no `rotation`) |
 | `server/src/__tests__/routes-sessions.test.ts` | Route | +7, 5 changed | cookie Max-Age = time left to the absolute deadline; cookie rotates with or without `rotateToken`, never a body; device + `rotateToken` → 200 `{token}` (`mds_`), old bearer 401 on `/v1/me` and a profile route, new 200, audit `tokenRotated: true`; device without it → 204 and kept (`tokenRotated: false`); `rotateToken: false` → 422; an old-token request whose session read precedes the commit gets 401 and the new session stays live (D2); a failed change rotates nothing. The five MUT-237 cookie cases now continue on the new cookie |
 | `server/src/__tests__/routes-passkeys.test.ts` | Route | +1, 1 changed | a passkey-opened session rotates and removing that passkey still revokes the new one |
-| `server/src/__tests__/routes-m{2,3,4,5,6,8}.test.ts` | Contract | changed | API version `1.71.0-mut262` |
+| `server/src/__tests__/routes-m{2,3,4,5,6,8}.test.ts` | Contract | changed | API version `1.72.0-mut262` |
 | `src/hosted/api/__tests__/client.test.ts` | Unit | +5 | a 401 on a request sent before the change answered is ignored; one landing mid-change is held and ignored on success, passed on if the change fails; a 401 after the change ends the session; the change's own 401 doesn't wait on itself |
 | `src/hosted/components/__tests__/ChangePasswordDrawer.test.tsx` | Component | +1 | a successful change re-reads queries (`GET /v1/me` again) |
 | `qa/specs/portal-selfservice/account.spec.ts` | Release-QA (live API) | 1 | `@portal-selfservice.account.rotate-on-change`: still signed in after the change under a new cookie; the old value gets 401 |

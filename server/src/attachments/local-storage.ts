@@ -6,8 +6,8 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeWebReadableStream } from 'node:stream/web';
 import { getContext } from 'hono/context-storage';
-import { contentDisposition } from './rules.js';
-import type { AttachmentStorage, SignedUrl, StoredObject } from './storage.js';
+import { contentDisposition, type DownloadDisposition } from './rules.js';
+import type { AttachmentStorage, SignDownloadInput, SignedUrl, StoredObject } from './storage.js';
 
 /**
  * MUT-396: attachment bytes on local disk, for the dev server and local QA only (ATTACHMENTS_DRIVER=local; config
@@ -45,6 +45,8 @@ interface GetClaims {
   e: number;
   m: string;
   f: string;
+  /** MUT-260 (A12): 'inline' for a portal preview; absent means attachment, so tokens signed before it still work. */
+  d?: 'inline';
 }
 type Claims = PutClaims | GetClaims;
 
@@ -82,10 +84,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     return { url, expiresAt, headers: { 'Content-Type': input.mimeType, 'x-goog-content-length-range': `0,${input.sizeBytes}` } };
   }
 
-  async signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }): Promise<SignedUrl> {
+  async signDownload(key: string, input: SignDownloadInput): Promise<SignedUrl> {
     this.pathOf(key);
     const expiresAt = new Date(input.now.getTime() + input.ttlSeconds * 1000);
-    return { url: this.url({ a: 'get', k: key, e: expiresAt.getTime(), m: input.mimeType, f: input.filename }), expiresAt };
+    const claims: GetClaims = { a: 'get', k: key, e: expiresAt.getTime(), m: input.mimeType, f: input.filename, ...(input.disposition === 'inline' ? { d: 'inline' as const } : {}) };
+    return { url: this.url(claims), expiresAt };
   }
 
   async head(key: string): Promise<StoredObject | null> {
@@ -140,7 +143,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
    * first and its size read from that handle, so a remove or re-upload in between can't send a 200 with the wrong
    * length; the stream owns the handle from then on. `withBody: false` (HEAD) answers from the handle and closes it.
    */
-  async openDownload(token: string, now: Date, options: { withBody?: boolean } = {}): Promise<{ body: ReadableStream<Uint8Array> | null; mimeType: string; contentDisposition: string; sizeBytes: number }> {
+  async openDownload(
+    token: string,
+    now: Date,
+    options: { withBody?: boolean } = {},
+  ): Promise<{ body: ReadableStream<Uint8Array> | null; mimeType: string; contentDisposition: string; disposition: DownloadDisposition; sizeBytes: number }> {
     const claims = this.verify(token, 'get', now);
     const handle = await open(this.pathOf(claims.k), 'r').catch(() => null);
     if (!handle) throw new LocalStorageError(404, 'No such object');
@@ -149,7 +156,8 @@ export class LocalAttachmentStorage implements AttachmentStorage {
       await handle.close();
       throw new LocalStorageError(404, 'No such object');
     }
-    const meta = { mimeType: claims.m, contentDisposition: contentDisposition(claims.f), sizeBytes: info.size };
+    const disposition: DownloadDisposition = claims.d === 'inline' ? 'inline' : 'attachment';
+    const meta = { mimeType: claims.m, contentDisposition: contentDisposition(claims.f, disposition), disposition, sizeBytes: info.size };
     if (options.withBody === false) {
       await handle.close();
       return { body: null, ...meta };

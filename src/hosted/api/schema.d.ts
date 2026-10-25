@@ -12387,10 +12387,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A short-lived signed download URL for a READY receipt */
+        /**
+         * A short-lived signed download URL for a READY receipt
+         * @description `disposition=inline` (MUT-260) signs a URL that displays the file instead of saving it, for the portal's preview. The response type is always the stored one: PDF, JPEG or PNG.
+         */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260. */
+                    disposition?: "attachment" | "inline";
+                };
                 header?: never;
                 path: {
                     receiptId: string;

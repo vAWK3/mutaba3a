@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
-import { contentDisposition } from './rules.js';
+import { contentDisposition, type DownloadDisposition } from './rules.js';
 
 /**
  * Where attachment bytes live (M6 brief §4). The API never streams files: it
@@ -14,6 +14,15 @@ export interface SignedUrl {
   expiresAt: Date;
 }
 
+/** MUT-260 (A12): what signDownload takes. `disposition` absent means attachment, as before. */
+export interface SignDownloadInput {
+  filename: string;
+  mimeType: string;
+  ttlSeconds: number;
+  now: Date;
+  disposition?: DownloadDisposition;
+}
+
 export interface StoredObject {
   sizeBytes: number;
   contentType: string | null;
@@ -21,7 +30,7 @@ export interface StoredObject {
 
 export interface AttachmentStorage {
   signUpload(key: string, input: { mimeType: string; sizeBytes: number; ttlSeconds: number; now: Date }): Promise<SignedUrl & { headers: Record<string, string> }>;
-  signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }): Promise<SignedUrl>;
+  signDownload(key: string, input: SignDownloadInput): Promise<SignedUrl>;
   head(key: string): Promise<StoredObject | null>;
   remove(key: string): Promise<void>;
   /**
@@ -56,12 +65,12 @@ export class GcsAttachmentStorage implements AttachmentStorage {
     return { url, expiresAt, headers: { 'Content-Type': input.mimeType, 'x-goog-content-length-range': `0,${input.sizeBytes}` } };
   }
 
-  async signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }) {
+  async signDownload(key: string, input: SignDownloadInput) {
     const expiresAt = new Date(input.now.getTime() + input.ttlSeconds * 1000);
     const [url] = await this.storage
       .bucket(this.bucket)
       .file(key)
-      .getSignedUrl({ version: 'v4', action: 'read', expires: expiresAt, responseDisposition: contentDisposition(input.filename), responseType: input.mimeType });
+      .getSignedUrl({ version: 'v4', action: 'read', expires: expiresAt, responseDisposition: contentDisposition(input.filename, input.disposition), responseType: input.mimeType });
     return { url, expiresAt };
   }
 
@@ -106,9 +115,9 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
     return { url: `memory://upload/${key}?expires=${expiresAt.getTime()}`, expiresAt, headers: { 'Content-Type': input.mimeType, 'x-goog-content-length-range': `0,${input.sizeBytes}` } };
   }
 
-  async signDownload(key: string, input: { filename: string; mimeType: string; ttlSeconds: number; now: Date }) {
+  async signDownload(key: string, input: SignDownloadInput) {
     const expiresAt = new Date(input.now.getTime() + input.ttlSeconds * 1000);
-    return { url: `memory://download/${key}?expires=${expiresAt.getTime()}&name=${encodeURIComponent(input.filename)}`, expiresAt };
+    return { url: `memory://download/${key}?expires=${expiresAt.getTime()}&name=${encodeURIComponent(input.filename)}${input.disposition === 'inline' ? '&disposition=inline' : ''}`, expiresAt };
   }
 
   async head(key: string): Promise<StoredObject | null> {

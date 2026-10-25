@@ -1,0 +1,74 @@
+app: portal
+area: receipts
+title: Receipts in the portal (Expenses › Receipts)
+tier: secondary
+paths:
+  - src/hosted/pages/views/ReceiptsGallery.tsx
+  - src/hosted/pages/views/ReceiptReview.tsx
+  - src/hosted/components/ReceiptCard.tsx
+  - src/hosted/components/ReceiptPreview.tsx
+  - src/hosted/data/receiptQueries.ts
+  - src/hosted/data/receiptFileRules.ts
+  - src/hosted/lib/receiptSuggestion.ts
+  - src/hosted/components/expenseForm/useHostedExpenseForm.ts
+  - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+features:
+  - id: gallery
+    title: Expenses › Receipts lists the profile's receipts, To review by default with counts, and a card opens its original large (MUT-260 AC1)
+    tier: secondary
+    tickets: [MUT-260]
+    steps:
+      - Open Expenses on a profile with two receipts to review and one filed
+      - Look at the Receipts tab and the gallery
+      - Switch to Filed, then All
+      - Open an image receipt, then a PDF receipt
+    expect:
+      - The tab reads "Receipts · 2 to review"; the gallery lists the two To-review cards, GET /v1/receipts asked with filingStatus=TO_REVIEW
+      - The filter shows To review 2 and Filed 1; Filed shows the filed card with its expense's vendor and amount; All sends no filter
+      - The image shows inline, and Open full size opens its inline URL; the PDF is in an iframe whose download was asked with disposition=inline
+  - id: upload
+    title: Upload a receipt with no expense; it lands in To review (MUT-260 AC2)
+    tier: secondary
+    tickets: [MUT-260]
+    steps:
+      - Open Expenses › Receipts and choose Upload receipt
+      - Pick a text file, then a PNG
+    expect:
+      - The text file is refused with its name and the reason, and nothing is sent
+      - The PNG is started (with an Idempotency-Key), PUT to the storage bucket and completed
+      - It appears as a To-review card, the count goes up, and "1 receipt added to To review" is announced
+  - id: review-approve
+    title: Review a receipt beside the expense form, prefilled from the phone and marked; the vendor typeahead works; Approve files it and opens the next (MUT-260 AC3, AC4)
+    tier: secondary
+    tickets: [MUT-260]
+    paths:
+      - src/hosted/components/VendorPicker.tsx
+    steps:
+      - Open a To-review receipt the phone read (Shufersal, ILS 84.20, 24 Oct)
+      - Check the prefilled fields
+      - Type "yel" in Vendor and pick Yellow Cab, choose a category
+      - Approve and file
+    expect:
+      - Amount 84.20, currency ILS, date 2026-10-24 and vendor Shufersal are filled, each marked "From the receipt"
+      - The vendor field suggests the profile's saved vendor Yellow Cab, and picking it prefills its last category
+      - POST /v1/receipts/{id}/approve gets the expense with an Idempotency-Key and no suggested field
+      - The toast says "Filed" and the next To-review receipt opens; the last one returns to the gallery
+  - id: filed
+    title: A filed receipt opens read-only with its expense, also from a direct link (MUT-260 D10)
+    tier: secondary
+    tickets: [MUT-260]
+    steps:
+      - Open a filed receipt by its link
+    expect:
+      - The page says "Filed receipt" and shows the expense's vendor, amount and date
+      - Open expense goes to the expense's drawer; there is no Approve
+  - id: unavailable
+    title: With the receipts library off, there is no Receipts tab, and its link says it isn't available (MUT-260 D4)
+    tier: secondary
+    tickets: [MUT-260]
+    steps:
+      - Open Expenses on a server whose receipts library is off
+      - Open /expenses/receipts directly
+    expect:
+      - The Expenses tabs are Expenses and Groups only
+      - The page says "Receipts aren't available here"

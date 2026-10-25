@@ -54,6 +54,9 @@ export interface ExpenseFormFieldsLabels {
   amountError: string;
 }
 
+/** The fields a host can hint under (MUT-260 A9). Vendor/client/project are the host's own slots, so it hints those itself. */
+export type ExpenseFormHintField = 'amount' | 'currency' | 'date' | 'title' | 'category' | 'notes';
+
 export interface ExpenseCategoryOption {
   id: string;
   name: string;
@@ -94,7 +97,23 @@ export interface ExpenseFormFieldsProps<T extends ExpenseFormFieldsShape> {
   showNotes?: boolean;
   /** True only for local's recurring mode, where title is mandatory (enforced by the host's own schema, not this one). Hosted leaves this false — title is always optional there. */
   titleRequired?: boolean;
+  /**
+   * MUT-260 (A9): a line under a field, and `data-suggested` on its control: the portal's receipt review marks the
+   * fields its suggestion filled ("From the receipt"). Local leaves it unset, and nothing changes there.
+   */
+  hints?: Partial<Record<ExpenseFormHintField, ReactNode>>;
 }
+
+function FieldHint({ field, hints }: { field: ExpenseFormHintField; hints?: Partial<Record<ExpenseFormHintField, ReactNode>> }) {
+  const hint = hints?.[field];
+  return hint ? (
+    <p className="form-hint" data-hint-for={field}>
+      {hint}
+    </p>
+  ) : null;
+}
+
+const suggested = (field: ExpenseFormHintField, hints?: Partial<Record<ExpenseFormHintField, ReactNode>>) => (hints?.[field] ? 'true' : undefined);
 
 export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   control,
@@ -113,6 +132,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
   dateMax,
   showNotes = true,
   titleRequired = false,
+  hints,
 }: ExpenseFormFieldsProps<T>) {
   const currentCurrency = useWatch({ control, name: 'currency' as never }) as unknown as string;
 
@@ -136,6 +156,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
                   className={cn('input', errors.amount && 'input-error')}
                   placeholder={labels.amountPlaceholder}
                   disabled={disabled}
+                  data-suggested={suggested('amount', hints)}
                   {...field}
                 />
               ) : (
@@ -147,6 +168,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
                   className={cn('input', errors.amount && 'input-error')}
                   placeholder={labels.amountPlaceholder}
                   disabled={disabled}
+                  data-suggested={suggested('amount', hints)}
                   {...field}
                 />
               )
@@ -155,6 +177,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
           {errors.amount && (
             <p className="form-error">{errors.amount.type === 'manual' ? String(errors.amount.message ?? '') : labels.amountError}</p>
           )}
+          <FieldHint field="amount" hints={hints} />
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="expense-currency">
@@ -164,7 +187,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
             name={'currency' as never}
             control={control}
             render={({ field }) => (
-              <Select id="expense-currency" disabled={disabled || currencyDisabled} {...field}>
+              <Select id="expense-currency" disabled={disabled || currencyDisabled} data-suggested={suggested('currency', hints)} {...field}>
                 {currencyOptions.map((code) => (
                   <option key={code} value={code}>
                     {code}
@@ -173,6 +196,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
               </Select>
             )}
           />
+          <FieldHint field="currency" hints={hints} />
         </div>
       </div>
 
@@ -191,11 +215,13 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
                 className={cn('input', errors.occurredAt && 'input-error')}
                 disabled={disabled}
                 max={dateMax}
+                data-suggested={suggested('date', hints)}
                 {...field}
               />
             )}
           />
           {errors.occurredAt && <p className="form-error">{String(errors.occurredAt.message ?? '')}</p>}
+          <FieldHint field="date" hints={hints} />
         </div>
       ) : (
         dateSlotOverride
@@ -210,9 +236,10 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
           name={'title' as never}
           control={control}
           render={({ field }) => (
-            <input id="expense-title" type="text" className="input" placeholder={labels.titlePlaceholder} disabled={disabled} {...field} />
+            <input id="expense-title" type="text" className="input" placeholder={labels.titlePlaceholder} disabled={disabled} data-suggested={suggested('title', hints)} {...field} />
           )}
         />
+        <FieldHint field="title" hints={hints} />
       </div>
 
       <div className="form-group">{vendorField}</div>
@@ -231,6 +258,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
               id="expense-category"
               invalid={Boolean(errors.categoryId)}
               disabled={disabled}
+              data-suggested={suggested('category', hints)}
               {...field}
             >
               <option value="">{labels.categoryPlaceholder}</option>
@@ -245,6 +273,7 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
         {errors.categoryId && (
           <p className="form-error">{errors.categoryId.type === 'manual' ? String(errors.categoryId.message ?? '') : labels.requiredError}</p>
         )}
+        <FieldHint field="category" hints={hints} />
       </div>
 
       {showNotes && (
@@ -256,9 +285,10 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
             name={'notes' as never}
             control={control}
             render={({ field }) => (
-              <textarea id="expense-notes" className="textarea" placeholder={labels.notesPlaceholder} disabled={disabled} {...field} />
+              <textarea id="expense-notes" className="textarea" placeholder={labels.notesPlaceholder} disabled={disabled} data-suggested={suggested('notes', hints)} {...field} />
             )}
           />
+          <FieldHint field="notes" hints={hints} />
         </div>
       )}
     </>
