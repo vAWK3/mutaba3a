@@ -122,7 +122,7 @@ features:
       - Reload the portal
       - Open the portal in Arabic on another profile with firm features on
     expect:
-      - The Overview shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
+      - Owed shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
       - Dismiss removes it, and it stays gone after the reload
       - In Arabic the page is right to left and the note reads "ميزات المكتب مفعّلة لملف …" with إغلاق
   - id: mtb3a-name

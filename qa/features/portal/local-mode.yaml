@@ -24,9 +24,9 @@ features:
       - Open the portal for the first time, with nobody signed in
       - Open You › Account, then You › App
     expect:
-      - The Personal profile's Overview opens in Arabic, right to left, with no sign-in form
+      - The Personal profile's Owed (المستحق) opens in Arabic, right to left, with no sign-in form
       - The account reads "على هذا الجهاز" (On this device); You › Account offers Sign in and Your data, You › App Language and the terms, and no sign-out, password, Malafat or store link
-      - The nav has the same sections as signed in, Expenses and Conversions included (MUT-287)
+      - The nav has the same four destinations as signed in: المستحق، المدفوع، المصروف، العملاء (MUT-424)
       - Exactly one request reached the server, the first-visit check of /v1/me
   - id: received-persists
     title: Money received signed out is still there after a reload, and nothing is sent
@@ -113,7 +113,7 @@ features:
       - src/hosted/pages/auth/SetupPage.tsx
     steps:
       - Open Payments signed in
-      - The session ends on the server; open Receivables
+      - The session ends on the server; open Owed
       - Choose Continue on this device
     expect:
       - Sign-in says "You've been signed out. Sign in again to continue." and offers both Sign in and Continue on this device
