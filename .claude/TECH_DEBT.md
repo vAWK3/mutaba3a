@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-249: Phone builds from before MUT-262 keep their token through a password change
+**Status**: Open
+**Ticket**: MUT-262 (ADR-193 D1); closes with MUT-293's minimum build
+**Added**: 2026-10-25
+**Priority**: Low
+**Impact**: device rotation is opt-in (`rotateToken: true`), so a MUT-238 build that changes the password keeps its session and token, the gap TD-158 described, until the person updates the app. Portal sessions and rotating phone builds are covered.
+**Fix**: raise the iOS/Android minimum build (MUT-293, `server/src/auth/minimum-build.ts`) past the first rotating build; then the server may rotate every device change and drop the opt-in.
+
 ### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
 **Status**: Accepted
 **Ticket**: MUT-370 (D3)
@@ -780,7 +788,7 @@
 **Fix**: a store-level "write + audit" in one transaction (Prisma `$transaction`; the memory store already applies both synchronously), adopted route by route, starting with the money-moving edits.
 
 ### TD-158: Changing your password keeps this device's token rather than issuing a new one
-**Status**: Open
+**Status**: Resolved (2026-10-25, MUT-262, ADR-193: the caller's session is rotated in the change's transaction; cookie always, device on `rotateToken: true`. Old phone builds: TD-249)
 **Ticket**: MUT-262 (found 2026-10-16, MUT-238 pre-landing adversarial review of MUT-237)
 **Added**: 2026-10-16
 **Priority**: Low (needs a stolen token, and the person to change the password from the very session that leaked)

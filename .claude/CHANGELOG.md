@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Changing your password gives this session a new token (MUT-262, TD-158, ADR-193, API 1.71.0-mut262)
+
+**Why:** a password change kept the changer's own session and token, so a leaked copy of it survived the change (TD-158; blocks pilot readiness MUT-322).
+
+### Changed
+- **Server:** `POST /v1/me/password` rotates the caller's session in the change's transaction (`users.changePassword` `rotation`, memory + Prisma; old row revoked `password_rotated`, new row keeps kind, agent, passkey and absolute deadline). Cookie: always, 204 + Set-Cookie with Max-Age to the absolute deadline. Device: with `rotateToken: true`, `200 { token }` (`PasswordChangedToken`); without it 204 as before. Audit `metadata.tokenRotated`. `sessionLifetime(kind, settings)` shared by the sign-in routes. API `1.71.0-mut262`.
+- **Portal:** `src/hosted/api/client.ts` credential generation: a 401 on a request sent before the change answered never ends the session; `ChangePasswordDrawer` invalidates every query after success.
+- **Phone (mutaba3a-flutter, branch `feature/mut-262-rotate-token`):** sends `rotateToken: true`, `AuthService.changePassword` adopts the new token inside `ApiClient.rotating`; unknown-outcome copy adds "If you're asked to sign in, use your new password." (en/ar).
+
+### Added
+- QA `portal-selfservice.account.rotate-on-change` (live API: stays signed in, old cookie 401). Flutter `ios.settings.change-password` now expects a rotated token.
+- TD-249 (old phone builds keep their token until MUT-293's floor).
+
+### Fixed
+- TD-158 resolved.
+
+---
+
 ## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-192)
 
 **Why:** seven peer sections made the portal read like a dashboard (epic MUT-423). This is the regroup MUT-426's pill needs; every URL stays, so the phone's universal links, the mail and Stripe landings and bookmarks keep working.
