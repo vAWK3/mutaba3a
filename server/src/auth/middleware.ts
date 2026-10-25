@@ -63,6 +63,8 @@ export type AppEnv = {
     expectedVersion: number;
     /** MUT-361: whether the lapse gate is enforced on this server (app-shell.ts, from BILLING_GATE). */
     billingGate: boolean;
+    /** MUT-370 (D9): whether this server offers passkeys (app-shell.ts, from WEBAUTHN_RP_ID); /v1/me's suggestion reads it. */
+    passkeys: boolean;
     /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
     personEntitlements: ReadonlyMap<string, Entitlement>;
   };

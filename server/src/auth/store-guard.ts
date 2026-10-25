@@ -101,6 +101,9 @@ export const STORE_ACCESS: StoreAccess = {
     createChallenge: 'sessionOnly',
     consumeChallenge: 'sessionOnly',
     pruneChallenges: 'operator',
+    // MUT-370: the person's own suggestion state, read on /v1/me and answered by their session (identity row).
+    promptOf: 'sessionOnly',
+    answerPrompt: { write: 'identity' },
   },
   // MUT-235: issued by /admin, redeemed by the two public setup routes; both run with no guard, so every principal is refused here.
   // MUT-366: the self-service routes are public, so they run with no guard (like redeem); no credential may call these.

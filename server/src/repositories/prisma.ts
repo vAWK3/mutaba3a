@@ -15,6 +15,7 @@ import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } 
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
+import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -554,6 +555,20 @@ export class PrismaLedgerStore implements LedgerStore {
       return rows[0] ?? null;
     },
     pruneChallenges: async (before) => (await this.prisma.webauthnChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    // MUT-370 (D1): the suggestion's state and the passkey count, one read.
+    promptOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { passkeyPrompt: true, _count: { select: { passkeys: true } } } });
+      return row && { prompt: resolvePasskeyPrompt(row.passkeyPrompt), passkeys: row._count.passkeys };
+    },
+    // MUT-370 (D2): under the person's row lock, so a Not now on two devices spends one offer.
+    answerPrompt: async (userId, _action, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ passkeyPrompt: unknown }>>`SELECT "passkeyPrompt" FROM "users" WHERE "id" = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!locked) return null;
+        const prompt = applyPasskeyNotNow(locked.passkeyPrompt, at);
+        await tx.user.update({ where: { id: userId }, data: { passkeyPrompt: prompt as unknown as Prisma.InputJsonValue } });
+        return { prompt, passkeys: await tx.passkey.count({ where: { userId } }) };
+      }),
   };
 
   /**

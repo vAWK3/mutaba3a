@@ -4,6 +4,7 @@ import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { verifyCurrentPassword } from '../auth/current-password.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { passkeyNameFor } from '../auth/passkey-names.js';
+import { passkeyPromptView } from '../auth/passkey-prompt.js';
 import { requestClientIp, type SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { CHALLENGE_TTL_MS, creationOptions, PASSKEY_LIMIT, signInOptions, STEP_UP_WINDOW_MS, verifyCreation, type WebauthnConfig } from '../auth/webauthn.js';
@@ -20,6 +21,8 @@ import {
   PasskeyCreationChallengeSchema,
   PasskeyCreationOptionsRequestSchema,
   PasskeyListSchema,
+  PasskeyPromptChangeSchema,
+  PasskeyPromptSchema,
   PasskeySchema,
   PasskeySignInChallengeSchema,
   RenamePasskeyRequestSchema,
@@ -62,6 +65,8 @@ export const PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
   'POST /v1/passkeys',
   'PATCH /v1/passkeys/:passkeyId',
   'DELETE /v1/passkeys/:passkeyId',
+  // MUT-370: the person's answer to the "Add a passkey" suggestion
+  'PATCH /v1/me/passkey-prompt',
 ]);
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
@@ -107,6 +112,37 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       configured();
       const items = await store.passkeys.listByUser(c.get('identity').user.id);
       return c.json({ items: items.map(passkeyJson), limit: PASSKEY_LIMIT }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'patch',
+      path: '/v1/me/passkey-prompt',
+      tags: ['Passkeys'],
+      summary: 'Answer the "Add a passkey" suggestion with Not now (MUT-370)',
+      description:
+        '`not-now` spends the current offer and hides the suggestion for 30 days (server clock); the third retires it. While it is ' +
+        'already hidden a Not now changes nothing, so two devices answering one offer spend it once. Idempotent by construction, ' +
+        'so no Idempotency-Key. Writes no audit row: a preference is not an event a firm sees. `/v1/me` `user.passkeyPrompt` ' +
+        'says when to show it.',
+      security: OWN,
+      request: { body: { required: true, content: { 'application/json': { schema: PasskeyPromptChangeSchema } } } },
+      responses: {
+        200: { description: 'The suggestion as it now stands', content: { 'application/json': { schema: PasskeyPromptSchema } } },
+        401: errorResponse('No valid session'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING'),
+        404: errorResponse('NOT_FOUND — passkeys are not configured on this server'),
+        422: errorResponse('Validation failed'),
+      },
+    }),
+    async (c) => {
+      configured();
+      const { action } = c.req.valid('json');
+      const now = c.get('now')();
+      const state = await store.passkeys.answerPrompt(c.get('identity').user.id, action, now);
+      if (!state) throw new ApiError('NOT_FOUND', 'No such person');
+      return c.json(passkeyPromptView(state.prompt, state.passkeys, now), 200);
     },
   );
 

@@ -73,7 +73,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
 
       const { email, password } = c.req.valid('json');
       const { user, token } = await signIn(c, { store, passwordHasher, throttle, pepper: settings.pepper }, { email, password }, 'device', deviceLifetime());
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), c.get('passkeys') ? c.get('now')() : null);
       return c.json({ ...me, token }, 201);
     },
   );
@@ -113,7 +113,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         'device',
         deviceLifetime(),
       );
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), c.get('passkeys') ? c.get('now')() : null);
       return c.json({ ...me, token }, 201);
     },
   );

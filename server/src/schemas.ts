@@ -792,6 +792,20 @@ export const TrialPromptChangeSchema = z
   .strict()
   .openapi('TrialPromptChange');
 
+/** MUT-370 (D2, D3): the "Add a passkey" suggestion, as the server decides it. */
+export const PasskeyPromptSchema = z
+  .object({
+    /** Show the suggestion now: the person holds no passkey, has an offer left (3 in all) and hasn't hidden it. */
+    due: z.boolean(),
+    /** How many offers the person answered with Not now (0–3); the third retires the suggestion. */
+    notNowCount: z.number().int().min(0).max(3),
+    /** Not now hides it until then (30 days); null when it isn't hidden. */
+    hiddenUntil: z.string().datetime().nullable(),
+  })
+  .openapi('PasskeyPrompt');
+
+export const PasskeyPromptChangeSchema = z.object({ action: z.enum(['not-now']) }).strict().openapi('PasskeyPromptChange');
+
 /** MUT-324 T1: GET /admin/v1/terms-acceptance — every user and the terms version they last accepted. */
 export const TermsReportSchema = z
   .object({
@@ -840,6 +854,8 @@ export const MeSchema = z
       malafatSuggestions: MalafatSuggestionsSchema,
       /** MUT-418: the trial's card prompt (all null until the person answers). Additive since 1.59.0-mut418. */
       trialPrompt: TrialPromptSchema,
+      /** MUT-370: whether to suggest adding a passkey; null on a server that offers no passkeys. Additive since 1.70.0-mut370. */
+      passkeyPrompt: PasskeyPromptSchema.nullable(),
       /**
        * MUT-367 (D16): the account's status, for billing to read. Behind a session it is always ACTIVE: a
        * PENDING_REVIEW or DISABLED account can't sign in. Additive since 1.57.0-mut367.
