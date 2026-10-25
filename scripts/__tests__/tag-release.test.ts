@@ -239,6 +239,8 @@ describe('a dirty tree never reaches deploy.sh', () => {
     expect(deploySh).toMatch(/if \[\[ "\$\{TREE_DIRTY\}" == "true" && -z "\$\{IMAGE_TAG:-\}" \]\]; then\n {2}die "the repo has uncommitted changes/);
     expect(deploySh).toContain('--label "dirty=${TREE_DIRTY}"');
     expect(deploySh).toContain('--label "org.opencontainers.image.revision=${HEAD_SHA}"');
+    expect(deploySh).toContain('--label "portal-config=${PORTAL_CONFIG}"');
+    expect(deploySh).toContain('--config "${PORTAL_CONFIG}"');
   });
 
   it('the server preflight fails on a dirty tree instead of asking, and says why', () => {

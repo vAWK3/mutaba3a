@@ -6,18 +6,35 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
  * MUT-347: deploy.sh's ROLLBACK_TO (scripts/lib/rollback.sh). Each helper is driven through fake gcloud,
- * terraform and npm on PATH, the way release-guard.test.ts drives the release guards; git is the real one
- * (its fetch is stubbed), against this clone.
+ * terraform and npm on PATH, the way release-guard.test.ts drives the release guards. git is the real one, on
+ * a throwaway repo (old commit with an annotated release tag, a "MUT-148" commit, HEAD), so a shallow CI clone
+ * changes nothing; its fetch is stubbed.
  */
 const LIB = resolve(process.cwd(), 'scripts/lib/rollback.sh');
+const GUARDS = resolve(process.cwd(), 'scripts/lib/release-guard.sh');
 const DEPLOY = resolve(process.cwd(), 'scripts/deploy.sh');
-const REPO_ROOT = resolve(process.cwd(), '..');
-const git = (...args: string[]) => execFileSync('git', ['-C', REPO_ROOT, ...args], { encoding: 'utf8' }).trim();
 let dir: string;
+let REPO_ROOT: string;
+const git = (...args: string[]) => execFileSync('git', ['-C', REPO_ROOT, ...args], { encoding: 'utf8' }).trim();
+const commit = (message: string) => {
+  writeFileSync(join(REPO_ROOT, 'file.txt'), message);
+  git('add', 'file.txt');
+  git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', message);
+  return git('rev-parse', 'HEAD');
+};
+let OLD: string;
+let MUT148: string;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'rollback-'));
   mkdirSync(join(dir, 'bin'));
+  REPO_ROOT = join(dir, 'repo');
+  mkdirSync(REPO_ROOT);
+  git('init', '-q');
+  OLD = commit('old release');
+  git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'tag', '-a', 'api-v0.0.1', '-m', 'release', OLD);
+  MUT148 = commit('MUT-148');
+  commit('head');
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
@@ -36,7 +53,7 @@ function run(call: string, o: { input?: string; env?: Record<string, string> } =
     'info() { echo "INFO $*" >&2; }; die() { echo "DIE $*" >&2; exit 1; }; warn() { echo "WARN $*" >&2; }',
     `REPO_ROOT="${REPO_ROOT}"; SERVER_DIR="${process.cwd()}"; TF_DIR="${dir}"; ENVIRONMENT=production`,
     'SERVICE_NAME=mutaba3a-api; GCP_REGION=me-west1; GCP_PROJECT_ID=demo; LOCAL_DATABASE_URL=postgres://proxy',
-    `source "${LIB}"`,
+    `source "${LIB}"; ROLLBACK_MUT148_COMMIT="${MUT148}"`,
     call,
   ].join('\n');
   const env = { ...process.env, ...o.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}` };
@@ -48,11 +65,12 @@ function run(call: string, o: { input?: string; env?: Record<string, string> } =
 // Each case spawns bash and fake CLIs; under the full suite's parallel load one can pass 5 s.
 describe('scripts/lib/rollback.sh', { timeout: 30_000 }, () => {
   describe('rollback_resolve', () => {
-    it('resolves a short sha or a tag to the full commit, warning when origin can’t be fetched', () => {
-      const r = run(`rollback_resolve "$(git -C "${REPO_ROOT}" rev-parse --short HEAD~1)"`);
+    it('resolves a short sha, or an annotated release tag, to the full commit, warning when origin can’t be fetched', () => {
+      const r = run(`rollback_resolve ${OLD.slice(0, 7)}`);
       expect(r.status).toBe(0);
-      expect(r.out).toBe(git('rev-parse', 'HEAD~1'));
+      expect(r.out).toBe(OLD);
       expect(r.err).toMatch(/could not fetch origin's tags/);
+      expect(run('rollback_resolve api-v0.0.1').out).toBe(OLD); // the commit, not the tag object
     });
 
     it('refuses a ref this clone doesn’t have', () => {
@@ -135,8 +153,103 @@ describe('scripts/lib/rollback.sh', { timeout: 30_000 }, () => {
   describe('rollback_expects_error_reporting', () => {
     it('is true from MUT-148 on, false before it', () => {
       expect(run('rollback_expects_error_reporting HEAD').status).toBe(0);
-      expect(run(`rollback_expects_error_reporting "$ROLLBACK_MUT148_COMMIT~1"`).status).not.toBe(0);
+      expect(run(`rollback_expects_error_reporting ${MUT148}`).status).toBe(0);
+      expect(run(`rollback_expects_error_reporting ${OLD}`).status).not.toBe(0);
     });
+  });
+});
+
+/**
+ * rollback_main end to end, with deploy.sh's own helpers (tf_init, the proxy, apply_release, smoke_release) stubbed to
+ * log their calls, and the real release guards' guard_sentry_release reading a fake `terraform console`.
+ */
+describe('rollback_main', { timeout: 30_000 }, () => {
+  const TAG = 'abc1234';
+  function rollback(o: { sentry?: 'true' | 'false'; deployed?: () => string; gate?: number; target?: () => string } = {}) {
+    const log = join(dir, 'calls.log');
+    rmSync(log, { force: true });
+    fake('terraform', `[[ "$1" == console ]] && { cat >/dev/null; echo '"${o.sentry ?? 'true'}"'; }\nexit 0`);
+    fake('gcloud', `[[ "$*" == *"print-access-token"* ]] && { echo tok; exit 0; }\necho '{"spec":{"template":{"spec":{"containers":[{"env":[{"name":"SERVICE_VERSION","value":"${(o.deployed ?? (() => git('rev-parse', '--short', 'HEAD')))()}"}]}]}}}}'`);
+    fake('npm', `case "$*" in *release-image*) echo ${TAG} ;; *rollback:check*) exit ${o.gate ?? 0} ;; esac\nexit 0`);
+    const stubs = ['tf_init', 'start_proxy', 'stop_proxy', 'apply_release', 'guard_release']
+      .map((f) => `${f}() { echo "${f}" >> "${log}"; }`)
+      .join('; ');
+    return run(
+      [
+        `source "${GUARDS}"`,
+        `need() { :; }; tf_output() { echo "x"; }; ${stubs}`,
+        `smoke_release() { echo "smoke_release EXPECT=\${EXPECT_ERROR_REPORTING}" >> "${log}"; }`,
+        'SUFFIX=""; REGISTRY=me-west1-docker.pkg.dev/demo/mutaba3a; AUTO_APPROVE=0; SERVICE_URL=https://svc',
+        `touch "${dir}/production.tfvars"; ROLLBACK_TO=${(o.target ?? (() => MUT148))()}`,
+        'rollback_main',
+      ].join('\n'),
+    );
+  }
+  const order = (calls: string, steps: string[]) => steps.map((step) => calls.indexOf(step));
+
+  it('runs every gate before the apply, in order, and smoke expects error reporting on when Sentry is on', () => {
+    const r = rollback();
+    expect(r.status, r.err).toBe(0);
+    const at = order(r.calls, ['terms:check-live -- --commit', 'release-image -- rollback', 'tf_init', 'terraform plan -detailed-exitcode', 'rollback:check -- --commit', 'apply_release', 'smoke_release EXPECT=on']);
+    expect(at.every((i) => i > -1), r.calls).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(r.calls).toContain(`--commit ${MUT148}`);
+  });
+
+  it('expects error reporting off when this checkout’s sentry_enabled is false', () => {
+    const r = rollback({ sentry: 'false' });
+    expect(r.status, r.err).toBe(0);
+    expect(r.calls).toContain('smoke_release EXPECT=off');
+  });
+
+  it('checks no error reporting for a commit from before MUT-148', () => {
+    const r = rollback({ target: () => OLD });
+    expect(r.status, r.err).toBe(0);
+    expect(r.calls).toContain('smoke_release EXPECT=');
+    expect(r.calls).not.toMatch(/smoke_release EXPECT=o/);
+    expect(r.err).toMatch(/predates MUT-148/);
+  });
+
+  it('stops before the apply when the migration gate refuses, and does nothing when the image already serves', () => {
+    const refused = rollback({ gate: 1 });
+    expect(refused.status).not.toBe(0);
+    expect(refused.calls).not.toContain('apply_release');
+    const serving = rollback({ deployed: () => TAG });
+    expect(serving.status).toBe(0);
+    expect(serving.err).toMatch(/already serves abc1234/);
+    expect(serving.calls).not.toContain('terraform plan');
+    expect(serving.calls).not.toContain('apply_release');
+  });
+
+  it('only goes back: refuses a commit newer than what serves, and warns when the deployed tag isn’t in the clone', () => {
+    const newer = rollback({ deployed: () => OLD.slice(0, 7), target: () => MUT148 });
+    expect(newer.status).not.toBe(0);
+    expect(newer.err).toMatch(/is not older than what serves/);
+    expect(newer.calls).not.toContain('apply_release');
+    const unknown = rollback({ deployed: () => 'f00dfee' });
+    expect(unknown.status, unknown.err).toBe(0);
+    expect(unknown.err).toMatch(/can't check that .* is older/);
+  });
+
+  it('refuses HEAD (a normal deploy) and a dirty tree', () => {
+    expect(rollback({ target: () => 'HEAD' }).err).toMatch(/is HEAD: that is a normal deploy/);
+    writeFileSync(join(REPO_ROOT, 'stray.txt'), 'x');
+    expect(rollback().err).toMatch(/uncommitted changes/);
+  });
+});
+
+describe('deploy.sh PORTAL_CONFIG', () => {
+  const line = readFileSync(DEPLOY, 'utf-8').split('\n').find((l) => l.startsWith('PORTAL_CONFIG='))!;
+  const hash = (env: Record<string, string>) =>
+    spawnSync('bash', ['-euo', 'pipefail', '-c', `ENVIRONMENT=production; ${line}; echo "$PORTAL_CONFIG"`], { encoding: 'utf-8', env: { PATH: process.env.PATH ?? '', ...env } });
+
+  it('hashes even with no MUTABA3A_* setting (set -e must not kill deploy.sh there), and changes when one does', () => {
+    const none = hash({});
+    expect(none.status).toBe(0);
+    expect(none.stdout.trim()).toMatch(/^[0-9a-f]{64}$/);
+    const key = hash({ MUTABA3A_TURNSTILE_SITE_KEY: 'a' });
+    expect(key.stdout.trim()).not.toBe(none.stdout.trim());
+    expect(hash({ MUTABA3A_TURNSTILE_SITE_KEY: 'a' }).stdout).toBe(key.stdout);
   });
 });
 

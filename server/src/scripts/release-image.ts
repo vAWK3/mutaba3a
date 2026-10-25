@@ -6,17 +6,20 @@ import { parseArgs } from 'node:util';
  * Registry's Docker v2 API with `REGISTRY_TOKEN` (deploy.sh passes `gcloud auth print-access-token`), so a
  * rollback needs no docker daemon.
  *
- *   npm run --silent release-image -- deploy-plan --image <ref:tag> --head <full sha> --dirty 0|1
- *       Prints `build` (the tag is free) or `reuse` (it already holds this clean HEAD). Refuses (exit 1) a
- *       tag that holds anything else: deploy.sh never pushes over a tag, so an old image is never destroyed.
+ *   npm run --silent release-image -- deploy-plan --image <ref:tag> --head <full sha> --dirty 0|1 --config <sha256>
+ *       Prints `build` (the tag is free) or `reuse` (it already holds this clean HEAD, built with the same portal
+ *       settings). Refuses (exit 1) a tag that holds anything else: deploy.sh never pushes over a tag, so an old
+ *       image is never destroyed.
  *   npm run --silent release-image -- rollback --repository <registry>/mutaba3a-api --commit <full sha>
  *       Prints the tag of that commit's image (its short sha) after checking the image's labels.
  *
- * deploy.sh labels every image it builds with REVISION_LABEL (the full commit) and DIRTY_LABEL (true when
- * IMAGE_TAG let a dirty tree through). Images built before MUT-347 have neither.
+ * deploy.sh labels every image it builds with REVISION_LABEL (the full commit), DIRTY_LABEL (true when IMAGE_TAG
+ * let a dirty tree through) and CONFIG_LABEL (a sha256 of ENVIRONMENT and every MUTABA3A_* setting the portal bundle
+ * is built with, from deploy.env). Images built before MUT-347 have none of them.
  */
 export const REVISION_LABEL = 'org.opencontainers.image.revision';
 export const DIRTY_LABEL = 'dirty';
+export const CONFIG_LABEL = 'portal-config';
 
 const TIMEOUT_MS = 30_000;
 const MANIFEST_TYPES = [
@@ -84,7 +87,10 @@ export async function listTags(host: string, name: string, token: string, fetchI
     const page = (await json(res, `${name}'s tags`)) as { tags?: string[] | null };
     tags.push(...(page.tags ?? []));
     const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '')?.[1];
-    url = next ? new URL(next, `https://${host}`).href : null;
+    const nextUrl = next ? new URL(next, `https://${host}`) : null;
+    // The token only ever goes to the registry itself.
+    if (nextUrl && nextUrl.host !== host) throw new Error(`the registry's next page is on another host (${nextUrl.host})`);
+    url = nextUrl?.href ?? null;
   }
   return tags;
 }
@@ -95,10 +101,13 @@ export function tagForCommit(tags: string[], commit: string): string | null {
   return matches.sort((a, b) => b.length - a.length)[0] ?? null;
 }
 
-export type DeployPlan = { action: 'build' } | { action: 'reuse'; warning?: string } | { action: 'refuse'; reason: string };
+export type DeployPlan = { action: 'build' } | { action: 'reuse' } | { action: 'refuse'; reason: string };
 
-/** A normal deploy: build a free tag, reuse an image of this clean HEAD, never push over anything else. */
-export function deployImagePlan(o: { labels: ImageLabels | null; tag: string; head: string; treeDirty: boolean }): DeployPlan {
+/**
+ * A normal deploy: build a free tag, reuse an image of this clean HEAD built with the same portal settings, never
+ * push over anything else. An unlabelled image (from before MUT-347) is never reused: nothing says what it holds.
+ */
+export function deployImagePlan(o: { labels: ImageLabels | null; tag: string; head: string; treeDirty: boolean; config: string }): DeployPlan {
   if (o.labels === null) return { action: 'build' };
   const revision = o.labels[REVISION_LABEL];
   const pickAnother = 'deploy.sh never pushes over a tag; pick another IMAGE_TAG, or roll back with ROLLBACK_TO=';
@@ -108,11 +117,13 @@ export function deployImagePlan(o: { labels: ImageLabels | null; tag: string; he
   if (o.labels[DIRTY_LABEL] === 'true' || o.treeDirty) {
     return { action: 'refuse', reason: `${o.tag} already names an image, and ${o.treeDirty ? 'this tree is dirty' : 'it was built from a dirty tree'}, so nothing proves it holds what you deploy: ${pickAnother}` };
   }
-  if (revision) return { action: 'reuse' };
-  if (!o.head.startsWith(o.tag)) {
-    return { action: 'refuse', reason: `${o.tag} already names an image with no revision label (built before MUT-347), so nothing says what it holds: ${pickAnother}` };
+  if (!revision) {
+    return { action: 'refuse', reason: `${o.tag} already names an image with no labels (built before MUT-347), so nothing says which commit or portal settings it holds: ${pickAnother}` };
   }
-  return { action: 'reuse', warning: `${o.tag} has no revision label (built before MUT-347); reusing it because its tag is HEAD's short sha and the tree is clean` };
+  if (o.labels[CONFIG_LABEL] !== o.config) {
+    return { action: 'refuse', reason: `${o.tag} was built with other portal build settings (ENVIRONMENT or deploy.env's MUTABA3A_* changed since), which its bundle bakes in: ${pickAnother}` };
+  }
+  return { action: 'reuse' };
 }
 
 export type RollbackCheck = { ok: true; warning?: string } | { ok: false; reason: string };
@@ -138,7 +149,14 @@ export async function releaseImageCli(argv: string[], env: NodeJS.ProcessEnv, de
   const { positionals, values } = parseArgs({
     args: argv,
     allowPositionals: true,
-    options: { image: { type: 'string' }, head: { type: 'string' }, dirty: { type: 'string' }, repository: { type: 'string' }, commit: { type: 'string' } },
+    options: {
+      image: { type: 'string' },
+      head: { type: 'string' },
+      dirty: { type: 'string' },
+      config: { type: 'string' },
+      repository: { type: 'string' },
+      commit: { type: 'string' },
+    },
   });
   const token = env.REGISTRY_TOKEN;
   if (!token) {
@@ -146,14 +164,14 @@ export async function releaseImageCli(argv: string[], env: NodeJS.ProcessEnv, de
     return 1;
   }
   try {
-    if (positionals[0] === 'deploy-plan' && values.image && values.head && values.dirty) {
+    if (positionals[0] === 'deploy-plan' && values.image && values.head && values.dirty && values.config) {
       const ref = parseImageRef(values.image);
-      const plan = deployImagePlan({ labels: await imageLabels(ref, token, fetchImpl), tag: ref.tag, head: values.head, treeDirty: values.dirty === '1' });
+      const labels = await imageLabels(ref, token, fetchImpl);
+      const plan = deployImagePlan({ labels, tag: ref.tag, head: values.head, treeDirty: values.dirty === '1', config: values.config });
       if (plan.action === 'refuse') {
         err(`[image] ${plan.reason}`);
         return 1;
       }
-      if (plan.action === 'reuse' && plan.warning) err(`[image] ${plan.warning}`);
       out(plan.action);
       return 0;
     }
@@ -177,7 +195,7 @@ export async function releaseImageCli(argv: string[], env: NodeJS.ProcessEnv, de
     err(`[image] ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
-  err('usage: release-image deploy-plan --image <ref:tag> --head <sha> --dirty 0|1 | release-image rollback --repository <ref> --commit <sha>');
+  err('usage: release-image deploy-plan --image <ref:tag> --head <sha> --dirty 0|1 --config <sha256> | release-image rollback --repository <ref> --commit <sha>');
   return 1;
 }
 

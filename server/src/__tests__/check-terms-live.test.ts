@@ -128,16 +128,16 @@ describe('the --commit check (rollback)', () => {
 
   it('checks the commit’s terms against the site', async () => {
     const lines: string[] = [];
-    const code = await checkTermsCli(['--commit', 'abc1234'], live, { fetchImpl: manifest(TERMS), termsAt: () => TERMS, log: (s) => lines.push(s) });
+    const code = await checkTermsCli(['--commit', 'abc1234'], live, { fetchImpl: manifest(TERMS), termsAt: () => TERMS, out: (s) => lines.push(`OUT ${s}`), err: (s) => lines.push(`ERR ${s}`) });
     expect(code).toBe(0);
-    expect(lines.join('\n')).toMatch(/2026-10-19 \(named by abc1234\) is live at https:\/\/site.example/);
+    expect(lines.join('\n')).toMatch(/OUT \[terms\] 2026-10-19 \(named by abc1234\) is live at https:\/\/site.example/);
   });
 
   it('refuses a commit from before the terms, and says why and how to go on', async () => {
     const lines: string[] = [];
-    const code = await checkTermsCli(['--commit', 'old1'], live, { fetchImpl: manifest(TERMS), termsAt: () => null, log: (s) => lines.push(s) });
+    const code = await checkTermsCli(['--commit', 'old1'], live, { fetchImpl: manifest(TERMS), termsAt: () => null, out: (s) => lines.push(`OUT ${s}`), err: (s) => lines.push(`ERR ${s}`) });
     expect(code).toBe(1);
-    expect(lines.join('\n')).toMatch(/old1 names no terms .*before MUT-324.*SKIP_TERMS_CHECK=1/);
+    expect(lines.join('\n')).toMatch(/ERR \[terms\] old1 names no terms .*before MUT-324.*SKIP_TERMS_CHECK=1/);
   });
 
   it('refuses a commit it cannot read, with the reason', async () => {
@@ -145,7 +145,7 @@ describe('the --commit check (rollback)', () => {
     const termsAt = () => {
       throw new Error('deadbee is not in this clone');
     };
-    const code = await checkTermsCli(['--commit', 'deadbee'], live, { fetchImpl: manifest(TERMS), termsAt, log: (s) => lines.push(s) });
+    const code = await checkTermsCli(['--commit', 'deadbee'], live, { fetchImpl: manifest(TERMS), termsAt, out: (s) => lines.push(`OUT ${s}`), err: (s) => lines.push(`ERR ${s}`) });
     expect(code).toBe(1);
     expect(lines.join('\n')).toMatch(/deadbee is not in this clone/);
   });

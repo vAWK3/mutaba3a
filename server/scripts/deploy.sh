@@ -186,9 +186,11 @@ LOCAL_DATABASE_URL="$(terraform output -raw local_database_url)"
 SQL_CONNECTION="$(terraform output -raw cloud_sql_connection_name)"
 popd >/dev/null
 
-# MUT-347: never push over a tag. A tag that already holds this clean HEAD (a re-run) is reused as it is;
-# a tag that holds anything else is refused (src/scripts/release-image.ts).
-IMAGE_PLAN="$(REGISTRY_TOKEN="$(gcloud auth print-access-token)" npm --prefix "${SERVER_DIR}" run --silent release-image -- deploy-plan --image "${IMAGE}" --head "${HEAD_SHA}" --dirty "$([[ "${TREE_DIRTY}" == "true" ]] && echo 1 || echo 0)")" \
+# MUT-347: never push over a tag. A tag that already holds this clean HEAD (a re-run), built with the same portal
+# settings, is reused as it is; a tag that holds anything else is refused (src/scripts/release-image.ts). The portal
+# bundle bakes in ENVIRONMENT and deploy.env's MUTABA3A_* settings, so their hash is part of what an image holds.
+PORTAL_CONFIG="$({ printf 'ENVIRONMENT=%s\n' "${ENVIRONMENT}"; { env | LC_ALL=C grep '^MUTABA3A_' || true; } | LC_ALL=C sort; } | shasum -a 256 | cut -d' ' -f1)"
+IMAGE_PLAN="$(REGISTRY_TOKEN="$(gcloud auth print-access-token)" npm --prefix "${SERVER_DIR}" run --silent release-image -- deploy-plan --image "${IMAGE}" --head "${HEAD_SHA}" --dirty "$([[ "${TREE_DIRTY}" == "true" ]] && echo 1 || echo 0)" --config "${PORTAL_CONFIG}")" \
   || die "refusing to deploy ${IMAGE} (above)"
 if [[ "${IMAGE_PLAN}" == "reuse" ]]; then
   info "reusing ${IMAGE}: it already holds ${HEAD_SHA:0:12}; skipping the bundle, the build and the push"
@@ -224,8 +226,10 @@ else
   pushd "${SERVER_DIR}" >/dev/null
   info "building ${IMAGE} with the local docker daemon"
   gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
-  # MUT-347: the labels a reuse or a rollback reads back (release-image.ts): the commit, and whether IMAGE_TAG let a dirty tree in.
-  docker build --platform linux/amd64 --label "org.opencontainers.image.revision=${HEAD_SHA}" --label "dirty=${TREE_DIRTY}" -t "${IMAGE}" .
+  # MUT-347: the labels a reuse or a rollback reads back (release-image.ts): the commit, whether IMAGE_TAG let a dirty
+  # tree in, and the portal settings it was built with.
+  docker build --platform linux/amd64 --label "org.opencontainers.image.revision=${HEAD_SHA}" --label "dirty=${TREE_DIRTY}" \
+    --label "portal-config=${PORTAL_CONFIG}" -t "${IMAGE}" .
   info "pushing ${IMAGE}"
   docker push "${IMAGE}"
 fi

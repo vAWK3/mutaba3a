@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONFIG_LABEL,
   DIRTY_LABEL,
   deployImagePlan,
   imageLabels,
@@ -89,6 +90,14 @@ describe('listTags and tagForCommit', () => {
     expect(await listTags('me-west1-docker.pkg.dev', 'demo/mutaba3a/mutaba3a-api', 'tok', r.fetchImpl)).toEqual(['abc1234d', '0123456']);
   });
 
+  it('never sends the token to another host a pagination link names', async () => {
+    const r = registry({
+      [`${BASE}/tags/list`]: new Response(JSON.stringify({ tags: ['abc1234d'] }), { headers: { link: '<https://elsewhere.example/v2/x/tags/list?last=a>; rel="next"' } }),
+    });
+    await expect(listTags('me-west1-docker.pkg.dev', 'demo/mutaba3a/mutaba3a-api', 'tok', r.fetchImpl)).rejects.toThrow(/another host/);
+    expect(r.calls.map((c) => c.url)).toEqual([`${BASE}/tags/list`]);
+  });
+
   it('finds the short-sha tag of a commit, the longest when two match', () => {
     expect(tagForCommit(['latest', '0123456', 'abc1234', 'abc1234d', 'abc9'], HEAD)).toBe('abc1234d');
     expect(tagForCommit(['0123456', 'api-v0.8.0'], OLD)).toBe('0123456');
@@ -101,32 +110,39 @@ describe('listTags and tagForCommit', () => {
 });
 
 describe('deployImagePlan (a normal deploy)', () => {
-  const labelled = (revision: string, dirty = 'false') => ({ [REVISION_LABEL]: revision, [DIRTY_LABEL]: dirty });
+  const CONFIG = 'c'.repeat(64);
+  const labelled = (revision: string, dirty = 'false', config = CONFIG) => ({ [REVISION_LABEL]: revision, [DIRTY_LABEL]: dirty, [CONFIG_LABEL]: config });
+  const plan = (labels: Record<string, string> | null, o: { tag?: string; treeDirty?: boolean; config?: string } = {}) =>
+    deployImagePlan({ labels, tag: o.tag ?? 'abc1234d', head: HEAD, treeDirty: o.treeDirty ?? false, config: o.config ?? CONFIG });
 
   it('builds when the tag is free', () => {
-    expect(deployImagePlan({ labels: null, tag: 'abc1234d', head: HEAD, treeDirty: false })).toEqual({ action: 'build' });
-    expect(deployImagePlan({ labels: null, tag: 'hotfix', head: HEAD, treeDirty: true })).toEqual({ action: 'build' });
+    expect(plan(null)).toEqual({ action: 'build' });
+    expect(plan(null, { tag: 'hotfix', treeDirty: true })).toEqual({ action: 'build' });
   });
 
-  it('reuses the image it already built from this clean HEAD (a re-run after a failed migration)', () => {
-    expect(deployImagePlan({ labels: labelled(HEAD), tag: 'abc1234d', head: HEAD, treeDirty: false })).toEqual({ action: 'reuse' });
+  it('reuses the image it already built from this clean HEAD with the same portal settings (a re-run after a failed migration)', () => {
+    expect(plan(labelled(HEAD))).toEqual({ action: 'reuse' });
   });
 
   it('refuses to push over a tag that names another commit', () => {
-    const plan = deployImagePlan({ labels: labelled(OLD), tag: 'hotfix', head: HEAD, treeDirty: false });
-    expect(plan).toMatchObject({ action: 'refuse' });
-    expect(plan.action === 'refuse' && plan.reason).toMatch(/already names an image built from 0123456789ab.*never pushes over a tag/);
+    const p = plan(labelled(OLD), { tag: 'hotfix' });
+    expect(p).toMatchObject({ action: 'refuse' });
+    expect(p.action === 'refuse' && p.reason).toMatch(/already names an image built from 0123456789ab.*never pushes over a tag/);
   });
 
   it('refuses a dirty image or a dirty tree: nothing proves the image holds what is deployed', () => {
-    expect(deployImagePlan({ labels: labelled(HEAD, 'true'), tag: 'hotfix', head: HEAD, treeDirty: false })).toMatchObject({ action: 'refuse' });
-    expect(deployImagePlan({ labels: labelled(HEAD), tag: 'hotfix', head: HEAD, treeDirty: true })).toMatchObject({ action: 'refuse' });
+    expect(plan(labelled(HEAD, 'true'), { tag: 'hotfix' })).toMatchObject({ action: 'refuse' });
+    expect(plan(labelled(HEAD), { tag: 'hotfix', treeDirty: true })).toMatchObject({ action: 'refuse' });
   });
 
-  it('reuses an unlabelled image only when its tag is HEAD’s short sha and the tree is clean, with a warning', () => {
-    expect(deployImagePlan({ labels: {}, tag: 'abc1234d', head: HEAD, treeDirty: false })).toEqual({ action: 'reuse', warning: expect.stringMatching(/no revision label/) });
-    expect(deployImagePlan({ labels: {}, tag: 'hotfix', head: HEAD, treeDirty: false })).toMatchObject({ action: 'refuse' });
-    expect(deployImagePlan({ labels: {}, tag: 'abc1234d', head: HEAD, treeDirty: true })).toMatchObject({ action: 'refuse' });
+  it('refuses an image built with other portal settings: the bundle bakes deploy.env’s MUTABA3A_* in (review)', () => {
+    const p = plan(labelled(HEAD), { config: 'd'.repeat(64) });
+    expect(p).toMatchObject({ action: 'refuse' });
+    expect(p.action === 'refuse' && p.reason).toMatch(/other portal build settings.*IMAGE_TAG/);
+  });
+
+  it('never reuses an unlabelled image (built before MUT-347): nothing says which commit or settings it holds', () => {
+    expect(plan({})).toMatchObject({ action: 'refuse', reason: expect.stringMatching(/no labels/) });
   });
 });
 
@@ -158,16 +174,14 @@ describe('the command line', () => {
   };
 
   it('deploy-plan prints build, or reuse, and refuses with the reason', async () => {
-    expect(await run(['deploy-plan', '--image', IMAGE, '--head', HEAD, '--dirty', '0'], {})).toMatchObject({ code: 0, out: 'build' });
-    const reused = await run(['deploy-plan', '--image', IMAGE, '--head', HEAD, '--dirty', '0'], {
+    const args = ['deploy-plan', '--image', IMAGE, '--head', HEAD, '--config', 'c'.repeat(64)];
+    expect(await run([...args, '--dirty', '0'], {})).toMatchObject({ code: 0, out: 'build' });
+    const routes = {
       [`${BASE}/manifests/abc1234d`]: manifest('sha256:cfg'),
-      [`${BASE}/blobs/sha256:cfg`]: config({ [REVISION_LABEL]: HEAD, [DIRTY_LABEL]: 'false' }),
-    });
-    expect(reused).toMatchObject({ code: 0, out: 'reuse' });
-    const refused = await run(['deploy-plan', '--image', IMAGE, '--head', HEAD, '--dirty', '1'], {
-      [`${BASE}/manifests/abc1234d`]: manifest('sha256:cfg'),
-      [`${BASE}/blobs/sha256:cfg`]: config({ [REVISION_LABEL]: HEAD, [DIRTY_LABEL]: 'false' }),
-    });
+      [`${BASE}/blobs/sha256:cfg`]: config({ [REVISION_LABEL]: HEAD, [DIRTY_LABEL]: 'false', [CONFIG_LABEL]: 'c'.repeat(64) }),
+    };
+    expect(await run([...args, '--dirty', '0'], routes)).toMatchObject({ code: 0, out: 'reuse' });
+    const refused = await run([...args, '--dirty', '1'], routes);
     expect(refused.code).toBe(1);
     expect(refused.err).toMatch(/dirty/);
   });
@@ -190,7 +204,7 @@ describe('the command line', () => {
   });
 
   it('needs REGISTRY_TOKEN', async () => {
-    const r = await run(['deploy-plan', '--image', IMAGE, '--head', HEAD, '--dirty', '0'], {}, {});
+    const r = await run(['deploy-plan', '--image', IMAGE, '--head', HEAD, '--config', 'c'.repeat(64), '--dirty', '0'], {}, {});
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/REGISTRY_TOKEN/);
   });

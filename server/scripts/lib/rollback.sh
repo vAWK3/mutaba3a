@@ -78,7 +78,7 @@ rollback_expects_error_reporting() {
 # are read by deploy.sh's apply_release, smoke_release and start_proxy.
 # shellcheck disable=SC2034
 rollback_main() {
-  local commit tag deployed
+  local commit tag deployed deployed_commit
   [[ -z "${IMAGE_TAG:-}" ]] || die "ROLLBACK_TO and IMAGE_TAG are both set: a rollback deploys the commit's existing image, so unset IMAGE_TAG"
   need gcloud "https://cloud.google.com/sdk/docs/install"
   need cloud-sql-proxy "brew install cloud-sql-proxy"
@@ -111,10 +111,22 @@ rollback_main() {
     info "${SERVICE_NAME} already serves ${tag}; nothing to roll back"
     return 0
   fi
+  # Only back: a newer commit through this path would skip the migration, pre-roll and post-roll it needs.
+  deployed_commit="$(git -C "${REPO_ROOT}" rev-parse --verify --quiet "${deployed}^{commit}" || true)"
+  if [[ -z "${deployed_commit}" ]]; then
+    warn "the deployed tag ${deployed} is not a commit in this clone; can't check that ${ROLLBACK_TO} is older than it"
+  elif ! git -C "${REPO_ROOT}" merge-base --is-ancestor "${commit}" "${deployed_commit}"; then
+    die "${ROLLBACK_TO} is not older than what serves (${deployed}); a rollback only goes back. To ship it, deploy it forward (./scripts/deploy.sh from that commit)"
+  fi
   TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${tag}")
   APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
   (cd "${TF_DIR}" && rollback_infra_gate "${deployed}")
   guard_release
+  # guard_release runs in a subshell, so SENTRY_ENABLED never reaches here from it: read it at the top level,
+  # as deploy.sh's step 0 does, or smoke would expect error reporting off on a service that has it on.
+  pushd "${TF_DIR}" >/dev/null || die "cannot enter ${TF_DIR}"
+  guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+  popd >/dev/null || die "cannot leave ${TF_DIR}"
   EXPECT_ERROR_REPORTING=""
   if rollback_expects_error_reporting "${commit}"; then
     EXPECT_ERROR_REPORTING="off"; [[ "${SENTRY_ENABLED}" == "true" ]] && EXPECT_ERROR_REPORTING="on"

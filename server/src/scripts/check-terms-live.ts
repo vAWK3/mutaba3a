@@ -110,12 +110,15 @@ export function termsAtCommit(commit: string, show: GitShow = gitShow): CurrentT
 interface CliDeps {
   fetchImpl?: typeof fetch;
   termsAt?: (commit: string) => CurrentTerms | null;
-  log?: (line: string) => void;
+  /** The success line (stdout). */
+  out?: (line: string) => void;
+  /** Every refusal (stderr). */
+  err?: (line: string) => void;
 }
 
 /** The command line: `[--commit <sha>]`. 0 when the terms are live, 1 with the reason otherwise. */
 export async function checkTermsCli(argv: string[], env: NodeJS.ProcessEnv, deps: CliDeps = {}): Promise<number> {
-  const { fetchImpl = fetch, termsAt = termsAtCommit, log = (line: string) => console.error(line) } = deps;
+  const { fetchImpl = fetch, termsAt = termsAtCommit, out = (line: string) => console.log(line), err: log = (line: string) => console.error(line) } = deps;
   const { values } = parseArgs({ args: argv, options: { commit: { type: 'string' } } });
   const origin = publicOrigin(env);
   if (!origin) {
@@ -145,12 +148,10 @@ export async function checkTermsCli(argv: string[], env: NodeJS.ProcessEnv, deps
     log(`[terms] ${problem}${named} (${url})`);
     return 1;
   }
-  log(`[terms] ${terms.version}${named} is live at ${origin}`);
+  out(`[terms] ${terms.version}${named} is live at ${origin}`);
   return 0;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  void checkTermsCli(process.argv.slice(2), process.env, { log: (line) => (line.includes(' is live at ') ? console.log(line) : console.error(line)) }).then((code) =>
-    process.exit(code),
-  );
+  void checkTermsCli(process.argv.slice(2), process.env).then((code) => process.exit(code));
 }

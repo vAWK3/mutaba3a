@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hazardsRolledPast, migrationDiff, migrationsAtCommit, ROLLBACK_HAZARDS, rollbackCheck } from '../rollback-check.js';
@@ -42,6 +42,11 @@ describe('hazardsRolledPast', () => {
 
   it('includes the rows MUT-347 added: MUT-333, MUT-115 and MUT-367', () => {
     expect(ROLLBACK_HAZARDS.map((h) => h.ticket)).toEqual(expect.arrayContaining(['MUT-100', 'MUT-235', 'MUT-255', 'MUT-182', 'MUT-333', 'MUT-115', 'MUT-367']));
+  });
+
+  it('every hazard’s migration name matches a real migration, so a typo can’t silently skip its check', () => {
+    const migrations = readdirSync(resolve(process.cwd(), 'prisma/migrations'));
+    for (const hazard of ROLLBACK_HAZARDS) expect(migrations.some((m) => m.includes(hazard.migration)), hazard.ticket).toBe(true);
   });
 
   it('every hazard is a DEPLOYMENT.md "Roll back past" row that shows its query, and every such row is a hazard', () => {

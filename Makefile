@@ -48,7 +48,9 @@ endif
 #   project  ← project_id in <environment>.tfvars
 #   bucket   ← the backend bucket of the last `terraform init`
 # preflight re-derives both independently and fails on a mismatch, so these
-# defaults can never silently point a deploy at the wrong project.
+# defaults can never silently point a release at the wrong project. (make
+# rollback-server runs no preflight: check GCP_PROJECT_ID and TF_STATE_BUCKET,
+# which it prints, before you confirm.)
 TF_DIR       := server/infrastructure/terraform
 TFVARS_FILE  := $(TF_DIR)/$(ENVIRONMENT).tfvars
 TFSTATE_FILE := $(TF_DIR)/.terraform/terraform.tfstate
