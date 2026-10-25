@@ -177,7 +177,7 @@ test('A filed receipt opens read-only with its expense, from a direct link', { t
   });
 
   await step('It shows the expense it is filed on, with Open expense and no Approve', async () => {
-    await expect(page.getByText('Spinneys')).toBeVisible();
+    await expect(page.getByText('Spinneys', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Approve and file' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Open expense' }).click();
     await expect(page.getByRole('dialog', { name: 'Edit expense' })).toBeVisible();
