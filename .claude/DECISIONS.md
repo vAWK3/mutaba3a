@@ -676,6 +676,7 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-037 decision 1, "no signup, invite or password-reset route" (the invite part) | ADR-099 | 2026-10-19 | MUT-306: a firm owner invites by email; the link goes only to the invitee, who accepts as that email |
 | ADR-037 MUT-182 amendment, "an owned profile is never granted to or provisioned into another user" | ADR-099 | 2026-10-19 | MUT-300: an operator may convert an owned Business profile into a firm (ownership moves to an OWNER role). **Withdrawn 2026-10-20** (MUT-300 D4: firm features in place, no conversion; sharing decided in v3) |
 | MUT-298 intake decision 6, "the invite always yields a copyable link" (Jira, not an ADR) | ADR-099 | 2026-10-19 | MUT-299 D10: the link goes only to the invited email; the owner never sees it |
+| ADR-099 §8, "there is no server … reading" (the server part), and MUT-252's on-device-only reading | ADR-199 | 2026-10-26 | MUT-253: on-device engines miss some fields (Android Arabic dates, the browser); our own server re-reads the stored original with self-hosted OCR to fill only the empty fields. No LLM, no third party |
 
 ---
 
@@ -4028,7 +4029,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
    - The User row is created on redemption. The membership is pending until accepted.
    - SETUP and RESET are never minted on an existing account through an invite.
    - An outbound email provider behind a `Mailer` port (EU region) is required in v3. MUT-306 picks the vendor against the brief's criteria (D14).
-8. **Receipts are read on the device** (ID4): PDF text layer, ZATCA QR, photo OCR (phone, and the portal as WASM). There is no server or LLM reading.
+8. **Receipts are read on the device** (ID4): PDF text layer, ZATCA QR, photo OCR (phone, and the portal as WASM). There is no server or LLM reading. *Amended 2026-10-26 by ADR-199: the server may re-read a stored original with self-hosted OCR to fill fields the device left empty; still no LLM.*
    - One `ReceiptSuggestion` contract is shared by phone and portal.
    - The extraction rules are ported to TS and tested against shared fixtures.
    - JoFotara QR decoding waits for the official ISTD guide (its layout is unconfirmed).
@@ -5312,4 +5313,34 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The hosted portal rolls back with the image; phone builds that need newer endpoints get 404s until roll-forward.
 - A rollback is run from a clean checkout whose terraform matches what serves (normally `main` right after the bad release).
 - Not yet drilled for real: MUT-327 drill day.
+
+---
+
+## ADR-199: The Server Re-Reads a Receipt With Self-Hosted OCR When the Device Leaves a Field Empty; Still No LLM, No Third Party (Amends ADR-099 §8 and MUT-252's On-Device-Only Reading; Epic MUT-252)
+
+**Status:** Accepted (2026-10-26, Basel chose option B, "self-hosted server fallback", over staying device-only (A) and an LLM reader (C)). The engine and the trigger are decided in the follow-up story; this ADR sets the rules they must meet.
+
+**Context:** MUT-253 (spike, ADR-182 draft in `mutaba3a-flutter/docs/spikes/mut-253-ocr-engine.md`) picked on-device engines per platform. They pass the 85% amount/date bar on iOS in all three languages, but Android Arabic dates reach 78.6% (Arabic-Indic digits), and tesseract.js alone misses in the browser (MUT-304). Under D5 a missed field opens empty for the person to type. Every receipt's original is already uploaded and stored by us (`expense_receipts`, MUT-255; the inbox attachment, MUT-116), so reading it on our own server adds processing, not a new copy or a new recipient.
+
+**Decision:**
+1. **The device reads first, always.** Phone and portal keep their on-device readers (MUT-256, MUT-301, MUT-304). The server never replaces a value the device filled; it only fills fields the device left empty or below its confidence threshold.
+2. **Self-hosted only.** The fallback engine runs in our own GCP project and region (a Cloud Run service or job next to the API), from open models we deploy ourselves. No third-party OCR or document API (Google Vision, Textract, Azure and the like) and no LLM, ours or anyone's. The MUT-252 rule as ADR-197 restates it, "MTB3A never sends data to an LLM", stands unchanged.
+3. **Only what is already stored.** The input is the stored original of a receipt the person uploaded. Nothing new leaves the device for this. The read happens after the upload, so a receipt captured offline is re-read once it syncs.
+4. **The result is a suggestion, never a record.** It comes back as the shared `ReceiptSuggestion` with its own `readerVersion` (`server-ocr-<engine>-<n>`) and per-field confidence, under the same "empty, never wrong-and-confident" rule (MUT-256 AC 2). The person still reviews and approves; nothing is auto-saved.
+5. **No new retention.** Raw OCR text is not stored or logged (Sentry and logs get counts and timings, never receipt text). Only the suggested fields are kept, as the device's are.
+6. **The licence must be commercial-safe**, for code and weights (no AGPL in the service, no non-commercial weights), checked in the follow-up story.
+7. **Ships dark** behind a server flag, off by default, until the engine passes the MUT-253 fixture bar on the fields it is asked to fill.
+
+**Consequences:**
+- MUT-304 (portal photo OCR) may shrink: if the server fallback covers the browser's misses, the WASM bundle can be smaller or deferred. MUT-304 is re-planned against this ADR.
+- MUT-256's `ReceiptTextRecognizer` gains no server call; the phone reports which fields it left empty when it uploads, and the review screen updates when the server's suggestion arrives.
+- Cloud Run CPU (and memory for the model) per re-read; the volume is bounded by misses, not by every receipt. The stored originals stay under CMEK (MUT-381); the service decrypts through the same key path as the API.
+- The privacy policy copy (ADR-186) must say receipts may be read on our servers. No new sub-processor is added. Basel approves the wording.
+
+**Alternatives considered:**
+- Device-only (A): rejected; Android Arabic dates and the browser stay manual.
+- An LLM reader on the server, ours or a vendor's (C): rejected for now; it reverses the MUT-252 promise and adds a sub-processor. MUT-432's own-Claude path stays the way to get LLM reading, on the person's side.
+- A third-party OCR API: rejected; it is a new recipient of receipt images.
+
+**Override log — ADR-099 §8 (partial) and MUT-252's on-device-only reading**: *What*: "there is no server or LLM reading". *Replaced by*: the server may re-read a stored original with self-hosted OCR to fill empty fields; LLM reading stays rejected. *Why*: on-device engines miss Android Arabic dates and the browser, and the original is already on our server. *Date*: 2026-10-26.
 
