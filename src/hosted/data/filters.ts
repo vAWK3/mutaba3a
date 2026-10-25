@@ -185,6 +185,18 @@ export const parseGroupDetail = (raw: Raw): GroupDetailSearch =>
     addToGroup: one(raw.addToGroup),
   });
 
+/**
+ * Expenses › Receipts (MUT-260 D1, A13): which receipts the gallery shows. To review is the default and is never
+ * written to the URL; `all` sends no filter to the server.
+ */
+export const RECEIPT_STATUSES = ['to_review', 'filed', 'all'] as const;
+export type ReceiptStatusFilter = (typeof RECEIPT_STATUSES)[number];
+export const DEFAULT_RECEIPT_STATUS: ReceiptStatusFilter = 'to_review';
+export interface ReceiptsPageSearch {
+  status?: Exclude<ReceiptStatusFilter, 'to_review'>;
+}
+export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch => compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined });
+
 export const INCOME_KINDS = ['received', 'owed'] as const;
 
 /**
