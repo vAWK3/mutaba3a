@@ -102,6 +102,15 @@ describe('passkey sign-in (MUT-115)', () => {
     await waitFor(() => expect(locationOf(router)).toMatch(new RegExp(`^/p/${ORG_A}`)));
   });
 
+  it('a refused autofill passkey is not offered again on its own (no loop that would lock the account)', async () => {
+    browser.autofill.mockResolvedValue(true);
+    const { api } = signInPage({ 'POST /v1/sessions/passkey': () => fail(401, 'INVALID_CREDENTIALS') });
+    expect(await screen.findByRole('alert')).toHaveTextContent('That passkey didn’t work');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(api.count('POST /v1/sessions/passkey')).toBe(1);
+    expect(screen.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled();
+  });
+
   it('submitting the password ends the autofill wait first', async () => {
     browser.autofill.mockResolvedValue(true);
     browser.startAuthentication.mockImplementation(() => new Promise(() => {}));

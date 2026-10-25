@@ -1276,7 +1276,7 @@ export const PasskeyListSchema = z
   .openapi('PasskeyList');
 
 export const RenamePasskeyRequestSchema = z
-  .object({ name: z.string().trim().min(1).max(64) })
+  .object({ name: z.string().trim().min(1).max(64).regex(/^[^\p{Cc}]*$/u, 'no control characters') })
   .strict()
   .openapi('RenamePasskeyRequest');
 

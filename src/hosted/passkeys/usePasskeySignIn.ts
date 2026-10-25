@@ -9,7 +9,8 @@ import { assertPasskey, cancelPasskeyCeremony, passkeyAutofillSupport, passkeySu
  *  - autofill: the email field's suggestions offer this site's passkeys (conditional mediation), armed on mount and
  *    re-armed before its challenge expires (the server keeps one 5 minutes).
  * Starting the button aborts the autofill wait (SimpleWebAuthn's abort service); the password form calls `pause()`
- * before it submits and `resume()` if that fails. A cancelled sheet shows nothing.
+ * before it submits and `resume()` if that fails. A cancelled sheet shows nothing. A passkey the server refused through
+ * autofill is not offered again on its own (review: no retry loop).
  */
 export const AUTOFILL_REARM_MS = 4.5 * 60_000;
 
@@ -68,9 +69,9 @@ export function usePasskeySignIn({ onSignedIn, onError }: PasskeySignInHandlers)
       try {
         await finish(challenge.challengeId, outcome.response as Schemas['PasskeySignInRequest']['response']);
       } catch (error) {
+        // Not re-armed: an authenticator that answers the field by itself would otherwise retry a refused passkey in a
+        // loop, each failure counting toward the account's lockout. The button and the password stay.
         handlers.current.onError(error);
-        autofillAllowed.current = true;
-        setAutofillRun((n) => n + 1);
       } finally {
         setPending(false);
       }

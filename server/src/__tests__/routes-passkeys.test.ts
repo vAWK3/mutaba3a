@@ -216,6 +216,7 @@ describe('passkey management (MUT-115)', () => {
     expect((await h.app.request(`/v1/passkeys/${passkey.id}`, json({ name: 'Mine' }, withSession(other), 'PATCH'))).status).toBe(404);
     expect((await h.app.request(`/v1/passkeys/${passkey.id}`, json({ name: '' }, withSession(token), 'PATCH'))).status).toBe(422);
     expect((await h.app.request(`/v1/passkeys/${passkey.id}`, json({ name: 'x'.repeat(65) }, withSession(token), 'PATCH'))).status).toBe(422);
+    expect((await h.app.request(`/v1/passkeys/${passkey.id}`, json({ name: 'line\nbreak' }, withSession(token), 'PATCH'))).status).toBe(422);
     const renamed = await h.app.request(`/v1/passkeys/${passkey.id}`, json({ name: '  هاتف العمل ' }, withSession(token), 'PATCH'));
     expect(await read(renamed)).toMatchObject({ id: passkey.id, name: 'هاتف العمل' });
     expect((await h.app.request(`/v1/passkeys/${passkey.id}`, { method: 'DELETE', headers: withSession(other) })).status).toBe(404);
