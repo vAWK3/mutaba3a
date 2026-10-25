@@ -31,6 +31,8 @@ describe('config/hosts (MUT-326)', () => {
       ['an empty domain', { domain: '', stage: 'proxy' }, /domain/],
       ['a dotted subdomain', { portalSubdomain: 'a.b' }, /portalSubdomain/],
       ['an empty subdomain', { portalSubdomain: '' }, /portalSubdomain/],
+      ['a dotted mail subdomain', { mailSubdomain: 'a.b' }, /mailSubdomain/],
+      ['a mail subdomain equal to the portal one', { mailSubdomain: 'app' }, /mailSubdomain/],
       ['an unknown stage', { stage: 'on' }, /stage must be one of/],
       ['a live stage without a domain', { stage: 'live' }, /legacy" exactly when domain is null/],
       ['a domain left at the legacy stage', { domain: 'placeholder.example' }, /legacy" exactly when domain is null/],
@@ -47,6 +49,14 @@ describe('config/hosts (MUT-326)', () => {
   });
 
   describe('resolveHosts', () => {
+    it('sends mail from <mailSubdomain>.<apex>, the apex without one, and nowhere without a domain', () => {
+      const live = (env: object) => resolveHosts(parseHostsConfig(config({ domain: 'placeholder.example', stage: 'live', ...env }))).mailDomain;
+      expect(live({ mailSubdomain: 'notify' })).toBe('notify.placeholder.example');
+      expect(live({})).toBe('placeholder.example');
+      expect(live({ mailSubdomain: null })).toBe('placeholder.example');
+      expect(resolveHosts(parseHostsConfig(config({ mailSubdomain: 'notify' }))).mailDomain).toBeNull();
+    });
+
     it('serves from the legacy hosts while no domain is set', () => {
       const hosts = resolveHosts(parseHostsConfig(config()));
       expect(hosts).toMatchObject({

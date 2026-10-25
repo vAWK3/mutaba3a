@@ -13,6 +13,7 @@ describe('scripts/hosts.ts (MUT-326)', () => {
       ['landingOrigin', LEGACY.landing],
       ['portalOrigin', LEGACY.portal],
       ['domain', ''],
+      ['mailDomain', ''],
     ])('prints %s', (key, value) => {
       expect(getValue(resolveHosts(config()), key)).toBe(value);
     });

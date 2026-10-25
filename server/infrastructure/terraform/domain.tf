@@ -24,6 +24,8 @@ locals {
   hosts_config = lookup(jsondecode(file("${path.module}/${var.hosts_file}")), var.environment, null)
   domain       = local.hosts_config == null ? null : local.hosts_config.domain
   domain_stage = local.hosts_config == null ? "legacy" : local.hosts_config.stage
+  # Mail is sent from <mailSubdomain>.<apex> (the Resend domain), or the apex when the file names no mailSubdomain.
+  mail_domain = local.domain == null ? null : (try(local.hosts_config.mailSubdomain, null) == null ? local.domain : "${local.hosts_config.mailSubdomain}.${local.domain}")
 
   front_door_enabled       = local.domain != null
   front_door_portal_origin = local.front_door_enabled ? "https://${local.hosts_config.portalSubdomain}.${local.domain}" : null

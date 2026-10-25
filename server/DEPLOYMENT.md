@@ -1298,13 +1298,13 @@ The filters are unproven against live entries until each first fires: note the d
 
 ### 6f. Transactional mail through Resend (MUT-359, ADR-159 §5)
 
-The API mails people through a `Mailer` port (`server/src/email/`). Today it sends one mail, "your password was set / changed", after a setup-link redeem and after `POST /v1/me/password`. MUT-366 adds the signup and recovery links, MUT-367 the review mails, MUT-306 invites, MUT-419 trial mails. Resend is the provider, on Barmajiyat's existing account (Malafat sends from it too). Mutaba3a has its own domain on the apex, sends from `no-reply@<apex>` in `eu-west-1`, and has open and click tracking **off**.
+The API mails people through a `Mailer` port (`server/src/email/`). Today it sends one mail, "your password was set / changed", after a setup-link redeem and after `POST /v1/me/password`. MUT-366 adds the signup and recovery links, MUT-367 the review mails, MUT-306 invites, MUT-419 trial mails. Resend is the provider, on Barmajiyat's existing account (Malafat sends from it too). Mutaba3a has its own Resend domain, `<mailSubdomain>.<apex>` from `config/hosts.json` (`notify`, Basel 2026-10-25; the apex when unset), sends from `no-reply@<mail domain>` in `eu-west-1`, and has open and click tracking **off**.
 
 | Piece | Where | State until you turn it on |
 |---|---|---|
 | `MAILER` | `infrastructure/terraform` var `mailer` (`noop` / `resend`) | `noop`: nothing is sent, and the password notice resolves to `disabled` |
 | Secrets `mutaba3a-api-resend-api-key`, `mutaba3a-api-resend-webhook-secret` | `infrastructure/terraform/email.tf` | Exist, empty. Terraform never writes their values. Mounted only with `mailer = "resend"` |
-| Sender, reply-to, cap | `MAIL_FROM_ADDRESS = no-reply@<domain>` (from `config/hosts.json`), vars `mail_reply_to` and `mail_daily_cap` | Not set |
+| Sender, reply-to, cap | `MAIL_FROM_ADDRESS = no-reply@<mail domain>` (`npm run hosts -- get mailDomain`, from `config/hosts.json`), vars `mail_reply_to` and `mail_daily_cap` | Not set |
 | DNS: DKIM, the `send.` return path (MX + SPF), DMARC `p=none` | `infrastructure/frontdoor/email.tf`, var `resend_dkim_value` | Not created |
 | Bounce webhook `POST /v1/email/resend/webhook` | The API | Answers 503 `MAILER_NOT_CONFIGURED` until `RESEND_WEBHOOK_SECRET` is set. It keeps only events sent from our domain (the account is shared) |
 | Alerts "Mail cap reached" and "Mail provider failing" | `email.tf`, on the §6b channels | Don't exist. Created with `mailer = "resend"` |
@@ -1317,7 +1317,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
 #### Go live (Basel, at the end of the run)
 
 1. **Privacy first.** MUT-369's privacy-policy paragraph is live: Resend is a processor and keeps records in the US. Mail carries links, never money records.
-2. **Resend:** on the Barmajiyat account, add the domain from `config/hosts.json` (`npm run hosts -- get domain`). Pick region **eu-west-1**, and turn **open tracking and click tracking off** (Domains › the domain › Configuration).
+2. **Resend:** on the Barmajiyat account, add the mail domain from `config/hosts.json` (`npm run hosts -- get mailDomain`: `<mailSubdomain>.<apex>`). DKIM and the `send.` records go under it; DMARC stays on the apex, which governs the subdomain. Pick region **eu-west-1**, and turn **open tracking and click tracking off** (Domains › the domain › Configuration).
 3. **DNS:** copy the DKIM value Resend shows (`p=MIGf…`) into `infrastructure/frontdoor/production.tfvars` as `resend_dkim_value`, plus `dmarc_report_address` if you want DMARC reports. An address off the apex needs that domain's authorization record. Then:
    ```bash
    cd infrastructure/frontdoor && terraform plan -var-file=production.tfvars
@@ -1335,7 +1335,7 @@ The API mails people through a `Mailer` port (`server/src/email/`). Today it sen
    * In Resend, create the webhook `https://<portal host>/v1/email/resend/webhook` for `email.bounced` and `email.complained`. Add its signing secret (`whsec_…`) as above to `mutaba3a-api-resend-webhook-secret`. Don't create the webhook earlier: until the release, the endpoint answers 503, and Svix may disable an endpoint that keeps failing.
    * In `infrastructure/terraform/production.tfvars`, in every checkout you release from, set `mailer = "resend"`, `mail_reply_to`, `mail_daily_cap` and, optionally, `operator_alert_email`.
    * Run `make release server`. The plan adds `MAILER=resend`, the two secret env vars, `MAIL_FROM_ADDRESS`, `MAIL_REPLY_TO` and `MAIL_DAILY_CAP`, and the two alert policies.
-8. **Live check (MUT-359 AC):** change your own password on the portal in Arabic, then in English. The notice must reach a Gmail and an Outlook inbox, not spam, with the From `MTB3A <no-reply@<apex>>`. Delete the MUT-359 line from `docs/operations/before-release.md` and record the date in §7.
+8. **Live check (MUT-359 AC):** change your own password on the portal in Arabic, then in English. The notice must reach a Gmail and an Outlook inbox, not spam, with the From `MTB3A <no-reply@<mail domain>>`. Delete the MUT-359 line from `docs/operations/before-release.md` and record the date in §7.
 
 **Turn it off:** set `mailer = "noop"` in every checkout you release from, then either apply from `infrastructure/terraform` (a plain apply isn't guarded) or release with `SKIP_MAILER_GUARD=1`. Once the service no longer mounts `RESEND_API_KEY`, later releases pass the guard. The secrets stay.
 

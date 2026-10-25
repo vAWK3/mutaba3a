@@ -1,8 +1,9 @@
 {
-  "$comment": "MUT-326, ADR-155: the one place Mutaba3a's public hosts live. Everything else (vite, the bundle allowlist, the server release scripts, Terraform's Cloud Run env and front door, Sentry, the phone lines `npm run domain:plan` prints) derives from this file. `domain` is the apex (e.g. \"example.com\"): the landing moves there, the portal and API to <portalSubdomain>.<apex>, and the `legacy` hosts keep answering. `stage` walks the move in server/DEPLOYMENT.md §5a's order: \"legacy\" (no domain), \"proxy\" (the front door is built and verified; builds still use the legacy hosts), \"live\" (builds, links and the phone use the new hosts), \"redirect\" (old-host pages are sent on; only once the carry-over has shipped). scripts/__tests__/no-hardcoded-hosts.test.ts fails if these hosts appear anywhere else.",
+  "$comment": "MUT-326, ADR-155: the one place Mutaba3a's public hosts live. Everything else (vite, the bundle allowlist, the server release scripts, Terraform's Cloud Run env and front door, Sentry, the phone lines `npm run domain:plan` prints) derives from this file. `domain` is the apex (e.g. \"example.com\"): the landing moves there, the portal and API to <portalSubdomain>.<apex>, mail is sent from <mailSubdomain>.<apex> (the apex when absent), and the `legacy` hosts keep answering. `stage` walks the move in server/DEPLOYMENT.md §5a's order: \"legacy\" (no domain), \"proxy\" (the front door is built and verified; builds still use the legacy hosts), \"live\" (builds, links and the phone use the new hosts), \"redirect\" (old-host pages are sent on; only once the carry-over has shipped). scripts/__tests__/no-hardcoded-hosts.test.ts fails if these hosts appear anywhere else.",
   "production": {
     "domain": "mtb3a.com",
     "portalSubdomain": "app",
+    "mailSubdomain": "notify",
     "stage": "live",
     "legacy": {
       "landing": "https://mutaba3a.netlify.app",

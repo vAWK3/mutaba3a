@@ -17,7 +17,7 @@ locals {
   secret_resend_webhook_secret = "mutaba3a-api-resend-webhook-secret${local.suffix}"
   # MUT-366: Cloudflare Turnstile's secret, which signup and recovery verify with once a link can be mailed.
   secret_turnstile  = "mutaba3a-api-turnstile-secret${local.suffix}"
-  mail_from_address = local.domain == null ? null : "no-reply@${local.domain}"
+  mail_from_address = local.mail_domain == null ? null : "no-reply@${local.mail_domain}"
 
   # Plain env for Cloud Run. MAILER is always set, so the server's default never decides it.
   mail_env = merge(

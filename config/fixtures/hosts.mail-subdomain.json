@@ -1,0 +1,22 @@
+{
+  "$comment": "Like hosts.placeholder.json, plus production sends mail from a subdomain (mailSubdomain), as the real config does.",
+  "production": {
+    "domain": "placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": {
+      "landing": "https://landing.example.test",
+      "portal": "https://portal.example.test"
+    },
+    "mailSubdomain": "notify"
+  },
+  "staging": {
+    "domain": "staging-placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": {
+      "landing": "https://landing-staging.example.test",
+      "portal": "https://portal-staging.example.test"
+    }
+  }
+}

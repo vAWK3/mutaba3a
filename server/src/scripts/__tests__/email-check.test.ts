@@ -55,6 +55,10 @@ describe('email:check — DNS (keyless, the preflight’s)', () => {
     const problems = await checkEmailDns(DOMAIN, dns({ [key]: value as never }));
     expect(problems.join('\n')).toContain(word);
   });
+
+  it("accepts DMARC on a parent domain, which governs a mail subdomain (the apex's record covers notify.<apex>)", async () => {
+    expect(await checkEmailDns(DOMAIN, dns({ [`txt:_dmarc.${DOMAIN}`]: [], 'txt:_dmarc.example.test': ['v=DMARC1; p=none'] }))).toEqual([]);
+  });
 });
 
 describe('email:check --api (the operator’s, with a full-access key)', () => {

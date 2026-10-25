@@ -178,6 +178,27 @@ run "the_dkim_value_publishes_resends_records_dns_only" {
   }
 }
 
+# Basel 2026-10-25: Resend sends from notify.<apex>. DKIM and the return path move under the mail subdomain;
+# DMARC stays on the apex, where it also governs the subdomain.
+run "a_mail_subdomain_moves_dkim_and_the_return_path_under_it" {
+  command = plan
+
+  variables {
+    hosts_file        = "../../../config/fixtures/hosts.mail-subdomain.json"
+    resend_dkim_value = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC"
+  }
+
+  assert {
+    condition = (
+      cloudflare_dns_record.email["dkim"].name == "resend._domainkey.notify.placeholder.example"
+      && cloudflare_dns_record.email["return_path_mx"].name == "send.notify.placeholder.example"
+      && cloudflare_dns_record.email["return_path_spf"].name == "send.notify.placeholder.example"
+      && cloudflare_dns_record.email["dmarc"].name == "_dmarc.placeholder.example"
+    )
+    error_message = "With mailSubdomain, DKIM and send.* sit under <mailSubdomain>.<apex>; DMARC stays on the apex."
+  }
+}
+
 run "a_report_address_adds_rua_and_the_region_moves_the_mx" {
   command = plan
 
