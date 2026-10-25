@@ -1104,7 +1104,7 @@ Basel asked to stop the one-at-a-time questions ("this has been going on too lon
 | OV5 | 5, Medium: deleting DCR clients strands connectors | Never delete a client that ever had a grant; GC only never-used clients after 30 d; grant → client FK `onDelete: Restrict` |
 | OV6 | 6, Medium: CIMD path unexercised | Live portal-selfservice spec gains a CIMD case (static metadata document served on loopback for the test); hand checks record which registration path Claude.ai and Claude Code used |
 | OV7 | 7, Medium: request may expire during sign-in | Authorization request lifetime 30 min (was 10) |
-| OV8 | 8, Low: /mcp refusals unpinned | `FEATURE_NOT_ENABLED` and closing refusals answer 403 with the JSON envelope and `WWW-Authenticate: Bearer error="invalid_token"`-free headers (no `scope`, no `insufficient_scope`), so clients don't loop into step-up; tests pin headers and body |
+| OV8 | 8, Low: /mcp refusals unpinned | `FEATURE_NOT_ENABLED` and closing refusals answer 403 with the JSON envelope and no `WWW-Authenticate` step-up hint (no `scope`, no `insufficient_scope`), so clients don't loop into re-authorization; tests pin headers and body |
 | OV9 | 9, Low: SDK compatibility | Before building, confirm the pinned `@modelcontextprotocol/sdk` version works with zod 4.6.5 and exports `WebStandardStreamableHTTPServerTransport` (one zod copy in the lockfile); GET `/mcp` answers 405 in stateless JSON mode |
 | OV10 | 10, Low: AC7 coupling unstated | Stated decision: `features.revoke('agent_access')` calls the OAuth repository's `revokeAllForUser` inside the same store transaction (memory and Prisma); recorded in ADR-197 and PATTERNS |
 
@@ -1132,3 +1132,89 @@ Basel asked to stop the one-at-a-time questions ("this has been going on too lon
 - **Consent page (Q2):** buttons disabled while deciding; 409 → "already handled".
 
 Approval readiness: PASS — S1(D2), S2a(D3), S2b(D4), S3(D5), S4(D6), S5→OV1(D7→D19), S6(D8), P-D1(D9), P-D4(D10), P-D5a(D11), P-D5b(D12), P-D8(D13), P-D6(D14), P-D3(D15), Q1(D16), R1(D17), OV11(D18), OV2–OV10 (Basel "go", 2026-10-25).
+
+## NOT in scope
+- MCP tools (MUT-435 read, MUT-436 write), statement matching (MUT-437), statement import (MUT-438, postponed).
+- Per-profile grant scoping, per-scope consent checkboxes, a third-party app directory.
+- Flutter app and the local web app (epic scope out).
+- Firm-owner consent for agent access to firm data (ADR-196 deferred → MUT-435).
+- A shared cross-instance rate limiter (existing debt; the new routes inherit per-instance limits).
+
+## What already exists (reused, not rebuilt)
+- `sessionDigest` + `SESSION_TOKEN_PEPPER` (`auth/sessions.ts`) for token digests; `SlidingWindowRateLimiter` + `requestClientIp`; `closingRefusal`/`isAccountGone` (`accounts/closure.ts`); `hasFeature` (`features.ts`); `standingOf`/`standingRefuses` (`billing/gate.ts`); the audit fan-out pattern (`admin-users.ts`); `principalStoreGuard`/`storeRefusal` (`auth/store-guard.ts`).
+- Portal: `AuthLayout`, `YouRows`, Drawer + URL-key pattern (`AccountDrawers.tsx`, `filters.ts`), PasskeysDrawer inline confirm, `useMe().user.features`, `safeNext`.
+- Ported by pattern (not code) from Malafat MAL-176/178/224: discovery builders, client-trust allowlist, CIMD URL rules and guarded fetcher.
+
+## Failure modes
+| Path | Realistic failure | Covered by | User sees |
+|---|---|---|---|
+| CIMD fetch | client metadata host down or slow | 5 s timeout → `invalid_client` redirect to `/connect/approve?error=` | clear error page, "try again from Claude" |
+| token endpoint | concurrent refresh | idempotent rotation (D19) + race tests | nothing; same tokens |
+| `/mcp` | flag revoked mid-session | per-request `hasFeature` → 403 pinned shape (OV8) | Claude shows MTB3A refused access |
+| consent | request expired during sign-in | 30 min lifetime (OV7) + "start again" state | clear message |
+| config | `PORTAL_ORIGIN` or `OAUTH_DERIVE_KEY` unset | 503 `OAUTH_NOT_CONFIGURED` / startup validation fails fast | operator sees it at deploy |
+| purge | user deleted with live grants | FK cascade + purge catalog test | n/a |
+No critical gaps: every failure has a test or explicit handling and none is silent.
+
+## Worktree parallelization strategy
+| Step | Modules touched | Depends on |
+|---|---|---|
+| 1. Schema + store port | server/prisma, server/src/repositories | — |
+| 2. OAuth core | server/src/oauth | 1 |
+| 3. Routes + agent auth + MCP | server/src/routes, server/src/auth, server/src/mcp | 2 |
+| 4. Revocation hooks + regression | server/src/routes, server/src/repositories, tests | 1, 2 |
+| 5. Portal | src/hosted | 3 (OpenAPI types) |
+| 6. QA specs + docs | qa/, .claude/, docs/ | 3, 5 |
+Lane A: 1 → 2 → 3 → 4 (shared server modules, sequential). Lane B: 5 after 3's OpenAPI lands. Execution: one worktree (memory: one worktree per repo per epic ticket); Lane B can start from the generated `schema.d.ts` once step 3 commits. Conflict flag: `routes/` is shared by steps 3 and 4.
+
+## Implementation Tasks
+Synthesized from this review's findings. Each task derives from a specific finding above.
+
+- [ ] **T1 (P1, human: ~1 day / CC: ~20 min)** — schema — migration `mut434_oauth` + `OAuthRepository` (memory + Prisma) + store-guard rows + purge catalog
+  - Surfaced by: OV2, OV3, OV5, S2a, D13 — Files: server/prisma/schema.prisma, server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts, server/src/auth/store-guard.ts — Verify: `npm --prefix server run test:db`
+- [ ] **T2 (P1, human: ~2 days / CC: ~45 min)** — oauth core — `protocol.ts`, `trust.ts` (+ CIMD fetcher), `service.ts` with conditional claims and idempotent rotation
+  - Surfaced by: D1, D2, D6, D19, D8, OV4 — Files: server/src/oauth/* — Verify: `npm --prefix server test -- oauth`
+- [ ] **T3 (P1, human: ~1 day / CC: ~30 min)** — routes — well-known, /oauth/*, /v1/oauth/*, `agent-auth.ts`, `/mcp` (zero tools), `iss`, audience, pinned refusals, 405 GET
+  - Surfaced by: D3, D4, D10, OV8, OV9 — Files: server/src/routes/{well-known,oauth,oauth-consent,mcp}.ts, server/src/auth/agent-auth.ts, server/src/mcp/server.ts, app.ts, config.ts, errors.ts — Verify: oauth-flow.test.ts, `openapi:check`
+- [ ] **T4 (P1, human: ~4 h / CC: ~20 min)** — revocation + regression — feature/password/disable/revoke-sessions hooks, audit, Sentry `captureMessage`, logger keys, R1 assertions
+  - Surfaced by: D11, D12, D14, D16, D17, OV10 — Files: routes/{admin-users,sessions}.ts, observability/reporter.ts, logger.ts, seven test suites — Verify: `npm --prefix server test`
+- [ ] **T5 (P1, human: ~1 day / CC: ~30 min)** — portal — `/connect/approve` (consent, refusal, errors, 409, local mode), Connect Claude drawer, CopyField, i18n ar/en
+  - Surfaced by: D1, D15, Q2 — Files: src/hosted/{router.tsx,pages/connect/*,components/ConnectClaudeDrawer.tsx,components/CopyField.tsx,data/*,i18n/*} — Verify: `npm run test:run -- src/hosted`
+- [ ] **T6 (P1, human: ~4 h / CC: ~20 min)** — QA + docs — qa/features/portal/connect.yaml + live portal-selfservice (DCR + CIMD cases), ADR-197, knowledge files, before-release (OAUTH_DERIVE_KEY, hand checks recording registration path)
+  - Surfaced by: OV6, AC1 — Verify: `release-qa run --attach --only <ids>`, `release-qa lint`
+
+## Unresolved decisions
+None.
+
+## Completion summary
+- Step 0: Scope Challenge — scope accepted as-is (structure B, smaller arrangement)
+- Reality rows: 7/7 tier-1 rows considered (premise/already-done/surface/binding/numbers/deferred-asks/pr-count, summarised below), 0 unverified premises
+- Architecture Review: 0 new issues (6 Scope Challenge findings, 6 plan decisions resolved)
+- Code Quality Review: 2 issues found (Q1, Q2)
+- Test Review: diagram produced, 1 gap identified (R1 regression contract, resolved)
+- Performance Review: 0 issues found
+- NOT in scope: written
+- What already exists: written
+- TODOS.md updates: 0 items proposed to user
+- Failure modes: 0 critical gaps flagged
+- Unresolved decisions: 0 in this review
+- Outside voice: Claude Plan subagent (native fallback; Codex not installed), completed, 11 findings, all resolved
+- Parallelization: 2 lanes, 1 parallel / 5 sequential
+- Lake Score: 12/12 answers with completeness scores picked the 10/10 option
+
+Reality: premise-table pass (spec, Malafat code, repo files cited inline) · already-done pass (no MUT-434 commits on main, `git log --grep MUT-434` empty) · surface-check pass (routes/commands named exist: `feature:revoke`, `revoke:sessions`, `test:db`, `openapi:check`) · binding-decisions pass (MUT-433 D3/D6 honoured; ADR-196 deferral kept) · numbers pass (lifetimes and limits are decisions, not measurements) · deferred-asks pass (ticket AC1–AC8 all mapped in §5) · pr-count pass (one PR, one worktree).
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Outside Review | Claude Plan subagent (native fallback) | Independent 2nd opinion | 1 | unavailable (outside provider); in-host completed | 11 findings, all resolved |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open (all resolved into plan) | 3 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+- **OUTSIDE COVERAGE:** Codex CLI not installed; native Claude Plan subagent completed inside the 5-minute window (in-host, not external coverage). 11 findings: 2 High, 5 Medium, 4 Low; all resolved (D18–D20, OV3–OV10).
+- **VERDICT:** Eng review complete with every finding resolved into the plan; status recorded as issues_open because findings were found. Ready to implement.
+
+NO UNRESOLVED DECISIONS
