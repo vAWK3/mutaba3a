@@ -69,7 +69,8 @@ describe('a page crash (design D3: inline, the shell stays)', () => {
     crash.page = true;
     renderPortal(`/p/${ORG_A}/clients`);
     const title = await screen.findByRole('heading', { name: COPY[language].title });
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    // MUT-426: the chrome is one landmark named for the product, with the pill's Sections nav inside it.
+    expect(screen.getByRole('navigation', { name: language === 'ar' ? 'الأقسام' : 'Sections' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: COPY[language].reload })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain('secret detail');
     await waitFor(() => expect(document.activeElement).toBe(title));
