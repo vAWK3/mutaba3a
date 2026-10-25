@@ -3750,6 +3750,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
+## MUT-414 / MUT-415 — passkey added mail, passkey review after a password change or recovery (2026-10-25)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `email/__tests__/passkey-notice.test.ts` (template, locale, vars, key `passkey-added:<id>`; never throws), `templates.test.ts` / `mailer.test.ts` (the new `passkey-added` sample: en/ar, links, no amount/date) | `npm --prefix server test` |
+| Routes | `routes-passkey-notice.test.ts` (4: one mail per add in the account's language naming the passkey, one per passkey, suppressed address gets none and the add succeeds, a failing provider never fails the add) | `npm --prefix server test` |
+| Portal | `components/__tests__/PasskeyReview.test.tsx` (7: review after a change with remove in place and Done; no passkeys / unreadable list / host without passkeys = no step; Arabic; recovery lands on the review, or Home with none) | `npx vitest run src/hosted/components/__tests__/PasskeyReview.test.tsx` |
+| Release-QA | `portal-selfservice.passkeys.added-mail`, `.review-after-password`, `.review-after-recovery` (new); `.password-change-keeps` presses Done on the review | `release-qa release --only portal-selfservice.passkeys` |
+
 ## MUT-426 — the floating pill, the You island and Reports (2026-10-25, ADR-195)
 
 | Layer | Tests | Command |
