@@ -175,15 +175,15 @@ test('A Malafat-fed profile’s income lists say why nothing can be added there'
   });
 
   await step('Payments says the same, with no Add income', async () => {
-    await page.getByRole('link', { name: 'Payments', exact: true }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    await page.getByRole('link', { name: 'Paid', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await expect(note).toBeVisible();
     await expect(page.getByRole('button', { name: '+ Add income' })).toHaveCount(0);
   });
 
   await step('A link asking for the Add income drawer opens nothing here', async () => {
     await page.goto(`/p/${FIRM}/payments?newIncome=received`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 

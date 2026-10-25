@@ -16,8 +16,8 @@ import { openYou, youRow } from '../../support/you';
 async function openPayments(page: Page) {
   await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
 }
 
 async function addReceived(page: Page, amount: string) {
@@ -61,8 +61,16 @@ const PUBLIC_FX_SNAPSHOT = { rateDate: RATE_DAY.toISOString().slice(0, 10), perE
 /** How the ≈ line names that date in English, e.g. "Oct 17, 2026". */
 const RATE_DAY_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(RATE_DAY);
 
-async function openSection(page: Page, name: string, heading = name) {
-  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name }).click();
+/** One of the four destinations (MUT-424): its page is titled with the tab's word. */
+async function openSection(page: Page, destination: 'Owed' | 'Paid' | 'Spent' | 'Clients') {
+  await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: destination }).click();
+  await expect(page.getByRole('heading', { level: 1, name: destination })).toBeVisible();
+}
+
+/** A page one level in (MUT-424): the destination, then its row at the bottom of the page. */
+async function openOneLevelIn(page: Page, destination: 'Owed' | 'Paid' | 'Clients', row: string, heading: string) {
+  await openSection(page, destination);
+  await page.getByRole('navigation', { name: `More in ${destination}` }).getByRole('link', { name: new RegExp(`^${row}`) }).click();
   await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
 }
 
@@ -86,13 +94,13 @@ test('A first visit opens the app on this device in Arabic, with no sign-in and 
     await page.goto('/');
     await expect(page.getByRole('navigation', { name: 'الأقسام' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1, name: 'نظرة عامة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'المستحق' })).toBeVisible();
     await expect(page.getByLabel('البريد الإلكتروني')).toHaveCount(0);
   });
 
-  await step('The nav has the same sections as signed in, Expenses and Conversions included', async () => {
+  await step('The nav has the same four destinations as signed in (MUT-424)', async () => {
     const links = page.getByRole('navigation', { name: 'الأقسام' }).getByRole('link');
-    await expect(links).toHaveText(['نظرة عامة', 'العملاء', 'المستحقات', 'الدفعات', 'المستندات', 'المصاريف', 'التحويلات']);
+    await expect(links).toHaveText(['المستحق', 'المدفوع', 'المصروف', 'العملاء']);
   });
 
   await step('You is this device\'s: Sign in and Your data, then Language and the terms, nothing that needs an account', async () => {
@@ -141,7 +149,8 @@ test('Signed out, add a client from the picker, record money owed and part of it
 
   await step('Open Receivables signed out', async () => {
     await page.goto('/');
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Receivables' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Owed' }).click();
+    await page.getByRole('navigation', { name: 'More in Owed' }).getByRole('link', { name: /^Receivables/ }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Receivables' })).toBeVisible();
   });
 
@@ -190,7 +199,8 @@ test('Signed out, add a client and a matter from the pickers, record money owed 
 
   await step('Open Receivables signed out', async () => {
     await page.goto('/');
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Receivables' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Owed' }).click();
+    await page.getByRole('navigation', { name: 'More in Owed' }).getByRole('link', { name: /^Receivables/ }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Receivables' })).toBeVisible();
   });
 
@@ -271,7 +281,7 @@ test('Download my records, clear the site\'s data, restore the file, and every r
   });
 
   await step('Record an expense, Ink, with a PDF receipt', async () => {
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await recordExpense(page, { amount: '30.00', title: 'Ink' });
     await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Edit expense' });
@@ -309,12 +319,12 @@ test('Download my records, clear the site\'s data, restore the file, and every r
     await expect(confirm).toContainText('Replace everything on this device with the 2 records in this file?');
     await confirm.getByRole('button', { name: 'Replace' }).click();
     await expect(page.getByText('Records restored.')).toBeVisible();
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
     await expect(paymentsTable(page)).toContainText('75.00');
   });
 
   await step('The expense\'s receipt downloads again, byte for byte', async () => {
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Edit expense' });
     const [download] = await Promise.all([page.waitForEvent('download'), drawer.getByRole('button', { name: 'Download' }).click()]);
@@ -335,9 +345,9 @@ test('When a signed-in session ends, the portal offers Sign in or Continue on th
     await expect(paymentsTable(page)).toContainText('PAY-0001');
   });
 
-  await step('The session ends on the server; open Receivables', async () => {
+  await step('The session ends on the server; open Owed', async () => {
     api.signedIn = false;
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Receivables' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Owed' }).click();
   });
 
   await step('Sign-in says so and offers both doors; nothing switched by itself', async () => {
@@ -363,7 +373,7 @@ test('Signed out, record an expense, attach a PDF receipt, reload, and download 
 
   await step('Open Expenses signed out and record 45.00, Taxi to court', async () => {
     await page.goto('/');
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await recordExpense(page, { amount: '45.00', title: 'Taxi to court' });
   });
 
@@ -397,7 +407,7 @@ test('Signed out and online, a trip group in two currencies shows the ≈ line; 
 
   await step('Record 40.00 USD and 120.00 ILS today', async () => {
     await page.goto('/');
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await recordExpense(page, { amount: '40.00', title: 'Airport taxi', currency: 'USD' });
     await recordExpense(page, { amount: '120.00', title: 'Hotel night', currency: 'ILS' });
   });
@@ -444,7 +454,7 @@ test('Signed out, log a conversion, reload, and edit it', { tag: '@portal.local.
 
   await step('Open Conversions signed out and log 1000 USD to 3700 ILS', async () => {
     await page.goto('/');
-    await openSection(page, 'Conversions');
+    await openOneLevelIn(page, 'Paid', 'Currency conversions', 'Conversions');
     await page.getByRole('button', { name: 'Log conversion' }).first().click();
     const drawer = page.getByRole('dialog', { name: 'Log conversion' });
     await drawer.getByLabel('From amount').fill('1000');
@@ -477,7 +487,7 @@ test('Signed out, Documents opens on its empty state, not an error', { tag: '@po
 
   await step('Open Documents signed out', async () => {
     await page.goto('/');
-    await openSection(page, 'Documents');
+    await openOneLevelIn(page, 'Clients', 'Documents', 'Documents');
   });
 
   await step('It says there are no documents yet, with no error', async () => {
@@ -493,7 +503,7 @@ test('Restore an older backup without receipt files: the confirm says which rece
 
   await step('Record an expense, Ink, with a PDF receipt', async () => {
     await page.goto('/');
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await recordExpense(page, { amount: '30.00', title: 'Ink' });
     await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Edit expense' });
@@ -528,7 +538,7 @@ test('Restore an older backup without receipt files: the confirm says which rece
   });
 
   await step('The expense and its receipt are back; the receipt has no file to download', async () => {
-    await openSection(page, 'Expenses');
+    await openSection(page, 'Spent');
     await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Ink/ }).click();
     const drawer = page.getByRole('dialog', { name: 'Edit expense' });
     await expect(drawer.getByRole('listitem').filter({ hasText: 'ink.pdf' })).toBeVisible();

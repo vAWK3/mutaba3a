@@ -256,7 +256,7 @@ test('A new signup lands on the trial step; adding a card keeps the trial and th
   });
   await step('Home again: neither the trial step nor the trial banner comes back', async () => {
     await page.goto(`/p/${person.personalId}`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Your free trial' })).toHaveCount(0);
   });

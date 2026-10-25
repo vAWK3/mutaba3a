@@ -114,7 +114,7 @@ test('Change a profile’s type: the cards say what each seeds, the confirm coun
   await step('Open Expenses from the note', async () => {
     await page.getByRole('link', { name: 'Open Expenses' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/expenses$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Expenses' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Spent' })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
@@ -170,7 +170,7 @@ test('New profile: name and type are asked for, the zone can be changed, and the
   await step('The new profile opens, and the server got exactly what was chosen', async () => {
     await expect(page.getByTestId('toast-live')).toHaveText(/Home is ready/);
     await expect(page.getByRole('link', { name: 'Switch profile: Home' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
     const post = api.last('POST', /^\/v1\/profiles$/);
     expect(post?.body).toEqual({ name: 'Home', type: 'PERSONAL', defaultCurrency: 'JOD', timezone: 'Asia/Amman' });
     expect(post?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);
@@ -304,7 +304,7 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
   await step('Close the drawer and add a received income on the shared profile', async () => {
     await page.getByRole('button', { name: 'Close' }).click();
     // MUT-425: Manage profiles opened over the You page; Payments is where income is added
-    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Payments' }).click();
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
     await page.locator('[data-income-add]').click();
     const drawer = page.getByRole('dialog', { name: 'New income' });
     await expect(drawer.getByRole('radio', { name: 'Received' })).toHaveAttribute('aria-checked', 'true');
@@ -381,7 +381,7 @@ test('Someone removed while working on the shared profile lands on their persona
 
   await step('Meanwhile Basel removes you; open Expenses', async () => {
     api.removedElsewhere(OFFICE_A);
-    await page.getByRole('link', { name: 'Expenses' }).first().click();
+    await page.getByRole('link', { name: 'Spent', exact: true }).click();
   });
 
   await step('The portal moves to the personal profile with a banner naming the shared one; Close dismisses it', async () => {

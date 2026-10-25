@@ -130,8 +130,8 @@ test('signed out, a crash sends nothing and the reporting code never loads', { t
     await page.goto('/');
     const sections = page.getByRole('navigation', { name: 'Sections' });
     await expect(sections).toBeVisible();
-    await sections.getByRole('link', { name: 'Payments' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    await sections.getByRole('link', { name: 'Paid' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
   });
 
   await step('Something on the page throws an error nobody catches', async () => {
@@ -169,9 +169,9 @@ test('a page that crashes shows a translated card in its place; the navigation s
     await expect.poll(() => crashReports.events().length, { timeout: 15_000 }).toBe(1);
   });
 
-  await step('Go to Payments: it opens normally', async () => {
-    await page.getByRole('navigation', { name: SECTIONS.ar }).getByRole('link', { name: 'الدفعات' }).click();
+  await step('Go to Paid: it opens normally', async () => {
+    await page.getByRole('navigation', { name: SECTIONS.ar }).getByRole('link', { name: 'المدفوع' }).click();
     await expect(card).toHaveCount(0);
-    await expect(page.getByRole('heading', { level: 1, name: 'الدفعات' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'المدفوع' })).toBeVisible();
   });
 });

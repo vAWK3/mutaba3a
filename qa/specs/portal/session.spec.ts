@@ -61,7 +61,7 @@ test('A sign-in link whose next leaves the portal lands on the portal’s home i
   await step('Sign in: the portal stays on its own origin, at the first profile', async () => {
     await signIn(page);
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 });
 
@@ -104,7 +104,7 @@ test('Sign out: a failure keeps you signed in and says so; then it ends the sess
     await page.goto(`/sign-in?reason=signed_out&next=${encodeURIComponent(`/p/${OFFICE_A}/payments`)}`);
     await signIn(page);
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 });
 

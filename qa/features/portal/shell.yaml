@@ -27,26 +27,46 @@ paths:
   - src/hosted/data/filters.ts
 features:
   - id: navigate
-    title: Signed in, the portal opens on the first profile's overview (owed, overdue, proposed, overdue clients first, per currency), every section is one click away, and عربي turns it right to left
+    title: Signed in, the portal opens on Owed for the first profile (owed, overdue, proposed, overdue clients first, per currency), the four destinations Owed, Paid, Spent and Clients are one click away, and عربي turns it right to left
     tier: core # the portal is unusable for everyone signed in if this breaks
     paths:
       - src/hosted/pages/views/OverviewPage.tsx
       - src/hosted/session/AuthGate.tsx
+      # MUT-424: which destination a page lights
+      - src/hosted/shell/destinations.ts
       - src/components/filters/SegmentedTabs.tsx
       # MUT-165 D9: the shell's spacing, screenshotted in English and Arabic
       - src/hosted/hosted.css
     steps:
       - Sign in and open the portal at /
       - Read the overview, then switch it to USD
-      - Visit each section from the sidebar
-      - Open You › App, choose عربي, then go back to Conversions
+      - Visit each of the four destinations from the sidebar
+      - Open You › App, choose عربي, then go to Conversions through Paid
     expect:
-      - / lands on the first profile's Overview with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
+      - / lands on the first profile's Owed page (today's overview) with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
       - USD shows the USD block and puts currency=USD in the URL
-      - Each section's heading shows and its link is aria-current
-      - The page turns rtl with the Arabic section names
+      - The sidebar holds exactly Owed, Paid, Spent and Clients; each page's heading is its tab's word and its link is aria-current
+      - The page turns rtl with the Arabic destination names
       - Every profile call carried X-Mutaba3a-Profile for that profile
       - A screenshot of the shell is attached in English and in Arabic, for spacing review
+  - id: one-level-in
+    title: From Owed, Paid and Clients, Receivables, Conversions and Documents are one link away, each lights its destination and links back to it (MUT-424)
+    tier: secondary
+    paths:
+      - src/hosted/components/DeeperLinks.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/views/ConversionsList.tsx
+      - src/hosted/pages/views/DocumentsList.tsx
+    steps:
+      - Open Owed, then Receivables from the row at the bottom, then go back from the page's own link
+      - Open Paid, then Currency conversions, then go back
+      - Open Clients, then Documents, then go back
+      - Choose عربي and open a link straight to Receivables
+    expect:
+      - Each row opens its page at the URL it always had, titled with its own name, with its destination still aria-current
+      - Each page's back link returns to its destination
+      - In Arabic, a deep link to Receivables lights المستحق and its back link reads المستحق
+      - A screenshot of Receivables in Arabic is attached
   - id: switch-profile
     title: You › Profiles lists each profile with its kind, keeps the section when switching (?from=, MUT-425), and a profile not on the account says so
     tier: secondary

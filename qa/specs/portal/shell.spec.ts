@@ -8,19 +8,29 @@ import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, 
 import { openYou } from '../../support/you';
 
 /**
- * The signed-in portal's shell (hosted-portal.md §7.1): the overview, the
- * section navigation, the profile switcher and client detail. Every /v1 call is
+ * The signed-in portal's shell (hosted-portal.md §7.1): Owed (the overview), the
+ * four destinations and what sits one level in (MUT-424), the profile switcher and client detail. Every /v1 call is
  * answered by the in-memory API in qa/support/portalApi.ts.
  */
 
 const portalI18n = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../src/hosted/i18n');
-const AR_HOSTED = (JSON.parse(fs.readFileSync(path.join(portalI18n, 'ar.json'), 'utf8')) as { hosted: { shell: { sections: string; nav: Record<string, string> }; conversions: { title: string } } }).hosted;
+const AR_HOSTED = (
+  JSON.parse(fs.readFileSync(path.join(portalI18n, 'ar.json'), 'utf8')) as {
+    hosted: {
+      shell: { sections: string };
+      destinations: Record<'owed' | 'paid' | 'spent' | 'clients', string>;
+      deeper: Record<'receivables' | 'conversions' | 'documents', { label: string }>;
+      conversions: { title: string };
+    };
+  }
+).hosted;
 const AR = AR_HOSTED.shell;
 
 const C1 = customer(0).id;
 const C2 = customer(1).id;
 const C3 = customer(2).id;
-const SECTIONS = ['Overview', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions'] as const;
+/** MUT-424: the four destinations, each page titled with its tab's word. */
+const DESTINATIONS = ['Owed', 'Paid', 'Spent', 'Clients'] as const;
 
 function seeded() {
   return new FakeApi({
@@ -42,13 +52,13 @@ function seeded() {
   });
 }
 
-test('signed in, the portal opens on the first profile’s overview and every section is one click away', { tag: '@portal.shell.navigate' }, async ({ page, step }) => {
+test('signed in, the portal opens on Owed for the first profile, and each of the four destinations is one click away', { tag: '@portal.shell.navigate' }, async ({ page, step }) => {
   const api = seeded();
 
   await step('Open the portal signed in', async () => {
     await api.open(page, '/');
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 
   await step('The overview shows what is owed, overdue and proposed, overdue clients first', async () => {
@@ -58,7 +68,7 @@ test('signed in, the portal opens on the first profile’s overview and every se
     await expect(strip).toContainText('1,200.00');
     await expect(strip).toContainText('800.00');
     await expect(page.getByText(/^As of /)).toBeVisible();
-    const rows = page.getByRole('table', { name: 'Overview' }).getByRole('row');
+    const rows = page.getByRole('table', { name: 'Owed' }).getByRole('row');
     await expect(rows.nth(1)).toContainText('Client 1');
     await expect(rows.nth(1)).toContainText('Overdue');
     await expect(rows.nth(2)).toContainText('Client 2');
@@ -73,15 +83,16 @@ test('signed in, the portal opens on the first profile’s overview and every se
     await page.getByRole('tab', { name: 'USD' }).click();
     await expect(page).toHaveURL(/currency=USD/);
     await expect(page.getByRole('group', { name: 'USD' })).toContainText('950.00');
-    await expect(page.getByRole('table', { name: 'Overview' }).getByRole('row')).toHaveCount(2);
+    await expect(page.getByRole('table', { name: 'Owed' }).getByRole('row')).toHaveCount(2);
   });
 
-  await step('Visit each section from the sidebar', async () => {
+  await step('Visit each of the four destinations from the sidebar', async () => {
     const nav = page.getByRole('navigation', { name: 'Sections' });
-    for (const section of SECTIONS) {
-      await nav.getByRole('link', { name: section, exact: true }).click();
-      await expect(page.getByRole('heading', { level: 1, name: section })).toBeVisible();
-      await expect(nav.getByRole('link', { name: section, exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(nav.getByRole('link')).toHaveText([...DESTINATIONS]);
+    for (const destination of DESTINATIONS) {
+      await nav.getByRole('link', { name: destination, exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1, name: destination })).toBeVisible();
+      await expect(nav.getByRole('link', { name: destination, exact: true })).toHaveAttribute('aria-current', 'page');
     }
   });
 
@@ -90,8 +101,9 @@ test('signed in, the portal opens on the first profile’s overview and every se
     await page.getByRole('main').getByRole('button', { name: 'عربي' }).click();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const nav = page.getByRole('navigation', { name: AR.sections });
-    await expect(nav.getByRole('link', { name: AR.nav.clients, exact: true })).toBeVisible();
-    await nav.getByRole('link', { name: AR.nav.conversions, exact: true }).click();
+    await expect(nav.getByRole('link', { name: AR_HOSTED.destinations.clients, exact: true })).toBeVisible();
+    await nav.getByRole('link', { name: AR_HOSTED.destinations.paid, exact: true }).click();
+    await page.getByRole('link', { name: new RegExp(`^${AR_HOSTED.deeper.conversions.label}`) }).click();
     await expect(page.getByRole('heading', { level: 1, name: AR_HOSTED.conversions.title })).toBeVisible();
     await attachScreenshot(page, 'portal-shell-conversions-ar');
   });
@@ -103,12 +115,54 @@ test('signed in, the portal opens on the first profile’s overview and every se
   });
 });
 
+/** MUT-424: [destination, its one-level-in row, the page it opens, that page's path]. */
+const ONE_LEVEL_IN = [
+  ['Owed', 'Receivables', 'Receivables', 'receivables'],
+  ['Paid', 'Currency conversions', 'Conversions', 'conversions'],
+  ['Clients', 'Documents', 'Documents', 'documents'],
+] as const;
+
+test('from Owed, Paid and Clients, Receivables, Conversions and Documents are one link away, and each links back', { tag: '@portal.shell.one-level-in' }, async ({ page, step }) => {
+  const api = seeded();
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  const main = page.getByRole('main');
+
+  await step('Open the portal signed in', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+  });
+
+  for (const [destination, row, title, segment] of ONE_LEVEL_IN) {
+    await step(`From ${destination}, open ${row}: ${destination} stays lit`, async () => {
+      await nav.getByRole('link', { name: destination, exact: true }).click();
+      await page.getByRole('navigation', { name: `More in ${destination}` }).getByRole('link', { name: new RegExp(`^${row}`) }).click();
+      await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/${segment}$`));
+      await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+      await expect(nav.getByRole('link', { name: destination, exact: true })).toHaveAttribute('aria-current', 'page');
+    });
+
+    await step(`Go back to ${destination} from the page's own link`, async () => {
+      await main.getByRole('link', { name: destination, exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1, name: destination })).toBeVisible();
+    });
+  }
+
+  await step('A deep link to Receivables lights Owed, in Arabic too', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    const arNav = page.getByRole('navigation', { name: AR.sections });
+    await expect(arNav.getByRole('link', { name: AR_HOSTED.destinations.owed, exact: true })).toHaveAttribute('aria-current', 'page');
+    await expect(main.getByRole('link', { name: AR_HOSTED.destinations.owed, exact: true })).toBeVisible();
+    await attachScreenshot(page, 'portal-shell-receivables-ar');
+  });
+});
+
 test('switching profile from You › Profiles keeps the section, and a profile that is not yours says so', { tag: '@portal.shell.switch-profile' }, async ({ page, step }) => {
   const api = seeded();
 
   await step('Open Payments on Nour Studio', async () => {
     await api.open(page, `/p/${OFFICE_A}/payments`);
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
   });
 
   const main = page.getByRole('main');
@@ -125,7 +179,7 @@ test('switching profile from You › Profiles keeps the section, and a profile t
     await main.getByRole('button', { name: /Nour Accounting/ }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/payments$`));
     await expect(page.getByRole('link', { name: 'Switch profile: Nour Accounting' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Payments' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await expect.poll(() => api.last('GET', /^\/v1\/payments$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_B);
   });
 
@@ -137,7 +191,7 @@ test('switching profile from You › Profiles keeps the section, and a profile t
   await step('Go to the first profile from there', async () => {
     await page.getByRole('button', { name: 'Go to Nour Studio' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 });
 
@@ -245,7 +299,7 @@ test('once firm features are on, the Overview shows one note that Dismiss keeps 
 
   await step('Sign in to the firm profile: the Overview shows the note', async () => {
     await api.open(page, `/p/${OFFICE_A}`);
-    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Owed' })).toBeVisible();
     await expect(page.getByRole('note').filter({ hasText: TEXT })).toBeVisible();
   });
 
@@ -256,7 +310,7 @@ test('once firm features are on, the Overview shows one note that Dismiss keeps 
 
   await step('Reload the portal: it stays gone', async () => {
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Owed' })).toBeVisible();
     await expect(page.getByText(TEXT)).toHaveCount(0);
   });
 
