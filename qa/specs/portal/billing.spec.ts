@@ -180,7 +180,7 @@ test('A cancelled subscription leaves the profile read-only for good, and says i
 
 test('On Owed, a running trial is one quiet line: the days left, Add a card and Hide for 3 days', { tag: '@portal.billing.trial-line' }, async ({ page, step }) => {
   const trialEnds = new Date(Date.now() + 9.5 * DAY).toISOString();
-  const personal = { ...office(OFFICE_A, 'Personal'), isPersonalDefault: true, billing: { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnds } };
+  const personal = { ...office(OFFICE_A, 'Personal'), personalDefault: true, type: 'PERSONAL' as const, billing: { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnds } };
   const api = new FakeApi({ profiles: [personal] });
   const routeBilling = () =>
     page.route('**/v1/billing', (route) =>

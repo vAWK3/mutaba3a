@@ -47,7 +47,9 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
 
   return (
     <div className="hp-shell">
-      <div className="hp-chrome">
+      {/* One landmark for the whole chrome, so Reports and the island sit in one too (axe region); the pill is its
+          own "Sections" nav inside it */}
+      <nav className="hp-chrome" aria-label={t('hosted.brand')}>
         <div className="hp-fade hp-fade-top" />
         <div className="hp-fade hp-fade-bottom" />
         {sections && (
@@ -62,7 +64,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         )}
         <div className="hp-chrome-bar">
           {sections && (
-            <nav className="hp-tabs hp-glass" aria-label={t('hosted.shell.sections')}>
+            <nav className="hp-pill hp-glass" aria-label={t('hosted.shell.sections')}>
               {DESTINATIONS.map((destination) => (
                 <Link
                   key={destination.key}
@@ -81,7 +83,7 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
           {/* MUT-425: the You page holds everything the profile switcher and the account menu did */}
           <YouIsland profile={profile} />
         </div>
-      </div>
+      </nav>
       <main className="hp-page">
         {!local && <UsagePrompt />}
         {children}

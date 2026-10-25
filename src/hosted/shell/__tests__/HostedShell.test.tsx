@@ -44,6 +44,8 @@ describe('the floating shell (MUT-426)', () => {
     // A page's own header sits inside <main>; only one outside it would be a header bar
     expect(screen.queryAllByRole('banner').filter((header) => !header.closest('main'))).toEqual([]);
     expect(container.querySelectorAll('.hp-chrome')).toHaveLength(1);
+    // The chrome is one landmark named for the product, so Reports and the island sit in one (axe region)
+    expect(screen.getByRole('navigation', { name: 'MTB3A' })).toBe(container.querySelector('.hp-chrome'));
 
     const chrome = container.querySelector('.hp-chrome') as HTMLElement;
     const order = within(chrome).getAllByRole('link').map((link) => link.getAttribute('aria-label') ?? link.textContent);

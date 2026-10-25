@@ -419,7 +419,7 @@ test('the pill, the You island and Reports float over the page at every width, m
     await api.open(page, `/p/${OFFICE_A}/clients`);
     await expect(page.getByRole('heading', { level: 1, name: 'Clients' })).toBeVisible();
     expect(await page.evaluate(() => ({ aside: document.querySelectorAll('aside').length, bars: [...document.querySelectorAll('header')].filter((h) => !h.closest('main')).length }))).toEqual({ aside: 0, bars: 0 });
-    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-pill'), await boxOf(page, '.hp-island')];
     expect(Math.abs(reports.x - GAP)).toBeLessThan(NEAR);
     expect(Math.abs(pill.x + pill.width / 2 - DESKTOP.width / 2)).toBeLessThan(NEAR);
     expect(Math.abs(DESKTOP.width - GAP - (island.x + island.width))).toBeLessThan(NEAR);
@@ -453,7 +453,7 @@ test('the pill, the You island and Reports float over the page at every width, m
   await step('On a 375px phone, the pill and the island circle sit at the bottom and Reports at the top end', async () => {
     await page.setViewportSize(PHONE);
     await api.open(page, `/p/${OFFICE_A}/clients`);
-    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-pill'), await boxOf(page, '.hp-island')];
     expect(Math.abs(PHONE.width - GAP - (reports.x + reports.width))).toBeLessThan(NEAR);
     expect(Math.abs(reports.y - GAP)).toBeLessThan(NEAR);
     expect(Math.abs(PHONE.height - GAP - (pill.y + pill.height))).toBeLessThan(island.height);
@@ -466,15 +466,15 @@ test('the pill, the You island and Reports float over the page at every width, m
 
   await step('Typing in the page search hides the bottom bar for the keyboard; leaving the field brings it back', async () => {
     const bar = page.locator('.hp-chrome-bar');
-    await page.getByRole('main').getByRole('searchbox').focus();
+    await page.locator('.hp-page .hp-search input').focus();
     await expect(bar).toBeHidden();
-    await page.getByRole('main').getByRole('searchbox').blur();
+    await page.locator('.hp-page .hp-search input').blur();
     await expect(bar).toBeVisible();
   });
 
   await step('In Arabic on the phone, Reports moves to the top start and the island to the pill’s left', async () => {
     await api.open(page, `/p/${OFFICE_A}/clients`, 'ar');
-    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-tabs'), await boxOf(page, '.hp-island')];
+    const [reports, pill, island] = [await boxOf(page, '.hp-reports'), await boxOf(page, '.hp-pill'), await boxOf(page, '.hp-island')];
     expect(Math.abs(reports.x - GAP)).toBeLessThan(NEAR);
     expect(island.x + island.width).toBeLessThan(pill.x + NEAR);
     await attachScreenshot(page, 'portal-chrome-phone-ar');
@@ -485,7 +485,7 @@ test('the pill, the You island and Reports float over the page at every width, m
       await page.setViewportSize(NARROW);
       await api.open(page, `/p/${OFFICE_A}/clients`, language);
       expect(await noSidewaysScroll(page)).toBe(true);
-      const cut = await page.locator('.hp-tabs a').evaluateAll((links) => links.filter((link) => link.scrollWidth > link.clientWidth).map((link) => link.textContent));
+      const cut = await page.locator('.hp-pill a').evaluateAll((links) => links.filter((link) => link.scrollWidth > link.clientWidth).map((link) => link.textContent));
       expect(cut).toEqual([]);
       const bar = await boxOf(page, '.hp-chrome-bar');
       expect(bar.x).toBeGreaterThanOrEqual(0);
@@ -503,7 +503,8 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await page.setViewportSize(DESKTOP);
     await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
     await expect(page.locator('.hp-island-name')).toHaveText('Nour Studio');
-    expect(await page.locator('.hp-island-avatar').evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/rgb/);
+    // The outer 4px ring is a profile colour (a --profile-ring-* token), not the neutral one
+    expect(await page.locator('.hp-island-avatar').evaluate((el) => getComputedStyle(el).boxShadow)).toMatch(/oklch\([^)]+\) 0px 0px 0px 4px$/);
     await expect(island).not.toHaveAttribute('aria-current', 'page');
   });
 
@@ -631,11 +632,13 @@ test('pages slide by depth, mirrored in Arabic, the You page grows from the isla
 
 test('with reduced transparency the pill and the island are solid, with no blur', { tag: '@portal.shell.reduced-transparency' }, async ({ page, step }) => {
   const api = seeded();
-  const glass = () => page.locator('.hp-tabs').evaluate((el) => ({ filter: getComputedStyle(el).backdropFilter, background: getComputedStyle(el).backgroundColor }));
+  const glass = () => page.locator('.hp-pill').evaluate((el) => ({ filter: getComputedStyle(el).backdropFilter, background: getComputedStyle(el).backgroundColor }));
+  /** The alpha of a computed colour, in any notation: `… / 0.74)` or rgba's fourth value; 1 when it has none. */
   const alphaOf = (color: string) => {
-    const parts = /rgba?\(([^)]+)\)|color\([^ ]+ ([^)]+)\)/.exec(color);
-    const values = (parts?.[1] ?? parts?.[2] ?? '').split(/[ ,/]+/).filter(Boolean);
-    return values.length === 4 ? Number(values[3]) : 1;
+    const slash = /\/\s*([\d.]+)\)$/.exec(color);
+    if (slash) return Number(slash[1]);
+    const rgba = /^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/.exec(color);
+    return rgba ? Number(rgba[1]) : 1;
   };
 
   await step('By default the pill is glass: blurred and see-through', async () => {

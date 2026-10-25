@@ -266,6 +266,8 @@
 /* ---------- Shell ---------- */
 
 .hp-shell { min-height: 100%; }
+/* scrollIntoView, focus and anchor jumps stop below the chrome, never under it */
+html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrome-bottom); }
 .hp-page { min-width: 0; padding: var(--hp-chrome-top) var(--space-8) var(--space-12); }
 
 /* MUT-426: three glass objects over the page (epic MUT-423 round 4 variation 3). Fixed over a scrolling document, so
@@ -304,7 +306,7 @@
 }
 .hp-reports:hover { color: var(--text); }
 .hp-reports[aria-current='page'] { background: var(--text); color: var(--bg); }
-.hp-tabs {
+.hp-pill {
   position: absolute;
   top: var(--hp-chrome-gap);
   left: 50%;
@@ -315,7 +317,7 @@
   padding: var(--space-1);
   border-radius: var(--radius-pill);
 }
-.hp-tabs a {
+.hp-pill a {
   display: inline-flex;
   align-items: center;
   min-height: calc(var(--hp-chrome-object) - 2 * var(--space-1));
@@ -327,8 +329,8 @@
   white-space: nowrap;
   transition: color var(--duration-toggle) var(--ease-spring), background-color var(--duration-toggle) var(--ease-spring);
 }
-.hp-tabs a:hover { color: var(--text); }
-.hp-tabs a.hp-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-pill a:hover { color: var(--text); }
+.hp-pill a.hp-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
 .hp-island {
   position: absolute;
   top: var(--hp-chrome-gap);
@@ -350,7 +352,7 @@
 .hp-island-avatar { width: 32px; height: 32px; margin: var(--space-0-5); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--hp-ring, var(--border-strong)); }
 .hp-island-on { background: var(--text); color: var(--bg); }
 .hp-island-on .hp-island-avatar { box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--hp-ring, var(--border-strong)); }
-.hp-reports:focus-visible, .hp-tabs a:focus-visible, .hp-island:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-reports:focus-visible, .hp-pill a:focus-visible, .hp-island:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 @media print {
   .hp-chrome { display: none; }
   .hp-page { padding: 0; }
@@ -579,8 +581,8 @@
     gap: var(--space-2);
     max-width: calc(100% - 2 * var(--hp-gutter));
   }
-  .hp-tabs { position: static; translate: none; min-width: 0; }
-  .hp-tabs a { padding: 0 var(--space-2-5); font-size: var(--text-label); }
+  .hp-pill { position: static; translate: none; min-width: 0; }
+  .hp-pill a { padding: 0 var(--space-2-5); font-size: var(--text-label); }
   /* D5: ring only; the name stays in the island's label */
   .hp-island { position: static; flex: none; padding: var(--space-1); }
   .hp-island-name { display: none; }
@@ -594,7 +596,7 @@
 /* eng C2: Arabic's four words beside the island fit 320 px; labels tighten, never truncate */
 @media (max-width: 359px) {
   .hp-chrome-bar { gap: var(--space-1); }
-  .hp-tabs a { padding: 0 var(--space-1-5); }
+  .hp-pill a { padding: 0 var(--space-1-5); }
 }
 
 /* ---------- Income drawers (MUT-133) ---------- */
