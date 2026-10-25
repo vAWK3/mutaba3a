@@ -26,8 +26,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const CARRY_OVER = JSON.stringify({ web: origin(WEB_PORT), portal: origin(OLD_PORTAL_PORT), portalOrigin: origin(NEW_PORTAL_PORT) });
 const children = [];
 
-/** Each server's own Vite cache and watch settings (support/carry-over.vite.ts), or they reload each other's pages. */
-const VITE_CONFIG = path.join('qa', 'support', 'carry-over.vite.ts');
+/** Each server's own Vite cache and watch settings (support/qa.vite.ts), or they reload each other's pages. */
+const VITE_CONFIG = path.join('qa', 'support', 'qa.vite.ts');
 
 function start(name, args, env) {
   const child = spawn('npx', ['vite', '--config', VITE_CONFIG, ...args, '--host', HOST, '--strictPort'], { cwd: ROOT, env: { ...process.env, MUTABA3A_CARRY_OVER: CARRY_OVER, ...env }, stdio: ['ignore', 'inherit', 'inherit'] });
@@ -67,8 +67,8 @@ function stop(code = 0) {
 process.on('SIGINT', () => stop(0));
 process.on('SIGTERM', () => stop(0));
 
-start('web', ['--port', String(WEB_PORT)], { CARRY_OVER_ROLE: 'web' });
-start('old portal', ['--mode', 'hosted', '--port', String(OLD_PORTAL_PORT)], { CARRY_OVER_ROLE: 'old-portal' });
+start('web', ['--port', String(WEB_PORT)], { QA_VITE_ROLE: 'carry-over-web' });
+start('old portal', ['--mode', 'hosted', '--port', String(OLD_PORTAL_PORT)], { QA_VITE_ROLE: 'carry-over-old-portal' });
 await Promise.all([waitFor(WEB_PORT), waitFor(OLD_PORTAL_PORT)]);
 // The engine waits on this one: once it answers, all three do.
-start('new portal', ['--mode', 'hosted', '--port', String(NEW_PORTAL_PORT)], { CARRY_OVER_ROLE: 'new-portal' });
+start('new portal', ['--mode', 'hosted', '--port', String(NEW_PORTAL_PORT)], { QA_VITE_ROLE: 'carry-over-new-portal' });

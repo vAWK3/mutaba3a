@@ -189,7 +189,7 @@
 **Ticket**: MUT-291 (QA)
 **Added**: 2026-10-24
 **Priority**: Low (QA only; a retry passes)
-**Impact**: Each of the three dev servers (qa/support/carry-over.vite.ts) has its own Vite cache, but a cold cache still optimises lazily imported dependencies on first use and reloads the page once. The project's Playwright warm-up is off, so a first run in a fresh QA worktree can need its retry.
+**Impact**: Each of the three dev servers has its own Vite cache (qa/support/qa.vite.ts, every QA dev server since MUT-440), but a cold cache still optimises lazily imported dependencies on first use and reloads the page once. The project's Playwright warm-up is off, so a first run in a fresh QA worktree can need its retry.
 **Fix**: Pre-bundle the lazy local chunk's dependencies (`optimizeDeps.include`) in the carry-over wrapper, or turn the warm-up on for this app.
 
 ### TD-230: The totals gate checks only the rows the mapper carried
