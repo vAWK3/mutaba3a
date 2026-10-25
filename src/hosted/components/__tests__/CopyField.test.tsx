@@ -15,7 +15,7 @@ describe('CopyField', () => {
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
     return render(
       <HostedLanguageProvider>
-        <CopyField label="MCP address" value="https://app.mtb3a.com/mcp" />
+        <CopyField label="MCP address" value="https://app.example.test/mcp" />
       </HostedLanguageProvider>,
     );
   }
@@ -24,7 +24,7 @@ describe('CopyField', () => {
     utils.copyToClipboard.mockResolvedValue(true);
     renderField();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Copy' }));
-    expect(utils.copyToClipboard).toHaveBeenCalledWith('https://app.mtb3a.com/mcp');
+    expect(utils.copyToClipboard).toHaveBeenCalledWith('https://app.example.test/mcp');
     expect(screen.getByRole('status')).toHaveTextContent('Copied');
   });
 

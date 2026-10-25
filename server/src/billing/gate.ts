@@ -54,6 +54,12 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',
+  // MUT-434: connecting or disconnecting an agent is identity, like passkeys: it writes no record. What the agent
+  // writes is gated per profile at the tool (agentWriteGate, MUT-436); a lapsed person can always disconnect one.
+  'GET /v1/oauth/requests/:requestId': 'open',
+  'POST /v1/oauth/requests/:requestId/decision': 'open',
+  'GET /v1/oauth/grants': 'open',
+  'DELETE /v1/oauth/grants/:grantId': 'open',
   // D6: leaving a co-owned profile, or its creator removing someone, adds no record.
   'DELETE /v1/profiles/:profileId/owners/:userId': 'open',
   // D4: the person's own captures and their cross-profile feed, and a new profile of their own.

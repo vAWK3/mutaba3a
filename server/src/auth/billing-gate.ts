@@ -47,6 +47,18 @@ async function gatePathProfile(c: Context<AppEnv>, identity: SessionIdentity, en
   if (standingRefuses(standingOf(entitlement.state), c.req.method)) throw lapsedError(organization.id, entitlement);
 }
 
+/**
+ * MUT-434 (guardrail; called by MUT-436's write tools): an agent's write to one profile follows that profile's lapse
+ * state exactly as a session's write would — refused with 402 SUBSCRIPTION_LAPSED when it is read-only or locked.
+ * `enforced` is the server's BILLING_GATE (off in tests and wherever the gate is off).
+ */
+export async function agentWriteGate(store: GateStore, organization: SessionAuth['organization'], now: Date, enforced: boolean): Promise<void> {
+  if (!enforced) return;
+  const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
+  const entitlement = await entitlementOf(store, organization, malafat?.status === 'CONNECTED', now);
+  if (standingRefuses(standingOf(entitlement.state), 'POST')) throw lapsedError(organization.id, entitlement);
+}
+
 async function entitlementOf(store: GateStore, organization: SessionAuth['organization'], malafatConnected: boolean, now: Date): Promise<Entitlement> {
   const entitlements = await entitlementsFor(store, [{ organization, malafatConnected }], now);
   return entitlements.get(organization.id)!;

@@ -6,7 +6,7 @@ import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPor
  * MUT-434 (D15): You › Account › Connect Claude (`?connectClaude=true`) — only with agent_access; the MCP address to
  * copy, the two how-tos, and Connected apps with an in-row Disconnect confirm (AC3).
  */
-const MCP_URL = 'https://app.mtb3a.com/mcp';
+const MCP_URL = 'https://app.example.test/mcp';
 const CLAUDE = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', clientName: 'Claude', clientKind: 'DCR', trust: 'VERIFIED', scopes: ['read', 'write'], connectedAt: '2026-10-20T09:00:00.000Z', lastUsedAt: null, expiresAt: '2027-04-18T09:00:00.000Z' };
 const CODE = { ...CLAUDE, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', clientName: 'Claude Code', trust: 'LOOPBACK', scopes: ['read'], lastUsedAt: '2026-10-24T09:00:00.000Z' };
 

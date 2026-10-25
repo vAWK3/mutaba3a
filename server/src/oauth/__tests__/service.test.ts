@@ -10,7 +10,7 @@ import { OAUTH_TTL, OAuthService, type OAuthServiceDeps } from '../service.js';
  * (D4), loopback ports (D8), CIMD storage (OV2) — is proven here.
  */
 
-const ISSUER = 'https://app.mtb3a.com';
+const ISSUER = 'https://app.example.test';
 const RESOURCE = `${ISSUER}/mcp`;
 const CLAUDE_CB = 'https://claude.ai/api/mcp/auth_callback';
 const VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
@@ -122,7 +122,7 @@ describe('startAuthorization', () => {
   it('accepts a normalised resource (OV4)', async () => {
     const s = await setup();
     const clientId = await registerClaude(s);
-    expect((await s.service.startAuthorization(authorizeParams(clientId, { resource: 'https://APP.mtb3a.com:443/mcp/' }), T0)).kind).toBe('consent');
+    expect((await s.service.startAuthorization(authorizeParams(clientId, { resource: 'https://APP.example.test:443/mcp/' }), T0)).kind).toBe('consent');
   });
 
   it('accepts a Claude Code loopback redirect on another port (D8)', async () => {

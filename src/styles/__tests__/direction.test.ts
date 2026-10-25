@@ -50,6 +50,10 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)
   'src/hosted/pages/auth/EmailLinkForm.tsx': { ltr: 1 }, // the email on /signup and /recover (MUT-368)
   'src/hosted/components/ChangePasswordDrawer.tsx': { ltr: 2 }, // passwords
+  // MUT-434: the MCP address and the Claude Code command read left to right; agents' self-declared names are auto
+  'src/hosted/components/CopyField.tsx': { ltr: 1 },
+  'src/hosted/components/ConnectClaudeDrawer.tsx': { ltr: 1, auto: 2 },
+  'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
   'src/hosted/components/PasskeysDrawer.tsx': { ltr: 1, auto: 3 }, // the step-up password; passkey names in the list and the rename field (MUT-115 DR11)
   'src/hosted/components/CloseAccountDrawer.tsx': { ltr: 2 }, // the password, and the address being closed inside the sentence (MUT-333)
   'src/hosted/components/FilterControls.tsx': { ltr: 1 }, // date input

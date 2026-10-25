@@ -9,8 +9,8 @@ import { consentNavigation } from '../consentSearch';
  */
 const REQUEST_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const PATH = `/v1/oauth/requests/${REQUEST_ID}`;
-const CODE_REDIRECT = 'https://claude.ai/api/mcp/auth_callback?code=mac_x&state=st&iss=https%3A%2F%2Fapp.mtb3a.com';
-const DENY_REDIRECT = 'https://claude.ai/api/mcp/auth_callback?error=access_denied&state=st&iss=https%3A%2F%2Fapp.mtb3a.com';
+const CODE_REDIRECT = 'https://claude.ai/api/mcp/auth_callback?code=mac_x&state=st&iss=https%3A%2F%2Fapp.example.test';
+const DENY_REDIRECT = 'https://claude.ai/api/mcp/auth_callback?error=access_denied&state=st&iss=https%3A%2F%2Fapp.example.test';
 
 function request(overrides: Record<string, unknown> = {}) {
   return { id: REQUEST_ID, client: { name: 'Claude', kind: 'DCR', trust: 'VERIFIED', redirectHost: 'claude.ai' }, scopes: ['read', 'write'], expiresAt: '2026-10-25T10:30:00.000Z', agentAccess: true, ...overrides };

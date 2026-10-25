@@ -11,8 +11,12 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
  * password, in any environment. This walks both the router and the published contract so neither can grow one unnoticed.
  */
 const FORBIDDEN = /sign-?up|register|invite|forgot|reset/i;
-/** MUT-366: the reviewed exceptions. (`/v1/account-recovery` doesn't match the pattern, but it is the other door.) */
-const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups']);
+/**
+ * MUT-366: the reviewed exceptions. (`/v1/account-recovery` doesn't match the pattern, but it is the other door.)
+ * MUT-434: `/oauth/register` registers an OAuth *client app* (RFC 7591), never a person: it creates no account, signs
+ * nobody in, and an agent can only act for a person who signs in and approves it on the consent page.
+ */
+const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups', '/oauth/register']);
 
 function inventory() {
   const app = createApp({

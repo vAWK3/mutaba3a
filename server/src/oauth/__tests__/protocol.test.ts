@@ -67,20 +67,20 @@ describe('scopes (D5: read and write up front)', () => {
 });
 
 describe('canonical resource (S2a/OV4)', () => {
-  const canonical = 'https://app.mtb3a.com/mcp';
+  const canonical = 'https://app.example.test/mcp';
 
   it.each([
-    'https://app.mtb3a.com/mcp',
-    'https://app.mtb3a.com/mcp/',
-    'HTTPS://APP.MTB3A.COM/mcp',
-    'https://app.mtb3a.com:443/mcp',
+    'https://app.example.test/mcp',
+    'https://app.example.test/mcp/',
+    'HTTPS://APP.EXAMPLE.TEST/mcp',
+    'https://app.example.test:443/mcp',
   ])('normalises %s', (raw) => {
     expect(canonicalResource(raw)).toBe(canonical);
   });
 
   it('keeps the path case and refuses fragments, relative and non-URLs', () => {
-    expect(canonicalResource('https://app.mtb3a.com/MCP')).toBe('https://app.mtb3a.com/MCP');
-    expect(canonicalResource('https://app.mtb3a.com/mcp#x')).toBeNull();
+    expect(canonicalResource('https://app.example.test/MCP')).toBe('https://app.example.test/MCP');
+    expect(canonicalResource('https://app.example.test/mcp#x')).toBeNull();
     expect(canonicalResource('/mcp')).toBeNull();
     expect(canonicalResource('not a url')).toBeNull();
   });
@@ -90,8 +90,8 @@ describe('canonical resource (S2a/OV4)', () => {
   });
 
   it('builds the MCP resource from the issuer', () => {
-    expect(mcpResourceUrl('https://app.mtb3a.com')).toBe(canonical);
-    expect(mcpResourceUrl('https://app.mtb3a.com/')).toBe(canonical);
+    expect(mcpResourceUrl('https://app.example.test')).toBe(canonical);
+    expect(mcpResourceUrl('https://app.example.test/')).toBe(canonical);
   });
 });
 
@@ -158,7 +158,7 @@ describe('dynamic client registration (RFC 7591)', () => {
 });
 
 describe('discovery documents', () => {
-  const issuer = 'https://app.mtb3a.com';
+  const issuer = 'https://app.example.test';
 
   it('publishes RFC 8414 metadata: S256 only, public clients, CIMD and iss', () => {
     expect(authorizationServerMetadata(issuer)).toEqual({

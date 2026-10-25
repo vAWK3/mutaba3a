@@ -34,7 +34,7 @@ function recordingReporter() {
   return { reporter, messages };
 }
 
-function harness(options: { oauth?: boolean; registerLimit?: number } = {}) {
+function harness(options: { oauth?: boolean; registerLimit?: number; billingGate?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   let now = T0;
   const { reporter, messages } = recordingReporter();
@@ -49,6 +49,7 @@ function harness(options: { oauth?: boolean; registerLimit?: number } = {}) {
     now: () => now,
     reporter,
     jobToken: JOB_TOKEN,
+    billingGate: options.billingGate ?? false,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: false, trustedProxyHops: 1, portalOrigin: ORIGIN },
     oauth:
       options.oauth === false
@@ -368,6 +369,18 @@ describe('rate limits (AC5)', () => {
     const res = await h.app.request('/oauth/register', json({ client_name: 'Claude', redirect_uris: [CLAUDE_CB] }));
     expect(res.status).toBe(429);
     expect(await read(res)).toMatchObject({ error: 'temporarily_unavailable' });
+  });
+});
+
+describe('the lapse gate (MUT-361)', () => {
+  it('never stops a person connecting or disconnecting an agent: it writes no record (found by the live QA run)', async () => {
+    const h = harness({ billingGate: true });
+    const p = await person(h);
+    expect((await h.app.request('/v1/me', { headers: p.cookie })).status).toBe(200);
+    const { bearer } = await connect(h, p);
+    expect((await initialize(h, bearer)).status).toBe(200);
+    const list = await read(await h.app.request('/v1/oauth/grants', { headers: p.cookie }));
+    expect((await h.app.request(`/v1/oauth/grants/${list.items[0].id as string}`, { method: 'DELETE', headers: p.cookie })).status).toBe(204);
   });
 });
 

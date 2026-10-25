@@ -1,4 +1,5 @@
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/passkeys.js';
+import { OAUTH_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/oauth-consent.js';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import pino from 'pino';
@@ -6,6 +7,8 @@ import { createApp, type AppDependencies } from '../app.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SCOPES } from '../auth/scopes.js';
 import { PERSON_LEVEL_GATE } from '../billing/gate.js';
+import { agentWriteGate } from '../auth/billing-gate.js';
+import type { ApiError } from '../errors.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/sessions.js';
@@ -267,11 +270,28 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     expect(res.status).not.toBe(402);
   });
 
+  it('an agent’s write follows the profile’s lapse state like a session’s (MUT-434 agentWriteGate)', async () => {
+    const h = harness();
+    const write = async (state: State, enforced = true) => {
+      const p = await person(h, state);
+      const organization = (await h.store.organizations.getById(p.personalId))!;
+      return agentWriteGate(h.store, organization, NOW, enforced).then(
+        () => 'allowed',
+        (err: ApiError) => `${err.code}:${(err.details as { state: string }).state}`,
+      );
+    };
+    expect(await write('trial-active')).toBe('allowed');
+    expect(await write('trial-read-only')).toBe('SUBSCRIPTION_LAPSED:READ_ONLY');
+    expect(await write('trial-locked')).toBe('SUBSCRIPTION_LAPSED:LOCKED');
+    expect(await write('trial-locked', false)).toBe('allowed');
+  });
+
   it('every organization-independent endpoint is classified', () => {
     const all = [
       ...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES,
       ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES,
       ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);
