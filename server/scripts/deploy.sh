@@ -10,6 +10,8 @@
 #   2. docker build (linux/amd64) with your local daemon, docker push to
 #      Artifact Registry as mutaba3a-api:<short git sha>. The image serves
 #      dist-hosted/ from the same origin as the API (hosted-portal.md §9).
+#      MUT-347: an image that already holds this clean HEAD is reused (steps 1
+#      and 2 are skipped), and a tag is never pushed over (src/scripts/release-image.ts).
 #   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy` and the read-only pre-roll checks (src/scripts/pre-roll.ts)
 #      from this directory against the production database. The proxy is
 #      stopped afterwards. A failed migration stops here; the service is not
@@ -20,6 +22,10 @@
 #   6. Post-roll data repairs (src/scripts/post-roll.ts) through the proxy
 #      again: idempotent fixes for rows the old revision wrote after step 3's
 #      migration, which a migration's backfill cannot see. Usually 0 rows.
+#
+# Roll back (MUT-347): ROLLBACK_TO=<sha|api-vX.Y.Z> ./scripts/deploy.sh, or
+# make rollback-server SHA=…, rolls back to the image that commit already has.
+# No build and no migration; its gates and step matrix are in lib/rollback.sh.
 #
 # Prerequisites (DEPLOYMENT.md §1): gcloud (authenticated), docker daemon
 # running, cloud-sql-proxy v2, terraform >= 1.5, node 22, and
@@ -44,6 +50,7 @@ IMAGE="${REGISTRY}/mutaba3a-api:${SHORT_SHA}"
 SUFFIX=""; [[ "${ENVIRONMENT}" == "production" ]] || SUFFIX="-${ENVIRONMENT}"
 SERVICE_NAME="mutaba3a-api${SUFFIX}"
 PROXY_PID=""
+ROLLBACK_TO="${ROLLBACK_TO:-}"
 
 info() { printf '\033[0;36m[deploy]\033[0m %s\n' "$*"; }
 die()  { printf '\033[0;31m[deploy] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -57,6 +64,8 @@ source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 # shellcheck source=lib/db-checks.sh
 source "${SERVER_DIR}/scripts/lib/db-checks.sh"
+# shellcheck source=lib/rollback.sh
+source "${SERVER_DIR}/scripts/lib/rollback.sh"
 # MUT-381 / MUT-360 / MUT-148 / MUT-359: the release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
   (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
@@ -85,6 +94,38 @@ start_proxy() {
   PROXY_PID="${DB_PROXY_PID}"
 }
 stop_proxy() { kill "${PROXY_PID}" 2>/dev/null || true; PROXY_PID=""; }
+# Step 4: roll the service to TF_ARGS's image_tag and reconcile everything else. Sets SERVICE_URL and PUBLIC_PORTAL_ORIGIN.
+apply_release() {
+  guard_release
+  pushd "${TF_DIR}" >/dev/null
+  info "applying the full stack at ${SHORT_SHA}"
+  terraform apply "${TF_ARGS[@]}" "${APPROVE[@]+"${APPROVE[@]}"}"
+  SERVICE_URL="$(terraform output -raw service_url 2>/dev/null || true)"
+  # MUT-326: where users reach the portal (the custom domain from config/hosts.json's stage "live" on).
+  PUBLIC_PORTAL_ORIGIN="$(terraform output -raw public_portal_origin 2>/dev/null || true)"
+  popd >/dev/null
+  [[ -n "${SERVICE_URL}" ]] || die "terraform did not create the Cloud Run service (no service_url output); fix the error above and re-run this script — everything already created is kept"
+}
+# Step 5: smoke the API and portal both (server/src/smoke.ts). An empty EXPECT_ERROR_REPORTING skips that check.
+smoke_release() {
+  local expect=()
+  [[ -n "${EXPECT_ERROR_REPORTING}" ]] && expect=(--expect-error-reporting "${EXPECT_ERROR_REPORTING}")
+  info "smoke-testing ${SERVICE_URL}"
+  pushd "${SERVER_DIR}" >/dev/null
+  npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}" "${expect[@]+"${expect[@]}"}"
+  # Through the front door too, once users are sent there (ADR-155): same checks, the Worker's path.
+  if [[ -n "${PUBLIC_PORTAL_ORIGIN}" && "${PUBLIC_PORTAL_ORIGIN}" != "${SERVICE_URL}" ]]; then
+    info "smoke-testing ${PUBLIC_PORTAL_ORIGIN} (the front door)"
+    npm run --silent smoke -- --url "${PUBLIC_PORTAL_ORIGIN}" --expect-version "${SHORT_SHA}" "${expect[@]+"${expect[@]}"}"
+  fi
+  popd >/dev/null
+}
+
+# MUT-347: a rollback builds nothing and migrates nothing; lib/rollback.sh runs it end to end.
+if [[ -n "${ROLLBACK_TO}" ]]; then
+  rollback_main
+  exit 0
+fi
 
 need gcloud "https://cloud.google.com/sdk/docs/install"
 need docker "Docker Desktop, daemon running"
@@ -95,9 +136,11 @@ docker info >/dev/null 2>&1 || die "the docker daemon is not running"
 [[ -f "${TF_DIR}/${ENVIRONMENT}.tfvars" ]] || die "missing ${TF_DIR}/${ENVIRONMENT}.tfvars (copy ${ENVIRONMENT}.tfvars.example)"
 # The image now bundles the hosted-portal build (MUT-45) alongside server/, so
 # the whole repo must be clean for the tag to name everything that went in.
-if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" && -z "${IMAGE_TAG:-}" ]]; then
+TREE_DIRTY="false"; [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" ]] && TREE_DIRTY="true"
+if [[ "${TREE_DIRTY}" == "true" && -z "${IMAGE_TAG:-}" ]]; then
   die "the repo has uncommitted changes; commit first so the image tag names what you deploy (or pass IMAGE_TAG=)"
 fi
+HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 
 # MUT-324 (D11): web first. People are asked to accept the terms this release names, so that exact
 # text must already be on the public site. `make release server` also checks it in its preflight,
@@ -106,7 +149,7 @@ fi
 if [[ "${SKIP_TERMS_CHECK:-}" == "1" ]]; then
   info "WARNING: skipping the terms check (SKIP_TERMS_CHECK=1)"
 else
-  npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms check failed (above); if the version isn't listed yet, release web first (make release web)"
+  MUTABA3A_ENVIRONMENT="${ENVIRONMENT}" npm --prefix "${SERVER_DIR}" run --silent terms:check-live || die "the terms check failed (above); if the version isn't listed yet, release web first (make release web)"
 fi
 
 info "environment=${ENVIRONMENT} project=${GCP_PROJECT_ID} region=${GCP_REGION} tag=${SHORT_SHA}"
@@ -143,40 +186,53 @@ LOCAL_DATABASE_URL="$(terraform output -raw local_database_url)"
 SQL_CONNECTION="$(terraform output -raw cloud_sql_connection_name)"
 popd >/dev/null
 
-# ---------------------------------------------------------------------------
-# 1. Build the hosted-portal bundle, copy it into the Docker build context
-# ---------------------------------------------------------------------------
-# MUT-149: a DSN without the upload token would ship crash reports with unreadable stacks, so it stops here
-if [[ -n "${MUTABA3A_SENTRY_DSN:-}" && -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  die "MUTABA3A_SENTRY_DSN is set but SENTRY_AUTH_TOKEN is not: export it, or store it once in the Keychain (DEPLOYMENT.md §1.5 step 3)"
-fi
-if [[ -z "${MUTABA3A_SENTRY_DSN:-}" && -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  warn "SENTRY_AUTH_TOKEN is set but MUTABA3A_SENTRY_DSN is not: the portal ships without crash reports, no maps uploaded"
-fi
-# The portal ships inside this image, so it versions with the API (ADR-091 am.6's release format)
-MUTABA3A_SENTRY_RELEASE="mutaba3a-portal@$(node -p "require('${SERVER_DIR}/package.json').version")+${SHORT_SHA}"
-MUTABA3A_SENTRY_ENVIRONMENT="${ENVIRONMENT}"
-export MUTABA3A_SENTRY_RELEASE MUTABA3A_SENTRY_ENVIRONMENT
-pushd "${REPO_ROOT}" >/dev/null
-info "building the hosted-portal bundle (npm run build:hosted)"
-npm ci --no-audit --no-fund
-npm run --silent build:hosted
-# TD-084: prove the bundle this release ships (no Sentry in the entry, no maps, no fixtures or tokens, no new origin)
-info "checking the hosted-portal bundle (check-bundles --dist dist-hosted)"
-npx --no-install tsx scripts/check-bundles.ts --dist dist-hosted
-popd >/dev/null
-rm -rf "${SERVER_DIR}/dist-hosted"
-cp -r "${REPO_ROOT}/dist-hosted" "${SERVER_DIR}/dist-hosted"
+# MUT-347: never push over a tag. A tag that already holds this clean HEAD (a re-run), built with the same portal
+# settings, is reused as it is; a tag that holds anything else is refused (src/scripts/release-image.ts). The portal
+# bundle bakes in ENVIRONMENT and deploy.env's MUTABA3A_* settings, so their hash is part of what an image holds.
+PORTAL_CONFIG="$({ printf 'ENVIRONMENT=%s\n' "${ENVIRONMENT}"; { env | LC_ALL=C grep '^MUTABA3A_' || true; } | LC_ALL=C sort; } | shasum -a 256 | cut -d' ' -f1)"
+IMAGE_PLAN="$(REGISTRY_TOKEN="$(gcloud auth print-access-token)" npm --prefix "${SERVER_DIR}" run --silent release-image -- deploy-plan --image "${IMAGE}" --head "${HEAD_SHA}" --dirty "$([[ "${TREE_DIRTY}" == "true" ]] && echo 1 || echo 0)" --config "${PORTAL_CONFIG}")" \
+  || die "refusing to deploy ${IMAGE} (above)"
+if [[ "${IMAGE_PLAN}" == "reuse" ]]; then
+  info "reusing ${IMAGE}: it already holds ${HEAD_SHA:0:12}; skipping the bundle, the build and the push"
+else
+  # ---------------------------------------------------------------------------
+  # 1. Build the hosted-portal bundle, copy it into the Docker build context
+  # ---------------------------------------------------------------------------
+  # MUT-149: a DSN without the upload token would ship crash reports with unreadable stacks, so it stops here
+  if [[ -n "${MUTABA3A_SENTRY_DSN:-}" && -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
+    die "MUTABA3A_SENTRY_DSN is set but SENTRY_AUTH_TOKEN is not: export it, or store it once in the Keychain (DEPLOYMENT.md §1.5 step 3)"
+  fi
+  if [[ -z "${MUTABA3A_SENTRY_DSN:-}" && -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
+    warn "SENTRY_AUTH_TOKEN is set but MUTABA3A_SENTRY_DSN is not: the portal ships without crash reports, no maps uploaded"
+  fi
+  # The portal ships inside this image, so it versions with the API (ADR-091 am.6's release format)
+  MUTABA3A_SENTRY_RELEASE="mutaba3a-portal@$(node -p "require('${SERVER_DIR}/package.json').version")+${SHORT_SHA}"
+  MUTABA3A_SENTRY_ENVIRONMENT="${ENVIRONMENT}"
+  export MUTABA3A_SENTRY_RELEASE MUTABA3A_SENTRY_ENVIRONMENT
+  pushd "${REPO_ROOT}" >/dev/null
+  info "building the hosted-portal bundle (npm run build:hosted)"
+  npm ci --no-audit --no-fund
+  npm run --silent build:hosted
+  # TD-084: prove the bundle this release ships (no Sentry in the entry, no maps, no fixtures or tokens, no new origin)
+  info "checking the hosted-portal bundle (check-bundles --dist dist-hosted)"
+  npx --no-install tsx scripts/check-bundles.ts --dist dist-hosted
+  popd >/dev/null
+  rm -rf "${SERVER_DIR}/dist-hosted"
+  cp -r "${REPO_ROOT}/dist-hosted" "${SERVER_DIR}/dist-hosted"
 
-# ---------------------------------------------------------------------------
-# 2. Build the image locally, push
-# ---------------------------------------------------------------------------
-pushd "${SERVER_DIR}" >/dev/null
-info "building ${IMAGE} with the local docker daemon"
-gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
-docker build --platform linux/amd64 -t "${IMAGE}" .
-info "pushing ${IMAGE}"
-docker push "${IMAGE}"
+  # ---------------------------------------------------------------------------
+  # 2. Build the image locally, push
+  # ---------------------------------------------------------------------------
+  pushd "${SERVER_DIR}" >/dev/null
+  info "building ${IMAGE} with the local docker daemon"
+  gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+  # MUT-347: the labels a reuse or a rollback reads back (release-image.ts): the commit, whether IMAGE_TAG let a dirty
+  # tree in, and the portal settings it was built with.
+  docker build --platform linux/amd64 --label "org.opencontainers.image.revision=${HEAD_SHA}" --label "dirty=${TREE_DIRTY}" \
+    --label "portal-config=${PORTAL_CONFIG}" -t "${IMAGE}" .
+  info "pushing ${IMAGE}"
+  docker push "${IMAGE}"
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Migrate from this machine through the Cloud SQL Auth Proxy
@@ -197,34 +253,19 @@ popd >/dev/null
 # ---------------------------------------------------------------------------
 # 4. Roll the service and reconcile everything else
 # ---------------------------------------------------------------------------
-guard_release
-pushd "${TF_DIR}" >/dev/null
-info "applying the full stack at ${SHORT_SHA}"
-terraform apply "${TF_ARGS[@]}" "${APPROVE[@]}"
-SERVICE_URL="$(terraform output -raw service_url 2>/dev/null || true)"
-# MUT-326: where users reach the portal (the custom domain from config/hosts.json's stage "live" on).
-PUBLIC_PORTAL_ORIGIN="$(terraform output -raw public_portal_origin 2>/dev/null || true)"
-popd >/dev/null
-[[ -n "${SERVICE_URL}" ]] || die "terraform did not create the Cloud Run service (no service_url output); fix the error above and re-run this script — everything already created is kept"
+apply_release
 
 # ---------------------------------------------------------------------------
 # 5. Smoke (API and portal both — see server/src/smoke.ts)
 # ---------------------------------------------------------------------------
-info "smoke-testing ${SERVICE_URL}"
-pushd "${SERVER_DIR}" >/dev/null
-npm run --silent smoke -- --url "${SERVICE_URL}" --expect-version "${SHORT_SHA}" --expect-error-reporting "${EXPECT_ERROR_REPORTING}"
-# Through the front door too, once users are sent there (ADR-155): same checks, the Worker's path.
-if [[ -n "${PUBLIC_PORTAL_ORIGIN}" && "${PUBLIC_PORTAL_ORIGIN}" != "${SERVICE_URL}" ]]; then
-  info "smoke-testing ${PUBLIC_PORTAL_ORIGIN} (the front door)"
-  npm run --silent smoke -- --url "${PUBLIC_PORTAL_ORIGIN}" --expect-version "${SHORT_SHA}" --expect-error-reporting "${EXPECT_ERROR_REPORTING}"
-fi
-popd >/dev/null
+smoke_release
 
 # ---------------------------------------------------------------------------
 # 6. Post-roll data repairs (see server/src/scripts/post-roll.ts)
 # ---------------------------------------------------------------------------
 # After the roll and the smoke, so the old revision has drained. Idempotent: a
-# re-run or a rollback (IMAGE_TAG=<old sha>) runs it again and finds 0 rows.
+# re-run runs it again and finds 0 rows. A rollback (ROLLBACK_TO) skips it:
+# these repairs are HEAD's, not the old code's (lib/rollback.sh).
 pushd "${SERVER_DIR}" >/dev/null
 start_proxy
 info "running post-roll data repairs"

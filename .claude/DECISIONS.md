@@ -5291,3 +5291,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The protocol endpoints rate-limit per Cloud Run instance, like sign-in (TD-253).
 - Account recovery, operator `rotate:password` and setup-link locks set a password without revoking grants (TD-254).
 - MUT-435 must decide firm-owner consent (ADR-196 deferred) before a read tool reaches firm data.
+
+---
+
+## ADR-198: A Rollback Deploys the Commit's Existing Image, Never Rebuilds, and Never Pushes Over a Tag (MUT-347)
+
+**Status:** Accepted (2026-10-25, MUT-347; plan `.claude/designs/mut-347-terms-guard-env-rollback.md`, D1 = A by Basel; outside-voice findings folded in).
+
+**Context:** `DEPLOYMENT.md` taught `IMAGE_TAG=<old sha> ./scripts/deploy.sh` as the rollback. deploy.sh always rebuilt the working tree, pushed it under that tag (overwriting the old image in Artifact Registry, which has no immutable tags) and ran today's migrations. The terms guard read production's site whatever the environment, and the working tree's terms.
+
+**Decision:**
+1. **Tags are never overwritten.** deploy.sh asks the registry first (`release-image deploy-plan`): a free tag builds; a tag holding this clean HEAD, built with the same portal settings, is reused (steps 1–2 skipped); anything else is refused, unlabelled pre-MUT-347 images included. Every build is labelled `org.opencontainers.image.revision=<full sha>`, `dirty=<bool>` and `portal-config=<sha256 of ENVIRONMENT and every MUTABA3A_* build setting>`: the portal bundle bakes those settings in, so a re-run after deploy.env changed must not reuse the old bundle (pre-landing review). `IMAGE_TAG` only names a fresh build.
+2. **`ROLLBACK_TO=<sha|api-vX.Y.Z>`** (`make rollback-server SHA=`) deploys the image the commit already has, found by its short-sha tag and checked by its labels (an unlabelled pre-MUT-347 image warns). It builds nothing, migrates nothing (forward-only) and skips post-roll (HEAD's repairs).
+3. **Gates, in order:** clean tree; not with `IMAGE_TAG`; not HEAD; older than what serves (an ancestor of the deployed tag's commit; a newer commit would skip its migration, pre-roll and post-roll); the commit's own terms are live (`git show <sha>:server/src/legal.ts`, strict literal parse; pre-MUT-324 commits need `SKIP_TERMS_CHECK=1`); infra drift (`terraform plan -detailed-exitcode` at the deployed `SERVICE_VERSION` must be empty, else the rollback would ship this checkout's infrastructure); the four release guards; the migration gate (database `_prisma_migrations` against the commit's migrations; each DEPLOYMENT.md "Roll back past" count runs, any above 0 refuses; otherwise the operator types the short sha).
+4. **The release's own site.** `terms:check-live` and `email:check` resolve hosts for `MUTABA3A_ENVIRONMENT`; with no staging entry in `config/hosts.json`, a staging release stops loudly.
+
+**Consequences:**
+- A registry cleanup policy must keep every deployed tag (noted in `main.tf`).
+- The hosted portal rolls back with the image; phone builds that need newer endpoints get 404s until roll-forward.
+- A rollback is run from a clean checkout whose terraform matches what serves (normally `main` right after the bad release).
+- Not yet drilled for real: MUT-327 drill day.
+

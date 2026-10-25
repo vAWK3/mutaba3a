@@ -378,7 +378,7 @@ if [[ "$MODE" == "server" ]]; then
   head_ "Terms of service"
   if [[ "${SKIP_TERMS_CHECK:-0}" == "1" ]]; then
     warn "terms not checked ${DIM}(SKIP_TERMS_CHECK=1)${NC}"
-  elif TERMS_OUT="$(npm --prefix server run --silent terms:check-live 2>&1)"; then
+  elif TERMS_OUT="$(MUTABA3A_ENVIRONMENT="$ENVIRONMENT" npm --prefix server run --silent terms:check-live 2>&1)"; then
     ok "${TERMS_OUT#\[terms\] }"
   else
     bad "${TERMS_OUT#\[terms\] }"
@@ -421,7 +421,7 @@ if [[ "$MODE" == "server" ]]; then
       EMAIL_ARGS=()
       warn "Resend API check skipped: no RESEND_CHECK_API_KEY ${DIM}(tracking and region are checked by npm --prefix server run email:check -- --api)${NC}"
     fi
-    if EMAIL_OUT="$(RESEND_CHECK_API_KEY="$CHECK_KEY" npm --prefix server run --silent email:check "${EMAIL_ARGS[@]+"${EMAIL_ARGS[@]}"}" 2>&1)"; then
+    if EMAIL_OUT="$(MUTABA3A_ENVIRONMENT="$ENVIRONMENT" RESEND_CHECK_API_KEY="$CHECK_KEY" npm --prefix server run --silent email:check "${EMAIL_ARGS[@]+"${EMAIL_ARGS[@]}"}" 2>&1)"; then
       ok "${EMAIL_OUT#\[email\] }"
     else
       bad "mail domain: ${EMAIL_OUT//\[email\] /}"

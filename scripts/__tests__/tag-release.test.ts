@@ -234,8 +234,13 @@ describe('a dirty tree never reaches deploy.sh', () => {
     return preflight.slice(start, preflight.indexOf('\n\n', start));
   }
 
-  it('deploy.sh still refuses uncommitted changes unless IMAGE_TAG names the image', () => {
-    expect(deploySh).toMatch(/git -C "\$\{REPO_ROOT\}" status --porcelain[^\n]*IMAGE_TAG/);
+  it('deploy.sh still refuses uncommitted changes unless IMAGE_TAG names the image, and labels such an image dirty (MUT-347)', () => {
+    expect(deploySh).toMatch(/TREE_DIRTY="false"; \[\[ -n "\$\(git -C "\$\{REPO_ROOT\}" status --porcelain[^\n]*TREE_DIRTY="true"/);
+    expect(deploySh).toMatch(/if \[\[ "\$\{TREE_DIRTY\}" == "true" && -z "\$\{IMAGE_TAG:-\}" \]\]; then\n {2}die "the repo has uncommitted changes/);
+    expect(deploySh).toContain('--label "dirty=${TREE_DIRTY}"');
+    expect(deploySh).toContain('--label "org.opencontainers.image.revision=${HEAD_SHA}"');
+    expect(deploySh).toContain('--label "portal-config=${PORTAL_CONFIG}"');
+    expect(deploySh).toContain('--config "${PORTAL_CONFIG}"');
   });
 
   it('the server preflight fails on a dirty tree instead of asking, and says why', () => {
@@ -255,3 +260,62 @@ describe('a dirty tree never reaches deploy.sh', () => {
     expect(check).toBeLessThan(body.indexOf('git push origin'));
   });
 });
+
+/**
+ * MUT-347: a rollback rolls back. deploy.sh never pushes over an image tag (so an old image survives to roll
+ * back to), and ROLLBACK_TO deploys a commit's existing image without building or migrating.
+ */
+describe('deploy.sh never overwrites an image, and ROLLBACK_TO builds nothing (MUT-347)', () => {
+  const deploySh = readFileSync(resolve(ROOT, 'server/scripts/deploy.sh'), 'utf-8');
+  const rollbackSh = readFileSync(resolve(ROOT, 'server/scripts/lib/rollback.sh'), 'utf-8');
+  const makefile = readFileSync(resolve(ROOT, 'Makefile'), 'utf-8');
+  const deployment = readFileSync(resolve(ROOT, 'server/DEPLOYMENT.md'), 'utf-8');
+  const runbook = readFileSync(resolve(ROOT, 'docs/operations/pilot-runbook.md'), 'utf-8');
+  /** The script's commands, comments dropped: what it runs, not what it explains. */
+  const code = (script: string) => script.split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
+
+  it('a deploy asks the registry first, and builds and pushes only a tag it may use', () => {
+    const run = code(deploySh);
+    const plan = run.indexOf('release-image -- deploy-plan');
+    expect(plan).toBeGreaterThan(-1);
+    expect(plan).toBeLessThan(run.indexOf('docker build'));
+    expect(plan).toBeLessThan(run.indexOf('docker push'));
+    expect(deploySh).toMatch(/if \[\[ "\$\{IMAGE_PLAN\}" == "reuse" \]\]; then/);
+  });
+
+  it('ROLLBACK_TO branches off before the docker checks and never falls through to the build', () => {
+    const branch = deploySh.indexOf('if [[ -n "${ROLLBACK_TO}" ]]; then\n  rollback_main\n  exit 0\nfi');
+    expect(branch).toBeGreaterThan(-1);
+    expect(branch).toBeLessThan(deploySh.indexOf('need docker'));
+  });
+
+  it('the rollback runs no docker, npm ci, bundle, Turnstile key check, migration, pre-roll or post-roll', () => {
+    const run = code(rollbackSh);
+    for (const step of ['docker', 'npm ci', 'build:hosted', 'check-bundles', 'guard_turnstile_site_key', 'ensure_bootstrap', 'prisma', 'run --silent pre-roll', 'run --silent post-roll']) {
+      expect(run, step).not.toContain(step);
+    }
+  });
+
+  it('the rollback runs its gates: clean tree, no IMAGE_TAG, the commit’s terms, infra drift, migrations, the guards, smoke', () => {
+    const run = code(rollbackSh);
+    expect(run).toMatch(/ROLLBACK_TO and IMAGE_TAG are both set/);
+    expect(run).toMatch(/status --porcelain/);
+    expect(run).toContain('terms:check-live -- --commit "${commit}"');
+    expect(run).toContain('release-image -- rollback');
+    expect(run).toContain('terraform plan -detailed-exitcode');
+    expect(run).toContain('rollback:check -- --commit');
+    expect(run).toMatch(/apply_release[\s\S]*smoke_release/);
+  });
+
+  it('make rollback-server runs deploy.sh with ROLLBACK_TO, without the HEAD preflight', () => {
+    const body = makefile.slice(makefile.indexOf('\nrollback-server:'), makefile.indexOf('\n\n', makefile.indexOf('\nrollback-server:') + 1));
+    expect(body).toContain("ROLLBACK_TO='$(SHA)' ./scripts/deploy.sh");
+    expect(body).not.toContain('preflight');
+  });
+
+  it('no doc teaches IMAGE_TAG=<old sha> as a rollback any more; DEPLOYMENT.md names make rollback-server', () => {
+    for (const text of [deploySh, deployment, runbook]) expect(text).not.toMatch(/IMAGE_TAG=<(old )?sha>/);
+    expect(deployment).toMatch(/^\| Roll back the service \| `make rollback-server SHA=/m);
+  });
+});
+

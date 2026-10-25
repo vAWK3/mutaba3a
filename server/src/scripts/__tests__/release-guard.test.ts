@@ -188,14 +188,17 @@ describe('deploy.sh calls the guard before every step that can move or reopen an
   it('guards before the bootstrap apply, before the migration and before the full apply', () => {
     const src = readFileSync(DEPLOY, 'utf-8');
     // Calls only: `guard_cmek_release "…` at step 0, and the `guard_release` wrapper (not its definition).
-    const guardAt = [...src.matchAll(/^(?:guard_cmek_release "|guard_release(?!\(\)))/gm)].map((m) => m.index ?? -1);
+    // MUT-347: step 4 is `apply_release`, shared with the rollback, which runs `guard_release` before its apply.
+    const guardAt = [...src.matchAll(/^(?:guard_cmek_release "|guard_release(?!\(\))|apply_release$)/gm)].map((m) => m.index ?? -1);
     const bootstrap = src.indexOf('ensure_bootstrap "');
     const migrate = src.indexOf('npx prisma migrate deploy');
-    const apply = src.indexOf('terraform apply "${TF_ARGS[@]}"');
+    const applyRelease = /^apply_release\(\) \{\n[\s\S]*?\n\}/m.exec(src)?.[0] ?? '';
+    expect(applyRelease.indexOf('guard_release')).toBeGreaterThan(-1);
+    expect(applyRelease.indexOf('guard_release')).toBeLessThan(applyRelease.indexOf('terraform apply "${TF_ARGS[@]}"'));
     expect(guardAt.length).toBeGreaterThanOrEqual(3);
     expect(guardAt.some((g) => g < bootstrap)).toBe(true);
     expect(guardAt.some((g) => g > bootstrap && g < migrate)).toBe(true);
-    expect(guardAt.some((g) => g > migrate && g < apply)).toBe(true);
+    expect(guardAt.some((g) => g > migrate)).toBe(true); // the top-level apply_release
   });
 });
 
@@ -385,9 +388,15 @@ describe('deploy.sh wires error reporting (MUT-148)', () => {
   });
 
   it('asks the smoke to check /health errorReporting on every smoke run', () => {
+    // MUT-347: smoke_release passes it when EXPECT_ERROR_REPORTING is set; a deploy always sets it (a rollback to a
+    // commit from before MUT-148 leaves it empty: rollback.test.ts).
     const smokes = [...deploy.matchAll(/^\s*npm run --silent smoke -- .*$/gm)].map((m) => m[0]);
     expect(smokes.length).toBeGreaterThan(0);
-    for (const line of smokes) expect(line).toMatch(/--expect-error-reporting "\$\{EXPECT_ERROR_REPORTING\}"/);
+    for (const line of smokes) expect(line).toContain('"${expect[@]+"${expect[@]}"}"');
+    expect(deploy).toContain('[[ -n "${EXPECT_ERROR_REPORTING}" ]] && expect=(--expect-error-reporting "${EXPECT_ERROR_REPORTING}")');
+    const set = deploy.indexOf('EXPECT_ERROR_REPORTING="off"; [[ "${SENTRY_ENABLED}" == "true" ]] && EXPECT_ERROR_REPORTING="on"');
+    expect(set).toBeGreaterThan(-1);
+    expect(set).toBeLessThan(deploy.lastIndexOf('\nsmoke_release'));
   });
 
   it('hands pre-roll and post-roll the DSN and release, so their crashes are reported', () => {

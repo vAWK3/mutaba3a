@@ -100,6 +100,9 @@ resource "google_project_service" "apis" {
 # Artifact Registry (images are built and pushed from the operator's machine)
 # ============================================================================
 
+# MUT-347: tags are never pushed over (deploy.sh) and no image is ever deleted, because a rollback
+# (make rollback-server) deploys a commit's existing image. A cleanup policy added here must keep every tag
+# a release deployed (the short shas the api-v* tags point at).
 resource "google_artifact_registry_repository" "images" {
   project       = var.project_id
   location      = var.region

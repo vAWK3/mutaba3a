@@ -3849,3 +3849,22 @@ Tests written first for the pure rules and the service (seen failing: modules mi
 | `src/hosted/components/__tests__/ConnectClaudeDrawer.test.tsx` | Portal | 7 | row only with the flag; off message; MCP address + copy + how-tos; rows with trust/dates/scope; in-row Disconnect with focus return (AC3); failure banner; empty state |
 | `src/hosted/components/__tests__/CopyField.test.tsx` | Portal | 2 | copy announced; failure announced, value stays readonly |
 | `qa/specs/portal-selfservice/connect.spec.ts` | Release-QA (live API) | 4 + 1 manual | approve end to end incl. `/mcp`; refused; revoke; row hidden; Claude.ai/Claude Code by hand |
+
+
+## MUT-347 — Terms guard per environment; a real rollback (2026-10-25, ADR-198)
+
+Tests first for each unit (seen failing: modules missing, or the old script text).
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `scripts/__tests__/legal-terms.test.ts` | Structural + spawn | +7 | both npm scripts pass `--env "${MUTABA3A_ENVIRONMENT:-production}"`; production resolves to hosts.json's landing; staging (no entry) stops on the hosts error, never "not set" (runs the real script); deploy.sh, preflight and the rollback pass the environment / `--commit` |
+| `server/src/__tests__/check-terms-live.test.ts` | Unit | +10 | `termsAtCommit`: current shape, pre-MUT-324 (null), commit missing (throws), malformed (throws); this checkout's legal.ts parses to CURRENT_TERMS; real git HEAD/missing path/missing commit; the `--commit` CLI passes, refuses pre-terms with SKIP_TERMS_CHECK advice, refuses unreadable |
+| `server/src/scripts/__tests__/release-image.test.ts` | Unit (stub fetch) | 22 | image ref parsing; labels: 404 = absent, bearer token, OCI index → linux/amd64, 403 throws; paginated tags; short-sha tag lookup; deploy plan build/reuse/refuse (other commit, dirty image or tree, unlabelled with non-sha tag); rollback check; CLI |
+| `server/src/scripts/__tests__/rollback-check.test.ts` | Unit | 11 | ls-tree at the commit (full tree); rolled-past and unapplied diff; hazards named once; the 7 hazards = DEPLOYMENT.md "Roll back past" rows, query text identical; exit 0/2/1 |
+| `server/src/scripts/__tests__/rollback.test.ts` | Shell (fake gcloud/terraform/npm, throwaway git repo) | 19 | resolve sha/annotated tag (fetch failure warns), refuse unknown ref; deployed SERVICE_VERSION; drift gate 0/2/1; migration gate 0, typed confirmation right/wrong/none, refusal; MUT-148 smoke expectation; `rollback_main` end to end: gate order, smoke expects `on`/`off` from the real Sentry guard (review: the subshell lost it), pre-MUT-148 skips it, gate refusal stops before apply, already-serving, only-back, HEAD and dirty refused; PORTAL_CONFIG hashes with no MUTABA3A_* under pipefail; deploy.sh refuses ROLLBACK_TO with IMAGE_TAG before any tool |
+| `scripts/__tests__/tag-release.test.ts` | Structural | +6 | deploy.sh labels builds and asks the registry before build/push; ROLLBACK_TO branches before the docker checks; rollback runs no docker/npm ci/bundle/Turnstile/bootstrap/prisma/pre-roll/post-roll, and does run its gates; `make rollback-server` skips the HEAD preflight; no doc teaches IMAGE_TAG rollback |
+| Manual | Drill | 1 | MUT-327 drill day: roll back to the previous api tag and forward again (Basel) |
+
+Also run by hand, read-only, against the local dev database: `rollback:check` for api-v0.8.0 (0), api-v0.6.0 (2, MUT-333 and MUT-115 counted 0) and HEAD (1, an unapplied migration); every hazard query executes.
+And read-only against production's Artifact Registry (gcloud token): `release-image rollback` found api-v0.8.0's (`8acc5022`) and api-v0.6.0's (`d9edb43f`) images, each warning it has no revision label; `deploy-plan` refused `8acc5022` from another HEAD with a dirty tree and said `build` for an unused tag (it also said `reuse` for `8acc5022` at its own commit then; since the pre-landing review an unlabelled image is never reused).
+

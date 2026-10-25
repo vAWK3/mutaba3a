@@ -48,7 +48,9 @@ endif
 #   project  ← project_id in <environment>.tfvars
 #   bucket   ← the backend bucket of the last `terraform init`
 # preflight re-derives both independently and fails on a mismatch, so these
-# defaults can never silently point a deploy at the wrong project.
+# defaults can never silently point a release at the wrong project. (make
+# rollback-server runs no preflight: check GCP_PROJECT_ID and TF_STATE_BUCKET,
+# which it prints, before you confirm.)
 TF_DIR       := server/infrastructure/terraform
 TFVARS_FILE  := $(TF_DIR)/$(ENVIRONMENT).tfvars
 TFSTATE_FILE := $(TF_DIR)/.terraform/terraform.tfstate
@@ -101,7 +103,7 @@ endif
 # Printed at the end of each release: CI no longer starts on push.
 CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on what you just pushed: make ci %s$(C_OFF)\n\n'
 
-.PHONY: help release release-web release-server release-full ci create \
+.PHONY: help release release-web release-server release-full rollback-server ci create \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e qa-view \
         bump-web bump-server \
@@ -115,6 +117,7 @@ help:
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
 	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
+	@printf '  $(C_GREEN)make rollback-server SHA=<sha|api-vX.Y.Z>$(C_OFF)   roll the API + portal back to that commit'"'"'s image (no build, no migration)\n'
 	@printf '\n$(C_BOLD)Accounts$(C_OFF) $(C_DIM)(live admin API of $(ENVIRONMENT); prompts, then confirms)$(C_OFF)\n'
 	@printf '  $(C_GREEN)make create user$(C_OFF)       a person with their personal profile (optionally joining an existing firm)\n'
 	@printf '  $(C_GREEN)make create business$(C_OFF)   a new firm, then its first person (personal profile + the firm'"'"'s)\n'
@@ -378,6 +381,18 @@ release-server: preflight-server
 # ---------------------------------------------------------------------------
 
 release-full: release-web release-server
+
+# ---------------------------------------------------------------------------
+# rollback server — MUT-347: roll the API + hosted portal back to the image a
+# commit already has in Artifact Registry. deploy.sh's ROLLBACK_TO builds and
+# migrates nothing; it refuses a dirty tree, IMAGE_TAG, infrastructure drift
+# and a "Roll back past" migration with rows (server/scripts/lib/rollback.sh).
+# No preflight: that checks HEAD, and a rollback checks the commit.
+# ---------------------------------------------------------------------------
+
+rollback-server:
+	@if [ -z '$(SHA)' ]; then printf 'usage: make rollback-server SHA=<sha|api-vX.Y.Z>\n' >&2; exit 2; fi
+	@cd server && ROLLBACK_TO='$(SHA)' ./scripts/deploy.sh
 
 # ---------------------------------------------------------------------------
 
