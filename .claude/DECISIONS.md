@@ -5185,3 +5185,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The destination links pass `activeOptions={{ exact: true }}`: TanStack adds `aria-current` to any active link, and Owed's bare `/p/:id` is active under every page of the profile.
 - The Arabic for Spent (المصروف) awaits Basel's sign-off; the alternative is المصاريف.
 
+## ADR-193: The Portal's Chrome Floats Over the Page — the Pill, the You Island and Reports, With Depth-Driven View Transitions (MUT-426, epic MUT-423)
+
+**Status:** Accepted (2026-10-25, MUT-426; plan `.claude/designs/mut-426-floating-shell-plan.md`, eng review D1–D9 answered by Basel). The last step of the MUT-423 shell (round 4 variation 3). Supersedes ADR-192 §6 (the interim Reports link) and the sidebar in `hosted-portal.md` §7.1.
+
+**Context:** the 240 px sidebar took room from every page and read like an admin dashboard; MUT-424 and MUT-425 left it as an interim home for the four destinations and two links into the You page.
+
+**Decision:**
+1. **Three glass objects, one DOM.** `HostedShell` renders `.hp-chrome` (fixed, `z-index: 15`, between the page and `.hp-popover`/toasts/drawers) holding the Reports corner icon, the pill (`nav` "Sections", the four destinations) and the You island, in that DOM order: the reading and keyboard order on both layouts. Desktop: Reports top start, pill top centre, island top end. Phone (≤ 760 px): pill and island circle at the bottom, Reports top end. The document still scrolls; the page reserves the chrome's space (top on desktop, both on a phone, plus the safe area through `viewport-fit=cover`), so at rest nothing is hidden.
+2. **The portal differs from the local app's MUT-79 "nothing floats over content" on purpose (S4):** the chrome floats only over scrolled content, through fixed `--bg` fade bands rather than a mask.
+3. **Glass** is `--hp-glass-bg` (74 % `--surface`), `--hp-glass-edge` and `--hp-lift` (dark values under the three-selector pattern) on `.hp-glass`, solid under `prefers-reduced-transparency` or without `backdrop-filter`.
+4. **The island is a link (MUT-425 D4).** Off You it opens You › Profiles with `?from=<section>` and `?back=<this page>` (D7); on You it is `aria-current` and goes to `back` (same profile only: `islandTarget`), else the section, else home. `back` is path-only and parsed against `/p/<id>/<known section>…`, so it cannot leave the portal. Profile switching still keeps the section only. Reports is a section (`SECTION_SEGMENTS`, D8).
+5. **The profile colour (D2)** is `ringColorOf(id)`: FNV-1a over the id onto six brand ring colours, each ≥ 3:1 on every surface in its theme. Client only; no API field. Two profiles can share one.
+6. **Page motion is TanStack Router view transitions (D6).** `defaultViewTransition` is `{ types }` from the pure `pageMotionOf(prev, next)` (first match wins: same path or first render none; into You island; leaving You back; outside a profile none; another profile fade; deeper forward; shallower back; else fade). It is set only where view-transition types are supported under both our check and router-core 1.144's own (router.js:146): otherwise the router starts untyped transitions on every navigation, drawer opens included. CSS draws each type on `::view-transition-old/new(root)`, mirrored in RTL by keyframe name; `.hp-chrome` is its own transition group and holds still; reduced motion cross-fades. Browsers without types get an instant swap.
+7. **No wordmark in the chrome (D3):** it heads You › App; sign-in and the tab title still name the product. **The trial notice is one muted line (D4).** **On a phone the island is ring-only (D5)**, the name in its label, and the bottom bar hides while a page field has focus (D9, `:has()`), for iOS's keyboard.
+
+**Consequences:**
+- `YouLinks.tsx`, the sidebar's and phone top bar's CSS, `--hp-sidebar-width` and the keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn/endsSoon` are gone; `hosted.shell.island` is new. TD-236 is resolved.
+- Unit tests reach You through the harness's `openYou(user, part)`; QA through `qa/support/you.ts`'s `openYou` (the island, then the part tab).
+- The iOS keyboard behaviour is proven in Chromium only (TD-249).

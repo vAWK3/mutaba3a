@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-193)
+
+**Why:** the last step of epic MUT-423. The sidebar took 240 px from every page and put a dashboard's chrome in front of one figure; the new shell is four words in a floating pill, one island for you and your books, and a Reports icon.
+
+### Added
+- `shell/YouIsland.tsx`: the You island (profile name + avatar ringed by `ringColorOf`, six brand ring colours; ring-only on a phone), linking into You with `?from=` and `?back=`, lit on You, and back to the exact page on a second press.
+- `shell/pageMotion.ts`: `depthOf`, `pageMotionOf`, `viewTransitionOption`, `supportsViewTransitionTypes`; the router's `defaultViewTransition`. `hosted.css` view-transition keyframes per type, RTL-mirrored, cross-fade under reduced motion.
+- `youRoutes.ts`: `back` in `parseYouSearch` (path-only, known section) and `islandTarget`; `reports` joins `SECTION_SEGMENTS`.
+- The Reports corner icon (`ChartIcon`), glass tokens (`--hp-glass-*`, `--hp-lift`), fade bands, `viewport-fit=cover`; the wordmark at the top of You › App; `hosted.shell.island` en/ar.
+- Tests: `shell/__tests__/{HostedShell,pageMotion,ringColor}.test.ts(x)`, `youRoutes.test` rows, the harness's `openYou`. QA: `portal.shell.floating-chrome` (core), `.island`, `.page-motion`, `.reduced-transparency`, `.keyboard`, `portal.billing.trial-line`.
+
+### Changed
+- `HostedShell`: no sidebar or phone top bar; `.hp-chrome` (Reports → pill → island) over `<main>`. On a phone the bottom bar hides while a page field has focus; toasts sit above it.
+- The trial banner is one muted line, "N days left in your free trial · Add a card · Hide for 3 days" (MUT-418's rules unchanged).
+- The You page's part tabs carry `back` beside `from`. QA `shell.navigate`, `shell.mtb3a-name`, `shell.switch-profile`, `you.*`, `profiles.*`, `session`, `local-mode` follow the island.
+
+### Removed
+- `shell/YouLinks.tsx`, the sidebar/top-bar CSS and `--hp-sidebar-width`; keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn`, `.endsSoon`. TD-236 resolved; TD-249 opened.
+
+### Technical
+- **Files:** `src/hosted/shell/{HostedShell,YouIsland}.tsx`, `src/hosted/shell/{pageMotion,youRoutes}.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `hosted.html`, `src/hosted/components/{TrialBanner,Icons,Brand}.tsx`, `src/hosted/pages/you/{YouPage,YouApp}.tsx`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/{shell,billing,you,profiles}.yaml`, `qa/specs/portal/*.spec.ts`, `qa/support/you.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-192)
 
 **Why:** seven peer sections made the portal read like a dashboard (epic MUT-423). This is the regroup MUT-426's pill needs; every URL stays, so the phone's universal links, the mail and Stripe landings and bookmarks keep working.

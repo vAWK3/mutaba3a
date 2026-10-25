@@ -2783,3 +2783,15 @@ Imported data is never written field by field into the live store. It is mapped 
 - Server: `SoftAuthenticator` makes attestation-`none` credentials and ES256 assertions for any origin on node:crypto, so `@simplewebauthn/server`'s real checks run; knobs flip one fact to refuse (no UV, wrong RP ID, counter, user handle).
 - Browser QA: Chromium's virtual authenticator over CDP (`qa/support/passkeys.ts`) against the live API on `localhost` (an IP can't be an RP ID). It answers conditional mediation at once, so a spec turns presence off while signing out.
 - **First instances:** `server/src/__tests__/routes-passkeys.test.ts`, `qa/specs/portal-selfservice/passkeys.spec.ts`.
+
+### Pattern: Glass chrome over a scrolling document (MUT-426)
+- Floating chrome is `position: fixed` over a page that still scrolls the document (no inner scroller), so scroll restoration, `scrollIntoView` and drawers keep working; the page reserves the chrome's space, so at rest nothing sits under it.
+- Glass is one class (`.hp-glass`: translucent `--surface`, `backdrop-filter`, a lift) with a solid fallback under `prefers-reduced-transparency` and without `backdrop-filter`. The fade where content meets it is a fixed `--bg` gradient band, never a mask (the document, not an element, scrolls).
+- **First instance:** `src/hosted/shell/HostedShell.tsx`, `src/hosted/hosted.css` (ADR-193).
+
+### Pattern: Page motion by depth, as typed view transitions (MUT-426)
+- A pure rule names each navigation's motion from the two pathnames (`pageMotionOf`, first match wins); the router hands it to `document.startViewTransition({ types })`, and CSS draws each type on `::view-transition-old/new(root)` with RTL picking mirrored keyframes by name. Direction comes from depth, not history, so browser Back and a back link agree.
+- Gate it on view-transition types (both our check and the router's): the router otherwise starts untyped transitions on every navigation, search-only ones included. Search-only changes return `false`; the chrome gets its own `view-transition-name` and holds still.
+- Prove it in a real browser by wrapping `document.startViewTransition` in an init script and reading `getAnimations()` on `::view-transition-new(root)` after `ready`.
+- **First instances:** `src/hosted/shell/pageMotion.ts`, `qa/specs/portal/shell.spec.ts` (`portal.shell.page-motion`).
+

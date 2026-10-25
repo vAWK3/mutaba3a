@@ -3750,6 +3750,16 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
+## MUT-426 — the floating pill, the You island and Reports (2026-10-25, ADR-193)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `shell/__tests__/pageMotion.test.ts` (`depthOf` for every page; every `pageMotionOf` row, first match wins; `viewTransitionOption` unset without types, `false` on a search-only change; both support checks), `ringColor.test.ts` (stable, in palette, spread, 3:1 on every surface light and dark), `youRoutes.test.ts` (`reports` section, `back` keeps and drops: You, unknown section, absolute, `//host`, query, hash, `..`, backslash; `islandTarget`) | `npx vitest run src/hosted/shell` |
+| Component (real router) | `shell/__tests__/HostedShell.test.tsx` (no aside or header bar, one chrome, Reports → tabs → island order, one lit tab, Reports lit, island name/label/ring, `from`+`back` in, exact page out, other-profile `back` → section, part tabs keep both, a tab leaves, locked: island only, no profile: island only with neutral ring and `/`, Arabic label); `TrialWelcome.test` (one line); `YouPage.test` (island + tabs carry the section; wordmark on App) | `npx vitest run src/hosted` |
+| Regression contract (C3) | every test that opened You through `YouLinks` now goes through the island (`openYou`): UsageConsent, ChangePassword/YourData/Billing drawers, auth-states, local-mode, views, ProfileCreateDrawer | `npm run test:run` |
+| Release-QA | `portal.shell.floating-chrome` (core), `.island`, `.page-motion`, `.reduced-transparency`, `.keyboard`, `portal.billing.trial-line` (new); `shell.navigate`, `.mtb3a-name`, `.switch-profile`, `you.*`, `profiles.*`, `session`, `local-mode` updated | `release-qa run --attach --app portal --all` |
+| Manual | an iPhone keyboard over Clients' search (TD-249) | — |
+
 ## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-192)
 
 | Layer | Tests | Command |

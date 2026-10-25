@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-249: The phone's bottom bar stepping aside for the keyboard is proven in Chromium, not on an iPhone
+**Status**: Open
+**Ticket**: MUT-426 (eng C1/D9)
+**Added**: 2026-10-25
+**Priority**: Low (the rule is plain CSS; the risk is iOS Safari's own fixed-bar bugs)
+**Impact**: `.hp-chrome-bar` hides while a page field has focus (`.hp-shell:has(.hp-page :is(input, textarea, select):focus)`), so iOS can't strand the pill over the keyboard (WebKit 202120/230225, Apple forums 800154). `portal.shell.floating-chrome` checks it at 375 px in Chromium; nobody has typed on a real iPhone yet.
+**Fix**: Basel or a tester types in Clients' search on an iPhone (iOS 26) and checks the pill is gone while typing and back, in place, after the keyboard closes. Record the result in `qa/features/portal/shell.yaml`.
+
 ### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
 **Status**: Accepted
 **Ticket**: MUT-370 (D3)
@@ -112,14 +120,6 @@
 **Priority**: Low
 **Impact**: The operator's script still deletes an account and its profiles by hand, with its own catalog-driven SQL, but without MUT-333's transfer of shared profiles, audit scrub, SIGNUP-link rule or Stripe step. Two implementations can drift.
 **Fix**: Make `purge-user` close the account through the admin API and run `accounts:purge` for it, or retire it once the hourly purge has run for a release.
-
-### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
-**Status**: Open
-**Ticket**: MUT-425 (eng D1/D2)
-**Added**: 2026-10-24
-**Priority**: Low (works and is tested; it is the old sidebar's shape)
-**Impact**: `shell/YouLinks.tsx` keeps the old switcher's and account menu's places as plain links, with their phone top-bar rules in `hosted.css`, until the pill and the island replace the sidebar.
-**Fix**: MUT-426 deletes `YouLinks` and its CSS; the island links with `?from=` and uses the profile-less `/you`.
 
 ### TD-235: Eight landing and legal release-QA flows still test the retired /hosted page and free tier
 **Status**: Open
@@ -2447,6 +2447,14 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
+**Status**: Resolved (2026-10-25, MUT-426: the You island replaced both links; `YouLinks.tsx` and its CSS are deleted, ADR-193)
+**Ticket**: MUT-425 (eng D1/D2)
+**Added**: 2026-10-24
+**Priority**: Low (works and is tested; it is the old sidebar's shape)
+**Impact**: `shell/YouLinks.tsx` keeps the old switcher's and account menu's places as plain links, with their phone top-bar rules in `hosted.css`, until the pill and the island replace the sidebar.
+**Fix**: MUT-426 deletes `YouLinks` and its CSS; the island links with `?from=` and uses the profile-less `/you`.
 
 ### TD-172: Signed out, a person can't record money owed: the portal can't create a client
 **Status**: Resolved (2026-10-19, MUT-286; Basel chose the picker option)

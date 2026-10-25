@@ -253,7 +253,7 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** a sidebar with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-192), Reports beside them until MUT-426's corner icon, and the page. Everything else sits one level below a destination, at the URL it always had:
+- **`HostedShell`:** no sidebar or header bar (MUT-426, ADR-193). Three glass objects float over the page: the Reports corner icon, the pill with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-192) and the You island (the profile's name and your avatar ringed in its colour). Desktop: Reports top start, pill top centre, island top end; phone: pill and island circle at the bottom, Reports top end. Pages slide by depth (`shell/pageMotion.ts`, router view transitions). Everything else sits one level below a destination, at the URL it always had:
 
   | Destination | Its page | One level in |
   |---|---|---|
@@ -262,7 +262,7 @@ Tests generated from the table (MUT-39):
   | Spent | `/expenses` | `/expenses/groups…` (the Expenses · Groups tabs) |
   | Clients | `/clients` | `/clients/:customerId` (its Documents tab), `/documents` (a row at the bottom of Clients: every document, with or without a client) |
 
-  `destinationOf(pathname)` (`shell/destinations.ts`) decides which tab is lit; Reports and the You page light none (`NO_DESTINATION`), and a test walks every route under `/p/$profileId` so a new page can't ship unmapped. The pages one level in keep their names and link back to their destination (`PageHeader back`); the rows are `DeeperLinks`. Since MUT-425 (ADR-187) the open profile's name and the avatar are links into the You page (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), which replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
+  `destinationOf(pathname)` (`shell/destinations.ts`) decides which tab is lit; Reports and the You page light none (`NO_DESTINATION`), and a test walks every route under `/p/$profileId` so a new page can't ship unmapped. The pages one level in keep their names and link back to their destination (`PageHeader back`); the rows are `DeeperLinks`. Since MUT-425 (ADR-187) the You page (opened from the You island since MUT-426, with `?from=` and `?back=`) (`/p/$profileId/you`, `/you/account`, `/you/app`; `/you…` without a profile), replaced the profile switcher and the user menu. No `TopBar` "+ Add" menu: the only create action in the portal is MUT-44's expense drawer.
 - **Routes** (TanStack Router, code-based like `src/router.tsx`; base `/`):
   - `/sign-in`
   - `/setup#<token>` (MUT-236): a setup link's page, public like sign-in; the token is stripped from the address bar on arrival (ADR-088 §8)
