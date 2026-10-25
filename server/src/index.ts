@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { createApp } from './app.js';
+import { AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { shutdownAndFlush } from './observability/reporter.js';
@@ -18,6 +18,7 @@ import { createAccountStripeGateway } from './billing/stripe/account-gateway.js'
 import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
 import { BILLING_SESSION_POLICY } from './routes/billing.js';
 import { EMAIL_WEBHOOK_POLICY } from './routes/email-webhook.js';
+import { defaultOAuthLimiters } from './routes/oauth.js';
 import { createMailer } from './email/mailer.js';
 import type { MailTransport } from './email/ports.js';
 import { createResendTransport } from './email/transports/resend.js';
@@ -64,6 +65,9 @@ const stripe = config.STRIPE_SECRET_KEY
   : null;
 const billingSessionLimiter = new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);
 const emailWebhookIpLimiter = new SlidingWindowRateLimiter(EMAIL_WEBHOOK_POLICY.ipPerMinute);
+// MUT-434: built here (not inside createApp) so the timer below can prune them; a client_id key is attacker-chosen.
+const oauthLimiters = defaultOAuthLimiters();
+const agentLimiter = new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE);
 
 // MUT-359 (ADR-159 §5): config has already refused every half-configured mailer, and log/memory in production.
 const memoryOutbox = config.MAILER === 'memory' ? new MemoryMailTransport() : null;
@@ -170,7 +174,7 @@ const app = createApp({
   publicFxIpLimiter,
   stripe,
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
-  oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY } : null,
+  oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter } : null,
   stripeWebhookIpLimiter,
   billingSessionLimiter,
   mailer,
@@ -232,6 +236,8 @@ const pruneTimer = setInterval(() => {
   selfService.ipLimiter.prune(now);
   selfService.addressMinuteLimiter.prune(now);
   selfService.addressDayLimiter.prune(now);
+  for (const limiter of Object.values(oauthLimiters)) limiter.prune(now);
+  agentLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {

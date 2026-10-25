@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { closingRefusal, isAccountGone } from '../accounts/closure.js';
 import { ApiError } from '../errors.js';
 import { hasFeature } from '../features.js';
+import { agentAuditFor } from '../oauth/audit.js';
 import type { OAuthService } from '../oauth/service.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
@@ -49,7 +50,8 @@ export function authenticateAgent(options: AgentAuthOptions): MiddlewareHandler<
     const { grant } = found;
     const user = await options.store.users.getById(grant.userId);
     if (!user || user.status !== 'ACTIVE' || isAccountGone(user.closure, now)) {
-      await options.store.oauth.revokeGrant({ grantId: grant.id, reason: 'account_changed', at: now, audit: [] });
+      const audit = await agentAuditFor(options.store)({ userId: grant.userId, action: 'user.agent_disconnected', metadata: { reason: 'account_changed' }, actor: { actorType: 'SYSTEM', actorId: null }, requestId: c.get('requestId') });
+      await options.store.oauth.revokeGrant({ grantId: grant.id, reason: 'account_changed', at: now, audit });
       throw challenge('invalid_token');
     }
     if (user.closure) throw closingRefusal(user.closure);

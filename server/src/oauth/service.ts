@@ -219,11 +219,10 @@ export class OAuthService {
     const grant = stored ? await this.deps.store.oauth.findGrant(stored.grantId) : null;
     if (!stored || !grant) return this.error('invalid_grant', 'The code is invalid or expired');
     if (grant.clientId !== clientId) return this.error('invalid_grant', 'The code was issued to another client');
-    // Checked before the claim, so a wrong verifier or redirect leaves the code usable by its rightful holder.
-    if (stored.consumedAt === null) {
-      if (!verifyS256(verifier, stored.codeChallenge) || stored.redirectUri !== redirectUri) return this.error('invalid_grant', 'The code, verifier or redirect does not match');
-      if (this.resourceMismatch(params.resource, stored.resource)) return this.error('invalid_target', 'The resource does not match the authorization');
-    }
+    // Checked before the claim, so a wrong verifier or redirect leaves the code usable by its rightful holder; and
+    // checked on a used code too, so only a caller holding the verifier can trip the reuse revoke (RFC 9700 §4.5).
+    if (!verifyS256(verifier, stored.codeChallenge) || stored.redirectUri !== redirectUri) return this.error('invalid_grant', 'The code, verifier or redirect does not match');
+    if (this.resourceMismatch(params.resource, stored.resource)) return this.error('invalid_target', 'The resource does not match the authorization');
 
     const access = randomToken(PREFIX.access);
     const refresh = randomToken(PREFIX.refresh);

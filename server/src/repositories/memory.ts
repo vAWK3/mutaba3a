@@ -811,6 +811,15 @@ export class MemoryLedgerStore implements LedgerStore {
     return count;
   }
 
+  /** Review finding 1: the Prisma store's revokeOAuthGrantsAuditedInTx — audited by SYSTEM on each of the person's profiles. */
+  private revokeOAuthGrantsAudited(userId: string, at: Date, requestId: string | null): void {
+    if (this.revokeOAuthGrantsOf(userId, 'password_changed', at) === 0) return;
+    for (const m of this.members.values()) {
+      if (m.userId !== userId) continue;
+      this.events.push({ id: randomUUID(), createdAt: at, organizationId: m.organizationId, actorType: 'SYSTEM', actorId: null, action: 'user.agent_disconnected', entityType: 'user', entityId: userId, metadata: { reason: 'password_changed' }, requestId });
+    }
+  }
+
   private storeOAuthTokens(grantId: string, tokens: readonly OAuthTokenInput[], at: Date): void {
     for (const t of tokens) {
       if (this.oauthTokens.has(t.digest)) throw new UniqueViolation('oauth_tokens.tokenDigest');
@@ -948,9 +957,13 @@ export class MemoryLedgerStore implements LedgerStore {
         this.oauthTokens.delete(digest);
         tokens++;
       }
-      const granted = new Set([...this.oauthGrants.values()].map((g) => g.clientId));
+      // A client keeps its row while it has a grant, or a request newer than the cutoff (a consent screen still open).
+      const kept = new Set([
+        ...[...this.oauthGrants.values()].map((g) => g.clientId),
+        ...[...this.oauthRequests.values()].filter((r) => r.createdAt.getTime() > clientsBefore.getTime()).map((r) => r.clientId),
+      ]);
       for (const [id, c] of this.oauthClients) {
-        if (granted.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
+        if (kept.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
         for (const [rid, r] of this.oauthRequests) if (r.clientId === id) this.oauthRequests.delete(rid);
         this.oauthClients.delete(id);
         clients++;
@@ -1047,6 +1060,7 @@ export class MemoryLedgerStore implements LedgerStore {
         // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
         Object.assign(person, { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at });
         this.revokeSessionsOf(person.id, 'setup_link_lock', input.at);
+        this.revokeOAuthGrantsAudited(person.id, input.at, input.audit[0]?.requestId ?? null);
       }
       // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links; an operator link replaces all.
       this.cancelOpenSetupLinks(input.userId, input.at, input.mailed ? { mailedOnly: true } : {});
@@ -1067,6 +1081,7 @@ export class MemoryLedgerStore implements LedgerStore {
       // MUT-366 (D18): a mailed link reached the person through their mailbox.
       if (link.mailed && person.emailVerifiedAt === null) person.emailVerifiedAt = input.at;
       this.revokeSessionsOf(person.id, 'password_set', input.at);
+      this.revokeOAuthGrantsAudited(person.id, input.at, input.audit[0]?.requestId ?? null);
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       if (this.recordTermsAcceptance(person.id, input.terms, input.at).created) {
         for (const event of input.termsAudit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });

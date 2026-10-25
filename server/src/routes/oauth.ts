@@ -26,7 +26,11 @@ export interface OAuthLimiters {
   revoke: RateLimiter;
 }
 
-export function defaultOAuthLimiters(): OAuthLimiters {
+/** A client_id is attacker-chosen (a CIMD URL may be long); the limiter key keeps a bounded prefix of it. */
+const CLIENT_KEY_MAX = 256;
+
+/** Concrete limiters, so the server's prune timer can drop idle keys (index.ts builds these and prunes them). */
+export function defaultOAuthLimiters(): { [K in keyof OAuthLimiters]: SlidingWindowRateLimiter } {
   return {
     register: new SlidingWindowRateLimiter(OAUTH_POLICY.registerPerIpPerHour, 3_600_000),
     authorize: new SlidingWindowRateLimiter(OAUTH_POLICY.authorizePerIpPerMinute),
@@ -138,7 +142,10 @@ export function oauthRoutes(options: OAuthRouteOptions): Hono<AppEnv> {
     const oauth = service();
     const form = await formOf(c);
     if (await limited(options.limiters.tokenIp, `oauth-token-ip:${ipOf(c)}`, c)) return oauthError(c, 429, 'temporarily_unavailable', 'Too many token requests from this address');
-    if (form.client_id && (await limited(options.limiters.tokenClient, `oauth-token:${form.client_id}`, c))) return oauthError(c, 429, 'temporarily_unavailable', 'Too many token requests for this client');
+    // Keyed on the client *and* the address: a public client_id is no secret, so a client-only key would let anyone
+    // spend a client's budget for every other caller of it.
+    const clientKey = form.client_id ? `oauth-token:${form.client_id.slice(0, CLIENT_KEY_MAX)}:${ipOf(c)}` : null;
+    if (clientKey && (await limited(options.limiters.tokenClient, clientKey, c))) return oauthError(c, 429, 'temporarily_unavailable', 'Too many token requests for this client');
     const result = await oauth.token(form, c.get('now')());
     c.header('Pragma', 'no-cache');
     return c.json(result.body, result.status);

@@ -34,7 +34,7 @@ function recordingReporter() {
   return { reporter, messages };
 }
 
-function harness(options: { oauth?: boolean; registerLimit?: number; billingGate?: boolean } = {}) {
+function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   let now = T0;
   const { reporter, messages } = recordingReporter();
@@ -60,7 +60,7 @@ function harness(options: { oauth?: boolean; registerLimit?: number; billingGate
             limiters: {
               register: new SlidingWindowRateLimiter(options.registerLimit ?? 1000, 3_600_000),
               authorize: new SlidingWindowRateLimiter(1000),
-              tokenClient: new SlidingWindowRateLimiter(1000),
+              tokenClient: new SlidingWindowRateLimiter(options.tokenClientLimit ?? 1000),
               tokenIp: new SlidingWindowRateLimiter(1000),
               revoke: new SlidingWindowRateLimiter(1000),
             },
@@ -276,6 +276,7 @@ describe('/mcp authentication', () => {
     await h.store.users.setStatus(p.userId, 'DISABLED', h.now());
     expect((await initialize(h, bearer)).status).toBe(401);
     expect(await h.store.oauth.listLiveGrants(p.userId, h.now())).toEqual([]);
+    expect((await agentAudit(h, p.personalId)).map((e: { action: string; actorType: string; metadata: unknown }) => [e.action, e.actorType, e.metadata])).toContainEqual(['user.agent_disconnected', 'SYSTEM', { reason: 'account_changed' }]);
   });
 });
 
@@ -369,6 +370,15 @@ describe('rate limits (AC5)', () => {
     const res = await h.app.request('/oauth/register', json({ client_name: 'Claude', redirect_uris: [CLAUDE_CB] }));
     expect(res.status).toBe(429);
     expect(await read(res)).toMatchObject({ error: 'temporarily_unavailable' });
+  });
+
+  it('one address spending a public client’s token budget leaves it for every other address (review finding 4)', async () => {
+    const h = harness({ tokenClientLimit: 1 });
+    const clientId = await register(h);
+    const tokenFrom = (ip: string) => h.app.request('/oauth/token', { ...form({ grant_type: 'refresh_token', client_id: clientId, refresh_token: 'mrt_x' }), headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': ip } });
+    expect((await tokenFrom('203.0.113.66')).status).toBe(400);
+    expect((await tokenFrom('203.0.113.66')).status).toBe(429);
+    expect((await tokenFrom('203.0.113.77')).status).toBe(400);
   });
 });
 

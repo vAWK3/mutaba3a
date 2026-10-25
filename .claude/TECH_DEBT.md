@@ -27,7 +27,7 @@
 **Fix**: during the `portal-selfservice.connect.real-clients` hand check, note whether Claude.ai used CIMD; if a hosted test document becomes worth it, publish one on an https host and add a live case.
 
 ### TD-254: Recovery, operator password rotation and setup-link locks don't disconnect agents
-**Status**: Open
+**Status**: Resolved 2026-10-25 (MUT-434 review fixes): setup-link `issue` with a lock (operator `rotate:password --lock`) and every `redeem` revoke grants (`password_changed`, one SYSTEM audit row per profile, only when a grant was live) in their own transaction, memory + Prisma. `users.setPassword` has no non-test caller. A brand-new account's setup link has no grants, so it writes nothing.
 **Ticket**: MUT-434 (D11 covers the person's own password change only)
 **Added**: 2026-10-25
 **Priority**: Medium

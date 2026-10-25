@@ -2413,7 +2413,7 @@ export interface OAuthRepository {
   touchGrant(grantId: string, at: Date): Promise<void>;
   /**
    * Nightly housekeeping: expired requests and codes, tokens of grants revoked or expired before `before`, and clients
-   * created before `clientsBefore` that never had a grant (OV5).
+   * created before `clientsBefore` that never had a grant (OV5) and has no request newer than that.
    */
   cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number }>;
 }

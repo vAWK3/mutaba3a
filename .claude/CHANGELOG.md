@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — MUT-434 review fixes (qa-reconcile, 7 findings)
+
+**Why:** the pre-landing review of MUT-434 found one critical and six smaller holes in the OAuth server.
+
+### Fixed
+- Account recovery and setup-link redeem, and an operator setup link with `--lock`, now revoke the person's agent grants in the same transaction, audited (`user.agent_disconnected`, `password_changed`). Resolves TD-254. `server/src/repositories/memory.ts`, `prisma.ts`.
+- A CIMD `client_id` whose host is an IP literal (`https://127.0.0.1/…`, `https://2130706433/…`, `[::1]`) is refused (`private_address`) before any fetch: Node never calls the DNS lookup guard for an IP. `server/src/oauth/trust.ts`.
+- OAuth and `/mcp` rate limiters are built in `index.ts` and pruned by the minute timer (they were built in `createApp` and never pruned; a `client_id` key is attacker-chosen). `server/src/index.ts`, `routes/oauth.ts`.
+- The token endpoint's per-client limit is keyed on client and address (prefix capped at 256 chars), so nobody can spend a public client's budget for everyone. `routes/oauth.ts`.
+- A used authorization code replayed without the right verifier or redirect is refused without revoking the grant; only a holder of the verifier trips the reuse revoke. `server/src/oauth/service.ts`.
+- Nightly cleanup keeps an old client that has a request newer than the cutoff (a consent screen still open). memory + Prisma.
+- `/mcp` revoking a grant because the account changed now writes the audit row (SYSTEM, `account_changed`). `server/src/auth/agent-auth.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-25 — A rollback rolls back, and the terms guard checks the release's own site (MUT-347, ADR-198)
 
 **Why:** MUT-324's review found the terms guard always read production's site and, on a rollback, checked the working tree's terms. Planning found worse: the documented rollback (`IMAGE_TAG=<old sha> ./scripts/deploy.sh`) rebuilt today's working tree, pushed it over the old sha's tag (destroying that image) and ran today's migrations. Basel chose a real rollback (D1 = A).

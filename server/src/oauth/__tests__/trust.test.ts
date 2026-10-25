@@ -36,6 +36,13 @@ describe('CIMD client ids and URLs', () => {
     ['https://claude.ai/meta.json#x', 'invalid_url'],
     ['https://claude.ai:8443/meta.json', 'invalid_url'],
     ['nonsense', 'invalid_url'],
+    // An IP-literal host never reaches the DNS lookup guard (Node skips `lookup` for IPs), so it is refused here.
+    ['https://127.0.0.1/meta.json', 'private_address'],
+    ['https://2130706433/meta.json', 'private_address'],
+    ['https://0x7f.1/meta.json', 'private_address'],
+    ['https://[::1]/meta.json', 'private_address'],
+    ['https://[::ffff:169.254.169.254]/meta.json', 'private_address'],
+    ['https://8.8.8.8/meta.json', 'private_address'],
   ])('refuses %s (%s)', (raw, reason) => {
     expect(parseCimdUrl(raw)).toEqual({ ok: false, reason });
   });

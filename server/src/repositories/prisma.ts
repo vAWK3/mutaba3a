@@ -674,7 +674,7 @@ export class PrismaLedgerStore implements LedgerStore {
             where: { OR: [{ expiresAt: { lte: before } }, { grant: { revokedAt: { lte: before } } }, { grant: { revokedAt: null, expiresAt: { lte: before } } }] },
           })
         ).count;
-        const clients = (await tx.oAuthClient.deleteMany({ where: { createdAt: { lte: clientsBefore }, grants: { none: {} } } })).count;
+        const clients = (await tx.oAuthClient.deleteMany({ where: { createdAt: { lte: clientsBefore }, grants: { none: {} }, requests: { none: { createdAt: { gt: clientsBefore } } } } })).count;
         return { requests, codes, tokens, clients };
       }),
   };
@@ -781,6 +781,8 @@ export class PrismaLedgerStore implements LedgerStore {
             // Stamping passwordChangedAt makes the session check refuse a session a racing sign-in inserts after the lock.
             await tx.user.update({ where: { id: input.userId }, data: { passwordHash: null, passwordChangedAt: input.at, updatedAt: input.at } });
             await tx.session.updateMany({ where: { userId: input.userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'setup_link_lock' } });
+            // MUT-434 review finding 1: a suspected takeover evicts the taker's agents too.
+            await revokeOAuthGrantsAuditedInTx(tx, input.userId, input.at, input.audit[0]?.requestId ?? null);
           }
           // MUT-366 (review #2): a mailed (recovery) link replaces only earlier mailed links, so a stranger asking for a
           // reset can't kill the operator's open link; an operator link replaces all.
@@ -822,6 +824,8 @@ export class PrismaLedgerStore implements LedgerStore {
             },
           });
           await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: input.at, revokedReason: 'password_set' } });
+          // MUT-434 review finding 1: a recovery (or any setup link) replaces the password, so every agent goes too.
+          await revokeOAuthGrantsAuditedInTx(tx, userId, input.at, input.audit[0]?.requestId ?? null);
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
           // MUT-324: an operator reset after acceptance must still set the password, so an existing acceptance is kept.
           const accepted = await insertTermsAcceptance(tx, userId, input.terms, input.at);
@@ -2800,6 +2804,20 @@ function toUserFeature(row: { userId: string; feature: string; grantedBy: string
 async function revokeOAuthGrantsInTx(tx: Prisma.TransactionClient, userId: string, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
   const { count } = await tx.oAuthGrant.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
   if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+  return count;
+}
+
+/**
+ * Review finding 1: when a password is replaced from a link (recovery, the operator's lock), every agent goes too, in
+ * the same transaction. The caller doesn't know the person before the claim, so the disconnect is audited here, on
+ * each of their profiles, by SYSTEM.
+ */
+async function revokeOAuthGrantsAuditedInTx(tx: Prisma.TransactionClient, userId: string, at: Date, requestId: string | null): Promise<number> {
+  const { count } = await tx.oAuthGrant.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: 'password_changed' } });
+  if (count === 0) return 0;
+  const memberships = await tx.membership.findMany({ where: { userId }, select: { organizationId: true } });
+  const audit: AuditEventInput[] = memberships.map((m) => ({ organizationId: m.organizationId, actorType: 'SYSTEM', actorId: null, action: 'user.agent_disconnected', entityType: 'user', entityId: userId, metadata: { reason: 'password_changed' }, requestId }));
+  if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
   return count;
 }
 

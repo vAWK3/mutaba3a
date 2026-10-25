@@ -5289,7 +5289,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - Per `/mcp` call: one indexed token lookup, one feature read, a once-a-minute touch.
 - The protocol endpoints rate-limit per Cloud Run instance, like sign-in (TD-253).
-- Account recovery, operator `rotate:password` and setup-link locks set a password without revoking grants (TD-254).
+- Account recovery, operator `rotate:password` and setup-link locks revoke grants in the same transaction (TD-254, resolved by the review fixes).
+- Review fixes (2026-10-25): a CIMD `client_id` with an IP-literal host is refused before any fetch (Node skips the DNS lookup guard for IPs); the token endpoint's per-client limit is keyed on client *and* address, and every OAuth limiter is built and pruned in `index.ts`; a used code trips the reuse revoke only after the verifier and redirect match; cleanup keeps a client with a request newer than its cutoff.
 - MUT-435 must decide firm-owner consent (ADR-196 deferred) before a read tool reaches firm data.
 
 ---

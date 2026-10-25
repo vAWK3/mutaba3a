@@ -126,6 +126,39 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       expect(await store.oauth.listLiveGrants(user.id, at(9))).toEqual([]);
     });
 
+    const TERMS = { version: '2026-10-19', locale: 'en' as const, textSha256: 'f'.repeat(64), surface: 'portal' as const, clientRelease: null };
+
+    it('a locking setup link takes the grants in the same step, audited (review finding 1)', async () => {
+      const store = await makeStore();
+      const { user, personal } = await grantFixture(store);
+      await store.accountSetup.issue({ userId: user.id, tokenDigest: digest(), purpose: 'RESET', at: at(4), expiresAt: at(50), lock: true, audit: [] });
+      expect(await store.oauth.listLiveGrants(user.id, at(5))).toEqual([]);
+      expect((await agentAudit(store, personal.id)).sort()).toEqual(['user.agent_connected', 'user.agent_disconnected']);
+    });
+
+    it('redeeming a setup or recovery link takes the grants, audited; a person with none writes no row', async () => {
+      const store = await makeStore();
+      const { user, personal } = await grantFixture(store);
+      const link = await store.accountSetup.issue({ userId: user.id, tokenDigest: digest(), purpose: 'RESET', at: at(4), expiresAt: at(50), lock: false, audit: [] });
+      expect(await store.oauth.listLiveGrants(user.id, at(5))).toHaveLength(1);
+      await store.accountSetup.redeem({ tokenDigest: link.tokenDigest, passwordHash: 'new-hash', at: at(5), audit: [], terms: TERMS, termsAudit: [] });
+      expect(await store.oauth.listLiveGrants(user.id, at(6))).toEqual([]);
+      expect((await agentAudit(store, personal.id)).sort()).toEqual(['user.agent_connected', 'user.agent_disconnected']);
+
+      const again = await store.accountSetup.issue({ userId: user.id, tokenDigest: digest(), purpose: 'RESET', at: at(6), expiresAt: at(50), lock: false, audit: [] });
+      await store.accountSetup.redeem({ tokenDigest: again.tokenDigest, passwordHash: 'newer-hash', at: at(7), audit: [], terms: TERMS, termsAudit: [] });
+      expect((await agentAudit(store, personal.id)).sort()).toEqual(['user.agent_connected', 'user.agent_disconnected']);
+    });
+
+    it('cleanup keeps an old client whose authorization request is still recent (review finding 6)', async () => {
+      const store = await makeStore();
+      const clientId = `mcl_${unique()}${unique()}`;
+      await store.oauth.createClient({ id: clientId, clientName: 'Claude', redirectUris: ['https://claude.ai/cb'], at: at(0) });
+      await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: 's', resource: 'https://app.example/mcp', createdAt: at(15), expiresAt: at(45) });
+      await store.oauth.cleanup({ at: at(20), before: at(10), clientsBefore: at(10) });
+      expect(await store.oauth.findClient(clientId)).not.toBeNull();
+    });
+
     it('cleanup removes expired rows and never-granted clients, but keeps a client with a grant (OV5)', async () => {
       const store = await makeStore();
       const { clientId, grant } = await grantFixture(store);

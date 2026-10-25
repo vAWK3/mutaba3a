@@ -232,6 +232,16 @@ describe('token: authorization_code', () => {
     expect(await s.service.authenticateAccess((first.body as { access_token: string }).access_token, T0)).toBeNull();
   });
 
+  it('a used code replayed without the verifier or with another redirect is refused but revokes nothing', async () => {
+    const s = await setup();
+    const { clientId, code } = await approvedCode(s);
+    const params = { grant_type: 'authorization_code', client_id: clientId, code, code_verifier: VERIFIER, redirect_uri: CLAUDE_CB, resource: RESOURCE };
+    const first = await s.service.token(params, T0);
+    expect((await s.service.token({ ...params, code_verifier: 'y'.repeat(43) }, T0)).status).toBe(400);
+    expect((await s.service.token({ ...params, redirect_uri: 'https://claude.ai/other' }, T0)).status).toBe(400);
+    expect(await s.service.authenticateAccess((first.body as { access_token: string }).access_token, T0)).not.toBeNull();
+  });
+
   it('two concurrent exchanges mint one chain (D6)', async () => {
     const s = await setup();
     const { clientId, code } = await approvedCode(s);

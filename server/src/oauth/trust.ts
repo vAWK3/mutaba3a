@@ -84,6 +84,9 @@ export function parseCimdUrl(raw: string): { ok: true; url: URL } | { ok: false;
   }
   if (url.protocol !== 'https:') return { ok: false, reason: 'not_https' };
   if (url.username !== '' || url.password !== '' || url.hash !== '' || raw.includes('#') || url.port !== '') return { ok: false, reason: 'invalid_url' };
+  // Node skips the `lookup` hook for an IP-literal host, so the SSRF guard would never see it; a metadata document
+  // lives at a domain name, so every IP literal is refused (WHATWG has already normalised `2130706433` to 127.0.0.1).
+  if (isIPv4(url.hostname) || url.hostname.startsWith('[')) return { ok: false, reason: 'private_address' };
   return { ok: true, url };
 }
 
