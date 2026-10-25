@@ -157,7 +157,7 @@ describe('LandingPage Get it (hosted-only)', () => {
   it('offers sign-in only when the build set a portal URL', () => {
     vi.stubGlobal('__PORTAL_URL__', 'https://portal.test');
     renderLanding('en');
-    const signIn = within(part('get-it')).getByRole('link', { name: 'Already have an account? Sign in' });
+    const signIn = within(part('get-it')).getByRole('link', { name: /^Already have an account\? Sign in/ });
     expect(signIn).toHaveAttribute('href', 'https://portal.test');
     vi.unstubAllGlobals();
   });

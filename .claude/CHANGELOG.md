@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Landing: Get MTB3A and the request form redesigned
+
+**Why:** when the landing went hosted-only the request form moved inline, but its styles stayed in the deleted `HostedOfferPage.css`, and the section's new wrappers were never styled: the form rendered unstyled (browser fieldset box, raw checkboxes, centred labels over 1800px inputs, a display-size heading) and the app links stacked as two tall cards beside an empty Sign-in card. Design brief: `.claude/designs/landing-get-it-redesign.md`.
+
+### Changed
+- `GetItSection`: one centred 720px column, the primary action first. Signup closed: the request card, then Sign in and the app tiles. Signup open: Create an account (ink tile) and the note ("ask us below"), then the card. Ways in are horizontal tiles with an icon, label and a chevron that mirrors in Arabic; Sign in now says it opens a new tab to screen readers.
+- The request card: raised surface, headline-size title, fields two a row from 640px, 44px fields and device pills, the hero's ink send button (full width on phones). `HostedRequestForm` no longer imports Button.css.
+- QA: `web.landing.hosted` and `hosted-375` (the retired `/hosted` page) became `get-it-form` and `get-it-375` on the landing; `get-it-paid` and `hosted-slash` retired with the block and page they tested.
+
+### Fixed
+- The request form's pill, alert, success and notice styles are back (moved into `LandingPage.css`).
+
+### Removed
+- Dead Get it CSS: `-free`, `-hint`, `--unavailable`, the `-paid*` block.
+
+### Files
+`src/pages/landing/components/{GetItSection,HostedRequestForm,PlatformIcons}.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingPage.test.tsx`, `qa/specs/web/landing.spec.ts`, `qa/features/web/landing.yaml`.
+
 ## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-192)
 
 **Why:** seven peer sections made the portal read like a dashboard (epic MUT-423). This is the regroup MUT-426's pill needs; every URL stays, so the phone's universal links, the mail and Stripe landings and bookmarks keep working.

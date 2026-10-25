@@ -497,7 +497,7 @@ Tests: `src/content/__tests__/malafatLinks.test.ts`.
 
 ### GetItSection / PrivacyBand / PlatformIcons
 **Location**: `src/pages/landing/components/`
-**Purpose**: `GetItSection` lists every way to get the app and gates each download on `useLatestRelease()` (ADR-041); since MUT-172 it ends with the paid half (`data-part="get-it-paid"`: hosted account + phone app come with a paid plan, one `.landing-get-it-paid-cta` link to `/hosted`, no heading, no box); `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs shared by the hero and Get it, and since MUT-173 `IosIcon` (an outlined phone) and `AndroidIcon` (the robot head, with Google's CC BY 3.0 attribution in its docblock) for the phone chapter. Download URLs live in `src/content/download-config.ts` (`DOWNLOAD_URLS`, `WEB_APP_URL`, and since MUT-186 `HOSTED_OFFER_URL` and `MOBILE_APP_LINKS`), shared with `DownloadPage` and `/hosted`.
+**Purpose**: `GetItSection` (hosted-only since the landing rewrite; redesigned 2026-10-25, `.claude/designs/landing-get-it-redesign.md`) is one centred 720px column: the primary action first (signup closed → the request card `data-part="get-it-request"`; open → the Create an account ink tile `.landing-get-it-option--primary` and the note, then the card), then the ways in for existing users as horizontal tiles (`OptionTile`: icon, label, `ChevronIcon` mirrored under `:dir(rtl)`, `a.landing-get-it-option`, brand press scale). DOM order is the visual order. `PrivacyBand` says privacy once; `PlatformIcons` holds the Apple/Windows/browser glyphs, `IosIcon` (an outlined phone), `AndroidIcon` (the robot head, with Google's CC BY 3.0 attribution in its docblock) and `ChevronIcon`. Store links live in `src/content/download-config.ts` (`MOBILE_APP_LINKS`).
 
 ### PrivacyPolicyPage
 **Location**: `src/pages/landing/PrivacyPolicyPage.tsx` + `PrivacyPolicyPage.css`
@@ -505,13 +505,13 @@ Tests: `src/content/__tests__/malafatLinks.test.ts`.
 
 Tests: `src/pages/landing/__tests__/`.
 
-### HostedOfferPage (`/hosted`)
+### HostedOfferPage (`/hosted`) — RETIRED (hosted-only landing; `/hosted` redirects to `/#get-it`)
 **Location**: `src/pages/landing/HostedOfferPage.tsx` + `HostedOfferPage.css`
 **Purpose**: The case for a hosted account and the request form (MUT-186). Landing chrome only, mounted in `src/main.tsx` at `HOSTED_OFFER_URL`. Sections (`data-part`): `hero` (copy + `HostedDevicesMock`), `compare` (a real `<table>`, Hosted column tinted, rows stacked on phones), `band` (reuses `.landing-privacy-band`), `request` (`HostedRequestForm`). Adds `.landing-section-headline--start` for start-aligned section headings. Never links an app store (9A).
 
 ### HostedRequestForm
 **Location**: `src/pages/landing/components/HostedRequestForm.tsx`
-**Purpose**: The hosted-account request form: `idle → sending → success | error`, posting through `submitHostedRequest`. Uses `Input`/`Select`/`Textarea`; device choices are 44px pill labels around native checkboxes; the honeypot sits in an `aria-hidden` box. On success it shows the visitor's own name and email (FSI-isolated) with "edit and send again". Props: `titleId` (the heading that names the form).
+**Purpose**: The hosted-account request form: `idle → sending → success | error`, posting through `submitHostedRequest`. Uses `Input`/`Select`/`Textarea` (44px on the landing, two a row from 640px via `.hosted-form`'s grid); its styles live in `LandingPage.css` since `HostedOfferPage.css` was retired, and its send button is the landing's ink button (`.hosted-submit`, no Button.css); device choices are 44px pill labels around native checkboxes; the honeypot sits in an `aria-hidden` box. On success it shows the visitor's own name and email (FSI-isolated) with "edit and send again". Props: `titleId` (the heading that names the form).
 
 ### hostedRequest.ts (Netlify Forms contract)
 **Location**: `src/pages/landing/hostedRequest.ts`

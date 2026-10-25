@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-249: Five landing QA specs fail on main, outside Get it
+**Status**: Open
+**Ticket**: none yet (found 2026-10-25 during the Get it redesign)
+**Added**: 2026-10-25
+**Priority**: Medium
+**Impact**: Run against this checkout's dev server, `web.landing.375` (EN 375: "wordmark clipped: 105px in 90px" in the bar), `web.landing.phone` (EN and AR: `Cannot read properties of undefined (reading 'platform')` in the spec's store-link setup) and `web.brand.link-hover` landing cases (light and dark: `a.hero-cta-alt` now matches 3 links, strict mode) fail. None touch Get it; all other landing specs pass.
+**Fix**: shrink or let the bar's MTB3A wordmark breathe at 375 EN; update the phone spec to the current `MOBILE_APP_LINKS` shape; scope the hover spec's hero alt link (`.first()` or by name).
+
 ### TD-248: The portal mirrors the passkey suggestion's numbers for its optimistic hide
 **Status**: Accepted
 **Ticket**: MUT-370 (D3)

@@ -3760,3 +3760,9 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
 | Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |
 
+## Landing Get it redesign (2026-10-25)
+
+| Layer | Coverage | Run |
+|---|---|---|
+| Landing unit | `LandingPage.test.tsx`: the request card comes before sign-in and the apps while signup is closed; the note comes before the card while it is open | `npm run test:run` |
+| Release-QA | `web.landing.get-it-form` (card first, two fields a row, no fieldset box, axe light+dark, empty → errors, failure → alert beside Try again, retry → success focused) and `web.landing.get-it-375` (Arabic 375: no overflow, fields stack, 44px pills, full-width send, stacked app tiles). Both passing 2026-10-25 against this checkout's dev server (`QA_CONTEXT` → :5180) | `release-qa run --app web --only get-it-form,get-it-375` |
