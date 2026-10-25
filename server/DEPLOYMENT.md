@@ -1428,6 +1428,8 @@ every `deploy.sh` run. The service reports its tag on `GET /health`
 | `mutaba3a-api-00004-9hj` | `4dd53b8` | 2026-10-11 02:53 | M8 (approval creates the agreement) and the release script |
 | `mutaba3a-api-00005-6wq` | `ced04f7` | 2026-10-11 06:00 | Hosted epic: users and sessions (MUT-37/38), writability (MUT-39), expenses (MUT-42). API `1.11.0-mut42`. Created `mutaba3a-api-session-pepper` (06:00:36) and applied the MUT-37, MUT-38 and MUT-42 migrations |
 
+Mail DNS: on 2026-10-25 the frontdoor stack adopted Resend Forge's records for `notify.mtb3a.com`. It imported the DKIM TXT and the `send.`/`rsend.` CNAMEs that Resend's Cloudflare integration created, and destroyed SES's MX + TXT on `send.`. `email:check -- --api` passes. The api v0.8.0 release (`8acc5022`) went out the same day.
+
 Malafat's side:
 
 - **Production:** `malafat-tenant-app` runs `web@2.2.4` (`8cd8fea19`, rolled
