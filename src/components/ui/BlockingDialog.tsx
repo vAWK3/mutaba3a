@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useDrawerFocus } from './drawer/useDrawerFocus';
 import './BlockingDialog.css';
@@ -17,16 +17,17 @@ export interface BlockingDialogProps {
  * `<body>` is `inert` and `aria-hidden`: the shell, an open drawer, a toast's Undo, all of it stays
  * mounted (a draft survives) but can't be reached, clicked or read. Escape is swallowed before any
  * document listener hears it, so a drawer underneath never closes. Focus comes in on open, wraps at
- * the ends, and goes back to what had it once the app is reachable again (`useDrawerFocus`).
+ * the ends (`useDrawerFocus`), and goes back to what had it once the app is reachable again.
  * There is no close button and the backdrop does nothing: the content decides when it's done.
  */
 export function BlockingDialog({ labelledBy, children, className }: BlockingDialogProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const { onKeyDown } = useDrawerFocus(panelRef);
+  // What had focus when the dialog first rendered, before anything behind went inert
+  const [trigger] = useState(() => (typeof document === 'undefined' ? null : document.activeElement));
 
-  // Before paint, so nothing behind is reachable for even a frame. The cleanup runs before
-  // useDrawerFocus's queued focus return, so focus lands on an element that is no longer inert.
+  // Before paint, so nothing behind is reachable for even a frame.
   useLayoutEffect(() => {
     const root = rootRef.current;
     const hidden = Array.from(document.body.children).filter((element): element is HTMLElement => element !== root && element instanceof HTMLElement);
@@ -41,8 +42,16 @@ export function BlockingDialog({ labelledBy, children, className }: BlockingDial
         restore(element, 'inert', inert);
         restore(element, 'aria-hidden', ariaHidden);
       }
+      // Focus goes back once the app is reachable again. Unlike a drawer, the dialog's own button is often
+      // what closes it, and it disables itself while saving: the browser then drops focus to <body> before
+      // the dialog goes, so this returns focus whenever nothing else holds it, not only when the dialog did.
+      queueMicrotask(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected) return;
+        if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true });
+      });
     };
-  }, []);
+  }, [trigger]);
 
   useEffect(() => {
     function swallowEscape(event: KeyboardEvent) {

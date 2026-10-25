@@ -72,6 +72,19 @@ describe('BlockingDialog (MUT-346)', () => {
     await vi.waitFor(() => expect(behind).toHaveFocus());
   });
 
+  it('returns focus even when focus had already left the dialog (a pressed button disables itself and the browser drops focus)', async () => {
+    const user = userEvent.setup();
+    render(<Page initiallyOpen={false} />);
+    const behind = screen.getByRole('button', { name: 'Behind' });
+    await user.click(behind);
+    const last = screen.getByRole('button', { name: 'Last' });
+    last.focus();
+    last.blur(); // what Chrome does when the focused button becomes disabled
+    expect(document.activeElement).toBe(document.body);
+    last.click();
+    await vi.waitFor(() => expect(behind).toHaveFocus());
+  });
+
   it('leaves an attribute the app already had in place when it closes', async () => {
     const user = userEvent.setup();
     const { container } = render(<Page initiallyOpen={false} />);
