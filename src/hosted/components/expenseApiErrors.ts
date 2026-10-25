@@ -1,6 +1,6 @@
 import type { UseFormSetError } from 'react-hook-form';
 import { ApiError, apiErrorBound, apiErrorReason } from '../api/client';
-import type { HostedExpenseFormValues } from './ExpenseDrawer';
+import type { HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
 
 /**
  * Maps the MUT-42 error vocabulary onto the drawer (MUT-44 design brief §6a
