@@ -1558,7 +1558,7 @@ export interface SessionRepository {
   revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
 }
 
-// ---- MUT-115: passkeys (ADR-189) ---------------------------------------------
+// ---- MUT-115: passkeys (ADR-190) ---------------------------------------------
 
 export type PasskeyDeviceType = 'singleDevice' | 'multiDevice';
 

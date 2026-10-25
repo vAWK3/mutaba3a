@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.68.0-mut175
+  version: 1.69.0-mut115
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -15,9 +15,9 @@ info:
 
     Minimum app version (MUT-293): a phone client sends `X-App-Platform: ios|android` and `X-App-Build: <int>` on every request. Below the configured floor for that platform, every endpoint except sign-in (`POST /v1/sessions`, `POST /v1/device-sessions`) and `/health` answers 426 APP_UPDATE_REQUIRED with `details: { platform, minimumBuild }`. Between the floor and the configured recommended build, the request still succeeds but carries `X-Update-Available: true` and `X-Recommended-Build: <int>`. A request with no `X-App-Platform` header (the portal, or any build older than this contract version) is untouched — this is scoped to the phone API only, not enforced against it.
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -35,6 +35,8 @@ info:
     Writability (MUT-39): a session may read a hosted profile's ledger but not write it. A session calling an operation that writes customers, projects, agreements, payments or attachments gets 403 READ_ONLY_PROFILE with details { domain, writerOfRecord } (writerOfRecord is MALAFAT when the profile's Malafat integration is connected, otherwise null); other operations it may not use answer 403 PRINCIPAL_NOT_ACCEPTED.
 
     Expenses (MUT-42) are a hosted profile's own record, written by the signed-in person: /v1/expenses*, /v1/expense-categories* and /v1/summaries/expenses accept sessions only, never an API key, and nothing about them appears in any operation an API key can call (audit and operations included). Each expense keeps its original amount and currency; summaries are per currency. Receipts use the attachments bucket and signed-URL lifetime. The expenses:read / expenses:write scopes are session-only and cannot be issued to a key.
+
+    Passkeys (MUT-115, ADR-190): one WebAuthn relying party, the apex domain, for the portal (https://app.<apex>) and the iOS app (https://<apex>). A signed-in person adds a passkey with POST /v1/passkeys/creation-options then POST /v1/passkeys (a sign-in at most 10 minutes old, else `currentPassword`: 403 RECENT_SIGN_IN_REQUIRED; at most 10, 409 PASSKEY_LIMIT), renames and removes it under /v1/passkeys/{id}; removing one signs out the sessions it opened. Sign-in: POST /v1/passkey-challenges, then POST /v1/sessions/passkey (cookie) or /v1/device-sessions/passkey (token), with the password sign-in's throttle, lockout and single 401. A password change keeps passkeys. Without WEBAUTHN_RP_ID every passkey operation answers 404.
 
     Sessions (MUT-38): POST /v1/sessions signs in and sets an httpOnly same-origin cookie. Each operation declares the principals it accepts in `security` (apiKey, session, or both); a request carrying both credentials is refused. Session requests to organization-scoped operations send X-Mutaba3a-Profile; a non-member organization answers 404, like any cross-organization id.
 
@@ -74,6 +76,8 @@ tags:
     description: Money received, its allocations, reversals, and the operations lookup
   - name: Sessions
     description: Hosted-portal sign-in, sign-out and the signed-in person
+  - name: Passkeys
+    description: A signed-in person's passkeys, and the challenge passkey sign-in starts from (MUT-115)
   - name: Profiles
     description: "A signed-in person's own standalone profiles: create, rename, default currency and type (sessions only; never a Malafat organization)"
   - name: Expenses
@@ -535,6 +539,8 @@ components:
                 - CURRENT_PASSWORD_WRONG
                 - ACCOUNT_CLOSING
                 - ACCOUNT_CLOSE_BLOCKED
+                - RECENT_SIGN_IN_REQUIRED
+                - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -584,6 +590,78 @@ components:
       required:
         - email
         - password
+    PasskeySignInRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        response:
+          $ref: "#/components/schemas/PasskeyAuthenticationResponse"
+      required:
+        - challengeId
+        - response
+      additionalProperties: false
+    PasskeyAuthenticationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: ^[A-Za-z0-9_-]+$
+        rawId:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: ^[A-Za-z0-9_-]+$
+        type:
+          type: string
+          enum:
+            - public-key
+        response:
+          type: object
+          properties:
+            clientDataJSON:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+            authenticatorData:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+            signature:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+            userHandle:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+          required:
+            - clientDataJSON
+            - authenticatorData
+            - signature
+          additionalProperties:
+            nullable: true
+        clientExtensionResults:
+          type: object
+          additionalProperties:
+            nullable: true
+        authenticatorAttachment:
+          type: string
+      required:
+        - id
+        - rawId
+        - type
+        - response
+        - clientExtensionResults
+      additionalProperties:
+        nullable: true
     MalafatSuggestionsChange:
       type: object
       properties:
@@ -653,6 +731,274 @@ components:
               type: string
           required:
             - token
+    PasskeyList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Passkey"
+        limit:
+          type: integer
+          description: The most passkeys a person may hold (409 PASSKEY_LIMIT past it)
+      required:
+        - items
+        - limit
+    Passkey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Named from its provider (AAGUID) or the device it was added from; renamable. Shown with dir="auto".
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          nullable: true
+          format: date-time
+        deviceType:
+          type: string
+          enum:
+            - singleDevice
+            - multiDevice
+          description: multiDevice = synced (e.g. iCloud Keychain)
+        backedUp:
+          type: boolean
+      required:
+        - id
+        - name
+        - createdAt
+        - lastUsedAt
+        - deviceType
+        - backedUp
+    PasskeyCreationChallenge:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        publicKey:
+          $ref: "#/components/schemas/PasskeyCreationOptions"
+      required:
+        - challengeId
+        - publicKey
+    PasskeyCreationOptions:
+      type: object
+      properties:
+        challenge:
+          type: string
+        rp:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+          required:
+            - name
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            displayName:
+              type: string
+          required:
+            - id
+            - name
+            - displayName
+        pubKeyCredParams:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                  - public-key
+              alg:
+                type: integer
+            required:
+              - type
+              - alg
+        timeout:
+          type: integer
+        excludeCredentials:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - public-key
+              transports:
+                type: array
+                items:
+                  type: string
+                  maxLength: 32
+                maxItems: 10
+            required:
+              - id
+              - type
+        authenticatorSelection:
+          type: object
+          additionalProperties:
+            nullable: true
+        attestation:
+          type: string
+      required:
+        - challenge
+        - rp
+        - user
+        - pubKeyCredParams
+      additionalProperties:
+        nullable: true
+    PasskeyCreationOptionsRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise)
+      additionalProperties: false
+    AddPasskeyRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        response:
+          $ref: "#/components/schemas/PasskeyRegistrationResponse"
+        currentPassword:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Needed only when the session last proved the password more than 10 minutes ago (403 RECENT_SIGN_IN_REQUIRED otherwise)
+      required:
+        - challengeId
+        - response
+      additionalProperties: false
+    PasskeyRegistrationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: ^[A-Za-z0-9_-]+$
+        rawId:
+          type: string
+          minLength: 1
+          maxLength: 16384
+          pattern: ^[A-Za-z0-9_-]+$
+        type:
+          type: string
+          enum:
+            - public-key
+        response:
+          type: object
+          properties:
+            clientDataJSON:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+            attestationObject:
+              type: string
+              minLength: 1
+              maxLength: 16384
+              pattern: ^[A-Za-z0-9_-]+$
+            transports:
+              type: array
+              items:
+                type: string
+                maxLength: 32
+              maxItems: 10
+          required:
+            - clientDataJSON
+            - attestationObject
+          additionalProperties:
+            nullable: true
+        clientExtensionResults:
+          type: object
+          additionalProperties:
+            nullable: true
+        authenticatorAttachment:
+          type: string
+      required:
+        - id
+        - rawId
+        - type
+        - response
+        - clientExtensionResults
+      additionalProperties:
+        nullable: true
+    RenamePasskeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required:
+        - name
+      additionalProperties: false
+    PasskeySignInChallenge:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        publicKey:
+          $ref: "#/components/schemas/PasskeyRequestOptions"
+      required:
+        - challengeId
+        - publicKey
+    PasskeyRequestOptions:
+      type: object
+      properties:
+        challenge:
+          type: string
+        rpId:
+          type: string
+        timeout:
+          type: integer
+        allowCredentials:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - public-key
+              transports:
+                type: array
+                items:
+                  type: string
+                  maxLength: 32
+                maxItems: 10
+            required:
+              - id
+              - type
+        userVerification:
+          type: string
+      required:
+        - challenge
+      additionalProperties:
+        nullable: true
     CloseAccountResponse:
       type: object
       properties:
@@ -8269,6 +8615,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/sessions/passkey:
+    post:
+      tags:
+        - Sessions
+      summary: Sign in with a passkey (sets the session cookie) (MUT-115)
+      description: "Send the `challengeId` from POST /v1/passkey-challenges and the platform's assertion (WebAuthn JSON). The same same-origin check, IP budget, throttle and lockout as the password sign-in: a failed assertion counts toward the account's lockout, and every refusal is the same 401."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeySignInRequest"
+      responses:
+        "201":
+          description: Signed in; the session cookie is set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          description: INVALID_CREDENTIALS — the same answer for every refusal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/sessions/current:
     delete:
       tags:
@@ -8490,6 +8886,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/device-sessions/passkey:
+    post:
+      tags:
+        - Device sessions
+      summary: Sign in from a native app with a passkey (returns a bearer token) (MUT-115)
+      description: Send the `challengeId` from POST /v1/passkey-challenges and the platform's assertion (WebAuthn JSON; on iOS the origin is https://<rp id>). The same IP budget, throttle and lockout as the password sign-in; every refusal is the same 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeySignInRequest"
+      responses:
+        "201":
+          description: Signed in; the token is shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceSession"
+        "401":
+          description: INVALID_CREDENTIALS — the same answer for every refusal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: ACCOUNT_UNDER_REVIEW (as the password sign-in)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/device-sessions/current:
     delete:
       tags:
@@ -8508,6 +8954,256 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/passkeys:
+    get:
+      tags:
+        - Passkeys
+      summary: Your passkeys (MUT-115)
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Oldest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyList"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Passkeys
+      summary: Finish adding a passkey (MUT-115)
+      description: Send the `challengeId` from creation-options and the platform's registration response (WebAuthn JSON). The same recent-sign-in rule applies again (the options call is not trusted). The passkey is named from its provider, or from the device it was added from; rename it with PATCH.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPasskeyRequest"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Passkey"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: RECENT_SIGN_IN_REQUIRED, CURRENT_PASSWORD_WRONG, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: PASSKEY_LIMIT — you already have 10 passkeys; CONFLICT — this passkey is already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED; reason PASSKEY_NOT_VERIFIED when the challenge was used, expired or not yours, or the response did not verify (origin, RP ID, user verification)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/passkeys/creation-options:
+    post:
+      tags:
+        - Passkeys
+      summary: "Start adding a passkey: the options for navigator.credentials.create() (MUT-115)"
+      description: Needs a sign-in (or password change) at most 10 minutes old; otherwise send `currentPassword` (403 RECENT_SIGN_IN_REQUIRED without it, 403 CURRENT_PASSWORD_WRONG when wrong, counted toward the sign-in lockout). The challenge is single-use, bound to this person, and lives 5 minutes. `excludeCredentials` lists your own passkeys.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyCreationOptionsRequest"
+      responses:
+        "200":
+          description: Pass `publicKey` to the platform; send `challengeId` back with the result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyCreationChallenge"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: RECENT_SIGN_IN_REQUIRED, CURRENT_PASSWORD_WRONG, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: PASSKEY_LIMIT — you already have 10 passkeys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/passkeys/{passkeyId}:
+    patch:
+      tags:
+        - Passkeys
+      summary: Rename one of your passkeys (MUT-115)
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: passkeyId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenamePasskeyRequest"
+      responses:
+        "200":
+          description: Renamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Passkey"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — no such passkey of yours (or passkeys are not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (a name is 1–64 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Passkeys
+      summary: Remove one of your passkeys (MUT-115)
+      description: It stops signing in at once, and every session it opened is signed out, except the one making this request.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: passkeyId
+          in: path
+      responses:
+        "204":
+          description: Removed
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — no such passkey of yours (or passkeys are not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/passkey-challenges:
+    post:
+      tags:
+        - Passkeys
+      summary: "Start a passkey sign-in: the options for navigator.credentials.get() (MUT-115)"
+      description: "No email first: `allowCredentials` is empty, so the platform offers every passkey it holds for this site. Single-use, 5 minutes. Then POST /v1/sessions/passkey (portal) or /v1/device-sessions/passkey (app)."
+      security: []
+      responses:
+        "201":
+          description: A sign-in challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeySignInChallenge"
+        "404":
+          description: NOT_FOUND — passkeys are not configured on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many challenges from this address
           content:
             application/json:
               schema:

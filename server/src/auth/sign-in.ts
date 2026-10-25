@@ -94,7 +94,7 @@ export interface PasskeySignInDeps extends SignInDeps {
 }
 
 /**
- * MUT-115 (ADR-189): sign in with a passkey, cookie or device. The same core as the password: one 401
+ * MUT-115 (ADR-190): sign in with a passkey, cookie or device. The same core as the password: one 401
  * INVALID_CREDENTIALS for every refusal, the same throttle and lockout (A3: a failed assertion counts on the person's
  * email key, shared with wrong passwords), the same PENDING_REVIEW 403 and closed-account rule, and a session bound
  * to the person's current password hash (D6), so an operator --lock, a disable or a racing password change wins.

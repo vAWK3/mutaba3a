@@ -1179,7 +1179,7 @@ export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySche
 
 export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
 
-// ---- MUT-115: passkeys (ADR-189) ------------------------------------------------------
+// ---- MUT-115: passkeys (ADR-190) ------------------------------------------------------
 // The WebAuthn JSON shapes are the W3C Level 3 serializations (PublicKeyCredential.toJSON / parse*OptionsFromJSON),
 // passed straight to @simplewebauthn/browser on the portal and the `passkeys` package on iOS. Only the fields the
 // server reads are named; the rest passes through.
@@ -1541,6 +1541,8 @@ export const CONFLICT_REASONS = [
   'COVERED_BY_GRANT',
   'NO_BILLING_ACCOUNT',
   'BILLING_ACCOUNT_NEEDS_HELP',
+  // MUT-115: this credential is already registered (to anyone).
+  'PASSKEY_EXISTS',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1631,6 +1633,9 @@ export const VALIDATION_REASONS = [
   'SAME_CURRENCY',
   // MUT-362: a person (no tax ID) in a country not yet open to consumers (billing-countries.json); a business can buy.
   'COUNTRY_NEEDS_BUSINESS',
+  // MUT-115: the passkey registration didn't verify (challenge used, expired or not the caller's; origin, RP ID or user
+  // verification wrong).
+  'PASSKEY_NOT_VERIFIED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

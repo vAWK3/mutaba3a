@@ -10,7 +10,10 @@ import { CHALLENGE_TTL_MS, creationOptions, PASSKEY_LIMIT, signInOptions, STEP_U
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { StateConflict, UniqueViolation } from '../repositories/memory.js';
-import type { AuditEventInput, LedgerStore, PasskeyRecord, SessionRecord, UserRecord } from '../repositories/ports.js';
+import type { AuditEventInput, JsonObject, LedgerStore, PasskeyRecord, SessionRecord, UserRecord } from '../repositories/ports.js';
+import type {
+  PasskeyCreationOptionsSchema,
+  PasskeyRequestOptionsSchema} from '../schemas.js';
 import {
   AddPasskeyRequestSchema,
   ErrorEnvelopeSchema,
@@ -23,7 +26,7 @@ import {
 } from '../schemas.js';
 
 /**
- * MUT-115 (ADR-189): a signed-in person's passkeys, and the public challenge passkey sign-in starts from. The two
+ * MUT-115 (ADR-190): a signed-in person's passkeys, and the public challenge passkey sign-in starts from. The two
  * sign-in routes themselves sit beside their password twins (routes/sessions.ts, routes/device-sessions.ts).
  *
  * Adding a passkey needs a sign-in at most 10 minutes old, or the current password (D4): passkeys survive a password
@@ -138,7 +141,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       const publicKey = await creationOptions(config, user, existing);
       const now = c.get('now')();
       const { id } = await store.passkeys.createChallenge({ challenge: publicKey.challenge, purpose: 'creation', userId: user.id, at: now, expiresAt: new Date(now.getTime() + CHALLENGE_TTL_MS) });
-      return c.json({ challengeId: id, publicKey }, 200);
+      return c.json({ challengeId: id, publicKey: publicKey as unknown as z.infer<typeof PasskeyCreationOptionsSchema> }, 200);
     },
   );
 
@@ -154,12 +157,11 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       request: { body: { required: true, content: { 'application/json': { schema: AddPasskeyRequestSchema } } } },
       responses: {
         201: { description: 'Added', content: { 'application/json': { schema: PasskeySchema } } },
-        400: errorResponse('PASSKEY_NOT_VERIFIED — the challenge was used, expired or not yours, or the response did not verify (origin, RP ID, user verification)'),
         401: errorResponse('No valid session'),
         403: errorResponse('RECENT_SIGN_IN_REQUIRED, CURRENT_PASSWORD_WRONG, PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING'),
         404: errorResponse('NOT_FOUND — passkeys are not configured on this server'),
         409: errorResponse('PASSKEY_LIMIT — you already have 10 passkeys; CONFLICT — this passkey is already registered'),
-        422: errorResponse('Validation failed'),
+        422: errorResponse('VALIDATION_FAILED; reason PASSKEY_NOT_VERIFIED when the challenge was used, expired or not yours, or the response did not verify (origin, RP ID, user verification)'),
       },
     }),
     async (c) => {
@@ -170,7 +172,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       const now = c.get('now')();
       const challenge = await store.passkeys.consumeChallenge(challengeId, 'creation', user.id, now);
       const verified = challenge ? await verifyCreation(config, response as unknown as RegistrationResponseJSON, challenge.challenge) : null;
-      if (!verified) throw new ApiError('PASSKEY_NOT_VERIFIED', 'The passkey could not be verified; try again');
+      if (!verified) throw new ApiError('VALIDATION_FAILED', 'The passkey could not be verified; try again', { reason: 'PASSKEY_NOT_VERIFIED' });
       const taken = (await store.passkeys.listByUser(user.id)).map((p) => p.name);
       const name = passkeyNameFor(verified.aaguid, c.req.header('user-agent') ?? null, session.kind, taken);
       let passkey: PasskeyRecord;
@@ -264,7 +266,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       }
       const publicKey = await signInOptions(config);
       const { id } = await store.passkeys.createChallenge({ challenge: publicKey.challenge, purpose: 'authentication', userId: null, at: now, expiresAt: new Date(now.getTime() + CHALLENGE_TTL_MS) });
-      return c.json({ challengeId: id, publicKey }, 201);
+      return c.json({ challengeId: id, publicKey: publicKey as unknown as z.infer<typeof PasskeyRequestOptionsSchema> }, 201);
     },
   );
 
@@ -287,7 +289,7 @@ export function passkeyJson(p: PasskeyRecord) {
 }
 
 /** One row per profile the person belongs to, like every identity event (actor USER). */
-async function passkeyAudit(store: LedgerStore, c: Context<AppEnv>, user: UserRecord, action: string, metadata: Record<string, unknown>): Promise<AuditEventInput[]> {
+async function passkeyAudit(store: LedgerStore, c: Context<AppEnv>, user: UserRecord, action: string, metadata: JsonObject): Promise<AuditEventInput[]> {
   return (await store.memberships.listByUser(user.id)).map((m) => ({
     organizationId: m.organizationId,
     actorType: 'USER',

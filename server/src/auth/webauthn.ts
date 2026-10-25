@@ -13,7 +13,7 @@ import { isoBase64URL, isoUint8Array, parseAuthenticatorData } from '@simpleweba
 import type { PasskeyDeviceType, PasskeyRecord, UserRecord } from '../repositories/ports.js';
 
 /**
- * MUT-115 (ADR-189): the WebAuthn relying party, a thin layer over @simplewebauthn/server so the routes never touch
+ * MUT-115 (ADR-190): the WebAuthn relying party, a thin layer over @simplewebauthn/server so the routes never touch
  * its option shapes. One RP ID, the apex domain (D1), so a passkey made on the portal (`https://app.<apex>`) signs in
  * to the iOS app (native assertions carry `https://<apex>`) and the other way round. Attestation `none`, discoverable
  * credentials, user verification required, ES256 + RS256 (D3).

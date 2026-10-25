@@ -67,7 +67,7 @@ const envSchema = z.object({
   /** The portal's public origin; non-GET session requests must come from it. Unset = compare with the request's own origin. */
   PORTAL_ORIGIN: z.string().url().optional(),
   /**
-   * MUT-115 (ADR-189, D2): the WebAuthn relying-party ID, the apex domain (Terraform sets it from config/hosts.json at
+   * MUT-115 (ADR-190, D2): the WebAuthn relying-party ID, the apex domain (Terraform sets it from config/hosts.json at
    * stages live/redirect). Unset = no passkeys: every passkey route answers 404. WEBAUTHN_ORIGINS (comma list)
    * replaces the derived origins (PORTAL_ORIGIN and https://<rp id>) for local development; each must be the RP ID or
    * a subdomain of it.
