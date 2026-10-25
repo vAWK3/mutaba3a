@@ -125,6 +125,8 @@ export function meBody(
       status: 'ACTIVE',
       // MUT-333: not closing (FakeApi tracks a closing of its own).
       closure: null as { requestedAt: string; deleteAfter: string } | null,
+      // MUT-433: no operator-granted features.
+      features: [] as string[],
     },
     profiles: profiles.map(hostedProfile),
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },

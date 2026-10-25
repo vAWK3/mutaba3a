@@ -119,6 +119,9 @@ export const STORE_ACCESS: StoreAccess = {
     listStoragePurges: 'operator',
     finishStoragePurge: 'operator',
   },
+  // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
+  // lists them. MUT-434 must reclassify activeFor for its MCP principal, or read it unguarded (eng review C4).
+  features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },
   signupReviews: { list: 'operator', findByUser: 'operator', digestFacts: 'operator', markNotified: 'operator', approve: 'operator', decline: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',

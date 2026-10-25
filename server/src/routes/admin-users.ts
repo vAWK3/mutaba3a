@@ -5,6 +5,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
+import { isFeature } from '../features.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
@@ -15,6 +16,9 @@ import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
   ErrorEnvelopeSchema,
+  FeatureGrantResponseSchema,
+  FeatureHoldersSchema,
+  FeatureRevokeResponseSchema,
   GrantMembershipRequestSchema,
   GrantMembershipResponseSchema,
   IssueSetupLinkRequestSchema,
@@ -56,11 +60,40 @@ const adminErrors = {
 const notFound = { description: 'Unknown user or organization', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } as const;
 
 const UserIdParam = z.object({ userId: z.string().uuid().openapi({ param: { name: 'userId', in: 'path' } }) });
+/** MUT-433: a plain string, checked by `featureOf` so an unknown name answers 422 with `{ field: 'feature' }` (eng review C7). */
+const FeatureParam = z.object({ feature: z.string().max(64).openapi({ param: { name: 'feature', in: 'path' }, example: 'agent_access' }) });
+const UserFeatureParams = UserIdParam.extend(FeatureParam.shape);
+
+const unknownUser = { description: 'Unknown user', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } as const;
+
+/** Review D1: the person (or a profile being audited) was deleted between the lookup and the write. */
+async function goneIsNotFound<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'User not found');
+    throw err;
+  }
+}
+
+function featureOf(name: string) {
+  if (!isFeature(name)) throw new ApiError('VALIDATION_FAILED', `Unknown feature: ${name}`, { field: 'feature' });
+  return name;
+}
+
 const MembershipParams = UserIdParam.extend({
   organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }),
 });
 
-type AuditAction = 'user.created' | 'user.setup_link_issued' | 'user.disabled' | 'user.enabled' | 'membership.granted' | 'membership.revoked';
+type AuditAction =
+  | 'user.created'
+  | 'user.setup_link_issued'
+  | 'user.disabled'
+  | 'user.enabled'
+  | 'user.feature_granted'
+  | 'user.feature_revoked'
+  | 'membership.granted'
+  | 'membership.revoked';
 
 /**
  * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
@@ -461,6 +494,104 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       },
     );
   }
+
+  // ---- MUT-433 (ADR-196): per-user feature flags --------------------------------------------------------------
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/admin/v1/users/{userId}/features/{feature}',
+      tags: ['Admin'],
+      summary: 'Turn a feature on for a person (idempotent); audited on every profile they belong to',
+      description:
+        'Every feature is off until the operator grants it (features.ts). A second grant changes nothing and keeps the first grantedAt. ' +
+        'A signup waiting for review is refused; a disabled account may hold a flag, which waits until it can sign in.',
+      security: [{ adminToken: [] }],
+      request: { params: UserFeatureParams },
+      responses: {
+        200: { description: 'The flag is on', content: { 'application/json': { schema: FeatureGrantResponseSchema } } },
+        404: unknownUser,
+        409: { description: 'The user is waiting for signup review (CONFLICT, details.reason USER_PENDING_REVIEW)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        422: { description: 'Unknown feature (VALIDATION_FAILED, details.field feature)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const params = c.req.valid('param');
+      const feature = featureOf(params.feature);
+      const user = await mustGetUser(params.userId);
+      // Eng review D5: a pending signup has no approved profile to audit on; approve it first.
+      if (user.status === 'PENDING_REVIEW') {
+        throw new ApiError('CONFLICT', 'This signup is waiting for review; approve it before granting a feature', { reason: 'USER_PENDING_REVIEW' });
+      }
+      const organizationIds = await memberOrganizations(user.id);
+      if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_granted' }, 'account change on a user with no memberships; no organization to audit');
+      const { grant, granted } = await goneIsNotFound(() =>
+        store.features.grant({
+          userId: user.id,
+          feature,
+          grantedBy: 'admin',
+          at: c.get('now')(),
+          audit: auditEvents(c, organizationIds, user.id, 'user.feature_granted', { feature }),
+        }),
+      );
+      return c.json({ feature, grantedAt: grant.grantedAt.toISOString(), granted }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/admin/v1/users/{userId}/features/{feature}',
+      tags: ['Admin'],
+      summary: 'Turn a feature off for a person (idempotent); seen on their very next request',
+      security: [{ adminToken: [] }],
+      request: { params: UserFeatureParams },
+      responses: {
+        200: { description: 'The flag is off', content: { 'application/json': { schema: FeatureRevokeResponseSchema } } },
+        404: unknownUser,
+        422: { description: 'Unknown feature (VALIDATION_FAILED, details.field feature)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const params = c.req.valid('param');
+      const feature = featureOf(params.feature);
+      const user = await mustGetUser(params.userId);
+      const organizationIds = await memberOrganizations(user.id);
+      if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_revoked' }, 'account change on a user with no memberships; no organization to audit');
+      const { revoked } = await goneIsNotFound(() =>
+        store.features.revoke({
+          userId: user.id,
+          feature,
+          at: c.get('now')(),
+          audit: auditEvents(c, organizationIds, user.id, 'user.feature_revoked', { feature }),
+        }),
+      );
+      return c.json({ feature, revoked }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/admin/v1/features/{feature}',
+      tags: ['Admin'],
+      summary: 'Everyone holding a feature now, oldest grant first',
+      security: [{ adminToken: [] }],
+      request: { params: FeatureParam },
+      responses: {
+        200: { description: 'The holders', content: { 'application/json': { schema: FeatureHoldersSchema } } },
+        422: { description: 'Unknown feature (VALIDATION_FAILED, details.field feature)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const feature = featureOf(c.req.valid('param').feature);
+      const holders = await store.features.holders(feature);
+      return c.json({ feature, holders: holders.map((h) => ({ userId: h.userId, email: h.email, grantedAt: h.grantedAt.toISOString() })) }, 200);
+    },
+  );
 
   app.openapi(
     createRoute({

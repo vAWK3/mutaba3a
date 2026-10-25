@@ -78,6 +78,8 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
       status: 'ACTIVE',
       // MUT-333: not closing unless a test says so.
       closure: null,
+      // MUT-433: no operator-granted features unless a test says so.
+      features: [] as string[],
     },
     profiles,
     limits: { ownedProfiles: profiles.filter((p) => p.owned).length, maxOwnedProfiles: 6 },

@@ -2231,6 +2231,40 @@ export interface LedgerStore {
   accountPurge: AccountPurgeRepository;
   /** MUT-115: passkeys and their challenges; the person's own (sessionOnly), sign-in reads them unguarded. */
   passkeys: PasskeyRepository;
+  /** MUT-433: per-user feature flags; `/v1/me` reads the person's own (sessionOnly), only the operator writes them. */
+  features: FeaturesRepository;
+}
+
+// ---- MUT-433: per-user feature flags (ADR-196) -----------------------------
+
+/** One person's flag: on while `revokedAt` is null. A grant after a revoke re-opens the same row. */
+export interface UserFeatureRecord {
+  userId: string;
+  feature: string;
+  grantedBy: string;
+  grantedAt: Date;
+  revokedAt: Date | null;
+}
+
+export interface FeatureHolderRecord {
+  userId: string;
+  email: string;
+  grantedAt: Date;
+}
+
+export interface FeaturesRepository {
+  /** The features the person holds now, sorted by name. */
+  activeFor(userId: string): Promise<string[]>;
+  /**
+   * One transaction: turns the flag on (creates the row, or re-opens a revoked one at `at`) and writes `audit` only
+   * when something changed. `granted: false` = it was already on (the row keeps its first `grantedAt`); two racing
+   * grants change it once (eng review C3). Throws ForeignKeyViolation for an unknown user.
+   */
+  grant(input: { userId: string; feature: string; grantedBy: string; at: Date; audit: AuditEventInput[] }): Promise<{ grant: UserFeatureRecord; granted: boolean }>;
+  /** One transaction: turns the flag off at `at`, auditing only when it was on. */
+  revoke(input: { userId: string; feature: string; at: Date; audit: AuditEventInput[] }): Promise<{ revoked: boolean }>;
+  /** Everyone holding the feature now, oldest grant first (then by user id). */
+  holders(feature: string): Promise<FeatureHolderRecord[]>;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

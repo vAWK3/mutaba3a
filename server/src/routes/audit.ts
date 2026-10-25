@@ -18,7 +18,10 @@ export const SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion']
  */
 export const OWED_REDATED = 'income.owed.redated';
 export const PAYMENT_REDATED = 'payment.redated';
-export const SESSION_ONLY_ACTIONS = [OWED_REDATED, PAYMENT_REDATED] as const;
+/** MUT-433 (review D3): a person's operator-granted features aren't financial history; the admin audit keeps them. */
+export const FEATURE_GRANTED = 'user.feature_granted';
+export const FEATURE_REVOKED = 'user.feature_revoked';
+export const SESSION_ONLY_ACTIONS = [OWED_REDATED, PAYMENT_REDATED, FEATURE_GRANTED, FEATURE_REVOKED] as const;
 
 /** /v1/audit — the organization's financial history for API keys (M6 brief §2). */
 export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {

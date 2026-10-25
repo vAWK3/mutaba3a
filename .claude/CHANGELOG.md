@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Per-user feature flags, operator-granted, starting with agent_access (MUT-433, ADR-196)
+
+**Why:** epic MUT-432 lets a person connect their own Claude over MCP. Basel decides who gets it: every flag is off until the operator grants it.
+
+### Added
+- Server: `user_feature_grants` (migration `20261025180000_mut433_user_feature_grants`, additive), `features.ts` (`FEATURES`, `isFeature`, `hasFeature`), `store.features` (`activeFor`, `grant`, `revoke`, `holders`) in Prisma and memory (memory map outside the local snapshot), store guard (`activeFor` sessionOnly, writes operator), purge map entry.
+- Admin API: `PUT`/`DELETE /admin/v1/users/{userId}/features/{feature}`, `GET /admin/v1/features/{feature}`. Audited on every membership profile; a pending signup is refused (409 `USER_PENDING_REVIEW`).
+- `/v1/me` (and device sign-in): `user.features: string[]`. API `1.73.0-mut433`.
+- CLI: `npm --prefix server run feature:grant|feature:revoke|feature:list`.
+- Tests: see TEST_PLAN.
+
+**Operator:** after the release, grant `agent_access` to sader@basel.ps (`docs/operations/before-release.md`).
+
+---
+
 ## [Unreleased] - 2026-10-25 — Terms that change mid-session ask in a dialog above the portal; an open drawer keeps its draft (MUT-346)
 
 **Why:** a terms bump picked up by a `/v1/me` refetch replaced the whole portal with the Updated-terms page, unmounting any open drawer and its half-typed entry. MUT-382's coming terms version would hit every open portal.

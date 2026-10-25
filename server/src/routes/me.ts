@@ -77,10 +77,11 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow, passkeyPrompt] = await Promise.all([
+  const [ownedProfiles, termsNow, passkeyPrompt, features] = await Promise.all([
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
+    store.features.activeFor(user.id),
   ]);
   return {
     user: {
@@ -95,6 +96,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       status: user.status,
       // MUT-333: while closing, the clients show only Keep my account and Sign out.
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
+      // MUT-433: read on every request, never cached, so an operator's revoke shows at once.
+      features,
     },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },

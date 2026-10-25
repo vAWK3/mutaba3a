@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
+import { FEATURES } from '../features.js';
 
 /**
  * Operator CLI for hosted-portal users (MUT-37, ADR-037). Talks to the admin
@@ -25,6 +26,9 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
  *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
  *   npm run billing:trial-mail [-- --dry-run]                   (MUT-419: today's trial reminders, or who they would mail)
  *   npm run accounts:purge [-- --dry-run]                       (MUT-333: delete closed accounts whose 30 days ran out, or see which)
+ *   npm run feature:grant  -- --email nour@firm.ps --feature agent_access   (MUT-433: turn a per-user flag on)
+ *   npm run feature:revoke -- --email nour@firm.ps --feature agent_access
+ *   npm run feature:list   -- --feature agent_access                (who holds it now)
  *
  * MUT-300 (ADR-099): `firm-enable` turns firm features on in place. An owned
  * Business profile stays its owner's, who becomes OWNER; an operator firm
@@ -50,7 +54,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews', 'accounts-purge'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -92,6 +96,10 @@ const USAGE = [
   '          with neither: every self-service signup waiting for review, oldest first, with its domain and why it waits',
   '          --approve: the account opens, its 14-day trial starts now, and the person is mailed',
   '          --decline: the empty account and its personal profile are deleted, and the person is mailed',
+  '  feature-grant  --email <email> --feature <name>   (MUT-433: turn a per-user flag on; every flag is off until granted)',
+  '  feature-revoke --email <email> --feature <name>   (off at once: seen on their very next request)',
+  '  feature-list   --feature <name>   (who holds it now, oldest grant first)',
+  `          features: ${FEATURES.join(', ')} (server/src/features.ts)`,
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -137,6 +145,7 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
         approve: { type: 'string' },
         decline: { type: 'string' },
         'dry-run': { type: 'boolean' },
+        feature: { type: 'string' },
       },
     }).values;
   } catch (e) {
@@ -166,13 +175,13 @@ export async function runUsersCommand(argv: string[], deps: UsersCliDeps): Promi
 }
 
 export interface AdminClient {
-  call<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  call<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
   userByEmail(email: string): Promise<UserSummary>;
 }
 
 /** Exported for seed-demo-account.ts (MUT-136), the admin-API half of seeding a local test account. */
 export function adminClient(fetchFn: typeof fetch, baseUrl: string, token: string): AdminClient {
-  const call = async <T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> => {
+  const call = async <T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> => {
     const res = await fetchFn(`${baseUrl}${path}`, {
       method,
       headers: { 'content-type': 'application/json', 'x-admin-token': token },
@@ -303,6 +312,28 @@ export function partnerNote(profileName: string): string[] {
     `AR: ${profileName} أصبح مشتركًا. يملكه كلٌّ منكما بالكامل: الدخل والعملاء والدفعات والمصاريف والإعدادات. ويبقى ملفّ كلٍّ منكما الشخصي خاصًّا به.`,
   ];
 }
+
+/** MUT-433 (ADR-196): per-user feature flags; the server checks the name (422 for an unknown one). */
+const FEATURE_HANDLERS: Record<Extract<Command, `feature-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
+  'feature-grant': async ({ client, need, out }) => {
+    const feature = need('feature');
+    const user = await client.userByEmail(need('email'));
+    const { granted } = await client.call<{ granted: boolean }>('PUT', `/admin/v1/users/${user.id}/features/${encodeURIComponent(feature)}`);
+    out(`${granted ? 'granted' : 'already on'}: ${feature} for ${user.id} (${user.email})`);
+  },
+  'feature-revoke': async ({ client, need, out }) => {
+    const feature = need('feature');
+    const user = await client.userByEmail(need('email'));
+    const { revoked } = await client.call<{ revoked: boolean }>('DELETE', `/admin/v1/users/${user.id}/features/${encodeURIComponent(feature)}`);
+    out(`${revoked ? 'revoked' : 'already off'}: ${feature} for ${user.id} (${user.email})`);
+  },
+  'feature-list': async ({ client, need, out }) => {
+    const feature = need('feature');
+    const { holders } = await client.call<{ holders: { userId: string; email: string; grantedAt: string }[] }>('GET', `/admin/v1/features/${encodeURIComponent(feature)}`);
+    if (holders.length === 0) out(`no one holds ${feature}`);
+    for (const h of holders) out(`${h.userId}  ${h.email}  ${h.grantedAt}`);
+  },
+};
 
 const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
   'billing-grant': async ({ client, need, optional, out }) => {
@@ -500,6 +531,7 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   },
   ...FIRM_HANDLERS,
   ...BILLING_HANDLERS,
+  ...FEATURE_HANDLERS,
   'signup-reviews': signupReviews,
 };
 

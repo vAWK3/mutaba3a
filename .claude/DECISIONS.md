@@ -5245,3 +5245,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - `sessionLifetime(kind, settings)` in `server/src/auth/sessions.ts` is the one place a session kind's idle/absolute lifetime is computed (sign-in routes and the change).
 - A change whose answer is lost leaves the phone on a revoked token: its next request signs it out, and the person signs in with the new password (copy says so). No server-side grace for the old token, by design.
 
+
+## ADR-196: Per-User Feature Flags Are Operator Grants in Their Own Table, Read Fresh on Every Request (MUT-433, epic MUT-432)
+
+**Status:** Accepted (2026-10-25, MUT-433; plan `.claude/designs/mut-433-user-feature-flags.md`, eng review D1–D5 answered by Basel).
+
+**Context:** Basel wants to choose, person by person, who may connect their own AI agent to MTB3A over MCP (epic MUT-432). Nothing was per-user: firm features are a per-organization operator timestamp (ADR-099), and `EntitlementGrant` (ADR-160) is per-user but billing-typed and read by coverage.
+
+**Decision:**
+1. **A `user_feature_grants` table**, one row per person and feature (`@@unique([userId, feature])`, FK cascade to users). A grant after a revoke re-opens the row; the history is in `audit_events`. Not a JSON column on users (no grantedAt/grantedBy, no "who has it" index); not `EntitlementGrant` (a non-billing row would leak into coverage).
+2. **Names are a closed set in code** (`server/src/features.ts`: `agent_access`), stored as text so a new flag needs no migration. An unknown name answers 422 `{ field: 'feature' }`. Reads go through the same list (pre-landing review D2): a name removed from code is simply off on `/v1/me` and in holders; the migration that retires it deletes its rows, so a name brought back later starts empty.
+3. **Only the operator writes them**: `PUT`/`DELETE /admin/v1/users/{userId}/features/{feature}` (idempotent; in `admin-users.ts` beside disable/enable, D1), `GET /admin/v1/features/{feature}` (holders), CLI `feature:grant|revoke|list`. Admin user responses don't list flags (D2).
+4. **Audited on every profile the person is a member of**, firms included (D4), in the operator's admin audit. Integration keys don't see these rows: `user.feature_granted`/`user.feature_revoked` join `SESSION_ONLY_ACTIONS` in `/v1/audit`, because a person's capability flag isn't financial history and Malafat is a separate product (pre-landing review D3). Written in the change's transaction, only when it changed something; two racing grants change it once (ON CONFLICT DO NOTHING, then a conditional re-open; no exception path inside a Postgres transaction).
+5. **A signup waiting for review can't be granted one** (409 `USER_PENDING_REVIEW`, D5); a disabled account can (the flag waits until it can sign in); revoke is always allowed.
+6. **Read fresh on every request** (`hasFeature`, store guard `activeFor: sessionOnly`, the rest `operator`). `/v1/me` gains `user.features: string[]` (plain strings, sorted). No cache, so a revoke is seen on the next request. The memory store keeps the map out of `snapshot()`/`restore()`: local mode has no flags and its format is unchanged.
+7. API `1.73.0-mut433`.
+
+**Deferred:** (a) a person flagged before joining a firm brings an active flag there with no audit row on it; logging active flags when a membership is created belongs with (b) (pre-landing review D4). (b) Firm-owner consent for agent access to firm data. A per-user flag lets a member's agent read every profile that member can see, with no say from the firm owner. Acceptable for the single-person pilot; revisit at MUT-435 (read tools).
+
+**Consequences:**
+- MUT-434 owns enforcement (moved there by D3): 403 `FEATURE_NOT_ENABLED` on every MCP/OAuth request, revoking OAuth grants on revoke, and applying the closure and status gates. It must reclassify `features.activeFor` for its MCP principal (Principal is `apiKey | session` today) or read it unguarded.
+- One indexed read per `/v1/me`.

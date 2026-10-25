@@ -3818,3 +3818,16 @@ Every new test advances the clock between sign-in and the change (AC6). Each was
 | `qa/specs/portal-selfservice/account.spec.ts` | Release-QA (live API) | 1 | `@portal-selfservice.account.rotate-on-change`: still signed in after the change under a new cookie; the old value gets 401 |
 | Flutter `feature/mut-262-rotate-token` | Unit/widget + iOS QA flow | see that repo | repository (`rotateToken`, 200 → token, 204 → null), `AuthService.changePassword`/`adoptRotatedToken`, `ApiClient.rotating` guard, screen copy; `ios.settings.change-password` expects a rotated token (run owed until a 1.71.0-mut262 server is deployed) |
 
+## MUT-433 — per-user feature flags (2026-10-25, ADR-196)
+
+Tests written before the code (not run red first: the worktree was still installing).
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/__tests__/user-features.test.ts` | Route | 12 | the closed feature list; off until granted (AC1); grant shows on `/v1/me` and audits once, a second grant changes nothing (AC2); audited on a firm the person only belongs to (D4); a pending signup 409 `USER_PENDING_REVIEW`, a disabled account both ways (D5); unknown feature 422 `{field}`, unknown user 404, no token 401; revoke seen on the next read and idempotent (AC3 seam); a grant after a revoke re-opens from the new instant; holders oldest first without revoked; a grant never reaches the memory snapshot (C5) |
+| `server/src/repositories/__tests__/store-contract-features.ts` (memory + Postgres) | Contract | 5 each | grant/no-op/audit once; revoke and re-open; revoke of nothing audits nothing; two racing grants and two racing revokes change it once (C3, real only on Postgres); holders with email, oldest first |
+| `server/src/__tests__/routes-account-closure.test.ts` | Route | 1 changed | a flagged person's feature rows go with the purge (C1) |
+| `server/src/scripts/__tests__/users-cli.test.ts` | CLI | +2 | `feature-grant`/`feature-revoke` by email print granted / already on / revoked / already off; `feature-list` prints the holder; `--feature` required; an unknown name fails |
+| `server/src/__tests__/routes-m{3,4,5,6,8}.test.ts` | Contract | changed | API version `1.73.0-mut433` |
+| Pre-landing review (regression-first, each seen failing) | Route + contract + CLI | +6 | a delete racing a grant or revoke answers 404, not 500 (D1); a retired name is off and nobody holds it, on both stores (D2); an API key's `/v1/audit` never lists feature grants while the admin audit does (D3); `feature-list` says `no one holds <feature>` (D5); the disabled-account case asserts the disable; both stores refuse a grant for an unknown person |
+

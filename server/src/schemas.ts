@@ -864,6 +864,11 @@ export const MeSchema = z
       status: UserStatusSchema,
       /** MUT-333: set while the account is closing; the portal and the phone then show only Keep my account and Sign out. Additive since 1.67.0-mut333. */
       closure: AccountClosureSchema.nullable(),
+      /**
+       * MUT-433 (ADR-196): the operator-granted features this person holds, sorted. Plain strings, not an enum, so a
+       * client never rejects a name a newer server adds; empty for nearly everyone. Additive since 1.73.0-mut433.
+       */
+      features: z.array(z.string()),
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -951,6 +956,30 @@ export const DeviceSessionSchema = MeSchema.extend({
 }).openapi('DeviceSession');
 
 export const RevokeSessionsResponseSchema = z.object({ revoked: z.number().int().min(0) }).openapi('RevokeSessionsResponse');
+
+// ---- Per-user feature flags (MUT-433, ADR-196) ------------------------------
+
+export const FeatureGrantResponseSchema = z
+  .object({
+    feature: z.string(),
+    /** When the flag was turned on; unchanged by a second grant. */
+    grantedAt: z.string().datetime(),
+    /** False when it was already on (nothing changed, nothing audited). */
+    granted: z.boolean(),
+  })
+  .openapi('FeatureGrantResponse');
+
+export const FeatureRevokeResponseSchema = z
+  .object({ feature: z.string(), /** False when it was already off. */ revoked: z.boolean() })
+  .openapi('FeatureRevokeResponse');
+
+export const FeatureHoldersSchema = z
+  .object({
+    feature: z.string(),
+    /** Everyone holding the feature now, oldest grant first. */
+    holders: z.array(z.object({ userId: z.string().uuid(), email: z.string(), grantedAt: z.string().datetime() })),
+  })
+  .openapi('FeatureHolders');
 
 // ---- One-time setup links (MUT-235, ADR-088) -------------------------------
 

@@ -25,7 +25,7 @@ if (!url) {
   });
 
   /** Kept on purpose, with no person in them (D9): stripe_events are event ids, email_deliveries digests. */
-  const OUTSIDE_PROFILES = new Set(['_prisma_migrations', 'users', 'organizations', 'sessions', 'inbox_entries', 'user_idempotency_keys', 'terms_acceptances', 'billing_accounts', 'account_setup_tokens', 'signup_reviews', 'stripe_events', 'email_deliveries', 'email_suppressions', 'passkeys', 'webauthn_challenges']);
+  const OUTSIDE_PROFILES = new Set(['_prisma_migrations', 'users', 'organizations', 'sessions', 'inbox_entries', 'user_idempotency_keys', 'terms_acceptances', 'billing_accounts', 'account_setup_tokens', 'signup_reviews', 'stripe_events', 'email_deliveries', 'email_suppressions', 'passkeys', 'webauthn_challenges', 'user_feature_grants']);
 
   describe('Prisma account purge catalog (MUT-333)', () => {
     it('knows every table with an organizationId column', async () => {
@@ -78,6 +78,8 @@ if (!url) {
       const passkey = await store.passkeys.create({ userId: user.id, credentialId: `cred-${unique}`, publicKey: new Uint8Array([1]), signCount: 0, transports: ['internal'], deviceType: 'multiDevice', backedUp: true, aaguid: '00000000-0000-0000-0000-000000000000', name: displayName.slice(0, 64), at: T0, limit: 10, audit: [] });
       await store.sessions.create({ userId: user.id, tokenDigest: randomUUID().replace(/-/g, '').padEnd(64, '2'), kind: 'device', at: T0, idleExpiresAt: DUE, absoluteExpiresAt: DUE, userAgent: null, passkeyId: passkey.id });
       await store.passkeys.createChallenge({ challenge: `challenge-${unique}`, purpose: 'creation', userId: user.id, at: T0, expiresAt: DUE });
+      // MUT-433 (C1): an operator-granted feature flag goes with the person (FK cascade).
+      await store.features.grant({ userId: user.id, feature: 'agent_access', grantedBy: 'admin', at: T0, audit: [] });
       await store.inboxEntries.create({ userId: user.id, kind: 'INCOME', amountMinor: 500n, currency: 'ILS', occurredOn: '2026-10-20', note: 'cash', captureSource: null }, T0);
       await store.users.acceptTerms({ userId: user.id, version: '2026-10-19', locale: 'ar', textSha256: 'f'.repeat(64), surface: 'portal', clientRelease: null, at: T0, audit: [firm.id, personalOrganization.id].map((organizationId) => ({ organizationId, actorType: 'USER', actorId: user.id, action: 'user.terms_accepted', entityType: 'user', entityId: user.id, requestId: null })) });
       await store.audit.append({ organizationId: firm.id, actorType: 'ADMIN', actorId: null, action: 'user.created', entityType: 'user', entityId: user.id, metadata: { email: user.email, displayName }, requestId: null });
