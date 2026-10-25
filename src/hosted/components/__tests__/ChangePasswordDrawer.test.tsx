@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler, type StubRequest, openYou } from '../../__tests__/harness';
 
 /**
  * MUT-237: Change password, opened from the account menu (`?changePassword=true`, ADR-008), never a page.
@@ -14,7 +14,7 @@ function portal(path: string, routes: Record<string, Handler> = {}) {
 const changeCalls = (calls: StubRequest[]) => calls.filter((c) => c.method === 'POST' && c.url.pathname === '/v1/me/password');
 
 async function openFromMenu(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+  await openYou(user, 'account');
   await user.click(await screen.findByRole('button', { name: /^Change password/ }));
   return screen.findByRole('dialog', { name: 'Change password' });
 }

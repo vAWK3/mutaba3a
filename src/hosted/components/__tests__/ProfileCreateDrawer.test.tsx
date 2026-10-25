@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, openYou, type Handler, type StubRequest } from '../../__tests__/harness';
 import type { HostedProfile } from '../../api/client';
 import { SLOW_UNDER_COVERAGE } from '../../../test/timeouts';
 
@@ -22,7 +22,7 @@ function portal(path: string, routes: Record<string, Handler> = {}, profiles: Ho
 const posts = (calls: StubRequest[]) => calls.filter((c) => c.method === 'POST' && c.url.pathname === '/v1/profiles');
 
 async function openFromSwitcher(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('link', { name: /Switch profile/ }));
+  await openYou(user);
   await user.click(await screen.findByRole('button', { name: /New profile/ }));
   return screen.findByRole('dialog', { name: 'New profile' });
 }
@@ -90,7 +90,7 @@ describe('New profile drawer (MUT-183)', () => {
     expect(posts(api.calls)[0].body).toMatchObject({ defaultCurrency: 'JOD' });
   });
 
-  it('CR3: creates with the exact body and lands on the new profile, named in the sidebar', async () => {
+  it('CR3: creates with the exact body and lands on the new profile, named on the island', async () => {
     let list = [builtIn];
     const { user, router, api } = portal(`/p/${ORG_A}`, {
       'GET /v1/me': () => ok(me(list)),
@@ -104,7 +104,7 @@ describe('New profile drawer (MUT-183)', () => {
     await user.click(screen.getByRole('button', { name: 'Create profile' }));
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${NEW_ID}`));
     expect(posts(api.calls)[0].body).toEqual({ name: 'Nour Studio', type: 'BUSINESS', defaultCurrency: 'USD', timezone: 'Asia/Jerusalem' });
-    expect(await screen.findByRole('link', { name: 'Switch profile: Nour Studio' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'You · Nour Studio' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'New profile' })).toBeNull();
     expect(await screen.findByText('Nour Studio is ready')).toBeInTheDocument();
     await waitFor(() => expect(api.count('GET /v1/me')).toBeGreaterThanOrEqual(2));
@@ -159,7 +159,7 @@ describe('New profile drawer (MUT-183)', () => {
     await fill(user, 'Side Studio');
     await user.click(screen.getByRole('button', { name: 'Create profile' }));
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${NEW_ID}`));
-    expect(await screen.findByRole('link', { name: 'Switch profile: Side Studio' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'You · Side Studio' })).toBeInTheDocument();
     expect(screen.queryByText("This profile isn't available")).toBeNull();
   });
 

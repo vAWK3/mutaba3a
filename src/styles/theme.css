@@ -279,6 +279,13 @@
   --overlay: color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
   --drawer-shadow: -4px 0 24px color-mix(in oklab, var(--m-shadow-tint) 12%, transparent);
   --landing-mock-avatar-fill: var(--m-avatar-mock-fill);
+  /* The portal's profile rings (MUT-426 D2): the island picks one by a hash of the profile id */
+  --profile-ring-1: var(--m-ring1);
+  --profile-ring-2: var(--m-ring2);
+  --profile-ring-3: var(--m-ring3);
+  --profile-ring-4: var(--m-ring4);
+  --profile-ring-5: var(--m-ring5);
+  --profile-ring-6: var(--m-ring6);
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, openYou, type Handler } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { LocalRecordsFileRefused, type PendingRestore } from '../localBackendContract';
 import { MODE_KEY, setMode, setUnhintedMode } from '../mode';
@@ -64,10 +64,9 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** MUT-425: the account menu became You › Account; the avatar link in the sidebar opens it. Returns the page. */
+/** MUT-425: the account menu became You › Account; the You island opens the page (MUT-426). Returns the page. */
 async function openAccount(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
-  await screen.findByRole('navigation', { name: 'You' });
+  await openYou(user, 'account');
   return screen.getByRole('main');
 }
 
@@ -116,10 +115,11 @@ describe('the shell signed out', () => {
 
   it('shows "On this device", never the placeholder email', async () => {
     stubApi({});
-    renderPortal(`/p/${ORG_A}`);
-    const account = await screen.findByRole('link', { name: /^Account:/ });
-    expect(account).toHaveTextContent('On this device');
-    expect(account).not.toHaveTextContent('local@device.invalid');
+    const { user } = renderPortal(`/p/${ORG_A}`);
+    await openYou(user);
+    const page = screen.getByRole('main');
+    expect(within(page).getByRole('heading', { level: 1 })).toHaveTextContent('On this device');
+    expect(page).not.toHaveTextContent('local@device.invalid');
   });
 
   it('offers Sign in and Your data, and nothing that needs an account or a phone', async () => {
@@ -167,7 +167,7 @@ describe('the shell signed out', () => {
   it('drops the "Hosted" chip and the old local-app note from You › Profiles', async () => {
     stubApi({});
     const { user } = renderPortal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('link', { name: /Switch profile/ }));
+    await openYou(user);
     const page = await screen.findByRole('main');
     await within(page).findByRole('button', { name: /Personal/ });
     expect(screen.queryByText('Hosted')).toBeNull();
@@ -303,12 +303,12 @@ describe('moving between modes', () => {
     setMode('local');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
     const { queryClient } = renderPortal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('link', { name: /^Account:/ })).toHaveTextContent('On this device');
+    expect(await screen.findByRole('link', { name: 'You · Personal' })).toBeInTheDocument();
     queryClient.setQueryData(['p', 'device-profile', 'payments'], { items: [] });
 
     otherTabSets('remote');
 
-    await waitFor(() => expect(screen.getByRole('link', { name: /^Account:/ })).toHaveTextContent('Nour Haddad'));
+    await waitFor(() => expect(screen.getByRole('link', { name: 'You · Haddad & Partners' })).toBeInTheDocument());
     expect(queryClient.getQueryData(['p', 'device-profile', 'payments'])).toBeUndefined();
   });
 
@@ -316,11 +316,11 @@ describe('moving between modes', () => {
     setMode('remote');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
     renderPortal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('link', { name: /^Account:/ })).toHaveTextContent('Nour Haddad');
+    expect(await screen.findByRole('link', { name: 'You · Haddad & Partners' })).toBeInTheDocument();
 
     otherTabSets('local');
 
-    await waitFor(() => expect(screen.getByRole('link', { name: /^Account:/ })).toHaveTextContent('On this device'));
+    await waitFor(() => expect(screen.getByRole('link', { name: 'You · Personal' })).toBeInTheDocument());
     expect(screen.queryByText('Nour Haddad')).toBeNull();
   });
 

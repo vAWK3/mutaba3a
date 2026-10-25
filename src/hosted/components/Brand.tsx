@@ -9,7 +9,7 @@ const PAGE_MARK_SIZE = 40;
 
 /**
  * The portal's lockup: the shared Brand v2 Wordmark with the portal's styles (MUT-104), naming the
- * product as the active language writes it, MTB3A or متابعة (MUT-402). The sidebar passes its own size.
+ * product as the active language writes it, MTB3A or متابعة (MUT-402). You › App passes its own size (MUT-426 D3).
  */
 export function Wordmark({ className = '', markSize = PAGE_MARK_SIZE }: { className?: string; markSize?: number }) {
   const { language } = useLanguage();

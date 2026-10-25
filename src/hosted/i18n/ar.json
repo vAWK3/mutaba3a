@@ -232,7 +232,6 @@
     "shell": {
       "sections": "الأقسام",
       "switcher": {
-        "label": "تبديل الملف",
         "hosted": "مستضاف",
         "sourceMalafat": "الإيرادات تُسجَّل في «ملفات»",
         "sourceExpensesOnly": "المصروفات فقط",
@@ -240,7 +239,7 @@
         "newProfile": "+ ملف جديد",
         "manage": "إدارة الملفات"
       },
-      "account": "الحساب",
+      "island": "أنت · {name}",
       "language": "اللغة"
     },
     "destinations": {
@@ -1240,9 +1239,7 @@
       "trialBanner": {
         "label": "تجربتك المجانية",
         "addCard": "أضف بطاقة",
-        "hide": "إخفاء لمدة 3 أيام",
-        "endsOn": "تنتهي في {date}، ولن يُخصم منك شيء قبل ذلك.",
-        "endsSoon": "تنتهي في {date}."
+        "hide": "إخفاء لمدة 3 أيام"
       },
       "gate": {
         "label": "خطتك",

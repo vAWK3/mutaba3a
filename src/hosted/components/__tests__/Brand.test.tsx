@@ -35,13 +35,13 @@ describe('Wordmark (MUT-104, MUT-402)', () => {
     expect(screen.queryByRole('img', { name: 'MTB3A' })).toBeNull();
   });
 
-  it('heads sign-in, setup, terms-update and the boot screens at a 40px mark, and takes the sidebar’s 32 (design D3)', () => {
+  it('heads sign-in, setup, terms-update and the boot screens at a 40px mark, and takes You › App’s 32 (design D3, MUT-426)', () => {
     const { container, unmount } = renderWordmark('en');
     expect(container.querySelector('.hp-wordmark img')).toHaveAttribute('width', '40');
     unmount();
-    const sidebar = renderWordmark('en', { className: 'hp-side-wordmark', markSize: 32 }).container;
-    expect(sidebar.querySelector('.hp-wordmark')).toHaveClass('hp-side-wordmark');
-    expect(sidebar.querySelector('.hp-wordmark img')).toHaveAttribute('width', '32');
+    const app = renderWordmark('en', { className: 'hp-you-wordmark', markSize: 32 }).container;
+    expect(app.querySelector('.hp-wordmark')).toHaveClass('hp-you-wordmark');
+    expect(app.querySelector('.hp-wordmark img')).toHaveAttribute('width', '32');
   });
 
   it('leads with the decorative Brand v2 mark for the active theme', () => {

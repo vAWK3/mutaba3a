@@ -39,7 +39,7 @@ function lit(nav: HTMLElement) {
 
 const main = () => screen.getByRole('main');
 
-describe('the shell (interim sidebar)', () => {
+describe('the shell (the floating pill, MUT-426)', () => {
   it('shows exactly the four destinations, in order', async () => {
     portal(`/p/${ORG_A}`);
     const nav = await sections();
@@ -56,7 +56,7 @@ describe('the shell (interim sidebar)', () => {
     expect(lit(await sections())).toEqual([destination]);
   });
 
-  it('keeps Reports one link away until its corner icon (MUT-426), lighting no destination there', async () => {
+  it('opens Reports from its corner icon (MUT-426), lighting no destination there', async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
     const nav = await sections();
     await user.click(screen.getByRole('link', { name: 'Reports' }));

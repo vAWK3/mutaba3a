@@ -34,6 +34,13 @@
   --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
   --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
   --m-mark-peach: oklch(0.8 0.11 55); /* #F5AB77 */
+  /* The profile ring colours (MUT-426 D2): six brand hues, each ≥ 3:1 on canvas and surface in its theme. */
+  --m-ring1: oklch(0.55 0.141 295.2); /* #795DBA */
+  --m-ring2: oklch(0.57 0.1 166.2); /* #2E8A6A */
+  --m-ring3: oklch(0.567 0.155 14.2); /* #C0475A */
+  --m-ring4: oklch(0.566 0.134 49.6); /* #B35A1F */
+  --m-ring5: oklch(0.542 0.107 86.7); /* #8A6A0E */
+  --m-ring6: oklch(0.551 0.143 260.6); /* #3E6FC4 */
 
   --m-font-display: "Thmanyah Serif Display", serif;
   --m-font-body: "Thmanyah Sans", system-ui, sans-serif;
@@ -103,6 +110,12 @@
     --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
     --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
     --m-mark-peach: oklch(0.82 0.11 60); /* #F9B379 */
+    --m-ring1: oklch(0.78 0.111 294.9); /* #BCA9F7 */
+    --m-ring2: oklch(0.75 0.11 165.3); /* #62C49D */
+    --m-ring3: oklch(0.721 0.12 11.9); /* #E58491 */
+    --m-ring4: oklch(0.78 0.11 54.9); /* #EEA471 */
+    --m-ring5: oklch(0.834 0.121 93.5); /* #E3C766 */
+    --m-ring6: oklch(0.758 0.107 263.4); /* #8DB0F5 */
     --m-shadow-tint: oklch(0.15 0.03 300);
     --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
     --m-shadow-primary: none;
@@ -136,6 +149,12 @@
   --m-mark-lavender: oklch(0.78 0.1 295); /* #BCABF1 */
   --m-mark-rose: oklch(0.78 0.11 10); /* #F499A7 */
   --m-mark-peach: oklch(0.82 0.11 60); /* #F9B379 */
+  --m-ring1: oklch(0.78 0.111 294.9); /* #BCA9F7 */
+  --m-ring2: oklch(0.75 0.11 165.3); /* #62C49D */
+  --m-ring3: oklch(0.721 0.12 11.9); /* #E58491 */
+  --m-ring4: oklch(0.78 0.11 54.9); /* #EEA471 */
+  --m-ring5: oklch(0.834 0.121 93.5); /* #E3C766 */
+  --m-ring6: oklch(0.758 0.107 263.4); /* #8DB0F5 */
   --m-shadow-tint: oklch(0.15 0.03 300);
   --m-shadow-card: 0 1px 2px color-mix(in oklch, var(--m-shadow-tint) 40%, transparent), 0 12px 40px color-mix(in oklch, var(--m-shadow-tint) 35%, transparent);
   --m-shadow-primary: none;

@@ -228,7 +228,6 @@
     "shell": {
       "sections": "Sections",
       "switcher": {
-        "label": "Switch profile",
         "hosted": "Hosted",
         "sourceMalafat": "Income recorded by Malafat",
         "sourceExpensesOnly": "Expenses only",
@@ -236,7 +235,7 @@
         "newProfile": "+ New profile",
         "manage": "Manage profiles"
       },
-      "account": "Account",
+      "island": "You · {name}",
       "language": "Language"
     },
     "destinations": {
@@ -1188,9 +1187,7 @@
       "trialBanner": {
         "label": "Your free trial",
         "addCard": "Add a card",
-        "hide": "Hide for 3 days",
-        "endsOn": "Ends on {date}. You won't be charged until then.",
-        "endsSoon": "Ends on {date}."
+        "hide": "Hide for 3 days"
       },
       "gate": {
         "label": "Your plan",

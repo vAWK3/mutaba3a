@@ -150,11 +150,12 @@ describe('the first-run trial step (AC1, AC2, AC4)', () => {
     expect(await within(dialog).findByRole('heading', { name: '10 days left in your free trial' })).toBeInTheDocument();
   });
 
-  it('inside the last 48 hours the banner only says when the trial ends (a card added now is charged at once)', async () => {
+  it('inside the last 48 hours the banner promises nothing about the charge (a card added now is charged at once)', async () => {
     portal(`/p/${ORG_B}`, { prompt: { welcomedAt: iso(-1), welcomeAnswer: 'skipped', bannerSnoozedUntil: null }, billing: trial(1.5) });
     const banner = await screen.findByRole('region', { name: 'Your free trial' });
-    expect(within(banner).getByText(/^Ends on [^.]+\.$/)).toBeInTheDocument();
-    expect(within(banner).queryByText(/won't be charged/)).not.toBeInTheDocument();
+    // MUT-426 D4: the end date left the line for You › Account's Billing row
+    expect(banner).toHaveTextContent(/2 days left/);
+    expect(banner).not.toHaveTextContent(/won't be charged|Ends on/);
   });
 
   it('opens in Arabic', async () => {
@@ -176,6 +177,16 @@ describe('the Home trial banner (AC3)', () => {
     await user.click(await within(banner).findByRole('button', { name: 'Add a card' }));
     expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true&step=subscribe`);
     expect(trackPortal).toHaveBeenCalledWith('trial_card_prompt_accepted', { prompt: 'banner' });
+  });
+
+  it('is one quiet line: the days left, Add a card and Hide, with no icon and no end date (MUT-426 D4)', async () => {
+    portal(`/p/${ORG_B}`, { prompt: answered, billing: trial(9.5) });
+    const banner = await screen.findByRole('region', { name: 'Your free trial' });
+    await within(banner).findByRole('button', { name: 'Add a card' });
+    expect(banner.querySelectorAll('p')).toHaveLength(1);
+    expect(banner.querySelector('svg')).toBeNull();
+    expect(banner).not.toHaveTextContent(/Ends on/);
+    expect(banner.textContent).toBe('10 days left in your free trial · Add a card · Hide for 3 days');
   });
 
   it('Hide for 3 days hides it and stores the snooze', async () => {

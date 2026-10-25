@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createPortalQueryClient } from '../queryClient';
 import { createMemoryHistory } from '@tanstack/react-router';
@@ -130,4 +130,17 @@ export function renderPortal(path: string) {
 /** Current path + search, as the router sees it. */
 export function locationOf(router: ReturnType<typeof createPortalRouter>): string {
   return router.state.location.href;
+}
+
+/**
+ * MUT-426: the You island opens You › Profiles (it replaced MUT-425's two sidebar links); the other parts are a tab
+ * away. Already on You, it only picks the part: a second press on the island would leave the page.
+ */
+export async function openYou(user: ReturnType<typeof renderPortal>['user'], part: 'profiles' | 'account' | 'app' = 'profiles') {
+  const island = await screen.findByRole('link', { name: /^You/ });
+  if (island.getAttribute('aria-current') !== 'page') await user.click(island);
+  await screen.findByRole('navigation', { name: 'You' });
+  if (part === 'profiles') await user.click(screen.getByRole('link', { name: 'Profiles' }));
+  if (part === 'account') await user.click(screen.getByRole('link', { name: 'Account' }));
+  if (part === 'app') await user.click(screen.getByRole('link', { name: 'App' }));
 }

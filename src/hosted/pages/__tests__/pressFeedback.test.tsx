@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, fail, me, ok, profile, renderPortal, stubApi } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, fail, me, ok, profile, renderPortal, stubApi, openYou } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { CUSTOMERS, PROJECTS, page, payment } from './fixtures';
 
@@ -37,8 +37,8 @@ describe('every portal button presses (L10)', () => {
 
     expect(unpressable()).toEqual([]);
 
-    // MUT-425: the account menu and the profile switcher became the You page
-    await user.click(screen.getByRole('link', { name: /^account/i }));
+    // MUT-425: the account menu and the profile switcher became the You page; MUT-426's island opens it
+    await openYou(user, 'account');
     expect(await screen.findByRole('button', { name: /^Sign out/ })).toBeInTheDocument();
     expect(unpressable()).toEqual([]);
 

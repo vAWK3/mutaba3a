@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { ORG_A, ORG_B, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi } from '../../__tests__/harness';
+import { ORG_A, ORG_B, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi, openYou } from '../../__tests__/harness';
 import { LocalRecordsFileRefused } from '../../session/localBackendContract';
 import type { ExportHostedRecordsOptions } from '../../session/recordsExportContract';
 
@@ -28,7 +28,7 @@ afterEach(() => vi.useRealTimers());
 describe('Your data, signed in (MUT-325)', () => {
   it('opens from You › Account (MUT-425) through the URL, every profile ticked, and says it is an export, not a backup', async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
-    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await openYou(user, 'account');
     await user.click(await screen.findByRole('button', { name: /^Your data/ }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Your data' });

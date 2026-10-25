@@ -107,6 +107,30 @@
     "markPeach": {
       "oklch": "oklch(0.8 0.11 55)",
       "hex": "#F5AB77"
+    },
+    "ring1": {
+      "oklch": "oklch(0.55 0.141 295.2)",
+      "hex": "#795DBA"
+    },
+    "ring2": {
+      "oklch": "oklch(0.57 0.1 166.2)",
+      "hex": "#2E8A6A"
+    },
+    "ring3": {
+      "oklch": "oklch(0.567 0.155 14.2)",
+      "hex": "#C0475A"
+    },
+    "ring4": {
+      "oklch": "oklch(0.566 0.134 49.6)",
+      "hex": "#B35A1F"
+    },
+    "ring5": {
+      "oklch": "oklch(0.542 0.107 86.7)",
+      "hex": "#8A6A0E"
+    },
+    "ring6": {
+      "oklch": "oklch(0.551 0.143 260.6)",
+      "hex": "#3E6FC4"
     }
   },
   "font": {
@@ -322,6 +346,30 @@
     "markPeach": {
       "oklch": "oklch(0.82 0.11 60)",
       "hex": "#F9B379"
+    },
+    "ring1": {
+      "oklch": "oklch(0.78 0.111 294.9)",
+      "hex": "#BCA9F7"
+    },
+    "ring2": {
+      "oklch": "oklch(0.75 0.11 165.3)",
+      "hex": "#62C49D"
+    },
+    "ring3": {
+      "oklch": "oklch(0.721 0.12 11.9)",
+      "hex": "#E58491"
+    },
+    "ring4": {
+      "oklch": "oklch(0.78 0.11 54.9)",
+      "hex": "#EEA471"
+    },
+    "ring5": {
+      "oklch": "oklch(0.834 0.121 93.5)",
+      "hex": "#E3C766"
+    },
+    "ring6": {
+      "oklch": "oklch(0.758 0.107 263.4)",
+      "hex": "#8DB0F5"
     }
   }
 }

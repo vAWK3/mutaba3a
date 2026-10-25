@@ -27,6 +27,7 @@ import { ExpenseGroupsPage } from './pages/views/ExpenseGroupsList';
 import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
 import { YouPage } from './pages/you/YouPage';
 import { HostedShell } from './shell/HostedShell';
+import { supportsViewTransitionTypes, viewTransitionOption } from './shell/pageMotion';
 import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
 import { useProfile } from './session/me';
 
@@ -201,7 +202,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
-  /** Expenses › Groups (MUT-268, 1A): a tab inside Expenses, so the sidebar's Expenses stays lit. */
+  /** Expenses › Groups (MUT-268, 1A): a tab inside Expenses, so the pill's Spent stays lit. */
   const groupsRoute = createRoute({
     getParentRoute: () => profileRoute,
     ...PAGE_CRASH,
@@ -299,6 +300,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     history,
     context: { queryClient },
     defaultPreload: false,
+    // MUT-426 (eng D6): pages slide by depth as typed view transitions; unset where types aren't supported
+    defaultViewTransition: viewTransitionOption(supportsViewTransitionTypes(globalThis.CSS?.supports?.bind(globalThis.CSS))),
     // MUT-149 (eng R2): the router catches render errors itself, so it reports them, and shows our translated screen
     defaultErrorComponent: FrameCrash,
     defaultOnCatch: (error, info) => reportBoundaryError(error, info?.componentStack ?? undefined),

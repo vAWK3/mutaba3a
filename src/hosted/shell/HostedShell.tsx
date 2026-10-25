@@ -4,7 +4,7 @@ import { useT } from '../../lib/i18n/core';
 import { syncPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
-import { Wordmark } from '../components/Brand';
+import { ChartIcon } from '../components/Icons';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { billingGateOf } from '../data/trialPrompt';
 import { useMe } from '../session/me';
@@ -13,30 +13,29 @@ import { AccountDrawers } from './AccountDrawers';
 import { DESTINATIONS, destinationOf, destinationPath } from './destinations';
 import { ProfileDrawers } from './ProfileDrawers';
 import { TrialWelcomeOpener } from './TrialWelcomeOpener';
-import { YouLinks } from './YouLinks';
+import { YouIsland } from './YouIsland';
 
 /**
- * `HostedShell` (hosted-portal.md §7.1): wordmark, the open profile's link to
- * the You page, the four destinations (MUT-424, ADR-192: Owed, Paid, Spent,
- * Clients; everything else one level in), Reports until its corner icon
- * (MUT-426), the avatar's link to the You page (MUT-425: both were menus),
- * and the page. There is still no "+ Add" menu: the one create action
- * in the portal is the expense drawer, opened from the Expenses list itself.
- * One DOM for every width; CSS turns the sidebar into a top bar on a phone,
- * so nothing is duplicated for assistive tech. Signed in or out, the sections
- * are the same (MUT-287, epic MUT-284 decision 4).
+ * `HostedShell` (hosted-portal.md §7.1, MUT-426): no sidebar and no header bar. Three glass objects float over the
+ * page: the Reports corner icon (MUT-424 eng D2), the pill with the four destinations (MUT-424, ADR-192: Owed, Paid,
+ * Spent, Clients; everything else one level in) and the You island (the profile, and the way to the You page). DOM
+ * order is their reading order on both layouts, so the keyboard meets Reports, the tabs, then the island. One DOM for
+ * every width: CSS puts the pill at the top on a desktop and at the bottom on a phone. The page still scrolls the
+ * document, and reserves the chrome's space, so nothing is hidden at rest. There is no "+ Add" menu: the one create
+ * action in the portal is the expense drawer, opened from the Expenses list itself. Signed in or out, the sections are
+ * the same (MUT-287, epic MUT-284 decision 4).
  */
-
-/** The sidebar's lockup: the Arabic name beside it at 16px (design D3). */
-const SIDEBAR_MARK_SIZE = 32;
 
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
   const local = useIsLocalMode();
+  const pathname = useLocation({ select: (location) => location.pathname });
   // MUT-424 (E6): one map lights the destination, so /receivables lights Owed without being nested under it
-  const lit = destinationOf(useLocation({ select: (location) => location.pathname }));
+  const lit = destinationOf(pathname);
+  // MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between.
+  const sections = profile !== null && billingGateOf(me, profile) !== 'locked';
   // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
     if (!local) void syncPortalUsage(userId);
@@ -48,14 +47,22 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
 
   return (
     <div className="hp-shell">
-      <aside className="hp-side">
-        <Wordmark className="hp-side-wordmark" markSize={SIDEBAR_MARK_SIZE} />
-        {/* MUT-425: the open profile's name opens You › Profiles (was the profile switcher) */}
-        <YouLinks profile={profile} position="top" />
-        {/* MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between. */}
-        {profile && billingGateOf(me, profile) !== 'locked' && (
-          <>
-            <nav className="hp-nav" aria-label={t('hosted.shell.sections')}>
+      <div className="hp-chrome">
+        <div className="hp-fade hp-fade-top" />
+        <div className="hp-fade hp-fade-bottom" />
+        {sections && (
+          <Link
+            to={`/p/${profile.id}/reports`}
+            className="hp-reports hp-glass press"
+            aria-label={t('hosted.reports.title')}
+            aria-current={pathname === `/p/${profile.id}/reports` ? 'page' : undefined}
+          >
+            <ChartIcon />
+          </Link>
+        )}
+        <div className="hp-chrome-bar">
+          {sections && (
+            <nav className="hp-tabs hp-glass" aria-label={t('hosted.shell.sections')}>
               {DESTINATIONS.map((destination) => (
                 <Link
                   key={destination.key}
@@ -63,25 +70,18 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
                   // TanStack adds aria-current to any active link; exact keeps that to the destination's own page,
                   // where `lit` agrees, so Owed's bare /p/:id isn't lit on every page under it.
                   activeOptions={{ exact: true, includeSearch: false }}
-                  className={lit === destination.key ? 'hp-nav-on' : undefined}
+                  className={lit === destination.key ? 'hp-tab-on' : undefined}
                   aria-current={lit === destination.key ? 'page' : undefined}
                 >
                   {t(`hosted.destinations.${destination.key}`)}
                 </Link>
               ))}
             </nav>
-            {/* MUT-175 (X2): one link away until MUT-426 moves Reports to the shell's corner icon (eng review R2) */}
-            <div className="hp-nav">
-              <Link to={`/p/${profile.id}/reports`} activeProps={{ className: 'hp-nav-on', 'aria-current': 'page' }}>
-                {t('hosted.reports.title')}
-              </Link>
-            </div>
-          </>
-        )}
-        <div className="hp-spacer" />
-        {/* MUT-425: the avatar opens You › Account (was the account menu) */}
-        <YouLinks profile={profile} position="bottom" />
-      </aside>
+          )}
+          {/* MUT-425: the You page holds everything the profile switcher and the account menu did */}
+          <YouIsland profile={profile} />
+        </div>
+      </div>
       <main className="hp-page">
         {!local && <UsagePrompt />}
         {children}

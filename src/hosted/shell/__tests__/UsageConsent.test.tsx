@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, me, ok, renderPortal, stubApi } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, me, ok, renderPortal, stubApi, openYou } from '../../__tests__/harness';
 import { USAGE_RECORD_KEY, resetPortalUsageForTests } from '../../analytics/portalAnalytics';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 
@@ -40,10 +40,9 @@ const USER_ID = me().user.id;
 const captured = () => sdk.capture.mock.calls.map(([event]) => event);
 const region = () => screen.queryByRole('region', { name: 'Share anonymous usage?' });
 
-/** MUT-425: the switch lives on You › App (was the account menu); the avatar link opens You › Account. */
+/** MUT-425: the switch lives on You › App (was the account menu); the You island opens the page (MUT-426). */
 async function openApp(user: ReturnType<typeof renderPortal>['user']) {
-  await user.click(await screen.findByRole('link', { name: /^Account:/ }));
-  await user.click(await screen.findByRole('link', { name: 'App' }));
+  await openYou(user, 'app');
   await screen.findByRole('group', { name: 'Language' });
 }
 
@@ -81,7 +80,7 @@ describe('Usage prompt (MUT-155)', () => {
     expect(region()).toBeNull();
     unmount();
     renderPortal(`/p/${ORG_A}`);
-    await screen.findByRole('link', { name: /^Account:/ });
+    await screen.findByRole('link', { name: /^You/ });
     expect(region()).toBeNull();
     expect(sdk.init).not.toHaveBeenCalled();
   });
@@ -135,7 +134,7 @@ describe('Sign-out (MUT-155, README rule 6)', () => {
     localStorage.setItem('ph_phc_test_posthog', '{"distinct_id":"x"}');
     const { user } = renderPortal(`/p/${ORG_A}`);
     await waitFor(() => expect(captured()).toEqual(['portal_opened']));
-    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await openYou(user, 'account');
     await user.click(await screen.findByRole('button', { name: /^Sign out/ }));
     await waitFor(() => expect(localStorage.getItem(USAGE_RECORD_KEY)).toBeNull());
     expect(localStorage.getItem('ph_phc_test_posthog')).toBeNull();

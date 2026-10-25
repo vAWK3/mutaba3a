@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
+import { ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, openYou } from '../../__tests__/harness';
 import type { BillingEntitlement, BillingOverview } from '../../api/client';
 import { stripeNavigation } from '../../data/billingQueries';
 
@@ -51,7 +51,7 @@ afterEach(() => vi.useRealTimers());
 describe('Billing drawer: the status view (DR1)', () => {
   it('opens from You › Account (MUT-425) through the URL: trial status first, then Subscribe, then both prices and the rules', async () => {
     const { user, router } = portal(`/p/${ORG_B}`);
-    await user.click(await screen.findByRole('link', { name: /^Account:/ }));
+    await openYou(user, 'account');
     await user.click(await screen.findByRole('button', { name: /^Billing/ }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });

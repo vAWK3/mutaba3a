@@ -104,16 +104,16 @@ describe('the You page (MUT-425)', () => {
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/expenses`));
     });
 
-    it('the sidebar links carry the section the person is in', async () => {
+    it('the island carries the section the person is in, and the part tabs pass it on (MUT-426, C3)', async () => {
       const { user, router } = portal(`/p/${ORG_B}/payments`);
-      await user.click(await screen.findByRole('link', { name: 'Switch profile: Nour Studio' }));
+      await user.click(await screen.findByRole('link', { name: 'You · Nour Studio' }));
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/you?from=payments`));
-      // On the You page they pass the kept section on (outside voice O1)
-      await user.click(screen.getByRole('link', { name: /Account: Nour Haddad/ }));
+      // On the You page the part tabs pass the kept section on (outside voice O1)
+      await user.click(screen.getByRole('link', { name: 'Account' }));
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/you/account?from=payments`));
-      // One current page in the sidebar: the avatar's, not the profile name's too (review)
-      expect(screen.getByRole('link', { name: /Account: Nour Haddad/ })).toHaveAttribute('aria-current', 'page');
-      expect(screen.getByRole('link', { name: 'Switch profile: Nour Studio' })).not.toHaveAttribute('aria-current');
+      // One current part, and the island lit while on You
+      expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'You · Nour Studio' })).toHaveAttribute('aria-current', 'page');
     });
   });
 
@@ -141,6 +141,12 @@ describe('the You page (MUT-425)', () => {
   });
 
   describe('App', () => {
+    it('heads App with the product wordmark, since the chrome has none (MUT-426 D3)', async () => {
+      portal(`/p/${ORG_A}/you/app`);
+      const main = await screen.findByRole('main');
+      expect(await within(main).findByRole('img', { name: 'MTB3A' })).toBeInTheDocument();
+    });
+
     it('has Language, then Terms in a new tab and the phone apps last', async () => {
       vi.stubGlobal('__TERMS_URL__', TERMS_URL);
       portal(`/p/${ORG_A}/you/app`);

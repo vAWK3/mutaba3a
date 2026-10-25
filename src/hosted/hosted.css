@@ -6,9 +6,30 @@
    ============================================ */
 
 :root {
-  --hp-sidebar-width: 240px;
   --hp-card-width: 360px;
   --hp-gutter: var(--space-4);
+  /* MUT-426: the floating chrome. The page reserves its space, so at rest nothing sits under it. */
+  --hp-chrome-gap: var(--space-4);
+  --hp-chrome-object: 44px;
+  --hp-chrome-top: calc(var(--hp-chrome-gap) + var(--hp-chrome-object) + var(--space-6));
+  --hp-chrome-bottom: 0px;
+  --hp-glass-bg: color-mix(in oklab, var(--surface) 74%, transparent);
+  --hp-glass-edge: color-mix(in oklab, var(--m-surface) 70%, transparent);
+  --hp-lift: 0 8px 30px color-mix(in oklab, var(--m-shadow-tint) 10%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 6%, transparent);
+  /* Page motion (D6): the nav duration and spring; reduced motion zeroes those, so its fade keeps its own length
+     (REDUCED_MOTION_FADE_SECONDS in lib/motion/presets.ts) */
+  --hp-vt-fade: 220ms;
+  --hp-vt-reduced-fade: 150ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hp-glass-edge: color-mix(in oklab, var(--m-ink) 12%, transparent);
+    --hp-lift: 0 8px 30px color-mix(in oklab, var(--m-shadow-tint) 50%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
+  }
+}
+:root[data-theme="dark"] {
+  --hp-glass-edge: color-mix(in oklab, var(--m-ink) 12%, transparent);
+  --hp-lift: 0 8px 30px color-mix(in oklab, var(--m-shadow-tint) 50%, transparent), 0 1px 3px color-mix(in oklab, var(--m-shadow-tint) 40%, transparent);
 }
 
 /* ---------- Brand, language (waits use BrandLoader, MUT-206) ---------- */
@@ -80,17 +101,10 @@
 .hp-banner-info .hp-banner-icon { color: var(--accent-2); }
 .hp-banner-icon { flex: none; width: 16px; height: 16px; margin-top: var(--space-0-5); }
 
-/* MUT-418: the free trial's days left on Home, with Add a card and (outside the last 3 days) Hide for 3 days */
-.hp-trial-banner { align-items: flex-start; }
-.hp-trial-banner-body { display: grid; gap: var(--space-1); min-width: 0; flex: 1; }
-.hp-trial-banner-body p { margin: 0; }
-.hp-trial-banner-title { font-weight: var(--weight-medium); }
-.hp-trial-banner-note { color: var(--muted); font-size: var(--text-label); }
-.hp-trial-banner-hide { flex: none; white-space: nowrap; }
-@media (max-width: 480px) {
-  .hp-trial-banner { flex-wrap: wrap; }
-  .hp-trial-banner-hide { flex-basis: 100%; text-align: start; }
-}
+/* MUT-418: the free trial's days left on Home, with Add a card and (outside the last 3 days) Hide for 3 days.
+   MUT-426 (D4): one quiet line, no icon and no box. */
+.hp-trial-line { margin: 0 0 var(--space-4); }
+.hp-trial-line p { margin: 0; color: var(--muted); font-size: var(--text-label); }
 
 /* MUT-370: Home's "Add a passkey" suggestion, under the trial banner. The actions wrap under the text on a phone. */
 .hp-passkey-suggest .hp-passkey-icon { flex: none; color: var(--accent-2); }
@@ -251,42 +265,97 @@
 
 /* ---------- Shell ---------- */
 
-.hp-shell { display: grid; grid-template-columns: var(--hp-sidebar-width) 1fr; min-height: 100%; }
-.hp-side {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-2-5);
-  background: var(--surface);
-  border-inline-end: 1px solid var(--border);
-}
-.hp-side-wordmark { padding: var(--space-1) var(--space-2) var(--space-2-5); }
-.hp-spacer { flex: 1; }
-.hp-page { min-width: 0; padding: var(--space-6) var(--space-8) var(--space-12); }
+.hp-shell { min-height: 100%; }
+.hp-page { min-width: 0; padding: var(--hp-chrome-top) var(--space-8) var(--space-12); }
 
-/* MUT-425: the sidebar's two links into the You page, where the profile switcher and the account menu were. */
-.hp-you-link-profile,
-.hp-you-link-account {
+/* MUT-426: three glass objects over the page (epic MUT-423 round 4 variation 3). Fixed over a scrolling document, so
+   scroll restoration, scrollIntoView and the drawers work as before. Above the page and its popovers' anchors, below
+   .hp-popover (20), the toasts (50) and the drawers (200). Nothing in it has a border: glass, a lift and a fade. */
+.hp-chrome { position: fixed; inset: 0; z-index: 15; pointer-events: none; view-transition-name: hp-chrome; }
+.hp-chrome a { pointer-events: auto; }
+/* The fade where content meets the chrome: the document scrolls, so a band, not a mask (eng S1: the page's --bg). */
+.hp-fade { position: absolute; inset-inline: 0; pointer-events: none; }
+.hp-fade-top { top: 0; height: var(--hp-chrome-top); background: linear-gradient(to bottom, var(--bg), transparent); }
+.hp-fade-bottom { display: none; }
+.hp-glass {
+  background: var(--hp-glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--hp-lift), inset 0 1px 0 var(--hp-glass-edge);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .hp-glass { background: var(--surface); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .hp-glass { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* Desktop: Reports top start, the pill top centre, the island top end. The bar only groups them on a phone. */
+.hp-chrome-bar { display: contents; }
+.hp-reports {
+  position: absolute;
+  top: var(--hp-chrome-gap);
+  inset-inline-start: var(--hp-chrome-gap);
+  width: var(--hp-chrome-object);
+  height: var(--hp-chrome-object);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+}
+.hp-reports:hover { color: var(--text); }
+.hp-reports[aria-current='page'] { background: var(--text); color: var(--bg); }
+.hp-tabs {
+  position: absolute;
+  top: var(--hp-chrome-gap);
+  left: 50%;
+  translate: -50% 0;
   display: flex;
   align-items: center;
+  gap: var(--space-0-5);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
+}
+.hp-tabs a {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(var(--hp-chrome-object) - 2 * var(--space-1));
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--text-body);
+  white-space: nowrap;
+  transition: color var(--duration-toggle) var(--ease-spring), background-color var(--duration-toggle) var(--ease-spring);
+}
+.hp-tabs a:hover { color: var(--text); }
+.hp-tabs a.hp-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-island {
+  position: absolute;
+  top: var(--hp-chrome-gap);
+  inset-inline-end: var(--hp-chrome-gap);
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  width: 100%;
-  min-width: 0;
+  max-width: 240px;
+  min-height: var(--hp-chrome-object);
+  padding: var(--space-1);
+  border-radius: var(--radius-pill);
   color: var(--text);
   text-decoration: none;
-  border-radius: var(--radius-lg);
+  transition: background-color var(--duration-toggle) var(--ease-spring), color var(--duration-toggle) var(--ease-spring);
 }
-.hp-you-link-profile { background: var(--surface-2); border: 1px solid var(--border); padding: var(--space-2) var(--space-2-5); }
-.hp-you-link-name { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-you-link-account { padding: var(--space-2); }
-.hp-you-link-profile:hover, .hp-you-link-account:hover, .hp-you-link-account[aria-current='page'] { background: var(--surface-3); }
-.hp-you-link-profile:focus-visible, .hp-you-link-account:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.hp-you-link-who { min-width: 0; line-height: var(--leading-tight); display: flex; flex-direction: column; }
-.hp-you-link-who span, .hp-you-link-who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hp-you-link-who small { color: var(--muted); font-size: var(--text-label); }
+.hp-island-named { padding-inline-start: var(--space-3); }
+.hp-island-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
+/* D2: the profile's ring token comes inline (YouIsland ringColorOf); no profile, a neutral ring */
+.hp-island-avatar { width: 32px; height: 32px; margin: var(--space-0-5); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--hp-ring, var(--border-strong)); }
+.hp-island-on { background: var(--text); color: var(--bg); }
+.hp-island-on .hp-island-avatar { box-shadow: 0 0 0 2px var(--text), 0 0 0 4px var(--hp-ring, var(--border-strong)); }
+.hp-reports:focus-visible, .hp-tabs a:focus-visible, .hp-island:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media print {
+  .hp-chrome { display: none; }
+  .hp-page { padding: 0; }
+}
+
 .hp-chip {
   flex: none;
   font-size: var(--text-label);
@@ -309,12 +378,6 @@
 .hp-check { flex: none; width: 14px; color: var(--accent-text); font-weight: var(--weight-bold); }
 .hp-option-line { display: flex; gap: var(--space-2); align-items: center; min-width: 0; font-weight: var(--weight-medium); }
 .hp-option-sub { display: block; font-size: var(--text-label); color: var(--muted); }
-
-.hp-nav { display: flex; flex-direction: column; gap: var(--space-0-5); margin-top: var(--space-2-5); }
-.hp-nav a { padding: var(--space-1-5) var(--space-2-5); border-radius: var(--radius-md); color: var(--text-secondary); text-decoration: none; font-size: var(--text-body); }
-.hp-nav a:hover { background: var(--surface-hover); color: var(--text); }
-.hp-nav a.hp-nav-on { background: var(--surface-3); color: var(--text); font-weight: var(--weight-medium); }
-.hp-nav a:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .hp-avatar {
   flex: none;
@@ -450,34 +513,43 @@
 .hp-skeleton-strip span { flex: 1; max-width: 160px; height: 44px; border-radius: var(--radius-lg); background: var(--surface-3); }
 .hp-skeleton-row { height: 40px; border-radius: var(--radius-md); background: var(--surface-3); }
 
-/* ---------- Phone: the sidebar becomes a top bar ---------- */
+/* ---------- Phone: the pill and the island circle at the bottom, Reports at the top end ---------- */
 
 @media (max-width: 760px) {
-  /* minmax(0, …): the top bar's nav scrolls inside itself, so its full width must not set the column's (MUT-268: every page scrolled sideways at 375 px) */
-  .hp-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
-  .hp-side {
-    position: sticky;
-    height: auto;
-    z-index: 10;
-    flex-direction: row;
-    flex-wrap: wrap;
+  :root {
+    /* eng S2: the page reserves a top row for Reports and the bottom for the pill and the home indicator */
+    --hp-chrome-top: calc(var(--hp-chrome-gap) + var(--hp-chrome-object) + var(--space-2));
+    --hp-chrome-bottom: calc(var(--hp-chrome-gap) + var(--hp-chrome-object) + var(--space-6) + env(safe-area-inset-bottom));
+  }
+  .hp-page { padding: var(--hp-chrome-top) var(--hp-gutter) var(--hp-chrome-bottom); }
+  .hp-fade-bottom { display: block; bottom: 0; height: var(--hp-chrome-bottom); background: linear-gradient(to top, var(--bg), transparent); }
+  .hp-reports { inset-inline-start: auto; inset-inline-end: var(--hp-chrome-gap); }
+  .hp-chrome-bar {
+    position: absolute;
+    bottom: calc(var(--hp-chrome-gap) + env(safe-area-inset-bottom));
+    left: 50%;
+    translate: -50% 0;
+    display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2-5) var(--hp-gutter);
-    border-inline-end: 0;
-    border-bottom: 1px solid var(--border);
+    max-width: calc(100% - 2 * var(--hp-gutter));
   }
-  .hp-side-wordmark { display: none; }
-  .hp-you-link-profile { flex: 1; width: auto; }
-  .hp-spacer { display: none; }
-  .hp-you-link-who { display: none; }
-  .hp-you-link-account { width: auto; flex: none; padding: var(--space-1); }
-  .hp-nav { order: 3; flex-basis: 100%; flex-direction: row; overflow-x: auto; margin-top: 0; }
-  .hp-nav a { white-space: nowrap; }
-  .hp-page { padding: var(--hp-gutter) var(--hp-gutter) var(--space-12); }
+  .hp-tabs { position: static; translate: none; min-width: 0; }
+  .hp-tabs a { padding: 0 var(--space-2-5); font-size: var(--text-label); }
+  /* D5: ring only; the name stays in the island's label */
+  .hp-island { position: static; flex: none; padding: var(--space-1); }
+  .hp-island-name { display: none; }
+  /* D9: iOS misplaces fixed bottom bars around the keyboard, so the bar steps aside while a page field has focus */
+  .hp-shell:has(.hp-page :is(input, textarea, select):focus) .hp-chrome-bar { visibility: hidden; }
   .hp-stat { padding: 0 var(--space-3); }
   .hp-filter { min-width: calc(50% - var(--space-3)); }
-  .hp-toast { inset-inline: var(--hp-gutter); max-width: none; }
+  .hp-toast { inset-inline: var(--hp-gutter); inset-block-end: var(--hp-chrome-bottom); max-width: none; }
+}
+
+/* eng C2: Arabic's four words beside the island fit 320 px; labels tighten, never truncate */
+@media (max-width: 359px) {
+  .hp-chrome-bar { gap: var(--space-1); }
+  .hp-tabs a { padding: 0 var(--space-1-5); }
 }
 
 /* ---------- Income drawers (MUT-133) ---------- */
@@ -627,10 +699,10 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-section-tabs--segmented .hp-section-tab { flex: 1; min-width: 0; text-align: center; padding: var(--space-1-5) var(--space-2); margin: 0; border: 0; border-radius: var(--radius-md); font-size: var(--text-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hp-section-tabs--segmented .hp-section-tab.hp-section-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
 .hp-section-tabs--segmented .hp-section-tab:focus-visible { border-radius: var(--radius-md); }
-/* A 44px target on touch screens: the pill's tabs and the phone top bar's avatar link (MUT-425 review). */
+/* A 44px target on touch screens: the You page's segmented tabs (MUT-425 review) and the floating pill's (MUT-426). */
 @media (pointer: coarse) {
   .hp-section-tabs--segmented .hp-section-tab { min-height: 44px; display: grid; place-items: center; }
-  .hp-you-link-account { min-height: 44px; min-width: 44px; justify-content: center; }
+  :root { --hp-chrome-object: 52px; }
 }
 
 .hp-toast-action { margin-inline-start: auto; white-space: nowrap; }
@@ -984,3 +1056,50 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-close-download { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .hp-close-download p { margin: 0; flex: 1 1 12rem; }
 .hp-close-who { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+
+/* ---------- Page motion (MUT-426 eng D6) ----------
+   The router names each navigation's view-transition type (shell/pageMotion.ts): forward slides the new page in from
+   the inline end, back from the inline start, the You page grows from the island's corner, and anything else
+   cross-fades. RTL picks the mirrored keyframes. The chrome is its own transition group and does not move: its old
+   snapshot is dropped and the new one shows at once. Reduced motion cross-fades every type. */
+
+::view-transition-old(hp-chrome) { display: none; }
+::view-transition-new(hp-chrome) { animation: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:active-view-transition-type(forward)::view-transition-old(root) { animation: hp-vt-out-to-left var(--duration-nav) var(--ease-spring) both; }
+  :root:active-view-transition-type(forward)::view-transition-new(root) { animation: hp-vt-in-from-right var(--duration-nav) var(--ease-spring) both; }
+  :root:active-view-transition-type(back)::view-transition-old(root) { animation: hp-vt-out-to-right var(--duration-nav) var(--ease-spring) both; }
+  :root:active-view-transition-type(back)::view-transition-new(root) { animation: hp-vt-in-from-left var(--duration-nav) var(--ease-spring) both; }
+  :root[dir='rtl']:active-view-transition-type(forward)::view-transition-old(root) { animation-name: hp-vt-out-to-right; }
+  :root[dir='rtl']:active-view-transition-type(forward)::view-transition-new(root) { animation-name: hp-vt-in-from-left; }
+  :root[dir='rtl']:active-view-transition-type(back)::view-transition-old(root) { animation-name: hp-vt-out-to-left; }
+  :root[dir='rtl']:active-view-transition-type(back)::view-transition-new(root) { animation-name: hp-vt-in-from-right; }
+
+  :root:active-view-transition-type(island)::view-transition-old(root) { animation: hp-vt-fade-out var(--hp-vt-fade) ease-out both; }
+  :root:active-view-transition-type(island)::view-transition-new(root) { animation: hp-vt-grow-from-right var(--duration-nav) var(--ease-spring) both; transform-origin: top right; }
+  :root[dir='rtl']:active-view-transition-type(island)::view-transition-new(root) { animation-name: hp-vt-grow-from-left; transform-origin: top left; }
+
+  :root:active-view-transition-type(fade)::view-transition-old(root) { animation: hp-vt-fade-out var(--hp-vt-fade) ease-out both; }
+  :root:active-view-transition-type(fade)::view-transition-new(root) { animation: hp-vt-fade-in var(--hp-vt-fade) ease-out both; }
+}
+
+/* On a phone the island is at the bottom, so the You page grows from there */
+@media (prefers-reduced-motion: no-preference) and (max-width: 760px) {
+  :root:active-view-transition-type(island)::view-transition-new(root) { transform-origin: bottom right; }
+  :root[dir='rtl']:active-view-transition-type(island)::view-transition-new(root) { transform-origin: bottom left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:active-view-transition-type(forward, back, island, fade)::view-transition-old(root) { animation: hp-vt-fade-out var(--hp-vt-reduced-fade) ease-out both; }
+  :root:active-view-transition-type(forward, back, island, fade)::view-transition-new(root) { animation: hp-vt-fade-in var(--hp-vt-reduced-fade) ease-out both; }
+}
+
+@keyframes hp-vt-in-from-right { from { opacity: 0; transform: translateX(32px); } }
+@keyframes hp-vt-in-from-left { from { opacity: 0; transform: translateX(-32px); } }
+@keyframes hp-vt-out-to-left { to { opacity: 0; transform: translateX(-16px); } }
+@keyframes hp-vt-out-to-right { to { opacity: 0; transform: translateX(16px); } }
+@keyframes hp-vt-grow-from-right { from { opacity: 0; transform: scale(0.94) translateX(24px); } }
+@keyframes hp-vt-grow-from-left { from { opacity: 0; transform: scale(0.94) translateX(-24px); } }
+@keyframes hp-vt-fade-in { from { opacity: 0; } }
+@keyframes hp-vt-fade-out { to { opacity: 0; } }
