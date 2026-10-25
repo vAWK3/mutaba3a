@@ -1089,7 +1089,46 @@ Up to 30 minutes sketching a separate CIMD clients table; return with a recommen
 D) Defer
 Leave CIMD storage unresolved for now.
 
-State: pending
-Actual answer: unanswered
-Accepted scope: none
+State: approved
+Actual answer: A) Apply: rows with kind + fetch times (recommended), Basel "go" 2026-10-25 (accepting all listed recommendations)
+Accepted scope: oauth_clients.id text (mcl_… or the URL, capped at 2048), kind DCR|CIMD, metadataFetchedAt, metadataExpiresAt (cache headers, ≤ 24 h); CIMD clients upserted on first authorize, re-fetched when expired; replaces the in-memory cache.
 History: none
+
+### OV3–OV10: remaining outside-voice items (batched at Basel's request)
+Basel asked to stop the one-at-a-time questions ("this has been going on too long") and accepted all eight listed recommendations with "go" (2026-10-25). Each row is its own approved choice; option A = Apply in the four-option menu.
+
+| ID | Finding (outside voice #, severity) | Approved change (State: approved, answer: "go") |
+|---|---|---|
+| OV3 | 3, Medium: one live grant per (user, client) clashes with CIMD | Allow several live grants per client; no `replaced` revoke on re-consent; each grant listed separately in Connected apps |
+| OV4 | 4, Medium: no canonical `resource` form | Normalise before comparing: lowercase scheme and host, drop default port, strip one trailing slash, no fragment; tests for each variant |
+| OV5 | 5, Medium: deleting DCR clients strands connectors | Never delete a client that ever had a grant; GC only never-used clients after 30 d; grant → client FK `onDelete: Restrict` |
+| OV6 | 6, Medium: CIMD path unexercised | Live portal-selfservice spec gains a CIMD case (static metadata document served on loopback for the test); hand checks record which registration path Claude.ai and Claude Code used |
+| OV7 | 7, Medium: request may expire during sign-in | Authorization request lifetime 30 min (was 10) |
+| OV8 | 8, Low: /mcp refusals unpinned | `FEATURE_NOT_ENABLED` and closing refusals answer 403 with the JSON envelope and `WWW-Authenticate: Bearer error="invalid_token"`-free headers (no `scope`, no `insufficient_scope`), so clients don't loop into step-up; tests pin headers and body |
+| OV9 | 9, Low: SDK compatibility | Before building, confirm the pinned `@modelcontextprotocol/sdk` version works with zod 4.6.5 and exports `WebStandardStreamableHTTPServerTransport` (one zod copy in the lockfile); GET `/mcp` answers 405 in stateless JSON mode |
+| OV10 | 10, Low: AC7 coupling unstated | Stated decision: `features.revoke('agent_access')` calls the OAuth repository's `revokeAllForUser` inside the same store transaction (memory and Prisma); recorded in ADR-197 and PATTERNS |
+
+**Cross-model tension:** the outside voice and the native review agreed on the plan's direction; it found two High gaps the native review missed (OV1, OV2), both now fixed. No remaining disagreement.
+
+## Approved changes to the plan (consolidated; these override §1–§8 above)
+
+- **Structure (D1):** `server/src/oauth/` = `protocol.ts`, `trust.ts`, `service.ts`; `/oauth/authorize` errors redirect to `/connect/approve?error=<code>`; no server HTML.
+- **Registration (D2, D18, OV2):** DCR + CIMD; CIMD fetched with Malafat's SSRF guards; CIMD clients are rows in `oauth_clients` (`kind`, `metadataFetchedAt`, `metadataExpiresAt`); `client_id_metadata_document_supported: true`.
+- **Audience (D3, OV4):** `resource` stored on request, grant and tokens, normalised; mismatch → `invalid_target`; absent → default `<origin>/mcp`; `/mcp` checks audience.
+- **Issuer (D4):** `iss` on every authorize redirect; `authorization_response_iss_parameter_supported: true`.
+- **Scopes (D5):** advertise and default `read write`; ADR-197 records the deviation from minimal `scopes_supported`.
+- **Single use (D6):** conditional claims for codes and refresh tokens; race tests on memory and `test:db`.
+- **Rotation (D19, replaces D7's superseded state):** idempotent rotation with `OAUTH_DERIVE_KEY`; identical pair within 30 s; reuse after 30 s revokes the grant + Sentry warning.
+- **Loopback (D8):** any port on `127.0.0.1`/`[::1]`/`localhost`, exact scheme/host/path.
+- **Build (D9):** hand-rolled, no OAuth library. **Tools (D10):** none in 434.
+- **Revocation (D11, D12):** password change and operator revoke-sessions also revoke grants.
+- **Lifetimes (D13, OV7):** code 60 s, request **30 min**, access 1 h, refresh 45 d idle, grant 180 d absolute.
+- **Sentry (D14):** `captureMessage` for refresh reuse (warning) and forced revokes (info) only.
+- **UI (D15):** one You › Account "Connect Claude" drawer with URL, how-tos and Connected apps.
+- **Logs (D16):** redact only `code_verifier`, `access_token`, `refresh_token`, `client_secret`, `authorization_code`; OAuth routes never log bodies.
+- **Regression (D17):** named preserve/change assertions in seven existing suites.
+- **Grants (OV3):** several live grants per client. **Clients (OV5):** never delete a client that had a grant; FK Restrict.
+- **QA (OV6):** live CIMD case; hand checks record the registration path. **Refusals (OV8):** pinned 403 shape. **SDK (OV9):** compatibility check first; GET `/mcp` 405. **AC7 wiring (OV10):** same-transaction revoke, documented.
+- **Consent page (Q2):** buttons disabled while deciding; 409 → "already handled".
+
+Approval readiness: PASS — S1(D2), S2a(D3), S2b(D4), S3(D5), S4(D6), S5→OV1(D7→D19), S6(D8), P-D1(D9), P-D4(D10), P-D5a(D11), P-D5b(D12), P-D8(D13), P-D6(D14), P-D3(D15), Q1(D16), R1(D17), OV11(D18), OV2–OV10 (Basel "go", 2026-10-25).
