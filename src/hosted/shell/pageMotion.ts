@@ -15,6 +15,8 @@ export interface PageTransitionOption {
 }
 
 const PROFILE_SEGMENT = 'p';
+/** The shell's profile-less page (no profile yet), which the profile-less You returns to */
+const HOME_PATH = '/';
 const ID_INDEX = 2; // '' / 'p' / ':id' / …
 const REST_INDEX = 3;
 
@@ -49,7 +51,8 @@ export function pageMotionOf(prev: string | undefined, next: string): PageMotion
   if (prev === undefined || prev === next) return 'none';
   // The You island shows on every shell page, the no-profile one at `/` included
   if (isYouPath(next)) return isYouPath(prev) ? 'none' : 'island';
-  if (isYouPath(prev)) return 'back';
+  // Back to a shell page; sign-out and setup leave the shell, and never move
+  if (isYouPath(prev)) return inProfile(next) || next === HOME_PATH ? 'back' : 'none';
   // Sign-in, setup and the home redirect never move
   if (!inProfile(prev) || !inProfile(next)) return 'none';
   if (profileIdOf(prev) !== profileIdOf(next)) return 'fade';

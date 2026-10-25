@@ -15,7 +15,7 @@ import { useAccountDrawers } from '../shell/AccountDrawers';
  * MUT-418: the Home reminder while the person's free trial runs with no card: "N days left in your free trial · Add
  * a card". Hiding it lasts 3 days on every device (stored on the server); in the trial's last 3 days it can't be
  * hidden. "Add a card" opens Billing's Subscribe step, and only when a card can be taken (D7). Gone once Stripe pays.
- * MUT-426 (D4): one quiet line on Owed, with no icon and no box; the end date lives on You › Account's Billing row.
+ * MUT-426 (D4): one quiet line on Owed, with no icon and no box; the end date lives in the Billing drawer.
  */
 export function TrialBanner() {
   const me = useMe();
