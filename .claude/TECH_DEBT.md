@@ -18,7 +18,7 @@
 
 ## Open Debt
 
-### TD-251: The phone's bottom bar stepping aside for the keyboard is proven in Chromium, not on an iPhone
+### TD-252: The phone's bottom bar stepping aside for the keyboard is proven in Chromium, not on an iPhone
 **Status**: Open
 **Ticket**: MUT-426 (eng C1/D9)
 **Added**: 2026-10-25
@@ -2464,7 +2464,7 @@ empty option and list the profiles only), with a drawer test for each.
 ## Resolved Debt
 
 ### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
-**Status**: Resolved (2026-10-25, MUT-426: the You island replaced both links; `YouLinks.tsx` and its CSS are deleted, ADR-194)
+**Status**: Resolved (2026-10-25, MUT-426: the You island replaced both links; `YouLinks.tsx` and its CSS are deleted, ADR-195)
 **Ticket**: MUT-425 (eng D1/D2)
 **Added**: 2026-10-24
 **Priority**: Low (works and is tested; it is the old sidebar's shape)

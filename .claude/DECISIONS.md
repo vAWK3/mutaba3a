@@ -5204,7 +5204,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Turning the library on in production must be checked on staging first: open an image and a PDF receipt and confirm no CSP violation (runbook §6 deploy table).
 - Thumbnails are full-size originals (TD-250).
 - Filing onto an existing expense (MUT-389's `/file`) and deleting from the gallery are not in the portal yet.
-## ADR-194: The Portal's Chrome Floats Over the Page — the Pill, the You Island and Reports, With Depth-Driven View Transitions (MUT-426, epic MUT-423)
+## ADR-195: The Portal's Chrome Floats Over the Page — the Pill, the You Island and Reports, With Depth-Driven View Transitions (MUT-426, epic MUT-423)
 
 **Status:** Accepted (2026-10-25, MUT-426; plan `.claude/designs/mut-426-floating-shell-plan.md`, eng review D1–D9 answered by Basel). The last step of the MUT-423 shell (round 4 variation 3). Supersedes ADR-192 §6 (the interim Reports link) and the sidebar in `hosted-portal.md` §7.1.
 
@@ -5222,4 +5222,4 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - `YouLinks.tsx`, the sidebar's and phone top bar's CSS, `--hp-sidebar-width` and the keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn/endsSoon` are gone; `hosted.shell.island` is new. TD-236 is resolved.
 - Unit tests reach You through the harness's `openYou(user, part)`; QA through `qa/support/you.ts`'s `openYou` (the island, then the part tab).
-- The iOS keyboard behaviour is proven in Chromium only (TD-251).
+- The iOS keyboard behaviour is proven in Chromium only (TD-252).

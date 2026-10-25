@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-194)
+## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-195)
 
 **Why:** the last step of epic MUT-423. The sidebar took 240 px from every page and put a dashboard's chrome in front of one figure; the new shell is four words in a floating pill, one island for you and your books, and a Reports icon.
 
@@ -45,7 +45,7 @@
 - The You page's part tabs carry `back` beside `from`. QA `shell.navigate`, `shell.mtb3a-name`, `shell.switch-profile`, `you.*`, `profiles.*`, `session`, `local-mode` follow the island.
 
 ### Removed
-- `shell/YouLinks.tsx`, the sidebar/top-bar CSS and `--hp-sidebar-width`; keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn`, `.endsSoon`. TD-236 resolved; TD-251 opened.
+- `shell/YouLinks.tsx`, the sidebar/top-bar CSS and `--hp-sidebar-width`; keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn`, `.endsSoon`. TD-236 resolved; TD-252 opened.
 
 ### Technical
 - **Files:** `src/hosted/shell/{HostedShell,YouIsland}.tsx`, `src/hosted/shell/{pageMotion,youRoutes}.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `hosted.html`, `src/hosted/components/{TrialBanner,Icons,Brand}.tsx`, `src/hosted/pages/you/{YouPage,YouApp}.tsx`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/{shell,billing,you,profiles}.yaml`, `qa/specs/portal/*.spec.ts`, `qa/support/you.ts`.

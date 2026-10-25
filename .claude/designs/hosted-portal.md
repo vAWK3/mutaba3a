@@ -253,7 +253,7 @@ Tests generated from the table (MUT-39):
 
 ### 7.1 Shell, routes, state
 
-- **`HostedShell`:** no sidebar or header bar (MUT-426, ADR-194). Three glass objects float over the page: the Reports corner icon, the pill with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-192) and the You island (the profile's name and your avatar ringed in its colour). Desktop: Reports top start, pill top centre, island top end; phone: pill and island circle at the bottom, Reports top end. Pages slide by depth (`shell/pageMotion.ts`, router view transitions). Everything else sits one level below a destination, at the URL it always had:
+- **`HostedShell`:** no sidebar or header bar (MUT-426, ADR-195). Three glass objects float over the page: the Reports corner icon, the pill with the four destinations **Owed · Paid · Spent · Clients** (MUT-424, ADR-192) and the You island (the profile's name and your avatar ringed in its colour). Desktop: Reports top start, pill top centre, island top end; phone: pill and island circle at the bottom, Reports top end. Pages slide by depth (`shell/pageMotion.ts`, router view transitions). Everything else sits one level below a destination, at the URL it always had:
 
   | Destination | Its page | One level in |
   |---|---|---|
