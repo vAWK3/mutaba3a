@@ -103,6 +103,11 @@ describe('the release checks resolve hosts for their own environment (MUT-347)',
     30_000,
   );
 
+  it('a rollback checks the terms its commit names, not the working tree’s', () => {
+    const rollbackSh = readFileSync(join(ROOT, 'server/scripts/lib/rollback.sh'), 'utf8');
+    expect(rollbackSh).toContain('MUTABA3A_ENVIRONMENT="${ENVIRONMENT}" npm --prefix "${SERVER_DIR}" run --silent terms:check-live -- --commit "${commit}"');
+  });
+
   it('deploy.sh and the server preflight pass their ENVIRONMENT to both checks', () => {
     const deploySh = readFileSync(join(ROOT, 'server/scripts/deploy.sh'), 'utf8');
     const preflight = readFileSync(join(ROOT, 'scripts/preflight.sh'), 'utf8');
