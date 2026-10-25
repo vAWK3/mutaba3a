@@ -301,6 +301,8 @@ export interface ProfileDrawerSearch {
   passkeys?: true;
   /** MUT-415: Passkeys opened as the review after a password change or a recovery (`?passkeys=true&review=…`). */
   review?: 'password' | 'recovery';
+  /** MUT-434: You › Account › Connect Claude (signed in, with agent_access). */
+  connectClaude?: true;
   /**
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
@@ -311,7 +313,7 @@ export interface ProfileDrawerSearch {
   /** MUT-362: back from Stripe's Customer Portal (its return_url), where a change may not be mirrored yet. */
   portal?: 'returned';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'step', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'step', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -326,6 +328,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     closeAccount: flag(raw.closeAccount),
     passkeys: flag(raw.passkeys),
     review: raw.review === 'password' || raw.review === 'recovery' ? raw.review : undefined,
+    connectClaude: flag(raw.connectClaude),
     step: raw.step === 'subscribe' || raw.step === 'welcome' ? raw.step : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' ? 'returned' : undefined,

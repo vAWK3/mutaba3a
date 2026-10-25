@@ -28,6 +28,8 @@ import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
 import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
+import { ConsentPage } from './pages/connect/ConsentPage';
+import { parseConsentSearch } from './pages/connect/consentSearch';
 import { HostedShell } from './shell/HostedShell';
 import { supportsViewTransitionTypes, viewTransitionOption } from './shell/pageMotion';
 import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
@@ -112,6 +114,16 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   /** Web fallback for the iOS/Android universal link when the app isn't installed (MUT-111). */
   const captureRoute = createRoute({ getParentRoute: () => authedRoute, path: '/capture', component: CaptureRedirect });
+
+  /** MUT-434: an agent asking to connect lands here from /oauth/authorize; signed in, no profile. */
+  const connectApproveRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    path: '/connect/approve',
+    validateSearch: parseConsentSearch,
+    component: function ConnectApprove() {
+      return <ConsentPage search={connectApproveRoute.useSearch()} />;
+    },
+  });
 
   const profileRoute = createRoute({
     getParentRoute: () => authedRoute,
@@ -301,6 +313,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     authedRoute.addChildren([
       homeRoute,
       captureRoute,
+      connectApproveRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

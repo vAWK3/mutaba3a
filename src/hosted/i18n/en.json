@@ -1599,6 +1599,69 @@
         "add": "Add a passkey",
         "notNow": "Not now"
       }
+    },
+    "copyField": {
+      "copy": "Copy",
+      "copied": "Copied",
+      "failed": "Couldn’t copy. Select the address and copy it yourself."
+    },
+    "connect": {
+      "title": "Connect Claude",
+      "rowSub": "Let your own Claude read and add your records",
+      "notEnabled": "Connecting Claude isn’t turned on for your account. Ask MTB3A support.",
+      "intro": "Your own Claude can read your records and, when you approve it in the chat, add expenses. MTB3A sends nothing to any AI itself.",
+      "urlLabel": "MCP address",
+      "howTitle": "How to connect",
+      "howClaudeAi": "Claude.ai: Settings › Connectors › Add custom connector, then paste this address.",
+      "howClaudeCode": "Claude Code: run",
+      "appsTitle": "Connected apps",
+      "appsEmpty": "No apps connected yet.",
+      "trust": {
+        "VERIFIED": "Claude",
+        "LOOPBACK": "An app on your computer",
+        "UNVERIFIED": "Unverified app"
+      },
+      "connectedOn": "Connected {date}",
+      "lastUsed": "Last used {date}",
+      "neverUsed": "Not used yet",
+      "scopeRead": "Can read",
+      "scopeWrite": "Can read and add",
+      "revoke": "Disconnect",
+      "revokeLabel": "Disconnect {name}",
+      "confirm": "Disconnect {name}? It loses access right away. You can connect it again later.",
+      "revoked": "{name} disconnected",
+      "revokeFailed": "Couldn’t disconnect. Check your connection and try again."
+    },
+    "consent": {
+      "title": "Connect an app",
+      "wants": "wants to connect to your MTB3A account.",
+      "trust": {
+        "VERIFIED": "This is Claude, by Anthropic.",
+        "LOOPBACK": "This is an app on your own computer, such as Claude Code.",
+        "UNVERIFIED": "We couldn’t verify this app. Allow it only if you started this connection yourself. It will send you back to"
+      },
+      "scope": {
+        "read": "See your profiles, clients, categories, vendors and expenses",
+        "write": "Add expenses to your inbox or to a profile you choose, after you approve them in the chat"
+      },
+      "revokeAnytime": "You can disconnect it any time from You › Account › Connect Claude.",
+      "allow": "Allow",
+      "deny": "Deny",
+      "startAgain": "Go back to your app and start connecting again.",
+      "error": {
+        "title": "Couldn’t connect",
+        "invalid_client": "This app isn’t registered correctly with MTB3A.",
+        "invalid_redirect_uri": "This app asked to send you somewhere it didn’t register.",
+        "invalid_request": "The connection request was incomplete.",
+        "temporarily_unavailable": "Too many attempts. Wait a minute and try again.",
+        "expired": "This request has expired or was already answered.",
+        "unknown": "Something went wrong with this request."
+      },
+      "refused": {
+        "title": "Connecting apps isn’t on for you",
+        "body": "Connecting Claude isn’t turned on for your account yet. Ask MTB3A support to turn it on, then try again.",
+        "back": "Back to {name}"
+      }
     }
   }
 }

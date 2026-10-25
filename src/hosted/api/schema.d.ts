@@ -15422,6 +15422,359 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/oauth/requests/{requestId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The agent asking to connect (MUT-434)
+         * @description What the consent page shows. Answers even without agent_access (agentAccess: false), so the page can refuse clearly and send the person back to the agent.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The pending request */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthAuthorizationRequest"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — decided, expired (30 minutes) or unknown */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/requests/{requestId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Allow or deny an agent (MUT-434)
+         * @description Allow creates the connection and returns the agent’s redirect with a one-time code; deny returns it with error=access_denied. Either way, send the browser to redirectTo.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    requestId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OAuthDecisionRequest"];
+                };
+            };
+            responses: {
+                /** @description Where to send the browser */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthDecision"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description FEATURE_NOT_ENABLED (allow without agent_access), PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT (reason REQUEST_GONE) — already answered or expired */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your connected agents (MUT-434) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live connections, newest first, and the MCP address */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthGrantList"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description FEATURE_NOT_ENABLED, PRINCIPAL_NOT_ACCEPTED or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/oauth/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an agent (MUT-434)
+         * @description It loses access on its next call. Allowed without agent_access, so a person can always disconnect.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    grantId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disconnected */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such live connection of yours */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/v1/oauth/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nightly OAuth housekeeping for MCP agents (Cloud Scheduler)
+         * @description Deletes expired consent requests and codes, the tokens of grants that ended a week ago, and registered clients that never got a grant within 30 days. Answers counts only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description What was deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OAuthCleanupSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -15581,7 +15934,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -18370,6 +18723,8 @@ export interface components {
         };
         RevokeSessionsResponse: {
             revoked: number;
+            /** @description MUT-434 (D12): connected agents disconnected too */
+            agentGrantsRevoked: number;
         };
         SignupReviewList: {
             data: components["schemas"]["SignupReview"][];
@@ -18641,6 +18996,72 @@ export interface components {
             received: true;
             /** @enum {string} */
             result: "suppressed" | "ignored";
+        };
+        OAuthAuthorizationRequest: {
+            /** Format: uuid */
+            id: string;
+            client: {
+                /** @description The client’s self-declared name; show it with dir="auto" and never as proof of who it is */
+                name: string;
+                /** @enum {string} */
+                kind: "DCR" | "CIMD";
+                /**
+                 * @description From the redirect the code goes to, never the client’s own name: VERIFIED = Claude (claude.ai/claude.com), LOOPBACK = an app on this computer (e.g. Claude Code), UNVERIFIED = anyone else
+                 * @enum {string}
+                 */
+                trust: "VERIFIED" | "LOOPBACK" | "UNVERIFIED";
+                /** @description Where the code will be sent, e.g. claude.ai or 127.0.0.1 */
+                redirectHost: string;
+            };
+            scopes: ("read" | "write")[];
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Whether this person may approve it (the agent_access feature); false = show the refusal */
+            agentAccess: boolean;
+        };
+        OAuthDecision: {
+            /**
+             * Format: uri
+             * @description Send the browser here: the client’s redirect with a code, or with error=access_denied
+             */
+            redirectTo: string;
+        };
+        OAuthDecisionRequest: {
+            /** @enum {string} */
+            decision: "approve" | "deny";
+        };
+        OAuthGrantList: {
+            items: components["schemas"]["OAuthGrant"][];
+            /**
+             * Format: uri
+             * @description The address to paste into Claude
+             */
+            mcpUrl: string;
+        };
+        OAuthGrant: {
+            /** Format: uuid */
+            id: string;
+            clientName: string;
+            /** @enum {string} */
+            clientKind: "DCR" | "CIMD";
+            /**
+             * @description From the redirect the code goes to, never the client’s own name: VERIFIED = Claude (claude.ai/claude.com), LOOPBACK = an app on this computer (e.g. Claude Code), UNVERIFIED = anyone else
+             * @enum {string}
+             */
+            trust: "VERIFIED" | "LOOPBACK" | "UNVERIFIED";
+            scopes: ("read" | "write")[];
+            /** Format: date-time */
+            connectedAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        OAuthCleanupSummary: {
+            requests: number;
+            codes: number;
+            tokens: number;
+            clients: number;
         };
     };
     responses: never;

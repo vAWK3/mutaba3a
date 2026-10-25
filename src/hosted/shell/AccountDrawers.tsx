@@ -5,6 +5,7 @@ import { BillingDrawer } from '../components/BillingDrawer';
 import { ChangePasswordDrawer } from '../components/ChangePasswordDrawer';
 import { CloseAccountDrawer } from '../components/CloseAccountDrawer';
 import { PasskeysDrawer } from '../components/PasskeysDrawer';
+import { ConnectClaudeDrawer } from '../components/ConnectClaudeDrawer';
 import { passkeySupport } from '../passkeys/webauthn';
 import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
@@ -38,6 +39,8 @@ export function useAccountDrawers() {
     openCloseAccount: () => go({ closeAccount: true }, false),
     /** MUT-115: Passkeys (`?passkeys=true`). */
     openPasskeys: () => go({ passkeys: true }, false),
+    /** MUT-434: Connect Claude and Connected apps (`?connectClaude=true`). */
+    openConnectClaude: () => go({ connectClaude: true }, false),
     /** MUT-415: the review after a password change, in Change password's place (Back doesn't reopen the form). */
     reviewPasskeys: () => go({ passkeys: true, review: 'password' }, true),
     close: () => go({}, true),
@@ -54,6 +57,8 @@ export function AccountDrawers() {
   if (drawers.state.closeAccount && !local) return <CloseAccountDrawer onClose={drawers.close} onDownload={drawers.openYourData} />;
   // MUT-115: an account's, and only where passkeys work on this host (never the legacy run.app portal).
   if (drawers.state.passkeys && !local && passkeySupport()) return <PasskeysDrawer review={drawers.state.review} onClose={drawers.close} />;
+  // MUT-434: an account's, and only with agent_access (the drawer checks; the server refuses its list without it).
+  if (drawers.state.connectClaude && !local) return <ConnectClaudeDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }

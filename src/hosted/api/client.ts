@@ -251,7 +251,8 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
  * self-service doors, signup and recovery (MUT-368): the in-page backend has no mailer to send their links. And the
  * passkey sign-in challenge (MUT-115), asked for while signed out.
  */
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges)(\/|\?|$)/;
+// MUT-434: connecting an agent (/v1/oauth) is the server's alone: the agent talks to the hosted service, never this page.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth)(\/|\?|$)/;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
@@ -461,6 +462,15 @@ export const api = {
   removePasskey: (id: string) => request<void>('DELETE', `/v1/passkeys/${encodeURIComponent(id)}`),
   /** MUT-370: Not now on the passkey suggestion (hidden 30 days; the third retires it). */
   changePasskeyPrompt: (action: PasskeyPromptAction) => request<PasskeyPrompt>('PATCH', '/v1/me/passkey-prompt', { body: { action } }),
+  /** MUT-434: the agent asking to connect, for the consent page (404 once answered or expired). */
+  oauthRequest: (requestId: string, signal?: AbortSignal) => request<Schemas['OAuthAuthorizationRequest']>('GET', `/v1/oauth/requests/${encodeURIComponent(requestId)}`, { signal }),
+  /** MUT-434: allow or deny; either way the answer is where to send the browser (409 when already answered). */
+  decideOauthRequest: (requestId: string, decision: Schemas['OAuthDecisionRequest']['decision']) =>
+    request<Schemas['OAuthDecision']>('POST', `/v1/oauth/requests/${encodeURIComponent(requestId)}/decision`, { body: { decision } }),
+  /** MUT-434: connected agents and the MCP address (403 FEATURE_NOT_ENABLED without agent_access). */
+  listOauthGrants: (signal?: AbortSignal) => request<Schemas['OAuthGrantList']>('GET', '/v1/oauth/grants', { signal }),
+  /** MUT-434: the agent loses access on its next call. */
+  revokeOauthGrant: (grantId: string) => request<void>('DELETE', `/v1/oauth/grants/${encodeURIComponent(grantId)}`),
   /** MUT-115: a single-use sign-in challenge (public). */
   passkeyChallenge: (signal?: AbortSignal) => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/passkey-challenges', { signal }),
   signInWithPasskey: (body: Schemas['PasskeySignInRequest']) => request<OkJson<'/v1/sessions/passkey', 'post'>>('POST', PASSKEY_SIGN_IN_PATH, { body }),

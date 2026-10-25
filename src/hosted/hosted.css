@@ -1037,6 +1037,19 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-passkey-stepup { margin-top: var(--space-4); }
 .hp-passkey-stepup > p { margin: 0 0 var(--space-2); }
 .hp-passkey-limit { margin: 0; margin-inline-end: auto; }
+
+/* MUT-434: CopyField, Connect Claude and the consent page */
+.hp-copy-row { display: flex; gap: var(--space-2); align-items: stretch; }
+.hp-copy-row .input { flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
+.hp-copy-field .form-hint:empty { display: none; }
+.hp-connect-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.hp-connect-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
+.hp-connect-steps code { overflow-wrap: anywhere; font-size: var(--text-label); }
+.hp-consent { display: grid; gap: var(--space-3); }
+.hp-consent > * { margin: 0; }
+.hp-consent-name { font-weight: var(--weight-semibold); }
+.hp-consent-scopes { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); }
+.hp-consent-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .hp-owner-action { flex: none; min-height: 44px; padding-inline: var(--space-2); justify-self: start; }
 .hp-owner-confirm { margin-block: var(--space-2); }
 .hp-owner-add { margin: 0; }
