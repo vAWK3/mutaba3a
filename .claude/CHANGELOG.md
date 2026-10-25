@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-25 — Portal: four destinations, Owed · Paid · Spent · Clients (MUT-424, ADR-192)
+
+**Why:** seven peer sections made the portal read like a dashboard (epic MUT-423). This is the regroup MUT-426's pill needs; every URL stays, so the phone's universal links, the mail and Stripe landings and bookmarks keep working.
+
+### Added
+- `src/hosted/shell/destinations.ts`: `DESTINATIONS`, `destinationOf(pathname)`, `destinationPath`, `NO_DESTINATION` (`reports`, `you`). A route-walking test fails on a page under `/p/$profileId` with no destination.
+- `DeeperLinks` (`components/DeeperLinks.tsx`): the one-level-in rows at the bottom of Owed (→ Receivables), Paid (→ Currency conversions) and Clients (→ Documents), drawn with `RowNavLink`, a new link row in `YouRows`.
+- `PageHeader back` and `useBackTo(destination)` (`pages/views/shared.tsx`): Receivables, Conversions and Documents link back to Owed, Paid and Clients; the client page's All clients link now uses it.
+- en/ar `hosted.destinations.*` and `hosted.deeper.*`; `.hp-deeper`.
+- QA: `portal.shell.one-level-in` (Owed → Receivables → back, Paid → Conversions → back, Clients → Documents → back, a deep link in Arabic).
+
+### Changed
+- The sidebar shows the four destinations, lit by `destinationOf` (`/receivables` lights Owed); Reports stays one link away beside them until MUT-426.
+- Page titles: Overview → Owed (its table too), Payments → Paid, Expenses and Groups → Spent.
+- QA `portal.shell.navigate` visits the four destinations; heading and nav names updated across the portal, carry-over, self-service and portal-live specs.
+
+### Removed
+- The eight `hosted.shell.nav.*` keys.
+
+---
+
 ## [Unreleased] - 2026-10-25 — Suggest a passkey after the first sign-in (MUT-370 portal half, ADR-191, API 1.70.0-mut370)
 
 **Why:** Basel's MUT-331 Q3: a password is required, and a passkey is optional but actively suggested as the more secure way. MUT-115 shipped passkeys; nothing suggested one.

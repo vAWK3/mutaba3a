@@ -227,16 +227,6 @@
     },
     "shell": {
       "sections": "Sections",
-      "nav": {
-        "overview": "Overview",
-        "reports": "Reports",
-        "clients": "Clients",
-        "receivables": "Receivables",
-        "payments": "Payments",
-        "documents": "Documents",
-        "expenses": "Expenses",
-        "conversions": "Conversions"
-      },
       "switcher": {
         "label": "Switch profile",
         "hosted": "Hosted",
@@ -248,6 +238,27 @@
       },
       "account": "Account",
       "language": "Language"
+    },
+    "destinations": {
+      "owed": "Owed",
+      "paid": "Paid",
+      "spent": "Spent",
+      "clients": "Clients"
+    },
+    "deeper": {
+      "label": "More in {destination}",
+      "receivables": {
+        "label": "Receivables",
+        "sub": "Every open entry, with filters"
+      },
+      "conversions": {
+        "label": "Currency conversions",
+        "sub": "Money moved from one currency to another"
+      },
+      "documents": {
+        "label": "Documents",
+        "sub": "Every invoice and receipt, including ones with no client"
+      }
     },
     "you": {
       "title": "You",

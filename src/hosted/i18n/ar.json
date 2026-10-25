@@ -231,16 +231,6 @@
     },
     "shell": {
       "sections": "الأقسام",
-      "nav": {
-        "overview": "نظرة عامة",
-        "reports": "التقارير",
-        "clients": "العملاء",
-        "receivables": "المستحقات",
-        "payments": "الدفعات",
-        "documents": "المستندات",
-        "expenses": "المصاريف",
-        "conversions": "التحويلات"
-      },
       "switcher": {
         "label": "تبديل الملف",
         "hosted": "مستضاف",
@@ -252,6 +242,27 @@
       },
       "account": "الحساب",
       "language": "اللغة"
+    },
+    "destinations": {
+      "owed": "المستحق",
+      "paid": "المدفوع",
+      "spent": "المصروف",
+      "clients": "العملاء"
+    },
+    "deeper": {
+      "label": "المزيد في {destination}",
+      "receivables": {
+        "label": "المستحقات",
+        "sub": "كل مبلغ مستحق لم يُدفع بعد، مع عوامل التصفية"
+      },
+      "conversions": {
+        "label": "تحويلات العملات",
+        "sub": "مال نُقل من عملة إلى أخرى"
+      },
+      "documents": {
+        "label": "المستندات",
+        "sub": "كل فاتورة وإيصال، ومنها ما لا يتبع أي عميل"
+      }
     },
     "you": {
       "title": "أنت",

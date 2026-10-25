@@ -142,8 +142,9 @@ describe('ConversionsList', () => {
     expect(Array.from(filter.options).map((o) => o.value)).toContain('JOD');
   });
 
-  it('has a Conversions entry in the sidebar nav', async () => {
-    portal(`/p/${ORG_A}`);
-    expect(await screen.findByRole('link', { name: 'Conversions' })).toBeInTheDocument();
+  it('is one level in under Paid, at the same URL (MUT-424)', async () => {
+    portal(`/p/${ORG_A}/payments`);
+    const deeper = await screen.findByRole('navigation', { name: 'More in Paid' });
+    expect(within(deeper).getByRole('link', { name: /^Currency conversions/ })).toHaveAttribute('href', `/p/${ORG_A}/conversions`);
   });
 });

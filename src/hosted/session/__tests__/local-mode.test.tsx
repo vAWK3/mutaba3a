@@ -153,12 +153,15 @@ describe('the shell signed out', () => {
     expect(server.calls.map((call) => `${call.method} ${call.url.pathname}`)).toEqual(['GET /v1/self-service']);
   });
 
-  it('shows the same sections as signed in, Expenses and Conversions included (MUT-287)', async () => {
+  it('shows the same four destinations as signed in, with Conversions one level in under Paid (MUT-287, MUT-424)', async () => {
     stubApi({});
-    renderPortal(`/p/${ORG_A}`);
+    const { user } = renderPortal(`/p/${ORG_A}`);
     const nav = await screen.findByRole('navigation', { name: 'Sections' });
     const links = within(nav).getAllByRole('link').map((link) => link.textContent);
-    expect(links).toEqual(['Overview', 'Reports', 'Clients', 'Receivables', 'Payments', 'Documents', 'Expenses', 'Conversions']);
+    expect(links).toEqual(['Owed', 'Paid', 'Spent', 'Clients']);
+    await user.click(within(nav).getByRole('link', { name: 'Paid' }));
+    const deeper = await screen.findByRole('navigation', { name: 'More in Paid' });
+    expect(within(deeper).getByRole('link', { name: /^Currency conversions/ })).toHaveAttribute('href', `/p/${ORG_A}/conversions`);
   });
 
   it('drops the "Hosted" chip and the old local-app note from You › Profiles', async () => {

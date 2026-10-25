@@ -97,13 +97,13 @@ describe('the "Add a passkey" card on Home (MUT-370)', () => {
   it('is not shown when not due, on a server without passkeys, or on a browser that cannot make one', async () => {
     for (const setup of [() => portal({ prompt: { due: false, notNowCount: 3, hiddenUntil: null } }), () => portal({ prompt: null })]) {
       const { unmount } = setup();
-      expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 1, name: 'Owed' })).toBeInTheDocument();
       expect(screen.queryByText(TITLE)).toBeNull();
       unmount();
     }
     browser.supported.value = false;
     portal();
-    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Owed' })).toBeInTheDocument();
     expect(screen.queryByText(TITLE)).toBeNull();
   });
 

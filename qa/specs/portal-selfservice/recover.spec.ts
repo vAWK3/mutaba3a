@@ -50,7 +50,7 @@ test('Forgot your password? resets it, signs you in, signs out another browser, 
   });
   await step('Signed in with the new password, on Home', async () => {
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
   await step('The other browser is signed out', async () => {
     await otherPage.reload();

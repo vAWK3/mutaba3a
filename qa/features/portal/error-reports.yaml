@@ -58,9 +58,9 @@ features:
     steps:
       - Sign in in Arabic; the server sends Clients a broken answer, and the page crashes
       - Press Tab
-      - Go to Payments
+      - Go to Paid
     expect:
       - «توقفت هذه الصفحة عن العمل» shows in place of the page, with one «إعادة التحميل» button, and the navigation is still there; the error's own text is not shown
       - Focus starts on the card's title, and Tab reaches the Reload button
       - The crash is reported once
-      - Payments opens normally
+      - Paid (المدفوع) opens normally

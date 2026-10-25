@@ -351,6 +351,8 @@
 [dir="rtl"] .hp-page-header h1 { font-family: var(--font-ar); }
 .hp-page-header:has(.hp-search) h1 { flex-basis: auto; }
 .hp-back { font-size: var(--text-label); color: var(--muted); flex-basis: 100%; }
+/* MUT-424: the destination page's one-level-in rows (drawn as You rows), quiet below the page's own content */
+.hp-deeper { margin-block-start: var(--space-6); }
 /* A text link: classed links own their hover (TD-122) */
 .hp-back:hover { color: var(--link-hover); text-decoration: underline; }
 .hp-search { min-width: 240px; }

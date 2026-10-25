@@ -14,6 +14,7 @@ import { useCustomerDirectory, usePayments, useProjectDirectory } from '../../da
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
+import { DeeperLinks } from '../../components/DeeperLinks';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
 
 /**
@@ -230,13 +231,14 @@ export function PaymentsPage({ search, setSearch }: { search: PaymentsPageSearch
     ) : undefined;
   return (
     <>
-      <PageHeader title={t('hosted.payments.title')}>{addButton(true)}</PageHeader>
+      <PageHeader title={t('hosted.destinations.paid')}>{addButton(true)}</PageHeader>
       <PaymentsList
         filters={filters}
         setFilters={setSearch}
         addAction={addButton(false)}
         onRedate={redate.payments ? (paymentId) => setSearch({ ...filters, payment: paymentId }) : undefined}
       />
+      <DeeperLinks destination="paid" links={[{ key: 'conversions', to: `/p/${profile.id}/conversions` }]} />
       <IncomeDrawerHost profile={profile} drawer={drawer} onClose={() => setSearch(filters)} onOpen={(next) => setSearch({ ...filters, ...next })} />
     </>
   );

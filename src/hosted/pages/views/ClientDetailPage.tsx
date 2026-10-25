@@ -17,7 +17,7 @@ import { useProfile, useWriteGate } from '../../session/me';
 import { DocumentsList } from './DocumentsList';
 import { PaymentsList } from './PaymentsList';
 import { ReceivablesList } from './ReceivablesList';
-import { StatusBadge } from './shared';
+import { PageHeader, StatusBadge } from './shared';
 
 /**
  * Client detail (hosted-portal.md §7.3): the per-currency summary and its
@@ -64,13 +64,9 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
     <QueryView queries={[customer]} data={customer.data} loading={<Skeleton strip />} notFound={notFound}>
       {(client) => (
         <>
-          <header className="hp-page-header">
-            <Link to={`/p/${profile.id}/clients`} className="hp-back">
-              {t('hosted.client.back')}
-            </Link>
-            <h1>{client.name}</h1>
+          <PageHeader title={client.name} back={{ to: `/p/${profile.id}/clients`, label: t('hosted.client.back') }}>
             {addButton(true)}
-          </header>
+          </PageHeader>
           <SegmentedTabs<ClientTab>
             className="hp-tabs"
             options={(['summary', 'receivables', 'payments', 'documents'] as const).map((value) => ({ value, label: t(`hosted.client.tabs.${value}`) }))}
