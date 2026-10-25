@@ -3750,7 +3750,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `data/__tests__/passkeyPrompt.test.ts` (8), `components/__tests__/PasskeySuggestion.test.tsx` (10: shown, Arabic, hidden cases, D4 after the trial step, Not now, added, cancelled, stepUp hand-off, failure, drawer add takes it away) | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.suggest-first-sign-in` (core), `.suggest-not-now`, `.suggest-add`, `.suggest-has-passkey`, `.suggest-arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys.suggest` |
 
-## MUT-426 — the floating pill, the You island and Reports (2026-10-25, ADR-193)
+## MUT-426 — the floating pill, the You island and Reports (2026-10-25, ADR-194)
 
 | Layer | Tests | Command |
 |---|---|---|
@@ -3758,7 +3758,7 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Component (real router) | `shell/__tests__/HostedShell.test.tsx` (no aside or header bar, one chrome, Reports → tabs → island order, one lit tab, Reports lit, island name/label/ring, `from`+`back` in, exact page out, other-profile `back` → section, part tabs keep both, a tab leaves, locked: island only, no profile: island only with neutral ring and `/`, Arabic label); `TrialWelcome.test` (one line); `YouPage.test` (island + tabs carry the section; wordmark on App) | `npx vitest run src/hosted` |
 | Regression contract (C3) | every test that opened You through `YouLinks` now goes through the island (`openYou`): UsageConsent, ChangePassword/YourData/Billing drawers, auth-states, local-mode, views, ProfileCreateDrawer | `npm run test:run` |
 | Release-QA | `portal.shell.floating-chrome` (core), `.island`, `.page-motion`, `.reduced-transparency`, `.keyboard`, `portal.billing.trial-line` (new); `shell.navigate`, `.mtb3a-name`, `.switch-profile`, `you.*`, `profiles.*`, `session`, `local-mode` updated | `release-qa run --attach --app portal --all` |
-| Manual | an iPhone keyboard over Clients' search (TD-249) | — |
+| Manual | an iPhone keyboard over Clients' search (TD-251) | — |
 
 ## MUT-424 — four destinations, the rest one level in (2026-10-25, ADR-192)
 
@@ -3769,4 +3769,20 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Component (real router) | `pages/__tests__/destinations.test.tsx` (exactly four links, the lit one for pages one level in, Reports beside them lighting none, Arabic names, destination titles, `DeeperLinks` rows, back links, All clients via `PageHeader back`) | `npx vitest run src/hosted/pages` |
 | Regression contract | renamed only: local-mode (four destinations, Conversions under Paid), ExpensesList / ConversionsList nav entries, crashScreens, TrialWelcome, FirmOnBanner headings | `npm run test:run` |
 | Release-QA | `portal.shell.navigate` (four destinations), `portal.shell.one-level-in` (new); heading and nav names across portal, carry-over, portal-selfservice and portal-live specs | `release-qa run --attach --app portal --all` |
+
+## Landing Get it redesign (2026-10-25)
+
+| Layer | Coverage | Run |
+|---|---|---|
+| Landing unit | `LandingPage.test.tsx`: the request card comes before sign-in and the apps while signup is closed; the note comes before the card while it is open | `npm run test:run` |
+| Release-QA | `web.landing.get-it-form` (card first, two fields a row, no fieldset box, axe light+dark, empty → errors, failure → alert beside Try again, retry → success focused) and `web.landing.get-it-375` (Arabic 375: no overflow, fields stack, 44px pills, full-width send, stacked app tiles). Both passing 2026-10-25 against this checkout's dev server (`QA_CONTEXT` → :5180) | `release-qa run --app web --only get-it-form,get-it-375` |
+
+## MUT-260 — portal receipts gallery, review and approve (2026-10-25, ADR-193)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Server | `attachments/__tests__/rules.test.ts` (inline disposition), `local-storage.test.ts` (the `d` claim; absent = attachment), `routes-receipts.test.ts` (`?disposition=inline` signs inline; unknown → 422), `routes-dev-attachments.test.ts` (inline PDF: no sandbox, no portal CSP, nosniff; attachment keeps sandbox), `portal.test.ts` (CSP string) | `npm --prefix server test` |
+| Portal unit | `lib/__tests__/receiptSuggestion.test.ts` (JOD 3dp, ILS 2dp, unsupported currency, missing fields, date only, ignored fields), `data/__tests__/receiptQueries.test.ts` (file rules, filter mapping, next receipt, 404/503 off, the two 429s, upload sequence + cleanup) | `npm run test:run` |
+| Portal pages | `pages/__tests__/Receipts.test.tsx` (21: tab + count, 404/503 hide, gallery filter/counts/PDF tile/lazy image, upload + refusals + 429, read-only, prefill + hints, unsupported currency, inline image/PDF, approve body without `suggested` + next, last → gallery, 409 → Filed view, 422 banner, network keeps the key, filed by link, not found); the drawer's own tests guard the extraction | `npm run test:run` |
+| Release-QA | `portal.receipts.gallery`, `.upload`, `.review-approve`, `.filed`, `.unavailable`, `portal.direction.receipts-review-ar`; `portal.expenses` re-run for the extraction | `release-qa release --only portal.receipts,portal.direction.receipts-review-ar,portal.expenses` |
 

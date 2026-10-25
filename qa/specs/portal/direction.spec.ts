@@ -6,7 +6,7 @@ import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
 import { readBidi, readField } from '../../support/bidi';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, attachment, payment } from '../../support/portalApi';
+import { FakeApi, attachment, category, libraryReceipt, payment } from '../../support/portalApi';
 
 /**
  * MUT-109 (TD-048, direction half) in the portal: an Arabic amount keeps the place
@@ -126,3 +126,40 @@ for (const language of ['ar', 'en'] as const) {
     });
   });
 }
+
+test('Arabic: the receipt review page mirrors, the receipt on the right, and stacks on a phone', { tag: '@portal.direction.receipts-review-ar' }, async ({ page, step }) => {
+  const arReview = (JSON.parse(fs.readFileSync(path.join(portalI18n, 'ar.json'), 'utf8')) as { hosted: { receipts: { review: { title: string; fromReceipt: string } } } }).hosted.receipts.review;
+  const receipt = libraryReceipt(1, {
+    filename: 'شوفرسال.jpg',
+    suggested: { readerVersion: 'phone-1.4', totalMinor: { value: '8420', source: 'qr', confidence: 0.98 }, currency: { value: 'ILS', source: 'qr', confidence: 0.98 }, vendorName: { value: 'شوفرسال', source: 'ocr', confidence: 0.9 } },
+  });
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [category(1, 'بقالة')], receipts: [receipt] });
+  const preview = page.locator('.hp-receipt-review-preview');
+  const form = page.locator('.hp-receipt-review-form');
+
+  await step('Open a To-review receipt in Arabic on a desktop-wide window', async () => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await api.open(page, `/p/${OFFICE_A}/expenses/receipts/${receipt.id}`, 'ar');
+    await expect(page.getByRole('heading', { level: 1, name: arReview.title })).toBeVisible();
+  });
+
+  await step('AC5: the page is right to left, Arabic, and the receipt sits to the right of the form', async () => {
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    await expect(page.locator('[data-hint-for="amount"]')).toHaveText(arReview.fromReceipt);
+    const p = (await preview.boundingBox())!;
+    const f = (await form.boundingBox())!;
+    expect(p.x).toBeGreaterThan(f.x);
+    // The amount still types and reads left to right
+    const amount = page.locator('#expense-amount');
+    await expect(amount).toHaveValue('84.20');
+    expect(await amount.evaluate((el) => getComputedStyle(el).direction)).toBe('ltr');
+    await attachScreenshot(page, 'ar-portal-receipt-review');
+  });
+
+  await step('AC5: on a 375px phone the receipt stacks above the form, with no sideways scroll', async () => {
+    await page.setViewportSize(PHONE);
+    await expect.poll(async () => (await preview.boundingBox())!.y < (await form.boundingBox())!.y).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+    await attachScreenshot(page, 'ar-portal-receipt-review-phone');
+  });
+});

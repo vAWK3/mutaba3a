@@ -189,7 +189,7 @@ describe('the retired lockup CSS (design D8, OV-4)', () => {
   it.each([
     ['src/pages/landing/LandingPage.css', '.landing-wordmark'],
     ['src/hosted/hosted.css', '.hp-wordmark'],
-    ['src/hosted/hosted.css', '.hp-side-wordmark'],
+    ['src/hosted/hosted.css', '.hp-you-wordmark'], // MUT-426 D3: the lockup moved from the sidebar to You › App
   ])('%s %s sets no gap or type that would fight the tokens', (file, selector) => {
     const set: string[] = [];
     sheet(file).walkRules((rule) => {

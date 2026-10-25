@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-193)
+## [Unreleased] - 2026-10-25 — Portal: the floating pill, the You island and Reports replace the sidebar (MUT-426, ADR-194)
 
 **Why:** the last step of epic MUT-423. The sidebar took 240 px from every page and put a dashboard's chrome in front of one figure; the new shell is four words in a floating pill, one island for you and your books, and a Reports icon.
 
@@ -45,10 +45,44 @@
 - The You page's part tabs carry `back` beside `from`. QA `shell.navigate`, `shell.mtb3a-name`, `shell.switch-profile`, `you.*`, `profiles.*`, `session`, `local-mode` follow the island.
 
 ### Removed
-- `shell/YouLinks.tsx`, the sidebar/top-bar CSS and `--hp-sidebar-width`; keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn`, `.endsSoon`. TD-236 resolved; TD-249 opened.
+- `shell/YouLinks.tsx`, the sidebar/top-bar CSS and `--hp-sidebar-width`; keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn`, `.endsSoon`. TD-236 resolved; TD-251 opened.
 
 ### Technical
 - **Files:** `src/hosted/shell/{HostedShell,YouIsland}.tsx`, `src/hosted/shell/{pageMotion,youRoutes}.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `hosted.html`, `src/hosted/components/{TrialBanner,Icons,Brand}.tsx`, `src/hosted/pages/you/{YouPage,YouApp}.tsx`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/{shell,billing,you,profiles}.yaml`, `qa/specs/portal/*.spec.ts`, `qa/support/you.ts`.
+## [Unreleased] - 2026-10-25 — Landing: Get MTB3A and the request form redesigned
+
+**Why:** when the landing went hosted-only the request form moved inline, but its styles stayed in the deleted `HostedOfferPage.css`, and the section's new wrappers were never styled: the form rendered unstyled (browser fieldset box, raw checkboxes, centred labels over 1800px inputs, a display-size heading) and the app links stacked as two tall cards beside an empty Sign-in card. Design brief: `.claude/designs/landing-get-it-redesign.md`.
+
+### Changed
+- `GetItSection`: one centred 720px column, the primary action first. Signup closed: the request card, then Sign in and the app tiles. Signup open: Create an account (ink tile) and the note ("ask us below"), then the card. Ways in are horizontal tiles with an icon, label and a chevron that mirrors in Arabic; Sign in now says it opens a new tab to screen readers.
+- The request card: raised surface, headline-size title, fields two a row from 640px, 44px fields and device pills, the hero's ink send button (full width on phones). `HostedRequestForm` no longer imports Button.css.
+- QA: `web.landing.hosted` and `hosted-375` (the retired `/hosted` page) became `get-it-form` and `get-it-375` on the landing; `get-it-paid` and `hosted-slash` retired with the block and page they tested.
+
+### Fixed
+- The request form's pill, alert, success and notice styles are back (moved into `LandingPage.css`).
+
+### Removed
+- Dead Get it CSS: `-free`, `-hint`, `--unavailable`, the `-paid*` block.
+
+### Files
+`src/pages/landing/components/{GetItSection,HostedRequestForm,PlatformIcons}.tsx`, `src/pages/landing/LandingPage.css`, `src/pages/landing/__tests__/LandingPage.test.tsx`, `qa/specs/web/landing.spec.ts`, `qa/features/web/landing.yaml`.
+
+## [Unreleased] - 2026-10-25 — Portal receipts: gallery, To review, upload and review (MUT-260, ADR-193, API 1.71.0-mut260)
+
+**Why:** receipts shared from the phone waited in the library as To review with nowhere on the web to see or file them. The last web piece of MUT-252; with MUT-258 it unblocks turning `receipts_library_enabled` on.
+
+### Added
+- **Portal:** Expenses › Receipts (a third tab when `GET /v1/receipts/counts` answers, "Receipts · N to review"): a thumbnail gallery with To review / Filed / All and counts, Upload receipt (PDF/JPEG/PNG ≤ 10 MB, several at once, one at a time), and a review page per receipt: the original large (image Fit/Actual size, PDF iframe, Open full size) beside the expense form prefilled from the phone's suggestion and marked "From the receipt"; Approve and file, then the next receipt. A filed receipt shows its expense. Read-only profiles browse without Upload or Approve. Library off (404/503): no tab, and its links say so. `hosted.receipts.*` en/ar.
+- **Server:** `GET /v1/receipts/{id}/download?disposition=inline|attachment` (default attachment); both storage drivers sign it. API `1.71.0-mut260`.
+- **QA:** `portal.receipts.{gallery,upload,review-approve,filed,unavailable}`, `portal.direction.receipts-review-ar`; FakeApi receipts library with real 1×1 images.
+
+### Changed
+- **CSP:** `img-src` and `frame-src` name `https://storage.googleapis.com` (and `frame-src 'self'`), ADR-193.
+- **Local driver:** an inline download is served without `content-security-policy: sandbox`; attachments keep it.
+- **Portal:** the expense drawer's form moved to `components/expenseForm/` (`useHostedExpenseForm`, `HostedExpenseFields`), shared with the review page; behaviour unchanged. The shared `ExpenseFormFields` gains optional `hints`. `ReceiptUploader` uses the shared `receiptFileRules` (now also the server's filename rule).
+
+### Technical
+- TD-250 (thumbnails are full originals). Runbook: the CSP note and the library turn-on row's staging check (A7).
 
 ---
 

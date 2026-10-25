@@ -196,6 +196,53 @@ interface StubReceipt {
   completedAt: string | null;
 }
 
+/**
+ * MUT-260: a receipt in the receipts library (MUT-255's /v1/receipts), as GET /v1/receipts/{id} returns it. The list
+ * adds `expense`, computed from the FakeApi's expenses the way the server joins it.
+ */
+export interface StubLibraryReceipt {
+  id: string;
+  expenseId: string | null;
+  filename: string;
+  mimeType: 'application/pdf' | 'image/jpeg' | 'image/png';
+  sizeBytes: number;
+  status: 'PENDING_UPLOAD' | 'READY';
+  filingStatus: 'TO_REVIEW' | 'FILED';
+  receivedOn: string;
+  suggested: Json | null;
+  approved: Json | null;
+  approvedAt: string | null;
+  version: number;
+  uploadedByUserId: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export function libraryReceipt(n: number, r: Partial<StubLibraryReceipt> = {}): StubLibraryReceipt {
+  return {
+    id: uid(0xb, n),
+    expenseId: null,
+    filename: `receipt-${n}.jpg`,
+    mimeType: 'image/jpeg',
+    sizeBytes: 2048,
+    status: 'READY',
+    filingStatus: 'TO_REVIEW',
+    receivedOn: '2026-10-24',
+    suggested: null,
+    approved: null,
+    approvedAt: null,
+    version: 1,
+    uploadedByUserId: STUB_USER_ID,
+    createdAt: STAMP,
+    completedAt: STAMP,
+    ...r,
+  };
+}
+
+/** A8: real 1×1 images, so an <img> of a signed receipt URL actually decodes in the browser. */
+const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const JPEG_1PX = Buffer.from('/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAAaADAAQAAAABAAAAAQAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/8AAEQgAAQABAwEiAAIRAQMRAf/EAB8AAAEFAQEBAQEBAAAAAAAAAAABAgMEBQYHCAkKC//EALUQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+v/EAB8BAAMBAQEBAQEBAQEAAAAAAAABAgMEBQYHCAkKC//EALURAAIBAgQEAwQHBQQEAAECdwABAgMRBAUhMQYSQVEHYXETIjKBCBRCkaGxwQkjM1LwFWJy0QoWJDThJfEXGBkaJicoKSo1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoKDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uLj5OXm5+jp6vLz9PX29/j5+v/bAEMAAgICAgICAwICAwUDAwMFBgUFBQUGCAYGBgYGCAoICAgICAgKCgoKCgoKCgwMDAwMDA4ODg4ODw8PDw8PDw8PD//bAEMBAgICBAQEBwQEBxALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/dAAQAAf/aAAwDAQACEQMRAD8A+mKKKK/Kz/QA/9k=', 'base64');
+
 export function expense(n: number, e: { amount: string; currency?: Currency; title?: string | null; vendor?: string | null; categoryId?: string | null; customerId?: string | null; projectId?: string | null; occurredOn?: string; notes?: string | null }) {
   return {
     id: uid(0x9, n),
@@ -392,6 +439,13 @@ export interface FakeApiSeed {
   reports?: Record<string, StubReportRecords>;
   /** MUT-333: the account is already closing (signing in during the grace): /v1/me carries it. */
   closure?: { requestedAt: string; deleteAfter: string };
+  /**
+   * MUT-260: the receipts library, which turns it on (GET /v1/receipts/counts answers). Absent: every /v1/receipts
+   * call answers 404, as a server with RECEIPTS_LIBRARY off does, so the Receipts tab stays hidden.
+   */
+  receipts?: StubLibraryReceipt[];
+  /** MUT-260: vendors already saved on the profile (as earlier expenses would have), with their last category. */
+  vendors?: { name: string; categoryId?: string }[];
 }
 
 /** MUT-175: what one profile's Reports reads. */
@@ -525,6 +579,8 @@ export class FakeApi {
   private readonly reports: Record<string, StubReportRecords>;
   /** MUT-333: set while the account is closing; then only Me, Keep my account and sign-out answer (403 ACCOUNT_CLOSING). */
   closure: { requestedAt: string; deleteAfter: string } | null;
+  /** MUT-260: the receipts library; null = off (404). */
+  readonly libraryReceipts: StubLibraryReceipt[] | null;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -551,6 +607,8 @@ export class FakeApi {
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
     this.termsAccepted = seed.termsAccepted ?? true;
     this.closure = seed.closure ?? null;
+    this.libraryReceipts = seed.receipts ? [...seed.receipts] : null;
+    for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null);
   }
 
   /** MUT-175: GET /v1/summaries/activity for the named profile (defaults: this month, by day). */
@@ -632,6 +690,14 @@ export class FakeApi {
     const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'PUT, GET', 'Access-Control-Allow-Headers': '*' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
     if (request.method() === 'PUT') return route.fulfill({ status: 200, headers: cors, body: '' });
+    // MUT-260 (A8): a library receipt's original, by its type, served the way its signed URL asked (inline or attachment).
+    const url = new URL(request.url());
+    if (url.pathname.includes('/library/')) {
+      const mime = url.searchParams.get('mime') ?? 'application/pdf';
+      const disposition = url.searchParams.get('disposition') === 'inline' ? 'inline' : 'attachment';
+      const body = mime === 'image/png' ? PNG_1PX : mime === 'image/jpeg' ? JPEG_1PX : Buffer.from('%PDF-1.4 qa');
+      return route.fulfill({ status: 200, headers: { ...cors, 'Content-Type': mime, 'Content-Disposition': `${disposition}; filename="receipt"` }, body });
+    }
     return route.fulfill({ status: 200, headers: { ...cors, 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="file.pdf"' }, body: '%PDF-1.4 qa' });
   }
 
@@ -756,7 +822,65 @@ export class FakeApi {
     if (resource === 'expense-groups') return this.groupAnswer(e, id, sub, subId);
     if (resource === 'fx-rates' && method === 'GET') return this.fxRates === 'unavailable' ? json({ error: { code: 'FX_RATES_UNAVAILABLE', message: 'No rates' } }, 503) : json(this.fxRates);
     if (resource === 'conversions') return this.conversionAnswer(e, id);
+    if (resource === 'receipts') return this.libraryAnswer(e, id, sub);
     return undefined;
+  }
+
+  /** MUT-260: GET /v1/receipts (and counts, one, download), library uploads, approve and delete, as MUT-255 answers them. */
+  private libraryAnswer(e: Logged, id: string | undefined, sub: string | undefined) {
+    const library = this.libraryReceipts;
+    if (!library) return notFound();
+    const q = (key: string) => e.query.get(key) ?? undefined;
+    const ready = library.filter((r) => r.status === 'READY');
+    if (e.method === 'GET' && !id) {
+      const status = q('filingStatus');
+      const rows = ready.filter((r) => !status || r.filingStatus === status).map((r) => this.libraryItem(r));
+      return paged(rows, Number(q('limit') ?? 24), q('cursor'));
+    }
+    if (e.method === 'GET' && id === 'counts') return json({ toReview: ready.filter((r) => r.filingStatus === 'TO_REVIEW').length, filed: ready.filter((r) => r.filingStatus === 'FILED').length });
+    if (e.method === 'POST' && id === 'uploads') {
+      const b = e.body as { filename: string; mimeType: StubLibraryReceipt['mimeType']; sizeBytes: number };
+      const made = libraryReceipt(0, { id: this.nextId(0xb), filename: b.filename, mimeType: b.mimeType, sizeBytes: b.sizeBytes, status: 'PENDING_UPLOAD', receivedOn: this.today, completedAt: null });
+      library.unshift(made);
+      return json({ receipt: made, upload: { url: `${STORAGE}/upload/${made.id}`, method: 'PUT', headers: { 'Content-Type': b.mimeType }, expiresAt: '2099-01-01T00:00:00Z' } }, 201);
+    }
+    const found = library.find((r) => r.id === id);
+    if (!found) return notFound();
+    if (e.method === 'GET' && !sub) return json(found);
+    if (e.method === 'DELETE' && !sub) {
+      library.splice(library.indexOf(found), 1);
+      return { status: 204, body: '' };
+    }
+    if (e.method === 'POST' && sub === 'complete') {
+      found.status = 'READY';
+      found.completedAt = STAMP;
+      return json(found);
+    }
+    if (e.method === 'GET' && sub === 'download') {
+      if (found.status !== 'READY') return json({ error: { code: 'VALIDATION_FAILED', message: 'Not ready', details: { reason: 'ATTACHMENT_NOT_READY' } } }, 422);
+      const disposition = q('disposition') === 'inline' ? 'inline' : 'attachment';
+      return json({ url: `${STORAGE}/library/${found.id}?mime=${encodeURIComponent(found.mimeType)}&disposition=${disposition}`, expiresAt: '2099-01-01T00:00:00Z', filename: found.filename, mimeType: found.mimeType });
+    }
+    if (e.method === 'POST' && sub === 'approve') {
+      if (found.filingStatus === 'FILED') return json({ error: { code: 'CONFLICT', message: 'Already filed', details: { reason: 'RECEIPT_ALREADY_FILED', expenseId: found.expenseId } } }, 409);
+      if (found.status !== 'READY') return json({ error: { code: 'VALIDATION_FAILED', message: 'Not ready', details: { reason: 'ATTACHMENT_NOT_READY' } } }, 422);
+      const b = { ...(e.body as Json) };
+      delete b.suggested;
+      delete b.captureSource;
+      const made = { ...expense(this.serial++, { amount: String(b.amount), currency: b.currency as Currency }), ...b, id: this.nextId(0x9), receipts: [] as StubReceipt[] } as StubExpense;
+      delete (made as { vendorDetails?: unknown }).vendorDetails;
+      made.vendorId = this.linkVendor(made.vendor, made.categoryId);
+      this.expenses.unshift(made);
+      Object.assign(found, { filingStatus: 'FILED', expenseId: made.id, approvedAt: STAMP, version: found.version + 1, approved: { occurredOn: made.occurredOn, amountMinor: '0', currency: made.currency, vendor: made.vendor, categoryId: made.categoryId } });
+      return json({ expense: listed(made), receipt: found }, 201);
+    }
+    return undefined;
+  }
+
+  /** A list row: the receipt and, when filed on an expense that still exists, that expense's summary (MUT-258). */
+  private libraryItem(r: StubLibraryReceipt) {
+    const x = r.expenseId ? this.expenses.find((e) => e.id === r.expenseId) : undefined;
+    return { ...r, expense: x ? { vendor: x.vendor, title: x.title, amount: x.amount, currency: x.currency, occurredOn: x.occurredOn, categoryId: x.categoryId } : null };
   }
 
   /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */

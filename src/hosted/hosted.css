@@ -488,6 +488,51 @@
 .hp-receipt-row { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1-5) 0; }
 .hp-receipt-row bdi { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- Expenses › Receipts (MUT-260, layout B): the gallery and the review page. Logical properties only, so
+   Arabic mirrors the whole layout and the preview moves to the right (D12). ---------- */
+.hp-receipts-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-4); }
+.hp-receipts-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--space-3); }
+.hp-receipt-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; min-width: 0; }
+.hp-receipt-card-link { display: flex; flex-direction: column; gap: var(--space-1); padding-block-end: var(--space-2); color: var(--text); text-decoration: none; height: 100%; }
+.hp-receipt-card-link:hover { background: var(--surface-hover); }
+.hp-receipt-card-link:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-receipt-thumb { display: flex; align-items: center; justify-content: center; aspect-ratio: 3 / 4; background: var(--surface-2); overflow: hidden; }
+.hp-receipt-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.hp-receipt-thumb-pdf { font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--muted); letter-spacing: 0.04em; }
+.hp-receipt-card-meta, .hp-receipt-card-expense { display: flex; align-items: center; justify-content: space-between; gap: var(--space-1-5); padding-inline: var(--space-2); font-size: var(--text-label); min-width: 0; }
+.hp-receipt-card-day { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-receipt-card-expense bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-receipt-chip { flex: none; font-size: var(--text-micro); font-weight: var(--weight-medium); padding: 0 var(--space-2); border-radius: var(--radius-pill); }
+.hp-receipt-chip-to_review { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.hp-receipt-chip-filed { background: var(--m-mint); color: var(--m-mint-ink); }
+.hp-receipt-card-uploading { opacity: 0.8; }
+
+.hp-receipt-back { display: inline-flex; align-items: center; gap: var(--space-1); margin-block-end: var(--space-2); font-size: var(--text-label); }
+[dir="rtl"] .hp-receipt-back-arrow, [dir="rtl"] .hp-receipt-next-arrow { display: inline-block; transform: scaleX(-1); }
+.hp-receipt-review { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-6); align-items: start; }
+.hp-receipt-preview { margin: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
+.hp-receipt-preview-toolbar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--border); font-size: var(--text-label); }
+.hp-receipt-preview-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.hp-receipt-preview-frame { display: flex; align-items: center; justify-content: center; min-height: 360px; max-height: 75vh; background: var(--surface-2); overflow: auto; }
+.hp-receipt-preview-frame img { max-width: 100%; max-height: 75vh; object-fit: contain; }
+.hp-receipt-preview-actual { align-items: flex-start; justify-content: flex-start; }
+.hp-receipt-preview-actual img { max-width: none; max-height: none; }
+.hp-receipt-pdf { width: 100%; height: 75vh; border: 0; background: var(--surface); }
+.hp-receipt-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block-start: var(--space-4); }
+.hp-receipt-next { margin-inline-start: auto; }
+.hp-receipt-filed-title { font-size: var(--text-body); margin: 0 0 var(--space-3); }
+.hp-receipt-filed-facts { margin: 0 0 var(--space-4); display: grid; gap: var(--space-2); }
+.hp-receipt-filed-facts div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.hp-receipt-filed-facts dt { color: var(--muted); }
+.hp-receipt-filed-facts dd { margin: 0; }
+.form-hint[data-hint-for] { margin-block-start: var(--space-1); }
+[data-suggested="true"].input, select[data-suggested="true"], [data-suggested="true"] .input { border-color: var(--success-muted); background: var(--success-subtle); }
+@media (max-width: 760px) {
+  .hp-receipt-review { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+  .hp-receipt-preview-frame { min-height: 240px; max-height: 60vh; }
+  .hp-receipt-pdf { height: 60vh; }
+}
+
 /* ---------- States ---------- */
 
 .hp-empty { max-width: 480px; margin: var(--space-12) auto 0; text-align: center; }

@@ -755,41 +755,66 @@ html:has(.landing-header) {
 }
 
 /* ============================================
-   Get it
+   Get it: one centred column, the primary action first
+   (signup closed: the request card; open: Create an account), then the ways
+   in for people who already have an account. Redesign 2026-10-25.
    ============================================ */
 .landing-get-it {
   text-align: center;
 }
 
-.landing-get-it-free {
-  margin: 0 0 var(--space-1-5);
+.landing-get-it-lead {
+  margin: 0 auto var(--space-10);
+  max-width: 48ch;
   font-size: var(--text-headline);
-  font-weight: var(--weight-semibold);
-  color: var(--text);
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+}
+
+.landing-get-it-body {
+  display: grid;
+  gap: var(--space-8);
+  max-width: 720px;
+  margin-inline: auto;
+  text-align: start;
 }
 
 .landing-get-it-note {
-  margin: 0 auto var(--space-10);
-  max-width: 48ch;
+  margin: calc(-1 * var(--space-4)) 0 0;
+  font-size: var(--text-label);
   color: var(--muted);
+  text-align: center;
 }
 
+/* Ways in: horizontal tiles, two app tiles side by side */
 .landing-get-it-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 240px));
-  justify-content: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+.landing-get-it-apps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.landing-get-it-apps-label {
+  grid-column: 1 / -1;
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
 }
 
 .landing-get-it-option {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-8) var(--space-5);
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-hero);
+  border-radius: var(--radius-lg);
   color: var(--text);
   text-decoration: none;
   transition:
@@ -798,6 +823,12 @@ html:has(.landing-header) {
     scale var(--duration-press) var(--ease-spring);
 }
 
+.landing-get-it-option > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+/* A classed link is a control: hold its own colours over the global a:hover (MUT-77) */
 a.landing-get-it-option:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
@@ -814,20 +845,36 @@ a.landing-get-it-option:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
-.landing-get-it-option--unavailable {
-  border-style: dashed;
-  color: var(--muted);
-  justify-content: center;
-}
-
 .landing-get-it-label {
+  flex: 1;
   font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
-.landing-get-it-hint {
-  font-size: var(--text-label);
+.landing-get-it-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--muted);
+}
+
+.landing-get-it-chevron:dir(rtl) {
+  scale: -1 1;
+}
+
+/* Create an account while signup is open: the hero's ink button, as a tile */
+.landing-get-it-option--primary,
+a.landing-get-it-option--primary:hover {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+a.landing-get-it-option--primary:hover {
+  opacity: var(--landing-hover-dim);
+}
+
+.landing-get-it-option--primary .landing-get-it-chevron {
+  color: inherit;
 }
 
 .landing-get-it-meta {
@@ -857,58 +904,251 @@ a.landing-get-it-option:focus-visible {
   opacity: var(--landing-press-dim);
 }
 
-/* The paid half of Get it (MUT-172): two lines and one button, no box, no heading */
-.landing-get-it-paid {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: center;
-  max-width: 48ch;
-  margin: var(--space-10) auto 0;
+/* ============================================
+   Request card and form (MUT-186 2A/D3/7A; rules moved here from the retired
+   HostedOfferPage.css)
+   ============================================ */
+.landing-get-it-request {
+  padding: var(--space-8);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-hero);
 }
 
-.landing-get-it-paid-lead {
-  margin: 0;
-  font-size: var(--text-body);
+.landing-get-it-request-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-heading);
+  font-size: var(--text-title);
   font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 
-.landing-get-it-paid-hint {
-  margin: 0;
-  font-size: var(--text-label);
-  color: var(--muted);
+:lang(ar) .landing-get-it-request-title {
+  font-family: var(--font-heading-ar);
+  letter-spacing: 0;
+  line-height: 1.4;
 }
 
-/* The hero button's recipe (HeroSection.css): the landing loads no Button.css */
-.landing-get-it-paid-cta {
+.landing-get-it-request-hint {
+  margin: 0 0 var(--space-8);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+}
+
+.hosted-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5) var(--space-4);
+}
+
+/* Name | email, phone | what you do; everything after spans the row */
+.hosted-form > :nth-child(n + 5) {
+  grid-column: 1 / -1;
+}
+
+/* 44px fields on the landing: a touch target, and the landing's roomier scale */
+.hosted-form .input,
+.hosted-form .select {
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+.hosted-form .input-label {
+  color: var(--text);
+}
+
+.hosted-devices-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.hosted-devices-field legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.hosted-device-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2-5);
+}
+
+.hosted-device-pill {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-2);
   min-height: 44px;
-  padding: var(--space-3) var(--space-6);
+  padding-inline: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: var(--text-body);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    scale var(--duration-press) var(--ease-spring);
+}
+
+.hosted-device-pill:has(:checked) {
+  background: var(--accent-subtle);
+  border-color: var(--accent-solid);
+  color: var(--on-accent-subtle);
+}
+
+.hosted-device-pill:hover {
+  border-color: var(--border-strong);
+}
+
+.hosted-device-pill:active {
+  scale: var(--press-scale);
+}
+
+/* One ring, on the pill, for keyboard focus only */
+.hosted-device-pill:has(:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.hosted-device-pill input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.hosted-device-pill input {
+  accent-color: var(--accent-solid);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+/* The hero's ink button (HeroSection.css): the landing loads no Button.css */
+.hosted-submit {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-8);
+  border: 0;
   border-radius: var(--radius-card);
   background: var(--text);
   color: var(--bg);
+  font: inherit;
   font-weight: var(--weight-semibold);
-  text-decoration: none;
+  cursor: pointer;
   transition:
     scale var(--duration-press) var(--ease-spring),
     opacity 0.15s ease;
 }
 
-/* A classed link is a control: hold its own colours over the global a:hover (MUT-77) */
-.landing-get-it-paid-cta:hover {
-  color: var(--bg);
-  text-decoration: none;
+.hosted-submit:hover:not(:disabled) {
   opacity: var(--landing-hover-dim);
 }
 
-.landing-get-it-paid-cta:active {
+.hosted-submit:active:not(:disabled) {
   scale: var(--press-scale);
 }
 
-.landing-get-it-paid-cta:focus-visible {
+.hosted-submit:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+.hosted-submit:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.hosted-notice {
+  margin: 0;
+  font-size: var(--text-label);
+  line-height: var(--leading-relaxed);
+  color: var(--text-secondary);
+}
+
+/* Links inside a sentence carry an underline, not colour alone (WCAG 1.4.1, axe link-in-text-block) */
+.hosted-notice a,
+.hosted-success a,
+.hosted-success-edit {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hosted-notice a:visited {
+  color: var(--link-visited);
+}
+
+.hosted-alert {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--badge-overdue-bg);
+  color: var(--badge-overdue-text);
+  font-size: var(--text-body);
+}
+
+.hosted-success {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--badge-paid-bg);
+  color: var(--badge-paid-text);
+}
+
+.hosted-success-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-headline);
+  margin: 0;
+  color: var(--badge-paid-text);
+}
+
+:lang(ar) .hosted-success-title {
+  font-family: var(--font-heading-ar);
+}
+
+.hosted-success-title:focus {
+  outline: none;
+}
+
+.hosted-success p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-relaxed);
+}
+
+.hosted-success a,
+.hosted-success-edit {
+  color: var(--badge-paid-text);
+  font-weight: var(--weight-medium);
+}
+
+.hosted-success a:hover,
+.hosted-success-edit:hover {
+  text-decoration-thickness: 2px;
+}
+
+.hosted-success-edit {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ============================================
@@ -967,10 +1207,6 @@ a.landing-get-it-option:focus-visible {
   .landing-chapter--flip .landing-chapter-copy {
     order: 0;
   }
-
-  .landing-get-it-options {
-    grid-template-columns: minmax(0, 340px);
-  }
 }
 
 @media (max-width: 640px) {
@@ -997,6 +1233,32 @@ a.landing-get-it-option:focus-visible {
 
   .landing-mock-badge {
     justify-self: start;
+  }
+
+  /* Get it on phones: one field per row, the card nearly edge to edge, a full-width send */
+  .landing-get-it-lead {
+    font-size: var(--text-body);
+  }
+
+  .landing-get-it-request {
+    padding: var(--space-6) var(--space-5);
+  }
+
+  .landing-get-it-request-title {
+    font-size: var(--text-headline);
+  }
+
+  .landing-get-it-request-hint {
+    margin-bottom: var(--space-6);
+  }
+
+  .hosted-form,
+  .landing-get-it-apps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hosted-submit {
+    justify-self: stretch;
   }
 
   .landing-footer-content {

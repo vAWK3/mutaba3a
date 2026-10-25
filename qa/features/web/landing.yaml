@@ -85,39 +85,33 @@ features:
       - Open /download
     expect:
       - The landing header and footer frame the page; the app's top bar is absent
-  - id: hosted
-    title: The hosted offer page explains the trade, then takes a request through every state (MUT-186)
+  - id: get-it-form
+    title: Get MTB3A puts the request card first and takes a request through every state, two fields a row on desktop (MUT-186, redesign 2026-10-25)
     tier: secondary
     legacy: [MUT-186]
+    paths:
+      - src/pages/landing/components/GetItSection.tsx
+      - src/pages/landing/components/HostedRequestForm.tsx
+      - src/pages/landing/hostedRequest.ts
+      - src/pages/landing/LandingPage.css
     steps:
-      - Open /hosted in English then Arabic, read the comparison, submit an empty, a valid and a failing request
+      - Open the landing page in English, scroll to Get MTB3A, in light and dark
+      - Press Send request with nothing filled in
+      - Fill in a name and email and send while the server fails
+      - Press Try again once the server answers
     expect:
-      - Validation errors, the success state and the error state with retry each show; the honeypot stays empty
-  - id: hosted-375
-    title: At 375 px in Arabic the hosted page fits, stacks the comparison and keeps 44 px device pills (MUT-186)
+      - The request card comes before sign-in and the app tiles; name and email share a row; the device chooser has no box around it; axe is clean
+      - Both errors show and the name is focused; the failure alert shows beside Try again with the answers kept
+      - The card confirms with the visitor's own email, focused, and one request carries form-name hosted-request in English
+  - id: get-it-375
+    title: At 375 px in Arabic Get MTB3A fits, one field a row, with 44 px device pills, a full-width send and stacked app tiles
     tier: secondary
-    legacy: [MUT-186]
+    paths:
+      - src/pages/landing/components/PlatformIcons.tsx
     steps:
-      - Open /hosted at 375 px wide in Arabic
+      - Open the landing page in Arabic at 375 px wide and scroll to the request card
     expect:
-      - No horizontal overflow; the comparison stacks; device pills are at least 44 px
-  - id: hosted-slash
-    title: A /hosted link that gained a trailing slash still opens the offer page (MUT-186)
-    tier: tertiary
-    legacy: [MUT-186]
-    steps:
-      - Open /hosted/
-    expect:
-      - The offer page renders
-  - id: get-it-paid
-    title: Get it states that, unlike the free apps, a hosted account and the phone app come with a paid plan, and its button opens /hosted (MUT-172)
-    tier: secondary
-    legacy: [MUT-172]
-    steps:
-      - Open the landing page, scroll to Get MTB3A, read the lines under the three app cards, press "See hosted accounts"; same in Arabic
-    expect:
-      - The lead says the hosted account and the phone app come with a paid plan, with no price, no checkout and no platform name
-      - The button is the block's only link, presses like every landing control, keeps its colour on hover, and opens /hosted in the same tab
+      - No horizontal overflow; fields stack; device pills and the send button are at least 44 px; the send spans the form; app tiles stack
   - id: phone
     title: The phone chapter says the phone logs and the hosted account shows, and names each phone app from its config (MUT-173)
     tier: secondary

@@ -2787,7 +2787,7 @@ Imported data is never written field by field into the live store. It is mapped 
 ### Pattern: Glass chrome over a scrolling document (MUT-426)
 - Floating chrome is `position: fixed` over a page that still scrolls the document (no inner scroller), so scroll restoration, `scrollIntoView` and drawers keep working; the page reserves the chrome's space, so at rest nothing sits under it.
 - Glass is one class (`.hp-glass`: translucent `--surface`, `backdrop-filter`, a lift) with a solid fallback under `prefers-reduced-transparency` and without `backdrop-filter`. The fade where content meets it is a fixed `--bg` gradient band, never a mask (the document, not an element, scrolls).
-- **First instance:** `src/hosted/shell/HostedShell.tsx`, `src/hosted/hosted.css` (ADR-193).
+- **First instance:** `src/hosted/shell/HostedShell.tsx`, `src/hosted/hosted.css` (ADR-194).
 
 ### Pattern: Page motion by depth, as typed view transitions (MUT-426)
 - A pure rule names each navigation's motion from the two pathnames (`pageMotionOf`, first match wins); the router hands it to `document.startViewTransition({ types })`, and CSS draws each type on `::view-transition-old/new(root)` with RTL picking mirrored keyframes by name. Direction comes from depth, not history, so browser Back and a back link agree.

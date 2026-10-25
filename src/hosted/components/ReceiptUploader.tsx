@@ -5,6 +5,7 @@ import { useAddReceipt, useDeleteReceipt } from '../data/expenseQueries';
 import { useToast } from './Toast';
 import { downloadNavigator } from '../data/download';
 import { api, type ExpenseReceipt } from '../api/client';
+import { RECEIPT_MIME_TYPES, checkReceiptFile } from '../data/receiptFileRules';
 
 /**
  * Receipt attachment on an existing expense (MUT-44 §3/§4): start → PUT the
@@ -12,8 +13,6 @@ import { api, type ExpenseReceipt } from '../api/client';
  * rendered once an expense exists — the server's receipt routes need an
  * expenseId, so a brand-new, unsaved expense has nothing to attach to yet.
  */
-const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_READY_RECEIPTS = 10;
 
 export interface ReceiptUploaderProps {
@@ -40,12 +39,10 @@ export function ReceiptUploader({ profileId, expenseId, receipts, readOnly = fal
   if (readOnly && readyCount === 0) return null;
 
   const handleFile = async (file: File) => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      showToast(t('hosted.expenses.drawer.receipts.invalidType'));
-      return;
-    }
-    if (file.size > MAX_BYTES) {
-      showToast(t('hosted.expenses.drawer.receipts.tooLarge'));
+    // MUT-260 (A5): the rules the Receipts tab checks too, the server's own (type, size, filename).
+    const problem = checkReceiptFile(file);
+    if (problem) {
+      showToast(t(`hosted.expenses.drawer.receipts.${problem}`));
       return;
     }
     try {
@@ -114,7 +111,7 @@ export function ReceiptUploader({ profileId, expenseId, receipts, readOnly = fal
           <input
             ref={inputRef}
             type="file"
-            accept={ACCEPTED_TYPES.join(',')}
+            accept={RECEIPT_MIME_TYPES.join(',')}
             style={{ display: 'none' }}
             onChange={(e) => {
               const file = e.target.files?.[0];

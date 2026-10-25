@@ -5185,7 +5185,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The destination links pass `activeOptions={{ exact: true }}`: TanStack adds `aria-current` to any active link, and Owed's bare `/p/:id` is active under every page of the profile.
 - The Arabic for Spent (المصروف) awaits Basel's sign-off; the alternative is المصاريف.
 
-## ADR-193: The Portal's Chrome Floats Over the Page — the Pill, the You Island and Reports, With Depth-Driven View Transitions (MUT-426, epic MUT-423)
+## ADR-193: Portal Receipts Show Their Original Inline — Storage Origin in img-src/frame-src, an Inline Download Disposition, and a Shared Expense Form (MUT-260)
+
+**Status:** Accepted (2026-10-25, MUT-260, plan `.claude/designs/mut-260-receipts-portal.md` D1–D12 with eng-review amendments A1–A14). Builds on ADR-167 (the receipts library, MUT-255) and the MUT-45 CSP (§4c of `server/DEPLOYMENT.md`).
+
+**Context:** Receipts shared from the phone wait in the library as To review, and the portal could not see them. Basel chose layout B (a Receipts tab under Expenses, a gallery and a review page) and to show the original inline rather than as a download.
+
+**Decision:**
+1. **CSP.** `PORTAL_CSP` names `https://storage.googleapis.com` in `img-src` and `frame-src` (plus `'self'` in `frame-src`, for the dev server's same-origin local driver). Signed URLs are short-lived and on their own origin, so a receipt can't script the portal.
+2. **Inline disposition.** `GET /v1/receipts/{id}/download?disposition=inline|attachment` (default `attachment`, so existing callers are unchanged; API `1.71.0-mut260`). `contentDisposition(filename, disposition)` drives both drivers: the GCS `responseDisposition`, and the local token's optional `d` claim (absent = attachment). The response type stays the stored one (PDF, JPEG, PNG). Only the PDF preview and Open full size ask for inline; an image shows from the attachment URL its gallery card already loaded (same query, same bytes).
+3. **Local driver.** An inline `/dev/attachments` GET goes without `content-security-policy: sandbox` (a sandboxed PDF won't render in an iframe), and, being a raw Response, without the portal CSP whose `frame-ancestors 'none'` would refuse the frame. Attachments keep the sandbox.
+4. **The library being on** is learned from `GET /v1/receipts/counts`: 404 or 503 hides the tab and makes its routes say "not available", never retried; success gives the To-review count.
+5. **One expense form.** `components/expenseForm/useHostedExpenseForm` + `HostedExpenseFields` are extracted from `ExpenseDrawer` unchanged and shared by the drawer and the review page; the shared `components/expenses/ExpenseFormFields` gains an optional `hints` prop (the local app passes none).
+6. **Prefill** is a pure `suggestionToFormValues(ReceiptSuggestion)`: every source counts, confidence only colours the hint; amounts are split at the currency's exponent as strings; a currency the portal doesn't offer leaves the default currency and an empty amount with "The receipt says …".
+7. **Approve** never sends `suggested` (it would replace the stored one), sends no `captureSource`, keys on `{receiptId, body}` per mounted receipt and drops the key on any 4xx (the server stores 4xx answers as final).
+
+**Consequences:**
+- Turning the library on in production must be checked on staging first: open an image and a PDF receipt and confirm no CSP violation (runbook §6 deploy table).
+- Thumbnails are full-size originals (TD-250).
+- Filing onto an existing expense (MUT-389's `/file`) and deleting from the gallery are not in the portal yet.
+## ADR-194: The Portal's Chrome Floats Over the Page — the Pill, the You Island and Reports, With Depth-Driven View Transitions (MUT-426, epic MUT-423)
 
 **Status:** Accepted (2026-10-25, MUT-426; plan `.claude/designs/mut-426-floating-shell-plan.md`, eng review D1–D9 answered by Basel). The last step of the MUT-423 shell (round 4 variation 3). Supersedes ADR-192 §6 (the interim Reports link) and the sidebar in `hosted-portal.md` §7.1.
 
@@ -5203,4 +5222,4 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - `YouLinks.tsx`, the sidebar's and phone top bar's CSS, `--hp-sidebar-width` and the keys `hosted.shell.switcher.label`, `hosted.shell.account`, `hosted.billing.trialBanner.endsOn/endsSoon` are gone; `hosted.shell.island` is new. TD-236 is resolved.
 - Unit tests reach You through the harness's `openYou(user, part)`; QA through `qa/support/you.ts`'s `openYou` (the island, then the part tab).
-- The iOS keyboard behaviour is proven in Chromium only (TD-249).
+- The iOS keyboard behaviour is proven in Chromium only (TD-251).

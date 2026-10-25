@@ -211,10 +211,14 @@ function isLegacyPageVisit(method: string, path: string): boolean {
 // PostHog's EU ingestion host for the portal's opt-in usage counts (MUT-155,
 // ADR-090): the SDK loads from the portal's own bundle, so script-src stays 'self'.
 // And the Sentry org's EU ingest host, for the portal's crash reports (MUT-149 AC5).
+// MUT-260 (ADR-193): img-src and frame-src name the same storage host, so the Receipts tab shows a receipt's original
+// inline (an <img>, or an <iframe> of a PDF signed with disposition=inline). Signed URLs are short-lived and on their
+// own origin, so a receipt can never script the portal. In dev the local driver's URLs are same-origin ('self').
 // MUT-368: Cloudflare Turnstile on /signup and /recover: its script (explicit render) and its challenge frame. Both
 // directives are spelled out because default-src covers neither once script-src names another origin.
 const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
-const PORTAL_CSP = `default-src 'self'; script-src 'self' ${TURNSTILE_ORIGIN}; frame-src ${TURNSTILE_ORIGIN}; connect-src 'self' https://storage.googleapis.com https://eu.i.posthog.com ${SENTRY_INGEST_ORIGIN}; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'`;
+const STORAGE_ORIGIN = 'https://storage.googleapis.com';
+const PORTAL_CSP = `default-src 'self'; script-src 'self' ${TURNSTILE_ORIGIN}; frame-src 'self' ${TURNSTILE_ORIGIN} ${STORAGE_ORIGIN}; connect-src 'self' ${STORAGE_ORIGIN} https://eu.i.posthog.com ${SENTRY_INGEST_ORIGIN}; img-src 'self' data: ${STORAGE_ORIGIN}; frame-ancestors 'none'; form-action 'self'`;
 
 /** A source map: uploaded to Sentry at build time, never served (MUT-149 AC4, D6 layer 3). */
 const isSourceMap = (path: string) => path.endsWith('.map');
@@ -232,7 +236,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.70.0-mut370';
+export const API_VERSION = '1.71.0-mut260';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
