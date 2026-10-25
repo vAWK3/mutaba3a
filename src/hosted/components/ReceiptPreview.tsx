@@ -6,9 +6,9 @@ import { useReceiptDownload } from '../data/receiptQueries';
 
 /**
  * A receipt's original, large (MUT-260 D2, D3, layout B): an image with Fit / Actual size, or a PDF in an iframe,
- * plus "Open full size" in a new tab. Both read one inline signed URL (A12: the PDF needs it to display, and Open full
- * size needs it to show rather than save; the image reuses it). A URL that has expired by the time it loads is
- * fetched again once (D5).
+ * plus "Open full size" in a new tab. A12: only the PDF and Open full size ask for an inline URL (an iframe or a new
+ * tab would otherwise save the file); an image shows from the same attachment URL as its gallery card, so the bytes
+ * the card loaded are reused. A URL that has expired by the time it loads is fetched again (D5).
  */
 export interface ReceiptPreviewProps {
   profileId: string;
@@ -17,11 +17,14 @@ export interface ReceiptPreviewProps {
 
 export function ReceiptPreview({ profileId, receipt }: ReceiptPreviewProps) {
   const { t } = useLanguage();
-  const download = useReceiptDownload(profileId, receipt.id, 'inline');
+  const isPdf = receipt.mimeType === 'application/pdf';
+  const inline = useReceiptDownload(profileId, receipt.id, 'inline');
+  const shown = useReceiptDownload(profileId, receipt.id, 'attachment', !isPdf);
+  const download = isPdf ? inline : shown;
   const [actualSize, setActualSize] = useState(false);
   const retried = useRef(false);
-  const isPdf = receipt.mimeType === 'application/pdf';
   const url = download.data?.url;
+  const fullUrl = inline.data?.url;
 
   const onExpired = () => {
     if (retried.current) return;
@@ -38,8 +41,8 @@ export function ReceiptPreview({ profileId, receipt }: ReceiptPreviewProps) {
             {t(actualSize ? 'hosted.receipts.preview.fit' : 'hosted.receipts.preview.actual')}
           </button>
         )}
-        {url && (
-          <a className="hp-link" href={url} target="_blank" rel="noopener noreferrer" data-testid="receipt-open-full">
+        {fullUrl && (
+          <a className="hp-link" href={fullUrl} target="_blank" rel="noopener noreferrer" data-testid="receipt-open-full">
             {t('hosted.receipts.preview.openFull')}
           </a>
         )}
@@ -56,7 +59,14 @@ export function ReceiptPreview({ profileId, receipt }: ReceiptPreviewProps) {
         ) : isPdf ? (
           <iframe src={url} title={t('hosted.receipts.preview.pdfTitle', { name: receipt.filename })} className="hp-receipt-pdf" />
         ) : (
-          <img src={url} alt={t('hosted.receipts.preview.label', { name: receipt.filename })} onError={onExpired} />
+          <img
+            src={url}
+            alt={t('hosted.receipts.preview.label', { name: receipt.filename })}
+            onLoad={() => {
+              retried.current = false;
+            }}
+            onError={onExpired}
+          />
         )}
       </div>
     </figure>

@@ -58,8 +58,10 @@ export function useReceiptCounts(profileId: string) {
  */
 export function useReceiptsAvailability(profileId: string): { availability: ReceiptsAvailability; toReview: number | null } {
   const counts = useReceiptCounts(profileId);
+  // A refetch that says "off" wins over counts cached from before (the library turned off mid-session).
+  if (counts.isError && isLibraryOff(counts.error)) return { availability: 'off', toReview: null };
   if (counts.data) return { availability: 'on', toReview: counts.data.toReview };
-  if (counts.isError) return { availability: isLibraryOff(counts.error) ? 'off' : 'on', toReview: null };
+  if (counts.isError) return { availability: 'on', toReview: null };
   return { availability: 'checking', toReview: null };
 }
 
@@ -98,8 +100,9 @@ export function useReceiptDownload(profileId: string, receiptId: string, disposi
   });
 }
 
+/** The lists, the counts and single receipts; never the signed URLs, which stay valid (re-signing would reload every thumbnail). */
 export function invalidateReceipts(queryClient: QueryClient, profileId: string) {
-  void queryClient.invalidateQueries({ queryKey: receiptsKey(profileId) });
+  for (const part of ['list', 'counts', 'one']) void queryClient.invalidateQueries({ queryKey: receiptsKey(profileId, part) });
 }
 
 /**
@@ -112,11 +115,19 @@ export async function uploadLibraryReceipt(profileId: string, file: File, idempo
     { filename: file.name, mimeType: file.type as ReceiptMimeType, sizeBytes: file.size },
     idempotencyKey,
   );
+  const cleanUp = () => api.deleteLibraryReceipt(profileId, receipt.id).catch(() => undefined);
   try {
     await putToSignedUrl(upload.url, upload.headers, file);
+  } catch (error) {
+    await cleanUp();
+    throw error;
+  }
+  try {
     return await api.completeLibraryReceipt(profileId, receipt.id);
   } catch (error) {
-    await api.deleteLibraryReceipt(profileId, receipt.id).catch(() => undefined);
+    // Only when the server said it didn't complete (a 4xx): a lost answer or a 5xx may have completed it, and
+    // deleting would throw away a receipt that is in (the pending row, if any, ages out of the 24-hour cap).
+    if (error instanceof ApiError && error.status >= 400 && error.status < 500) await cleanUp();
     throw error;
   }
 }

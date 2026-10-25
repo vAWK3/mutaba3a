@@ -210,9 +210,10 @@ describe('the review page (AC3, D7, D8)', () => {
   it('shows the original inline: an image, and Open full size on the inline URL', async () => {
     const { api } = portal(`${BASE}/${R1}`, { receipts: [receipt(R1)] });
     const img = await screen.findByRole('img', { name: 'Receipt 1.jpg' });
-    expect(img).toHaveAttribute('src', `${STORAGE}/${R1}?d=inline`);
+    expect(img).toHaveAttribute('src', `${STORAGE}/${R1}?d=attachment`);
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Open full size' })).toHaveAttribute('href', `${STORAGE}/${R1}?d=inline`));
     expect(screen.getByRole('link', { name: 'Open full size' })).toHaveAttribute('target', '_blank');
-    expect(api.calls.find((c) => c.url.pathname === `/v1/receipts/${R1}/download`)?.url.searchParams.get('disposition')).toBe('inline');
+    expect(api.calls.some((c) => c.url.pathname === `/v1/receipts/${R1}/download` && c.url.searchParams.get('disposition') === 'inline')).toBe(true);
   });
 
   it('a PDF shows in an iframe', async () => {

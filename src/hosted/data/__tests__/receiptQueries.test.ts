@@ -17,7 +17,7 @@ describe('checkReceiptFile (A5)', () => {
   it('refuses the type, then the size, then the name, as the server does', () => {
     expect(checkReceiptFile(file({ type: 'image/gif' }))).toBe('invalidType');
     expect(checkReceiptFile(file({ size: MAX_RECEIPT_BYTES + 1 }))).toBe('tooLarge');
-    expect(checkReceiptFile(file({ size: 0 }))).toBe('tooLarge');
+    expect(checkReceiptFile(file({ size: 0 }))).toBe('empty');
     expect(checkReceiptFile(file({ name: 'a/b.png' }))).toBe('badName');
     expect(checkReceiptFile(file({ name: 'x'.repeat(201) }))).toBe('badName');
     expect(checkReceiptFile(file({ name: 'a\u0007.png' }))).toBe('badName');
@@ -77,7 +77,13 @@ describe('uploadLibraryReceipt (D9, A4)', () => {
     expect(api.count(`DELETE /v1/receipts/${R}`)).toBe(1);
   });
 
-  it('a failed complete deletes too; a failed delete still throws the original error', async () => {
+  it('a complete whose answer was lost keeps the receipt (it may be in)', async () => {
+    const api = stubApi({ 'POST /v1/receipts/uploads': started, [`PUT /b/${R}`]: () => new Response(null, { status: 200 }), [`POST /v1/receipts/${R}/complete`]: () => fail(502, 'UNKNOWN') });
+    await expect(uploadLibraryReceipt(P, file, 'key-1')).rejects.toMatchObject({ status: 502 });
+    expect(api.count(`DELETE /v1/receipts/${R}`)).toBe(0);
+  });
+
+  it('a refused complete deletes; a failed delete still throws the original error', async () => {
     const api = stubApi({ 'POST /v1/receipts/uploads': started, [`PUT /b/${R}`]: () => new Response(null, { status: 200 }), [`POST /v1/receipts/${R}/complete`]: () => fail(422, 'VALIDATION_FAILED', { reason: 'UPLOAD_MISMATCH' }), [`DELETE /v1/receipts/${R}`]: () => fail(500, 'INTERNAL') });
     await expect(uploadLibraryReceipt(P, file, 'key-1')).rejects.toMatchObject({ status: 422 });
     expect(api.count(`DELETE /v1/receipts/${R}`)).toBe(1);

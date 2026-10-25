@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
@@ -61,6 +61,11 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   const list = useReceipts(profile.id, status);
   const counts = useReceiptCounts(profile.id);
   const uploads = useUploadReceipts(profile.id);
+  // The search as it is when an upload finishes, not as it was when it started (the person may have switched tabs).
+  const latestSearch = useRef(search);
+  useEffect(() => {
+    latestSearch.current = search;
+  });
 
   const onFiles = async (files: File[]) => {
     const problems: string[] = [];
@@ -80,29 +85,30 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
     } else if (problems.length === 0 && landed > 0) {
       showToast(tp('hosted.receipts.uploaded', landed), { tone: 'info' });
     }
-    // AC2: an upload lands in To review, so show that list.
-    if (landed > 0 && status === 'filed') setSearch({ ...search, status: undefined });
+    // AC2: an upload lands in To review, so show that list (unless the person moved to All meanwhile).
+    if (landed > 0 && latestSearch.current.status === 'filed') setSearch({ ...latestSearch.current, status: undefined });
   };
 
+  // One file input for the page; the toolbar's and the empty state's buttons both open it.
+  const fileInput = writable ? (
+    <input
+      ref={inputRef}
+      type="file"
+      multiple
+      accept={RECEIPT_MIME_TYPES.join(',')}
+      hidden
+      data-testid="receipts-upload-input"
+      onChange={(e) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = '';
+        if (files.length > 0) void onFiles(files);
+      }}
+    />
+  ) : null;
   const uploadButton = writable ? (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        multiple
-        accept={RECEIPT_MIME_TYPES.join(',')}
-        hidden
-        data-testid="receipts-upload-input"
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          e.target.value = '';
-          if (files.length > 0) void onFiles(files);
-        }}
-      />
-      <Button variant="primary" size="sm" onClick={() => inputRef.current?.click()} disabled={uploads.uploading}>
-        {t(uploads.uploading ? 'hosted.receipts.uploading' : 'hosted.receipts.upload')}
-      </Button>
-    </>
+    <Button variant="primary" size="sm" onClick={() => inputRef.current?.click()} disabled={uploads.uploading}>
+      {t(uploads.uploading ? 'hosted.receipts.uploading' : 'hosted.receipts.upload')}
+    </Button>
   ) : null;
 
   const options: { value: ReceiptStatusFilter; label: string; count?: number }[] = [
@@ -113,6 +119,7 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
 
   return (
     <>
+      {fileInput}
       <div className="hp-receipts-bar">
         <SegmentedTabs<ReceiptStatusFilter>
           options={options}

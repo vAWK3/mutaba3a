@@ -515,6 +515,7 @@
           "download": "Download",
           "preparing": "Preparing…",
           "invalidType": "Receipts must be a PDF, JPEG or PNG file.",
+          "empty": "Receipts can't be empty files.",
           "tooLarge": "Receipts can be at most 10 MB.",
           "uploadFailed": "Couldn't upload the receipt. Try again.",
           "downloadFailed": "Couldn't prepare the download. Try again.",
@@ -1020,6 +1021,7 @@
       },
       "errors": {
         "invalidType": "{name}: receipts must be a PDF, JPEG or PNG file.",
+        "empty": "{name}: the file is empty.",
         "tooLarge": "{name}: receipts can be at most 10 MB.",
         "badName": "{name}: this file's name can't be used. Rename it (no slashes, at most 200 characters).",
         "tooManyPending": "Too many unfinished uploads. Finish or remove them, then try again.",

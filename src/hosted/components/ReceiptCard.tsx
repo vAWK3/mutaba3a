@@ -43,6 +43,9 @@ function ImageThumb({ profileId, item }: { profileId: string; item: ReceiptListI
           src={download.data.url}
           alt=""
           loading="lazy"
+          onLoad={() => {
+            retried.current = false;
+          }}
           onError={() => {
             // An expired URL (D5): one more, then the tile stays blank.
             if (retried.current) return;
