@@ -1,0 +1,157 @@
+{
+  "name": "first-run",
+  "description": "Nothing recorded anywhere: no movement in the period or its history, nothing owed (First Run, default view).",
+  "period": "month",
+  "readable": [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "verdict": {
+    "from": "2026-10-01",
+    "to": "2026-10-31",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": {
+      "date": "2026-10-23",
+      "source": "live"
+    },
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "0.00",
+            "spent": "0.00",
+            "net": "0.00"
+          }
+        ],
+        "converted": {
+          "received": "0.00",
+          "spent": "0.00",
+          "net": "0.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "11111111-1111-4111-8111-111111111111",
+        "name": "Nal Software"
+      },
+      {
+        "kind": "PERSONAL",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "0.00",
+            "spent": "0.00",
+            "net": "0.00"
+          }
+        ],
+        "converted": {
+          "received": "0.00",
+          "spent": "0.00",
+          "net": "0.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "22222222-2222-4222-8222-222222222222",
+        "name": "Personal"
+      }
+    ],
+    "total": {
+      "label": "kept",
+      "currencies": [
+        {
+          "currency": "ILS",
+          "net": "0.00"
+        }
+      ],
+      "converted": "0.00",
+      "inCurrencyOnly": null,
+      "sharedInFull": false,
+      "partial": false
+    },
+    "usual": null,
+    "owed": {
+      "currencies": [],
+      "overdueCount": 0,
+      "converted": "0.00"
+    },
+    "unavailable": []
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "kept",
+        "figure": {
+          "minor": 0,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": false,
+        "breakdown": null,
+        "inCurrencyOnly": null
+      },
+      "usual": null,
+      "leavesOut": [],
+      "rows": [
+        {
+          "profileId": "11111111-1111-4111-8111-111111111111",
+          "name": "Nal Software",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 0,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": true,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "22222222-2222-4222-8222-222222222222",
+          "name": "Personal",
+          "kind": "spent",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 0,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": true,
+          "unavailable": null,
+          "link": true
+        }
+      ],
+      "owed": {
+        "none": true,
+        "figure": null,
+        "breakdown": null,
+        "overdueCount": 0
+      },
+      "footnote": {
+        "sharedInFull": false,
+        "rateDate": "2026-10-23",
+        "omitted": []
+      }
+    },
+    "isFirstRun": true,
+    "verdictAllLocked": false
+  }
+}
