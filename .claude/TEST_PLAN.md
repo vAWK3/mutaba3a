@@ -3900,7 +3900,7 @@ And read-only against production's Artifact Registry (gcloud token): `release-im
 
 ## MUT-437 — One purchase is one expense (2026-10-26, ADR-202)
 
-Tests written first for the store, the rule and the tools (watched failing: 6 red before T3, the D17/D12/D15 tests with T4); the refactor commit's proof is the existing inbox suites, unchanged.
+The store contracts and the rule/read-tool tests were written first and watched failing (6 red before T3). The write-path tests (`mcp-write-tools.test.ts`, +15) were written right after the T4 code, not before it (disclosed). The refactor commit's proof is the existing inbox suites, unchanged.
 
 | File | Kind | Count | What it proves |
 |---|---|---|---|
