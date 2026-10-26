@@ -3,12 +3,12 @@ import { z } from 'zod';
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld } from '../agreements/compose.js';
 import { todayIn } from '../dates.js';
 import { parseExpenseAmount } from '../expenses/compose.js';
-import { MATCH_DATE_WINDOW_DAYS, dateWindow, rankMatches, type MatchCandidate } from '../expenses/similarity.js';
+import { MATCH_DATE_WINDOW_DAYS, dateWindow, rankMatches, type MatchCandidate, type MatchProbe } from '../expenses/similarity.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { SUPPORTED_CURRENCIES, formatMoney, type Currency } from '../money.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { ownedOrCoOwnedProfilesOf, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { ExpenseCursor, ExpenseRecord, InboxEntryCursor, InboxEntryRecord, Organization } from '../repositories/ports.js';
+import type { ExpenseCursor, ExpenseRecord, Organization } from '../repositories/ports.js';
 import { serializeInboxEntry } from '../serializers.js';
 import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, inboxReadable, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
 
@@ -36,23 +36,26 @@ const CATEGORIES_OUTPUT = { ...page({ id: z.string(), name: z.string(), archived
 const CLIENTS_OUTPUT = page({ id: z.string(), name: z.string() });
 const VENDORS_OUTPUT = { items: z.array(z.object({ id: z.string(), name: z.string(), matchedName: z.string(), exact: z.boolean() })), truncated: z.boolean() };
 const INBOX_OUTPUT = page({ id: z.string(), kind: z.enum(['income', 'expense']), amount: z.string(), currency: z.string(), occurredOn: z.string(), note: z.string().nullable(), captureSource: z.string().nullable() });
-const SIMILAR_OUTPUT = {
-  items: z.array(
-    z.object({
-      where: z.enum(['profile', 'inbox']),
-      profileId: z.string().nullable(),
-      id: z.string(),
-      amount: z.string(),
-      currency: z.string(),
-      occurredOn: z.string(),
-      vendor: z.string().nullable(),
-      title: z.string().nullable(),
-      daysApart: z.number(),
-      reasons: z.array(z.string()),
-    }),
-  ),
-  truncated: z.boolean(),
-};
+/** One look-alike, as find_similar_expenses and the write tools' `matched` answer return it (MUT-437). */
+export const LOOK_ALIKE_ITEM = z.object({
+  where: z.enum(['profile', 'inbox']),
+  profileId: z.string().nullable(),
+  id: z.string(),
+  amount: z.string(),
+  currency: z.string(),
+  occurredOn: z.string(),
+  vendor: z.string().nullable(),
+  title: z.string().nullable(),
+  daysApart: z.number(),
+  reasons: z.array(z.string()),
+  vendorMatch: z.enum(['similar', 'different', 'unknown']),
+  /** A READY receipt is already on this expense: attaching another would be a second copy. */
+  hasReceipt: z.boolean(),
+  /** False for an inbox entry: file it to a profile first (file_inbox_entry), then attach. */
+  canAttachReceipt: z.boolean(),
+});
+export type LookAlike = z.infer<typeof LOOK_ALIKE_ITEM>;
+const SIMILAR_OUTPUT = { items: z.array(LOOK_ALIKE_ITEM), truncated: z.boolean() };
 
 function profileView(organization: Organization, userId: string) {
   const type = profileTypeOf(organization);
@@ -78,6 +81,14 @@ function searchDate(value: string, now: Date): string {
 
 type Candidate = MatchCandidate & { where: 'profile' | 'inbox'; profileId: string | null; id: string; title: string | null };
 
+/** How an agent's inbox note starts with the vendor (add_expense to the inbox writes `vendor · title · notes`). */
+export const INBOX_NOTE_SEPARATOR = ' · ';
+
+/** Review D16: an inbox entry has no vendor field; the note's first part stands in for ranking only. */
+function inboxNoteVendor(note: string | null): string | null {
+  return note?.split(INBOX_NOTE_SEPARATOR)[0]?.trim() || null;
+}
+
 /** Pages through one source until it ends or SIMILAR_MAX_CANDIDATES rows were read; `truncated` when it didn't end. */
 async function readCapped<T, C>(fetchPage: (cursor: C | null) => Promise<{ items: T[]; nextCursor: C | null }>): Promise<{ items: T[]; truncated: boolean }> {
   const items: T[] = [];
@@ -88,6 +99,58 @@ async function readCapped<T, C>(fetchPage: (cursor: C | null) => Promise<{ items
     cursor = result.nextCursor;
   } while (cursor && items.length < SIMILAR_MAX_CANDIDATES);
   return { items, truncated: cursor !== null };
+}
+
+/**
+ * MUT-437: the look-alikes of one purchase, best first, at most SIMILAR_MAX_RESULTS — shared by find_similar_expenses and
+ * every agent expense write, which refuses to write while any comes back. One named profile, or every profile the
+ * person owns or co-owns (a LOCKED one left out, as /v1/entries does) plus the inbox. `exclude` drops ids before the cut
+ * (review D12: the ones the person already called different, and an entry being filed), so a retry shows the next ones.
+ */
+export async function findLookAlikes(
+  ctx: McpContext,
+  probe: MatchProbe,
+  options: { profileId?: string | undefined; exclude?: ReadonlySet<string> } = {},
+): Promise<{ items: LookAlike[]; truncated: boolean }> {
+  const userId = ctx.agent.user.id;
+  // One named profile answers its own refusal; across all of them, a LOCKED profile is left out.
+  const profiles = options.profileId ? [await agentProfile(ctx, options.profileId)] : await readableProfiles(ctx, await ownedOrCoOwnedProfilesOf(ctx.store, userId));
+  // The database narrows to the rule's currency, amount and window (MUT-437); rankMatches still applies the whole rule.
+  const filter = { ...dateWindow(probe.occurredOn), currency: probe.currency, amountMinor: probe.amountMinor };
+
+  const sources = await Promise.all(
+    profiles.map(async (organization) => {
+      const read = await readCapped<ExpenseRecord, ExpenseCursor>((cursor) => ctx.store.expenses.list(organization.id, filter, { limit: SIMILAR_PAGE, cursor }));
+      const items: Candidate[] = read.items.map((e) => ({ where: 'profile', profileId: organization.id, id: e.id, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, vendor: e.vendor, title: e.title }));
+      return { items, truncated: read.truncated };
+    }),
+  );
+  if (!options.profileId && !(await inboxReadable(ctx))) {
+    const read = await ctx.store.inboxEntries.listMatchCandidates(userId, filter, SIMILAR_MAX_CANDIDATES);
+    const items: Candidate[] = read.items.map((e) => ({ where: 'inbox', profileId: null, id: e.id, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, vendor: inboxNoteVendor(e.note), title: e.note }));
+    sources.push({ items, truncated: read.truncated });
+  }
+
+  const candidates = sources.flatMap((s) => s.items).filter((c) => !options.exclude?.has(c.id));
+  const ranked = rankMatches(probe, candidates).slice(0, SIMILAR_MAX_RESULTS);
+  const onProfiles = ranked.filter((r) => r.item.where === 'profile');
+  const receipts = onProfiles.length ? await ctx.store.expenseReceipts.countReadyByExpenseIds([...new Set(onProfiles.map((r) => r.item.profileId as string))], onProfiles.map((r) => r.item.id)) : new Map<string, number>();
+  const items = ranked.map(({ item, match }) => ({
+    where: item.where,
+    profileId: item.profileId,
+    id: item.id,
+    amount: formatMoney({ minor: item.amountMinor, currency: item.currency as Currency }),
+    currency: item.currency,
+    occurredOn: item.occurredOn,
+    vendor: item.vendor,
+    title: item.title,
+    daysApart: match.daysApart,
+    reasons: match.reasons,
+    vendorMatch: match.vendorMatch,
+    hasReceipt: (receipts.get(item.id) ?? 0) > 0,
+    canAttachReceipt: item.where === 'profile',
+  }));
+  return { items, truncated: sources.some((s) => s.truncated) };
 }
 
 export function registerReadTools(server: McpServer, ctx: McpContext): void {
@@ -212,39 +275,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     ({ amount, currency, date, vendor, profileId }) =>
       runTool(ctx, 'find_similar_expenses', SIMILAR_OUTPUT, async () => {
         const probe = { amountMinor: parseExpenseAmount(amount, currency as Currency), currency, occurredOn: searchDate(date, ctx.now()), vendor };
-        // One named profile answers its own refusal; across all of them, a LOCKED profile is left out (as /v1/entries does).
-        const profiles = profileId ? [await agentProfile(ctx, profileId)] : await readableProfiles(ctx, await ownedOrCoOwnedProfilesOf(ctx.store, userId));
-        const window = dateWindow(probe.occurredOn);
-
-        const fromProfiles = await Promise.all(
-          profiles.map(async (organization) => {
-            const read = await readCapped<ExpenseRecord, ExpenseCursor>((cursor) => ctx.store.expenses.list(organization.id, { ...window, currency }, { limit: SIMILAR_PAGE, cursor }));
-            const items: Candidate[] = read.items.map((e) => ({ where: 'profile', profileId: organization.id, id: e.id, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, vendor: e.vendor, title: e.title }));
-            return { items, truncated: read.truncated };
-          }),
-        );
-        const sources = [...fromProfiles];
-        if (!profileId && !(await inboxReadable(ctx))) {
-          const read = await readCapped<InboxEntryRecord, InboxEntryCursor>((cursor) => ctx.store.inboxEntries.list(userId, { limit: SIMILAR_PAGE, cursor }));
-          const items: Candidate[] = read.items.filter((e) => e.kind === 'EXPENSE').map((e) => ({ where: 'inbox', profileId: null, id: e.id, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, vendor: null, title: e.note }));
-          sources.push({ items, truncated: read.truncated });
-        }
-
-        const items = rankMatches(probe, sources.flatMap((s) => s.items))
-          .slice(0, SIMILAR_MAX_RESULTS)
-          .map(({ item, match }) => ({
-            where: item.where,
-            profileId: item.profileId,
-            id: item.id,
-            amount: formatMoney({ minor: item.amountMinor, currency: item.currency as Currency }),
-            currency: item.currency,
-            occurredOn: item.occurredOn,
-            vendor: item.vendor,
-            title: item.title,
-            daysApart: match.daysApart,
-            reasons: match.reasons,
-          }));
-        return { items, truncated: sources.some((s) => s.truncated) };
+        return findLookAlikes(ctx, probe, { profileId });
       }),
   );
 }

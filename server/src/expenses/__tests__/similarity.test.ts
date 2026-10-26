@@ -89,3 +89,16 @@ describe('dateWindow', () => {
     expect(dateWindow('2026-03-01')).toEqual({ from: '2026-02-26', to: '2026-03-04' });
   });
 });
+
+describe('vendorMatch (MUT-437, review D2)', () => {
+  it('says similar, different or unknown, and never lets a different vendor exclude a match', () => {
+    expect(matchScore(probe, candidate()).vendorMatch).toBe('similar');
+    expect(matchScore(probe, candidate({ vendor: 'Cafe Nero' }))).toMatchObject({ matches: true, vendorMatch: 'different' });
+    expect(matchScore(probe, candidate({ vendor: null })).vendorMatch).toBe('unknown');
+    expect(matchScore({ ...probe, vendor: undefined }, candidate()).vendorMatch).toBe('unknown');
+  });
+
+  it('keeps an Arabic receipt and a Latin card descriptor a match, marked different (transliteration scores below the floor)', () => {
+    expect(matchScore({ ...probe, vendor: 'كارفور' }, candidate({ vendor: 'CARREFOUR MKT 0231' }))).toMatchObject({ matches: true, vendorMatch: 'different' });
+  });
+});
