@@ -151,7 +151,7 @@ export function payment(
     notes: null,
     status: p.status ?? 'POSTED',
     reversedAt: p.status === 'REVERSED' ? STAMP : null,
-    reversalReason: null,
+    reversalReason: null as string | null,
     replacesPaymentId: null,
     replacedByPaymentId: null,
     allocations,
@@ -629,6 +629,8 @@ export class FakeApi {
   private readonly uncategorized: number;
   private readonly onceQueue: { method: string; path: RegExp; answer: OnceAnswer }[] = [];
   private serial = 500;
+  /** MUT-453: each Owed entry's credits, newest first. */
+  private readonly credits = new Map<string, { id: string; receivableId: string; amount: string; net: string; vat: string; reason: string; effectiveDate: string; createdAt: string }[]>();
   private setupLink: StubSetupLink | null;
   private currentPassword: string;
   /** MUT-324: false = the person is behind on the terms and the portal asks them first. */
@@ -883,7 +885,7 @@ export class FakeApi {
     if (resource === 'payments' && method === 'GET' && !id) {
       return page(this.payments.filter((p) => (!q('status') || p.status === q('status')) && (!q('customerId') || p.customerId === q('customerId'))));
     }
-    if (resource === 'payments' && id) return this.paymentAnswer(e, id);
+    if (resource === 'payments' && id) return this.paymentAnswer(e, id, sub);
     if (resource === 'income' && method === 'POST') return this.income(e.body ?? {});
     if (resource === 'income' && method === 'PATCH' && id) return this.redateIncome(e, id);
     if (resource === 'attachments' && method === 'GET') {
@@ -1070,6 +1072,8 @@ export class FakeApi {
     const found = this.receivables.find((r) => r.id === id);
     if (!found) return notFound();
     if (e.method === 'GET' && !sub) return json(found);
+    if (e.method === 'GET' && sub === 'credits') return json({ receivable: found, credits: this.credits.get(found.id) ?? [] });
+    if (e.method === 'POST' && sub === 'credits') return this.credit(found, e.body as { amount: string; reason: string });
     if (e.method === 'POST' && sub === 'settle') {
       const body = e.body as { amount: string; paidAt: string; method: 'CASH' | 'BANK' };
       const paid = toMinor(found.paid) + toMinor(body.amount);
@@ -1108,9 +1112,10 @@ export class FakeApi {
   }
 
   /** MUT-224: GET one payment; PATCH its received date with If-Match (MUT-223), allocations untouched. */
-  private paymentAnswer(e: Logged, id: string) {
+  private paymentAnswer(e: Logged, id: string, sub?: string) {
     const found = this.payments.find((p) => p.id === id);
     if (!found) return notFound();
+    if (e.method === 'POST' && sub === 'reverse') return this.reverse(found, (e.body as { reason: string }).reason);
     if (e.method === 'GET') return json(found);
     if (e.method === 'PATCH') {
       if (e.headers['if-match'] !== String(found.version)) return conflict('VERSION_MISMATCH');
@@ -1119,6 +1124,36 @@ export class FakeApi {
       return json(found);
     }
     return undefined;
+  }
+
+  /** MUT-453: as the server: whole and final; every Owed it paid is owed again. */
+  private reverse(found: StubPayment, reason: string) {
+    if (found.status === 'REVERSED') return conflict('ALREADY_REVERSED');
+    for (const a of found.allocations) {
+      const r = this.receivables.find((x) => x.id === a.receivableId);
+      if (!r) continue;
+      r.paid = toDecimal(toMinor(r.paid) - toMinor(a.amount));
+      r.outstanding = toDecimal(toMinor(r.gross) - toMinor(r.paid) - toMinor(r.credited));
+      r.status = r.outstanding === '0.00' ? 'PAID' : toMinor(r.paid) > 0 ? 'PARTIALLY_PAID' : 'DUE';
+      r.version += 1;
+    }
+    Object.assign(found, { status: 'REVERSED', reversedAt: STAMP, reversalReason: reason, allocated: '0.00', unallocated: found.amount, allocationState: 'unallocated', version: found.version + 1 });
+    return json(found);
+  }
+
+  /** MUT-453: a credit up to what is left; crediting everything left closes the entry (Cancel). */
+  private credit(found: StubReceivable, body: { amount: string; reason: string }) {
+    if (toMinor(found.outstanding) === 0) return json({ error: { code: 'VALIDATION_FAILED', message: 'Nothing is outstanding', details: { reason: 'RECEIVABLE_NOT_OPEN' } } }, 422);
+    if (toMinor(body.amount) > toMinor(found.outstanding)) {
+      return json({ error: { code: 'VALIDATION_FAILED', message: 'The credit exceeds what is outstanding', details: { reason: 'CREDIT_EXCEEDS_OUTSTANDING', outstanding: found.outstanding } } }, 422);
+    }
+    found.credited = toDecimal(toMinor(found.credited) + toMinor(body.amount));
+    found.outstanding = toDecimal(toMinor(found.gross) - toMinor(found.paid) - toMinor(found.credited));
+    if (found.outstanding === '0.00') found.status = 'PAID';
+    found.version += 1;
+    const made = { id: uid(0x9, this.serial++), receivableId: found.id, amount: body.amount, net: body.amount, vat: '0.00', reason: body.reason, effectiveDate: todayInJerusalem(), createdAt: STAMP };
+    this.credits.set(found.id, [made, ...(this.credits.get(found.id) ?? [])]);
+    return json({ receivable: found, credit: made }, 201);
   }
 
   /** MUT-224: PATCH /v1/income/{id} moves an Owed entry's postingDate (its due date stays). */

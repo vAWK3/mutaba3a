@@ -157,6 +157,12 @@ Every money rule runs on both stores (memory and `test:db`).
 | Component | `HostedYourDataDrawer.test.tsx`, `local-mode.test.tsx` | menu/URL, checklist, progress, cancel, missing files, too-new reload, Arabic RTL; Restore confirm names an account export |
 | Release-QA | `qa/specs/portal/your-data.spec.ts` | `portal.your-data.download-signed-in`, `portal.your-data.download-cancel` |
 
+## Correcting money (MUT-453, added 2026-10-26)
+- Server `src/__tests__/owner-corrections.test.ts` (17): session + device reverse/credit on an owned profile, co-owner on a partner's payment, idempotent replay + ALREADY_REVERSED, REASON_RESERVED, Malafat-fed 403 before lookup, disconnected Malafat firm → 404 on its own rows (D5) while the key still reverses (API_KEY audit), CREDIT_EXCEEDS_OUTSTANDING / RECEIVABLE_NOT_OPEN / Cancel settles, `/v1/me` access ⇔ allowed (D1), Undo truth by audit actor (D6).
+- Store contract `store-contract-entries.ts`: a reversed settle payment no longer settles its Owed (D3; Postgres on CI via test:db). `routes-entries.test.ts`: `credited` / `reversalReason` in the feed. `billing-gate-routes.test.ts`: both writes 402 when lapsed. `route-security.test.ts`: both routes accept sessions.
+- Portal: `incomeAffordances.test.ts` (corrections), `incomeApiErrors.test.ts` (`mapCorrectionError`), `RedateDrawer.test.tsx` (reverse, reduce, cancel, over-the-limit refused before sending, server's new maximum, Back, history lines, Malafat).
+- Release-QA (web): `qa/features/portal/income.yaml` + `qa/specs/portal/income.spec.ts` — `reverse-payment`, `credit-owed`, `credit-over-outstanding`, `cancel-owed`, `correct-malafat-readonly`.
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)
