@@ -2714,7 +2714,8 @@ export class PrismaLedgerStore implements LedgerStore {
     settledOwedIds: async (organizationIds, paymentIds) => {
       if (paymentIds.length === 0) return new Map();
       const allocations = await this.prisma.paymentAllocation.findMany({
-        where: { organizationId: { in: [...organizationIds] }, paymentId: { in: [...paymentIds] } },
+        // MUT-453 (review D3): a reversal keeps its allocation rows as history; a reversed payment settles nothing.
+        where: { organizationId: { in: [...organizationIds] }, paymentId: { in: [...paymentIds] }, payment: { status: 'POSTED' } },
         select: { paymentId: true, receivableId: true, receivable: { select: { origin: true } } },
       });
       const count = new Map<string, number>();

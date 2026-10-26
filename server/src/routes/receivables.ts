@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { actorOf, lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
@@ -91,19 +91,22 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/receivables/{receivableId}/credits',
       tags: ['Receivables'],
       summary: 'Credit a posted receivable without changing its posted figures',
-      description: 'Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to.',
-      security: [{ apiKey: [] }],
+      description: 'Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to. MUT-453: a session or device session may credit on a profile whose payments it may write, but only an amount owed a person recorded (origin ADJUSTMENT); any other is 404.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.credit')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(CreditRequestSchema) },
       responses: { 201: { description: 'Credited', content: { 'application/json': { schema: CreditResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = keyAuth(c);
+      const { organization } = c.get('auth');
+      const actor = actorOf(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      if (!receivable) throw new ApiError('NOT_FOUND', 'No such receivable');
+      // MUT-453 (review D5): a person credits only what a person recorded; a disconnected Malafat firm's installments and
+      // retainer charges stay Malafat's (the same rule settle keeps below).
+      if (!receivable || (actor.actorType === 'USER' && receivable.origin !== 'ADJUSTMENT')) throw new ApiError('NOT_FOUND', 'No such receivable');
       const currency = receivable.currency as Currency;
       const amountMinor = parseAmount(body.amount, currency);
       const effectiveDate = body.effectiveDate ? assertIsoDate(body.effectiveDate, 'effectiveDate') : today;
@@ -122,7 +125,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         throw err;
       }
       if (!result) throw new ApiError('NOT_FOUND', 'No such receivable');
-      await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
+      await store.audit.append({ organizationId: organization.id, ...actor, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
       return c.json({ receivable: serializeReceivable(result.receivable, today), credit: serializeCredit(result.credit, currency) }, 201);
     },
   );

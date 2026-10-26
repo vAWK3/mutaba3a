@@ -132,7 +132,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (receivable) {
         if (receivable.origin !== 'ADJUSTMENT' || receivable.createdByUserId !== user.id) throw new ApiError('NOT_FOUND', 'No such income entry');
         if (receivable.deletedAt) return c.body(null, 204);
-        if (receivable.paidMinor > 0n || receivable.creditedMinor > 0n) throw new ApiError('CONFLICT', 'This entry has already been settled', { reason: 'ALREADY_SETTLED' });
+        if (receivable.paidMinor > 0n || receivable.creditedMinor > 0n) throw new ApiError('CONFLICT', 'This entry has already been paid or credited', { reason: 'ALREADY_SETTLED' });
         // The store re-asserts that guard atomically; a row that comes back still undeleted means a settle
         // won the race since the check above, and this is the same refusal, not a silent 204.
         const voided = await store.receivables.softDeleteAdjustment(organization.id, receivable.id, now);
@@ -145,7 +145,13 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const undone = await store.payments.undoCapture(organization.id, incomeId, user.id, now);
       if (undone.result === 'not-found') throw new ApiError('NOT_FOUND', 'No such income entry');
       if (undone.result === 'allocated') throw new ApiError('CONFLICT', 'This entry has already been allocated', { reason: 'ALREADY_ALLOCATED' });
-      if (undone.result === 'reversed-elsewhere') throw new ApiError('CONFLICT', 'Malafat reversed this entry; it is no longer yours to undo', { reason: 'REVERSED_BY_MALAFAT' });
+      if (undone.result === 'reversed-elsewhere') {
+        // MUT-453 (review D6): a person may reverse a capture too, so who did is read from the reversal's own audit row, not
+        // from the profile: a disconnected firm reads as writer-null, yet Malafat may have reversed there before it went.
+        const { items } = await store.audit.list(organization.id, { entityType: 'payment', entityId: incomeId, action: 'payment.reversed' }, { limit: 1, cursor: null });
+        if (items[0]?.actorType === 'USER') throw new ApiError('CONFLICT', 'This entry has already been reversed', { reason: 'ALREADY_REVERSED' });
+        throw new ApiError('CONFLICT', 'Malafat reversed this entry; it is no longer yours to undo', { reason: 'REVERSED_BY_MALAFAT' });
+      }
       if (undone.result === 'reversed' && undone.payment) {
         await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.reversed', entityType: 'payment', entityId: undone.payment.id, metadata: { number: undone.payment.number, reason: CAPTURE_UNDO_REASON, allocationsUndone: 0, amount: formatMoney({ minor: undone.payment.amountMinor, currency: undone.payment.currency as Currency }) }, requestId: c.get('requestId') });
       }

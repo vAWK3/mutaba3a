@@ -67,6 +67,9 @@ const EXPENSE_OPERATIONS = [
 // MUT-223 adds the two re-date PATCHes: a person's own entries and captured payments, never a key's.
 const INCOME_OPERATIONS = ['POST /v1/income', 'DELETE /v1/income/{incomeId}', 'PATCH /v1/income/{incomeId}', 'POST /v1/receivables/{receivableId}/settle', 'PATCH /v1/payments/{paymentId}'];
 
+/** MUT-453: Malafat's reverse and credit, also open to a person on rows a person recorded (both principals). */
+const CORRECTION_OPERATIONS = ['POST /v1/payments/{paymentId}/reverse', 'POST /v1/receivables/{receivableId}/credits'];
+
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];
 
@@ -115,6 +118,7 @@ const SESSION_OPERATIONS = [
   ...REPORTS_OPERATIONS,
   ...EXPENSE_OPERATIONS,
   ...INCOME_OPERATIONS,
+  ...CORRECTION_OPERATIONS,
   ...CONVERSION_OPERATIONS,
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
