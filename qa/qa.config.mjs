@@ -171,6 +171,8 @@ export default {
         'server/src/expenses/similarity.ts',
         // MUT-436: the receipt upload path the agent's receipt tools share with the routes.
         'server/src/expenses/receipts-compose.ts',
+        // MUT-437: inbox filing, shared by POST /v1/inbox/{id}/file-as-expense and the agent's file_inbox_entry.
+        'server/src/inbox/file-expense.ts',
         'server/src/auth/agent-auth.ts',
         'src/hosted/pages/connect/**',
         'src/hosted/components/ConnectClaudeDrawer.tsx',

@@ -9,6 +9,7 @@ paths:
   - server/src/mcp/**
   - server/src/expenses/similarity.ts
   - server/src/auth/store-guard.ts
+  - server/src/inbox/file-expense.ts
 features:
   - id: read-tools
     title: A connected Claude lists my profiles and finds an expense I already recorded
@@ -53,4 +54,35 @@ features:
     expect:
       - The upload finishes as ready and attached to the expense
       - The expense drawer lists the receipt file
-
+  - id: statement-match
+    title: Claude gives back the expense I already recorded instead of adding the statement line twice
+    tier: secondary
+    # MUT-437 (ADR-202): every agent expense write checks for the same purchase first.
+    paths:
+      - server/src/mcp/write-tools.ts
+      - server/src/mcp/read-tools.ts
+      - server/src/expenses/similarity.ts
+    steps:
+      - Claude adds a 45.90 ILS expense at Carrefour from its receipt
+      - Claude adds the card statement line for the same purchase, two days later
+      - I say it is a different purchase, and Claude retries with the same key
+      - Open Expenses
+    expect:
+      - The statement line answers "matched" with the receipt's expense and records nothing
+      - The retry records it
+      - Expenses lists both 45.90 purchases
+  - id: file-inbox-entry
+    title: Claude files my phone capture from the inbox into a profile and attaches the receipt to it
+    tier: secondary
+    paths:
+      - server/src/mcp/write-tools.ts
+      - server/src/inbox/file-expense.ts
+    steps:
+      - I capture 33.20 ILS on the phone; it waits in my inbox
+      - Claude finds it as the look-alike of my receipt and files it to my personal profile
+      - Claude uploads the receipt to the filed expense
+      - Open that expense in Expenses
+    expect:
+      - The inbox entry is offered as a look-alike that must be filed before a receipt can attach
+      - Filing creates the expense on my personal profile
+      - The expense drawer lists the receipt file
