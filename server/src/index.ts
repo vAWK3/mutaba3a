@@ -149,6 +149,7 @@ const app = createApp({
   localAttachments,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
+  mcpInboxWrites: config.MCP_INBOX_WRITES,
   billingGate: config.BILLING_GATE,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
