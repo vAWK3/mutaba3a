@@ -33,7 +33,8 @@ test('A connected Claude lists my profiles and finds an expense I already record
     expenseId = ((await res.json()) as { id: string }).id;
   });
   await step('The agent lists its tools and my profiles', async () => {
-    const tools = (await mcpCall(accessToken, 'tools/list')).result?.tools as Array<{ name: string; description: string }>;
+    // MUT-436: a read+write grant is offered the write tools too; these are the read ones.
+    const tools = ((await mcpCall(accessToken, 'tools/list')).result?.tools as Array<{ name: string; description: string }>).filter((t) => READ_TOOLS.includes(t.name));
     expect(tools.map((t) => t.name).sort()).toEqual(READ_TOOLS);
     for (const t of tools) expect(t.description, t.name).toContain('Show the person what you found');
     const profiles = (await mcpCall(accessToken, 'tools/call', { name: 'list_profiles', arguments: {} })).result?.structuredContent as { items: Array<{ id: string; defaultCurrency: string; isPersonalDefault: boolean }> };
@@ -52,9 +53,10 @@ async function callTool(accessToken: string, name: string, args: Record<string, 
   return { isError: Boolean(result?.isError), text, structured: result?.structuredContent as Record<string, unknown> | undefined };
 }
 
-async function openExpense(page: import('@playwright/test').Page, profileId: string, vendor: string) {
+/** Expenses lists date, title, category, client and amount (not the vendor): open the row by its amount. */
+async function openExpense(page: import('@playwright/test').Page, profileId: string, amount: string) {
   await page.goto(`/p/${profileId}/expenses`);
-  await page.getByText(vendor, { exact: true }).first().click();
+  await page.getByRole('row').filter({ hasText: amount }).first().click();
   await expect(page.getByRole('dialog')).toBeVisible();
 }
 
@@ -79,7 +81,7 @@ test('Claude asks where an expense goes, adds it to my profile, and the drawer s
     expect(again.structured).toMatchObject({ id: expenseId, replayed: true });
   });
   await step('Open that expense in Expenses: it says "Added by Claude"', async () => {
-    await openExpense(page, me.profileId, 'Carrefour');
+    await openExpense(page, me.profileId, '45.90');
     await expect(page.getByRole('dialog').getByText('Added by', { exact: false })).toBeVisible();
     await expect(page.getByRole('dialog').getByText('Claude', { exact: true })).toBeVisible();
   });
@@ -115,7 +117,7 @@ test('Claude uploads a receipt to an expense it added, and the receipt shows on 
     expect(done.structured).toMatchObject({ status: 'READY', filingStatus: 'FILED' });
   });
   await step('Open that expense in Expenses: the receipt is listed', async () => {
-    await openExpense(page, me.profileId, 'Shufersal');
+    await openExpense(page, me.profileId, '12.50');
     await expect(page.getByRole('dialog').getByText('shufersal-receipt.pdf')).toBeVisible();
   });
 });
