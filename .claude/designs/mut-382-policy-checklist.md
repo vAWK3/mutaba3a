@@ -54,7 +54,7 @@ in the row has run (the web release waits for it). ? = Basel must confirm before
 | Resend sends our emails | `server/src/email` (MUT-359) | ✔ |
 | Stripe: name, email, random internal ID; card and billing on Stripe's page | `billing/stripe/checkout-gateway.ts:115-119, 150`; Checkout Session `billing/checkout.ts:204-211` | ✔ |
 | Sentry EU; Netlify + Akismet; PostHog EU | as above; `netlify.toml`, `.claude/INFRA.md` | ✔ |
-| info@mtb3a.com mail kept by our email provider | **Provider not known to the code** | ? Basel names it |
+| info@mtb3a.com mail kept by Microsoft, which hosts our mailbox | Basel, 2026-10-26: info@mtb3a.com is a Microsoft account (not in code) | ✔ |
 | Profiles we set up for a Malafat organization share records; yours never do | Only operator-provisioned profiles get keys (`routes/admin.ts:189`); owned and personal profiles are never bound (`schema.prisma:172-181`); scopes `auth/scopes.ts:45-60` | ✔ |
 
 ## Keeping the mobile apps secure (`security`)
@@ -71,7 +71,7 @@ in the row has run (the web release waits for it). ? = Basel must confirm before
 | Sentence (short) | Evidence | |
 |---|---|---|
 | We remove amounts, names, notes, contact details, request contents, IP, anything typed | Shared deny-list `server/src/observability/sentry-rules.ts:10-80`; browser `beforeSend` `src/lib/observability/browserSentry.ts:40-53, 78-82`; phone `sendDefaultPii` false (**P** `error_reporting.dart:54, 60`) | ✔ |
-| Native app crashes: Sentry's own scrubbing | **P** `error_reporting.dart:14-17`; org `dataScrubber`, `scrubIPAddresses: true` in `docs/observability/sentry-rules.json:189` | ? `npx tsx scripts/sentry-org-settings.ts --check` with the admin token (never recorded as applied) |
+| Native app crashes: Sentry's own scrubbing | **P** `error_reporting.dart:14-17`; org `dataScrubber`, `scrubIPAddresses: true` in `docs/observability/sentry-rules.json:189` | ✔ `scripts/sentry-org-settings.ts --check` against `barmajiyat-ltd` (de.sentry.io), run by Basel 2026-10-26: "privacy settings match" |
 | Account only as a random internal ID | `sentry-rules.ts:142`, `sentry-scrub.ts:163` | ✔ |
 | iPhone share extension, widgets and Siri shortcuts report too | **P** `ios/ShareExtension/ShareViewController.swift:25`, `CaptureWidgetsBundle.swift:9`, `CaptureIntentsExtension.swift:18`, `ExtensionReporting.swift:55` | ✔ |
 | Never screenshots | **P** `attachScreenshot` false | ✔ |
@@ -90,4 +90,4 @@ in the row has run (the web release waits for it). ? = Basel must confirm before
 - `email`: the closing notice (`email/ports.ts:87`) and the passkey-added notice (`:92`) added. ✔
 - `usageAnalytics`: the website sends page address, referrer, campaign tags and device type (`src/lib/analytics/guard.ts:37-53`). ✔
 - `contact`, `hostedRequest`: info@mtb3a.com (B2). ⏳ Basel sets up the inbox before the web release.
-- Free apps: the policy no longer names them (plan #13). `/download` still offers the Mac and Windows apps (`src/main.tsx:95-96`). ? Basel decides.
+- Free apps: the policy no longer names them (plan #13). Basel, 2026-10-26: only iOS, Android and the web are supported, so `/download`, its installer redirects (old links land on `/`) and the free app's Mac/Windows download rows in Settings › About are removed. ✔

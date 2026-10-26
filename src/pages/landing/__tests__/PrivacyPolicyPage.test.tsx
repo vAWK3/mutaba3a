@@ -140,7 +140,8 @@ describe('PrivacyPolicyPage', () => {
     expect(noTracking).not.toContain('أو تقارير الأعطال أو');
     expect(noTracking).toContain('يرسل موقعنا وخوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
     expect(reports).toContain('يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً');
-    expect(reports).toContain('ولا تتضمن تقارير الموقع أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا');
+    expect(reports).toContain('ولا تتضمن تقارير الموقع أي حساب على الإطلاق.');
+    expect(reports).not.toContain('تطبيق الويب المجاني');
     const network = screen.getByRole('heading', { level: 2, name: 'ما يصل إلى الشبكة' }).parentElement?.textContent ?? '';
     expect(network).toContain('ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry، وإحصاءات الزيارات المجهولة الموضّحة في قسم «إحصاءات استخدام مجهولة» إلى PostHog.');
     expect(reports).toContain('وترسل البوابة المستضافة تقريرًا عندما تتعطّل صفحة في متصفحك');

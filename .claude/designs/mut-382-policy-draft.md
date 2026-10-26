@@ -3,13 +3,13 @@
 Draft of 2026-10-26. Approve the English, and the Arabic is then translated from it (meaning-equal, not fresh copy).
 Facts behind every sentence: `.claude/designs/mut-382-policy-checklist.md`.
 
-## Open questions (answer these with the approval)
+## Answers (Basel, 2026-10-26): text approved as drafted
 
-1. **The info@mtb3a.com mailbox provider.** The policy must name who keeps mail sent to that address (Google Workspace, Zoho, a forwarder?). The draft says `{MAILBOX_PROVIDER}`.
-2. **The old free apps.** The plan drops every free-app mention, but `/download` still offers the Mac and Windows apps. Either remove `/download`, or keep one sentence: "The older free apps for Mac and Windows keep everything on your device and send us nothing." (Recommended: keep the sentence until `/download` goes.)
-3. **Dates.** The policy says "Last updated October 26, 2026" and the new terms are version `2026-10-26`. Both should be the web release day. Renaming the version later is cheap (a re-hash).
-4. **Terms §2 also claims "We set up your account",** which is false once sign-up opens. Should the new version fix it too (draft below)? Recommended: yes, since everyone accepts again anyway.
-5. **Sentry IP storage.** Before the web release, run `SENTRY_ADMIN_TOKEN=… SENTRY_ORG=barmajiyat-ltd npx tsx scripts/sentry-org-settings.ts --check`. The policy relies on "Prevent storing IP addresses", and nothing records that it was ever applied.
+1. **Mailbox provider:** info@mtb3a.com is a Microsoft account. The policy says "kept by Microsoft, which hosts our mailbox".
+2. **Old free apps:** `/download` and the Mac/Windows desktop apps are removed; only iOS, Android and the web are supported. The policy names no free app.
+3. **Dates:** "Last updated October 26, 2026", and terms version `2026-10-26`.
+4. **Terms §2:** yes, the new version says you can create your account yourself.
+5. **Sentry:** `scripts/sentry-org-settings.ts --check` reports the org's privacy settings match.
 
 ## Privacy policy: changed sections
 
@@ -51,7 +51,7 @@ Facts behind every sentence: `.claude/designs/mut-382-policy-checklist.md`.
 
 **Now:**
 
-> We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Cloudflare carries the connections between you and our hosted portal and servers, and runs the Turnstile check described under "When you create an account". Resend sends our emails, as described under "Emails we send". Stripe handles payments: when you subscribe, it receives your name, your email address and a random internal ID for your account, and you type your card and billing details on Stripe's own checkout page, so they never reach our servers. Sentry, hosted in the EU, receives the error reports described under "Error reports" and stores them for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under "Anonymous usage counts" for us. Emails you send to info@mtb3a.com are kept by our email provider, {MAILBOX_PROVIDER}. Business profiles we set up for an organization that uses Malafat share their records with Malafat; profiles you create yourself never do. Beyond that, we disclose data only when the law requires it.
+> We don't sell your data or share it with advertisers. Our servers and receipt storage run on Google Cloud, which processes the data only to host it for us. Cloudflare carries the connections between you and our hosted portal and servers, and runs the Turnstile check described under "When you create an account". Resend sends our emails, as described under "Emails we send". Stripe handles payments: when you subscribe, it receives your name, your email address and a random internal ID for your account, and you type your card and billing details on Stripe's own checkout page, so they never reach our servers. Sentry, hosted in the EU, receives the error reports described under "Error reports" and stores them for us. Our website runs on Netlify, which receives the account-request form and checks each request for spam with Akismet (made by Automattic). PostHog, hosted in the EU, processes the anonymous usage counts described under "Anonymous usage counts" for us. Emails you send to info@mtb3a.com are kept by Microsoft, which hosts our mailbox. Business profiles we set up for an organization that uses Malafat share their records with Malafat; profiles you create yourself never do. Beyond that, we disclose data only when the law requires it.
 
 ### Keeping the mobile apps secure
 
@@ -131,11 +131,11 @@ Facts behind every sentence: `.claude/designs/mut-382-policy-checklist.md`.
 
 (Drops: "The free app that keeps everything on your own device is covered by our privacy policy, not by these terms.")
 
-### 2. Your account, first paragraph (question 4)
+### 2. Your account, first paragraph
 
 **Was:** We set up your account and send you a link to choose your password. Keep your password to yourself…
 
-**Now:** You create your account on the web portal while sign-up is open, or we set it up for you; either way, you choose your password through a link we email you. Keep your password to yourself: you are responsible for what is done with your account. If you think someone else has used it, tell us straight away.
+**Now:** You create your account yourself on the web portal, or we set it up for you; either way, you choose your password through a link we email you. Keep your password to yourself: you are responsible for what is done with your account. If you think someone else has used it, tell us straight away.
 
 ### 5. Closing your account
 

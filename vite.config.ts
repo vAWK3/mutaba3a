@@ -439,14 +439,24 @@ export function withPageMeta(html: string, tags: HtmlTagDescriptor[], documentTi
  */
 function legalTermsManifest(): Plugin {
   const dir = fileURLToPath(new URL("./src/content/legal/terms/", import.meta.url));
+  const source = () => {
+    // Files only: a folder in there (drafts/) is not a released text
+    const files = readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map(({ name }) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
+    return `${JSON.stringify(termsManifest(files), null, 2)}\n`;
+  };
   return {
     name: "mutaba3a:legal-terms-manifest",
+    // The dev server (release QA's web app) serves the same file, read fresh on each request
+    configureServer(server) {
+      server.middlewares.use(`/${TERMS_MANIFEST_FILE}`, (_req, res) => {
+        res.setHeader("Content-Type", "application/json");
+        res.end(source());
+      });
+    },
     generateBundle() {
-      // Files only: a folder in there (drafts/) is not a released text
-      const files = readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isFile())
-        .map(({ name }) => ({ name, bytes: readFileSync(`${dir}${name}`) }));
-      this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: `${JSON.stringify(termsManifest(files), null, 2)}\n` });
+      this.emitFile({ type: "asset", fileName: TERMS_MANIFEST_FILE, source: source() });
     },
   };
 }
