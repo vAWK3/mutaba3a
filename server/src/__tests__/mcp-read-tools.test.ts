@@ -405,6 +405,7 @@ describe('every tool that takes a profile refuses a stranger’s (review D3)', (
       find_similar_expenses: { amount: '1.00', currency: 'ILS', date: '2026-10-20' },
       start_receipt_upload: { target: { kind: 'expense', expenseId: '00000000-0000-4000-8000-000000000001' }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 100, idempotencyKey: 'sweep-key-0001' },
       complete_receipt_upload: { receiptId: '00000000-0000-4000-8000-000000000002' },
+      file_inbox_entry: { inboxEntryId: '00000000-0000-4000-8000-000000000003', idempotencyKey: 'sweep-key-0004' },
     };
     for (const t of withProfile) {
       expect(minimal[t.name], `add ${t.name} to this sweep`).toBeDefined();
