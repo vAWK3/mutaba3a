@@ -5411,7 +5411,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Consequences:**
 - MUT-436's `add_expense` output changes to `{ outcome, expense, candidates, replayed }` (unreleased, so no client depended on it).
-- Each agent write holds one pooled connection for its run; the per-person agent limiter (240/min) bounds it.
+- Pre-landing review: waiters must not hold pooled connections (a parallel batch starved the lock holder's own queries and stalled the pool). Same-person calls queue in memory (`KeyedQueue`) and at most 3 lock transactions run per instance (`Semaphore`, `repositories/keyed-queue.ts`) before the advisory lock; `store-prisma-agent-lock-pool.test.ts` proves 8 parallel runs finish on a small pool.
 - The session's own filing route keeps no look-alike check (out of scope).
 
 **Alternatives considered:** a different vendor excluding (D2: misses transliterated duplicates); a `confirmedNew` boolean (D3: lets the agent skip the question); an error instead of a result (D5: invites "fix and retry"); an in-process per-person queue (D15: Basel chose the database lock so it holds across instances); destination-only search (D4: one purchase in two profiles).

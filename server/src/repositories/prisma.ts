@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { KeyedQueue, Semaphore } from './keyed-queue.js';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
@@ -2724,14 +2725,24 @@ export class PrismaLedgerStore implements LedgerStore {
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
 
+  // Review (MUT-437): a same-person call waits in memory and at most AGENT_WRITE_LOCK_SLOTS lock transactions run per
+  // instance, so waiters never hold the pooled connections the lock's holder needs for its own queries.
+  private readonly agentWrites = new KeyedQueue();
+  private readonly agentWriteSlots = new Semaphore(AGENT_WRITE_LOCK_SLOTS);
+
   readonly agentWriteLock: AgentWriteLock = {
     run: <T>(userId: string, fn: () => Promise<T>): Promise<T> =>
-      this.prisma.$transaction(
-        async (tx) => {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AGENT_WRITE_LOCK}::int, hashtext(${userId}))`;
-          return fn();
-        },
-        { maxWait: AGENT_WRITE_LOCK_WAIT_MS, timeout: AGENT_WRITE_LOCK_WAIT_MS },
+      this.agentWrites.run(userId, () =>
+        this.agentWriteSlots.run(() =>
+          this.prisma.$transaction(
+            async (tx) => {
+              // Across instances (D15): the in-process queue only orders this one.
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AGENT_WRITE_LOCK}::int, hashtext(${userId}))`;
+              return fn();
+            },
+            { maxWait: AGENT_WRITE_LOCK_WAIT_MS, timeout: AGENT_WRITE_LOCK_WAIT_MS },
+          ),
+        ),
       ),
   };
 
@@ -3392,6 +3403,8 @@ async function insertPerson(
  */
 const AGENT_WRITE_LOCK = 437;
 const AGENT_WRITE_LOCK_WAIT_MS = 15_000;
+/** Lock transactions at once per instance: each holds a connection while its run needs others (db_pool_size 10). */
+const AGENT_WRITE_LOCK_SLOTS = 3;
 
 /** MUT-366 (D12): one SIGNUP issue or redeem per address at a time. The first key namespaces the lock to this use. */
 const SIGNUP_ADDRESS_LOCK = 366;

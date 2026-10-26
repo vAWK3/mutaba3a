@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { KeyedQueue } from './keyed-queue.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
@@ -3045,21 +3046,11 @@ export class MemoryLedgerStore implements LedgerStore {
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
 
-  /** MUT-437 (D15): each person's last queued agent write; a run starts once the previous one settles. */
-  private readonly agentWriteTails = new Map<string, Promise<unknown>>();
+  /** MUT-437 (D15): one agent write per person at a time; a run starts once the previous one settles. */
+  private readonly agentWrites = new KeyedQueue();
 
   readonly agentWriteLock: AgentWriteLock = {
-    run: async <T>(userId: string, fn: () => Promise<T>): Promise<T> => {
-      const previous = this.agentWriteTails.get(userId) ?? Promise.resolve();
-      const result = previous.then(fn);
-      const tail = result.catch(() => undefined);
-      this.agentWriteTails.set(userId, tail);
-      try {
-        return await result;
-      } finally {
-        if (this.agentWriteTails.get(userId) === tail) this.agentWriteTails.delete(userId);
-      }
-    },
+    run: <T>(userId: string, fn: () => Promise<T>): Promise<T> => this.agentWrites.run(userId, fn),
   };
 
   readonly inboxEntries: InboxEntryRepository = {
