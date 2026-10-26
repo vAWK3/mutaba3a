@@ -404,6 +404,8 @@ model InboxEntry {
   updatedAt     DateTime
 
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  /// MUT-437 (TD-258): the look-alike candidates, a person's captures in a date window.
+  @@index([userId, occurredOn])
   @@map("inbox_entries")
 }
 

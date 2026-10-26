@@ -413,5 +413,29 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
 
       expect(await store.userIdempotency.get(w.stranger.user.id, 'k-pending-1')).toBeNull();
     });
+    it('MUT-437 (TD-258): lists a person’s expense captures by date window, currency and amount, however old the capture', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const wanted = await store.inboxEntries.create(w.entry({ occurredOn: '2026-10-03', note: 'Starbucks · latte' }), at(1));
+      await store.inboxEntries.create(w.entry({ occurredOn: '2026-10-07' }), at(2)); // the window's last day
+      // Newer captures that miss on one field each: the old newest-200 scan would have read these first.
+      for (let i = 0; i < 5; i += 1) await store.inboxEntries.create(w.entry({ occurredOn: '2026-10-05', amountMinor: 999n }), at(10 + i));
+      await store.inboxEntries.create(w.entry({ currency: 'USD' }), at(20));
+      await store.inboxEntries.create(w.entry({ kind: 'INCOME' }), at(21));
+      await store.inboxEntries.create(w.entry({ occurredOn: '2026-10-08' }), at(22)); // a day past the window
+      await store.inboxEntries.create(w.entry({ occurredOn: '2026-09-30' }), at(23)); // a day before it
+      await store.inboxEntries.create(w.entry({ userId: w.stranger.user.id }), at(24));
+
+      const filter = { from: '2026-10-01', to: '2026-10-07', currency: 'ILS', amountMinor: 12_345n } as const;
+      const found = await store.inboxEntries.listMatchCandidates(w.owner.user.id, filter, 50);
+      expect(found.items.map((e) => e.occurredOn).sort()).toEqual(['2026-10-03', '2026-10-07']);
+      expect(found.items.find((e) => e.id === wanted.id)).toMatchObject({ note: 'Starbucks · latte', kind: 'EXPENSE' });
+      expect(found.truncated).toBe(false);
+
+      const capped = await store.inboxEntries.listMatchCandidates(w.owner.user.id, filter, 1);
+      expect(capped.items).toHaveLength(1);
+      expect(capped.truncated).toBe(true);
+      expect((await store.inboxEntries.listMatchCandidates(w.stranger.user.id, filter, 50)).items).toHaveLength(1);
+    });
   });
 }

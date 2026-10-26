@@ -240,5 +240,14 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(removed!.removedReceipts.map((r) => r.id).sort()).toEqual([kept.id, half.id].sort());
       expect(await store.expenseReceipts.getById(w.a.id, kept.id)).toBeNull();
     });
+    it('MUT-437: filters by exact amount, so a look-alike read returns same-currency, same-amount rows only', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const hit = await store.expenses.create(w.expense({ occurredOn: '2026-10-04' }), at(1));
+      await store.expenses.create(w.expense({ occurredOn: '2026-10-04', amountMinor: 12_346n }), at(2));
+      await store.expenses.create(w.expense({ occurredOn: '2026-10-04', currency: 'USD' }), at(3));
+      const page = await store.expenses.list(w.a.id, { from: '2026-10-01', to: '2026-10-07', currency: 'ILS', amountMinor: 12_345n }, { limit: 50, cursor: null });
+      expect(page.items.map((e) => e.id)).toEqual([hit.id]);
+    });
   });
 }

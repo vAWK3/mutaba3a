@@ -305,8 +305,14 @@ export const STORE_ACCESS: StoreAccess = {
     // basis as every other method here. /admin's per-user support lookup calls it too,
     // unguarded, so this change does not touch that route's behaviour.
     countByUser: 'sessionOnly',
+    // MUT-437 (TD-258): the agent's look-alike candidates; the person's own captures only.
+    listMatchCandidates: 'sessionOnly',
     fileAsExpense: { write: 'expenses' },
     fileAsIncome: { write: 'payments' },
+  },
+  // MUT-437 (D15): one agent expense write at a time per person; nothing but an agent calls it.
+  agentWriteLock: {
+    run: 'sessionOnly',
   },
   // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
   conversions: {
@@ -427,6 +433,12 @@ export const AGENT_STORE_METHODS: ReadonlySet<string> = new Set([
   'expenseReceipts.completeOnExpense',
   'expenseReceipts.complete',
   'expenseReceipts.countPendingSince',
+  // MUT-437: look-alike checks on every agent expense write, and file_inbox_entry.
+  'agentWriteLock.run',
+  'inboxEntries.listMatchCandidates',
+  'inboxEntries.getById',
+  'inboxEntries.fileAsExpense',
+  'expenseReceipts.countReadyByExpenseIds',
 ]);
 
 /**
