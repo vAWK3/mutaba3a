@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import { expenseKey, useCreateExpense, useDeleteExpense, useExpense, useUpdateExpense } from '../data/expenseQueries';
@@ -166,6 +167,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     >
       {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
           date's ten-year max (MUT-392) would otherwise block Save with no message the drawer can show. */}
+      {mode === 'edit' && existingExpense?.captureSource === 'mcp' && <AddedByClaude label={t('hosted.expenses.drawer.addedByClaude')} />}
       <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ReadOnlyFields readOnly={readOnly}>
           <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} />
@@ -193,3 +195,21 @@ function valuesOf(expense: Expense): HostedExpenseFormValues {
     notes: expense.notes ?? '',
   };
 }
+
+/**
+ * MUT-436 (AC5): an expense the person's own Claude added (captureSource 'mcp', ADR-201). "Claude" is a name: it stays
+ * Latin and left-to-right inside an Arabic sentence (<bdi>, ADR-101).
+ */
+function AddedByClaude({ label }: { label: string }) {
+  const [before, after = ''] = label.split('{claude}');
+  return (
+    <p className="expense-drawer-source">
+      <Badge variant="info" size="sm">
+        {before}
+        <bdi>Claude</bdi>
+        {after}
+      </Badge>
+    </p>
+  );
+}
+
