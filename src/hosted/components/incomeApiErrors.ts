@@ -124,3 +124,26 @@ export function mapRedateError(error: unknown, kind: 'owed' | 'payment'): Mapped
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };
   return { fields: [], toast: 'hosted.income.errors.saveFailed' };
 }
+
+/**
+ * MUT-453: Reverse payment, Reduce amount owed and Cancel. More than is left (another tab or the phone paid or credited
+ * meanwhile) shows the server's new maximum under the amount and re-reads; a row that went or changed re-reads, so the
+ * drawer shows what it is now; anything else is a toast.
+ */
+export function mapCorrectionError(error: unknown): MappedError {
+  const early = nonValidation(error);
+  if (early) return early;
+  const apiError = error as ApiError;
+  const reason = apiErrorReason(apiError);
+  if (apiError.code === 'VALIDATION_FAILED') {
+    if (reason === 'AMOUNT_INVALID') return { fields: [{ field: 'amount', key: 'hosted.income.errors.amountInvalid' }] };
+    if (reason === 'CREDIT_EXCEEDS_OUTSTANDING') {
+      const outstanding = (apiError.details as { outstanding?: unknown } | null)?.outstanding;
+      return { fields: [{ field: 'amount', key: 'hosted.correct.errors.exceedsNow', params: { outstanding: typeof outstanding === 'string' ? outstanding : '' } }], reread: true };
+    }
+    if (reason === 'RECEIVABLE_NOT_OPEN') return { fields: [], toast: 'hosted.correct.errors.nothingLeft', reread: true };
+  }
+  if (apiError.code === 'CONFLICT') return { fields: [], toast: reason === 'ALREADY_REVERSED' ? 'hosted.correct.errors.alreadyReversed' : 'hosted.correct.errors.changed', reread: true };
+  if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };
+  return { fields: [], toast: 'hosted.income.errors.saveFailed' };
+}

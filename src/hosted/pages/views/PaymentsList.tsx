@@ -8,7 +8,7 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { isNarrowed, splitIncomeDrawer, type PaymentFilters, type PaymentsPageSearch, type PaymentStatusFilter } from '../../data/filters';
-import { canRedatePayment, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
+import { canOpenPayment, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, usePayments, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -77,7 +77,7 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
   const rows = useMemo(
     () =>
       list.data && customers.data
-        ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`), (p) => canRedatePayment(profile, p, userId, writable))
+        ? shape(list.data, customers.data, language, (m) => t(`hosted.payments.method.${m}`), (p) => canOpenPayment(profile, p, userId, writable))
         : undefined,
     [list.data, customers.data, language, t, profile, userId, writable],
   );

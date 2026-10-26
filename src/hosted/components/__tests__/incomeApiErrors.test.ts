@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ApiError } from '../../api/client';
-import { mapIncomeError, mapRedateError, mapSettleError } from '../incomeApiErrors';
+import { mapCorrectionError, mapIncomeError, mapRedateError, mapSettleError } from '../incomeApiErrors';
 
 const v = (reason: string, extra: Record<string, unknown> = {}) => new ApiError(422, 'VALIDATION_FAILED', reason, { reason, ...extra });
 
@@ -110,5 +110,26 @@ describe('the lapse gate (MUT-361)', () => {
     const lapsed = new ApiError(402, 'SUBSCRIPTION_LAPSED', 'm', { state: 'READ_ONLY' });
     expect(mapIncomeError(lapsed, 'received')).toEqual({ fields: [], toast: 'hosted.billing.gate.refused' });
     expect(mapSettleError(lapsed)).toEqual({ fields: [], toast: 'hosted.billing.gate.refused' });
+  });
+});
+
+describe('mapCorrectionError (MUT-453)', () => {
+  it('puts the new maximum under the amount and re-reads when more than is left was asked', () => {
+    expect(mapCorrectionError(v('CREDIT_EXCEEDS_OUTSTANDING', { outstanding: '60.00' }))).toEqual({
+      fields: [{ field: 'amount', key: 'hosted.correct.errors.exceedsNow', params: { outstanding: '60.00' } }],
+      reread: true,
+    });
+  });
+
+  it('re-reads on nothing left, an already reversed payment, a changed row or a gone one', () => {
+    expect(mapCorrectionError(v('RECEIVABLE_NOT_OPEN'))).toEqual({ fields: [], toast: 'hosted.correct.errors.nothingLeft', reread: true });
+    expect(mapCorrectionError(new ApiError(409, 'CONFLICT', 'x', { reason: 'ALREADY_REVERSED' }))).toEqual({ fields: [], toast: 'hosted.correct.errors.alreadyReversed', reread: true });
+    expect(mapCorrectionError(new ApiError(409, 'CONFLICT', 'x', { reason: 'VERSION_MISMATCH' }))).toEqual({ fields: [], toast: 'hosted.correct.errors.changed', reread: true });
+    expect(mapCorrectionError(new ApiError(404, 'NOT_FOUND', 'x', null))).toEqual({ fields: [], toast: 'hosted.redate.gone', reread: true });
+  });
+
+  it('says the profile is Malafat’s, or that the subscription lapsed, like every other write', () => {
+    expect(mapCorrectionError(new ApiError(403, 'READ_ONLY_PROFILE', 'x', { domain: 'payments', writerOfRecord: 'MALAFAT' })).toast).toBeDefined();
+    expect(mapCorrectionError(new ApiError(402, 'SUBSCRIPTION_LAPSED', 'x', null)).toast).toBe('hosted.billing.gate.refused');
   });
 });

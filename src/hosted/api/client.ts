@@ -82,6 +82,11 @@ export type CreateIncomeRequest = Schemas['CreateIncomeRequest'];
 export type IncomeResponse = Schemas['IncomeResponse'];
 export type PaymentMethod = Schemas['PaymentMethod'];
 export type SettleReceivableRequest = Schemas['SettleReceivableRequest'];
+export type ReversePaymentRequest = Schemas['ReversePaymentRequest'];
+export type CreditRequest = Schemas['CreditRequest'];
+export type CreditResponse = Schemas['CreditResponse'];
+export type Credit = Schemas['Credit'];
+export type CreditsResponse = Schemas['CreditsResponse'];
 export type UpdateIncomeRequest = Schemas['UpdateIncomeRequest'];
 export type UpdatePaymentRequest = Schemas['UpdatePaymentRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
@@ -620,6 +625,13 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+  // MUT-453: correcting money a person recorded. Both carry the attempt's Idempotency-Key.
+  reversePayment: (profileId: string, paymentId: string, body: ReversePaymentRequest, idempotencyKey: string) =>
+    request<Payment>('POST', `/v1/payments/${encodeURIComponent(paymentId)}/reverse`, { profileId, body, idempotencyKey }),
+  creditReceivable: (profileId: string, receivableId: string, body: CreditRequest, idempotencyKey: string) =>
+    request<CreditResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/credits`, { profileId, body, idempotencyKey }),
+  receivableCredits: (profileId: string, receivableId: string) =>
+    request<CreditsResponse>('GET', `/v1/receivables/${encodeURIComponent(receivableId)}/credits`, { profileId }),
   // MUT-224 (MUT-223's routes): date only, If-Match on the version the drawer loaded; no Idempotency-Key, a replay is a 409.
   redateIncome: (profileId: string, incomeId: string, body: UpdateIncomeRequest, version: string) =>
     request<IncomeResponse>('PATCH', `/v1/income/${encodeURIComponent(incomeId)}`, { profileId, body, ifMatchVersion: version }),

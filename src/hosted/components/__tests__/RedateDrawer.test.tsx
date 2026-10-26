@@ -42,6 +42,9 @@ interface Routes {
   getPayment?: () => Response;
   listPayments?: () => Response;
   patch?: (request: StubRequest) => Response | Promise<Response>;
+  /** MUT-453: reverse and credits. */
+  post?: (request: StubRequest) => Response | Promise<Response>;
+  credits?: () => Response;
 }
 
 function stub(routes: Routes = {}) {
@@ -58,7 +61,9 @@ function stub(routes: Routes = {}) {
       if (method === 'GET' && url.pathname === `/v1/receivables/${R}`) return (routes.getOwed ?? (() => json(owed())))();
       if (method === 'GET' && url.pathname === `/v1/payments/${P}`) return (routes.getPayment ?? (() => json(mine())))();
       if (method === 'GET' && url.pathname === '/v1/payments') return (routes.listPayments ?? (() => json({ items: [], nextCursor: null })))();
+      if (method === 'GET' && url.pathname === `/v1/receivables/${R}/credits`) return (routes.credits ?? (() => json({ receivable: owed(), credits: [] })))();
       if (method === 'PATCH') return (routes.patch ?? (() => json({})))(request);
+      if (method === 'POST') return (routes.post ?? (() => json({})))(request);
       return fail(404, 'NOT_FOUND');
     }),
   );
@@ -333,24 +338,28 @@ describe('RedateDrawer — a payment (?payment=)', () => {
 });
 
 describe('RedateDrawer — an Owed entry a partner captured (MUT-373)', () => {
-  it('shows "no longer available" with no Save: only who captured it may re-date it', async () => {
+  it('opens read-only with no Save: only who captured it may re-date it, but either partner may correct it (MUT-453 D2)', async () => {
     stub({ getOwed: () => json(owed({ capturedByUserId: 'u-partner' })) });
     renderDrawer('owed');
-    expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Reduce amount owed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel amount owed' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 });
 
 describe('RedateDrawer — a payment it can no longer change', () => {
-  it('shows "no longer available" for an undone payment or someone else’s, with no Save', async () => {
-    for (const refused of [mine({ status: 'REVERSED' }), mine({ capturedBy: { userId: 'u-other', displayName: 'Rami' } })]) {
-      stub({ getPayment: () => json(refused) });
-      const { unmount } = renderDrawer('payment');
-      expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
-      unmount();
-      vi.unstubAllGlobals();
-    }
+  it('shows "no longer available" for a payment its person undid, with no Save', async () => {
+    stub({ getPayment: () => json(mine({ status: 'REVERSED', reversalReason: 'capture_undo' })) });
+    renderDrawer('payment');
+    expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('opens someone else’s payment read-only, offering Reverse payment but no Save (MUT-453 D2)', async () => {
+    stub({ getPayment: () => json(mine({ capturedBy: { userId: 'u-other', displayName: 'Rami' } })) });
+    renderDrawer('payment');
+    expect(await screen.findByRole('button', { name: 'Reverse payment' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
   it('when the server answers 404 on save, says so instead of doing nothing', async () => {
@@ -372,5 +381,109 @@ describe('RedateDrawer — Arabic', () => {
     renderDrawer('payment');
     expect(await screen.findByRole('heading', { name: 'تغيير تاريخ الاستلام' })).toBeInTheDocument();
     expect(await screen.findByLabelText('تاريخ الاستلام')).toBeInTheDocument();
+  });
+});
+
+describe('RedateDrawer — corrections (MUT-453)', () => {
+  const posts = (calls: StubRequest[]) => calls.filter((c) => c.method === 'POST');
+  const reasonBox = () => screen.getByLabelText('Reason');
+
+  it('reverses a payment with a reason; the reason is required first, and the key is the attempt’s', async () => {
+    const { calls } = stub({ post: () => json(mine({ status: 'REVERSED', reversalReason: 'Applied to the wrong job' })) });
+    const { user, onClose } = renderDrawer('payment');
+    await user.click(await screen.findByRole('button', { name: 'Reverse payment' }));
+    await user.click(screen.getByRole('button', { name: 'Reverse payment' }));
+    expect(await screen.findByText('Say why, so the history makes sense later.')).toBeInTheDocument();
+    expect(posts(calls)).toHaveLength(0);
+
+    await user.type(reasonBox(), '  Applied to the wrong job ');
+    await user.click(screen.getByRole('button', { name: 'Reverse payment' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const [sent] = posts(calls);
+    expect(sent!.url.pathname).toBe(`/v1/payments/${P}/reverse`);
+    expect(sent!.body).toEqual({ reason: 'Applied to the wrong job' });
+    expect(sent!.headers.get('idempotency-key')).toBeTruthy();
+    expect(await screen.findByText(/Payment reversed/)).toBeInTheDocument();
+  });
+
+  it('reduces an Owed by part of what is left, showing what stays owed; more than is left is refused before sending', async () => {
+    const { calls } = stub({ post: () => json({ receivable: owed({ outstanding: '300.00', credited: '200.00' }), credit: {} }, 201) });
+    const { user, onClose } = renderDrawer('owed');
+    await user.click(await screen.findByRole('button', { name: 'Reduce amount owed' }));
+    const amount = screen.getByLabelText('Reduce by (ILS)');
+    await user.type(amount, '600');
+    await user.type(reasonBox(), 'Agreed a lower fee');
+    await user.click(screen.getByRole('button', { name: 'Reduce' }));
+    expect(posts(calls)).toHaveLength(0);
+
+    await user.clear(amount);
+    await user.type(amount, '200');
+    expect(screen.getByText(/left after this/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reduce' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts(calls)[0]).toMatchObject({ body: { amount: '200.00', reason: 'Agreed a lower fee' } });
+    expect(posts(calls)[0]!.url.pathname).toBe(`/v1/receivables/${R}/credits`);
+  });
+
+  it('Cancel credits everything left', async () => {
+    const { calls } = stub({ post: () => json({ receivable: owed({ outstanding: '0.00', credited: '500.00', status: 'PAID' }), credit: {} }, 201) });
+    const { user, onClose } = renderDrawer('owed');
+    await user.click(await screen.findByRole('button', { name: 'Cancel amount owed' }));
+    await user.type(reasonBox(), 'Client dropped the job');
+    await user.click(screen.getByRole('button', { name: 'Cancel amount owed' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(posts(calls)[0]).toMatchObject({ body: { amount: '500.00', reason: 'Client dropped the job' } });
+  });
+
+  it('when another tab paid meanwhile, shows the new maximum under the amount and stays open', async () => {
+    stub({ post: () => fail(422, 'VALIDATION_FAILED', { reason: 'CREDIT_EXCEEDS_OUTSTANDING', outstanding: '100.00' }) });
+    const { user, onClose } = renderDrawer('owed');
+    await user.click(await screen.findByRole('button', { name: 'Reduce amount owed' }));
+    await user.type(screen.getByLabelText('Reduce by (ILS)'), '200');
+    await user.type(reasonBox(), 'Typo');
+    await user.click(screen.getByRole('button', { name: 'Reduce' }));
+    expect(await screen.findByText(/more than what’s left now/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('Back returns to the entry without sending anything', async () => {
+    const { calls } = stub();
+    const { user } = renderDrawer('payment');
+    await user.click(await screen.findByRole('button', { name: 'Reverse payment' }));
+    await user.click(screen.getAllByRole('button', { name: 'Back' })[0]!);
+    expect(await screen.findByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(posts(calls)).toHaveLength(0);
+  });
+
+  it('shows a reversed payment’s reason and an Owed’s credits, with no correction offered on what is closed', async () => {
+    stub({ getPayment: () => json(mine({ status: 'REVERSED', reversedAt: '2026-10-12T08:00:00Z', reversalReason: 'Applied to the wrong job' })) });
+    const payment = renderDrawer('payment');
+    expect(await screen.findByText(/Reversed on .* · Applied to the wrong job/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reverse payment' })).toBeNull();
+    payment.unmount();
+    vi.unstubAllGlobals();
+
+    const credited = owed({ status: 'PAID', outstanding: '0.00', credited: '500.00' });
+    stub({ getOwed: () => json(credited), credits: () => json({ receivable: credited, credits: [{ id: 'k1', receivableId: R, amount: '500.00', net: '500.00', vat: '0.00', reason: 'Client dropped the job', effectiveDate: '2026-10-12', createdAt: '2026-10-12T08:00:00Z' }] }) });
+    renderDrawer('owed');
+    expect(await screen.findByText(/Client dropped the job/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reduce amount owed' })).toBeNull();
+  });
+
+  it('offers no correction on a Malafat-fed profile’s rows (it opens nothing there at all)', async () => {
+    stub();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const malafat = profile({ writerOfRecord: 'MALAFAT', isPersonalDefault: false, owned: false, access: { payments: 'read', capture: 'read-write' }, income: { received: true, owed: false, customer: 'linked-required' } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <HostedLanguageProvider>
+          <ToastProvider>
+            <RedateDrawer kind="payment" profile={malafat} id={P} userId={ME} onClose={vi.fn()} onOpenPayment={vi.fn()} onSeePayments={vi.fn()} />
+          </ToastProvider>
+        </HostedLanguageProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('This entry is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reverse payment' })).toBeNull();
   });
 });
