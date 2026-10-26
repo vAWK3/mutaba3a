@@ -457,10 +457,11 @@ export function sessionAuth(c: AuthReader): SessionAuth {
  * work done early, not the person writing the ledger.
  */
 export function postingActorOf(c: AuthReader): PostingActor {
-  const auth = c.get('auth');
-  return auth.kind === 'apiKey'
-    ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId: c.get('requestId') }
-    : { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
+  return postingActorFor(c.get('auth'), c.get('requestId'));
+}
+
+function postingActorFor(auth: AuthContext, requestId: string): PostingActor {
+  return auth.kind === 'apiKey' ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId } : { actorType: 'SYSTEM', actorId: null, requestId };
 }
 
 /** The real caller behind a request, for an audit row (MUT-65: unlike postingActorOf, never SYSTEM — this is for a write the caller actually asked for, not lazy catch-up). */
@@ -487,11 +488,12 @@ export function actorOf(c: AuthReader): AuditActor {
  * job's, not a write by the person. The two always travel together.
  */
 export function lazyPostingOf(c: PostingReader, store: LedgerStore): { store: LedgerStore; actor: PostingActor } {
-  const actor = c.get('auth') ? postingActorOf(c) : personPostingActorOf(c);
+  const auth = c.get('auth');
+  const actor = auth ? postingActorFor(auth, c.get('requestId')) : personPostingActorOf(c);
   return { store: actor.actorType === 'SYSTEM' ? unguarded(store) : store, actor };
 }
 
-interface PostingReader extends AuthReader {
+interface PostingReader {
   get(key: 'auth'): AuthContext | undefined;
   get(key: 'identity'): SessionIdentity | undefined;
   get(key: 'requestId'): string;
