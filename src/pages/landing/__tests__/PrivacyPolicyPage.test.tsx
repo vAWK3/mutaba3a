@@ -44,10 +44,21 @@ describe('PrivacyPolicyPage', () => {
     expect(text).toContain('Google Cloud');
   });
 
-  it('tells mobile users how to have their account and data deleted', () => {
+  it('tells people how to close their account, and what is deleted, anonymised and kept (MUT-333, MUT-382)', () => {
     renderPage('en');
     const heading = screen.getByRole('heading', { level: 2, name: /Deleting your account/ });
-    expect(heading.parentElement?.textContent).toContain('info@malafat.app');
+    const section = heading.parentElement?.textContent ?? '';
+    expect(section).toContain('Close my account');
+    expect(section).toMatch(/under You › Account/);
+    expect(section).toMatch(/on the Account tab/);
+    expect(section).toMatch(/For 30 days you can sign in and keep your account/);
+    expect(section).toMatch(/the records you added stay, without your name/);
+    expect(section).toMatch(/a random internal ID, never your name or email/);
+    expect(section).toMatch(/invoices for what you paid/);
+    expect(section).toMatch(/before version 0\.1\.13/);
+    // Closing is self-service now, and uninstalling never promised to clear the Keychain (MUT-382 #1, #4)
+    expect(section).not.toMatch(/email info@/);
+    expect(section).not.toMatch(/uninstalling/i);
   });
 
   it('says what the hosted-account request form collects, that Netlify receives it, and what it is for (MUT-186)', () => {
@@ -56,7 +67,7 @@ describe('PrivacyPolicyPage', () => {
     const section = heading.parentElement?.textContent ?? '';
     expect(section).toContain('Netlify');
     expect(section).toMatch(/only to reply with an offer/);
-    expect(section).toContain('info@malafat.app');
+    expect(section).toContain('info@mtb3a.com');
     // The whole truth: the spam filter, the technical details, and how long requests are kept (qa-reconcile F2)
     expect(section).toContain('Akismet');
     expect(section).toMatch(/IP address/);
@@ -91,19 +102,25 @@ describe('PrivacyPolicyPage', () => {
     expect(headings.indexOf('Error reports')).toBe(headings.indexOf('Anonymous usage counts') + 1);
     const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
     const reports = body(/Error reports/);
-    expect(reports).toMatch(/It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type/);
+    expect(reports).toMatch(/Before a report is sent, we remove amounts, names, notes, contact details, request contents, your IP address, and anything you type/);
+    expect(reports).toMatch(/When the iPhone or Android app itself crashes, Sentry's own scrubbing removes them instead/);
+    expect(reports).toMatch(/share extension, widgets and Siri shortcuts/);
     expect(reports).toMatch(/Our servers send a report when a request fails on our side/);
     expect(reports).toMatch(/The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from/);
     expect(reports).toMatch(/They never attach screenshots or what's on your screen/);
     expect(reports).toMatch(/the hosted portal sends one when a page crashes in your browser/);
-    // MUT-150 (eng D8): what the website really sends, and that the free web app sends nothing
+    // MUT-150 (eng D8): what the website really sends. MUT-382: the retired free apps are no longer named.
     expect(reports).toMatch(/Our website sends a report when one of its pages crashes or hits an error/);
-    expect(reports).toMatch(/The website's reports include no account at all, and the free web app you open from the website never sends one/);
+    expect(reports).toMatch(/The website's reports include no account at all\./);
+    expect(reports).not.toMatch(/free web app/);
     expect(reports).not.toMatch(/fails to load/);
     const noTracking = body(/No ads, no tracking/);
     expect(noTracking).not.toMatch(/crash reporting/);
     expect(noTracking).toMatch(/Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports when something breaks/);
-    expect(noTracking).toMatch(/The free apps on Mac, Windows, and in the browser never send them/);
+    expect(noTracking).not.toMatch(/free apps/);
+    // MUT-382 #7: our log lines hold no IP; Google Cloud's request record holds the connecting address
+    expect(noTracking).toMatch(/Our own log lines never include your IP address/);
+    expect(noTracking).toMatch(/usually Cloudflare's rather than yours/);
     expect(body(/Who else handles your data/)).toMatch(/Sentry, hosted in the EU, receives the error reports/);
     expect(body(/What reaches the network/)).toMatch(/The mobile apps connect to MTB3A's servers, to Sentry for error reports/);
     expect(body(/What reaches the network/)).toMatch(/The hosted portal also sends the error reports described under "Error reports" to Sentry/);
@@ -123,7 +140,8 @@ describe('PrivacyPolicyPage', () => {
     expect(noTracking).not.toContain('أو تقارير الأعطال أو');
     expect(noTracking).toContain('يرسل موقعنا وخوادمنا والبوابة المستضافة وتطبيقا iPhone وAndroid تقارير أعطال عند حدوث خلل');
     expect(reports).toContain('يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً');
-    expect(reports).toContain('ولا تتضمن تقارير الموقع أي حساب على الإطلاق، ولا يرسل تطبيق الويب المجاني الذي تفتحه من الموقع أي تقرير أبدًا');
+    expect(reports).toContain('ولا تتضمن تقارير الموقع أي حساب على الإطلاق.');
+    expect(reports).not.toContain('تطبيق الويب المجاني');
     const network = screen.getByRole('heading', { level: 2, name: 'ما يصل إلى الشبكة' }).parentElement?.textContent ?? '';
     expect(network).toContain('ويرسل الموقع أيضًا تقارير الأعطال الموضّحة في قسم «تقارير الأعطال» إلى Sentry، وإحصاءات الزيارات المجهولة الموضّحة في قسم «إحصاءات استخدام مجهولة» إلى PostHog.');
     expect(reports).toContain('وترسل البوابة المستضافة تقريرًا عندما تتعطّل صفحة في متصفحك');
@@ -162,9 +180,28 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' })).toBeInTheDocument();
   });
 
-  it('gives a contact address', () => {
+  it('gives MTB3A’s own contact address, and never the old Malafat one (MUT-382, B2)', () => {
     renderPage('en');
-    expect(document.querySelector('main')?.textContent).toContain('info@malafat.app');
+    expect(document.querySelector('main')?.textContent).toContain('info@mtb3a.com');
+    expect(document.querySelector('main')?.textContent).not.toContain('info@malafat.app');
+  });
+
+  it('states where the records, backups and logs live, how they are encrypted, and the processors it was missing (MUT-382)', () => {
+    renderPage('en');
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const hosted = body(/Where your records live/);
+    expect(hosted).toMatch(/our daily backups stay there too/);
+    expect(hosted).toMatch(/Google Cloud encrypts your records, receipts and backups/);
+    expect(hosted).toMatch(/kept by Google Cloud for 30 days, and may be stored outside the Tel Aviv region/);
+    expect(hosted).toMatch(/can technically reach your data/);
+    expect(hosted).not.toMatch(/Our team opens your records only/);
+    const sharing = body(/Who else handles your data/);
+    expect(sharing).toContain('Stripe');
+    expect(sharing).toMatch(/never reach our servers/);
+    expect(sharing).not.toContain('{MAILBOX_PROVIDER}');
+    expect(body(/Emails we send/)).toMatch(/a passkey is added/);
+    expect(body(/Emails we send/)).toMatch(/the day it will be deleted/);
+    expect(body(/Anonymous usage counts/)).toMatch(/the page you came from, any campaign tags/);
   });
 
   it('renders right to left in Arabic with no raw translation keys', () => {

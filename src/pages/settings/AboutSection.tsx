@@ -3,16 +3,9 @@ import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { APP_VERSION } from '../../lib/appVersion';
 import { RELEASE_NOTES, latestNotesUpTo, useWhatsNewStore } from '../../lib/whatsNew';
 
-// Stable download URLs (redirected by Netlify to GitHub Releases latest)
-const DOWNLOAD_URLS = {
-  mac: '/download/mac',
-  windows: '/download/windows',
-} as const;
-
 /**
- * Settings › About (MUT-139): app info, update status and desktop downloads
- * under one heading — these three were separate h2 sections with no
- * standalone tests, so merging costs nothing and reads as one topic.
+ * Settings › About (MUT-139): app info and update status under one heading.
+ * MUT-382: the desktop downloads are gone; MTB3A runs on iOS, Android and the web.
  */
 export function AboutSection() {
   const t = useT();
@@ -109,30 +102,6 @@ export function AboutSection() {
           </button>
         </div>
       )}
-
-      <div className="settings-row" style={{ marginTop: 'var(--space-4)' }}>
-        <div>
-          <div className="settings-label">{t('settings.desktopApp.download')}</div>
-          <div className="settings-description">{t('settings.desktopApp.downloadDesc')}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-          <a href={DOWNLOAD_URLS.mac} className="btn btn-secondary" rel="noopener">
-            {t('settings.desktopApp.downloadMac')}
-          </a>
-          <a href={DOWNLOAD_URLS.windows} className="btn btn-secondary" rel="noopener">
-            {t('settings.desktopApp.downloadWindows')}
-          </a>
-        </div>
-      </div>
-
-      <div className="settings-row">
-        <div>
-          <div className="settings-label" style={{ color: 'var(--muted)' }}>{t('download.allVersions')}</div>
-        </div>
-        <a href="/download" className="btn btn-ghost">
-          {t('settings.desktopApp.downloadBtn')}
-        </a>
-      </div>
     </div>
   );
 }

@@ -60,7 +60,7 @@ describe('/recover', () => {
     stubApi(routes({ [DOORS]: () => ok({ signup: false, recovery: false }) }));
     renderPortal('/recover');
     expect(await screen.findByRole('heading', { name: "Resetting by email isn't available yet" })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'info@malafat.app' })).toHaveAttribute('href', 'mailto:info@malafat.app');
+    expect(screen.getByRole('link', { name: 'info@mtb3a.com' })).toHaveAttribute('href', 'mailto:info@mtb3a.com');
     expect(screen.queryByLabelText('Email')).toBeNull();
     expect(turnstile.api.render).not.toHaveBeenCalled();
   });

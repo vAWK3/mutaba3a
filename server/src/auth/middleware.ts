@@ -352,7 +352,9 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, stor
     throw new ApiError('VALIDATION_FAILED', 'Name the profile to act on in the X-Mutaba3a-Profile header', { reason: 'PROFILE_REQUIRED' });
   }
   const named = await namedMembership(c, identity, store);
-  if (!named) throw new ApiError('NOT_FOUND', 'Profile not found');
+  // MUT-374 D6: the reason tells a client the named profile itself is gone for this person (left, removed, never
+  // theirs), not a record under it, so the phone re-reads /v1/me and drops it.
+  if (!named) throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
   const { organization, membership } = named;
   const writerOfRecord = await profileWriterOf(store, organization.id);
   return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord, membershipRole: membership.role };

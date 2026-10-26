@@ -10,10 +10,12 @@ interface TermsText {
   sections: Array<{ title: string }>;
 }
 /** Read from disk: Playwright loads specs as plain ES modules, which import JSON only with an attribute. */
-const text = (language: 'en' | 'ar'): TermsText =>
-  JSON.parse(readFileSync(new URL(`../../../src/content/legal/terms/2026-10-19.${language}.json`, import.meta.url), 'utf8')) as TermsText;
+const text = (language: 'en' | 'ar', version = '2026-10-19'): TermsText =>
+  JSON.parse(readFileSync(new URL(`../../../src/content/legal/terms/${version}.${language}.json`, import.meta.url), 'utf8')) as TermsText;
 const en = text('en');
 const ar = text('ar');
+/** The latest version, which /terms shows (MUT-382); 2026-10-19 stays published at its own address. */
+const latest = { en: text('en', '2026-10-26'), ar: text('ar', '2026-10-26') };
 /** The privacy policy's copy, from the app's own translation files, so a copy change needs no spec change. */
 const privacy = { en: enCopy.landing.privacyPolicy, ar: arCopy.landing.privacyPolicy };
 
@@ -27,19 +29,20 @@ async function preferLanguage(page: Page, language: 'en' | 'ar') {
 }
 
 test('/terms shows the frozen terms in English and Arabic, each version at its own address', { tag: '@web.legal.terms-page' }, async ({ page, step }) => {
-  await step('Open /terms in English: every section, the version line, and the English text prevails', async () => {
+  await step('Open /terms in English: every section, the latest version line, and the English text prevails', async () => {
     await preferLanguage(page, 'en');
     await page.goto('/terms');
-    await expect(page.getByRole('heading', { level: 2, name: en.sections[0]!.title })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: en.title })).toBeVisible();
-    for (const section of en.sections) await expect(page.getByRole('heading', { level: 2, name: section.title })).toBeVisible();
-    await expect(page.getByText(en.updated)).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: latest.en.sections[0]!.title })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: latest.en.title })).toBeVisible();
+    for (const section of latest.en.sections) await expect(page.getByRole('heading', { level: 2, name: section.title })).toBeVisible();
+    await expect(page.getByText(latest.en.updated)).toBeVisible();
     await expect(page.getByRole('main')).toContainText('English text prevails');
   });
 
-  await step('Open /terms/2026-10-19: the same frozen text', async () => {
+  await step('Open /terms/2026-10-19: the earlier frozen text, at its own address', async () => {
     await page.goto('/terms/2026-10-19');
     await expect(page.getByRole('heading', { level: 2, name: en.sections[0]!.title })).toBeVisible();
+    await expect(page.getByText(en.updated)).toBeVisible();
   });
 
   await step('Open an unknown version: it says so and links to the current terms', async () => {
@@ -52,9 +55,9 @@ test('/terms shows the frozen terms in English and Arabic, each version at its o
     await page.setViewportSize({ width: 375, height: 812 });
     await preferLanguage(page, 'ar');
     await page.goto('/terms');
-    await expect(page.getByRole('heading', { level: 2, name: ar.sections[0]!.title })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: latest.ar.sections[0]!.title })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    for (const section of ar.sections) await expect(page.getByRole('heading', { level: 2, name: section.title })).toBeVisible();
+    for (const section of latest.ar.sections) await expect(page.getByRole('heading', { level: 2, name: section.title })).toBeVisible();
     await expectNoHorizontalOverflow(page, '/terms in Arabic at 375px');
   });
 });
@@ -121,20 +124,23 @@ test('the privacy policy says the website, our servers, the portal and the phone
     const headings = await page.getByRole('heading', { level: 2 }).allTextContents();
     expect(headings.indexOf(privacy.en.errorReports.title)).toBe(headings.indexOf(privacy.en.usageAnalytics.title) + 1);
     const reports = section(privacy.en.errorReports.title);
-    await expect(reports).toContainText('It never includes amounts, names, notes, contact details, request contents, your IP address, or anything you type');
+    await expect(reports).toContainText('Before a report is sent, we remove amounts, names, notes, contact details, request contents, your IP address, and anything you type');
     await expect(reports).toContainText('Our servers send a report when a request fails on our side');
     await expect(reports).toContainText("The iPhone and Android apps send a report when the app crashes or hits an error it can't recover from");
     await expect(reports).toContainText("They never attach screenshots or what's on your screen");
     await expect(reports).toContainText('the hosted portal sends one when a page crashes in your browser');
     await expect(reports).toContainText('Our website sends a report when one of its pages crashes or hits an error');
-    await expect(reports).toContainText('the free web app you open from the website never sends one');
+    await expect(reports).toContainText("The website's reports include no account at all.");
+    await expect(reports).toContainText("the iPhone app's share extension, widgets and Siri shortcuts");
   });
 
   await step('"No ads, no tracking" drops the no-crash-reporting promise; "Who else handles your data" names Sentry in the EU', async () => {
     const noTracking = section(privacy.en.noTracking.title);
     await expect(noTracking).not.toContainText('crash reporting');
     await expect(noTracking).toContainText('Our website, our servers, the hosted portal, and the iPhone and Android apps send error reports');
-    await expect(noTracking).toContainText('The free apps on Mac, Windows, and in the browser never send them');
+    await expect(noTracking).not.toContainText('free apps');
+    // MUT-382: our own log lines hold no IP; Google Cloud's request record holds the connecting address
+    await expect(noTracking).toContainText('Our own log lines never include your IP address');
     await expect(section(privacy.en.network.title)).toContainText('The website also sends the error reports described under "Error reports" to Sentry and the anonymous visit counts');
     await expect(page.locator('.privacy-policy-intro')).toContainText("MTB3A's website");
     await expect(section(privacy.en.sharing.title)).toContainText('Sentry, hosted in the EU, receives the error reports');
@@ -150,7 +156,7 @@ test('the privacy policy says the website, our servers, the portal and the phone
     await expect(section(privacy.ar.errorReports.title)).toContainText('ويرسل تطبيقا iPhone وAndroid تقريرًا عندما يتعطّل التطبيق');
     await expect(section(privacy.ar.errorReports.title)).toContainText('وترسل البوابة المستضافة تقريرًا عندما تتعطّل صفحة في متصفحك');
     await expect(section(privacy.ar.errorReports.title)).toContainText('يرسل موقعنا تقريرًا عندما تتعطّل إحدى صفحاته أو تواجه خطأً');
-    await expect(section(privacy.ar.noTracking.title)).toContainText('فلا ترسلها أبدًا');
+    await expect(section(privacy.ar.noTracking.title)).toContainText('ولا تتضمن سطور السجلات الخاصة بنا عنوان IP الخاص بك أبدًا');
   });
 });
 
@@ -172,13 +178,15 @@ test('the terms are linked from the footer and the /hosted form, and the privacy
 });
 
 test('the website publishes the list of released terms versions', { tag: '@web.legal.terms-manifest' }, async ({ page, step }) => {
-  await step('Fetch /legal/terms-versions.json: 2026-10-19 with an English and an Arabic sha256', async () => {
+  await step('Fetch /legal/terms-versions.json: 2026-10-19 and 2026-10-26, each with an English and an Arabic sha256', async () => {
     const res = await page.request.get('/legal/terms-versions.json');
     expect(res.ok()).toBe(true);
     const manifest = (await res.json()) as { versions: Array<{ version: string; sha256: Record<string, string> }> };
-    const current = manifest.versions.find((v) => v.version === '2026-10-19');
-    expect(current?.sha256.en).toMatch(/^[0-9a-f]{64}$/);
-    expect(current?.sha256.ar).toMatch(/^[0-9a-f]{64}$/);
+    for (const version of ['2026-10-19', '2026-10-26']) {
+      const entry = manifest.versions.find((v) => v.version === version);
+      expect(entry?.sha256.en, version).toMatch(/^[0-9a-f]{64}$/);
+      expect(entry?.sha256.ar, version).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 });
 

@@ -61,7 +61,7 @@ describe('an account waiting for review (MUT-367)', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: "We're reviewing your account" })).toBeInTheDocument();
     expect(screen.getByText("We'll email you within 2 working days.")).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'info@malafat.app' })).toHaveAttribute('href', 'mailto:info@malafat.app');
+    expect(screen.getByRole('link', { name: 'info@mtb3a.com' })).toHaveAttribute('href', 'mailto:info@mtb3a.com');
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(await screen.findByLabelText('Email')).toHaveValue('');
     expect(screen.getByLabelText('Password')).toHaveValue('');

@@ -25,8 +25,6 @@ describe('marketingPath', () => {
 describe('landingRoute (MUT-150 eng D7)', () => {
   it.each([
     ['/', '/'],
-    ['/download', '/download'],
-    ['/download/', '/download'],
     ['/privacy', '/privacy'],
     ['/terms', '/terms'],
     ['/terms/', '/terms'],
@@ -35,7 +33,7 @@ describe('landingRoute (MUT-150 eng D7)', () => {
     expect(landingRoute(pathname)).toBe(expected);
   });
 
-  it.each(['/app', '/app/', '/app/clients', '/hosted', '/hosted-offer.html', '/download/mac', '/privacyx', '/termsx', '/unknown', '/hosted//'])(
+  it.each(['/app', '/app/', '/app/clients', '/hosted', '/hosted-offer.html', '/download', '/download/', '/download/mac', '/privacyx', '/termsx', '/unknown', '/hosted//'])(
     'is null for %s: not a page the website renders, so nothing there may report',
     (pathname) => {
       expect(landingRoute(pathname)).toBeNull();

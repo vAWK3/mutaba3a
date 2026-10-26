@@ -201,6 +201,16 @@ run "mutaba3a_pg2_matches_mutaba3a_pg_settings" {
     error_message = "mutaba3a-pg2 keeps the backups the privacy policy promises: 14 daily, 7 days of point-in-time recovery."
   }
 
+  # MUT-382 (B4): the privacy policy says backups stay in Tel Aviv; Cloud SQL picks a multi-region without this.
+  assert {
+    condition = (
+      google_sql_database_instance.postgres.settings[0].backup_configuration[0].location == var.region
+      && google_sql_database_instance.postgres_cmek[0].settings[0].backup_configuration[0].location == var.region
+      && var.region == "me-west1"
+    )
+    error_message = "Both instances keep their backups in the service's region (me-west1), as the privacy policy promises."
+  }
+
   assert {
     condition = (
       google_sql_database_instance.postgres_cmek[0].settings[0].ip_configuration[0].ssl_mode == "ENCRYPTED_ONLY"

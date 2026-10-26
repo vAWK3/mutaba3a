@@ -123,7 +123,7 @@
       "menu": "Close my account",
       "rowSub": "Deleted after 30 days, unless you keep it",
       "title": "Close my account",
-      "lead": "Your account and everything in it will be deleted 30 days from now.",
+      "lead": "Your account will be deleted 30 days from now, with the profiles you own and everything in them.",
       "deletesHeading": "Deleted",
       "deletesProfiles": "These profiles, with every record and receipt in them: {names}.",
       "deletesSessions": "Your sign-ins on the web and on your phones. You'll stay signed in here only to keep your account.",

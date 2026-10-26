@@ -64,7 +64,7 @@ async function expectTextLinkHover(page: Page, label: string, link: Locator) {
   await expect.poll(async () => (await after()).decoration, { message: `${label}: hovered underline` }).toBe('underline');
 }
 
-/** /download and Settings › About ask GitHub for the latest release; answer 404 so nothing leaves the host and the fallback renders */
+/** Settings › About asks GitHub for the latest release; answer 404 so nothing leaves the host and the fallback renders */
 async function stubGitHub(page: Page) {
   await page.route('https://api.github.com/**', (route) => route.fulfill({ status: 404, body: '{}' }));
 }
@@ -81,7 +81,7 @@ for (const scheme of SCHEMES) {
         await page.goto('/');
         await expect(page.locator('#hero-title')).toBeVisible();
         await expectControlHover(page, 'hero button', page.locator('a.hero-cta-primary'));
-        await expectTextLinkHover(page, 'hero alt link', page.locator('a.hero-cta-alt'));
+        await expectTextLinkHover(page, 'hero alt link', page.locator('a.hero-cta-alt').first());
         await expectControlHover(page, 'Get it card', page.locator('a.landing-get-it-option').first());
       });
 
@@ -100,18 +100,6 @@ for (const scheme of SCHEMES) {
         await page.goto('/privacy');
         await expectTextLinkHover(page, 'privacy back link', page.locator('a.privacy-policy-back'));
       });
-    },
-  );
-
-  test(
-    `${scheme} mode: on the download page, a hovered platform button keeps its colours and the footer links underline`,
-    { tag: '@web.brand.link-hover' },
-    async ({ page }) => {
-      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-      await stubGitHub(page);
-      await page.goto('/download');
-      await expectControlHover(page, 'download button', page.locator('a.download-cta').first());
-      await expectTextLinkHover(page, 'back to app', page.locator('a.download-link--back'));
     },
   );
 
@@ -142,7 +130,6 @@ for (const scheme of SCHEMES) {
       await step('Settings › About: the link buttons keep their labels', async () => {
         await page.goto('/app/settings');
         await expectControlHover(page, 'Buy Me a Coffee', page.getByRole('link', { name: 'Buy Me a Coffee' }));
-        await expectControlHover(page, 'download all versions', page.locator('a.btn-ghost'), '--text');
       });
     },
   );
