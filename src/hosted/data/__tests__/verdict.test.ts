@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { HostedProfile, Me, Verdict } from '../../api/client';
-import { allLocked, glanceOf, glanceShellProfile, isFirstRun, type GlanceInput } from '../verdict';
+import { allLocked, glanceOf, glanceShellProfile, isFirstRun, outsideProfiles, verdictAllLocked, type GlanceInput } from '../verdict';
 
 /** MUT-448: the Glance ledger shaped from GET /v1/summaries/verdict (plan P6–P9, P14, D7, D8, DD1, DD3, DD4, DD8, DD9). */
 
@@ -137,6 +137,15 @@ describe('glanceOf: usual (R8, DD1)', () => {
     expect(glanceOf(verdict({ usual: '2690.00' }), input()).usual?.direction).toBe('about');
   });
 
+  it('calls a gap under one whole unit "about", never "▲ ₪0" (review)', () => {
+    expect(glanceOf(verdict({ usual: '2689.60' }), input()).usual?.direction).toBe('about');
+  });
+
+  it('marks the gap ≈ when the kept figure was converted (review)', () => {
+    const mixed = verdict({ total: { ...verdict().total, currencies: [{ currency: 'ILS', net: '2000.00' }, { currency: 'USD', net: '200.00' }], converted: '2742.00' } });
+    expect(glanceOf(mixed, input()).usual?.delta.approximate).toBe(true);
+  });
+
   it('hides it while the month is still running, so the 3rd never reads as a bad month', () => {
     expect(glanceOf(verdict({ from: '2026-10-01', to: '2026-10-31', asOf: '2026-10-03' }), input()).usual).toBeNull();
   });
@@ -204,3 +213,21 @@ describe('allLocked (D7)', () => {
     expect(allLocked([], standing)).toBe(false);
   });
 });
+
+describe('outsideProfiles (review: firms you staff)', () => {
+  it('lists readable, open profiles the verdict does not count, and all of them when it counts none', () => {
+    const counted = verdict({ profiles: [profile({ ...nal, profileId: 'a' })], unavailable: [{ profileId: 'b', name: 'B', code: 'SUBSCRIPTION_LAPSED' }] });
+    const held = [hosted('a'), hosted('b'), hosted('firm'), hosted('locked', 'LOCKED'), hosted('blind', 'TRIAL', false)];
+    expect(outsideProfiles(held, counted, standing).map((p) => p.id)).toEqual(['firm']);
+    expect(outsideProfiles(held, null, standing).map((p) => p.id)).toEqual(['a', 'b', 'firm']);
+  });
+});
+
+describe('verdictAllLocked (review)', () => {
+  it('is true when every counted profile is locked, though a staffed firm keeps the person open', () => {
+    expect(verdictAllLocked(verdict({ profiles: [], unavailable: [{ profileId: 'a', name: 'A', code: 'SUBSCRIPTION_LAPSED' }] }))).toBe(true);
+    expect(verdictAllLocked(verdict({ profiles: [], unavailable: [{ profileId: 'a', name: 'A', code: 'INTERNAL' }] }))).toBe(false);
+    expect(verdictAllLocked(verdict())).toBe(false);
+  });
+});
+

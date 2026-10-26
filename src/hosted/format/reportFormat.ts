@@ -36,6 +36,12 @@ export function formatMonth(month: string, language: Language, today: string): s
   return dates(language, sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' }).format(at(`${month}-01`));
 }
 
+/** A day in Reports, as `formatDay` writes it but Levantine in Arabic like the periods beside it (AC6): the ECB rate date. */
+export function formatReportDay(day: string, language: Language): string {
+  // Arabic's medium style is all digits; the month spelled out is what names it Levantine
+  return dates(language, language === 'ar' ? { day: 'numeric', month: 'long', year: 'numeric' } : { dateStyle: 'medium' }).format(at(day));
+}
+
 /** "October 2026", "2026", or "19 Oct – 25 Oct": the hero's caption for a period. */
 export function formatPeriod(period: Period, range: Range, language: Language): string {
   if (period === 'year') return range.from.slice(0, 4);

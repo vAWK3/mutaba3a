@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPeriod, formatSigned } from '../reportFormat';
+import { formatPeriod, formatReportDay, formatSigned } from '../reportFormat';
 
 /** MUT-448: a Glance business line carries its sign; zero carries none, and a loss uses U+2212. */
 
@@ -26,3 +26,11 @@ describe('Arabic month names in Reports (AC6)', () => {
     expect(formatPeriod('month', { from: '2026-02-01', to: '2026-02-28' }, 'ar')).toBe('شباط 2026');
   });
 });
+
+describe('formatReportDay (AC6, review)', () => {
+  it('writes the rate day as formatDay does in English, and Levantine in Arabic', () => {
+    expect(formatReportDay('2026-10-23', 'en')).toBe('Oct 23, 2026');
+    expect(formatReportDay('2026-10-23', 'ar')).toContain('تشرين الأول');
+  });
+});
+

@@ -13,12 +13,13 @@ import { LockedScreen } from '../../components/LapseGate';
 import { addDays } from '../../data/expenseGroups';
 import type { GlanceSearch } from '../../data/filters';
 import { DEFAULT_PERIOD, canReadReports, hasNext, hasPrevious, periodRange, stepPeriod, type Period, type Range } from '../../data/reports';
-import { allLocked, glanceOf, isFirstRun, type Amount, type Glance, type GlanceRow } from '../../data/verdict';
+import { allLocked, glanceOf, isFirstRun, outsideProfiles, verdictAllLocked, type Amount, type Glance, type GlanceRow } from '../../data/verdict';
 import { useVerdict, verdictKey, type VerdictRange } from '../../data/verdictQueries';
 import { minorToDecimal } from '../../format/currencies';
 import { DecimalAmount } from '../../format/DecimalAmount';
-import { formatDay, moneyDateFloor, todayInZone } from '../../format/dates';
-import { formatPeriod, formatSigned, formatWhole } from '../../format/reportFormat';
+import { isolate } from '../../../lib/utils';
+import { moneyDateFloor, todayInZone } from '../../format/dates';
+import { formatPeriod, formatReportDay, formatSigned, formatWhole } from '../../format/reportFormat';
 import { useMe, useWritableFor } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { FirstRun } from './ReportsPage';
@@ -69,17 +70,49 @@ export function GlancePage({ search, setSearch, shell }: GlancePageProps) {
   const glance = useMemo(() => (verdict ? glanceOf(verdict, { period, readable }) : null), [verdict, period, readable]);
   useGlanceViewed(period, Boolean(verdict), local);
 
+  const outside = useMemo(() => outsideProfiles(me.profiles, verdict ?? null, me), [me, verdict]);
+
   const header = <PageHeader title={t(`${K}.title`)} />;
   const lapsed = query.error instanceof ApiError && query.error.code === 'SUBSCRIPTION_LAPSED';
-  if (locked || lapsed) {
+  if (locked || lapsed || (verdict && verdictAllLocked(verdict))) {
     const profile = shell ?? me.profiles[0];
     return profile ? <LockedScreen profile={profile} /> : header;
   }
+  // Review: the verdict counts none of this person's profiles (staff only, ADR-204 D2): their Reports, one tap away
+  if (query.error instanceof ApiError && query.error.status === 404) {
+    return (
+      <>
+        {header}
+        <div className="hp-glance">
+          <p className="hp-glance-hint hp-report-note">{t(`${G}.outside.note`)}</p>
+          <OutsideList profiles={outside} period={DEFAULT_PERIOD} />
+        </div>
+      </>
+    );
+  }
+
+  const today = verdict?.asOf ?? knownToday;
+  const at = search.at ?? verdict?.from ?? knownToday;
+  const set = (next: Partial<GlanceSearch>) => setSearch({ ...search, ...next });
+  // Review: the controls stay on every state after the first answer, so no period is a dead end (stepping replaces history)
+  const controls = (
+    <ReportControls
+      period={period}
+      onPeriod={(p) => set({ period: p, at: undefined })}
+      yearLockedUntil={null}
+      canPrevious={hasPrevious(period, at, null, true, language, addDays(moneyDateFloor(today), -DAYS_BEFORE_FLOOR))}
+      canNext={hasNext(period, at, today, language)}
+      onStep={(direction) => set({ at: stepPeriod(period, at, direction, language) })}
+      allProfiles={null}
+      onAllProfiles={() => undefined}
+    />
+  );
   if (!verdict) {
     if (query.isError) {
       return (
         <>
           {header}
+          {controls}
           <QueryView queries={[query]} data={undefined}>
             {() => null}
           </QueryView>
@@ -88,32 +121,30 @@ export function GlancePage({ search, setSearch, shell }: GlancePageProps) {
     }
     return <GlanceSkeleton header={header} rows={Math.min(Math.max(me.profiles.length, 1), MAX_SKELETON_ROWS)} label={t(`${K}.loading`)} />;
   }
-  if (isFirstRun(verdict)) {
-    return shell ? <FirstRun header={header} profile={shell} writable={writable} /> : (
+  // DD4, review: First Run only where a person lands, never on a period they stepped back to
+  if (!search.at && period === DEFAULT_PERIOD && isFirstRun(verdict)) {
+    return (
       <>
-        {header}
-        <Empty title={t(`${K}.firstRun.title`)} body={t(`${K}.firstRun.body`)} />
+        {shell ? (
+          <FirstRun header={header} profile={shell} writable={writable} />
+        ) : (
+          <>
+            {header}
+            <Empty title={t(`${K}.firstRun.title`)} body={t(`${K}.firstRun.body`)} />
+          </>
+        )}
+        <div className="hp-glance">
+          <OutsideList profiles={outside} period={period} at={verdict.from} />
+        </div>
       </>
     );
   }
 
   const shown: Range = { from: verdict.from, to: verdict.to };
-  const today = verdict.asOf;
-  const at = search.at ?? verdict.from;
-  const set = (next: Partial<GlanceSearch>) => setSearch({ ...search, ...next });
   return (
     <>
       {header}
-      <ReportControls
-        period={period}
-        onPeriod={(p) => set({ period: p, at: undefined })}
-        yearLockedUntil={null}
-        canPrevious={hasPrevious(period, at, null, true, language, addDays(moneyDateFloor(today), -DAYS_BEFORE_FLOOR))}
-        canNext={hasNext(period, at, today, language)}
-        onStep={(direction) => set({ at: stepPeriod(period, at, direction, language) })}
-        allProfiles={null}
-        onAllProfiles={() => undefined}
-      />
+      {controls}
       {query.isError && (
         <p className="hp-glance-refresh hp-report-note" aria-live="polite">
           {t(`${G}.refreshFailed`)}{' '}
@@ -124,8 +155,32 @@ export function GlancePage({ search, setSearch, shell }: GlancePageProps) {
       )}
       <div className={`hp-glance ${dimmed ? 'hp-report-busy' : ''}`} aria-busy={dimmed || undefined}>
         <Ledger glance={glance!} period={period} shown={shown} today={today} />
+        <OutsideList profiles={outside} period={period} at={shown.from} />
       </div>
     </>
+  );
+}
+
+/** Review: profiles the person can open that no total counts (firms they staff): a plain row each, into its Reports. */
+function OutsideList({ profiles, period, at }: { profiles: readonly HostedProfile[]; period: Period; at?: string }) {
+  const { t } = useLanguage();
+  if (profiles.length === 0) return null;
+  return (
+    <ul className="hp-glance-list hp-glance-outside" aria-label={t(`${G}.outside.label`)}>
+      {profiles.map((p) => (
+        <li key={p.id}>
+          <Link to={`/p/${p.id}/reports`} search={at ? { period, at } : {}} className="hp-glance-row press" aria-label={t(`${G}.outside.linkName`, { name: p.name })}>
+            <span className="hp-glance-name">
+              <bdi>{p.name}</bdi>
+              <span className="hp-glance-kind">{t(`${G}.outside.label`)}</span>
+            </span>
+            <span className="hp-glance-chevron" aria-hidden="true">
+              ›
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -173,7 +228,7 @@ function Ledger({ glance, period, shown, today }: { glance: Glance; period: Peri
   const anyApprox = Boolean(hero.breakdown) || Boolean(owed.breakdown && owed.figure?.approximate) || rows.some((r) => r.primary.some((a) => a.approximate));
   const notes = [
     footnote.sharedInFull ? t(`${G}.footnote.shared`) : null,
-    anyApprox && footnote.rateDate ? t(`${K}.hero.rateFooter`, { date: formatDay(footnote.rateDate, language) }) : null,
+    anyApprox && footnote.rateDate ? t(`${K}.hero.rateFooter`, { date: formatReportDay(footnote.rateDate, language) }) : null,
     footnote.omitted.length > 0 ? t(`${G}.footnote.omitted`, { currencies: footnote.omitted.join(', ') }) : null,
   ].filter((n): n is string => n !== null);
 
@@ -201,7 +256,7 @@ function Ledger({ glance, period, shown, today }: { glance: Glance; period: Peri
           <p className="hp-report-caption">{hero.negative ? t(`${K}.hero.keptNegative`) : caption}</p>
         )}
       </section>
-      {glance.leavesOut.length > 0 && <p className="hp-glance-leaves hp-report-note">{t(`${G}.leavesOut`, { names: glance.leavesOut.join(language === 'ar' ? '، ' : ', ') })}</p>}
+      {glance.leavesOut.length > 0 && <p className="hp-glance-leaves hp-report-note">{t(`${G}.leavesOut`, { names: glance.leavesOut.map(isolate).join(language === 'ar' ? '، ' : ', ') })}</p>}
       <ul className="hp-glance-list" aria-label={t(`${G}.profilesLabel`)}>
         {rows.map((row) => (
           <li key={row.profileId}>
@@ -310,7 +365,7 @@ function AmountsPanel({ amounts, rateDate }: { amounts: Amount[]; rateDate: stri
           ))}
         </tbody>
       </table>
-      {rateDate && <p className="hp-popover-foot">{t(`${K}.hero.rateFooter`, { date: formatDay(rateDate, language) })}</p>}
+      {rateDate && <p className="hp-popover-foot">{t(`${K}.hero.rateFooter`, { date: formatReportDay(rateDate, language) })}</p>}
     </>
   );
 }

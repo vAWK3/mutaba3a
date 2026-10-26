@@ -10,6 +10,7 @@ import type { Me } from '../../session/me';
  * states the design review added: first run (DD4), all locked (D7), a refresh that fails while figures show (DD6).
  */
 
+const FIRM_ID = '33333333-3333-4333-8333-333333333333';
 const LOCKED: BillingEntitlement = { state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null };
 
 type VerdictProfile = Verdict['profiles'][number];
@@ -169,4 +170,37 @@ describe('the Glance', () => {
     expect(rows[1]!.getAttribute('aria-label')).toMatch(/^Personal، مصروف /);
     expect(screen.getByRole('region', { name: 'تبقّى لك' })).toBeInTheDocument();
   });
+
+  it('stepping back into an empty period keeps the controls and an empty ledger, never First Run (review)', async () => {
+    const empty = verdict({ from: '2025-10-01', to: '2025-10-31', profiles: verdict().profiles.map((p) => ({ ...p, currencies: [], converted: { received: '0.00', spent: '0.00', net: '0.00' } })), total: { ...verdict().total, currencies: [], converted: '0.00' }, owed: { currencies: [], overdueCount: 0, converted: '0.00' } });
+    portal('/reports?period=month&at=2025-10-01', () => ok(empty));
+    await list();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeEnabled();
+    expect(screen.queryByRole('heading', { name: 'Your reports start with your first payment or expense' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the controls over the error card when a period fails to load (review)', async () => {
+    portal('/reports?period=month&at=2026-09-01', () => fail(500, 'INTERNAL'));
+    expect(await screen.findByRole('button', { name: 'Next month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry|try again/i })).toBeInTheDocument();
+  });
+
+  it('lists a staffed firm under the ledger as a link into its own Reports (review)', async () => {
+    const withFirm = me([profile({ owned: true }), profile({ id: ORG_B, name: 'Personal', owned: true, isPersonalDefault: true }), profile({ id: FIRM_ID, name: 'Sader Law Firm' })]);
+    portal('/reports', () => ok(verdict()), withFirm);
+    const outside = await screen.findByRole('list', { name: 'Not in this total' });
+    expect(within(outside).getByRole('link', { name: 'Sader Law Firm, not in this total' })).toHaveAttribute('href', `/p/${FIRM_ID}/reports?period=month&at=2026-10-01`);
+  });
+
+  it('gives a staff-only person their firms’ Reports instead of an error (review)', async () => {
+    portal('/reports', () => fail(404, 'NOT_FOUND'), me([profile({ id: FIRM_ID, name: 'Sader Law Firm' })]));
+    expect(await screen.findByRole('link', { name: 'Sader Law Firm, not in this total' })).toHaveAttribute('href', `/p/${FIRM_ID}/reports`);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows the locked screen when every profile the verdict counts is locked (review)', async () => {
+    portal('/reports', () => ok(verdict({ profiles: [], unavailable: [{ profileId: ORG_A, name: 'Haddad & Partners', code: 'SUBSCRIPTION_LAPSED' }] })));
+    expect(await screen.findByRole('heading', { name: 'Subscribe or download your records' })).toBeInTheDocument();
+  });
 });
+

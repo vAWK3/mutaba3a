@@ -80,3 +80,11 @@ features:
       - Open Reports with no open Owed entries
     expect:
       - '"Nothing owed to you", with no overdue count'
+  - id: staff-firm
+    title: A firm you staff, which no total counts, still opens its own Reports from the Glance
+    tier: secondary
+    steps:
+      - Press the Reports icon on an account that owns a profile and staffs a Malafat firm
+    expect:
+      - The firm is listed under the ledger as "Not in this total"
+      - Its row opens the firm's own Reports

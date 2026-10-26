@@ -279,6 +279,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
    */
   const glanceRoute = createRoute({
     getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
     path: '/reports',
     validateSearch: parseGlance,
     component: function Glance() {

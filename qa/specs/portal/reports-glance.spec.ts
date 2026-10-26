@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { FIRM, NEW_PROFILE, OFFICE_A, OFFICE_B, office } from '../../support/portal';
+import { FIRM, NEW_PROFILE, OFFICE_A, OFFICE_B, malafatFirm, office } from '../../support/portal';
 import { FakeApi, todayInJerusalem, verdictBody, type FakeApiSeed, type StubVerdictLine } from '../../support/portalApi';
 
 /**
@@ -208,3 +208,20 @@ test('With nothing open, the owed line says nothing is owed', { tag: '@portal.re
     await expect(page.locator('.hp-glance-overdue')).toHaveCount(0);
   });
 });
+
+test('A firm you staff, which no total counts, still opens its own Reports from the Glance', { tag: '@portal.reports-glance.staff-firm' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nal Software'), malafatFirm()], verdicts: { current: verdictBody([business], thisMonth) } });
+
+  await step('Press the Reports icon on an account that owns a profile and staffs a Malafat firm', async () => {
+    await openGlance(page, api);
+  });
+
+  await step('The firm sits under the ledger as “Not in this total”, and its row opens its own Reports', async () => {
+    const outside = page.getByRole('list', { name: 'Not in this total' });
+    await expect(outside.getByRole('link')).toHaveCount(1);
+    await outside.getByRole('link', { name: 'Haddad & Partners, not in this total' }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${FIRM}/reports\\?`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Reports' })).toBeVisible();
+  });
+});
+

@@ -1632,7 +1632,12 @@
         },
         "hint": "Open a profile for its charts",
         "refreshFailed": "Couldn't refresh",
-        "profilesLabel": "Your profiles"
+        "profilesLabel": "Your profiles",
+        "outside": {
+          "label": "Not in this total",
+          "note": "Your Reports total counts the profiles you own. These aren't yours, so open one for its own Reports.",
+          "linkName": "{name}, not in this total"
+        }
       }
     },
     "passkeys": {

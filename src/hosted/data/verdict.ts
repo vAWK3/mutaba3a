@@ -1,4 +1,5 @@
 import { parseAmountToMinor } from '../../lib/utils';
+import { wholeUnits } from '../format/reportFormat';
 import type { Currency, HostedProfile, Me, Verdict } from '../api/client';
 import { canReadReports, type Period } from './reports';
 import { billingGateOf } from './trialPrompt';
@@ -110,7 +111,10 @@ function usualOf(v: Verdict, period: Period): Glance['usual'] {
   const running = v.from <= v.asOf && v.asOf <= v.to;
   if (period !== 'month' || running || v.usual === null || v.total.converted === null) return null;
   const minor = parseAmountToMinor(v.total.converted, v.base) - parseAmountToMinor(v.usual, v.base);
-  return { direction: minor > 0 ? 'above' : minor < 0 ? 'below' : 'about', delta: { minor: Math.abs(minor), currency: v.base, approximate: false } };
+  // Shown in whole units: a gap that rounds to nothing is "about your usual", never "▲ ₪0" (review)
+  const direction = wholeUnits(minor, v.base) === 0 ? 'about' : minor > 0 ? 'above' : 'below';
+  const approximate = v.total.currencies.some((c) => c.currency !== v.base && !isZero(c.net));
+  return { direction, delta: { minor: Math.abs(minor), currency: v.base, approximate } };
 }
 
 function owedOf(v: Verdict): Glance['owed'] {
@@ -167,3 +171,19 @@ export function glanceShellProfile(profiles: readonly HostedProfile[], backProfi
 export function allLocked(profiles: readonly HostedProfile[], me: Pick<Me, 'billingStanding'>): boolean {
   return profiles.length > 0 && profiles.every((p) => billingGateOf(me, p) === 'locked');
 }
+
+/**
+ * Review (MUT-448 qa-reconcile): profiles the person can open but the verdict doesn't count, chiefly firms they staff
+ * (ADR-204 D2 counts owned, co-owned and OWNER firms only). The Glance lists them as link-only rows, "Not in this
+ * total", so the corner icon never strands their Reports. `verdict` null: the verdict counted nothing (404).
+ */
+export function outsideProfiles(profiles: readonly HostedProfile[], verdict: Verdict | null, me: Pick<Me, 'billingStanding'>): HostedProfile[] {
+  const counted = new Set([...(verdict?.profiles ?? []).map((p) => p.profileId), ...(verdict?.unavailable ?? []).map((u) => u.profileId)]);
+  return profiles.filter((p) => !counted.has(p.id) && canReadReports(p) && billingGateOf(me, p) !== 'locked');
+}
+
+/** Review: every profile the verdict counts is locked (the person's own all lapsed while a staffed firm is open). */
+export function verdictAllLocked(v: Verdict): boolean {
+  return v.profiles.length === 0 && v.unavailable.length > 0 && v.unavailable.every((u) => u.code === 'SUBSCRIPTION_LAPSED');
+}
+

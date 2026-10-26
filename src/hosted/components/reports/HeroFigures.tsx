@@ -7,9 +7,8 @@ import type { ConvertedTotal } from '../../data/expenseGroups';
 import { convertMoney, sumMoney, type Money, type Unit } from '../../data/reports';
 import { minorToDecimal } from '../../format/currencies';
 import { DecimalAmount } from '../../format/DecimalAmount';
-import { formatDay } from '../../format/dates';
 import { rateLines } from '../../format/rateLines';
-import { formatWhole } from '../../format/reportFormat';
+import { formatReportDay, formatWhole } from '../../format/reportFormat';
 import { usePopover } from '../../shell/usePopover';
 
 /**
@@ -244,7 +243,7 @@ function RateBreakdown({ breakdown }: { breakdown: Breakdown }) {
           ))}
         </tbody>
       </table>
-      <p className="hp-popover-foot">{[...lines, t('hosted.reports.hero.rateFooter', { date: formatDay(breakdown.total.rateDate, language) })].join(' · ')}</p>
+      <p className="hp-popover-foot">{[...lines, t('hosted.reports.hero.rateFooter', { date: formatReportDay(breakdown.total.rateDate, language) })].join(' · ')}</p>
     </>
   );
 }
