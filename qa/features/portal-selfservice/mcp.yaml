@@ -86,3 +86,33 @@ features:
       - The inbox entry is offered as a look-alike that must be filed before a receipt can attach
       - Filing creates the expense on my personal profile
       - The expense drawer lists the receipt file
+  - id: receipt-matches-statement
+    title: Claude attaches my receipt to the expense it already recorded from my card statement
+    tier: secondary
+    # MUT-437 AC2.
+    paths:
+      - server/src/mcp/read-tools.ts
+      - server/src/mcp/receipt-tools.ts
+      - server/src/expenses/similarity.ts
+    steps:
+      - Claude records the card statement line, 61.40 ILS at CARREFOUR MKT 0231
+      - Claude reads my Arabic receipt from two days earlier and looks for its match
+      - Claude attaches the receipt to the expense it found
+      - Open that expense in Expenses
+    expect:
+      - The statement-line expense comes back as the receipt's match, able to take a receipt and with none yet
+      - There is one 61.40 expense, and its drawer lists the receipt file
+  - id: several-matches
+    title: Claude shows me every look-alike and records nothing until I choose
+    tier: secondary
+    # MUT-437 AC3.
+    paths:
+      - server/src/mcp/write-tools.ts
+      - server/src/mcp/read-tools.ts
+    steps:
+      - I already have two 18.00 ILS expenses that week, at Aroma and Cafe Nero
+      - Claude adds an 18.00 ILS statement line at AROMA TLV
+      - Open Expenses
+    expect:
+      - Claude gets both expenses back as look-alikes, Aroma first, and nothing is recorded
+      - Expenses still lists only the two 18.00 expenses

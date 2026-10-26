@@ -189,3 +189,62 @@ test('Claude files my phone capture from the inbox into a profile and attaches t
     await expect(page.getByRole('dialog').getByText('super-pharm.pdf')).toBeVisible();
   });
 });
+
+test('Claude attaches my receipt to the expense it already recorded from my card statement', { tag: '@portal-selfservice.mcp.receipt-matches-statement' }, async ({ page, step }) => {
+  const me = await person(page, { agentAccess: true });
+  await grantCoverage(me.id);
+  const accessToken = await connect(page);
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n', 'utf8');
+  let lineId = '';
+  await step('Claude records the card statement line: 61.40 ILS at CARREFOUR MKT 0231', async () => {
+    const added = await callTool(accessToken, 'add_expense', { destination: { kind: 'profile', profileId: me.profileId }, amount: '61.40', currency: 'ILS', occurredOn: '2026-10-22', vendor: 'CARREFOUR MKT 0231', idempotencyKey: `qa-mcp-${randomUUID()}` });
+    expect(added.structured, added.text).toMatchObject({ outcome: 'created' });
+    lineId = (added.structured?.expense as { id: string }).id;
+  });
+  await step('Claude reads my Arabic receipt from two days earlier and finds that expense as its match', async () => {
+    const found = await callTool(accessToken, 'find_similar_expenses', { amount: '61.40', currency: 'ILS', date: '2026-10-20', vendor: 'كارفور' });
+    expect(found.structured?.items).toEqual([expect.objectContaining({ id: lineId, where: 'profile', canAttachReceipt: true, hasReceipt: false })]);
+  });
+  await step('Claude attaches the receipt to that expense', async () => {
+    const started = await callTool(accessToken, 'start_receipt_upload', { profileId: me.profileId, target: { kind: 'expense', expenseId: lineId }, filename: 'carrefour-receipt.pdf', mimeType: 'application/pdf', sizeBytes: pdf.length, idempotencyKey: `qa-mcp-${randomUUID()}` });
+    expect(started.isError, started.text).toBe(false);
+    const upload = started.structured?.upload as { url: string; headers: Record<string, string> };
+    const put = await fetch(new URL(upload.url, liveState().origin), { method: 'PUT', headers: upload.headers, body: pdf });
+    expect(put.ok, `PUT ${put.status}`).toBe(true);
+    const done = await callTool(accessToken, 'complete_receipt_upload', { profileId: me.profileId, receiptId: String(started.structured?.receiptId) });
+    expect(done.structured, done.text).toMatchObject({ status: 'READY', expenseId: lineId });
+  });
+  await step('Open that expense in Expenses: one 61.40 expense, with the receipt listed', async () => {
+    await page.goto(`/p/${me.profileId}/expenses`);
+    await expect(page.getByRole('row').filter({ hasText: '61.40' })).toHaveCount(1);
+    await openExpense(page, me.profileId, '61.40');
+    await expect(page.getByRole('dialog').getByText('carrefour-receipt.pdf')).toBeVisible();
+  });
+});
+
+test('Claude shows me every look-alike and records nothing until I choose', { tag: '@portal-selfservice.mcp.several-matches' }, async ({ page, step }) => {
+  const me = await person(page, { agentAccess: true });
+  await grantCoverage(me.id);
+  const accessToken = await connect(page);
+  const ids: string[] = [];
+  await step('I already have two 18.00 ILS expenses that week: Aroma and Cafe Nero', async () => {
+    for (const [vendor, occurredOn] of [['Aroma', '2026-10-20'], ['Cafe Nero', '2026-10-21']]) {
+      const res = await page.request.post(`${liveState().origin}/v1/expenses`, {
+        headers: { origin: liveState().origin, 'x-mutaba3a-profile': me.profileId, 'idempotency-key': `qa-mcp-${randomUUID()}` },
+        data: { occurredOn, amount: '18.00', currency: 'ILS', vendor },
+      });
+      expect(res.status(), await res.text()).toBe(201);
+      ids.push(((await res.json()) as { id: string }).id);
+    }
+  });
+  await step('Claude adds an 18.00 ILS statement line at AROMA TLV', async () => {
+    const matched = await callTool(accessToken, 'add_expense', { destination: { kind: 'profile', profileId: me.profileId }, amount: '18.00', currency: 'ILS', occurredOn: '2026-10-21', vendor: 'AROMA TLV', idempotencyKey: `qa-mcp-${randomUUID()}` });
+    expect(matched.isError, matched.text).toBe(false);
+    expect(matched.structured).toMatchObject({ outcome: 'matched', expense: null });
+    expect((matched.structured?.candidates as Array<{ id: string }>).map((c) => c.id)).toEqual([ids[0], ids[1]]);
+  });
+  await step('Expenses still shows only my two 18.00 expenses', async () => {
+    await page.goto(`/p/${me.profileId}/expenses`);
+    await expect(page.getByRole('row').filter({ hasText: '18.00' })).toHaveCount(2);
+  });
+});
