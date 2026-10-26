@@ -61,7 +61,8 @@ export interface GlanceInput {
 }
 
 const exact = (value: string, currency: Currency): Amount => ({ minor: parseAmountToMinor(value, currency), currency, approximate: false });
-const isZero = (value: string) => Number(value) === 0;
+/** A canonical decimal string that is zero ("0.00", "-0.000"), read without turning it into a float (hosted-portal.md §7.3). */
+const isZero = (value: string) => /^-?0+(\.0+)?$/.test(value);
 
 function converted(value: string, base: Currency, currencies: readonly Currency[]): Amount {
   return { ...exact(value, base), approximate: currencies.some((c) => c !== base) };
