@@ -628,6 +628,9 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
       // Malafat has since allocated or reversed.
       status: incomeStatusOf(p),
       version: p.version,
+      // MUT-453: why it was reversed (a person's or Malafat's reason), so a history can say so; null while POSTED.
+      reversalReason: p.reversalReason,
+      credited: null,
     };
   }
   const r = entry.receivable;
@@ -644,6 +647,9 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     dueDate: r.dueDate,
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
     version: r.version,
+    reversalReason: null,
+    // MUT-453: what was credited off it (reduced or cancelled); fully credited with nothing paid reads "Cancelled".
+    credited: amt(r.creditedMinor, r.currency),
   };
 }
 

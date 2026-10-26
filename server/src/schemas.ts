@@ -2409,6 +2409,10 @@ export const IncomeResponseSchema = z
     status: IncomeStatusSchema,
     /** MUT-223: send it back in If-Match to PATCH /v1/income/{id}. */
     version: z.number().int().positive(),
+    /** MUT-453: `received` only, once reversed (by a person or Malafat); null otherwise. Absent in a body stored before 1.77.0. */
+    reversalReason: z.string().nullable(),
+    /** MUT-453: `owed` only, what was credited off it ("0.00" when nothing); null for `received`. Absent in a body stored before 1.77.0. */
+    credited: AmountSchema.nullable(),
   })
   .openapi('IncomeResponse');
 

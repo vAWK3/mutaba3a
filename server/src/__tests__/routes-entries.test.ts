@@ -219,7 +219,7 @@ describe('GET /v1/entries — what counts as an entry', () => {
 
     const body = await read(await feed());
     expect(ids(body)).toEqual([payment.id, keep.id]);
-    expect(body.items[0]).toMatchObject({ kind: 'received', profileId: firm.id, origin: 'integration', createdByUserId: null, income: { status: 'reversed' } });
+    expect(body.items[0]).toMatchObject({ kind: 'received', profileId: firm.id, origin: 'integration', createdByUserId: null, income: { status: 'reversed', reversalReason: 'bounced', credited: null } });
   });
 
   it('reads how much Malafat has applied: partial, allocated; a fresh capture stays unallocated', async () => {
@@ -287,7 +287,21 @@ describe('GET /v1/entries — what counts as an entry', () => {
 
     const items = (await read(await feed())).items as Loose[];
     expect(items.find((i) => i.kind === 'received')).toMatchObject({ settlesOwedId: owed.id, income: { amount: '200.00', status: 'allocated' } });
-    expect(items.find((i) => i.kind === 'owed')).toMatchObject({ income: { id: owed.id, status: 'open' } });
+    expect(items.find((i) => i.kind === 'owed')).toMatchObject({ income: { id: owed.id, status: 'open', credited: '0.00' } });
+  });
+
+  it('shows what was credited on an Owed, and a person’s reversal with its reason; the reversed payment no longer settles it (MUT-453)', async () => {
+    const { h, b, u, feed } = await setup();
+    const customerB = await customer(h, u.as(b.id));
+    const owed = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Logo', amount: '500.00' });
+    h.tick();
+    const settled = await read(await h.app.request(`/v1/receivables/${owed.id}/settle`, json({ amount: '200.00' }, { ...u.as(b.id), ...idem() })));
+    expect((await h.app.request(`/v1/payments/${settled.payment.id as string}/reverse`, json({ reason: 'Wrong job' }, { ...u.as(b.id), ...idem() }))).status).toBe(200);
+    expect((await h.app.request(`/v1/receivables/${owed.id}/credits`, json({ amount: '500.00', reason: 'Cancelled' }, { ...u.as(b.id), ...idem() }))).status).toBe(201);
+
+    const items = (await read(await feed())).items as Loose[];
+    expect(items.find((i) => i.kind === 'received')).toMatchObject({ settlesOwedId: null, income: { status: 'reversed', reversalReason: 'Wrong job', credited: null } });
+    expect(items.find((i) => i.kind === 'owed')).toMatchObject({ income: { id: owed.id, status: 'settled', credited: '500.00', reversalReason: null } });
   });
 
   it('shows only Owed a person recorded: scheduled installments stay out', async () => {

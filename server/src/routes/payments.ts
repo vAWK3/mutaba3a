@@ -230,7 +230,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // date, or move it later, even below the floor: the reversal has already committed, and refusing the second
       // step would leave the money with no payment at all (ADR-086).
       if (replacedOn === null || compareIsoDates(body.receivedOn, replacedOn) < 0) assertNotTooOld(body.receivedOn, today, 'receivedOn');
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.apiKeyId, requestId: actor.requestId });
+      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.actorId, requestId: actor.requestId });
       const src = await source(organization, { customerId: body.customerId, currency: body.currency, amount: body.amount });
       const explicit = parseAllocations(body.allocations, src.currency) ?? [];
       const { value, token } = await plan(organization, src, explicit, undefined, today);
@@ -360,7 +360,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.apiKeyId, requestId: actor.requestId });
+      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.actorId, requestId: actor.requestId });
       const src = await source(organization, { paymentId: c.req.valid('param').paymentId });
       const explicit = parseAllocations(body.allocations, src.currency) ?? [];
       const { value } = await plan(organization, src, explicit, undefined, today);
