@@ -281,3 +281,68 @@ features:
       - Save a received income entry
     expect:
       - The saved toast includes the animated save-feedback icon
+  - id: reverse-payment
+    title: A payment recorded on the wrong job is reversed with a reason; the entry it paid is owed again and the payment shows why (MUT-453)
+    tier: secondary
+    paths:
+      - src/hosted/components/CorrectionPane.tsx
+      - src/hosted/components/RedateDrawer.tsx
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Record payment in full on an Owed entry
+      - Open that payment from Payments and choose Reverse payment
+      - Give the reason "Applied to the wrong job" and confirm
+    expect:
+      - POST /v1/payments/<id>/reverse gets {reason} with an Idempotency-Key
+      - The toast says Payment reversed and the payment reads Reversed
+      - Opening it again shows "Reversed on <date> · Applied to the wrong job" and no Reverse button
+      - The Owed entry is back among the open ones
+  - id: credit-owed
+    title: Reduce amount owed by part of what is left, with a reason; what is left drops and the credit is listed (MUT-453)
+    tier: secondary
+    paths:
+      - src/hosted/components/CorrectionPane.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - Open an open Owed entry of 500 from Receivables and choose Reduce amount owed
+      - Type 200 and the reason "Agreed a lower fee", then Reduce
+    expect:
+      - The drawer says "₪300.00 left after this" before saving
+      - POST /v1/receivables/<id>/credits gets {amount 200.00, reason} with an Idempotency-Key
+      - The entry shows 300.00 outstanding, and its drawer lists the credit with its reason
+  - id: credit-over-outstanding
+    title: Reducing by more than is left is refused at the field without a request; if the server has less left, its figure is shown (MUT-453)
+    tier: secondary
+    paths:
+      - src/hosted/components/CorrectionPane.tsx
+      - src/hosted/components/incomeApiErrors.ts
+    steps:
+      - Open an Owed entry of 500 and choose Reduce amount owed
+      - Type 600 with a reason and Reduce
+      - Type 200 while the server has only 100 left, and Reduce
+    expect:
+      - The field says it exceeds what's left, and nothing is sent
+      - The server's answer shows "That’s more than what’s left now (₪100.00)" and the drawer stays open
+  - id: cancel-owed
+    title: Cancel amount owed credits everything left, with a reason; the entry reads Cancelled (MUT-453)
+    tier: secondary
+    paths:
+      - src/hosted/components/CorrectionPane.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/data/incomeAffordances.ts
+    steps:
+      - Open an open Owed entry of 500 and choose Cancel amount owed
+      - Give the reason "Client dropped the job" and confirm
+    expect:
+      - POST /v1/receivables/<id>/credits gets {amount 500.00, reason}
+      - The toast says Amount owed cancelled, and among settled entries it reads Cancelled
+  - id: correct-malafat-readonly
+    title: A Malafat-fed profile offers no correction, even from a deep link (Malafat keeps that ledger) (MUT-453)
+    tier: secondary
+    paths:
+      - src/hosted/data/incomeAffordances.ts
+    steps:
+      - Open the firm's Payments at ?payment=<id>
+      - Open the firm's Receivables at ?income=<id>
+    expect:
+      - No row opens a drawer and no Reverse, Reduce or Cancel is offered

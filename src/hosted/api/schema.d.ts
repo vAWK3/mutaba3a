@@ -6552,7 +6552,7 @@ export interface paths {
         put?: never;
         /**
          * Credit a posted receivable without changing its posted figures
-         * @description Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to.
+         * @description Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to. MUT-453: a session or device session may credit on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only an amount owed a person recorded (origin ADJUSTMENT); any other is 404. A person’s effectiveDate is not after today nor more than ten years back (422 DATE_INVALID).
          */
         post: {
             parameters: {
@@ -7285,7 +7285,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a payment: every allocation undone, status REVERSED
-         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards.
+         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
          */
         post: {
             parameters: {
@@ -17235,6 +17235,9 @@ export interface components {
             dueDate: string | null;
             status: components["schemas"]["IncomeStatus"];
             version: number;
+            reversalReason?: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credited?: string | null;
         };
         /** @enum {string} */
         IncomeKind: "received" | "owed";

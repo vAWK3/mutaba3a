@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.76.0-mut447
+  version: 1.77.0-mut453
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -47,6 +47,7 @@ info:
     Lapse gate (MUT-361, ADR-181): each hosted profile is entitled per GET /v1/me `billing.state`. On a READ_ONLY profile a session (cookie or device) may only read: any other method answers 402 SUBSCRIPTION_LAPSED with details { profileId, state, source, until }. A LOCKED profile answers only GET /v1/records-export and its receipts. The person-level routes (the inbox, GET /v1/entries, GET /v1/summaries/verdict, POST /v1/profiles) follow `billingStanding`, the best state across the person's profiles; GET /v1/entries and GET /v1/summaries/verdict leave LOCKED profiles out (the verdict names them in `unavailable`). Identity (/v1/me*, sessions, password, terms), /v1/billing/* and leaving a profile stay open in every state. An API key is never gated, and nothing is ever deleted.
 
     Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization's today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.
+    Correcting money (MUT-453): on a profile the person owns (`/v1/me` `owned`, its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER) whose payments are read-write, POST /v1/payments/{id}/reverse { reason } reverses a payment a person recorded (origin CAPTURE, a settle payment included, whoever recorded it; not one Malafat applied to its own entries), undoing its allocations so the Owed it paid reopens, and POST /v1/receivables/{id}/credits { amount, reason, effectiveDate? } credits an Owed entry (origin ADJUSTMENT) up to what is left (more → 422 CREDIT_EXCEEDS_OUTSTANDING); crediting all of it cancels it. The same routes and codes Malafat's key uses, audited as USER. Malafat's own payments and installments answer 404 to a person; on a Malafat-fed profile both answer 403 READ_ONLY_PROFILE before any lookup. IncomeResponse adds `reversalReason` and `credited`.
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are MTB3A's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
 tags:
@@ -3802,6 +3803,14 @@ components:
           type: integer
           minimum: 0
           exclusiveMinimum: true
+        reversalReason:
+          type: string
+          nullable: true
+        credited:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
       required:
         - id
         - kind
@@ -13493,9 +13502,11 @@ paths:
       tags:
         - Receivables
       summary: Credit a posted receivable without changing its posted figures
-      description: Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to.
+      description: "Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to. MUT-453: a session or device session may credit on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only an amount owed a person recorded (origin ADJUSTMENT); any other is 404. A person’s effectiveDate is not after today nor more than ten years back (422 DATE_INVALID)."
       security:
         - apiKey: []
+        - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -14109,9 +14120,11 @@ paths:
       tags:
         - Payments
       summary: "Reverse a payment: every allocation undone, status REVERSED"
-      description: Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards.
+      description: "Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404."
       security:
         - apiKey: []
+        - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string

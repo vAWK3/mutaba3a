@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { keyAuth, postingActorOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { actorOf, keyAuth, postingActorOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { compareIsoDates, type IsoDate } from '../dates.js';
@@ -8,6 +8,7 @@ import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { isOwnCapture, isOwnProfile, redateTo } from '../income/compose.js';
+import { notOwner } from '../personal-profile.js';
 import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
@@ -35,7 +36,8 @@ const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'appli
 
 interface Actor {
   organizationId: string;
-  apiKeyId: string;
+  actorType: 'API_KEY' | 'USER';
+  actorId: string;
   requestId: string;
 }
 
@@ -43,13 +45,17 @@ interface Actor {
 export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  const actorOf = (c: Parameters<typeof keyAuth>[0]): Actor => {
+  /** The key-only routes (create, allocate). */
+  const keyActorOf = (c: Parameters<typeof keyAuth>[0]): Actor => {
     const { organization, apiKey } = keyAuth(c);
-    return { organizationId: organization.id, apiKeyId: apiKey.id, requestId: c.get('requestId') };
+    return { organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, requestId: c.get('requestId') };
   };
 
+  /** MUT-453: reverse takes a key or a person; the audit says which. */
+  const principalActorOf = (c: Parameters<typeof keyAuth>[0]): Actor => ({ organizationId: c.get('auth').organization.id, ...actorOf(c), requestId: c.get('requestId') });
+
   const audit = (a: Actor, action: string, entityType: string, entityId: string, metadata: JsonObject) =>
-    store.audit.append({ organizationId: a.organizationId, actorType: 'API_KEY', actorId: a.apiKeyId, action, entityType, entityId, metadata, requestId: a.requestId });
+    store.audit.append({ organizationId: a.organizationId, actorType: a.actorType, actorId: a.actorId, action, entityType, entityId, metadata, requestId: a.requestId });
 
   async function paymentView(organizationId: string, payment: PaymentRecord, today: IsoDate, people: ReadonlyMap<string, CapturedBy>) {
     const allocations = await store.payments.listAllocations(organizationId, payment.id);
@@ -207,7 +213,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     }),
     async (c) => {
       const { organization } = c.get('auth');
-      const actor = actorOf(c);
+      const actor = keyActorOf(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
@@ -225,7 +231,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // date, or move it later, even below the floor: the reversal has already committed, and refusing the second
       // step would leave the money with no payment at all (ADR-086).
       if (replacedOn === null || compareIsoDates(body.receivedOn, replacedOn) < 0) assertNotTooOld(body.receivedOn, today, 'receivedOn');
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.apiKeyId, requestId: actor.requestId });
+      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.actorId, requestId: actor.requestId });
       const src = await source(organization, { customerId: body.customerId, currency: body.currency, amount: body.amount });
       const explicit = parseAllocations(body.allocations, src.currency) ?? [];
       const { value, token } = await plan(organization, src, explicit, undefined, today);
@@ -351,11 +357,11 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     }),
     async (c) => {
       const { organization } = c.get('auth');
-      const actor = actorOf(c);
+      const actor = keyActorOf(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
-      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.apiKeyId, requestId: actor.requestId });
+      await postDueItems(store, organization, today, now, { actorType: 'API_KEY', actorId: actor.actorId, requestId: actor.requestId });
       const src = await source(organization, { paymentId: c.req.valid('param').paymentId });
       const explicit = parseAllocations(body.allocations, src.currency) ?? [];
       const { value } = await plan(organization, src, explicit, undefined, today);
@@ -384,22 +390,37 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments/{paymentId}/reverse',
       tags: ['Payments'],
       summary: 'Reverse a payment: every allocation undone, status REVERSED',
-      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards.',
-      security: [{ apiKey: [] }],
+      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'payments.reverse')] as const,
       request: { params: PaymentIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ReversePaymentRequestSchema) },
       responses: { 200: { description: 'Reversed', content: { 'application/json': { schema: PaymentSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
       const { organization } = c.get('auth');
-      const actor = actorOf(c);
+      const actor = principalActorOf(c);
+      // MUT-453 (D1, owner-only, qa-reconcile): a person corrects money only on a profile they own (its creator or a
+      // co-owner), before any lookup; a firm's members, a disconnected Malafat firm's included, never.
+      if (actor.actorType === 'USER') {
+        const { organization: org, user, membershipRole } = sessionAuth(c);
+        if (!isOwnProfile(org, user.id, membershipRole)) throw notOwner();
+      }
       const now = c.get('now')();
       const today = todayFor(organization, now);
       // MUT-61: the reason a person's own capture undo records is how that undo is told apart from this route's reversal.
       if (c.req.valid('json').reason === CAPTURE_UNDO_REASON) throw validationError('REASON_RESERVED', `"${CAPTURE_UNDO_REASON}" is reserved for a person undoing their own capture`, { field: 'reason' });
       const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
+      // MUT-453 (review D5): a disconnected Malafat firm reads as writer-null, so its session holds payments:write; Malafat's
+      // own payments stay its to reverse. 404, not 403, as settle answers for a receivable it may not touch.
+      if (actor.actorType === 'USER' && payment.origin !== 'CAPTURE') throw new ApiError('NOT_FOUND', 'No such payment');
       if (payment.status === 'REVERSED') throw new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
       const allocations = await store.payments.listAllocations(organization.id, payment.id);
+      // MUT-453 (review fix): a person's reversal never reopens an entry Malafat posted (an installment or retainer
+      // charge its key once applied this capture to); like undo's ALREADY_ALLOCATED, only what a person put on the books.
+      if (actor.actorType === 'USER' && allocations.length > 0) {
+        const targets = await store.receivables.getByIds(organization.id, allocations.map((a) => a.receivableId));
+        if (targets.some((r) => r.origin !== 'ADJUSTMENT')) throw new ApiError('NOT_FOUND', 'No such payment');
+      }
       const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now).catch((err: unknown) => {
         if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was reversed, send the request again', { reason: 'VERSION_MISMATCH' });
         throw err;

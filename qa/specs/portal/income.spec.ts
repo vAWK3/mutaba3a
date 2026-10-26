@@ -690,3 +690,156 @@ test('Add income switched from Owed to Received after opening More details still
     expect(post?.body).toEqual({ kind: 'received', amount: '500.00', currency: 'ILS', occurredOn: todayInJerusalem(), customerId: C1, method: 'BANK' });
   });
 });
+
+// ---- MUT-453: correcting money a person recorded ----
+
+test('A payment on the wrong job is reversed with a reason; the entry is owed again and the payment says why', { tag: '@portal.income.reverse-payment' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const paymentDrawer = page.getByRole('dialog', { name: 'Change the received date' });
+  const reverseDrawer = page.getByRole('dialog', { name: /^Reverse payment/ });
+
+  await step('Record payment in full on the Owed entry', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const settle = page.getByRole('dialog', { name: /Record payment/ });
+    await settle.getByRole('button', { name: 'Record payment' }).click();
+    await expect(settle).toHaveCount(0);
+  });
+
+  await step('Open that payment from Payments and choose Reverse payment', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await paymentDrawer.getByRole('button', { name: 'Reverse payment' }).click();
+    await expect(reverseDrawer).toBeVisible();
+  });
+
+  await step('Give the reason "Applied to the wrong job" and confirm', async () => {
+    await reverseDrawer.getByLabel('Reason').fill('Applied to the wrong job');
+    await reverseDrawer.getByRole('button', { name: 'Reverse payment' }).click();
+    await expect(reverseDrawer).toHaveCount(0);
+    const sent = api.last('POST', /^\/v1\/payments\/[^/]+\/reverse$/);
+    expect(sent?.body).toEqual({ reason: 'Applied to the wrong job' });
+    expect(sent?.headers['idempotency-key']).toBeTruthy();
+    await expect(page.getByTestId('toast-live')).toContainText('Payment reversed');
+  });
+
+  await step('The payment reads Reversed and says why; the entry is open again', async () => {
+    const row = page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ });
+    await expect(row).toContainText('Reversed');
+    await row.locator('button.row-link').click();
+    const shown = page.getByRole('dialog', { name: 'Payment' });
+    await expect(shown.getByText(/Reversed on .* · Applied to the wrong job/)).toBeVisible();
+    await expect(shown.getByRole('button', { name: 'Reverse payment' })).toHaveCount(0);
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await expect(page.getByRole('button', { name: /^Record payment for Client 1/ })).toBeVisible();
+  });
+});
+
+test('Reduce amount owed by part of what is left; the entry shows what stays owed and lists the credit', { tag: '@portal.income.credit-owed' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const entry = page.getByRole('dialog', { name: 'Change the date' });
+  const reduce = page.getByRole('dialog', { name: 'Reduce amount owed' });
+
+  await step('Open the Owed entry from Receivables and choose Reduce amount owed', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await entry.getByRole('button', { name: 'Reduce amount owed' }).click();
+    await expect(reduce).toBeVisible();
+  });
+
+  await step('Type 200 and the reason "Agreed a lower fee", then Reduce', async () => {
+    await reduce.getByLabel('Reduce by (ILS)').fill('200');
+    await expect(reduce.getByText(/300\.00.* left after this/)).toBeVisible();
+    await reduce.getByLabel('Reason').fill('Agreed a lower fee');
+    await reduce.getByRole('button', { name: 'Reduce' }).click();
+    await expect(reduce).toHaveCount(0);
+    const sent = api.last('POST', /^\/v1\/receivables\/[^/]+\/credits$/);
+    expect(sent?.body).toEqual({ amount: '200.00', reason: 'Agreed a lower fee' });
+    expect(sent?.headers['idempotency-key']).toBeTruthy();
+  });
+
+  await step('The entry shows 300.00 outstanding and lists the credit', async () => {
+    const row = page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ });
+    await expect(row).toContainText('300.00');
+    await row.locator('button.row-link').click();
+    await expect(entry.getByText('Credits')).toBeVisible();
+    await expect(entry.getByText(/200\.00.* · Agreed a lower fee/)).toBeVisible();
+  });
+});
+
+test('Reducing by more than is left is refused at the field; a smaller server figure is shown as the new maximum', { tag: '@portal.income.credit-over-outstanding' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const reduce = page.getByRole('dialog', { name: 'Reduce amount owed' });
+
+  await step('Open the Owed entry and choose Reduce amount owed', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables?income=${owed.id}`);
+    await page.getByRole('dialog', { name: 'Change the date' }).getByRole('button', { name: 'Reduce amount owed' }).click();
+    await expect(reduce).toBeVisible();
+  });
+
+  await step('Type 600 with a reason and Reduce', async () => {
+    await reduce.getByLabel('Reduce by (ILS)').fill('600');
+    await reduce.getByLabel('Reason').fill('Typo');
+    await reduce.getByRole('button', { name: 'Reduce' }).click();
+    await expect(reduce.getByText(/Exceeds what's left/)).toBeVisible();
+    expect(api.last('POST', /\/credits$/)).toBeUndefined();
+  });
+
+  await step('Type 200 while the server has only 100 left, and Reduce', async () => {
+    api.once('POST', /\/credits$/, apiError(422, 'VALIDATION_FAILED', { reason: 'CREDIT_EXCEEDS_OUTSTANDING', outstanding: '100.00' }));
+    await reduce.getByLabel('Reduce by (ILS)').fill('200');
+    await reduce.getByRole('button', { name: 'Reduce' }).click();
+    await expect(reduce.getByText(/more than what’s left now \(.*100\.00.*\)/)).toBeVisible();
+    await expect(reduce).toBeVisible();
+  });
+});
+
+test('Cancel amount owed credits everything left; the entry reads Cancelled', { tag: '@portal.income.cancel-owed' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const cancel = page.getByRole('dialog', { name: 'Cancel amount owed' });
+
+  await step('Open the Owed entry and choose Cancel amount owed', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await page.getByRole('dialog', { name: 'Change the date' }).getByRole('button', { name: 'Cancel amount owed' }).click();
+    await expect(cancel).toBeVisible();
+    await expect(cancel.getByText(/Everything still owed \(.*500\.00.*\) is cancelled/)).toBeVisible();
+  });
+
+  await step('Give the reason "Client dropped the job" and confirm', async () => {
+    await cancel.getByLabel('Reason').fill('Client dropped the job');
+    await cancel.getByRole('button', { name: 'Cancel amount owed' }).click();
+    await expect(cancel).toHaveCount(0);
+    expect(api.last('POST', /\/credits$/)?.body).toEqual({ amount: '500.00', reason: 'Client dropped the job' });
+    await expect(page.getByTestId('toast-live')).toContainText('Amount owed cancelled');
+  });
+
+  await step('Among settled entries it reads Cancelled', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables?status=SETTLED`);
+    await expect(page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ })).toContainText('Cancelled');
+  });
+});
+
+test('A Malafat-fed profile offers no correction, even from a deep link', { tag: '@portal.income.correct-malafat-readonly' }, async ({ page, step }) => {
+  const owed = receivable(61, { customerId: C1, gross: '500.00', origin: 'INSTALLMENT' });
+  const paid = payment(62, { customerId: C1, amount: '200.00', allocations: [allocation(63, { receivableId: owed.id, projectId: owed.projectId ?? C1, amount: '200.00', left: '300.00' })] });
+  const api = new FakeApi({ profiles: [malafatFirm()], clients: 1, receivables: [owed], payments: [paid] });
+
+  await step('Open the firm’s Payments at ?payment=', async () => {
+    await api.open(page, `/p/${FIRM}/payments?payment=${paid.id}`);
+    await expect(page.getByRole('table', { name: 'Payments' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Reverse payment' })).toHaveCount(0);
+  });
+
+  await step('Open the firm’s Receivables at ?income=', async () => {
+    await api.open(page, `/p/${FIRM}/receivables?income=${owed.id}`);
+    await expect(page.getByRole('table', { name: 'Receivables' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Reduce amount owed|Cancel amount owed/ })).toHaveCount(0);
+  });
+});

@@ -5499,6 +5499,29 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Invalidating on every save path (D3, superseded).
 - A two-column desktop with a placeholder card (DD7).
 
+## ADR-206: A Person Reverses a Payment and Credits What Is Owed, on Rows a Person Recorded (MUT-453)
+
+**Status:** Accepted (2026-10-26, MUT-453; phone half MUT-454). Plan, eng review and Basel's answers D1–D6: `.claude/designs/mut-453-owner-corrections.md`, Jira comment 12699. Resolves TD-126 (the amount half; ADR-083 fixed the date half). Amends ADR-037 decision 7 (MUT-65/MUT-133 amendments) and ADR-083's consequences.
+
+**Context:** On a profile with no Malafat writer, a person could record money but not correct it once applied. The reverse and credit routes took only an API key, and a key never reaches an owned profile, so nobody could. A wrong amount was fixed once in production with a one-off script (2026-10-26).
+
+**Decision:**
+1. **Same routes, more principals (D3).** `POST /v1/payments/{id}/reverse` and `POST /v1/receivables/{id}/credits` accept a session or device session besides the key: one handler, the same codes, audited as `actorType` USER or API_KEY (`actorOf`). No new route, code, migration or store method.
+2. **Gate (D1):** the session must hold `payments:write`, the same gate as settle. So `/v1/me` `access.payments` is true by construction; a Malafat-fed profile answers 403 `READ_ONLY_PROFILE` before any lookup.
+3. **Rows (D2 narrowed by D5):** a session reaches only rows a person recorded: CAPTURE payments and ADJUSTMENT receivables, whoever captured them (co-owners correct each other's). Malafat's own payments, installments and retainer charges answer 404 to a person, as settle does, because a *disconnected* Malafat firm reads as writer-null. The key keeps its full reach.
+4. **Feed (D3):** `entries.settledOwedIds` counts only POSTED payments; a reversal keeps its allocation rows as history. `IncomeResponse` gains `reversalReason` and `credited` (additive). API 1.77.0-mut453.
+5. **Undo truth (D6):** Undo on a capture someone else reversed reads that reversal's audit actor: USER → 409 `ALREADY_REVERSED`, otherwise `REVERSED_BY_MALAFAT`. Undo on a credited Owed says "paid or credited" (same code `ALREADY_SETTLED`).
+6. **Portal:** the entry drawer (`?payment=` / `?income=`) offers Reverse payment, Reduce amount owed and Cancel amount owed (`CorrectionPane`), each with a required reason; gate `owned && writable && payments read-write` (ADR-066 kept). A partner's row opens read-only with corrections; a reversed payment shows its reason; an Owed lists its credits; a fully credited, unpaid entry reads Cancelled. An undone capture stays gone.
+
+**Consequences:**
+- Re-dating and Undo stay per person (ADR-163 D10); correcting is per profile, with the audit naming who.
+- The empty-reason answer stays the schema's 422; `REASON_REQUIRED` arrives with MUT-443 for both principals.
+- When MUT-305/306 give roles scopes, they decide whether BOOKKEEPER/SUBMITTER hold `payments:write`, and with it these corrections.
+
+**Alternatives considered:** new session-only routes (two paths to drift); owner-only gate with a new `/v1/me` field (settle has no such check); any row on the profile (opens a disconnected firm's Malafat ledger); branching Undo's message on the profile's writer (wrong on a disconnected firm).
+
+**Amendment (qa-reconcile, 2026-10-26, Basel):** decision 2 is **owner-only**. A session corrects money only on a profile the person owns (`ownsProfile`: its creator or a co-owner), checked before any lookup; anyone else, a firm's members and a disconnected Malafat firm's included, gets 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` (`notOwner()`, now shared from `personal-profile.ts` with the profile routes). `/v1/me` stays truthful without a new field: a person may correct exactly where `owned && access.payments === 'read-write'`, which is the portal's gate. Also from the review: a person's reversal is refused (404) when the capture paid anything but person-recorded entries, so it never reopens an installment Malafat's key applied it to; a person's credit `effectiveDate` follows `pastMoneyDate`; the new IncomeResponse fields are optional (pre-1.77.0 replays); the portal starts a new attempt after a 409 and Cancel reports a partial cancel. Override log: replaces decision 2's "anyone whose session holds `payments:write`"; reason: a firm's staff could otherwise reverse any capture through the API.
+
 ## ADR-207: The Portal and the Phone Shape the Verdict From One Contract (MUT-449)
 
 **Status:** Accepted (2026-10-26, MUT-449; epic MUT-446). The phone-side plan, eng review D1–D5 and design review PD1–PD16 are in `~/.gstack/projects/vAWK3-mutaba3a/mut-449-phone-glance-plan.md` and in `mutaba3a-flutter` `.claude/designs/mut-449-reports-glance.md`.

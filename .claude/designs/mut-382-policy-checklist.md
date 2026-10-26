@@ -8,12 +8,12 @@ in the row has run (the web release waits for it). ? = Basel must confirm before
 
 | Sentence (short) | Evidence | |
 |---|---|---|
-| Records on MTB3A's servers in Google Cloud's Tel Aviv region (me-west1) | `server/infrastructure/terraform/variables.tf:6-10` (`region = "me-west1"`); Cloud SQL `mutaba3a-pg` region me-west1 (`gcloud sql instances describe`) | ✔ |
+| Records on MTB3A's servers in Google Cloud's me-west1 region (Basel 2026-10-26: name the region, not the city) | `server/infrastructure/terraform/variables.tf:6-10` (`region = "me-west1"`); Cloud SQL `mutaba3a-pg` region me-west1 (`gcloud sql instances describe`) | ✔ |
 | Our daily backups stay there too | `main.tf` `backup_configuration.location = var.region` on both instances (MUT-382 B4), `tests/cmek.tftest.hcl`. **Today's backups are in `eu`** (`gcloud sql backups list`, 2026-10-23..25) | ⏳ server release + 14 days |
 | Each backup kept 14 days; any moment in the last 7 days | `main.tf` `retained_backups` = 14, `transaction_log_retention_days = 7`; `scripts/__tests__/legal-terms.test.ts` backup promise | ✔ |
 | Google Cloud encrypts records, receipts and backups where stored | Google-managed encryption: `cmek_stage` defaults to `off` (`variables.tf:55-58`), bucket key only when the KMS key exists (`main.tf:1000-1005`) | ✔ |
 | Servers reach the database only over encrypted connections | `ssl_mode = "ENCRYPTED_ONLY"` (`main.tf:157, 227`); live `sslMode ENCRYPTED_ONLY` | ✔ |
-| Technical logs kept by Google Cloud for 30 days, may be outside Tel Aviv | `gcloud logging buckets describe _Default --location=global`: 30 days, location global; only the `_Default`/`_Required` sinks exist | ✔ |
+| Technical logs kept by Google Cloud for 30 days, may be outside me-west1 | `gcloud logging buckets describe _Default --location=global`: 30 days, location global; only the `_Default`/`_Required` sinks exist | ✔ |
 | Per sign-in: shortened browser/app description, never the IP | `sessions.userAgent` truncated to 200 chars, no IP column (`schema.prisma:528-551`, `auth/sign-in.ts:25, 191`) | ✔ |
 | Per passkey: public key and identifier, never fingerprint or face | `passkeys` columns (`schema.prisma:555-579`): credentialId, publicKey, signCount, transports, deviceType, backedUp, aaguid, name, dates. Biometrics never leave the authenticator (WebAuthn) | ✔ |
 | Per email: scrambled address and whether it arrived, 30 days | `email_deliveries.recipientHash` sha256 + status (`schema.prisma:1553-1570`), pruned at 30 days (`server/src/index.ts:88, 243-244`, `prisma.ts:2661`) | ✔ |

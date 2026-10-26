@@ -571,7 +571,7 @@ describe('Changing a date (MUT-224)', () => {
 
   it('opens ?payment= from the Received date of the user’s own posted capture; the expander and other rows stay put', async () => {
     const mine = capture(P1_ID, 'PAY-2026-0007');
-    const undone = capture(P2_ID, 'PAY-2026-0008', { status: 'REVERSED' });
+    const undone = capture(P2_ID, 'PAY-2026-0008', { status: 'REVERSED', reversalReason: 'capture_undo' });
     const { user, router } = portal(`/p/${ORG_A}/payments`, {
       'GET /v1/payments': () => ok(page([mine, undone])),
       [`GET /v1/payments/${P1_ID}`]: () => ok(mine),

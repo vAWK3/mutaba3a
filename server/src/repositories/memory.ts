@@ -3028,6 +3028,8 @@ export class MemoryLedgerStore implements LedgerStore {
       const byPayment = new Map<string, AllocationRecord[]>();
       for (const a of this.allocs.values()) {
         if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId)) continue;
+        // MUT-453 (review D3): a reversal keeps its allocation rows as history; a reversed payment settles nothing.
+        if (this.pays.get(a.paymentId)?.status !== 'POSTED') continue;
         byPayment.set(a.paymentId, [...(byPayment.get(a.paymentId) ?? []), a]);
       }
       const links = new Map<string, string>();

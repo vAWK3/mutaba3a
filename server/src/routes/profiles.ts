@@ -3,7 +3,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
-import { canCoOwn, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
+import { canCoOwn, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import { identityIdempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { LedgerStore, MembershipRecord, Organization, UserRecord } from '../repositories/ports.js';
@@ -258,10 +258,6 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   );
 
   return app;
-}
-
-function notOwner(): ApiError {
-  return new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one was set up for you by your account administrator', { reason: 'NOT_OWNER' });
 }
 
 /** MUT-373 (outside voice OV3): a profile with more than one owner stays BUSINESS; PATCH checks this under its row lock too. */
