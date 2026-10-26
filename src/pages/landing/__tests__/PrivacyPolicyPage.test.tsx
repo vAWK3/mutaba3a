@@ -192,7 +192,7 @@ describe('PrivacyPolicyPage', () => {
     const hosted = body(/Where your records live/);
     expect(hosted).toMatch(/our daily backups stay there too/);
     expect(hosted).toMatch(/Google Cloud encrypts your records, receipts and backups/);
-    expect(hosted).toMatch(/kept by Google Cloud for 30 days, and may be stored outside the Tel Aviv region/);
+    expect(hosted).toMatch(/kept by Google Cloud for 30 days, and may be stored outside the me-west1 region/);
     expect(hosted).toMatch(/can technically reach your data/);
     expect(hosted).not.toMatch(/Our team opens your records only/);
     const sharing = body(/Who else handles your data/);
@@ -223,7 +223,7 @@ describe('PrivacyPolicyPage', () => {
     renderPage('en');
     const heading = screen.getByRole('heading', { level: 2, name: /Where your records live/ });
     const section = heading.parentElement?.textContent ?? '';
-    for (const fact of ['me-west1', 'Tel Aviv', '14 days', 'Sentry', 'PostHog', 'only if you agree', '30 days', 'terms of service']) {
+    for (const fact of ['me-west1', '14 days', 'Sentry', 'PostHog', 'only if you agree', '30 days', 'terms of service']) {
       expect(section).toContain(fact);
     }
   });

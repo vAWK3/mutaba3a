@@ -1,4 +1,16 @@
 {
+  "0.3.0": {
+    "en": [
+      "The free web app at /app and the Mac and Windows apps have retired. MTB3A now runs on iPhone, Android and the web portal. If you saved a records file from the free app, you can restore it in the portal after you sign in.",
+      "The download page is gone, and old links to it now open the home page.",
+      "Our privacy policy and terms of service are updated (October 26, 2026): you can create your account yourself, close it from the portal or the apps, and reach us at info@mtb3a.com."
+    ],
+    "ar": [
+      "توقّف تطبيق «متابعة» المجاني على الويب (/app) وتطبيقا Mac وWindows. تعمل «متابعة» الآن على iPhone وAndroid وبوابة الويب، وإذا حفظت ملف سجلات من التطبيق المجاني فيمكنك استعادته في البوابة بعد تسجيل الدخول.",
+      "أُزيلت صفحة التنزيل، وتفتح الروابط القديمة إليها الآن الصفحة الرئيسية.",
+      "حدّثنا سياسة الخصوصية وشروط الخدمة (26 أكتوبر 2026): يمكنك إنشاء حسابك بنفسك وإغلاقه من البوابة أو التطبيقات، ومراسلتنا على info@mtb3a.com."
+    ]
+  },
   "0.2.2": {
     "en": [
       "Enable self service portal"

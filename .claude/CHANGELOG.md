@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Release prep for web 0.3.0: notes, and the privacy policy names the region (MUT-382)
+
+### Changed
+- The privacy policy (en+ar) says records and backups live in Google Cloud's me-west1 region, and logs may be stored outside it. It no longer names Tel Aviv (Basel, 2026-10-26). Files: `src/lib/i18n/translations/{en,ar}/landing.json`, `PrivacyPolicyPage.test.tsx`, `.claude/designs/mut-382-policy-checklist.md`.
+- `release-notes.json` 0.3.0 (en+ar): the free app at /app and the desktop apps retired, the download page removed, the updated privacy policy and terms.
+- Filed MUT-457: the phone minimum build has no Terraform variable, and iOS build numbers are always 1.
+
 ## [Unreleased] - 2026-10-26 — Correct money you recorded: reverse a payment, reduce or cancel what is owed (MUT-453, ADR-206)
 
 **Why:** on a profile a person writes, a wrong amount owed or a payment on the wrong job could not be fixed by its owner (TD-126); it took a one-off production script. Planned and eng-reviewed; Basel's answers D1–D6 (Jira comment 12699). The phone half is MUT-454.
