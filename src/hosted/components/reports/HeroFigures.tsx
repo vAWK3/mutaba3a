@@ -7,9 +7,8 @@ import type { ConvertedTotal } from '../../data/expenseGroups';
 import { convertMoney, sumMoney, type Money, type Unit } from '../../data/reports';
 import { minorToDecimal } from '../../format/currencies';
 import { DecimalAmount } from '../../format/DecimalAmount';
-import { formatDay } from '../../format/dates';
 import { rateLines } from '../../format/rateLines';
-import { formatWhole } from '../../format/reportFormat';
+import { formatReportDay, formatWhole } from '../../format/reportFormat';
 import { usePopover } from '../../shell/usePopover';
 
 /**
@@ -123,7 +122,7 @@ function Figures({ received, spent, currency, approximate, reducedMotion, breakd
       <div className="hp-report-received">
         <span className="hp-report-label">{t('hosted.reports.hero.received')}</span>
         {breakdown ? (
-          <BreakdownButton breakdown={breakdown}>
+          <BreakdownButton panel={<RateBreakdown breakdown={breakdown} />}>
             {mark}
             <CountUp minor={received} currency={currency} reducedMotion={reducedMotion} />
           </BreakdownButton>
@@ -157,16 +156,16 @@ function Figures({ received, spent, currency, approximate, reducedMotion, breakd
 
 /**
  * The ≈ figure as a ≥ 44px button: hover, keyboard focus or tap opens the exact amounts; Esc, an outside tap or
- * focus leaving closes them (review: it no longer stays open, or reopens, after Tab).
+ * focus leaving closes them (review: it no longer stays open, or reopens, after Tab). MUT-448: the panel's content
+ * comes from the caller, so the Glance shares these rules (eng D1, D6).
  */
-function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; children: ReactNode }) {
-  const { t, language } = useLanguage();
+export function BreakdownButton({ panel, className = 'hp-report-big', children }: { panel: ReactNode; className?: string; children: ReactNode }) {
+  const { t } = useLanguage();
   const { open, setOpen, close, buttonRef, panelRef } = usePopover();
   const closing = useRef(false);
   /** A click closes only what a click opened: on a mouse, hover has already opened it. */
   const openedByClick = useRef(false);
   const panelId = useId();
-  const lines = rateLines(breakdown.total.used, breakdown.total.currency, t, language);
   const onFocus = (event: FocusEvent<HTMLButtonElement>) => {
     // Focus coming back from Esc must not reopen what was just closed
     if (closing.current || !event.currentTarget.matches(':focus-visible')) return;
@@ -194,7 +193,7 @@ function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; childr
       <button
         ref={buttonRef}
         type="button"
-        className="hp-report-big hp-report-approx press"
+        className={`${className} hp-report-approx press`}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         aria-description={t('hosted.reports.hero.breakdownOpen')}
@@ -207,33 +206,44 @@ function BreakdownButton({ breakdown, children }: { breakdown: Breakdown; childr
       </button>
       {open && (
         <div ref={panelRef} id={panelId} className="hp-popover hp-report-breakdown-panel" role="group" aria-label={t('hosted.reports.hero.breakdownTitle')}>
-          <table className="hp-report-breakdown-table">
-            <thead>
-              <tr>
-                <th scope="col">
-                  <span className="sr-only">{t('hosted.reports.hero.breakdownTitle')}</span>
-                </th>
-                <th scope="col">{t('hosted.reports.hero.received')}</th>
-                <th scope="col">{t('hosted.reports.hero.spent')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {breakdown.currencies.map((c) => (
-                <tr key={c}>
-                  <th scope="row">{c}</th>
-                  <td>
-                    <DecimalAmount value={minorToDecimal(breakdown.received.get(c) ?? 0, c)} currency={c} />
-                  </td>
-                  <td>
-                    <DecimalAmount value={minorToDecimal(breakdown.spent.get(c) ?? 0, c)} currency={c} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="hp-popover-foot">{[...lines, t('hosted.reports.hero.rateFooter', { date: formatDay(breakdown.total.rateDate, language) })].join(' · ')}</p>
+          {panel}
         </div>
       )}
     </span>
+  );
+}
+
+/** The hero's panel: received and spent in each currency, then the rate lines and their date (B5). */
+function RateBreakdown({ breakdown }: { breakdown: Breakdown }) {
+  const { t, language } = useLanguage();
+  const lines = rateLines(breakdown.total.used, breakdown.total.currency, t, language);
+  return (
+    <>
+      <table className="hp-report-breakdown-table">
+        <thead>
+          <tr>
+            <th scope="col">
+              <span className="sr-only">{t('hosted.reports.hero.breakdownTitle')}</span>
+            </th>
+            <th scope="col">{t('hosted.reports.hero.received')}</th>
+            <th scope="col">{t('hosted.reports.hero.spent')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breakdown.currencies.map((c) => (
+            <tr key={c}>
+              <th scope="row">{c}</th>
+              <td>
+                <DecimalAmount value={minorToDecimal(breakdown.received.get(c) ?? 0, c)} currency={c} />
+              </td>
+              <td>
+                <DecimalAmount value={minorToDecimal(breakdown.spent.get(c) ?? 0, c)} currency={c} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="hp-popover-foot">{[...lines, t('hosted.reports.hero.rateFooter', { date: formatReportDay(breakdown.total.rateDate, language) })].join(' · ')}</p>
+    </>
   );
 }

@@ -29,6 +29,7 @@ function portal(path: string, body: Me = me([profile(), profile({ id: ORG_B, nam
     'GET /v1/expense-groups': () => EMPTY,
     'GET /v1/conversions': () => EMPTY,
     'GET /v1/billing': () => ok({ configured: false }),
+    'GET /v1/summaries/verdict': () => new Promise<Response>(() => {}),
   });
   return renderPortal(path);
 }
@@ -63,13 +64,34 @@ describe('the floating shell (MUT-426)', () => {
     expect(lit).toEqual(['Paid']);
   });
 
-  it('opens Reports from the corner icon, lit there and on no tab', async () => {
-    const { user, router } = portal(`/p/${ORG_A}`);
+  it('opens the Glance from the corner icon with the page it left, lit there and on no tab (MUT-448)', async () => {
+    const { user, router } = portal(`/p/${ORG_A}/payments`);
     await user.click(await screen.findByRole('link', { name: 'Reports' }));
-    expect(locationOf(router)).toBe(`/p/${ORG_A}/reports`);
+    expect(locationOf(router)).toBe(`/reports?back=${encodeURIComponent(`/p/${ORG_A}/payments`)}`);
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page');
     const pill = screen.getByRole('navigation', { name: 'Sections' });
     expect(within(pill).getAllByRole('link').filter((link) => link.hasAttribute('aria-current'))).toEqual([]);
+    // Its second press returns to that page (the You island's rule, MUT-426 D7)
+    await user.click(screen.getByRole('link', { name: 'Reports' }));
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/payments`);
+  });
+
+  it('keeps the Reports icon lit on a profile’s own Reports, the Glance’s drill-down', async () => {
+    portal(`/p/${ORG_A}/reports`);
+    expect(await screen.findByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the profile the Glance was opened from in the shell, unless it is locked (MUT-448 D8)', async () => {
+    const two = me([profile(), profile({ id: ORG_B, name: 'Side Studio' })]);
+    portal(`/reports?back=${encodeURIComponent(`/p/${ORG_B}/payments`)}`, two);
+    expect(await island()).toHaveAccessibleName('You · Side Studio');
+  });
+
+  it('skips a locked profile for the Glance’s shell, so its pill stays (MUT-448 D8)', async () => {
+    const body = { ...me([profile({ billing: LOCKED }), profile({ id: ORG_B, name: 'Side Studio' })]), billingStanding: 'READ_ONLY' } as Me;
+    portal(`/reports?back=${encodeURIComponent(`/p/${ORG_A}/payments`)}`, body);
+    expect(await island()).toHaveAccessibleName('You · Side Studio');
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
   });
 
   describe('the You island', () => {

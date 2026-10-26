@@ -14,12 +14,17 @@ import { formatDecimal } from './DecimalAmount';
 
 const at = (day: string) => new Date(`${day}T00:00:00Z`);
 const formatters = new Map<string, Intl.DateTimeFormat>();
+/**
+ * MUT-448 (AC6): Reports name Arabic months the Levantine way (تشرين الأول, not أكتوبر), with Latin digits like every
+ * amount beside them. Only Reports' dates (Basel, 2026-10-26); the rest of the portal still formats with plain `ar`.
+ */
+const REPORTS_ARABIC_DATES = 'ar-PS-u-nu-latn';
 
 function dates(language: Language, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   const key = `${language}|${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat(getLocale(language), { ...options, timeZone: 'UTC' });
+    formatter = new Intl.DateTimeFormat(language === 'ar' ? REPORTS_ARABIC_DATES : getLocale(language), { ...options, timeZone: 'UTC' });
     formatters.set(key, formatter);
   }
   return formatter;
@@ -29,6 +34,12 @@ function dates(language: Language, options: Intl.DateTimeFormatOptions): Intl.Da
 export function formatMonth(month: string, language: Language, today: string): string {
   const sameYear = month.slice(0, 4) === today.slice(0, 4);
   return dates(language, sameYear ? { month: 'long' } : { month: 'long', year: 'numeric' }).format(at(`${month}-01`));
+}
+
+/** A day in Reports, as `formatDay` writes it but Levantine in Arabic like the periods beside it (AC6): the ECB rate date. */
+export function formatReportDay(day: string, language: Language): string {
+  // Arabic's medium style is all digits; the month spelled out is what names it Levantine
+  return dates(language, language === 'ar' ? { day: 'numeric', month: 'long', year: 'numeric' } : { dateStyle: 'medium' }).format(at(day));
 }
 
 /** "October 2026", "2026", or "19 Oct – 25 Oct": the hero's caption for a period. */
@@ -67,6 +78,20 @@ export function formatWhole(minor: number, currency: Currency, language: Languag
     wholeFormatters.set(key, formatter);
   }
   return formatter.format(wholeUnits(minor, currency));
+}
+
+/**
+ * MUT-448: a business line's net with its sign, "+₪9,040" or "−₪3,100" (U+2212, not a hyphen); zero carries none.
+ * The sign is part of the same Intl string, so Arabic places it as the locale does inside the amount's <bdi>.
+ */
+export function formatSigned(minor: number, currency: Currency, language: Language): string {
+  const key = `${language}|${currency}|signed`;
+  let formatter = wholeFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(getLocale(language), { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0, signDisplay: 'exceptZero' });
+    wholeFormatters.set(key, formatter);
+  }
+  return formatter.format(wholeUnits(minor, currency)).replace('-', '\u2212');
 }
 
 /** Whole units, halves away from zero, and never −0 (review: a 0.40 loss read "-₪0"). */

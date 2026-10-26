@@ -28,6 +28,43 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Reports Glance: what you kept across your profiles (MUT-448, ADR-205)
+
+**Why:** Reports becomes account-level (epic MUT-446). The quick answer, "am I ahead, and which part pays?", across a person's profiles. It shows MUT-447's verdict as the server sends it. Planned with eng D1–D10 and design DD1–DD11, and Basel approved the copy (`.claude/designs/mut-448-reports-glance.md`).
+
+### Added
+- `/reports`, the Glance (`pages/views/GlancePage.tsx`). It shows:
+  - what you kept: ≈ only when converted, usual only on finished months;
+  - one row per profile: business net signed, personal spent and came in, a shared pill, the "income only" and "Nothing recorded" states, and locked or failed profiles named;
+  - what you're still owed, a footnote and a hint.
+- Layout: one centred 560px column at every width until Explore (MUT-451). It has a first-run block, a ledger-shaped skeleton, a quiet "Couldn't refresh · Retry", and LockedScreen when every profile is locked.
+- `data/verdict.ts`: `glanceOf`, `isFirstRun`, `glanceShellProfile` and `allLocked`, all pure. `data/verdictQueries.ts`: `useVerdict` (refetch on every visit, staleTime 10 s, no profile header; the default month asks with no dates). `api.verdict`, `parseGlance`, `formatSigned`, `useGlanceViewed`.
+- `qa/features/portal/reports-glance.yaml` and `qa/specs/portal/reports-glance.spec.ts`: 10 scenarios (staff-firm added at review). `FakeApi` answers the verdict from canned bodies (`verdictBody`, `currentVerdict`).
+
+### Changed
+- The corner Reports icon opens `/reports?back=<page>`, is lit on both report routes, and returns to `back` on a second press. The shell keeps the `back` profile unless it is locked or unreadable.
+- A Glance row slides forward into that profile's Reports for the same period, and Back slides back.
+- `report_viewed` gains `layer` (`glance` | `profile`); the analytics taxonomy is 2.3.0.
+- `BreakdownButton` is exported and takes its panel from the caller (no behaviour change; 6 characterization tests first). `FirstRun` is exported from ReportsPage. `backOf` is exported from youRoutes.
+
+### Fixed (review before merge, Basel's answers)
+- Staff-only people (bookkeeper or submitter, not OWNER) no longer get "Can't reach": the Glance lists profiles the person can open but no total counts (firms they staff) as link-only rows, "Not in this total", into their own Reports (`outsideProfiles`). A 404 verdict shows just those rows.
+- No dead end:
+  - First Run shows only on the default view; an empty past period keeps the controls and an empty ledger.
+  - A period that fails to load keeps the controls above the error card.
+- Every counted profile locked (a staffed firm still open) shows LockedScreen (`verdictAllLocked`), not "₪0 kept".
+- A usual gap under one whole unit reads "About your usual"; the gap is ≈ when converted.
+- The ECB rate date in Reports is Levantine in Arabic (`formatReportDay`). Names in "Leaves out" are bidi-isolated.
+- `/reports` has its own crash boundary (`PAGE_CRASH`).
+
+### Technical
+- Tests:
+  - `data/__tests__/verdict.test.ts` (24) and `verdictQueries.test.tsx` (5);
+  - `pages/__tests__/Glance.test.tsx` (14) and `format/__tests__/reportFormat.test.ts` (3);
+  - the popover characterization (6);
+  - shell, motion, filters, client and analytics cases.
+- QA specs updated for the icon's new target: `reports.first-run`, `reports.signed-out`, `shell.island`.
+
 ## [Unreleased] - 2026-10-26 — The host check no longer counts mail addresses (ADR-155 amendment)
 
 **Why:** MUT-382 put `info@mtb3a.com` in the terms, privacy policy and sign-in pages, and `no-hardcoded-hosts.test.ts` failed main on all 17 lines. A mailbox names who to write to, not where the apps are served (Basel, 2026-10-26).

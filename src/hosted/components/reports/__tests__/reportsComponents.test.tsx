@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
-import { CountUp } from '../HeroFigures';
+import { CountUp, HeroFigures } from '../HeroFigures';
 import { ReportControls, type ReportControlsProps } from '../ReportControls';
 
 /** MUT-175: the hero's count-up (DR21) and the control row (DR1, DR27, DS4, DT7). */
@@ -25,6 +25,69 @@ describe('CountUp', () => {
     inLanguage('en', <CountUp minor={123456} currency="ILS" reducedMotion={false} />);
     expect(document.querySelector('.hp-countup')!.textContent).not.toBe('₪1,235');
     expect(document.querySelector('.sr-only')).toHaveTextContent('₪1,235');
+  });
+});
+
+/**
+ * MUT-448 (D6): the ≈ popover's rules, pinned before BreakdownButton is shared with the Glance. Each one was a MUT-175
+ * review fix; none of them may change when the button starts taking its lines from the caller.
+ */
+describe('the ≈ breakdown popover', () => {
+  const rates = { base: 'ILS', rateDate: '2026-10-23', fetchedAt: '2026-10-24T06:00:00Z', source: 'live', rates: [{ currency: 'ILS', rate: 1, derived: false }, { currency: 'USD', rate: 0.25, derived: false }] } as const;
+  const hero = () =>
+    inLanguage(
+      'en',
+      <>
+        <HeroFigures received={new Map([['ILS', 100000], ['USD', 20000]])} spent={new Map([['ILS', 30000]])} unit={{ currency: 'ILS', rates: rates as never, singleCurrency: false }} caption="October so far" reducedMotion />
+        <button type="button">elsewhere</button>
+      </>,
+    );
+  const trigger = () => screen.getByRole('button', { name: /≈/ });
+  const panel = () => screen.queryByRole('group', { name: 'Exact amounts' });
+
+  it('opens on hover and closes when the pointer leaves', async () => {
+    hero();
+    await userEvent.hover(trigger());
+    expect(panel()).not.toBeNull();
+    await userEvent.unhover(trigger());
+    expect(panel()).toBeNull();
+  });
+
+  it('stays open when the pointer leaves after a click opened it', async () => {
+    hero();
+    await userEvent.click(trigger());
+    await userEvent.unhover(trigger());
+    expect(panel()).not.toBeNull();
+  });
+
+  it('keeps a hover-opened panel open on the click that follows, and closes on a second click', async () => {
+    hero();
+    await userEvent.hover(trigger());
+    await userEvent.click(trigger());
+    expect(panel()).not.toBeNull();
+    await userEvent.click(trigger());
+    expect(panel()).toBeNull();
+  });
+
+  it('closes on Escape, returns focus to the figure, and does not reopen from that focus', async () => {
+    hero();
+    await userEvent.click(trigger());
+    await userEvent.keyboard('{Escape}');
+    expect(panel()).toBeNull();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('does not open from a focus that is not keyboard focus', () => {
+    hero();
+    trigger().focus();
+    expect(panel()).toBeNull();
+  });
+
+  it('closes when focus leaves the figure and its panel', async () => {
+    hero();
+    await userEvent.click(trigger());
+    await userEvent.click(screen.getByRole('button', { name: 'elsewhere' }));
+    expect(panel()).toBeNull();
   });
 });
 

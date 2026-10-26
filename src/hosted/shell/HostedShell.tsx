@@ -14,6 +14,7 @@ import { DESTINATIONS, destinationOf, destinationPath } from './destinations';
 import { ProfileDrawers } from './ProfileDrawers';
 import { TrialWelcomeOpener } from './TrialWelcomeOpener';
 import { YouIsland } from './YouIsland';
+import { backOf, sectionOf } from './youRoutes';
 
 /**
  * `HostedShell` (hosted-portal.md §7.1, MUT-426): no sidebar and no header bar. Three glass objects float over the
@@ -26,12 +27,18 @@ import { YouIsland } from './YouIsland';
  * the same (MUT-287, epic MUT-284 decision 4).
  */
 
+/** MUT-448: the account-level Reports (the Glance). */
+const GLANCE_PATH = '/reports';
+
 export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
   const local = useIsLocalMode();
   const pathname = useLocation({ select: (location) => location.pathname });
+  // MUT-448: the Reports icon opens the Glance with the page it was pressed on, and a second press returns there
+  const backParam = useLocation({ select: (location) => (location.search as Record<string, unknown>).back });
+  const onGlance = pathname === GLANCE_PATH;
   // MUT-424 (E6): one map lights the destination, so /receivables lights Owed without being nested under it
   const lit = destinationOf(pathname);
   // MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between.
@@ -54,10 +61,11 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
         <div className="hp-fade hp-fade-bottom" />
         {sections && (
           <Link
-            to={`/p/${profile.id}/reports`}
+            to={onGlance ? (backOf(backParam) ?? `/p/${profile.id}`) : GLANCE_PATH}
+            search={onGlance ? undefined : { back: pathname }}
             className="hp-reports hp-glass press"
             aria-label={t('hosted.reports.title')}
-            aria-current={pathname === `/p/${profile.id}/reports` ? 'page' : undefined}
+            aria-current={onGlance || sectionOf(pathname) === 'reports' ? 'page' : undefined}
           >
             <ChartIcon />
           </Link>

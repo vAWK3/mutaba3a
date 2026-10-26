@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
 import { OFFICE_A, OFFICE_B, customer, malafatFirm, office, openSignedInPortal } from '../../support/portal';
-import { FakeApi, currencyBlock, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
+import { FakeApi, currencyBlock, currentVerdict, customerSummary, payment, project, receivable, attachment, uid } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 
@@ -38,6 +38,8 @@ const DESTINATIONS = ['Owed', 'Paid', 'Spent', 'Clients'] as const;
 function seeded() {
   return new FakeApi({
     profiles: [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, 'Nour Accounting'), malafatFirm()],
+    // MUT-448: the Reports icon opens the Glance; its rows lead to each profile's own Reports
+    verdicts: { '*': currentVerdict([{ profileId: OFFICE_A, name: 'Nour Studio', received: '4500.00' }, { profileId: OFFICE_B, name: 'Nour Accounting', received: '1200.00' }]) },
     clients: 3,
     summary: [
       currencyBlock('ILS', {
@@ -546,9 +548,11 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await expect(island).not.toHaveAttribute('aria-current', 'page');
   });
 
-  await step('From Reports, switching profile lands on the other profile’s Reports', async () => {
+  await step('From a profile’s Reports (through the Glance), switching profile lands on the other profile’s Reports', async () => {
     await page.locator('.hp-reports').click();
-    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/reports$`));
+    await expect(page).toHaveURL(/\/reports\?back=/);
+    await page.getByRole('list', { name: 'Your profiles' }).getByRole('link', { name: /^Nour Studio,/ }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/reports\\?`));
     await expect(page.locator('.hp-reports')).toHaveAttribute('aria-current', 'page');
     await openYou(page, 'profiles');
     await page.getByRole('main').getByRole('button', { name: /Nour Accounting/ }).click();

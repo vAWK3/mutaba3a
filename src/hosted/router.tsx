@@ -13,9 +13,11 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { omitShellOverlay, parseClientDetail, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ReportsPage } from './pages/views/ReportsPage';
+import { GlancePage } from './pages/views/GlancePage';
+import { glanceShellProfile } from './data/verdict';
 import { ClientsPage } from './pages/views/ClientsPage';
 import { ClientDetailPage } from './pages/views/ClientDetailPage';
 import { ReceivablesPage } from './pages/views/ReceivablesList';
@@ -33,7 +35,7 @@ import { parseConsentSearch } from './pages/connect/consentSearch';
 import { HostedShell } from './shell/HostedShell';
 import { supportsViewTransitionTypes, viewTransitionOption } from './shell/pageMotion';
 import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
-import { useProfile } from './session/me';
+import { useMe, useProfile } from './session/me';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -272,6 +274,27 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   });
 
   /**
+   * MUT-448: the Glance, account-level Reports outside any profile (eng P1). The shell keeps a profile so its pill and
+   * island stay (D8): the one the Reports icon was pressed on (`back`), unless it is locked or unreadable.
+   */
+  const glanceRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/reports',
+    validateSearch: parseGlance,
+    component: function Glance() {
+      const search = parseGlance(omitShellOverlay(glanceRoute.useSearch()));
+      const me = useMe();
+      const shell = glanceShellProfile(me.profiles, search.back?.split('/')[2], me);
+      return (
+        <HostedShell profile={shell}>
+          <GlancePage search={search} setSearch={useReplaceSearch()} shell={shell} />
+        </HostedShell>
+      );
+    },
+  });
+
+  /**
    * MUT-425: the You page, one route per part, inside the open profile (`/p/:id/you…`) and without one (`/you…`, for
    * a person with no profile or on one they lost, eng D3). `from` is the only search the page reads (eng D3), and it
    * is parsed again at the page: TanStack carries every raw key into a route's search, so a `?from=bogus` would
@@ -314,6 +337,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       homeRoute,
       captureRoute,
       connectApproveRoute,
+      glanceRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

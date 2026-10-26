@@ -47,6 +47,9 @@ describe('pageMotionOf', () => {
     ['Spent → its Groups tab', p('/expenses'), p('/expenses/groups'), 'fade'],
     ['a tab → Reports', p('/payments'), p('/reports'), 'fade'],
     ['Reports → a tab', p('/reports'), p(), 'fade'],
+    ['a Glance row → that profile’s Reports (MUT-448 D5)', '/reports', p('/reports'), 'forward'],
+    ['that profile’s Reports → back to the Glance', p('/reports'), '/reports', 'back'],
+    ['the Glance → another page (the corner icon’s second press)', '/reports', p('/payments'), 'none'],
     ['outside the shell (sign-in → home)', '/sign-in', p(), 'none'],
     ['the home redirect', '/', p(), 'none'],
   ] as const)('%s is %s', (_name, prev, next, motion) => {

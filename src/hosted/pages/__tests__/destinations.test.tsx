@@ -56,11 +56,11 @@ describe('the shell (the floating pill, MUT-426)', () => {
     expect(lit(await sections())).toEqual([destination]);
   });
 
-  it('opens Reports from its corner icon (MUT-426), lighting no destination there', async () => {
+  it('opens Reports from its corner icon (MUT-426), lighting no destination there; MUT-448: the account-level Glance', async () => {
     const { user, router } = portal(`/p/${ORG_A}`);
     const nav = await sections();
     await user.click(screen.getByRole('link', { name: 'Reports' }));
-    expect(locationOf(router)).toBe(`/p/${ORG_A}/reports`);
+    expect(locationOf(router)).toBe(`/reports?back=${encodeURIComponent(`/p/${ORG_A}`)}`);
     expect(lit(nav)).toEqual([]);
     expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page');
   });

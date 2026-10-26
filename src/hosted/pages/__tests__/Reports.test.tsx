@@ -129,10 +129,10 @@ const thisMonth: Rec[] = [
 ];
 
 describe('Reports: reaching it and the first run (AC1, DR6, DR8)', () => {
-  it('is a nav item after Overview and opens on the current profile', async () => {
+  it('is reached through the Glance: the corner icon opens /reports with the page it left (MUT-448)', async () => {
     portal(`/p/${ORG_A}`, { records: { [ORG_A]: thisMonth } });
     const link = await screen.findByRole('link', { name: 'Reports' });
-    expect(link).toHaveAttribute('href', BASE);
+    expect(link).toHaveAttribute('href', `/reports?back=${encodeURIComponent(`/p/${ORG_A}`)}`);
   });
 
   it('with no records shows one block and the two capture actions', async () => {

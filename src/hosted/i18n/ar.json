@@ -1679,6 +1679,57 @@
         },
         "typicallySameDay": "عادةً في اليوم نفسه",
         "biggestChange": "أكبر تغيّر"
+      },
+      "glance": {
+        "label": {
+          "kept": "تبقّى لك",
+          "keptApprox": "≈ تبقّى لك",
+          "businessNet": "صافي الأعمال",
+          "businessNetApprox": "≈ صافي الأعمال"
+        },
+        "usual": {
+          "above": "أعلى من معدّلك بـ{amount}",
+          "below": "أقل من معدّلك بـ{amount}",
+          "about": "قريب من معدّلك"
+        },
+        "inOnly": "بـ{currency} فقط",
+        "leavesOut": "لا يشمل {names}",
+        "row": {
+          "net": "صافي",
+          "spent": "مصروف",
+          "incomeOnly": "دخل فقط",
+          "cameIn": "دخل {amount}",
+          "shared": "مشترك",
+          "nothing": "لا شيء مسجّل",
+          "locked": "مقفل · الاشتراك",
+          "failed": "تعذّر التحميل",
+          "linkName": "{name}، {kind} {amount}",
+          "linkNameShared": "{name}، مشترك، {kind} {amount}"
+        },
+        "owed": {
+          "label": "ما زال مستحقًا لك",
+          "none": "لا شيء مستحق لك",
+          "overdue": {
+            "zero": "لا متأخرات",
+            "one": "دفعة متأخرة",
+            "two": "دفعتان متأخرتان",
+            "few": "{count} دفعات متأخرة",
+            "many": "{count} دفعة متأخرة",
+            "other": "{count} دفعة متأخرة"
+          }
+        },
+        "footnote": {
+          "shared": "يشمل الأعمال المشتركة كاملة",
+          "omitted": "لا يشمل السجلات بـ{currencies}"
+        },
+        "hint": "افتح ملفًا لترى رسومه",
+        "refreshFailed": "تعذّر التحديث",
+        "profilesLabel": "ملفاتك",
+        "outside": {
+          "label": "خارج هذا المجموع",
+          "note": "يحسب مجموع تقاريرك الملفات التي تملكها. هذه ليست لك، فافتح أحدها لترى تقاريره.",
+          "linkName": "{name}، خارج هذا المجموع"
+        }
       }
     },
     "passkeys": {
