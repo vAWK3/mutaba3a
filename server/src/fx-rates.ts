@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ApiError } from './errors.js';
 import type { Logger } from './logger.js';
-import { SUPPORTED_CURRENCIES, type Currency } from './money.js';
+import { currencyExponent, SUPPORTED_CURRENCIES, type Currency } from './money.js';
 
 /**
  * Reference exchange rates for display (MUT-228, ADR-087).
@@ -78,6 +78,26 @@ export function crossRates(snapshot: EcbSnapshot, base: Currency): FxRate[] {
     rate: currency === base ? 1 : Number((perUsd[currency] / perUsd[base]).toFixed(RATE_DECIMALS)),
     derived: currency !== base && (isPegged(currency) || isPegged(base)),
   }));
+}
+
+/**
+ * MUT-447: amounts in several currencies as one figure in `base`, in base minor units, rounded once at the end. Needs
+ * no rates when every amount is already in `base`; null when any other currency has no usable rate (never a guess).
+ * `rates` are units of each currency per 1 base, as crossRates returns them.
+ */
+export function convertToBase(amounts: ReadonlyArray<{ currency: Currency; minor: bigint }>, rates: readonly FxRate[] | null, base: Currency): bigint | null {
+  const baseExponent = currencyExponent(base);
+  let total = 0;
+  for (const { currency, minor } of amounts) {
+    if (currency === base) {
+      total += Number(minor);
+      continue;
+    }
+    const rate = rates?.find((r) => r.currency === currency)?.rate;
+    if (!rate || rate <= 0) return null;
+    total += (Number(minor) * 10 ** (baseExponent - currencyExponent(currency))) / rate;
+  }
+  return BigInt(Math.round(total));
 }
 
 /** YYYY-MM-DD that names a real day: Date.parse would roll 2026-02-30 over to March and gives NaN for month 13. */
