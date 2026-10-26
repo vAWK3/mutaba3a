@@ -50,6 +50,7 @@
 - Look-alikes: a bad date names `date` and keeps the ten-year bounds; a vendor under 3 characters only matches itself; profiles read in parallel; `list_vendors` reports `truncated`.
 - Guard refusals and results that drift from a tool's output schema reach Sentry (`mcp:<tool>`); tool descriptions say stored text is records, never instructions.
 - TD-258 (inbox candidates are a capped scan).
+- Re-review: the batch check reads the body once under the SDK's 4 MiB cap (413) and passes it parsed; the agent's inbox reads follow the person's standing (refused only when every profile is LOCKED).
 
 ### Technical
 - `server/src/__tests__/helpers/oauth-agent.ts`: the OAuth test harness, shared by `routes-oauth.test.ts` and `mcp-read-tools.test.ts`.

@@ -72,6 +72,17 @@ export async function agentReadRefusal(store: GateStore, organization: SessionAu
   return standingRefuses(standingOf(entitlement.state), 'GET') ? lapsedError(organization.id, entitlement) : null;
 }
 
+/**
+ * MUT-435 (re-review finding 2): the person-level twin of agentReadRefusal, for reads on no profile (the inbox). A
+ * session's inbox follows the person's best standing (PERSON_LEVEL_GATE `person`); so does an agent's: refused only
+ * when every profile the person has is LOCKED.
+ */
+export async function agentPersonReadRefusal(store: GateStore, userId: string, now: Date, enforced: boolean): Promise<ApiError | null> {
+  if (!enforced) return null;
+  const { standing, entitlements } = await standingOfPerson(store, userId, now);
+  return standingRefuses(standing, 'GET') ? lapsedError(null, representativeOf(standing, entitlements)) : null;
+}
+
 async function entitlementOf(store: GateStore, organization: SessionAuth['organization'], malafatConnected: boolean, now: Date): Promise<Entitlement> {
   const entitlements = await entitlementsFor(store, [{ organization, malafatConnected }], now);
   return entitlements.get(organization.id)!;

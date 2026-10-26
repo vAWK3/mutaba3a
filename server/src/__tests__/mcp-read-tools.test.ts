@@ -317,6 +317,17 @@ describe('one request is one call (review D1)', () => {
     expect((await read(res)).error).toMatchObject({ code: -32600, message: expect.stringContaining('batching') });
     expect(search).not.toHaveBeenCalled();
   });
+
+  it('keeps the SDK’s body cap and its parse error (re-review finding 1)', async () => {
+    const { h, bearer } = await setup();
+    const post = (body: string) => h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body });
+    const huge = await post(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping', params: { pad: 'x'.repeat(5 * 1024 * 1024) } }));
+    expect(huge.status).toBe(413);
+    const broken = await post('{"jsonrpc": "2.0", "id": 1,');
+    expect(broken.status).toBe(400);
+    expect((await read(broken)).error.code).toBe(-32700);
+    expect((await post(JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping' }))).status).toBe(200);
+  });
 });
 
 describe('a person’s connections share one budget (review D4)', () => {
@@ -349,6 +360,8 @@ describe('a profile LOCKED by billing (review D2)', () => {
     await h.store.billing.setTrialStart(p.userId, new Date(h.now().getTime() - 31 * 86_400_000));
     expect(await toolError(h, bearer, 'list_categories', { profileId: p.personalId })).toContain('SUBSCRIPTION_LAPSED');
     expect((await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' })).items).toEqual([]);
+    // Every profile locked: the inbox follows, as the app's own inbox does (re-review finding 2).
+    expect(await toolError(h, bearer, 'list_inbox')).toContain('SUBSCRIPTION_LAPSED');
   });
 });
 

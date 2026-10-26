@@ -10,7 +10,7 @@ import { decodeCursor, encodeCursor } from '../pagination.js';
 import { ownedOrCoOwnedProfilesOf, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import type { ExpenseCursor, ExpenseRecord, InboxEntryCursor, InboxEntryRecord, Organization } from '../repositories/ports.js';
 import { serializeInboxEntry } from '../serializers.js';
-import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
+import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, inboxReadable, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
 
 /**
  * MUT-435: the read tools — where an expense could go (profiles), how to file it (categories, clients, vendors), what
@@ -179,6 +179,8 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     },
     ({ limit, cursor }) =>
       runTool(ctx, 'list_inbox', INBOX_OUTPUT, async () => {
+        const refusal = await inboxReadable(ctx);
+        if (refusal) throw refusal;
         const result = await ctx.store.inboxEntries.list(userId, { limit: limit ?? TOOL_PAGE_DEFAULT, cursor: cursor ? decodeInboxCursor(cursor) : null });
         return {
           items: result.items.map((e) => {
@@ -222,7 +224,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
           }),
         );
         const sources = [...fromProfiles];
-        if (!profileId) {
+        if (!profileId && !(await inboxReadable(ctx))) {
           const read = await readCapped<InboxEntryRecord, InboxEntryCursor>((cursor) => ctx.store.inboxEntries.list(userId, { limit: SIMILAR_PAGE, cursor }));
           const items: Candidate[] = read.items.filter((e) => e.kind === 'EXPENSE').map((e) => ({ where: 'inbox', profileId: null, id: e.id, amountMinor: e.amountMinor, currency: e.currency, occurredOn: e.occurredOn, vendor: null, title: e.note }));
           sources.push({ items, truncated: read.truncated });

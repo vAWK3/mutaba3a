@@ -1,6 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { agentReadRefusal, type GateStore } from '../auth/billing-gate.js';
+import { agentPersonReadRefusal, agentReadRefusal, type GateStore } from '../auth/billing-gate.js';
 import type { AgentIdentity } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { OAuthScope } from '../oauth/protocol.js';
@@ -42,6 +42,11 @@ export async function agentProfile(ctx: McpContext, profileId: string): Promise<
   const refusal = await agentReadRefusal(ctx.gateStore, organization, ctx.now(), ctx.billingGate);
   if (refusal) throw refusal;
   return organization;
+}
+
+/** The person's inbox may be read unless every profile they have is LOCKED (as a session's GET /v1/inbox). */
+export async function inboxReadable(ctx: McpContext): Promise<ApiError | null> {
+  return agentPersonReadRefusal(ctx.gateStore, ctx.agent.user.id, ctx.now(), ctx.billingGate);
 }
 
 /** The profiles an agent may read right now: owned or co-owned (P1), minus any LOCKED by billing (review D2). */
