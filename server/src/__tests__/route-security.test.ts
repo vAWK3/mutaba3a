@@ -99,7 +99,8 @@ const ENTRIES_OPERATIONS = ['GET /v1/entries'];
 const RECORDS_EXPORT_OPERATIONS = ['GET /v1/records-export', 'GET /v1/records-export/receipts/{receiptId}'];
 
 /** MUT-175: portal Reports' activity summary — it reads a profile's expenses too, so it is session-only like /v1/summaries/expenses. */
-const REPORTS_OPERATIONS = ['GET /v1/summaries/activity'];
+// MUT-447: the verdict reads across a person's profiles (session-only, person-level, like GET /v1/entries).
+const REPORTS_OPERATIONS = ['GET /v1/summaries/activity', 'GET /v1/summaries/verdict'];
 
 /** MUT-362: Settings › Billing — session-only, naming no X-Mutaba3a-Profile (the person pays, like /v1/me). */
 const BILLING_OPERATIONS = ['GET /v1/billing', 'POST /v1/billing/checkout-session', 'POST /v1/billing/portal-session'];

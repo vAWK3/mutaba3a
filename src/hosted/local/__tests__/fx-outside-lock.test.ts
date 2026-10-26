@@ -52,4 +52,23 @@ describe('reference rates and the lock (D2)', { timeout: 30_000 }, () => {
 
     expect(outcome).toBe(201);
   });
+
+  it('MUT-447: a save does not wait for a Reports verdict whose FX fetch is stuck', async () => {
+    const page = await openPage();
+    const me = (await (await page.fetch(new Request('http://localhost/v1/me'))).json()) as { profiles: Array<{ id: string }> };
+    const profileId = me.profiles[0]!.id;
+
+    // The verdict waits on the stuck FX fetch before the lock and never settles here; its outcome is not this test's subject.
+    page.fetch(new Request('http://localhost/v1/summaries/verdict')).catch(() => undefined);
+    const save = page.fetch(
+      new Request('http://localhost/v1/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Mutaba3a-Profile': profileId, 'Idempotency-Key': 'fx-lock-test-verdict' },
+        body: JSON.stringify({ occurredOn: '2026-10-01', amount: '12.00', currency: 'ILS', title: 'Coffee' }),
+      }),
+    );
+    const outcome = await Promise.race([save.then((r) => r.status), new Promise((resolve) => setTimeout(() => resolve('blocked'), 2_000))]);
+
+    expect(outcome).toBe(201);
+  });
 });

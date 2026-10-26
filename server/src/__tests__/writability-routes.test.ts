@@ -318,7 +318,19 @@ describe('the escape hatch', () => {
       'routes/summaries.ts',
       'routes/summaries.ts',
       'routes/summaries.ts',
+      'routes/summaries.ts',
     ]);
+  });
+});
+
+describe('lazy posting on a person-level read (MUT-447 review)', () => {
+  it('is SYSTEM for a signed-in person with no selected profile, and refused with neither', async () => {
+    const { lazyPostingOf } = await import('../auth/middleware.js');
+    const { MemoryLedgerStore } = await import('../repositories/memory.js');
+    const store = new MemoryLedgerStore();
+    const context = (vars: Record<string, unknown>) => ({ get: (key: string) => vars[key] }) as Parameters<typeof lazyPostingOf>[0];
+    expect(lazyPostingOf(context({ identity: { user: { id: 'u' } }, requestId: 'r' }), store).actor).toEqual({ actorType: 'SYSTEM', actorId: null, requestId: 'r' });
+    expect(() => lazyPostingOf(context({ requestId: 'r' }), store)).toThrow(/does not accept this kind of credential/);
   });
 });
 

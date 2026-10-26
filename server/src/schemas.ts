@@ -18,6 +18,7 @@ import { CLIENT_RELEASE_MAX, CLIENT_RELEASE_PATTERN, TERMS_VERSION_PATTERN } fro
 import { ITEM_STATUSES } from './agreements/status.js';
 import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
+import { VERDICT_PROFILE_KINDS, VERDICT_TOTAL_LABELS } from './summaries/verdict.js';
 
 /**
  * Wire schemas. These are the OpenAPI components; every route references
@@ -3099,6 +3100,59 @@ export const ActivitySummarySchema = z
       .openapi({ description: 'Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries' }),
   })
   .openapi('ActivitySummary');
+
+// ---- MUT-447: the Reports verdict across a person's profiles (ADR-204) ---------------
+
+export const VerdictQuerySchema = z.object({
+  from: IsoDateSchema.optional().openapi({ description: "Inclusive; defaults to the first of this month in the base profile's timezone (R4: the oldest personal profile, else the oldest included one). The same date rules and errors as GET /v1/summaries/activity" }),
+  to: IsoDateSchema.optional().openapi({ description: `Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month (422 RANGE_TOO_LONG)` }),
+});
+const flowStrings = { received: AmountSchema, spent: AmountSchema, net: AmountSchema };
+const owedBlock = z.object({ currency: CurrencySchema, outstanding: AmountSchema, overdue: AmountSchema });
+const owedSchema = { currencies: z.array(owedBlock), overdueCount: z.number().int().openapi({ description: 'Open entries past their due date' }) };
+/** Why a held profile is not in the verdict: locked by billing, or it failed to read (reported server-side). */
+export const VERDICT_UNAVAILABLE_CODES = ['SUBSCRIPTION_LAPSED', 'INTERNAL'] as const;
+export type VerdictUnavailableCode = (typeof VERDICT_UNAVAILABLE_CODES)[number];
+export const VerdictSchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    asOf: IsoDateSchema.openapi({ description: "Today in the base profile's timezone" }),
+    base: CurrencySchema.openapi({ description: 'The currency converted figures are in: the oldest personal profile’s default, else the oldest included profile’s (R4)' }),
+    rates: z
+      .object({ date: IsoDateSchema, source: z.enum(['live', 'stale']) })
+      .nullable()
+      .openapi({ description: 'The ECB reference day the converted figures used; null when no rates were available (every converted figure that needs one is then null)' }),
+    profiles: z.array(
+      z.object({
+        profileId: uuid,
+        name: z.string(),
+        kind: z.enum(VERDICT_PROFILE_KINDS).openapi({ description: 'BUSINESS and FIRM lines show net; a PERSONAL line is shown as spent (+ came in)' }),
+        shared: z.boolean().openapi({ description: 'More than one owner; its whole net counts in the total (R6)' }),
+        currencies: z.array(z.object({ currency: CurrencySchema, ...flowStrings })),
+        converted: z.object(flowStrings).nullable(),
+        history: z
+          .array(z.object({ month: IsoMonthSchema, currencies: z.array(z.object(currencyFlow)) }))
+          .openapi({ description: 'The 12 calendar months ending with to’s month: received and spent per currency (clients and categories are GET /v1/summaries/activity’s)' }),
+        owed: z.object(owedSchema),
+        omittedCurrencies: z
+          .array(z.string())
+          .openapi({ description: 'Currency codes this API no longer supports (MUT-388) found on this profile’s records: those rows are left out of every figure. Usually empty' }),
+      }),
+    ),
+    total: z.object({
+      label: z.enum(VERDICT_TOTAL_LABELS).openapi({ description: 'kept when a personal profile is included; businessNet otherwise' }),
+      currencies: z.array(z.object({ currency: CurrencySchema, net: AmountSchema })).openapi({ description: 'Σ received − spent across every included profile, per currency (never summed across currencies)' }),
+      converted: AmountSchema.nullable().openapi({ description: 'The same in base at one rate set; null when a currency has no rate' }),
+      inCurrencyOnly: CurrencySchema.nullable().openapi({ description: 'When converted is null: the currency with the most records, to show on its own' }),
+      sharedInFull: z.boolean(),
+      partial: z.boolean().openapi({ description: 'A held profile is in `unavailable`: the totals cover the rest, and usual is null' }),
+    }),
+    usual: AmountSchema.nullable().openapi({ description: 'Median kept over the up to 6 months before a calendar-month period in which every included profile was complete; null for weeks, years, fewer than 3 such months or missing rates' }),
+    owed: z.object({ ...owedSchema, converted: AmountSchema.nullable() }),
+    unavailable: z.array(z.object({ profileId: uuid, name: z.string(), code: z.enum(VERDICT_UNAVAILABLE_CODES) })).openapi({ description: 'Profiles left out: locked by billing (SUBSCRIPTION_LAPSED) or that failed to read (INTERNAL)' }),
+  })
+  .openapi('Verdict');
 
 // ---- MUT-267: expense groups (ADR-094) -----------------------------------------
 

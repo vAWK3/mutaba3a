@@ -69,6 +69,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'PATCH /v1/inbox/:entryId': 'person',
   'DELETE /v1/inbox/:entryId': 'person',
   'GET /v1/entries': 'person',
+  // MUT-447: the Reports verdict reads across the person's profiles and leaves LOCKED ones out (personEntitlements).
+  'GET /v1/summaries/verdict': 'person',
   'POST /v1/profiles': 'person',
   // A profile's own settings follow that profile.
   'PATCH /v1/profiles/:profileId': 'pathProfile',

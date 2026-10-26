@@ -2837,3 +2837,6 @@ Imported data is never written field by field into the live store. It is mapped 
 ### Pattern: Two-step relational compose, so a caller can check between (MUT-437)
 - `server/src/inbox/file-expense.ts`: `prepare…` runs every rule and writes nothing; `commit…` writes and audits. The route calls both back to back; the agent puts its look-alike check between them. Pure capture rules stay in `inbox/compose.ts`.
 
+## Pattern: a person-level read that answers partially (MUT-447)
+
+A read across a person's profiles (`GET /v1/summaries/verdict`, like `GET /v1/entries`) never fails as a whole because one profile does: it drops LOCKED profiles first (from `personEntitlements`), reads the rest with `Promise.allSettled`, and lists each left-out profile in `unavailable` with a code. A failure that isn't an `ApiError` is our bug: report it with `c.get('reportError')(err)` (set by `createApiShell`, the same reporter and tags as an unhandled error) so a partial answer is never silent in Sentry.

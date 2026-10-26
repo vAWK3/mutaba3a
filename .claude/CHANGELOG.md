@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — One verdict across your profiles for Reports (MUT-447, ADR-204)
+
+**Why:** Reports becomes account-level (epic MUT-446): one row per profile, what you kept and what you're owed, on the portal and the phone. One server read keeps both apps on the same numbers.
+
+### Added
+- `GET /v1/summaries/verdict?from&to` (API 1.76.0-mut447): per profile (owned, co-owned, and firms you own) received/spent/net per currency, converted, 12-month history and owed; combined kept (or business net), usual (calendar months), owed and `unavailable`. Works signed in and signed out.
+- `verdictProfilesOf` (personal-profile.ts), `composeVerdict`/`owedOf`/`baseProfileOf` (summaries/verdict.ts), `convertToBase` (fx-rates.ts), `firstCountedMonth` (summaries/months.ts), the `reportError` context function (app-shell.ts).
+
+### Changed
+- `/v1/summaries/activity` and the verdict share `reportRange` and `readActivityWindow` (behaviour unchanged).
+- `lazyPostingOf` attributes posting on a person-level read to SYSTEM (`personPostingActorOf`); `postingActorOf` is unchanged.
+- `reportError` logs a handled failure as well as sending it to Sentry.
+- The local app warms reference rates before the lock for the verdict too; `routes/summaries` joins `LOCAL_SERVER_ALLOWLIST`.
+
+### Fixed
+- Review (before merge): a profile holding a retired currency (AED/SAR/QAR/BHD/OMR) no longer turns the verdict into a 500; those rows are left out and listed in `omittedCurrencies`. An unexpected FX failure degrades to unconverted figures; a failing profile marks the answer `partial` and hides usual; base and label come from every profile you hold; profiles are read three at a time.
+- `server/src/expenses/__tests__/presets.test.ts` no longer reads `src/db/defaultExpenseCategories.ts`, which MUT-445 deleted with the free app (main's server suite failed on it); the server's presets are now the only copy, so the offline-drift case is removed (Basel, 2026-10-26).
+
+### Technical
+- Tests: `summaries/__tests__/verdict.test.ts` (23), `months.test.ts`, `__tests__/routes-verdict.test.ts` (16), LOCKED and no-posting-into-locked cases in `billing-gate-routes.test.ts`, `src/hosted/data/__tests__/reportsMonthParity.test.ts`, two local-mode cases. TD-264.
+
 ## [Unreleased] - 2026-10-26 — The desktop apps and the free web app at /app are retired (MUT-445, ADR-203)
 
 **Why:** MTB3A runs on iOS, Android and the web portal only (Basel, 2026-10-26). MUT-382 removed `/download`; this removes what was left. Basel chose to retire `/app` now, carry-over sender included: a free user's records stay in that browser unless they saved a records file, which the portal still restores.

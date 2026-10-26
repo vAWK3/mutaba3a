@@ -10,6 +10,7 @@ import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/f
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/me.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from '../../../server/src/routes/portal-routes.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/profiles.js';
+import { SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES } from '../../../server/src/routes/summaries.js';
 import { LOCAL_URL_TTL_SECONDS } from './attachments.js';
 import { LOCAL_PEPPER } from './mintLocalSession.js';
 
@@ -100,7 +101,7 @@ export function createLocalApp(options: CreateLocalAppOptions): LocalApp {
       rateLimiter,
       sessions,
       routeAccess: () => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes)),
-      organizationIndependent: new Set([...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
 

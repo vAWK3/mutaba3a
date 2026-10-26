@@ -3930,3 +3930,15 @@ The store contracts and the rule/read-tool tests were written first and watched 
 | `qa/specs/portal-selfservice/mcp.spec.ts` | Release-QA (live API) | +2 | statement-match; file-inbox-entry (filed, receipt uploaded, listed in the drawer) |
 | Regression | Route + unit | unchanged/changed | inbox-filing, expense-capture-source, routes-vendors, inbox-isolation, route-security unchanged across the refactor; store-guard allow-list (35 methods) and inbox classification; add-expense/receipt specs read the new output |
 
+## MUT-447 — Reports verdict API (2026-10-26, ADR-204)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/summaries/__tests__/verdict.test.ts` | 23 | kept = Σ net; businessNet without a personal profile; two personal profiles and FIRM/shared lines; per-currency totals + one converted figure; no rates → converted null + busiest currency, base-only still filled; `convertToBase` rounding, JOD peg, missing rate; R4 base; usual median odd/even, calendar month only, 3-month floor, 7th-day rule, earlier data (D9), all-profiles-complete (D11), missing rate; `owedOf` open balance, overdue count, future Owed excluded; combined owed converted; review: retired currencies omitted and listed, empty profiles don't block usual, bigint median rounding, partial hides usual, label from held kinds; a retired-currency overdue entry is not counted |
+| `server/src/summaries/__tests__/months.test.ts` | 2 | the 7th-day complete-month rule |
+| `src/hosted/data/__tests__/reportsMonthParity.test.ts` | 9 | the portal's copy of the rule equals the server's (ADR-097 forbids importing it) |
+| `server/src/__tests__/routes-verdict.test.ts` | 16 | no profile header; personal + owned firm; owned business, co-owned shared, another person's profile absent; BOOKKEEPER firm excluded; businessNet; unpaid Owed not in net; due installment posted so owed = organization summary (D3); FX down → 200 (D4); a failing profile named + reported; 422 END_BEFORE_START / RANGE_TOO_LONG (D5); defaults in the base profile's timezone (D12); API key → 403 PRINCIPAL_NOT_ACCEPTED; review: retired AED row → 200 + `omittedCurrencies`, unexpected FX error → 200 converted + reported once, INTERNAL failure → partial + reported (NOT_FOUND not reported), no profiles → 404, SUBMITTER excluded |
+| `server/src/__tests__/billing-gate-routes.test.ts` | +2 | a LOCKED profile is left out and listed (`partial`) while a covered firm still counts; nothing is posted into the locked profile; the route is classified `person` |
+| `server/src/__tests__/route-security.test.ts`, `writability-routes.test.ts` | pins | session-only surface gains the verdict; `lazyPostingOf` call sites gain one, `unguarded()` stays in middleware.ts; lazy posting on a person-level read is SYSTEM with an identity and refused without one |
+| `src/hosted/local/__tests__/createLocalApp.test.ts` | +1 | signed out the verdict answers with the local profile owned; two reads identical (no posting locally, D10) |
+| `src/hosted/local/__tests__/fx-outside-lock.test.ts` | +1 | a save never waits for a verdict whose FX fetch is stuck (fails without the fix) |

@@ -60,6 +60,8 @@ const LOCAL_SERVER_ALLOWLIST = [
   'routes/me',
   'routes/portal-routes',
   'routes/profiles',
+  // MUT-447: the verdict's organization-independent route set; summaryRoutes is already in the chunk through portal-routes
+  'routes/summaries',
   'schemas',
 ]
 

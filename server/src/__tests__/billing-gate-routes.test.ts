@@ -18,6 +18,7 @@ import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from '../inbox/routes-keys.js';
 import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/profiles.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/fx-rates.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/entries.js';
+import { SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/summaries.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
 import { provisionUser } from './helpers/provision.js';
@@ -227,6 +228,41 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     expect((await h.app.request('/v1/profiles', json({ name: 'Studio', type: 'BUSINESS', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, { ...p.session, ...idem() }))).status).toBe(402);
   });
 
+  it('MUT-447: the Reports verdict leaves a locked profile out, names it, and still counts the covered firm', async () => {
+    const h = harness();
+    const p = await person(h, 'trial-active');
+    const firm = await firmWithKey(h);
+    await h.app.request(`/admin/v1/users/${p.userId}/memberships`, json({ organizationId: firm.id }, ADMIN));
+    await h.app.request('/admin/v1/billing/grants', json({ organizationId: firm.id, tier: 'FIRM', reason: 'pilot' }, ADMIN));
+    await h.store.billing.setTrialStart(p.userId, daysAgo(31));
+
+    const res = await h.app.request('/v1/summaries/verdict', { headers: p.session });
+    expect(res.status).toBe(200);
+    const body = await read(res);
+    expect(body.profiles.map((x: Loose) => x.profileId)).toEqual([firm.id]);
+    expect(body.unavailable).toEqual([{ profileId: p.personalId, name: expect.any(String), code: 'SUBSCRIPTION_LAPSED' }]);
+    expect(body.total.partial).toBe(true);
+  });
+
+  it('MUT-447 (review A1): the verdict never runs catch-up posting on a locked profile', async () => {
+    const h = harness();
+    const p = await person(h, 'trial-active');
+    const firm = await firmWithKey(h);
+    await h.app.request(`/admin/v1/users/${p.userId}/memberships`, json({ organizationId: firm.id }, ADMIN));
+    await h.app.request('/admin/v1/billing/grants', json({ organizationId: firm.id, tier: 'FIRM', reason: 'pilot' }, ADMIN));
+    await h.store.billing.setTrialStart(p.userId, daysAgo(31));
+    // postDueItems starts by asking for a profile's unposted due installments: the locked profile must never be asked about.
+    const asked: string[] = [];
+    const listUnpostedDue = h.store.agreements.listUnpostedDue.bind(h.store.agreements);
+    h.store.agreements.listUnpostedDue = (async (organizationId: string, ...rest: unknown[]) => {
+      asked.push(organizationId);
+      return (listUnpostedDue as Loose)(organizationId, ...rest);
+    }) as Loose;
+
+    expect((await h.app.request('/v1/summaries/verdict', { headers: p.session })).status).toBe(200);
+    expect(asked).toEqual([firm.id]);
+  });
+
   it('locked everywhere: the inbox and the entries feed are refused', async () => {
     const h = harness();
     const p = await person(h, 'trial-locked');
@@ -292,6 +328,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES,
       ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);
