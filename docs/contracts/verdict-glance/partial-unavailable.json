@@ -1,0 +1,163 @@
+{
+  "name": "partial-unavailable",
+  "description": "One profile locked by billing and one that failed to read: non-link rows, \"Leaves out\", no usual (AC3, 402 on one profile).",
+  "period": "month",
+  "readable": [
+    "11111111-1111-4111-8111-111111111111",
+    "33333333-3333-4333-8333-333333333333",
+    "44444444-4444-4444-8444-444444444444"
+  ],
+  "verdict": {
+    "from": "2026-09-01",
+    "to": "2026-09-30",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": {
+      "date": "2026-10-23",
+      "source": "live"
+    },
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "10000.00",
+            "spent": "960.00",
+            "net": "9040.00"
+          }
+        ],
+        "converted": {
+          "received": "10000.00",
+          "spent": "960.00",
+          "net": "9040.00"
+        },
+        "history": [
+          {
+            "month": "2026-09",
+            "currencies": [
+              {
+                "currency": "ILS",
+                "received": "10000.00",
+                "spent": "960.00"
+              }
+            ]
+          }
+        ],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "11111111-1111-4111-8111-111111111111",
+        "name": "Nal Software"
+      }
+    ],
+    "total": {
+      "label": "businessNet",
+      "currencies": [
+        {
+          "currency": "ILS",
+          "net": "9040.00"
+        }
+      ],
+      "converted": "9040.00",
+      "inCurrencyOnly": null,
+      "sharedInFull": false,
+      "partial": true
+    },
+    "usual": null,
+    "owed": {
+      "currencies": [],
+      "overdueCount": 0,
+      "converted": "0.00"
+    },
+    "unavailable": [
+      {
+        "profileId": "33333333-3333-4333-8333-333333333333",
+        "name": "elMokhtbr",
+        "code": "SUBSCRIPTION_LAPSED"
+      },
+      {
+        "profileId": "44444444-4444-4444-8444-444444444444",
+        "name": "Barmajiyat",
+        "code": "INTERNAL"
+      }
+    ]
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "businessNet",
+        "figure": {
+          "minor": 904000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": false,
+        "breakdown": null,
+        "inCurrencyOnly": null
+      },
+      "usual": null,
+      "leavesOut": [
+        "elMokhtbr",
+        "Barmajiyat"
+      ],
+      "rows": [
+        {
+          "profileId": "11111111-1111-4111-8111-111111111111",
+          "name": "Nal Software",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 904000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "33333333-3333-4333-8333-333333333333",
+          "name": "elMokhtbr",
+          "kind": "net",
+          "shared": false,
+          "primary": [],
+          "extra": [],
+          "empty": false,
+          "unavailable": "locked",
+          "link": false
+        },
+        {
+          "profileId": "44444444-4444-4444-8444-444444444444",
+          "name": "Barmajiyat",
+          "kind": "net",
+          "shared": false,
+          "primary": [],
+          "extra": [],
+          "empty": false,
+          "unavailable": "failed",
+          "link": false
+        }
+      ],
+      "owed": {
+        "none": true,
+        "figure": null,
+        "breakdown": null,
+        "overdueCount": 0
+      },
+      "footnote": {
+        "sharedInFull": false,
+        "rateDate": "2026-10-23",
+        "omitted": []
+      }
+    },
+    "isFirstRun": false,
+    "verdictAllLocked": false
+  }
+}

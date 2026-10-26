@@ -1,0 +1,194 @@
+{
+  "name": "two-profiles",
+  "description": "One business and one personal profile, all in ILS, a finished month above the usual (AC1).",
+  "period": "month",
+  "readable": [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "verdict": {
+    "from": "2026-09-01",
+    "to": "2026-09-30",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": {
+      "date": "2026-10-23",
+      "source": "live"
+    },
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "10000.00",
+            "spent": "960.00",
+            "net": "9040.00"
+          }
+        ],
+        "converted": {
+          "received": "10000.00",
+          "spent": "960.00",
+          "net": "9040.00"
+        },
+        "history": [
+          {
+            "month": "2026-09",
+            "currencies": [
+              {
+                "currency": "ILS",
+                "received": "10000.00",
+                "spent": "960.00"
+              }
+            ]
+          }
+        ],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "11111111-1111-4111-8111-111111111111",
+        "name": "Nal Software"
+      },
+      {
+        "kind": "PERSONAL",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "500.00",
+            "spent": "6350.00",
+            "net": "-5850.00"
+          }
+        ],
+        "converted": {
+          "received": "500.00",
+          "spent": "6350.00",
+          "net": "-5850.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "22222222-2222-4222-8222-222222222222",
+        "name": "Personal"
+      }
+    ],
+    "total": {
+      "label": "kept",
+      "currencies": [
+        {
+          "currency": "ILS",
+          "net": "3190.00"
+        }
+      ],
+      "converted": "3190.00",
+      "inCurrencyOnly": null,
+      "sharedInFull": false,
+      "partial": false
+    },
+    "usual": "2590.00",
+    "owed": {
+      "currencies": [
+        {
+          "currency": "ILS",
+          "outstanding": "11500.00",
+          "overdue": "3000.00"
+        }
+      ],
+      "overdueCount": 2,
+      "converted": "11500.00"
+    },
+    "unavailable": []
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "kept",
+        "figure": {
+          "minor": 319000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": false,
+        "breakdown": null,
+        "inCurrencyOnly": null
+      },
+      "usual": {
+        "direction": "above",
+        "delta": {
+          "minor": 60000,
+          "currency": "ILS",
+          "approximate": false
+        }
+      },
+      "leavesOut": [],
+      "rows": [
+        {
+          "profileId": "11111111-1111-4111-8111-111111111111",
+          "name": "Nal Software",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 904000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "22222222-2222-4222-8222-222222222222",
+          "name": "Personal",
+          "kind": "spent",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 635000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [
+            {
+              "kind": "cameIn",
+              "amount": {
+                "minor": 50000,
+                "currency": "ILS",
+                "approximate": false
+              }
+            }
+          ],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        }
+      ],
+      "owed": {
+        "none": false,
+        "figure": {
+          "minor": 1150000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "breakdown": null,
+        "overdueCount": 2
+      },
+      "footnote": {
+        "sharedInFull": false,
+        "rateDate": "2026-10-23",
+        "omitted": []
+      }
+    },
+    "isFirstRun": false,
+    "verdictAllLocked": false
+  }
+}

@@ -1,0 +1,312 @@
+{
+  "name": "five-profiles",
+  "description": "Five profiles in API order: a shared business, a losing business, an OWNER firm with an Arabic name, below the usual (AC2).",
+  "period": "month",
+  "readable": [
+    "11111111-1111-4111-8111-111111111111",
+    "33333333-3333-4333-8333-333333333333",
+    "44444444-4444-4444-8444-444444444444",
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "verdict": {
+    "from": "2026-09-01",
+    "to": "2026-09-30",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": {
+      "date": "2026-10-23",
+      "source": "live"
+    },
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "10000.00",
+            "spent": "960.00",
+            "net": "9040.00"
+          }
+        ],
+        "converted": {
+          "received": "10000.00",
+          "spent": "960.00",
+          "net": "9040.00"
+        },
+        "history": [
+          {
+            "month": "2026-09",
+            "currencies": [
+              {
+                "currency": "ILS",
+                "received": "10000.00",
+                "spent": "960.00"
+              }
+            ]
+          }
+        ],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "11111111-1111-4111-8111-111111111111",
+        "name": "Nal Software"
+      },
+      {
+        "kind": "BUSINESS",
+        "shared": true,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "2500.00",
+            "spent": "650.00",
+            "net": "1850.00"
+          }
+        ],
+        "converted": {
+          "received": "2500.00",
+          "spent": "650.00",
+          "net": "1850.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "33333333-3333-4333-8333-333333333333",
+        "name": "elMokhtbr"
+      },
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "400.00",
+            "spent": "3500.00",
+            "net": "-3100.00"
+          }
+        ],
+        "converted": {
+          "received": "400.00",
+          "spent": "3500.00",
+          "net": "-3100.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "44444444-4444-4444-8444-444444444444",
+        "name": "Barmajiyat"
+      },
+      {
+        "kind": "FIRM",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "7000.00",
+            "spent": "1200.00",
+            "net": "5800.00"
+          }
+        ],
+        "converted": {
+          "received": "7000.00",
+          "spent": "1200.00",
+          "net": "5800.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "55555555-5555-4555-8555-555555555555",
+        "name": "مكتب صادر للمحاماة والاستشارات"
+      },
+      {
+        "kind": "PERSONAL",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "500.00",
+            "spent": "6350.00",
+            "net": "-5850.00"
+          }
+        ],
+        "converted": {
+          "received": "500.00",
+          "spent": "6350.00",
+          "net": "-5850.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "22222222-2222-4222-8222-222222222222",
+        "name": "Personal"
+      }
+    ],
+    "total": {
+      "label": "kept",
+      "currencies": [
+        {
+          "currency": "ILS",
+          "net": "7740.00"
+        }
+      ],
+      "converted": "7740.00",
+      "inCurrencyOnly": null,
+      "sharedInFull": true,
+      "partial": false
+    },
+    "usual": "9100.00",
+    "owed": {
+      "currencies": [],
+      "overdueCount": 0,
+      "converted": "0.00"
+    },
+    "unavailable": []
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "kept",
+        "figure": {
+          "minor": 774000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": false,
+        "breakdown": null,
+        "inCurrencyOnly": null
+      },
+      "usual": {
+        "direction": "below",
+        "delta": {
+          "minor": 136000,
+          "currency": "ILS",
+          "approximate": false
+        }
+      },
+      "leavesOut": [],
+      "rows": [
+        {
+          "profileId": "11111111-1111-4111-8111-111111111111",
+          "name": "Nal Software",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 904000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "33333333-3333-4333-8333-333333333333",
+          "name": "elMokhtbr",
+          "kind": "net",
+          "shared": true,
+          "primary": [
+            {
+              "minor": 185000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "44444444-4444-4444-8444-444444444444",
+          "name": "Barmajiyat",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": -310000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "55555555-5555-4555-8555-555555555555",
+          "name": "مكتب صادر للمحاماة والاستشارات",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 580000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": false
+        },
+        {
+          "profileId": "22222222-2222-4222-8222-222222222222",
+          "name": "Personal",
+          "kind": "spent",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 635000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [
+            {
+              "kind": "cameIn",
+              "amount": {
+                "minor": 50000,
+                "currency": "ILS",
+                "approximate": false
+              }
+            }
+          ],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        }
+      ],
+      "owed": {
+        "none": true,
+        "figure": null,
+        "breakdown": null,
+        "overdueCount": 0
+      },
+      "footnote": {
+        "sharedInFull": true,
+        "rateDate": "2026-10-23",
+        "omitted": []
+      }
+    },
+    "isFirstRun": false,
+    "verdictAllLocked": false
+  }
+}

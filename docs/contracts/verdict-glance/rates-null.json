@@ -1,0 +1,200 @@
+{
+  "name": "rates-null",
+  "description": "No ECB rates: every converted figure is null, the hero is \"in ILS only\", the row stacks its currencies, owed lists each one.",
+  "period": "month",
+  "readable": [
+    "66666666-6666-4666-8666-666666666666",
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "verdict": {
+    "from": "2026-09-01",
+    "to": "2026-09-30",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": null,
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "USD",
+            "received": "3000.00",
+            "spent": "0.00",
+            "net": "3000.00"
+          },
+          {
+            "currency": "ILS",
+            "received": "0.00",
+            "spent": "900.00",
+            "net": "-900.00"
+          }
+        ],
+        "converted": null,
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "66666666-6666-4666-8666-666666666666",
+        "name": "US Consulting"
+      },
+      {
+        "kind": "PERSONAL",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "500.00",
+            "spent": "6350.00",
+            "net": "-5850.00"
+          }
+        ],
+        "converted": null,
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "22222222-2222-4222-8222-222222222222",
+        "name": "Personal"
+      }
+    ],
+    "total": {
+      "label": "kept",
+      "currencies": [
+        {
+          "currency": "USD",
+          "net": "3000.00"
+        },
+        {
+          "currency": "ILS",
+          "net": "-6750.00"
+        }
+      ],
+      "converted": null,
+      "inCurrencyOnly": "ILS",
+      "sharedInFull": false,
+      "partial": false
+    },
+    "usual": null,
+    "owed": {
+      "currencies": [
+        {
+          "currency": "USD",
+          "outstanding": "1000.00",
+          "overdue": "0.00"
+        },
+        {
+          "currency": "ILS",
+          "outstanding": "2000.00",
+          "overdue": "2000.00"
+        }
+      ],
+      "overdueCount": 1,
+      "converted": null
+    },
+    "unavailable": []
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "kept",
+        "figure": {
+          "minor": -675000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": true,
+        "breakdown": null,
+        "inCurrencyOnly": "ILS"
+      },
+      "usual": null,
+      "leavesOut": [],
+      "rows": [
+        {
+          "profileId": "66666666-6666-4666-8666-666666666666",
+          "name": "US Consulting",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 300000,
+              "currency": "USD",
+              "approximate": false
+            }
+          ],
+          "extra": [
+            {
+              "kind": "more",
+              "amount": {
+                "minor": -90000,
+                "currency": "ILS",
+                "approximate": false
+              }
+            }
+          ],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "22222222-2222-4222-8222-222222222222",
+          "name": "Personal",
+          "kind": "spent",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 635000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [
+            {
+              "kind": "cameIn",
+              "amount": {
+                "minor": 50000,
+                "currency": "ILS",
+                "approximate": false
+              }
+            }
+          ],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        }
+      ],
+      "owed": {
+        "none": false,
+        "figure": {
+          "minor": 100000,
+          "currency": "USD",
+          "approximate": false
+        },
+        "breakdown": [
+          {
+            "minor": 100000,
+            "currency": "USD",
+            "approximate": false
+          },
+          {
+            "minor": 200000,
+            "currency": "ILS",
+            "approximate": false
+          }
+        ],
+        "overdueCount": 1
+      },
+      "footnote": {
+        "sharedInFull": false,
+        "rateDate": null,
+        "omitted": []
+      }
+    },
+    "isFirstRun": false,
+    "verdictAllLocked": false
+  }
+}

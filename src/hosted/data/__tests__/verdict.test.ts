@@ -1,4 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { CASES, type contractOf } from '../../../../scripts/verdict-glance-fixtures';
 import type { HostedProfile, Me, Verdict } from '../../api/client';
 import { allLocked, glanceOf, glanceShellProfile, isFirstRun, outsideProfiles, verdictAllLocked, type GlanceInput } from '../verdict';
 
@@ -231,3 +233,25 @@ describe('verdictAllLocked (review)', () => {
   });
 });
 
+
+/**
+ * MUT-449 D5: the shared verdict-glance contract (docs/contracts/verdict-glance). The phone asserts its Dart twin of
+ * glanceOf against the same files, so a change here must re-write the contract on purpose
+ * (`npx tsx scripts/verdict-glance-fixtures.ts`) and re-sync the phone's pinned copy.
+ */
+describe('glanceOf: the shared verdict-glance contract (MUT-449)', () => {
+  const dir = 'docs/contracts/verdict-glance';
+  const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+
+  it('has a file for every case the generator defines, and nothing else', () => {
+    expect(files).toEqual(CASES.map((c) => `${c.name}.json`).sort());
+  });
+
+  it.each(files)('%s: glanceOf, isFirstRun and verdictAllLocked match the contract', (file) => {
+    const contract = JSON.parse(readFileSync(`${dir}/${file}`, 'utf8')) as ReturnType<typeof contractOf>;
+    const glance = glanceOf(contract.verdict, { period: contract.period, readable: new Set(contract.readable) });
+    expect(glance).toEqual(contract.expected.glance);
+    expect(isFirstRun(contract.verdict)).toBe(contract.expected.isFirstRun);
+    expect(verdictAllLocked(contract.verdict)).toBe(contract.expected.verdictAllLocked);
+  });
+});

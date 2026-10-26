@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — The verdict-glance contract, shared with the phone (MUT-449, ADR-207)
+
+**Why:** the phone's Reports (MUT-449, `mutaba3a-flutter`) shapes the same verdict in Dart. Without a shared test, the two shapings could quietly disagree on a ≈ figure or a "Leaves out" line (MUT-449 eng review D5).
+
+### Added
+- `docs/contracts/verdict-glance/*.json`: eight `GET /v1/summaries/verdict` answers, each with the Glance it must make. The cases are two profiles, five profiles, converted multi-currency, rates null, partial-unavailable, a running month, all-locked, and first-run.
+- `scripts/verdict-glance-fixtures.ts`: writes the cases from the portal's `glanceOf`. `--check` fails on a stale file, and it prints the sha256 that the phone's copy pins.
+- `verdict.test.ts`: `glanceOf`, `isFirstRun` and `verdictAllLocked` are asserted against every contract file.
+
+### Changed
+- `docs/operations/before-release.md`: the API with MUT-447 goes live before any phone build with Reports.
+
+---
+
 ## [Unreleased] - 2026-10-26 — Release prep for web 0.3.0: notes, and the privacy policy names the region (MUT-382)
 
 ### Changed

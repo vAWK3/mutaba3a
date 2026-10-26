@@ -5521,3 +5521,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:** new session-only routes (two paths to drift); owner-only gate with a new `/v1/me` field (settle has no such check); any row on the profile (opens a disconnected firm's Malafat ledger); branching Undo's message on the profile's writer (wrong on a disconnected firm).
 
 **Amendment (qa-reconcile, 2026-10-26, Basel):** decision 2 is **owner-only**. A session corrects money only on a profile the person owns (`ownsProfile`: its creator or a co-owner), checked before any lookup; anyone else, a firm's members and a disconnected Malafat firm's included, gets 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` (`notOwner()`, now shared from `personal-profile.ts` with the profile routes). `/v1/me` stays truthful without a new field: a person may correct exactly where `owned && access.payments === 'read-write'`, which is the portal's gate. Also from the review: a person's reversal is refused (404) when the capture paid anything but person-recorded entries, so it never reopens an installment Malafat's key applied it to; a person's credit `effectiveDate` follows `pastMoneyDate`; the new IncomeResponse fields are optional (pre-1.77.0 replays); the portal starts a new attempt after a 409 and Cancel reports a partial cancel. Override log: replaces decision 2's "anyone whose session holds `payments:write`"; reason: a firm's staff could otherwise reverse any capture through the API.
+
+## ADR-207: The Portal and the Phone Shape the Verdict From One Contract (MUT-449)
+
+**Status:** Accepted (2026-10-26, MUT-449; epic MUT-446). The phone-side plan, eng review D1–D5 and design review PD1–PD16 are in `~/.gstack/projects/vAWK3-mutaba3a/mut-449-phone-glance-plan.md` and in `mutaba3a-flutter` `.claude/designs/mut-449-reports-glance.md`.
+
+**Context:** ADR-204 keeps every money rule on the server. Each client still shapes the verdict for display: it picks the figure each line shows, decides when a figure is ≈, when to show the usual, the "Leaves out" line, and First Run. The portal does this in TypeScript (`src/hosted/data/verdict.ts`, ADR-205), and the phone does it in Dart (`lib/domain/services/glance.dart`). The two can't share code across languages.
+
+**Decision:**
+1. **One contract:** `docs/contracts/verdict-glance/*.json` holds verdict answers, each with the Glance it must make. `scripts/verdict-glance-fixtures.ts` writes the files from the portal's `glanceOf`. Cases are added there, never edited by hand.
+2. **Both sides assert it:** the portal's `verdict.test.ts` checks every file. The phone copies the folder into `test/fixtures/verdict_glance/` with `tool/sync_verdict_fixtures.sh`, pins the digest in `SOURCE.sha256`, and its `glance_test.dart` checks its Dart `glanceOf` against every case. This is the Sentry scrub contract's vendored-copy pattern (ADR-091).
+3. **The phone reads tolerantly:** an unknown kind, label, code or currency maps to a safe meaning or drops only its own block. So a later server enum needs no minimum phone build (the MUT-436 lesson).
+4. **Staff only is only a real NOT_FOUND:** an older server without the route also answers NOT_FOUND, and the phone's API client marks that `routeMissing`. The phone shows it as an error, never as "you own nothing".
+
+**Consequences:**
+- Changing the Glance's shaping is a two-repo change: re-write the contract here, re-sync the phone, and fix whichever side then fails.
+- Formatting stays each client's own: the portal uses `Intl` whole-unit currency formatting, and the phone puts the symbol first in Latin digits. The contract pins the numbers, not the strings.
+- Release order: the API with MUT-447 goes live before a phone build with Reports (`docs/operations/before-release.md`). The portal needs no step (ADR-205).
+
+**Alternatives considered:**
+- A one-time copy of the portal's `verdictBody` builder: single-currency, and it can't detect drift.
+- Phone-only fixtures, with parity left to one live QA flow (Basel chose D5 A).

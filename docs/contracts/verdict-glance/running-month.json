@@ -1,0 +1,213 @@
+{
+  "name": "running-month",
+  "description": "The month in progress (usual hidden though sent), an income-only business, a profile with nothing, an omitted retired currency, a negative kept.",
+  "period": "month",
+  "readable": [
+    "77777777-7777-4777-8777-777777777777",
+    "88888888-8888-4888-8888-888888888888",
+    "22222222-2222-4222-8222-222222222222"
+  ],
+  "verdict": {
+    "from": "2026-10-01",
+    "to": "2026-10-31",
+    "asOf": "2026-10-26",
+    "base": "ILS",
+    "rates": {
+      "date": "2026-10-23",
+      "source": "live"
+    },
+    "profiles": [
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "1200.00",
+            "spent": "0.00",
+            "net": "1200.00"
+          }
+        ],
+        "converted": {
+          "received": "1200.00",
+          "spent": "0.00",
+          "net": "1200.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [
+          "KWD"
+        ],
+        "profileId": "77777777-7777-4777-8777-777777777777",
+        "name": "Side gig"
+      },
+      {
+        "kind": "BUSINESS",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "0.00",
+            "spent": "0.00",
+            "net": "0.00"
+          }
+        ],
+        "converted": {
+          "received": "0.00",
+          "spent": "0.00",
+          "net": "0.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "88888888-8888-4888-8888-888888888888",
+        "name": "Quiet shop"
+      },
+      {
+        "kind": "PERSONAL",
+        "shared": false,
+        "currencies": [
+          {
+            "currency": "ILS",
+            "received": "500.00",
+            "spent": "6350.00",
+            "net": "-5850.00"
+          }
+        ],
+        "converted": {
+          "received": "500.00",
+          "spent": "6350.00",
+          "net": "-5850.00"
+        },
+        "history": [],
+        "owed": {
+          "currencies": [],
+          "overdueCount": 0
+        },
+        "omittedCurrencies": [],
+        "profileId": "22222222-2222-4222-8222-222222222222",
+        "name": "Personal"
+      }
+    ],
+    "total": {
+      "label": "kept",
+      "currencies": [
+        {
+          "currency": "ILS",
+          "net": "-4650.00"
+        }
+      ],
+      "converted": "-4650.00",
+      "inCurrencyOnly": null,
+      "sharedInFull": false,
+      "partial": false
+    },
+    "usual": "2000.00",
+    "owed": {
+      "currencies": [],
+      "overdueCount": 0,
+      "converted": "0.00"
+    },
+    "unavailable": []
+  },
+  "expected": {
+    "glance": {
+      "hero": {
+        "label": "kept",
+        "figure": {
+          "minor": -465000,
+          "currency": "ILS",
+          "approximate": false
+        },
+        "negative": true,
+        "breakdown": null,
+        "inCurrencyOnly": null
+      },
+      "usual": null,
+      "leavesOut": [],
+      "rows": [
+        {
+          "profileId": "77777777-7777-4777-8777-777777777777",
+          "name": "Side gig",
+          "kind": "incomeOnly",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 120000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "88888888-8888-4888-8888-888888888888",
+          "name": "Quiet shop",
+          "kind": "net",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 0,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [],
+          "empty": true,
+          "unavailable": null,
+          "link": true
+        },
+        {
+          "profileId": "22222222-2222-4222-8222-222222222222",
+          "name": "Personal",
+          "kind": "spent",
+          "shared": false,
+          "primary": [
+            {
+              "minor": 635000,
+              "currency": "ILS",
+              "approximate": false
+            }
+          ],
+          "extra": [
+            {
+              "kind": "cameIn",
+              "amount": {
+                "minor": 50000,
+                "currency": "ILS",
+                "approximate": false
+              }
+            }
+          ],
+          "empty": false,
+          "unavailable": null,
+          "link": true
+        }
+      ],
+      "owed": {
+        "none": true,
+        "figure": null,
+        "breakdown": null,
+        "overdueCount": 0
+      },
+      "footnote": {
+        "sharedInFull": false,
+        "rateDate": "2026-10-23",
+        "omitted": [
+          "KWD"
+        ]
+      }
+    },
+    "isFirstRun": false,
+    "verdictAllLocked": false
+  }
+}

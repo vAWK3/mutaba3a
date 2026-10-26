@@ -3949,6 +3949,15 @@ The store contracts and the rule/read-tool tests were written first and watched 
 | `src/hosted/local/__tests__/createLocalApp.test.ts` | +1 | signed out the verdict answers with the local profile owned; two reads identical (no posting locally, D10) |
 | `src/hosted/local/__tests__/fx-outside-lock.test.ts` | +1 | a save never waits for a verdict whose FX fetch is stuck (fails without the fix) |
 
+## MUT-449 — The verdict-glance contract (2026-10-26, ADR-207)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `src/hosted/data/__tests__/verdict.test.ts` | +9 | Every file in `docs/contracts/verdict-glance` matches `glanceOf`, `isFirstRun` and `verdictAllLocked`, and there is one file per generator case. Drift was checked on purpose: editing one expected amount fails that case, and `--check` reports the file as stale. |
+| `scripts/verdict-glance-fixtures.ts --check` | 8 files | The contract on disk is what `glanceOf` makes now. |
+
+The phone side (`mutaba3a-flutter`) has `glance_test.dart` (the same 8 cases, the sha256 pin, C9 tolerance, outsideProfiles and period maths), plus the verdict model, repository, store, controller and screen tests and the `ios.reports.*` release-QA flows.
+
 ## MUT-448 — Reports Glance (2026-10-26, ADR-205)
 
 | Test | Cases | What it proves |
