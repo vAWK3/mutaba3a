@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — DESIGN.md for the portal (MUT-417)
+
+**Why:** the phone app has a DESIGN.md that says which component to use for what; the portal had none, so every design review worked the rules out again from the code (MUT-115 pinned a component map by hand, DR10).
+
+### Added
+- `DESIGN.md` at the repo root: surface mode, colour roles (pointing at `mutaba3a.tokens.json` and `theme.css`, no new values), the type scale, drawers and their footers, the banner slot, toasts, the in-place destructive confirm (MUT-115 DR7), list rows, the "or" divider, icons, and the RTL and 375 px rules, each with its component and file path. It covers the portal and the website; the local web app is retired (MUT-445).
+- TD-265: the two portal deletes still on `window.confirm` (`ExpenseDrawer`, `ConversionDrawer`).
+
+### Changed
+- `CLAUDE.md`: the UI-work rule points at `DESIGN.md`. `COMPONENT_REGISTRY.md`'s Quick Lookup does too.
+
 ## [Unreleased] - 2026-10-27 — MUT-290 and MUT-292 closed as won't do
 
 **Why:** MUT-445 (ADR-203) already retired the free web app, so MUT-292 has nothing left to do. Basel dropped MUT-290: nothing moves a signed-out portal's records into an account; people use Download my records and retype.

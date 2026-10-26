@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-265: Two portal deletes still ask with `window.confirm`
+**Status**: Open
+**Ticket**: MUT-417 (follow-up)
+**Added**: 2026-10-27
+**Priority**: Low
+**Impact**: `ExpenseDrawer.tsx` (Delete asks a bare "Delete") and `ConversionDrawer.tsx` (Delete asks `hosted.conversions.drawer.deleteConfirm`) use the browser's dialog. It can't be styled, isn't in the reader's language chrome, and goes against DESIGN.md's destructive-confirm rule (MUT-115 DR7). The expense one also doesn't say what will be deleted.
+**Fix**: turn the footer's Delete into the in-place confirm (`.hp-confirm`, as in `GroupDrawer.tsx`): a sentence naming the record and its amount, Cancel focused, Delete in `variant="danger"`, Escape cancels first. Add a QA spec for each.
+
 ### TD-264: The Reports verdict aggregates every included profile in memory on each request
 **Status**: Open
 **Ticket**: MUT-447
