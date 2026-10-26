@@ -67,9 +67,10 @@ async function boot(): Promise<LocalBackend> {
   let persistRequested = false;
 
   async function send(request: Request): Promise<Response> {
-    // Review D2: reference rates read no records, so their network fetch runs here, before the cross-tab lock.
-    // Inside it the route then reads the warm cache (or the failure backoff) and never waits on the network.
-    if (isFxRatesRead(request)) await fxRates.get().catch(() => undefined);
+    // Review D2: a reference-rates fetch reads no records, so it runs here, before the cross-tab lock. Inside it the
+    // route then reads the warm cache (or the failure backoff) and never waits on the network. MUT-447: the Reports
+    // verdict converts with the same rates, so it is warmed the same way.
+    if (readsFxRates(request)) await fxRates.get().catch(() => undefined);
     const authorised = new Request(request, { headers: withBearer(request.headers, session.token) });
     const response = await transport(authorised);
     if (!persistRequested && isWrite(request.method) && response.ok) {
@@ -213,12 +214,12 @@ function withBearer(headers: Headers, token: string): Headers {
   return next;
 }
 
-function isFxRatesRead(request: Request): boolean {
-  return request.method === 'GET' && new URL(request.url).pathname === FX_RATES_PATH;
+function readsFxRates(request: Request): boolean {
+  return request.method === 'GET' && FX_RATE_READERS.has(new URL(request.url).pathname);
 }
 
-/** The local app's own reference-rates route, the one `send` warms outside the lock. */
-const FX_RATES_PATH = '/v1/fx-rates';
+/** The local routes that read reference rates, the ones `send` warms outside the lock. */
+const FX_RATE_READERS: ReadonlySet<string> = new Set(['/v1/fx-rates', '/v1/summaries/verdict']);
 
 function isWrite(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';

@@ -29,6 +29,36 @@ describe('createLocalApp + mintLocalSession', () => {
     expect(body.profiles).toHaveLength(1); // the one personal profile users.create wrote
   });
 
+  it('MUT-447: answers the Reports verdict signed out, with no profile header, the local profile owned', async () => {
+    const store = new MemoryLedgerStore();
+    const now = () => new Date('2026-10-20T09:00:00.000Z');
+    const { token } = await mintLocalSession(store, now, 'ar');
+    const app = createLocalApp({ store, now });
+    const auth = { Authorization: `Bearer ${token}` };
+    const me = (await (await app.fetch(new Request('http://local/v1/me', { headers: auth }))).json()) as { profiles: Array<{ id: string }> };
+    const profileId = me.profiles[0]!.id;
+    const saved = await app.fetch(
+      new Request('http://local/v1/expenses', {
+        method: 'POST',
+        headers: { ...auth, 'Content-Type': 'application/json', 'X-Mutaba3a-Profile': profileId, 'Idempotency-Key': 'verdict-local-1' },
+        body: JSON.stringify({ occurredOn: '2026-10-05', amount: '12.00', currency: 'ILS', title: 'Coffee' }),
+      }),
+    );
+    expect(saved.status).toBe(201);
+
+    const read = async () => {
+      const res = await app.fetch(new Request('http://local/v1/summaries/verdict', { headers: auth }));
+      expect(res.status).toBe(200);
+      return (await res.json()) as { profiles: Array<{ profileId: string; kind: string; currencies: unknown[] }>; total: { label: string; converted: string | null }; owed: unknown; rates: unknown };
+    };
+    const first = await read();
+    expect(first.profiles).toEqual([expect.objectContaining({ profileId, kind: 'PERSONAL', currencies: [{ currency: 'ILS', received: '0.00', spent: '12.00', net: '-12.00' }] })]);
+    expect(first.total).toMatchObject({ label: 'kept', converted: '-12.00' });
+    expect(first.rates).toBeNull(); // no rate source given: per-currency figures still answer (D4)
+    // X7 (D10): local profiles hold no agreements, so the verdict's catch-up posting writes nothing; a second read is identical.
+    expect(await read()).toEqual(first);
+  });
+
   it('holds a session to the rate limit it is given (MUT-291 R1)', async () => {
     const store = new MemoryLedgerStore();
     const now = () => new Date('2026-01-01T00:00:00.000Z');
