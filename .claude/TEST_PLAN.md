@@ -3957,3 +3957,9 @@ The store contracts and the rule/read-tool tests were written first and watched 
 | `src/hosted/data/__tests__/filters.test.ts`, `api/__tests__/client.test.ts`, `analytics/__tests__/reportViewed.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` | +5 | `parseGlance` drops an unsafe `back`. The verdict call carries no profile header. `layer` is glance/profile. Taxonomy 2.3.0 is pinned. |
 | `qa/specs/portal/reports-glance.spec.ts` | 9 | Release-QA: two-profiles, five-profiles, arabic, local-mode, negative-month, row-drilldown, desktop-layout, first-run, owed-zero. `reports.first-run`, `reports.signed-out` and `shell.island` now reach a profile's Reports through the Glance. |
 
+Review fixes (qa-reconcile, 2026-10-26):
+- `verdict.test.ts`: +4 (`outsideProfiles`, `verdictAllLocked`, usual "about" under one unit, ≈ gap).
+- `reportFormat.test.ts`: +1 (`formatReportDay` en and Levantine ar).
+- `Glance.test.tsx`: +5 (an empty past period keeps the controls; a failed period keeps the controls; a staffed firm listed outside the total; staff-only 404 shows its firms; all counted locked → LockedScreen).
+- QA: `portal.reports-glance.staff-firm`.
+

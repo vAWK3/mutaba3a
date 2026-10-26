@@ -5485,6 +5485,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 3. **Figures as sent:** the portal does no conversion, summing or median. `data/verdict.ts` only picks which figure a line shows. ≈ appears only when other currencies were converted (DD8). Usual appears only on finished months, because the server sends it for the month in progress too (DD1; the phone, MUT-449, needs the same rule).
 4. **Freshness (D9):** the query is under no profile's keys, so it refetches on every visit (staleTime 10 s) instead of being invalidated by saves. The default month asks with no dates, and `asOf` is "today" (D4).
 5. **All locked (D7):** decided from `/v1/me` (`billingGateOf`), with no request. A late 402 shows the same LockedScreen.
+7. **Profiles no total counts (review, Basel):** firms the person staffs are listed under the ledger as link-only rows ("Not in this total") into their own Reports, and a 404 verdict (nothing counted) shows only those rows. The corner icon opens the Glance for everyone, and no profile's Reports becomes unreachable.
 6. **Layout (DD7):** one centred 560px column at every width until MUT-451 adds Explore's column. This replaces the ticket's desktop side area.
 
 **Consequences:**
