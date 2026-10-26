@@ -89,5 +89,5 @@ in the row has run (the web release waits for it). ? = Basel must confirm before
 
 - `email`: the closing notice (`email/ports.ts:87`) and the passkey-added notice (`:92`) added. ✔
 - `usageAnalytics`: the website sends page address, referrer, campaign tags and device type (`src/lib/analytics/guard.ts:37-53`). ✔
-- `contact`, `hostedRequest`: info@mtb3a.com (B2). ⏳ Basel sets up the inbox before the web release.
+- `contact`, `hostedRequest`: info@mtb3a.com (B2). ✔ The mailbox exists, a Microsoft account (Basel, 2026-10-26).
 - Free apps: the policy no longer names them (plan #13). Basel, 2026-10-26: only iOS, Android and the web are supported, so `/download`, its installer redirects (old links land on `/`) and the free app's Mac/Windows download rows in Settings › About are removed. ✔
