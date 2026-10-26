@@ -41,6 +41,9 @@
 - `postingActorOf` attributes posting on a request with no selected profile to SYSTEM.
 - The local app warms reference rates before the lock for the verdict too; `routes/summaries` joins `LOCAL_SERVER_ALLOWLIST`.
 
+### Fixed
+- `server/src/expenses/__tests__/presets.test.ts` no longer reads `src/db/defaultExpenseCategories.ts`, which MUT-445 deleted with the free app (main's server suite failed on it); the server's presets are now the only copy, so the offline-drift case is removed (Basel, 2026-10-26).
+
 ### Technical
 - Tests: `summaries/__tests__/verdict.test.ts` (17), `months.test.ts`, `__tests__/routes-verdict.test.ts` (11), a LOCKED case in `billing-gate-routes.test.ts`, `src/hosted/data/__tests__/reportsMonthParity.test.ts`, two local-mode cases. TD-264.
 
