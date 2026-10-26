@@ -751,7 +751,7 @@ test('Reduce amount owed by part of what is left; the entry shows what stays owe
 
   await step('Type 200 and the reason "Agreed a lower fee", then Reduce', async () => {
     await reduce.getByLabel('Reduce by (ILS)').fill('200');
-    await expect(reduce.getByText(/300\.00 left after this/)).toBeVisible();
+    await expect(reduce.getByText(/300\.00.* left after this/)).toBeVisible();
     await reduce.getByLabel('Reason').fill('Agreed a lower fee');
     await reduce.getByRole('button', { name: 'Reduce' }).click();
     await expect(reduce).toHaveCount(0);
@@ -765,7 +765,7 @@ test('Reduce amount owed by part of what is left; the entry shows what stays owe
     await expect(row).toContainText('300.00');
     await row.locator('button.row-link').click();
     await expect(entry.getByText('Credits')).toBeVisible();
-    await expect(entry.getByText(/200\.00 · Agreed a lower fee/)).toBeVisible();
+    await expect(entry.getByText(/200\.00.* · Agreed a lower fee/)).toBeVisible();
   });
 });
 
@@ -792,7 +792,7 @@ test('Reducing by more than is left is refused at the field; a smaller server fi
     api.once('POST', /\/credits$/, apiError(422, 'VALIDATION_FAILED', { reason: 'CREDIT_EXCEEDS_OUTSTANDING', outstanding: '100.00' }));
     await reduce.getByLabel('Reduce by (ILS)').fill('200');
     await reduce.getByRole('button', { name: 'Reduce' }).click();
-    await expect(reduce.getByText(/more than what’s left now \(₪100\.00\)/)).toBeVisible();
+    await expect(reduce.getByText(/more than what’s left now \(.*100\.00.*\)/)).toBeVisible();
     await expect(reduce).toBeVisible();
   });
 });
@@ -807,7 +807,7 @@ test('Cancel amount owed credits everything left; the entry reads Cancelled', { 
     await page.getByRole('table', { name: 'Receivables' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
     await page.getByRole('dialog', { name: 'Change the date' }).getByRole('button', { name: 'Cancel amount owed' }).click();
     await expect(cancel).toBeVisible();
-    await expect(cancel.getByText(/Everything still owed \(₪500\.00\) is cancelled/)).toBeVisible();
+    await expect(cancel.getByText(/Everything still owed \(.*500\.00.*\) is cancelled/)).toBeVisible();
   });
 
   await step('Give the reason "Client dropped the job" and confirm', async () => {

@@ -127,8 +127,8 @@ export function CorrectionPane({ mode, profile, record, onBack, onDone, onReread
       }
     >
       <form id={FORM_ID} onSubmit={onSubmit} noValidate>
-        {payment && <p className="hp-settle-note">{t('hosted.correct.reverseExplain')}</p>}
-        {mode === 'cancel' && owed && <p className="hp-settle-note">{t('hosted.correct.cancelExplain', { amount: money(owed.outstanding) })}</p>}
+        {payment && <p className="hp-settle-note hp-correct-explain">{t('hosted.correct.reverseExplain')}</p>}
+        {mode === 'cancel' && owed && <p className="hp-settle-note hp-correct-explain">{t('hosted.correct.cancelExplain', { amount: money(owed.outstanding) })}</p>}
         {mode === 'reduce' && owed && (
           <div className="form-group">
             <label className="form-label" htmlFor="hosted-correction-amount">
