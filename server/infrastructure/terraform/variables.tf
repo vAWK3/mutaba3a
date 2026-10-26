@@ -91,7 +91,7 @@ variable "self_signup_enabled" {
 }
 
 variable "mail_reply_to" {
-  description = "MUT-359 (D6): where replies to MTB3A mail go (MAIL_REPLY_TO). Required with mailer = \"resend\". Today's only support address is on Malafat's domain; a mailbox on the apex is a follow-up."
+  description = "MUT-359 (D6): where replies to MTB3A mail go (MAIL_REPLY_TO). Required with mailer = \"resend\". MUT-382 (B2): info@mtb3a.com, the address the policy, the terms and the apps name."
   type        = string
   default     = null
 }
