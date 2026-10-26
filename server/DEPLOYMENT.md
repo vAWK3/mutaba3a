@@ -1392,7 +1392,7 @@ npm --prefix server run billing:trial-mail -- --url "$URL"             # send to
 | `OPERATOR_ALERT_EMAIL` | var `operator_alert_email` (`infrastructure/terraform/email.tf`) | The digest's recipient. Unset = no digest (boot warns). At most one mail per UTC hour, only when new signups wait |
 | Lists | `server/src/email/domains/{disposable,free-webmail,relay}.txt` | Shipped in the image. Refresh the disposable list: `npm --prefix server run email-domains:update -- --commit <sha>` (CC0, pinned commit), review, commit, release |
 
-**Deciding** (MUTABA3A_ADMIN_TOKEN in the environment, `--url` = the API):
+**Deciding** (`scripts/live-admin.sh` reads the admin token from Secret Manager with your gcloud login and points at config/hosts.json's portal origin; `--url` overrides it):
 ```bash
 npm --prefix server run signups:review                               # who waits, since when, and why (webmail, rdap-age-12d …)
 npm --prefix server run signups:review -- --approve rana@gmail.com   # opens it, starts the 14-day trial, mails "your account is ready"

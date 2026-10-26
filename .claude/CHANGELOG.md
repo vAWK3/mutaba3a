@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — `signups:review` gets the admin token from gcloud
+
+**Why:** `npm run signups:review` stopped at "MUTABA3A_ADMIN_TOKEN is not set" and defaulted to localhost, so every review meant fetching the secret by hand.
+
+### Changed
+- `server/scripts/live-admin.sh`: runs one `users.ts` command against the live API. It always reads `mutaba3a-api-admin-token` from Secret Manager (project from `GCP_PROJECT_ID` or the environment's tfvars, as the release does), keeps it in the child's environment only, and adds `--url` = config/hosts.json's portal origin unless one is given.
+- `signups:review` now calls it; the other `users.ts` scripts are unchanged. `server/DEPLOYMENT.md` says so.
+
 ## [Unreleased] - 2026-10-26 — The verdict-glance contract, shared with the phone (MUT-449, ADR-207)
 
 **Why:** the phone's Reports (MUT-449, `mutaba3a-flutter`) shapes the same verdict in Dart. Without a shared test, the two shapings could quietly disagree on a ≈ figure or a "Leaves out" line (MUT-449 eng review D5).
