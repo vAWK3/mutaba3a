@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_STORE_METHODS } from '../auth/store-guard.js';
-import { ADMIN, CLAUDE_CB, MCP_HEADERS, RESOURCE, VERIFIER, authorize, connect, form, harness, json, person, read, register, requestIdFrom, type Harness, type Loose, type Person } from './helpers/oauth-agent.js';
+import { ADMIN, CLAUDE_CB, MCP_HEADERS, RESOURCE, VERIFIER, authorize, connect, form, harness, json, person, read, register, requestIdFrom, rpc, tool, toolError, type Harness, type Loose, type Person } from './helpers/oauth-agent.js';
 
 /**
  * MUT-435: the MCP read tools, driven through the real /mcp with an OAuth token, so the agent store guard and the
@@ -8,28 +8,6 @@ import { ADMIN, CLAUDE_CB, MCP_HEADERS, RESOURCE, VERIFIER, authorize, connect, 
  */
 const READ_TOOLS = ['find_similar_expenses', 'list_categories', 'list_clients', 'list_inbox', 'list_profiles', 'list_vendors'];
 const SHOW_FIRST = 'Show the person what you found';
-let rpcId = 0;
-
-async function rpc(h: Harness, bearer: Record<string, string>, method: string, params: Record<string, unknown> = {}): Promise<Loose> {
-  const res = await h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }) });
-  expect(res.status).toBe(200);
-  return read(res);
-}
-
-/** A tool's structured result; fails the test on a tool error. */
-async function tool(h: Harness, bearer: Record<string, string>, name: string, args: Record<string, unknown> = {}): Promise<Loose> {
-  const { result } = await rpc(h, bearer, 'tools/call', { name, arguments: args });
-  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
-  return result.structuredContent;
-}
-
-/** A tool error's text. */
-async function toolError(h: Harness, bearer: Record<string, string>, name: string, args: Record<string, unknown> = {}): Promise<string> {
-  const { result } = await rpc(h, bearer, 'tools/call', { name, arguments: args });
-  expect(result.isError).toBe(true);
-  return (result.content as Array<{ text: string }>).map((c) => c.text).join('\n');
-}
-
 let keySeq = 0;
 const asPerson = (p: Person, profileId?: string) => ({ ...p.cookie, ...(profileId ? { 'x-mutaba3a-profile': profileId } : {}), 'idempotency-key': `mut435-test-key-${++keySeq}` });
 
@@ -67,10 +45,11 @@ async function setup() {
 }
 
 describe('tools/list (AC3)', () => {
-  it('offers the six read tools, each telling the agent to show the person what it found, with an output schema', async () => {
+  it('offers the six read tools (beside MUT-436’s write tools), each telling the agent to show the person what it found, with an output schema', async () => {
     const { h, bearer } = await setup();
     const { result } = await rpc(h, bearer, 'tools/list');
-    const tools = result.tools as Array<{ name: string; description: string; outputSchema?: unknown }>;
+    const all = result.tools as Array<{ name: string; description: string; outputSchema?: unknown }>;
+    const tools = all.filter((t) => READ_TOOLS.includes(t.name));
     expect(tools.map((t) => t.name).sort()).toEqual(READ_TOOLS);
     for (const t of tools) {
       expect(t.description, t.name).toContain(SHOW_FIRST);
@@ -78,7 +57,7 @@ describe('tools/list (AC3)', () => {
     }
   });
 
-  it('offers nothing to a grant without the read scope', async () => {
+  it('offers no read tool to a grant without the read scope', async () => {
     const h = harness();
     const p = await person(h);
     const clientId = await register(h);
@@ -88,9 +67,10 @@ describe('tools/list (AC3)', () => {
     const tokens = await read(await h.app.request('/oauth/token', form({ grant_type: 'authorization_code', client_id: clientId, code, code_verifier: VERIFIER, redirect_uri: CLAUDE_CB, resource: RESOURCE })));
     expect(tokens.scope).toBe('write');
     const bearer = { authorization: `Bearer ${tokens.access_token}` };
-    // No tool is registered, so the SDK has no tools capability to list: nothing is offered either way.
+    // MUT-436: a write-only grant gets the write tools and no read tool.
     const listed = await rpc(h, bearer, 'tools/list');
-    expect(listed.result?.tools ?? []).toEqual([]);
+    const names = ((listed.result?.tools ?? []) as Array<{ name: string }>).map((t) => t.name);
+    for (const name of READ_TOOLS) expect(names).not.toContain(name);
     const called = await rpc(h, bearer, 'tools/call', { name: 'list_profiles', arguments: {} });
     expect(called.error ?? called.result?.isError, JSON.stringify(called)).toBeTruthy();
     expect(called.result?.structuredContent).toBeUndefined();
@@ -378,11 +358,15 @@ describe('every tool that takes a profile refuses a stranger’s (review D3)', (
       list_clients: {},
       list_vendors: { q: 'a' },
       find_similar_expenses: { amount: '1.00', currency: 'ILS', date: '2026-10-20' },
+      start_receipt_upload: { target: { kind: 'expense', expenseId: '00000000-0000-4000-8000-000000000001' }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 100, idempotencyKey: 'sweep-key-0001' },
+      complete_receipt_upload: { receiptId: '00000000-0000-4000-8000-000000000002' },
     };
     for (const t of withProfile) {
       expect(minimal[t.name], `add ${t.name} to this sweep`).toBeDefined();
       expect(await toolError(h, bearer, t.name, { ...minimal[t.name], profileId: stranger.personalId }), t.name).toContain('Profile not found');
     }
+    // add_expense names its profile inside destination.
+    expect(await toolError(h, bearer, 'add_expense', { destination: { kind: 'profile', profileId: stranger.personalId }, amount: '1.00', currency: 'ILS', occurredOn: '2026-10-20', idempotencyKey: 'sweep-key-0003' })).toContain('Profile not found');
   });
 });
 

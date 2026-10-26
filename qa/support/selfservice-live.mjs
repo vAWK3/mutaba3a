@@ -28,6 +28,7 @@ const DB_NAME = `mutaba3a_qa_selfservice_${process.pid}`;
 const DATABASE_URL = `postgresql://mutaba3a:mutaba3a@localhost:54329/${DB_NAME}`;
 const DIST = path.join(ROOT, 'qa', '.state', 'selfservice-dist');
 const STATE = path.join(ROOT, 'qa', '.state', 'portal-selfservice.json');
+const ATTACHMENTS = path.join(ROOT, 'qa', '.state', 'selfservice-attachments');
 // Local QA-only values, not secrets: the API runs on loopback for the length of a QA run.
 const ADMIN_TOKEN = 'qa-portal-selfservice-admin-token-0123456789';
 const PEPPER = 'qa-portal-selfservice-session-pepper-0123456789';
@@ -100,6 +101,10 @@ async function main() {
       WEBAUTHN_ORIGINS: ORIGIN,
       // MUT-434: OAuth for MCP agents (connect.spec.ts), with PORTAL_ORIGIN above as the issuer.
       OAUTH_DERIVE_KEY: 'qa-portal-selfservice-oauth-derive-key-0123456789',
+      // MUT-436: receipt uploads from an agent (mcp.spec.ts) PUT to the API's own /dev/attachments (MUT-396's local
+      // driver, never in production); the folder goes with the env.
+      ATTACHMENTS_DRIVER: 'local',
+      ATTACHMENTS_DIR: ATTACHMENTS,
     },
   });
   const stop = (code = 0) => {
@@ -109,6 +114,7 @@ async function main() {
     setTimeout(() => {
       dropDatabase();
       rmSync(STATE, { force: true });
+      rmSync(ATTACHMENTS, { recursive: true, force: true });
       process.exit(code);
     }, 500);
   };

@@ -17042,7 +17042,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
             note: string | null;
-            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            captureSource: components["schemas"]["StoredCaptureSource"];
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -17051,6 +17051,8 @@ export interface components {
         };
         /** @enum {string} */
         InboxEntryKind: "income" | "expense";
+        /** @enum {string|null} */
+        StoredCaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | null;
         InboxCount: {
             count: number;
         };
@@ -17097,6 +17099,7 @@ export interface components {
              * @description Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.
              */
             createdByUserId: string | null;
+            captureSource: components["schemas"]["StoredCaptureSource"] & unknown;
             version: number;
             /** Format: date-time */
             createdAt: string;

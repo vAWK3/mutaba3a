@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { Hono } from 'hono';
 import { authenticateAgent, type AgentAuthOptions } from '../auth/agent-auth.js';
 import type { AppEnv } from '../auth/middleware.js';
-import { createMcpServer } from '../mcp/server.js';
+import { createMcpServer, type McpToolOptions } from '../mcp/server.js';
 import type { ErrorReporter } from '../observability/reporter.js';
 import type { LedgerStore } from '../repositories/ports.js';
 
@@ -13,6 +13,8 @@ export interface McpRouteOptions extends AgentAuthOptions {
   /** MUT-435: where a tool's unexpected failure goes (the agent only sees a retry message). */
   reporter: ErrorReporter;
   version: string;
+  /** MUT-436: what the write and receipt tools need (inbox switch, attachments, the receipts library). */
+  tools: McpToolOptions;
 }
 
 /**
@@ -53,6 +55,7 @@ export function mcpRoutes(options: McpRouteOptions): Hono<AppEnv> {
       now: c.get('now'),
       requestId: c.get('requestId'),
       version: options.version,
+      tools: options.tools,
     });
     // No sessionIdGenerator: stateless mode, a fresh server per request.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });

@@ -138,6 +138,7 @@ describe('POST /v1/expenses', () => {
       projectId: a.project.id,
       notes: 'Stamp duty',
       createdByUserId: p.userId,
+      captureSource: null, // MUT-436 (ADR-201): none sent, none kept
       version: 1,
       createdAt: '2026-10-20T09:00:00.000Z',
       updatedAt: '2026-10-20T09:00:00.000Z',

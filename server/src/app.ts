@@ -134,6 +134,8 @@ export interface AppDependencies {
   stripeWebhookIpLimiter?: RateLimiter;
   /** MUT-255: per-person budget for starting receipts-library uploads. Defaults to RECEIPT_UPLOAD_POLICY. */
   receiptUploadLimiter?: RateLimiter;
+  /** MUT-436 (review D3): MCP_INBOX_WRITES — agents may add to the inbox (off until the phone release decodes 'mcp'). */
+  mcpInboxWrites?: boolean;
   /**
    * MUT-389 (RECEIPTS_LIBRARY): mounts the receipts library and makes deleting an expense keep its READY receipts To
    * review. Absent or false = no /v1/receipts* routes, and a deleted expense takes its receipts with it (pre-MUT-255).
@@ -260,7 +262,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.74.0-mut434';
+export const API_VERSION = '1.75.0-mut436';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -414,6 +416,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
+  // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
+  const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
   // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
   if (deps.receiptsLibrary) {
@@ -422,7 +426,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       receiptRoutes(store, {
         storage: deps.attachments ?? null,
         urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
-        uploadLimiter: deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute),
+        uploadLimiter: receiptUploadLimiter,
       }),
     );
   }
@@ -496,7 +500,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
   app.route('/', oauthCleanupRoutes(deps.store));
-  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version }));
+  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
+    tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter } }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',

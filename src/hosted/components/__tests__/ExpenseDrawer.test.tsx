@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../Toast';
 import { ExpenseDrawer } from '../ExpenseDrawer';
 import en from '../../i18n/en.json';
+import ar from '../../i18n/ar.json';
 
 const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
 vi.mock('../../analytics/portalAnalytics', () => ({ trackPortal }));
@@ -540,3 +541,56 @@ describe('ExpenseDrawer (hosted)', () => {
     });
   });
 });
+
+describe('ExpenseDrawer: added by Claude (MUT-436 AC5)', () => {
+  const expenseFrom = (captureSource: string | null) => () =>
+    ok({
+      id: 'e1', occurredOn: '2026-09-01', amount: '45.90', currency: 'ILS', title: null, vendor: 'كارفور',
+      categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: 'u', captureSource, version: 1,
+      createdAt: '', updatedAt: '', receipts: [],
+    });
+  const routesWith = (captureSource: string | null) => ({
+    'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+    'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+    'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+    'GET /v1/expenses/e1': expenseFrom(captureSource),
+  });
+
+  it('marks an expense a person’s Claude added', async () => {
+    route(routesWith('mcp'));
+    renderDrawer({ mode: 'edit', expenseId: 'e1' });
+    expect(await screen.findByText(en.hosted.expenses.drawer.addedByClaude.replace('{claude}', '').trim(), { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Claude').tagName).toBe('BDI');
+  });
+
+  it('says it in Arabic too, with Claude kept left-to-right', async () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    route(routesWith('mcp'));
+    renderDrawer({ mode: 'edit', expenseId: 'e1' });
+    expect(await screen.findByText(ar.hosted.expenses.drawer.addedByClaude.replace('{claude}', '').trim(), { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Claude').tagName).toBe('BDI');
+  });
+
+  it('shows nothing for an expense from the phone or the portal', async () => {
+    for (const source of ['siri', null]) {
+      route(routesWith(source));
+      const { unmount } = renderDrawerUnmountable();
+      await screen.findByDisplayValue('45.90');
+      expect(screen.queryByText('Claude')).toBeNull();
+      unmount();
+    }
+  });
+});
+
+function renderDrawerUnmountable() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <HostedLanguageProvider>
+        <ToastProvider>
+          <ExpenseDrawer profileId="org-1" mode="edit" expenseId="e1" onClose={vi.fn()} />
+        </ToastProvider>
+      </HostedLanguageProvider>
+    </QueryClientProvider>,
+  );
+}

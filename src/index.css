@@ -2387,6 +2387,11 @@ div.input-with-prefix {
   gap: var(--space-3);
 }
 
+/* MUT-436 (AC5): "Added by Claude" above an expense's fields in its drawer. */
+.expense-drawer-source {
+  margin: 0 0 var(--space-3);
+}
+
 .drawer-footer-right {
   display: flex;
   gap: var(--space-3);

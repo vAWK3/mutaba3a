@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../../app.js';
+import type { AttachmentStorage } from '../../attachments/storage.js';
 import { s256Challenge } from '../../oauth/protocol.js';
 import type { ErrorContext, ErrorReporter } from '../../observability/reporter.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
@@ -39,7 +40,7 @@ export function recordingReporter() {
   return { reporter, messages, exceptions };
 }
 
-export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean; agentLimit?: number; agentPersonLimit?: number } = {}) {
+export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean; agentLimit?: number; agentPersonLimit?: number; mcpInboxWrites?: boolean; receiptsLibrary?: boolean; attachments?: AttachmentStorage } = {}) {
   const store = new MemoryLedgerStore();
   let now = T0;
   const { reporter, messages, exceptions } = recordingReporter();
@@ -55,6 +56,9 @@ export function harness(options: { oauth?: boolean; registerLimit?: number; toke
     reporter,
     jobToken: JOB_TOKEN,
     billingGate: options.billingGate ?? false,
+    ...(options.mcpInboxWrites ? { mcpInboxWrites: true } : {}),
+    ...(options.receiptsLibrary ? { receiptsLibrary: true } : {}),
+    ...(options.attachments ? { attachments: options.attachments } : {}),
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: false, trustedProxyHops: 1, portalOrigin: ORIGIN },
     oauth:
       options.oauth === false
@@ -125,3 +129,24 @@ export async function connect(h: Harness, p: Person) {
 export const initialize = (h: Harness, headers: Record<string, string>) =>
   h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...headers }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1' } } }) });
 
+let rpcId = 0;
+
+export async function rpc(h: Harness, bearer: Record<string, string>, method: string, params: Record<string, unknown> = {}): Promise<Loose> {
+  const res = await h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }) });
+  expect(res.status).toBe(200);
+  return read(res);
+}
+
+/** MCP JSON-RPC over the real /mcp. A tool's structured result; fails the test on a tool error. */
+export async function tool(h: Harness, bearer: Record<string, string>, name: string, args: Record<string, unknown> = {}): Promise<Loose> {
+  const { result } = await rpc(h, bearer, 'tools/call', { name, arguments: args });
+  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
+  return result.structuredContent;
+}
+
+/** A tool error's text. */
+export async function toolError(h: Harness, bearer: Record<string, string>, name: string, args: Record<string, unknown> = {}): Promise<string> {
+  const { result } = await rpc(h, bearer, 'tools/call', { name, arguments: args });
+  expect(result.isError).toBe(true);
+  return (result.content as Array<{ text: string }>).map((c) => c.text).join('\n');
+}

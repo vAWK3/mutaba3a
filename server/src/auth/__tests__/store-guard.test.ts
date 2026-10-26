@@ -215,16 +215,38 @@ describe('per-user feature flags (MUT-433)', () => {
 describe('the MCP agent guard (MUT-435)', () => {
   const guard = agentStoreGuard();
 
-  it('opens exactly the methods the read tools call, nothing else', () => {
+  it('opens exactly the methods the read, write and receipt tools call, nothing else (MUT-435/436)', () => {
     expect([...AGENT_STORE_METHODS].sort()).toEqual([
+      'audit.append',
+      'customers.getById',
       'customers.list',
+      'expenseCategories.getById',
       'expenseCategories.list',
+      'expenseReceipts.complete',
+      'expenseReceipts.completeOnExpense',
+      'expenseReceipts.countPendingSince',
+      'expenseReceipts.create',
+      'expenseReceipts.getById',
+      'expenseReceipts.listByExpense',
+      'expenseReceipts.setKey',
+      'expenses.create',
+      'expenses.getById',
       'expenses.list',
+      'idempotency.claim',
+      'idempotency.complete',
+      'idempotency.fail',
+      'inboxEntries.create',
       'inboxEntries.list',
       'memberships.find',
       'memberships.listByUser',
       'organizations.getById',
+      'projects.getById',
+      'userIdempotency.claim',
+      'userIdempotency.complete',
+      'userIdempotency.fail',
+      'vendors.resolve',
       'vendors.search',
+      'vendors.touch',
     ]);
   });
 

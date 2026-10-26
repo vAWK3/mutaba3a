@@ -2,12 +2,11 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { todayFor, validationError } from '../agreements/compose.js';
-import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
-import { verifyUploadedObject } from '../attachments/verify.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { completeExpenseReceipt, receiptAudit, startExpenseReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
 import { computeStreak, loggedAtOf } from '../expenses/streak.js';
@@ -70,7 +69,14 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
 
   function audit(c: Context<AppEnv>, action: string, entityType: 'expense' | 'expense_receipt', entityId: string, metadata?: JsonObject) {
     const auth = sessionAuth(c);
-    return store.audit.append({ organizationId: auth.organization.id, actorType: 'USER', actorId: auth.user.id, action, entityType, entityId, ...(metadata ? { metadata } : {}), requestId: c.get('requestId') });
+    return receiptAudit(store, { organizationId: auth.organization.id, userId: auth.user.id, requestId: c.get('requestId') })(action, entityType, entityId, metadata);
+  }
+
+  const receiptDeps: ReceiptDeps = { store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds };
+
+  function receiptActor(c: Context<AppEnv>): ReceiptActor {
+    const { organization, user } = sessionAuth(c);
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args) };
   }
 
   async function mustGet(organizationId: string, id: string): Promise<ExpenseRecord> {
@@ -276,21 +282,9 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       responses: { 201: { description: 'Upload started', content: { 'application/json': { schema: CreateReceiptUploadResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
-      const s = storage();
-      const { organization, user } = sessionAuth(c);
       const body = c.req.valid('json');
-      const now = c.get('now')();
-      const check = checkFile(body);
-      if (!check.ok) throw validationError(check.reason, `Upload refused: ${check.reason}`);
-      const expense = await mustGet(organization.id, c.req.valid('param').expenseId);
-      await assertRoomForReceipt(organization.id, expense.id);
-      const created = await store.expenseReceipts.create(
-        { organizationId: organization.id, expenseId: expense.id, filename: body.filename, mimeType: body.mimeType, sizeBytes: body.sizeBytes, receivedOn: todayFor(organization, now), uploadedByUserId: user.id, requestId: c.get('requestId') },
-        now,
-      );
-      const keyed = (await store.expenseReceipts.setKey(organization.id, created.id, receiptStorageKey(organization.id, created.id))) ?? created;
-      const upload = await s.signUpload(keyed.storageKey, { mimeType: body.mimeType, sizeBytes: body.sizeBytes, ttlSeconds: options.urlTtlSeconds, now });
-      return c.json({ receipt: serializeExpenseReceipt(keyed), upload: { url: upload.url, method: 'PUT' as const, headers: upload.headers, expiresAt: upload.expiresAt.toISOString() } }, 201);
+      const { receipt, upload } = await startExpenseReceipt(receiptDeps, receiptActor(c), c.req.valid('param').expenseId, body);
+      return c.json({ receipt: serializeExpenseReceipt(receipt), upload }, 201);
     },
   );
 
@@ -307,20 +301,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       responses: { 200: { description: 'READY', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
-      const s = storage();
-      const { organization } = sessionAuth(c);
       const { expenseId, receiptId } = c.req.valid('param');
-      const receipt = await mustGetReceipt(organization.id, expenseId, receiptId);
-      if (receipt.status === 'READY') return c.json(serializeExpenseReceipt(receipt), 200);
-      // Storage first, outside any transaction: no network I/O under a database lock.
-      await verifyUploadedObject(s, receipt);
-      // MUT-397: the room check and the flip to READY happen under the expense lock, the same one filing takes.
-      const result = await store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE }, c.get('now')());
-      if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
-      if (result.kind === 'receipt_not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
-      if (result.kind === 'too_many_receipts') throw tooManyReceipts();
-      if (result.kind === 'completed') await audit(c, 'expense_receipt.added', 'expense_receipt', result.receipt.id, { expenseId, filename: result.receipt.filename, sizeBytes: result.receipt.sizeBytes });
-      return c.json(serializeExpenseReceipt(result.receipt), 200);
+      return c.json(serializeExpenseReceipt(await completeExpenseReceipt(receiptDeps, receiptActor(c), expenseId, receiptId)), 200);
     },
   );
 
@@ -400,11 +382,6 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       return c.json({ from, to, currencies: summarizeExpenses(expenses) }, 200);
     },
   );
-
-  /** Advisory, for the upload start only: completion re-checks under the expense lock (completeOnExpense, MUT-397). */
-  async function assertRoomForReceipt(organizationId: string, expenseId: string): Promise<void> {
-    if ((await store.expenseReceipts.listByExpense(organizationId, expenseId)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
-  }
 
   return app;
 }

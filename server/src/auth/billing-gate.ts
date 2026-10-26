@@ -83,6 +83,16 @@ export async function agentPersonReadRefusal(store: GateStore, userId: string, n
   return standingRefuses(standing, 'GET') ? lapsedError(null, representativeOf(standing, entitlements)) : null;
 }
 
+/**
+ * MUT-436: an agent's write on no profile (the inbox) follows the person's standing exactly as a session's POST
+ * /v1/inbox does (PERSON_LEVEL_GATE `person`): refused when the person's best standing is read-only or locked.
+ */
+export async function agentPersonWriteGate(store: GateStore, userId: string, now: Date, enforced: boolean): Promise<void> {
+  if (!enforced) return;
+  const { standing, entitlements } = await standingOfPerson(store, userId, now);
+  if (standingRefuses(standing, 'POST')) throw lapsedError(null, representativeOf(standing, entitlements));
+}
+
 async function entitlementOf(store: GateStore, organization: SessionAuth['organization'], malafatConnected: boolean, now: Date): Promise<Entitlement> {
   const entitlements = await entitlementsFor(store, [{ organization, malafatConnected }], now);
   return entitlements.get(organization.id)!;

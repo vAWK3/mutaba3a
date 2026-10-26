@@ -1,6 +1,9 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { agentPersonReadRefusal, agentReadRefusal, type GateStore } from '../auth/billing-gate.js';
+import { mayWriteFor, profileWriterOf, type Domain } from '../auth/writability.js';
+import { requestFingerprint, runIdempotent, type ClaimOps } from '../idempotency.js';
 import type { AgentIdentity } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { OAuthScope } from '../oauth/protocol.js';
@@ -126,3 +129,74 @@ function decodeOffset(cursor: string, scope: string): number {
   }
   throw new ApiError('VALIDATION_FAILED', 'cursor is not a cursor this call issued: send nextCursor back to the same tool with the same arguments', { field: 'cursor' });
 }
+
+// ---- Writes (MUT-436) ---------------------------------------------------------------------------------------------
+
+/**
+ * Review R1/D2: an agent writes as its person's session would — the session's column of the writability matrix, on
+ * this profile's writer of record. For `expenses` that is every profile (parity); the agent's real reach is the store
+ * allow-list (AGENT_STORE_METHODS). Refuses with the matrix's own error.
+ */
+export async function assertAgentMayWrite(ctx: McpContext, organization: Organization, domain: Domain): Promise<void> {
+  const writer = await profileWriterOf(ctx.gateStore, organization.id);
+  if (!mayWriteFor('session', domain, writer)) throw new ApiError('READ_ONLY_PROFILE', 'This profile is read-only here', { writerOfRecord: writer });
+}
+
+/** The idempotency key every write tool takes (MCP has no header per call). */
+export const idempotencyKeyInput = z
+  .string()
+  .regex(/^[A-Za-z0-9_\-:.]{8,128}$/, 'idempotencyKey: 8–128 characters of A–Z a–z 0–9 _ - : .')
+  .describe('One key per source document (a receipt, a statement line), reused only to retry that same call: never for another purchase.');
+
+/**
+ * Review D7/R7: an agent key lives in its person's namespace (`a:` + SHA-256 of person, tool and key), so a retry after a
+ * reconnect (a new OAuth grant) still replays, and it can never collide with a session's or an API key's key.
+ */
+export function agentClaimKey(userId: string, tool: string, key: string): string {
+  // The tool is part of the key (review): one key per source document can serve add_expense and its receipt upload.
+  return `a:${createHash('sha256').update(`${userId}\n${tool}\n${key}`).digest('hex')}`;
+}
+
+/**
+ * One write tool call under its idempotency key. An API refusal (4xx, not 429) is stored and replays as the same
+ * refusal (OV4); a 5xx/429 or anything unexpected releases the key. Returns the result, or rethrows the refusal.
+ */
+export async function withToolIdempotency<T extends Record<string, unknown>>(
+  ctx: McpContext,
+  scope: { kind: 'profile'; organizationId: string } | { kind: 'person' },
+  tool: string,
+  args: Record<string, unknown>,
+  work: () => Promise<T>,
+): Promise<T & { replayed: boolean }> {
+  const { idempotencyKey, ...meaning } = args;
+  const key = agentClaimKey(ctx.agent.user.id, tool, String(idempotencyKey));
+  const ops: ClaimOps =
+    scope.kind === 'profile'
+      ? {
+          claim: (a) => ctx.store.idempotency.claim({ organizationId: scope.organizationId, ...a }),
+          complete: (a) => ctx.store.idempotency.complete({ organizationId: scope.organizationId, ...a }),
+          fail: (a) => ctx.store.idempotency.fail({ organizationId: scope.organizationId, ...a }),
+        }
+      : {
+          claim: (a) => ctx.store.userIdempotency.claim({ userId: ctx.agent.user.id, ...a }),
+          complete: (a) => ctx.store.userIdempotency.complete({ userId: ctx.agent.user.id, ...a }),
+          fail: (a) => ctx.store.userIdempotency.fail({ userId: ctx.agent.user.id, ...a }),
+        };
+  const fingerprint = requestFingerprint('MCP', tool, JSON.stringify(meaning));
+  const outcome = await runIdempotent(ops, { key, operation: `mcp.${tool}`, fingerprints: [fingerprint], now: ctx.now() }, async () => {
+    try {
+      return { status: 200, body: await work() };
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500 && err.status !== 429 && err.code !== 'PRINCIPAL_NOT_ACCEPTED') {
+        return { status: err.status, body: { error: { code: err.code, message: err.message, details: err.details ?? null } } };
+      }
+      throw err;
+    }
+  });
+  if (outcome.status >= 400) {
+    const { error } = outcome.body as { error: { code: ConstructorParameters<typeof ApiError>[0]; message: string; details: unknown } };
+    throw new ApiError(error.code, error.message, error.details ?? undefined);
+  }
+  return { ...(outcome.body as T), replayed: outcome.replayed };
+}
+

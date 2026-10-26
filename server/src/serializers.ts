@@ -8,7 +8,7 @@ import { formatMoney, type Currency } from './money.js';
 import { windowEnd } from './expenses/groups.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
-import type { CaptureSource } from './schemas.js';
+import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import type {
   BillingAccountRecord,
@@ -565,6 +565,7 @@ export function serializeExpense(e: ExpenseRecord) {
     projectId: e.projectId,
     notes: e.notes,
     createdByUserId: e.createdByUserId,
+    captureSource: (e.captureSource ?? null) as StoredCaptureSource | null,
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
@@ -691,7 +692,7 @@ export function serializeInboxEntry(e: InboxEntryRecord) {
     currency: e.currency as Currency,
     occurredOn: e.occurredOn,
     note: e.note,
-    captureSource: e.captureSource as CaptureSource | null,
+    captureSource: e.captureSource as StoredCaptureSource | null,
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),

@@ -25,3 +25,32 @@ features:
       - The agent is offered the six read tools, each telling it to show me what it found before writing
       - My personal profile is listed with its default currency
       - The Carrefour expense comes back as the look-alike, matched on currency, amount, date and vendor
+  - id: add-expense
+    title: Claude asks where an expense goes, adds it to my profile, and the drawer says "Added by Claude"
+    tier: secondary
+    paths:
+      - server/src/mcp/write-tools.ts
+      - server/src/expenses/compose.ts
+      - src/hosted/components/ExpenseDrawer.tsx
+    steps:
+      - Claude tries to add an expense without saying where it goes
+      - Claude adds a 45.90 ILS expense at Carrefour to my personal profile, then retries the same call
+      - Open that expense in Expenses
+    expect:
+      - Claude is told to ask me whether it goes to the inbox or which profile, and nothing is recorded
+      - The expense is recorded once; the retry answers the first result
+      - The expense drawer shows "Added by Claude"
+  - id: receipt-upload
+    title: Claude uploads a receipt to an expense it added, and the receipt shows on the expense
+    tier: secondary
+    paths:
+      - server/src/mcp/receipt-tools.ts
+      - server/src/expenses/receipts-compose.ts
+    steps:
+      - Claude adds an expense and starts a receipt upload for it
+      - Claude sends the file to the upload address and finishes the upload
+      - Open that expense in Expenses
+    expect:
+      - The upload finishes as ready and attached to the expense
+      - The expense drawer lists the receipt file
+

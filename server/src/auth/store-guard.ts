@@ -403,6 +403,30 @@ export const AGENT_STORE_METHODS: ReadonlySet<string> = new Set([
   'vendors.search',
   'inboxEntries.list',
   'expenses.list',
+  // MUT-436 write tools: add_expense (profile: compose + vendors + audit; inbox: create) and their idempotency claims.
+  'idempotency.claim',
+  'idempotency.complete',
+  'idempotency.fail',
+  'userIdempotency.claim',
+  'userIdempotency.complete',
+  'userIdempotency.fail',
+  'expenses.create',
+  'expenses.getById',
+  'expenseCategories.getById',
+  'customers.getById',
+  'projects.getById',
+  'vendors.resolve',
+  'vendors.touch',
+  'inboxEntries.create',
+  'audit.append',
+  // MUT-436 receipt tools (expenses/receipts-compose.ts).
+  'expenseReceipts.create',
+  'expenseReceipts.setKey',
+  'expenseReceipts.getById',
+  'expenseReceipts.listByExpense',
+  'expenseReceipts.completeOnExpense',
+  'expenseReceipts.complete',
+  'expenseReceipts.countPendingSince',
 ]);
 
 /**
