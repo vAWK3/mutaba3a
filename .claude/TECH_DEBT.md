@@ -34,6 +34,14 @@
 **Impact**: `users.setPassword` (operator `rotate:password`), setup-link `issue` with a lock and `redeem` (recovery) revoke sessions but leave OAuth grants live, so an agent connected by someone who knew the old password survives a recovery.
 **Fix**: revoke grants (`password_changed`, audited) in those three store transactions, as `changePassword` does; decide with Basel whether the setup link for a brand-new account counts.
 
+### TD-258: The inbox part of `find_similar_expenses` is a capped scan
+**Status**: Open
+**Ticket**: MUT-435 (review D6) — fix with MUT-437
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: `inboxEntries.list` has no date, currency or kind filter, so the look-alike search reads the person's newest 200 inbox entries and filters them in JS; an older matching capture past that is missed (the result says `truncated: true`).
+**Fix**: an `inboxEntries` candidate query filtered by `occurredOn` window, currency and kind (memory + Prisma, index on `(userId, occurredOn)`), allow-listed for agents, when MUT-437's matching needs it.
+
 ### TD-257: `list_vendors` is a typeahead, not a vendor list
 **Status**: Open
 **Ticket**: MUT-435

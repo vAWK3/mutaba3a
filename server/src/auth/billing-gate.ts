@@ -2,6 +2,7 @@ import type { Context } from 'hono';
 import { entitlementsFor, standingOfPerson } from '../billing/coverage.js';
 import type { Entitlement } from '../billing/entitlement.js';
 import { PERSON_LEVEL_GATE, lapsedError, profileGateRefuses, standingOf, standingRefuses, type Standing } from '../billing/gate.js';
+import type { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv, SessionAuth, SessionIdentity } from './middleware.js';
 
@@ -10,7 +11,7 @@ import type { AppEnv, SessionAuth, SessionIdentity } from './middleware.js';
  * route work: the facts are read here, the rules are gate.ts's. Only called while the gate is on (BILLING_GATE).
  */
 
-type GateStore = Pick<LedgerStore, 'memberships' | 'organizations' | 'integrations' | 'billing'>;
+export type GateStore = Pick<LedgerStore, 'memberships' | 'organizations' | 'integrations' | 'billing'>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A profile-scoped request: the selected profile's own entitlement decides. */
@@ -57,6 +58,18 @@ export async function agentWriteGate(store: GateStore, organization: SessionAuth
   const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
   const entitlement = await entitlementOf(store, organization, malafat?.status === 'CONNECTED', now);
   if (standingRefuses(standingOf(entitlement.state), 'POST')) throw lapsedError(organization.id, entitlement);
+}
+
+/**
+ * MUT-435 (review D2): an agent's read of one profile follows that profile's lapse state as a session's read would —
+ * refused (402 SUBSCRIPTION_LAPSED) on a LOCKED profile, where a person only gets the records export; READ_ONLY reads
+ * pass. Returns the refusal instead of throwing so a search across profiles can skip a locked one, as /v1/entries does.
+ */
+export async function agentReadRefusal(store: GateStore, organization: SessionAuth['organization'], now: Date, enforced: boolean): Promise<ApiError | null> {
+  if (!enforced) return null;
+  const malafat = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
+  const entitlement = await entitlementOf(store, organization, malafat?.status === 'CONNECTED', now);
+  return standingRefuses(standingOf(entitlement.state), 'GET') ? lapsedError(organization.id, entitlement) : null;
 }
 
 async function entitlementOf(store: GateStore, organization: SessionAuth['organization'], malafatConnected: boolean, now: Date): Promise<Entitlement> {

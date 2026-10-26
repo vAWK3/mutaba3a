@@ -306,3 +306,85 @@ describe('errors', () => {
     expect(h.exceptions).toEqual([{ error: expect.objectContaining({ message: expect.stringContaining('list_vendors result does not match its output schema') }), context: expect.objectContaining({ route: 'mcp:list_vendors' }) }]);
   });
 });
+
+describe('one request is one call (review D1)', () => {
+  it('refuses a JSON-RPC batch before any tool runs', async () => {
+    const { h, bearer } = await setup();
+    const search = vi.spyOn(h.store.expenses, 'list');
+    const call = (id: number) => ({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'find_similar_expenses', arguments: { amount: '1.00', currency: 'ILS', date: '2026-10-20' } } });
+    const res = await h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify([call(1), call(2)]) });
+    expect(res.status).toBe(400);
+    expect((await read(res)).error).toMatchObject({ code: -32600, message: expect.stringContaining('batching') });
+    expect(search).not.toHaveBeenCalled();
+  });
+});
+
+describe('a person’s connections share one budget (review D4)', () => {
+  it('refuses the person once their agents together pass the per-person limit, whatever the connection', async () => {
+    const h = harness({ agentLimit: 100, agentPersonLimit: 3 });
+    const p = await person(h);
+    const first = await connect(h, p);
+    const second = await connect(h, p);
+    const ping = (bearer: Record<string, string>) => h.app.request('/mcp', { method: 'POST', headers: { ...MCP_HEADERS, ...bearer, 'mcp-protocol-version': '2025-06-18' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) });
+    expect((await ping(first.bearer)).status).toBe(200);
+    expect((await ping(second.bearer)).status).toBe(200);
+    expect((await ping(first.bearer)).status).toBe(200);
+    const refused = await ping(second.bearer);
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get('retry-after')).toBeTruthy();
+  });
+});
+
+describe('a profile LOCKED by billing (review D2)', () => {
+  it('is refused by name and left out of the look-alike search, as the app does; read-only stays readable', async () => {
+    const h = harness({ billingGate: true });
+    const p = await person(h);
+    const { bearer } = await connect(h, p);
+    await h.store.billing.setTrialStart(p.userId, new Date(h.now().getTime() - 3 * 86_400_000));
+    await expense(h, p, p.personalId, { amount: '45.90' });
+    // Day 20 of the trial: read-only, still readable by the agent.
+    await h.store.billing.setTrialStart(p.userId, new Date(h.now().getTime() - 20 * 86_400_000));
+    expect((await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' })).items).toHaveLength(1);
+    // Day 31: locked.
+    await h.store.billing.setTrialStart(p.userId, new Date(h.now().getTime() - 31 * 86_400_000));
+    expect(await toolError(h, bearer, 'list_categories', { profileId: p.personalId })).toContain('SUBSCRIPTION_LAPSED');
+    expect((await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' })).items).toEqual([]);
+  });
+});
+
+describe('every tool that takes a profile refuses a stranger’s (review D3)', () => {
+  it('sweeps tools/list, so a tool added later is covered without a new test', async () => {
+    const { h, bearer } = await setup();
+    const stranger = await person(h);
+    const { result } = await rpc(h, bearer, 'tools/list');
+    const withProfile = (result.tools as Array<{ name: string; inputSchema: { properties?: Record<string, unknown>; required?: string[] } }>).filter((t) => t.inputSchema.properties?.profileId);
+    expect(withProfile.length).toBeGreaterThan(0);
+    // The smallest valid arguments for each, by hand: a new tool with a new required argument fails here until it is named.
+    const minimal: Record<string, Record<string, unknown>> = {
+      list_categories: {},
+      list_clients: {},
+      list_vendors: { q: 'a' },
+      find_similar_expenses: { amount: '1.00', currency: 'ILS', date: '2026-10-20' },
+    };
+    for (const t of withProfile) {
+      expect(minimal[t.name], `add ${t.name} to this sweep`).toBeDefined();
+      expect(await toolError(h, bearer, t.name, { ...minimal[t.name], profileId: stranger.personalId }), t.name).toContain('Profile not found');
+    }
+  });
+});
+
+describe('an offset cursor belongs to the call that issued it (review D5)', () => {
+  it('refuses a cursor sent to another tool, another profile or another filter', async () => {
+    const { h, p, bearer } = await setup();
+    const studio = await business(h, p);
+    const other = await business(h, p, 'Second');
+    await h.app.request('/v1/expense-categories', { headers: asPerson(p, studio) });
+    await h.app.request('/v1/expense-categories', { headers: asPerson(p, other) });
+    const first = await tool(h, bearer, 'list_categories', { profileId: studio, limit: 1 });
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(await toolError(h, bearer, 'list_categories', { profileId: other, limit: 1, cursor: first.nextCursor })).toMatch(/cursor/i);
+    expect(await toolError(h, bearer, 'list_categories', { profileId: studio, limit: 1, includeArchived: true, cursor: first.nextCursor })).toMatch(/cursor/i);
+    expect(await toolError(h, bearer, 'list_profiles', { limit: 1, cursor: first.nextCursor })).toMatch(/cursor/i);
+    expect((await tool(h, bearer, 'list_categories', { profileId: studio, limit: 1, cursor: first.nextCursor })).items).toHaveLength(1);
+  });
+});

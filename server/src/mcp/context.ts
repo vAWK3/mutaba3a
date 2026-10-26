@@ -1,5 +1,6 @@
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { agentReadRefusal, type GateStore } from '../auth/billing-gate.js';
 import type { AgentIdentity } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { OAuthScope } from '../oauth/protocol.js';
@@ -14,6 +15,10 @@ import type { LedgerStore, Organization } from '../repositories/ports.js';
 export interface McpContext {
   agent: AgentIdentity;
   store: LedgerStore;
+  /** The raw store narrowed to what the lapse gate reads (billing facts are session-only under the agent guard). */
+  gateStore: GateStore;
+  /** The server's BILLING_GATE. */
+  billingGate: boolean;
   reporter: ErrorReporter;
   now: () => Date;
   requestId: string;
@@ -34,7 +39,15 @@ export async function agentProfile(ctx: McpContext, profileId: string): Promise<
   if (!membership || !organization || !ownsProfile(organization, ctx.agent.user.id, membership.role)) {
     throw new ApiError('NOT_FOUND', 'Profile not found. Call list_profiles for the profiles you can use.');
   }
+  const refusal = await agentReadRefusal(ctx.gateStore, organization, ctx.now(), ctx.billingGate);
+  if (refusal) throw refusal;
   return organization;
+}
+
+/** The profiles an agent may read right now: owned or co-owned (P1), minus any LOCKED by billing (review D2). */
+export async function readableProfiles(ctx: McpContext, profiles: readonly Organization[]): Promise<Organization[]> {
+  const refusals = await Promise.all(profiles.map((o) => agentReadRefusal(ctx.gateStore, o, ctx.now(), ctx.billingGate)));
+  return profiles.filter((_, i) => refusals[i] === null);
 }
 
 // ---- Results ---------------------------------------------------------------------------------------------------
@@ -88,19 +101,23 @@ export const pagingInput = {
   cursor: z.string().optional().describe('The nextCursor from the previous page; omit for the first page.'),
 };
 
-/** For lists the store returns whole (a profile's categories, a person's profiles): an offset cursor over them. */
-export function pageOf<T>(items: readonly T[], cursor: string | undefined, limit = TOOL_PAGE_DEFAULT): { items: T[]; nextCursor: string | null } {
-  const start = cursor === undefined ? 0 : decodeOffset(cursor);
+/**
+ * For lists the store returns whole (a profile's categories, a person's profiles): an offset cursor over them, tagged
+ * with the call that issued it (`scope`: the tool and the arguments that shape the list), so a cursor sent to another
+ * call is refused instead of silently skipping or repeating items (review D5).
+ */
+export function pageOf<T>(items: readonly T[], scope: string, cursor: string | undefined, limit = TOOL_PAGE_DEFAULT): { items: T[]; nextCursor: string | null } {
+  const start = cursor === undefined ? 0 : decodeOffset(cursor, scope);
   const end = start + limit;
-  return { items: items.slice(start, end), nextCursor: end < items.length ? Buffer.from(JSON.stringify({ o: end }), 'utf8').toString('base64url') : null };
+  return { items: items.slice(start, end), nextCursor: end < items.length ? Buffer.from(JSON.stringify({ o: end, s: scope }), 'utf8').toString('base64url') : null };
 }
 
-function decodeOffset(cursor: string): number {
+function decodeOffset(cursor: string, scope: string): number {
   try {
-    const { o } = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { o?: unknown };
-    if (typeof o === 'number' && Number.isInteger(o) && o >= 0) return o;
+    const { o, s } = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as { o?: unknown; s?: unknown };
+    if (typeof o === 'number' && Number.isInteger(o) && o >= 0 && s === scope) return o;
   } catch {
     // fall through
   }
-  throw new ApiError('VALIDATION_FAILED', 'cursor is not a cursor this tool issued', { field: 'cursor' });
+  throw new ApiError('VALIDATION_FAILED', 'cursor is not a cursor this call issued: send nextCursor back to the same tool with the same arguments', { field: 'cursor' });
 }

@@ -12,7 +12,7 @@ describe('index.ts prunes every limiter it builds', () => {
   const built = [...source.matchAll(/^const (\w+) = (?:new SlidingWindowRateLimiter|defaultOAuthLimiters)\(/gm)].map((m) => m[1] ?? '');
 
   it('finds the limiters', () => {
-    expect(built).toEqual(expect.arrayContaining(['rateLimiter', 'signInIpLimiter', 'oauthLimiters', 'agentLimiter']));
+    expect(built).toEqual(expect.arrayContaining(['rateLimiter', 'signInIpLimiter', 'oauthLimiters', 'agentLimiter', 'agentPersonLimiter']));
   });
 
   it('each one appears in the prune timer', () => {
@@ -21,6 +21,6 @@ describe('index.ts prunes every limiter it builds', () => {
   });
 
   it('the server hands createApp its OAuth limiters, so createApp builds none of its own', () => {
-    expect(source).toMatch(/oauth: config\.OAUTH_DERIVE_KEY \? \{[^}]*limiters: oauthLimiters, agentLimiter \}/);
+    expect(source).toMatch(/oauth: config\.OAUTH_DERIVE_KEY \? \{[^}]*limiters: oauthLimiters, agentLimiter, agentPersonLimiter \}/);
   });
 });

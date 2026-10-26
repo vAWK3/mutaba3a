@@ -39,7 +39,7 @@ export function recordingReporter() {
   return { reporter, messages, exceptions };
 }
 
-export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean } = {}) {
+export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean; agentLimit?: number; agentPersonLimit?: number } = {}) {
   const store = new MemoryLedgerStore();
   let now = T0;
   const { reporter, messages, exceptions } = recordingReporter();
@@ -62,6 +62,8 @@ export function harness(options: { oauth?: boolean; registerLimit?: number; toke
         : {
             deriveKey: 'derive-key-with-at-least-32-characters!!',
             fetchMetadata,
+            ...(options.agentLimit ? { agentLimiter: new SlidingWindowRateLimiter(options.agentLimit) } : {}),
+            ...(options.agentPersonLimit ? { agentPersonLimiter: new SlidingWindowRateLimiter(options.agentPersonLimit) } : {}),
             limiters: {
               register: new SlidingWindowRateLimiter(options.registerLimit ?? 1000, 3_600_000),
               authorize: new SlidingWindowRateLimiter(1000),

@@ -177,11 +177,13 @@ export interface AppDependencies {
    * the /oauth endpoints, the OAuth discovery documents, /mcp and /v1/oauth/* answer 503 OAUTH_NOT_CONFIGURED.
    * `fetchMetadata` and the limiters are injected by tests; production uses the guarded CIMD fetch and OAUTH_POLICY.
    */
-  oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter } | null;
+  oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter; agentPersonLimiter?: RateLimiter } | null;
 }
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
+/** MUT-435 (review D4): one person's agents together, however many connections they hold. */
+export const AGENT_PERSON_REQUESTS_PER_MINUTE = 240;
 
 const NO_MINIMUM_BUILD_CONFIG: MinimumBuildConfig = { ios: {}, android: {}, disabled: false };
 
@@ -494,7 +496,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
   app.route('/', oauthCleanupRoutes(deps.store));
-  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), version: deps.version }));
+  app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',

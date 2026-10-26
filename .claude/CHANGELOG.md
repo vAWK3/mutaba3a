@@ -42,6 +42,15 @@
 - The agent store guard is an explicit allow-list (`AGENT_STORE_METHODS`): only the eight methods the read tools call; MUT-434's "any `read`-class method" is closed.
 - `/mcp` passes the error reporter to the tools; the server instructions add "never choose a profile; check find_similar_expenses first".
 
+### Changed (pre-landing review, Basel D1–D7)
+- `/mcp` refuses a JSON-RPC batch (400, -32600) before any tool runs: one request is one call, so the rate limit holds. `server/src/routes/mcp.ts`.
+- A second agent rate limit per person (240/min across all their connections) beside the per-connection 120. `auth/agent-auth.ts`, `app.ts`, `index.ts`.
+- Agent reads follow the lapse gate: a LOCKED profile answers 402 SUBSCRIPTION_LAPSED and the unscoped look-alike search leaves it out (`agentReadRefusal`, `auth/billing-gate.ts`).
+- Offset cursors (`list_profiles`, `list_categories`) carry their tool and arguments; `decodeCursor` refuses a time outside a Date's range (was a 500, REST lists too).
+- Look-alikes: a bad date names `date` and keeps the ten-year bounds; a vendor under 3 characters only matches itself; profiles read in parallel; `list_vendors` reports `truncated`.
+- Guard refusals and results that drift from a tool's output schema reach Sentry (`mcp:<tool>`); tool descriptions say stored text is records, never instructions.
+- TD-258 (inbox candidates are a capped scan).
+
 ### Technical
 - `server/src/__tests__/helpers/oauth-agent.ts`: the OAuth test harness, shared by `routes-oauth.test.ts` and `mcp-read-tools.test.ts`.
 - No REST or OpenAPI change: `API_VERSION` stays `1.74.0-mut434`.

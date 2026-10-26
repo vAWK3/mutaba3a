@@ -10,7 +10,7 @@ import { decodeCursor, encodeCursor } from '../pagination.js';
 import { ownedOrCoOwnedProfilesOf, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import type { ExpenseCursor, ExpenseRecord, InboxEntryCursor, InboxEntryRecord, Organization } from '../repositories/ports.js';
 import { serializeInboxEntry } from '../serializers.js';
-import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, pageOf, pagingInput, runTool, type McpContext } from './context.js';
+import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
 
 /**
  * MUT-435: the read tools — where an expense could go (profiles), how to file it (categories, clients, vendors), what
@@ -106,7 +106,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     ({ limit, cursor }) =>
       runTool(ctx, 'list_profiles', PROFILES_OUTPUT, async () => {
         const profiles = await ownedOrCoOwnedProfilesOf(ctx.store, userId);
-        return pageOf(profiles.map((o) => profileView(o, userId)), cursor, limit);
+        return pageOf(profiles.map((o) => profileView(o, userId)), 'list_profiles', cursor, limit);
       }),
   );
 
@@ -124,7 +124,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
         const organization = await agentProfile(ctx, profileId);
         // Never seeds the preset (GET /v1/expense-categories does): a read tool writes nothing.
         const categories = await ctx.store.expenseCategories.list(organization.id, { includeArchived: includeArchived ?? false });
-        const result = pageOf(categories.map((c) => ({ id: c.id, name: c.name, archived: c.archivedAt !== null })), cursor, limit);
+        const result = pageOf(categories.map((c) => ({ id: c.id, name: c.name, archived: c.archivedAt !== null })), `list_categories:${organization.id}:${includeArchived ?? false}`, cursor, limit);
         return categories.length === 0 ? { ...result, hint: 'This profile has no categories yet. The person can open it in MTB3A once to get the default set; an expense can also be filed without one.' } : result;
       }),
   );
@@ -210,7 +210,8 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     ({ amount, currency, date, vendor, profileId }) =>
       runTool(ctx, 'find_similar_expenses', SIMILAR_OUTPUT, async () => {
         const probe = { amountMinor: parseExpenseAmount(amount, currency as Currency), currency, occurredOn: searchDate(date, ctx.now()), vendor };
-        const profiles = profileId ? [await agentProfile(ctx, profileId)] : await ownedOrCoOwnedProfilesOf(ctx.store, userId);
+        // One named profile answers its own refusal; across all of them, a LOCKED profile is left out (as /v1/entries does).
+        const profiles = profileId ? [await agentProfile(ctx, profileId)] : await readableProfiles(ctx, await ownedOrCoOwnedProfilesOf(ctx.store, userId));
         const window = dateWindow(probe.occurredOn);
 
         const fromProfiles = await Promise.all(

@@ -29,7 +29,22 @@ export function mcpRoutes(options: McpRouteOptions): Hono<AppEnv> {
   });
 
   app.post('/mcp', async (c) => {
-    const server = createMcpServer({ agent: c.get('agent'), store: options.guardedStore, reporter: options.reporter, now: c.get('now'), requestId: c.get('requestId'), version: options.version });
+    // Review D1: one request is one call. The rate limit counts requests, and protocol 2025-06-18 dropped JSON-RPC
+    // batching, so an array body is refused before any tool runs (the SDK would run up to 100 calls at once).
+    const body: unknown = await c.req.raw.clone().json().catch(() => undefined);
+    if (Array.isArray(body)) {
+      return c.json({ jsonrpc: '2.0', error: { code: -32600, message: 'Invalid Request: batching is not supported; send one JSON-RPC message per request' }, id: null }, 400);
+    }
+    const server = createMcpServer({
+      agent: c.get('agent'),
+      store: options.guardedStore,
+      gateStore: options.store,
+      billingGate: c.get('billingGate') === true,
+      reporter: options.reporter,
+      now: c.get('now'),
+      requestId: c.get('requestId'),
+      version: options.version,
+    });
     // No sessionIdGenerator: stateless mode, a fresh server per request.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
