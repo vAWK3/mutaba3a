@@ -47,7 +47,12 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('now', now);
     c.set('billingGate', deps.billingGate ?? false);
     c.set('passkeys', deps.passkeys ?? false);
-    c.set('reportError', (err: unknown) => reporter.captureException(err, { requestId, route: c.req.routePath }));
+    // MUT-447 (review): a handled failure inside a partial answer is logged and reported like an unhandled one, so it
+    // leaves a trace even where the reporter is a no-op (local mode, tests).
+    c.set('reportError', (err: unknown) => {
+      logger.error({ requestId, err }, 'handled failure in a partial answer');
+      reporter.captureException(err, { requestId, route: c.req.routePath });
+    });
     await next();
   });
 

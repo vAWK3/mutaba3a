@@ -3,6 +3,8 @@ import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/m
 import { crossRates, type CachedFxRates, type FxRate } from '../fx-rates.js';
 import { verdictProfilesOf } from '../personal-profile.js';
 import { baseProfileOf, composeVerdict, owedOf, type VerdictProfileInput } from '../summaries/verdict.js';
+import { SENTRY_RULES } from '../observability/sentry-rules.js';
+import type { VerdictUnavailableCode } from '../schemas.js';
 import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf, type IsoDate } from '../dates.js';
@@ -198,7 +200,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
         'from/to default to this month in the base profile’s timezone; usual is set only for a whole calendar month. A profile that fails to read is listed in `unavailable` and the rest answers.',
       security: SESSION_ONLY,
       request: { query: VerdictQuerySchema },
-      responses: { 200: { description: 'Verdict', content: { 'application/json': { schema: VerdictSchema } } }, ...validationResponse, ...errorResponses },
+      responses: { 200: { description: 'Verdict', content: { 'application/json': { schema: VerdictSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
       const now = c.get('now')();
@@ -206,59 +208,67 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const entitlements = c.get('personEntitlements');
       const locked = new Set([...(entitlements ?? [])].filter(([, e]) => e.state === 'LOCKED').map(([id]) => id));
       const all = await verdictProfilesOf(store, c.get('identity').user.id);
-      const baseRef = baseProfileOf(all.map((p) => ({ ...p, createdAt: p.organization.createdAt })));
+      const held = all.filter((p) => !locked.has(p.organization.id));
+      // Review: base and calendar come from a profile that is shown, unless every one is locked.
+      const baseRef = baseProfileOf((held.length > 0 ? held : all).map((p) => ({ ...p, createdAt: p.organization.createdAt })));
       if (!baseRef) throw new ApiError('NOT_FOUND', 'No profiles to report on');
       const base = baseRef.organization.defaultCurrency as Currency;
       const asOf = todayFor(baseRef.organization, now);
       const { from, to } = reportRange(c.req.valid('query'), asOf);
-      const unavailable = all.filter((p) => locked.has(p.organization.id)).map((p) => ({ profileId: p.organization.id, name: p.organization.name, code: 'SUBSCRIPTION_LAPSED' }));
-      const held = all.filter((p) => !locked.has(p.organization.id));
+      const unavailable: Array<{ profileId: string; name: string; code: VerdictUnavailableCode }> = all
+        .filter((p) => locked.has(p.organization.id))
+        .map((p) => ({ profileId: p.organization.id, name: p.organization.name, code: 'SUBSCRIPTION_LAPSED' }));
+      // Rates read nothing from the profiles, so they load while the profiles do (review).
+      const ratesRead = ratesFor(base, c.get('reportError'));
       // LOCKED profiles are dropped above, before any posting (eng review A1); posting is SYSTEM through the one door (D3/D7).
       const posting = lazyPostingOf(c, store);
-      const read = await Promise.allSettled(
-        held.map(async ({ organization, kind, shared }): Promise<VerdictProfileInput> => {
-          const today = todayFor(organization, now);
-          await postDueItems(posting.store, organization, today, now, posting.actor);
-          const [window, receivables] = await Promise.all([
-            readActivityWindow(organization.id, from, to),
-            listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor })),
-          ]);
-          return {
-            profileId: organization.id,
-            name: organization.name,
-            kind,
-            shared,
-            createdAt: organization.createdAt,
-            defaultCurrency: organization.defaultCurrency as Currency,
-            timezone: organization.timezone,
-            earlierData: window.earlierData,
-            activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
-            owed: owedOf(receivables, today),
-          };
-        }),
-      );
+      const read = await settledWithLimit(held, VERDICT_PROFILE_CONCURRENCY, async ({ organization, kind, shared }): Promise<VerdictProfileInput> => {
+        const today = todayFor(organization, now);
+        await postDueItems(posting.store, organization, today, now, posting.actor);
+        const [window, receivables] = await Promise.all([
+          readActivityWindow(organization.id, from, to),
+          listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor })),
+        ]);
+        return {
+          profileId: organization.id,
+          name: organization.name,
+          kind,
+          shared,
+          createdAt: organization.createdAt,
+          defaultCurrency: organization.defaultCurrency as Currency,
+          timezone: organization.timezone,
+          earlierData: window.earlierData,
+          activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
+          owed: owedOf(receivables, today),
+        };
+      });
       const profiles: VerdictProfileInput[] = [];
       read.forEach((result, i) => {
         if (result.status === 'fulfilled') return void profiles.push(result.value);
         const { organization } = held[i]!;
         const err: unknown = result.reason;
-        if (!(err instanceof ApiError)) c.get('reportError')(err);
-        unavailable.push({ profileId: organization.id, name: organization.name, code: err instanceof ApiError ? err.code : 'INTERNAL' });
+        // As the shell would for an unhandled error (ADR-091): our bugs and server errors are reported; the client sees INTERNAL either way.
+        if (!(err instanceof ApiError) || err.status >= SENTRY_RULES.serverReportsStatusAtLeast) c.get('reportError')(err);
+        unavailable.push({ profileId: organization.id, name: organization.name, code: 'INTERNAL' });
       });
-      const { rates, meta } = await ratesFor(base);
-      return c.json({ from, to, asOf, rates: meta, ...composeVerdict({ from, to, base, rates, profiles }), unavailable }, 200);
+      const { rates, meta } = await ratesRead;
+      const verdict = composeVerdict({ from, to, base, rates, profiles, partial: unavailable.length > 0, heldKinds: all.map((p) => p.kind) });
+      return c.json({ from, to, asOf, rates: meta, ...verdict, unavailable }, 200);
     },
   );
 
-  /** X3 (D4): rates when the cache has them; null (never a 503) when it doesn't, or on a server with no rate source. */
-  async function ratesFor(base: Currency): Promise<{ rates: FxRate[] | null; meta: { date: string; source: 'live' | 'stale' } | null }> {
+  /**
+   * X3 (D4): rates when the cache has them; null — never a 503 or a 500 — when it doesn't, on a server with no rate
+   * source, or when reading them fails unexpectedly (reported, review): the verdict's writes have already happened.
+   */
+  async function ratesFor(base: Currency, reportError: (err: unknown) => void): Promise<{ rates: FxRate[] | null; meta: { date: string; source: 'live' | 'stale' } | null }> {
     if (!fxRates) return { rates: null, meta: null };
     try {
       const reading = await fxRates.get();
       return { rates: crossRates(reading.snapshot, base), meta: { date: reading.snapshot.rateDate, source: reading.source } };
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'FX_RATES_UNAVAILABLE') return { rates: null, meta: null };
-      throw err;
+      if (!(err instanceof ApiError && err.code === 'FX_RATES_UNAVAILABLE')) reportError(err);
+      return { rates: null, meta: null };
     }
   }
 
@@ -338,6 +348,26 @@ function activityDate(value: string, today: string, field: 'from' | 'to'): strin
 }
 
 const DAYS_IN_YEAR = 366;
+
+/** MUT-447 (review): how many of a person's profiles the verdict reads at once, so one request can't take the whole connection pool. */
+const VERDICT_PROFILE_CONCURRENCY = 3;
+
+/** Promise.allSettled over `items`, running at most `limit` of `run` at a time; results keep the input order. */
+async function settledWithLimit<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      try {
+        results[i] = { status: 'fulfilled', value: await run(items[i]!) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 /** MUT-175 (shared with MUT-447, eng review D5): a Reports range — real dates, from ≤ to, at most 13 calendar months; defaults to `today`'s month. */
 function reportRange(q: { from?: string | undefined; to?: string | undefined }, today: IsoDate): { from: IsoDate; to: IsoDate } {

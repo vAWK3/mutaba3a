@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { VerdictProfileKind } from './summaries/verdict.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore, MembershipRole, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
 
 /** MUT-120: the personal profile is named in the user's language; a server-generated name, so no i18n layer (precedent: expenses/presets.ts). */
@@ -66,15 +67,15 @@ export async function ownedOrCoOwnedProfilesOf(store: Pick<LedgerStore, 'members
 export async function verdictProfilesOf(
   store: Pick<LedgerStore, 'memberships' | 'organizations'>,
   userId: string,
-): Promise<{ organization: Organization; kind: 'BUSINESS' | 'PERSONAL' | 'FIRM'; shared: boolean }[]> {
+): Promise<{ organization: Organization; kind: VerdictProfileKind; shared: boolean }[]> {
   const held = (await memberProfilesOf(store, userId)).filter(({ organization, role }) => ownsProfile(organization, userId, role) || (profileOwnerOf(organization) === null && role === 'OWNER'));
-  return Promise.all(
-    held.map(async ({ organization }) => {
-      if (profileTypeOf(organization) === 'PERSONAL') return { organization, kind: 'PERSONAL' as const, shared: false };
-      const owners = (await store.memberships.listByOrganization(organization.id)).filter((m) => m.role === 'OWNER').length;
-      return { organization, kind: profileOwnerOf(organization) ? ('BUSINESS' as const) : ('FIRM' as const), shared: owners > 1 };
-    }),
-  );
+  // One read for every held profile's OWNER members (review: not one per profile).
+  const owners = new Map<string, number>();
+  for (const entry of await store.memberships.listOwnersOf(held.map(({ organization }) => organization.id))) owners.set(entry.organizationId, (owners.get(entry.organizationId) ?? 0) + 1);
+  return held.map(({ organization }) => {
+    if (profileTypeOf(organization) === 'PERSONAL') return { organization, kind: 'PERSONAL', shared: false };
+    return { organization, kind: profileOwnerOf(organization) ? 'BUSINESS' : 'FIRM', shared: (owners.get(organization.id) ?? 0) > 1 };
+  });
 }
 
 async function memberProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<{ organization: Organization; role: MembershipRole }[]> {

@@ -44,7 +44,7 @@ info:
 
     Capture on a Malafat-fed profile (MUT-61): a session may POST /v1/income kind received — never owed (403 READ_ONLY_PROFILE) — for a client this integration has linked (customer.externalReference set; else 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED), with an optional matter of that client whose currency it must match (422 CURRENCY_MISMATCH). The payment is POSTED, unallocated and origin `capture`; GET /v1/payments?customerId=…&origin=capture&allocationState=unallocated lists what still needs allocating, through the usual allocation preview and POST /v1/payments/{id}/allocations. The person may undo it (DELETE /v1/income/{id}) until any of it is allocated (409 ALREADY_ALLOCATED); once the integration reverses it, their undo answers 409 REVERSED_BY_MALAFAT (the reversal reason "capture_undo" is reserved for the person: 422 REASON_RESERVED). GET /v1/me publishes each profile's rules as `income`.
 
-    Lapse gate (MUT-361, ADR-181): each hosted profile is entitled per GET /v1/me `billing.state`. On a READ_ONLY profile a session (cookie or device) may only read: any other method answers 402 SUBSCRIPTION_LAPSED with details { profileId, state, source, until }. A LOCKED profile answers only GET /v1/records-export and its receipts. The person-level routes (the inbox, GET /v1/entries, POST /v1/profiles) follow `billingStanding`, the best state across the person's profiles; GET /v1/entries leaves LOCKED profiles out. Identity (/v1/me*, sessions, password, terms), /v1/billing/* and leaving a profile stay open in every state. An API key is never gated, and nothing is ever deleted.
+    Lapse gate (MUT-361, ADR-181): each hosted profile is entitled per GET /v1/me `billing.state`. On a READ_ONLY profile a session (cookie or device) may only read: any other method answers 402 SUBSCRIPTION_LAPSED with details { profileId, state, source, until }. A LOCKED profile answers only GET /v1/records-export and its receipts. The person-level routes (the inbox, GET /v1/entries, GET /v1/summaries/verdict, POST /v1/profiles) follow `billingStanding`, the best state across the person's profiles; GET /v1/entries and GET /v1/summaries/verdict leave LOCKED profiles out (the verdict names them in `unavailable`). Identity (/v1/me*, sessions, password, terms), /v1/billing/* and leaving a profile stay open in every state. An API key is never gated, and nothing is ever deleted.
 
     Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization's today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.
 
@@ -5625,55 +5625,14 @@ components:
                             type: string
                             pattern: ^-?\d+(\.\d+)?$
                             description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-                          byCategory:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                categoryId:
-                                  type: string
-                                  nullable: true
-                                  format: uuid
-                                total:
-                                  type: string
-                                  pattern: ^-?\d+(\.\d+)?$
-                                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-                                count:
-                                  type: integer
-                              required:
-                                - categoryId
-                                - total
-                                - count
-                          byCustomer:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                customerId:
-                                  type: string
-                                  nullable: true
-                                  format: uuid
-                                total:
-                                  type: string
-                                  pattern: ^-?\d+(\.\d+)?$
-                                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-                                count:
-                                  type: integer
-                              required:
-                                - customerId
-                                - total
-                                - count
-                            description: Received per client, largest first; null = no client, last
                         required:
                           - currency
                           - received
                           - spent
-                          - byCategory
-                          - byCustomer
                   required:
                     - month
                     - currencies
-                description: The 12 calendar months ending with to’s month, as GET /v1/summaries/activity
+                description: "The 12 calendar months ending with to’s month: received and spent per currency (clients and categories are GET /v1/summaries/activity’s)"
               owed:
                 type: object
                 properties:
@@ -5702,6 +5661,11 @@ components:
                 required:
                   - currencies
                   - overdueCount
+              omittedCurrencies:
+                type: array
+                items:
+                  type: string
+                description: "Currency codes this API no longer supports (MUT-388) found on this profile’s records: those rows are left out of every figure. Usually empty"
             required:
               - profileId
               - name
@@ -5711,6 +5675,7 @@ components:
               - converted
               - history
               - owed
+              - omittedCurrencies
         total:
           type: object
           properties:
@@ -5747,12 +5712,16 @@ components:
                   description: "When converted is null: the currency with the most records, to show on its own"
             sharedInFull:
               type: boolean
+            partial:
+              type: boolean
+              description: "A held profile is in `unavailable`: the totals cover the rest, and usual is null"
           required:
             - label
             - currencies
             - converted
             - inCurrencyOnly
             - sharedInFull
+            - partial
         usual:
           type: string
           nullable: true
@@ -5804,6 +5773,9 @@ components:
                 type: string
               code:
                 type: string
+                enum:
+                  - SUBSCRIPTION_LAPSED
+                  - INTERNAL
             required:
               - profileId
               - name
@@ -14467,6 +14439,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

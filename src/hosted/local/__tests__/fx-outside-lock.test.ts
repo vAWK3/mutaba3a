@@ -58,7 +58,8 @@ describe('reference rates and the lock (D2)', { timeout: 30_000 }, () => {
     const me = (await (await page.fetch(new Request('http://localhost/v1/me'))).json()) as { profiles: Array<{ id: string }> };
     const profileId = me.profiles[0]!.id;
 
-    void page.fetch(new Request('http://localhost/v1/summaries/verdict'));
+    // The verdict waits on the stuck FX fetch before the lock and never settles here; its outcome is not this test's subject.
+    page.fetch(new Request('http://localhost/v1/summaries/verdict')).catch(() => undefined);
     const save = page.fetch(
       new Request('http://localhost/v1/expenses', {
         method: 'POST',

@@ -7753,6 +7753,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description Validation or idempotency-key failure */
                 422: {
                     headers: {
@@ -17916,7 +17925,7 @@ export interface components {
                     /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     net: string;
                 } | null;
-                /** @description The 12 calendar months ending with to’s month, as GET /v1/summaries/activity */
+                /** @description The 12 calendar months ending with to’s month: received and spent per currency (clients and categories are GET /v1/summaries/activity’s) */
                 history: {
                     /** @description Calendar month, YYYY-MM */
                     month: string;
@@ -17926,21 +17935,6 @@ export interface components {
                         received: string;
                         /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                         spent: string;
-                        byCategory: {
-                            /** Format: uuid */
-                            categoryId: string | null;
-                            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                            total: string;
-                            count: number;
-                        }[];
-                        /** @description Received per client, largest first; null = no client, last */
-                        byCustomer: {
-                            /** Format: uuid */
-                            customerId: string | null;
-                            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                            total: string;
-                            count: number;
-                        }[];
                     }[];
                 }[];
                 owed: {
@@ -17954,6 +17948,8 @@ export interface components {
                     /** @description Open entries past their due date */
                     overdueCount: number;
                 };
+                /** @description Currency codes this API no longer supports (MUT-388) found on this profile’s records: those rows are left out of every figure. Usually empty */
+                omittedCurrencies: string[];
             }[];
             total: {
                 /**
@@ -17971,6 +17967,8 @@ export interface components {
                 converted: string | null;
                 inCurrencyOnly: components["schemas"]["Currency"] & unknown;
                 sharedInFull: boolean;
+                /** @description A held profile is in `unavailable`: the totals cover the rest, and usual is null */
+                partial: boolean;
             };
             /** @description Median kept over the up to 6 months before a calendar-month period in which every included profile was complete; null for weeks, years, fewer than 3 such months or missing rates */
             usual: string | null;
@@ -17992,7 +17990,8 @@ export interface components {
                 /** Format: uuid */
                 profileId: string;
                 name: string;
-                code: string;
+                /** @enum {string} */
+                code: "SUBSCRIPTION_LAPSED" | "INTERNAL";
             }[];
         };
         CreateUploadResponse: {

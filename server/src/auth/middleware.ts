@@ -457,10 +457,8 @@ export function sessionAuth(c: AuthReader): SessionAuth {
  * work done early, not the person writing the ledger.
  */
 export function postingActorOf(c: AuthReader): PostingActor {
-  // MUT-447: a person-level session read (the verdict) selects no profile, so authenticate() set no `auth`; a
-  // session's catch-up posting is SYSTEM either way.
-  const auth = c.get('auth') as AuthContext | undefined;
-  return auth?.kind === 'apiKey'
+  const auth = c.get('auth');
+  return auth.kind === 'apiKey'
     ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId: c.get('requestId') }
     : { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
 }
@@ -488,9 +486,25 @@ export function actorOf(c: AuthReader): AuditActor {
  * SYSTEM on the store beneath the guard, because the catch-up is the reconcile
  * job's, not a write by the person. The two always travel together.
  */
-export function lazyPostingOf(c: AuthReader, store: LedgerStore): { store: LedgerStore; actor: PostingActor } {
-  const actor = postingActorOf(c);
+export function lazyPostingOf(c: PostingReader, store: LedgerStore): { store: LedgerStore; actor: PostingActor } {
+  const actor = c.get('auth') ? postingActorOf(c) : personPostingActorOf(c);
   return { store: actor.actorType === 'SYSTEM' ? unguarded(store) : store, actor };
+}
+
+interface PostingReader extends AuthReader {
+  get(key: 'auth'): AuthContext | undefined;
+  get(key: 'identity'): SessionIdentity | undefined;
+  get(key: 'requestId'): string;
+}
+
+/**
+ * MUT-447 (review): a person-level read (the verdict) selects no profile, so authenticate() set no `auth`. Its
+ * catch-up posting is SYSTEM, as a session's always is, but only for a signed-in person: anything else is refused
+ * rather than handed the store beneath the guard.
+ */
+function personPostingActorOf(c: PostingReader): PostingActor {
+  if (!c.get('identity')) throw principalNotAccepted();
+  return { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
 }
 
 /** Exported for requireMinimumBuild (MUT-293), which needs the same public-route exemption authenticate() uses. */

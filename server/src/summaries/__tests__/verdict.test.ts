@@ -120,6 +120,51 @@ describe('composeVerdict: totals', () => {
   });
 });
 
+describe('composeVerdict: review fixes (qa-reconcile 2026-10-26)', () => {
+  // A row written while a Gulf currency was supported (MUT-388 retired them; formatMoney still displays them).
+  const retired = (code: string, received: string, spent: string): CurrencyActivity => ({ ...block('ILS', received, spent), currency: code as Currency });
+
+  it('leaves retired-currency rows out of every figure and lists them per profile (#1)', () => {
+    const p = profile({
+      kind: 'BUSINESS',
+      activity: activity([block('ILS', '100.00', '0.00'), retired('AED', '50.00', '0.00')], { '2026-09': [retired('BHD', '1.000', '0.000')] }),
+      owed: { currencies: [{ currency: 'SAR' as Currency, outstanding: '9.00', overdue: '0.00' }], overdueCount: 1 },
+    });
+    const v = composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [p] });
+    expect(v.profiles[0]).toMatchObject({ currencies: [{ currency: 'ILS', net: '100.00' }], omittedCurrencies: ['AED', 'BHD', 'SAR'] });
+    expect(v.profiles[0]!.history.find((h) => h.month === '2026-09')!.currencies).toEqual([]);
+    expect(v.total).toMatchObject({ currencies: [{ currency: 'ILS', net: '100.00' }], converted: '100.00' });
+    expect(v.owed.currencies).toEqual([]);
+  });
+
+  it('keeps only monthly in and out in the history it returns (#10)', () => {
+    const v = composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [profile({ kind: 'BUSINESS', activity: activity([], { '2026-09': [block('ILS', '5.00', '1.00')] }) })] });
+    expect(v.profiles[0]!.history.find((h) => h.month === '2026-09')!.currencies).toEqual([{ currency: 'ILS', received: '5.00', spent: '1.00' }]);
+  });
+
+  it('marks a partial answer and withholds usual, keeping the label of the profiles held (#4)', () => {
+    const business = profile({ kind: 'BUSINESS', earlierData: true, activity: activity([block('ILS', '10.00', '0.00')]) });
+    const v = composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [business], partial: true, heldKinds: ['BUSINESS', 'PERSONAL'] });
+    expect(v.total).toMatchObject({ label: 'kept', partial: true });
+    expect(v.usual).toBeNull();
+    expect(composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [business] }).total.partial).toBe(false);
+  });
+
+  it('does not let a profile with no records hide usual, and has no usual when nobody has records (#3)', () => {
+    const months = Object.fromEntries(['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'].map((m) => [m, [block('ILS', '9.00', '0.00')]]));
+    const business = profile({ kind: 'BUSINESS', earlierData: true, activity: activity([], months) });
+    const empty = profile({ kind: 'BUSINESS', activity: activity([], {}, null) });
+    expect(composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [business, empty] }).usual).toBe('9.00');
+    expect(composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [empty] }).usual).toBeNull();
+  });
+
+  it('rounds an even median half away from zero, in integers (#7)', () => {
+    const months = { '2026-04': '-0.01', '2026-05': '-0.02', '2026-06': '-0.01', '2026-07': '-0.02', '2026-08': '-0.01', '2026-09': '-0.02' };
+    const p = profile({ kind: 'PERSONAL', earlierData: true, activity: activity([], Object.fromEntries(Object.entries(months).map(([m, v]) => [m, [block('ILS', '0.00', v.slice(1))]]))) });
+    expect(composeVerdict({ ...OCT, base: 'ILS', rates: rates(), profiles: [p] }).usual).toBe('-0.02');
+  });
+});
+
 describe('convertToBase', () => {
   it('converts through the rate set, rounding once at the end', () => {
     expect(convertToBase([{ currency: 'USD', minor: 1n }, { currency: 'USD', minor: 1n }], rates(), 'ILS')).toBe(7n);

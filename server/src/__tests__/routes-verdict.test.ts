@@ -189,7 +189,69 @@ describe('GET /v1/summaries/verdict', () => {
   it('refuses an API key', async () => {
     const s = await setup();
     const res = await s.verdict('', { ...s.keyAuth, 'x-mutaba3a-profile': s.firm });
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(res.status).toBeLessThan(500);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+describe('GET /v1/summaries/verdict — review fixes (qa-reconcile 2026-10-26)', () => {
+  it('answers 200 when a profile holds a row in a retired currency, leaving it out and naming it (#1)', async () => {
+    const s = await setup();
+    await s.income(s.personal, { kind: 'received', amount: '10.00', occurredOn: '2026-10-05' });
+    await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-06', amountMinor: 500n, currency: 'AED', title: 'Old', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: s.userId }, s.clock.now);
+    const res = await s.verdict();
+    expect(res.status).toBe(200);
+    const body = await read(res);
+    expect(line(body, s.personal)).toMatchObject({ currencies: [{ currency: 'ILS', net: '10.00' }], omittedCurrencies: ['AED'] });
+  });
+
+  it('answers 200 with no conversion when the rate source fails unexpectedly, and reports it (#5)', async () => {
+    // A snapshot that passes the cache's date check but holds no rates: crossRates throws a TypeError, not FX_RATES_UNAVAILABLE.
+    const s = await setup({ fx: { latest: async () => ({ rateDate: '2026-10-19', perEur: null }) as unknown as EcbSnapshot } });
+    await s.income(s.personal, { kind: 'received', amount: '10.00', occurredOn: '2026-10-05' });
+    const res = await s.verdict();
+    expect(res.status).toBe(200);
+    expect((await read(res)).total.converted).toBe('10.00');
+    expect(s.reported).toHaveLength(1);
+  });
+
+  it('names a profile whose read fails with an API error as INTERNAL and reports server errors only (#8)', async () => {
+    const s = await setup();
+    const { ApiError } = await import('../errors.js');
+    const list = s.store.receivables.list.bind(s.store.receivables);
+    let thrown: unknown = new ApiError('INTERNAL', 'receivable vanished');
+    s.store.receivables.list = (async (organizationId: string, ...rest: unknown[]) => {
+      if (organizationId === s.firm) throw thrown;
+      return (list as Loose)(organizationId, ...rest);
+    }) as Loose;
+    let body = await read(await s.verdict());
+    expect(body.unavailable).toEqual([{ profileId: s.firm, name: expect.any(String), code: 'INTERNAL' }]);
+    expect(body.total.partial).toBe(true);
+    expect(s.reported).toHaveLength(1);
+    thrown = new ApiError('NOT_FOUND', 'gone');
+    body = await read(await s.verdict());
+    expect(body.unavailable[0].code).toBe('INTERNAL');
+    expect(s.reported).toHaveLength(1);
+  });
+
+  it('answers 404 when the person holds no profile the verdict counts', async () => {
+    const s = await setup();
+    await s.store.memberships.revoke(s.userId, s.personal);
+    await s.store.memberships.revoke(s.userId, s.firm);
+    const res = await s.verdict();
+    expect(res.status).toBe(404);
+    expect((await read(res)).error.code).toBe('NOT_FOUND');
+  });
+
+  it('leaves out a firm where the person is a SUBMITTER', async () => {
+    const s = await setup();
+    const staffed = await read(await s.app.request('/admin/v1/organizations', json({ name: `Firm ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
+    const partner = await provisionUser(s.app, { email: `partner${++seq}@firm.ps`, displayName: 'Sami Odeh', organizationId: staffed.id });
+    await s.store.organizations.setFirm(staffed.id, { enabled: true, ownerUserIds: [partner.user.id] }, s.clock.now, { actorId: null, requestId: null });
+    await s.app.request(`/admin/v1/users/${s.userId}/memberships`, json({ organizationId: staffed.id }, admin));
+    const member = (await s.store.memberships.find(s.userId, staffed.id))!;
+    (s.store as Loose).members.set(`${s.userId}:${staffed.id}`, { ...member, role: 'SUBMITTER' });
+    expect((await s.store.memberships.find(s.userId, staffed.id))?.role).toBe('SUBMITTER');
+    expect(line(await read(await s.verdict()), staffed.id)).toBeUndefined();
   });
 });

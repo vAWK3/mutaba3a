@@ -241,6 +241,26 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     const body = await read(res);
     expect(body.profiles.map((x: Loose) => x.profileId)).toEqual([firm.id]);
     expect(body.unavailable).toEqual([{ profileId: p.personalId, name: expect.any(String), code: 'SUBSCRIPTION_LAPSED' }]);
+    expect(body.total.partial).toBe(true);
+  });
+
+  it('MUT-447 (review A1): the verdict never runs catch-up posting on a locked profile', async () => {
+    const h = harness();
+    const p = await person(h, 'trial-active');
+    const firm = await firmWithKey(h);
+    await h.app.request(`/admin/v1/users/${p.userId}/memberships`, json({ organizationId: firm.id }, ADMIN));
+    await h.app.request('/admin/v1/billing/grants', json({ organizationId: firm.id, tier: 'FIRM', reason: 'pilot' }, ADMIN));
+    await h.store.billing.setTrialStart(p.userId, daysAgo(31));
+    // postDueItems starts by asking for a profile's unposted due installments: the locked profile must never be asked about.
+    const asked: string[] = [];
+    const listUnpostedDue = h.store.agreements.listUnpostedDue.bind(h.store.agreements);
+    h.store.agreements.listUnpostedDue = (async (organizationId: string, ...rest: unknown[]) => {
+      asked.push(organizationId);
+      return (listUnpostedDue as Loose)(organizationId, ...rest);
+    }) as Loose;
+
+    expect((await h.app.request('/v1/summaries/verdict', { headers: p.session })).status).toBe(200);
+    expect(asked).toEqual([firm.id]);
   });
 
   it('locked everywhere: the inbox and the entries feed are refused', async () => {
