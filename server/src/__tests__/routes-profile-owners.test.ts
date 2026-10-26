@@ -283,6 +283,14 @@ describe('leaving and removing (DELETE /v1/profiles/{id}/owners/{userId})', () =
     expect(revoked).toEqual([expect.objectContaining({ actorType: 'USER', actorId: lina.userId, entityId: lina.userId, metadata: { reason: 'left', role: 'OWNER' } })]);
   });
 
+  it('answers a profile-scoped request after leaving with 404 PROFILE_NOT_FOUND, so the phone drops the profile (MUT-374 D6)', async () => {
+    const { h, lina, id } = await shared();
+    expect((await removeOwner(h, lina, id, lina.userId)).status).toBe(200);
+    const res = await h.app.request('/v1/customers', { headers: lina.me({ 'x-mutaba3a-profile': id }) });
+    expect(res.status).toBe(404);
+    expect((await read(res)).error).toMatchObject({ code: 'NOT_FOUND', details: { reason: 'PROFILE_NOT_FOUND' } });
+  });
+
   it('lets the creator remove a co-owner', async () => {
     const { h, basel, lina, id } = await shared();
     const res = await removeOwner(h, basel, id, lina.userId);

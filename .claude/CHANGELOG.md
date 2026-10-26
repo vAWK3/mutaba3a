@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — A profile-scoped 404 says the profile is gone (MUT-374)
+
+**Why:** a co-owner who left, or was removed on the portal, still has queued phone entries and a stored default for that profile; the phone needs to tell "the profile is gone for you" from "this record is gone" to drop it without a relaunch.
+
+### Changed
+- A request naming a profile the caller isn't a member of (`X-Mutaba3a-Profile`) answers 404 NOT_FOUND with `details.reason: 'PROFILE_NOT_FOUND'` (`server/src/auth/middleware.ts selectProfile`). Additive: clients that ignore `details` see the same 404.
+
+### Technical
+- Test: `routes-profile-owners.test.ts` (a profile-scoped read after leaving).
+- No schema change: `API_VERSION` stays as it is.
+
+---
+
 ## [Unreleased] - 2026-10-26 — Claude can add expenses and receipts (MUT-436, ADR-201)
 
 **Why:** the epic's purpose: a person's own Claude logs receipts and statement lines as expenses, asked first and safe to retry.
