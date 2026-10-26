@@ -1196,6 +1196,8 @@ model Expense {
   /// MUT-333 (D7): null once the person who entered it has deleted their account ("former member").
   createdByUserId String?          @db.Uuid
   createdBy       User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// MUT-436 (ADR-201): where it was captured (app, siri, widget, quick_action, share; mcp = the person's own Claude).
+  captureSource   String?          @db.VarChar(20)
   version         Int              @default(1)
   createdAt       DateTime
   updatedAt       DateTime

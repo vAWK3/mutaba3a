@@ -229,6 +229,8 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           ...links,
           notes: entry.note,
           createdByUserId: user.id,
+          // MUT-436 (review R6): the entry's source stays with the expense it becomes, so its marker survives filing.
+          ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
         },
         body.vendorDetails,
         now,

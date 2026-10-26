@@ -2527,6 +2527,8 @@ export interface ExpenseRecord {
   notes: string | null;
   /** MUT-333 (D7): null once the person who entered it has deleted their account. */
   createdByUserId: string | null;
+  /** MUT-436 (ADR-201): where it was captured; 'mcp' = the person's own Claude. Optional: local-mode records never carry it. */
+  captureSource?: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -2547,6 +2549,8 @@ export interface CreateExpenseInput {
   projectId: string | null;
   notes: string | null;
   createdByUserId: string;
+  /** MUT-436: the capture source to keep on the row (absent = none). */
+  captureSource?: string | null;
 }
 
 /** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */

@@ -83,7 +83,8 @@ const FEE_PROPOSAL = cols<FeeProposalRecord>()({
   proposedOn: true, note: true, clientApprovedOn: true, clientApprovalNote: true, commissionRateBasisPoints: true, upfrontTreatment: true, agreementId: true,
   withdrawnAt: true, withdrawnReason: true, requestId: true, version: true, createdAt: true, updatedAt: true,
 });
-const EXPENSE = cols<ExpenseRecord>()({
+// MUT-436 (ADR-201): captureSource stays on the server; the local records format (MUT-325) is unchanged.
+const EXPENSE = cols<Omit<ExpenseRecord, 'captureSource'>>()({
   id: true, organizationId: true, amountMinor: true, currency: true, occurredOn: true, title: true, vendor: true, notes: true, categoryId: true, customerId: true,
   projectId: true, createdByUserId: true, deletedAt: true, version: true, createdAt: true, updatedAt: true,
   // MUT-254
