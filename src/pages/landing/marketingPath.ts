@@ -15,7 +15,7 @@ export function marketingPath(pathname: string): string {
 }
 
 /** The pages the website renders, as templates: a terms version never appears in one (MUT-150). */
-export type LandingRoute = '/' | '/download' | '/privacy' | '/terms' | '/terms/:version';
+export type LandingRoute = '/' | '/privacy' | '/terms' | '/terms/:version';
 
 /**
  * Which website page `pathname` is, or null for anything else: the one list of
@@ -25,7 +25,7 @@ export type LandingRoute = '/' | '/download' | '/privacy' | '/terms' | '/terms/:
  */
 export function landingRoute(pathname: string): LandingRoute | null {
   const path = marketingPath(pathname);
-  if (path === '/' || path === '/download' || path === '/privacy' || path === '/terms') return path;
+  if (path === '/' || path === '/privacy' || path === '/terms') return path;
   if (path.startsWith('/terms/') && path.length > '/terms/'.length) return '/terms/:version';
   return null;
 }

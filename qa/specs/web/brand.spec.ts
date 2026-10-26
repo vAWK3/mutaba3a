@@ -676,10 +676,5 @@ test('the landing header and the public pages name the product MTB3A in English 
     await page.emulateMedia({ forcedColors: 'none' });
   });
 
-  // common.pageTitle names the tab on the public sub-pages (/download, /privacy, /terms); the /app shell sets no title of its own
-  await step('Open the download page in English: the tab says "MTB3A — Download"', async () => {
-    await page.goto('/download');
-    await expect(page).toHaveTitle(`MTB3A — ${en.download.title}`);
-  });
   await page.close();
 });

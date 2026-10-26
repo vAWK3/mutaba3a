@@ -29,26 +29,24 @@ features:
       - Something on the page throws an error nobody catches
     expect:
       - One report, tagged Arabic and route /privacy
-  - id: download-and-terms-covered
-    title: Errors on the download page and on a frozen terms version are reported; the version never appears in the route (MUT-150)
+  - id: terms-covered
+    title: Errors on a frozen terms version are reported; the version never appears in the route (MUT-150; the download page went in MUT-382)
     tier: tertiary
     legacy: [MUT-150]
     steps:
-      - Open the download page; something throws
       - Open /terms/2026-10-19; something throws
     expect:
-      - One report with route /download, then one with route /terms/:version
+      - One report with route /terms/:version
   - id: app-routes-silent
     title: The free web app never sends an error report, even when reached from the website (MUT-150, ADR-024)
     tier: core
     legacy: [MUT-150]
     paths:
       - src/main.tsx
-      - src/pages/download/DownloadPage.tsx
     steps:
-      - Open the download page and wait until its error reporting has loaded
+      - Open the privacy policy and wait until its error reporting has loaded
       - With error reporting live, the page moves to /app without reloading, and something throws there
-      - Follow the link back to the web app and log an income
+      - From the website, open the web app and log an income
       - Something in the app throws an error nobody catches
       - Open the app directly in a new tab, and something throws there too
     expect:

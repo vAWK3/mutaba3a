@@ -47,15 +47,6 @@ const LandingPage =
       )
     : null;
 
-const DownloadPage =
-  __BUILD_MODE__ === "web"
-    ? lazy(() =>
-        import("./pages/download/DownloadPage").then((m) => ({
-          default: m.DownloadPage,
-        })),
-      )
-    : null;
-
 const PrivacyPolicyPage =
   __BUILD_MODE__ === "web"
     ? lazy(() =>
@@ -90,10 +81,6 @@ function App() {
 
     if (route === "/" && LandingPage) {
       return <LandingShell><LandingPage /></LandingShell>;
-    }
-
-    if (route === "/download" && DownloadPage) {
-      return <LandingShell><DownloadPage /></LandingShell>;
     }
 
     if (route === "/privacy" && PrivacyPolicyPage) {

@@ -163,13 +163,6 @@
       "other": "تم تصدير {count} إيصال"
     },
     "exportReceiptsFailed": "فشل تصدير الإيصالات",
-    "desktopApp": {
-      "download": "تحميل تطبيق سطح المكتب",
-      "downloadDesc": "احصل على التطبيق الأصلي لأداء أفضل",
-      "downloadBtn": "تحميل",
-      "downloadMac": "تحميل لنظام macOS",
-      "downloadWindows": "تحميل لنظام Windows"
-    },
     "import": {
       "mode": {
         "title": "الاستيراد كـ",

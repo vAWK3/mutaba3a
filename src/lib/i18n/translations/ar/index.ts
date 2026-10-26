@@ -21,7 +21,6 @@ import drawer from './drawer.json';
 import fx from './fx.json';
 import integrity from './integrity.json';
 import demo from './demo.json';
-import download from './download.json';
 import landing from './landing.json';
 import whatsNew from './whatsNew.json';
 import carryOver from './carryOver.json';
@@ -43,7 +42,6 @@ export const PARTS = {
   fx,
   integrity,
   demo,
-  download,
   landing,
   whatsNew,
   carryOver,

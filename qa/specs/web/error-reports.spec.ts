@@ -77,17 +77,8 @@ test('an error on the Arabic privacy page is reported with the Arabic language',
   });
 });
 
-test('errors on the download page and on a frozen terms version are reported, the version never in the route', { tag: '@web.error-reports.download-and-terms-covered' }, async ({ page, step, crashReports }) => {
+test('errors on a frozen terms version are reported, the version never in the route', { tag: '@web.error-reports.terms-covered' }, async ({ page, step, crashReports }) => {
   await preferLanguage(page, 'en');
-
-  await step('Open the download page; something throws', async () => {
-    await page.goto('/download');
-    await throwUncaught(page, 'MUT-150 QA download');
-  });
-
-  await step('One report with route /download', async () => {
-    expect((await oneReport(page, crashReports, 'MUT-150 QA download')).tags).toMatchObject({ route: '/download' });
-  });
 
   await step('Open the terms at /terms/2026-10-19; something throws', async () => {
     await page.goto('/terms/2026-10-19');
@@ -100,10 +91,10 @@ test('errors on the download page and on a frozen terms version are reported, th
 });
 
 test('the free web app never sends a report, even when reached from the website', { tag: '@web.error-reports.app-routes-silent' }, async ({ page, step, crashReports }) => {
-  await step('Open the download page in English and wait until its error reporting has loaded', async () => {
+  await step('Open the privacy policy in English and wait until its error reporting has loaded', async () => {
     await preferLanguage(page, 'en');
     const sdkLoaded = page.waitForRequest(/landingSentry/, { timeout: SDK_WAIT_MS });
-    await page.goto('/download');
+    await page.goto('/privacy');
     await sdkLoaded;
   });
 
@@ -122,10 +113,11 @@ test('the free web app never sends a report, even when reached from the website'
     if (SENTRY_CODE.test(request.url())) sentryCode.push(request.url());
   });
 
-  await step('Follow the link back to the web app and log an income', async () => {
-    await page.goto('/download');
+  await step('From the website, open the web app and log an income', async () => {
+    // MUT-382: no website page links to /app any more (the download page is gone), so the visit goes there.
+    await page.goto('/privacy');
     sentryCode.length = 0;
-    await page.locator('a[href="/app"]').first().click();
+    await page.goto('/app');
     await page.waitForURL(/\/app/);
     await page.getByRole('dialog', { name: 'Welcome to MTB3A' }).getByRole('button', { name: 'Skip for now' }).click();
     await logIncome(page, { title: 'QA landing check', amount: '120', client: 'Layla Haddad' });

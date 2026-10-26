@@ -31,7 +31,7 @@ function renderSection() {
 }
 
 describe('AboutSection', () => {
-  it('merges About, Updates and Desktop App under one heading, no subheadings', () => {
+  it('keeps About and Updates under one heading, no subheadings', () => {
     useCheckForUpdatesMock.mockReturnValue({ latestVersion: null, hasUpdate: false, isLoading: false, error: null });
     const { container } = renderSection();
 
@@ -96,22 +96,12 @@ describe('AboutSection', () => {
     expect(screen.getByRole('link', { name: en.settings.updates.updateNow })).toHaveAttribute('href', '/download');
   });
 
-  it('shows desktop download links and the all-versions link', () => {
+  it('offers no desktop download (MUT-382: iOS, Android and the web only)', () => {
     useCheckForUpdatesMock.mockReturnValue({ latestVersion: null, hasUpdate: false, isLoading: false, error: null });
     renderSection();
 
-    expect(screen.getByRole('link', { name: en.settings.desktopApp.downloadMac })).toHaveAttribute(
-      'href',
-      '/download/mac',
-    );
-    expect(screen.getByRole('link', { name: en.settings.desktopApp.downloadWindows })).toHaveAttribute(
-      'href',
-      '/download/windows',
-    );
-    expect(screen.getByRole('link', { name: en.settings.desktopApp.downloadBtn })).toHaveAttribute(
-      'href',
-      '/download',
-    );
+    expect(screen.queryByRole('link', { name: /macOS|Windows/ })).not.toBeInTheDocument();
+    expect(document.querySelector('a[href^="/download/"]')).toBeNull();
   });
 
   describe('What’s new (MUT-24)', () => {

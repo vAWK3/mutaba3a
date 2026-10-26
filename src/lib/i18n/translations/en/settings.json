@@ -151,13 +151,6 @@
       "other": "{count} receipts exported"
     },
     "exportReceiptsFailed": "Receipts export failed",
-    "desktopApp": {
-      "download": "Download Desktop App",
-      "downloadDesc": "Get the native app for better performance",
-      "downloadBtn": "Download",
-      "downloadMac": "Download for macOS",
-      "downloadWindows": "Download for Windows"
-    },
     "import": {
       "mode": {
         "title": "Import as",

@@ -155,7 +155,7 @@ export default defineConfig([
     // the desktop build never carry it (ADR-024). The base rule is used here
     // because the TypeScript variant above already guards this tree.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/hosted/**', 'src/pages/landing/**', 'src/pages/download/**', 'src/lib/analytics/**', 'src/**/__tests__/**', 'src/test/**'],
+    ignores: ['src/hosted/**', 'src/pages/landing/**', 'src/lib/analytics/**', 'src/**/__tests__/**', 'src/test/**'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -176,7 +176,7 @@ export default defineConfig([
   {
     // The landing pages themselves (MUT-154): only their analytics module loads
     // the SDK or the guard; the pages call useLandingAnalytics().
-    files: ['src/pages/landing/**/*.{ts,tsx}', 'src/pages/download/**/*.{ts,tsx}'],
+    files: ['src/pages/landing/**/*.{ts,tsx}'],
     ignores: ['src/pages/landing/analytics/**', 'src/**/__tests__/**'],
     rules: {
       'no-restricted-imports': [
