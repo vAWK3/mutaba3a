@@ -2831,3 +2831,9 @@ Imported data is never written field by field into the live store. It is mapped 
 ### Pattern: Upload rules live in a compose module, not a route (MUT-436)
 - `server/src/expenses/receipts-compose.ts` owns start/complete for receipts (checks in order, the audit row via an injected writer). Routes and MCP tools call it; a new door adds no copy of the rules, and a new rule (MUT-56's scan) lands once.
 
+### Pattern: Check before an agent writes: validate → look-alikes → write, answered as a result (MUT-437)
+- An agent expense write runs `guardedWrite` (`server/src/mcp/write-tools.ts`): the person's `agentWriteLock` around `withToolIdempotency`, whose work validates with no writes, calls `assertNoLookAlikes` (`findLookAlikes`, the one rule), then writes. A look-alike throws the internal `LookAlikesFound` (not an `ApiError`, so the key is released) and becomes `{ outcome: 'matched', candidates }`. The person's answer (`notDuplicateOf`) stays out of the fingerprint. A new agent write that creates an expense goes through `guardedWrite`.
+
+### Pattern: Two-step relational compose, so a caller can check between (MUT-437)
+- `server/src/inbox/file-expense.ts`: `prepare…` runs every rule and writes nothing; `commit…` writes and audits. The route calls both back to back; the agent puts its look-alike check between them. Pure capture rules stay in `inbox/compose.ts`.
+

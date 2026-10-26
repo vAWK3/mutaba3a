@@ -25,7 +25,7 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 
 CD: `make release web` pushes main and Netlify builds the website (dist-web); `make release server` deploys
-the API with the portal (dist-hosted) inside its image. The desktop pipeline was retired (MUT-445, ADR-202).
+the API with the portal (dist-hosted) inside its image. The desktop pipeline was retired (MUT-445, ADR-203).
 ```
 
 ---
@@ -56,7 +56,7 @@ Never lower them to land a change.
 
 ### 2. Desktop Release Workflow (retired)
 
-The desktop apps were retired by MUT-445 (ADR-202): there is no desktop build, release workflow, updater or GitHub release. The Windows workflow and `deploy.sh` are deleted.
+The desktop apps were retired by MUT-445 (ADR-203): there is no desktop build, release workflow, updater or GitHub release. The Windows workflow and `deploy.sh` are deleted.
 
 ### 3b. Contracts CI (`.github/workflows/contracts-ci.yml`, since 2026-10-17, MUT-147)
 
@@ -86,7 +86,7 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 ### 3. Web Deploy (Netlify Configuration)
 
-`netlify.toml` builds the website (`npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web`) and publishes `dist-web`. Its redirects send `/download`, `/download/*`, `/app`, `/app/*` and `/hosted` home (301) before the SPA fallback; `public/sw.js` removes the retired free web app's service worker (MUT-445, ADR-202). The domain move's host-scoped rules are emitted as `_redirects` by `vite.config.ts` (ADR-155).
+`netlify.toml` builds the website (`npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web`) and publishes `dist-web`. Its redirects send `/download`, `/download/*`, `/app`, `/app/*` and `/hosted` home (301) before the SPA fallback; `public/sw.js` removes the retired free web app's service worker (MUT-445, ADR-203). The domain move's host-scoped rules are emitted as `_redirects` by `vite.config.ts` (ADR-155).
 
 ---
 

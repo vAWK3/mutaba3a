@@ -9,8 +9,8 @@
 
 | ID | Title | Status | Date |
 |----|-------|--------|------|
-| ADR-001 | Offline-First with IndexedDB | Retired with the local app by ADR-202 (2026-10-26) | 2024-01 |
-| ADR-002 | Repository Pattern for Storage Abstraction | Retired with the local app by ADR-202 (2026-10-26) | 2024-01 |
+| ADR-001 | Offline-First with IndexedDB | Retired with the local app by ADR-203 (2026-10-26) | 2024-01 |
+| ADR-002 | Repository Pattern for Storage Abstraction | Retired with the local app by ADR-203 (2026-10-26) | 2024-01 |
 | ADR-003 | Drawer-First UX Pattern | Active | 2024-01 |
 | ADR-004 | Multi-Currency as First-Class Citizen | Active | 2024-01 |
 | ADR-005 | No Server Backend for MVP | Active | 2024-01 |
@@ -24,7 +24,7 @@
 | ADR-013 | Local-Only Sync (LAN + File Bundle) | Superseded by ADR-053 (2026-10-12) | 2024-06 |
 | ADR-014 | Document Immutability After Export | Active | 2024-08 |
 | ADR-015 | Profile-Scoped Expenses | Active | 2024-09 |
-| ADR-016 | Tauri for Desktop Distribution | Superseded by ADR-202 (2026-10-26) | 2024-03 |
+| ADR-016 | Tauri for Desktop Distribution | Superseded by ADR-203 (2026-10-26) | 2024-03 |
 | ADR-017 | React 19 with TypeScript Strict | Active | 2025-01 |
 | ADR-018 | CSS Variables for Theming | Active; amended by ADR-058 (Brand v2, 2026-10-12) | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
@@ -39,7 +39,7 @@
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables (overridden by ADR-053 for the eight sync tables only) | Active | 2026-10 |
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
-| ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Superseded by ADR-202 (2026-10-26) | 2026-10 |
+| ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Superseded by ADR-203 (2026-10-26) | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 | ADR-033 | Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read | Active | 2026-10 |
 | ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
@@ -67,7 +67,7 @@
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
 | ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
 | ADR-099 | Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3) | Active | 2026-10 |
-| ADR-202 | MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445) | Active | 2026-10 |
+| ADR-203 | MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445) | Active | 2026-10 |
 
 ---
 
@@ -5396,7 +5396,32 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 ---
 
-## ADR-202: MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445)
+## ADR-202: Every Agent Expense Write Checks for the Same Purchase First, Under a Per-Person Lock (MUT-437, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-437; plan `.claude/designs/mut-437-statement-receipt-matching.md`, eng review D1–D18 answered by Basel).
+
+**Context:** MUT-435 shipped the same-purchase rule (`expenses/similarity.ts`, ADR-200) and `find_similar_expenses`; MUT-436's `add_expense` relied on the agent calling it. A card statement and a folder of receipts describe the same purchases, so an agent working through both would record each one twice.
+
+**Decision:**
+1. **The server enforces it.** `add_expense` (both destinations) and the new `file_inbox_entry` run, inside the person's write lock: validate (no writes, D17) → `findLookAlikes` across every profile the person owns or co-owns (LOCKED left out) and their inbox (D4) → write. Any look-alike answers `{ outcome: 'matched', expense: null, candidates }`, a normal result (D5): nothing is written (not even a vendor) and the idempotency key is released (the internal `LookAlikesFound` is not an `ApiError`, so `runIdempotent` fails the claim).
+2. **The person answers, the agent retries with the same key.** `notDuplicateOf` (≤100 ids, kept out of the fingerprint) lists the look-alikes the person called a different purchase; they are dropped before the top-10 cut, so each retry shows the next ones and a frequent same-price purchase is recorded once all are answered (D3, D12).
+3. **The rule is unchanged and shared (AC4):** a different vendor never excludes, it ranks lower and reads `vendorMatch: 'different'` (D2: Arabic/Hebrew receipts against Latin card descriptors). An inbox entry's vendor for ranking is its note's text before " · " (D16). Each look-alike says `hasReceipt` and `canAttachReceipt` (false for an inbox entry).
+4. **Reads that cannot miss:** the expense read filters on currency, amount and the ±3-day window in the database (`ExpenseFilter.amountMinor`); the inbox read is `inboxEntries.listMatchCandidates` with a `(userId, occurredOn)` index (TD-258 fixed, D6).
+5. **`file_inbox_entry` (D7):** files a captured entry to a chosen profile through `inbox/file-expense.ts` (`prepareInboxExpenseFiling` + `commitInboxExpenseFiling`, shared with POST /v1/inbox/{id}/file-as-expense, D11/D18), keeping the entry's capture source; it is outside `MCP_INBOX_WRITES` (D10), since filing never creates an 'mcp' inbox row, and runs the same check with the entry excluded (D13). Receipts then attach to the expense it returns.
+6. **One write at a time per person (D15):** `agentWriteLock.run(userId, fn)` takes `pg_advisory_xact_lock(437, hashtext(userId))` in an interactive transaction (15 s) while `fn` runs on the pool (memory: a per-person promise chain), so two parallel tool calls cannot both pass the check.
+7. **Write needs read (D14):** write and receipt tools register only for a grant with both scopes, so a `matched` answer never shows records to a grant that cannot read.
+8. **Descriptions** tell the agent to use the purchase date (not the posting date) and, for a foreign charge, the original amount and currency (D8, D9).
+
+**Consequences:**
+- MUT-436's `add_expense` output changes to `{ outcome, expense, candidates, replayed }` (unreleased, so no client depended on it).
+- Pre-landing review: waiters must not hold pooled connections (a parallel batch starved the lock holder's own queries and stalled the pool). Same-person calls queue in memory (`KeyedQueue`) and at most 3 lock transactions run per instance (`Semaphore`, `repositories/keyed-queue.ts`) before the advisory lock; `store-prisma-agent-lock-pool.test.ts` proves 8 parallel runs finish on a small pool.
+- The session's own filing route keeps no look-alike check (out of scope).
+
+**Alternatives considered:** a different vendor excluding (D2: misses transliterated duplicates); a `confirmedNew` boolean (D3: lets the agent skip the question); an error instead of a result (D5: invites "fix and retry"); an in-process per-person queue (D15: Basel chose the database lock so it holds across instances); destination-only search (D4: one purchase in two profiles).
+
+---
+
+## ADR-203: MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445)
 
 **Status:** Accepted (2026-10-26, MUT-445; decided by Basel). Supersedes ADR-016 and ADR-031; retires ADR-001 and ADR-002 with the code they governed; folds in MUT-292.
 

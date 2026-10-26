@@ -3899,7 +3899,7 @@ Also run by hand, read-only, against the local dev database: `rollback:check` fo
 And read-only against production's Artifact Registry (gcloud token): `release-image rollback` found api-v0.8.0's (`8acc5022`) and api-v0.6.0's (`d9edb43f`) images, each warning it has no revision label; `deploy-plan` refused `8acc5022` from another HEAD with a dirty tree and said `build` for an unused tag (it also said `reuse` for `8acc5022` at its own commit then; since the pre-landing review an unlabelled image is never reused).
 
 
-## MUT-445 — the desktop apps and the free web app retired (2026-10-26, ADR-202)
+## MUT-445 — the desktop apps and the free web app retired (2026-10-26, ADR-203)
 
 A removal: the deleted code's tests went with it (≈210 files: the local app's components, pages, hooks, Dexie and i18n key tests, the updater and release-files tests, 18 release-QA web areas). What changed in what stays:
 
@@ -3914,3 +3914,19 @@ A removal: the deleted code's tests went with it (≈210 files: the local app's 
 | `qa/specs/carry-over/carry-over.spec.ts` | Release-QA | rewritten | `records-file`: a records file the free app saved (written by the spec) restores with its counts, totals and Not carried list; `replace-existing` now carries from the old address |
 
 **Not run:** the release-QA specs (no QA env was started for this change: `web.landing.retired-paths` and the carry-over app's two rewritten flows have not passed yet), and `public/sw.js` in a browser that has the old worker installed.
+
+## MUT-437 — One purchase is one expense (2026-10-26, ADR-202)
+
+The store contracts and the rule/read-tool tests were written first and watched failing (6 red before T3). The write-path tests (`mcp-write-tools.test.ts`, +15) were written right after the T4 code, not before it (disclosed). The refactor commit's proof is the existing inbox suites, unchanged.
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/expenses/__tests__/similarity.test.ts` | Unit | +2 | vendorMatch similar/different/unknown; Arabic vs Latin stays a match, marked different |
+| `server/src/__tests__/mcp-read-tools.test.ts` | Route (real /mcp) | +4 | hasReceipt/canAttachReceipt/vendorMatch; the amount pre-filter finds one among 250; an inbox capture older than 205 newer ones is found (TD-258); an inbox note's vendor ranks first (D16); sweep covers file_inbox_entry |
+| `server/src/__tests__/mcp-write-tools.test.ts` | Route (real /mcp + OAuth) | +15 | matched writes nothing (no vendor), same key then creates with notDuplicateOf, replays never self-match; similar vendor first and excluded ids dropped; 15 look-alikes come 10 then 5 then create (D12); another profile and the inbox block (D4); validation before the check (D17); two parallel calls → one created, one matched (D15); inbox destination checks too; AC2 statement-first then receipt attached, hasReceipt; file_inbox_entry files with the entry's source and grant audit, replays, receipt attaches to the returned id; filing matched then filed with notDuplicateOf (D13); NOT_FOUND / ENTRY_KIND_MISMATCH / lapse; a write-only grant gets no write tools (D14) |
+| `server/src/repositories/__tests__/store-contract-inbox.ts` | Contract (memory + Postgres) | +1 | listMatchCandidates window edges, currency, amount, kind, person, cap with truncated |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` | Contract (memory + Postgres) | +1 | expenses.list amountMinor |
+| `server/src/repositories/__tests__/store-contract-agent-lock.ts` | Contract (memory + Postgres) | 2 | runs for one person never overlap, another person's do; a throwing run releases the lock |
+| `qa/specs/portal-selfservice/mcp.spec.ts` | Release-QA (live API) | +2 | statement-match; file-inbox-entry (filed, receipt uploaded, listed in the drawer) |
+| Regression | Route + unit | unchanged/changed | inbox-filing, expense-capture-source, routes-vendors, inbox-isolation, route-security unchanged across the refactor; store-guard allow-list (35 methods) and inbox classification; add-expense/receipt specs read the new output |
+

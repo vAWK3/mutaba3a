@@ -215,8 +215,9 @@ describe('per-user feature flags (MUT-433)', () => {
 describe('the MCP agent guard (MUT-435)', () => {
   const guard = agentStoreGuard();
 
-  it('opens exactly the methods the read, write and receipt tools call, nothing else (MUT-435/436)', () => {
+  it('opens exactly the methods the read, write and receipt tools call, nothing else (MUT-435/436/437)', () => {
     expect([...AGENT_STORE_METHODS].sort()).toEqual([
+      'agentWriteLock.run',
       'audit.append',
       'customers.getById',
       'customers.list',
@@ -225,6 +226,7 @@ describe('the MCP agent guard (MUT-435)', () => {
       'expenseReceipts.complete',
       'expenseReceipts.completeOnExpense',
       'expenseReceipts.countPendingSince',
+      'expenseReceipts.countReadyByExpenseIds',
       'expenseReceipts.create',
       'expenseReceipts.getById',
       'expenseReceipts.listByExpense',
@@ -236,7 +238,10 @@ describe('the MCP agent guard (MUT-435)', () => {
       'idempotency.complete',
       'idempotency.fail',
       'inboxEntries.create',
+      'inboxEntries.fileAsExpense',
+      'inboxEntries.getById',
       'inboxEntries.list',
+      'inboxEntries.listMatchCandidates',
       'memberships.find',
       'memberships.listByUser',
       'organizations.getById',
@@ -298,6 +303,7 @@ describe('the inbox (MUT-66)', () => {
       update: 'sessionOnly',
       delete: 'sessionOnly',
       countByUser: 'sessionOnly',
+      listMatchCandidates: 'sessionOnly',
       fileAsExpense: { write: 'expenses' },
       fileAsIncome: { write: 'payments' },
     });

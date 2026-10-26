@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { KeyedQueue, Semaphore } from './keyed-queue.js';
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
@@ -142,6 +143,7 @@ import type {
   IncomeWriteResult,
   InboxEntryCursor,
   InboxEntryKind,
+  AgentWriteLock,
   InboxEntryRepository,
   EntriesRepository,
   EntryRow,
@@ -2723,6 +2725,27 @@ export class PrismaLedgerStore implements LedgerStore {
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
 
+  // Review (MUT-437): a same-person call waits in memory and at most AGENT_WRITE_LOCK_SLOTS lock transactions run per
+  // instance, so waiters never hold the pooled connections the lock's holder needs for its own queries.
+  private readonly agentWrites = new KeyedQueue();
+  private readonly agentWriteSlots = new Semaphore(AGENT_WRITE_LOCK_SLOTS);
+
+  readonly agentWriteLock: AgentWriteLock = {
+    run: <T>(userId: string, fn: () => Promise<T>): Promise<T> =>
+      this.agentWrites.run(userId, () =>
+        this.agentWriteSlots.run(() =>
+          this.prisma.$transaction(
+            async (tx) => {
+              // Across instances (D15): the in-process queue only orders this one.
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AGENT_WRITE_LOCK}::int, hashtext(${userId}))`;
+              return fn();
+            },
+            { maxWait: AGENT_WRITE_LOCK_WAIT_MS, timeout: AGENT_WRITE_LOCK_WAIT_MS },
+          ),
+        ),
+      ),
+  };
+
   readonly inboxEntries: InboxEntryRepository = {
     create: (input, at) => translate(() => this.prisma.inboxEntry.create({ data: { ...input, createdAt: at, updatedAt: at } })),
     getById: (userId, id) => this.prisma.inboxEntry.findFirst({ where: { id, userId } }),
@@ -2749,6 +2772,14 @@ export class PrismaLedgerStore implements LedgerStore {
       return count === 1;
     },
     countByUser: (userId) => this.prisma.inboxEntry.count({ where: { userId } }),
+    listMatchCandidates: async (userId, filter, limit) => {
+      const rows = await this.prisma.inboxEntry.findMany({
+        where: { userId, kind: 'EXPENSE', currency: filter.currency, amountMinor: filter.amountMinor, occurredOn: { gte: filter.from, lte: filter.to } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+      });
+      return { items: rows.slice(0, limit), truncated: rows.length > limit };
+    },
     fileAsExpense: (params, at) =>
       this.prisma.$transaction(async (tx) => {
         if (!(await claimInboxEntryTx(tx, params))) return { kind: 'not_found' as const };
@@ -3008,6 +3039,7 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
   return {
     ...(f.from || f.to ? { occurredOn: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) } } : {}),
     ...(f.currency ? { currency: f.currency } : {}),
+    ...(f.amountMinor !== undefined ? { amountMinor: f.amountMinor } : {}),
     ...(f.categoryId ? { categoryId: f.categoryId } : {}),
     ...(f.customerId ? { customerId: f.customerId } : {}),
     ...(f.projectId ? { projectId: f.projectId } : {}),
@@ -3364,6 +3396,15 @@ async function insertPerson(
   }
   return { user: toUser(user), memberships, personalOrganization };
 }
+
+/**
+ * MUT-437 (D15): one agent expense write per person at a time. The lock is held by the transaction's connection while
+ * `fn` runs its own queries on the pool; the timeout bounds a stuck run (the agent gets a 5xx and the key is released).
+ */
+const AGENT_WRITE_LOCK = 437;
+const AGENT_WRITE_LOCK_WAIT_MS = 15_000;
+/** Lock transactions at once per instance: each holds a connection while its run needs others (db_pool_size 10). */
+const AGENT_WRITE_LOCK_SLOTS = 3;
 
 /** MUT-366 (D12): one SIGNUP issue or redeem per address at a time. The first key namespaces the lock to this use. */
 const SIGNUP_ADDRESS_LOCK = 366;

@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-26 — The desktop apps and the free web app at /app are retired (MUT-445, ADR-202)
+## [Unreleased] - 2026-10-26 — The desktop apps and the free web app at /app are retired (MUT-445, ADR-203)
 
 **Why:** MTB3A runs on iOS, Android and the web portal only (Basel, 2026-10-26). MUT-382 removed `/download`; this removes what was left. Basel chose to retire `/app` now, carry-over sender included: a free user's records stay in that browser unless they saved a records file, which the portal still restores.
 
@@ -48,8 +48,29 @@
 - `src/content/legal/termsManifest.ts` names Node's types itself.
 
 ### Technical
-- ADR-202; ADR-016 and ADR-031 superseded, ADR-001/002 retired; TD-262, TD-263 added; TD-013, 022, 023, 031, 035, 036, 046, 050, 064, 071, 074, 134, 153, 207 resolved by the retirement.
+- ADR-203 (ADR-202 went to MUT-437); ADR-016 and ADR-031 superseded, ADR-001/002 retired; TD-262, TD-263 added; TD-013, 022, 023, 031, 035, 036, 046, 050, 064, 071, 074, 134, 153, 207 resolved by the retirement.
 - Checks: `i18n:check`, lint, typecheck pass; the full Vitest run has one failure, `no-hardcoded-hosts`, which MUT-382's `info@mtb3a.com` copy causes on main too.
+
+## [Unreleased] - 2026-10-26 — One purchase is one expense when Claude logs it (MUT-437, ADR-202)
+
+**Why:** a card statement and the receipts behind it describe the same purchases; Claude must not record each twice.
+
+### Added
+- Every agent expense write (`add_expense`, new `file_inbox_entry`) checks for look-alikes after validating and before writing, and answers `outcome: 'matched'` with the candidates instead of writing; `notDuplicateOf` records it once the person says it is different (`server/src/mcp/write-tools.ts`).
+- `file_inbox_entry`: files a captured inbox entry to a profile so a receipt can attach (not behind `MCP_INBOX_WRITES`).
+- Look-alikes carry `vendorMatch`, `hasReceipt`, `canAttachReceipt`; an inbox note's first part ranks as its vendor.
+- `agentWriteLock` (Postgres advisory lock per person), `inboxEntries.listMatchCandidates` + index migration `20261026120000`, `ExpenseFilter.amountMinor`.
+- Release-QA `portal-selfservice.mcp.statement-match`, `portal-selfservice.mcp.file-inbox-entry`.
+
+### Changed
+- `add_expense`'s output is `{ outcome, expense, candidates, replayed }`.
+- Write and receipt tools need the `read` scope as well as `write`.
+- Inbox filing moved into `server/src/inbox/file-expense.ts` (route behaviour unchanged, own refactor commit `324f4039`).
+
+### Fixed
+- TD-258: the inbox look-alike search no longer misses a capture older than the newest 200.
+
+---
 
 ## [Unreleased] - 2026-10-26 — A profile-scoped 404 says the profile is gone (MUT-374)
 

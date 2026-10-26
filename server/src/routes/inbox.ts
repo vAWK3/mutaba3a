@@ -2,10 +2,10 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { todayFor, validationError } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { identityIdempotent, idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { assertFilableCurrency, assertKind, inboxDate, parseInboxAmount } from '../inbox/compose.js';
+import { commitInboxExpenseFiling, prepareInboxExpenseFiling } from '../inbox/file-expense.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { incomeCaptureRulesFor, incomeMoneyDate, owedDueDate, owedVatFields, resolveIncomeLinks } from '../income/compose.js';
 import type { IsoDate } from '../dates.js';
@@ -205,51 +205,10 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const entry = await mustGet(user.id, c.req.valid('param').entryId);
-      assertKind(entry, 'EXPENSE');
-      assertFilableCurrency(entry);
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
-      // POST /v1/expenses' own date rule (MUT-227 floor, MUT-392 ceiling), so filing is refused exactly where a direct
-      // create is, not more.
-      expenseOccurredOn(entry.occurredOn, todayFor(organization, now));
-      const links = await resolveLinks(store, organization.id, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
-      if (body.categoryId) await assertCategoryChoosable(store, organization.id, body.categoryId);
-
-      // MUT-254: after every check, so a refusal never creates a vendor it didn't need (A2).
-      const expense = await withResolvedVendor(
-        store,
-        organization.id,
-        {
-          organizationId: organization.id,
-          occurredOn: entry.occurredOn,
-          amountMinor: entry.amountMinor,
-          currency: entry.currency,
-          title: body.title ?? null,
-          vendor: body.vendor ?? null,
-          categoryId: body.categoryId ?? null,
-          ...links,
-          notes: entry.note,
-          createdByUserId: user.id,
-          // MUT-436 (review R6): the entry's source stays with the expense it becomes, so its marker survives filing.
-          ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
-        },
-        body.vendorDetails,
-        now,
-      );
-      const filed = await withCategoryForeignKey(() => store.inboxEntries.fileAsExpense({ userId: user.id, inboxEntryId: entry.id, kind: 'EXPENSE', expense }, now));
-      if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
-      await touchExpenseVendor(store, filed.expense, now);
-
-      await store.audit.append({
-        organizationId: organization.id,
-        actorType: 'USER',
-        actorId: user.id,
-        action: 'expense.created',
-        entityType: 'expense',
-        entityId: filed.expense.id,
-        metadata: { currency: filed.expense.currency, occurredOn: filed.expense.occurredOn, filedFromInbox: true, ...(entry.captureSource ? { captureSource: entry.captureSource } : {}) },
-        requestId: c.get('requestId'),
-      });
-      return c.json(serializeExpense(filed.expense), 201);
+      const prepared = await prepareInboxExpenseFiling(store, { organization, userId: user.id, entry, body, now });
+      const expense = await commitInboxExpenseFiling(store, prepared, { now, requestId: c.get('requestId') });
+      return c.json(serializeExpense(expense), 201);
     },
   );
 

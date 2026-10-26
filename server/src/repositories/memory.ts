@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { KeyedQueue } from './keyed-queue.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
@@ -127,6 +128,7 @@ import type {
   InboxEntryCursor,
   InboxEntryKind,
   InboxEntryRecord,
+  AgentWriteLock,
   InboxEntryRepository,
   UpdateInboxEntryPatch,
   CustomerFilter,
@@ -3044,6 +3046,13 @@ export class MemoryLedgerStore implements LedgerStore {
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
 
+  /** MUT-437 (D15): one agent write per person at a time; a run starts once the previous one settles. */
+  private readonly agentWrites = new KeyedQueue();
+
+  readonly agentWriteLock: AgentWriteLock = {
+    run: <T>(userId: string, fn: () => Promise<T>): Promise<T> => this.agentWrites.run(userId, fn),
+  };
+
   readonly inboxEntries: InboxEntryRepository = {
     create: async (input: CreateInboxEntryInput, at) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('inbox_entries.userId');
@@ -3080,6 +3089,12 @@ export class MemoryLedgerStore implements LedgerStore {
       return true;
     },
     countByUser: async (userId) => [...this.inbox.values()].filter((e) => e.userId === userId).length,
+    listMatchCandidates: async (userId, filter, limit) => {
+      const rows = [...this.inbox.values()]
+        .filter((e) => e.userId === userId && e.kind === 'EXPENSE' && e.currency === filter.currency && e.amountMinor === filter.amountMinor && e.occurredOn >= filter.from && e.occurredOn <= filter.to)
+        .sort(newestInboxFirst);
+      return { items: rows.slice(0, limit).map((e) => ({ ...e })), truncated: rows.length > limit };
+    },
     fileAsExpense: async (params, at) => {
       const claimed = this.claimInboxEntry(params);
       if (!claimed) return { kind: 'not_found' };
@@ -3355,6 +3370,7 @@ function matchesExpense(e: ExpenseRecord, f: ExpenseFilter): boolean {
     (!f.from || e.occurredOn >= f.from) &&
     (!f.to || e.occurredOn <= f.to) &&
     (!f.currency || e.currency === f.currency) &&
+    (f.amountMinor === undefined || e.amountMinor === f.amountMinor) &&
     (!f.categoryId || e.categoryId === f.categoryId) &&
     customerMatches &&
     (!f.projectId || e.projectId === f.projectId)

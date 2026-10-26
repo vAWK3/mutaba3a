@@ -245,6 +245,51 @@ describe('find_similar_expenses (AC2)', () => {
     }
   });
 
+  it('tells the agent which look-alikes already have a receipt and which can take one (MUT-437)', async () => {
+    const { h, p, bearer } = await setup();
+    const withReceipt = await expense(h, p, p.personalId, { amount: '45.90', vendor: 'Carrefour' });
+    const bare = await expense(h, p, p.personalId, { amount: '45.90', vendor: 'Cafe Nero', occurredOn: '2026-10-21' });
+    const captured = await inbox(h, p, { amount: '45.90' });
+    const receipt = await h.store.expenseReceipts.create({ organizationId: p.personalId, expenseId: withReceipt, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-20', uploadedByUserId: p.userId, requestId: null }, h.now());
+    await h.store.expenseReceipts.setKey(p.personalId, receipt.id, `org/${p.personalId}/expense-receipts/${receipt.id}`);
+    await h.store.expenseReceipts.completeOnExpense({ organizationId: p.personalId, expenseId: withReceipt, receiptId: receipt.id, maxReceipts: 10 }, h.now());
+
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20', vendor: 'Carrefour' });
+    const byId = new Map(out.items.map((i: Loose) => [i.id, i]));
+    expect(byId.get(withReceipt)).toMatchObject({ hasReceipt: true, canAttachReceipt: true, vendorMatch: 'similar' });
+    expect(byId.get(bare)).toMatchObject({ hasReceipt: false, canAttachReceipt: true, vendorMatch: 'different' });
+    expect(byId.get(captured)).toMatchObject({ where: 'inbox', hasReceipt: false, canAttachReceipt: false, vendorMatch: 'unknown' });
+  });
+
+  it('reads only same-amount rows, so many other purchases in the window never hide a match (MUT-437)', async () => {
+    const { h, p, bearer } = await setup();
+    for (let i = 0; i < 250; i++) {
+      await h.store.expenses.create({ organizationId: p.personalId, occurredOn: '2026-10-20', amountMinor: 1000n + BigInt(i), currency: 'ILS', vendor: null, title: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vendorId: null } as Loose, h.now());
+    }
+    const hit = await expense(h, p, p.personalId, { amount: '45.90', occurredOn: '2026-10-18' });
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' });
+    expect(out.items.map((i: Loose) => i.id)).toEqual([hit]);
+    expect(out.truncated).toBe(false);
+  });
+
+  it('finds an inbox capture however many newer captures sit above it (TD-258)', async () => {
+    const { h, p, bearer } = await setup();
+    const old = await inbox(h, p, { amount: '45.90', occurredOn: '2026-10-19' });
+    for (let i = 0; i < 205; i++) await h.store.inboxEntries.create({ userId: p.userId, kind: 'EXPENSE', amountMinor: 100n, currency: 'ILS', occurredOn: '2026-10-20', note: null, captureSource: 'app' }, h.now());
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' });
+    expect(out.items.map((i: Loose) => i.id)).toEqual([old]);
+    expect(out.truncated).toBe(false);
+  });
+
+  it('ranks an inbox capture by the vendor at the start of its note (review D16)', async () => {
+    const { h, p, bearer } = await setup();
+    const other = await expense(h, p, p.personalId, { amount: '45.90', vendor: 'Cafe Nero' });
+    const noted = await inbox(h, p, { amount: '45.90', occurredOn: '2026-10-22', note: 'Starbucks · latte for the client' });
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20', vendor: 'Starbucks' });
+    expect(out.items.map((i: Loose) => i.id)).toEqual([noted, other]);
+    expect(out.items[0]).toMatchObject({ vendor: 'Starbucks', vendorMatch: 'similar', title: 'Starbucks · latte for the client' });
+  });
+
   it('reads a three-decimal currency in its own digits', async () => {
     const { h, p, bearer } = await setup();
     await expense(h, p, p.personalId, { amount: '12.345', currency: 'JOD' });
@@ -360,6 +405,7 @@ describe('every tool that takes a profile refuses a stranger’s (review D3)', (
       find_similar_expenses: { amount: '1.00', currency: 'ILS', date: '2026-10-20' },
       start_receipt_upload: { target: { kind: 'expense', expenseId: '00000000-0000-4000-8000-000000000001' }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 100, idempotencyKey: 'sweep-key-0001' },
       complete_receipt_upload: { receiptId: '00000000-0000-4000-8000-000000000002' },
+      file_inbox_entry: { inboxEntryId: '00000000-0000-4000-8000-000000000003', idempotencyKey: 'sweep-key-0004' },
     };
     for (const t of withProfile) {
       expect(minimal[t.name], `add ${t.name} to this sweep`).toBeDefined();

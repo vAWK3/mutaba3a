@@ -2216,6 +2216,8 @@ export interface LedgerStore {
   vendors: VendorRepository;
   /** MUT-66: the unsorted inbox — the one repository scoped by user, not by organization. */
   inboxEntries: InboxEntryRepository;
+  /** MUT-437 (D15): one agent expense write at a time per person (look-alike check + write). Agents only. */
+  agentWriteLock: AgentWriteLock;
   /** MUT-131: idempotency for organization-independent writes (POST /v1/inbox's create). */
   userIdempotency: UserIdempotencyRepository;
   /** MUT-161: conversions on hosted profiles; session-only, invisible to API keys (store guard `conversions`). MUT-194: optimistic update and soft delete, like expenses. */
@@ -2642,6 +2644,8 @@ export interface ExpenseFilter {
   unlinked?: boolean;
   /** MUT-267: a group's members, or its left-out expenses dated inside its window. */
   group?: ExpenseGroupFilter;
+  /** MUT-437: exactly this amount (minor units): the look-alike pre-filter, with `currency` and a date window. */
+  amountMinor?: bigint;
 }
 
 /**
@@ -3261,6 +3265,15 @@ export type IncomeWriteResult = { kind: 'received'; payment: PaymentRecord; allo
  * destination-side validation (writability, link resolution, future dates)
  * happens in the route, before either is ever called.
  */
+/**
+ * MUT-437 (review D15): runs `fn` while holding this person's agent-write lock, so two parallel agent calls cannot both
+ * pass the look-alike check and both write. Postgres: a transaction-scoped advisory lock (holds one pooled connection
+ * for the run); memory: a per-person promise chain. `fn` uses the store as usual, not a transaction client.
+ */
+export interface AgentWriteLock {
+  run<T>(userId: string, fn: () => Promise<T>): Promise<T>;
+}
+
 export interface InboxEntryRepository {
   create(input: CreateInboxEntryInput, at: Date): Promise<InboxEntryRecord>;
   getById(userId: string, id: string): Promise<InboxEntryRecord | null>;
@@ -3270,6 +3283,11 @@ export interface InboxEntryRepository {
   delete(userId: string, id: string): Promise<boolean>;
   /** One indexed COUNT(*), for the operator's per-user support figure. Never a list. */
   countByUser(userId: string): Promise<number>;
+  /**
+   * MUT-437 (TD-258): this person's EXPENSE captures dated in `[from, to]` with this currency and amount, at most
+   * `limit` (`truncated` when there were more). The look-alike candidates; indexed on (userId, occurredOn).
+   */
+  listMatchCandidates(userId: string, filter: { from: IsoDate; to: IsoDate; currency: string; amountMinor: bigint }, limit: number): Promise<{ items: InboxEntryRecord[]; truncated: boolean }>;
   /**
    * Atomic: creates the expense and deletes this entry in one transaction.
    * `not_found` covers an unknown id, another user's, the wrong kind, or one

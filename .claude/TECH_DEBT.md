@@ -28,7 +28,7 @@
 
 ### TD-262: The portal's carry-over receiver still accepts the retired free web app as a source
 **Status**: Open
-**Ticket**: MUT-445 (ADR-202)
+**Ticket**: MUT-445 (ADR-203)
 **Added**: 2026-10-26
 **Priority**: Low
 **Impact**: `carryOverBuild` still gives the portal the old landing origin as `sources.web`, and the receiver still answers it, though nothing sends from there since the free web app was retired. A records file saved from that app still restores through `/carry-over/receive` and Your data › Restore, which is the path to keep.
@@ -65,6 +65,7 @@
 **Priority**: Low
 **Impact**: an agent that adds a receipt's amount to the inbox can't attach the file there; it has to file the expense to a profile first (the tool description says so).
 **Fix**: inbox attachments (a receipt on an InboxEntry, moved onto the expense at filing), if inbox-first agent flows need it.
+**Update (MUT-437)**: an agent now files the entry first (`file_inbox_entry`), then attaches to the expense it returns; inbox attachments are still not needed for the agent flow.
 
 ### TD-259: A Claude.ai chat can record expenses but not upload receipt files
 **Status**: Open
@@ -75,7 +76,7 @@
 **Fix**: revisit if MCP gains a client-to-server file transfer primitive.
 
 ### TD-258: The inbox part of `find_similar_expenses` is a capped scan
-**Status**: Open
+**Status**: Resolved (2026-10-26, MUT-437: `inboxEntries.listMatchCandidates` filtered by window, currency, amount and kind, index `(userId, occurredOn)`)
 **Ticket**: MUT-435 (review D6) — fix with MUT-437
 **Added**: 2026-10-26
 **Priority**: Low
@@ -559,7 +560,7 @@
 **Fix**: decide the phone bar's budget. Either the bar's button hides its label below about 400px (it already does at 360px), or the lockup drops to the mark plus the active name at a smaller M on phones (M ≥ 30 keeps the 12px floor; it still needs 98px). A design call, not a CSS tweak.
 
 ### TD-207: The /app shell sets no tab title, so English users of the app see متابعة
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Ticket**: MUT-402 build
 **Added**: 2026-10-23
 **Priority**: Low
@@ -623,7 +624,7 @@
 **Fix**: run `--check` on a schedule with the admin token in a CI secret (a weekly workflow), or wait for the Terraform provider to support the org settings and move them there.
 
 ### TD-153: A future-dated paid CSV row stops the import halfway and leaves a record-less paid entry
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Ticket**: none (found 2026-10-16, MUT-24 §C coverage pass)
 **Added**: 2026-10-16
 **Priority**: Medium. Money data, but only through Settings → Import with a bad file.
@@ -1026,7 +1027,7 @@
 **Fix**: in the desktop-retirement ticket (none filed yet), remove or gate the banner.
 
 ### TD-134: The desktop bundle keeps the Go hosted card's code
-**Status**: Resolved 2026-10-26 (MUT-445): the desktop build and the Go hosted card were both retired (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the desktop build and the Go hosted card were both retired (ADR-203)
 **Added**: 2026-10-14 (MUT-187, ADR-076 §3)
 **Priority**: Low
 **Impact**: `goHostedEnabled()` is a function call, which Rollup doesn't fold, so `GoHostedCard`, `HostedAccountEntry` and their CSS ship in `dist-desktop`, never rendered (desktop's `__PORTAL_URL__` is `""`, so no portal origin). A few KB.
@@ -1517,7 +1518,7 @@
 **Effort**: Small each
 
 ### TD-074: `migration-safety`'s hand-kept table list misses five live tables
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-12 (MUT-73, found in the audit; brief decision D10)
 **Priority**: Low
 **Impact**: `ALL_TABLES` in `src/db/migration-safety.ts` decides what the post-migration snapshot in the `mutaba3a_backup` IndexedDB contains. It has never listed `paymentRecords` or `recurringOccurrences` (nor the plan tables, which Dexie v24 dropped in MUT-226), so those snapshots, including the one the Dexie v21 upgrade writes, hold no payment records. The user-facing JSON backup (`src/db/backup.ts`) is not affected: it reads `db.tables` and is complete. `importBackupFromFile`, the only restore path for these snapshots, has no UI caller. MUT-73 removed the eight sync names from the list and changed nothing else, to keep a deletion ticket from changing a non-sync path.
@@ -1594,7 +1595,7 @@
 **Effort**: Small
 
 ### TD-064: MUT-82's leftovers around Home's in-place payment
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-12 (MUT-82)
 **Priority**: Low to Medium (item 1 is Medium: it is the sample path visitors take)
 **Impact**: Held back to keep MUT-82 to H1:
@@ -1676,7 +1677,7 @@
 **Effort**: Small
 
 ### TD-071: `src/lib/aggregations.ts` and its forecast types have never had an app consumer
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-12 (found during MUT-58's consumer audit)
 **Priority**: Low
 **Impact**: `src/lib/aggregations.ts` (556 lines: `calculateForecastKPIs`, `calculateMonthActuals`, `calculateRunningBalance`, the `findUnpaidIncome*` finders and their date helpers) is imported only by its own 60-test file. It was added unwired in `9fb9fd7` ("redesign"); the forecast strip computed its own copy instead. The "Forecast KPI Types" block in `src/types/index.ts` (`AmountByCurrency`, `ForecastOptions`, `ForecastKPIs`, `MonthActuals`) is read only by that file, and `AttentionItem` by nothing; its comment still says it replaces `GuidanceItem`, which MUT-58 deleted. Not to be confused with `src/db/aggregations.ts`, which is live (`summarizeOwedByCurrency`, ADR-033). MUT-58 left all of it alone because the money-event read side never kept it alive.
@@ -1781,7 +1782,7 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Remediation**: one first-run surface: either the Welcome dialog creates/skips the profile and then the card guides, or the card absorbs the profile step. Out of MUT-74's scope.
 
 ### TD-050: The document page's payment-request actions fail silently
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-12 (MUT-5 final pass)
 **Priority**: Low
 **Impact**: `useRecordPaymentForRequest`, `useVoidPaymentRequest` and `useCreatePaymentRequest` (`src/hooks/useQueries.ts`) have no `onError`, `DocumentDetailPage` never reads the mutation error, and the app's `QueryClient` has no global mutation error handler. When the repository refuses (a payment record error, a locked entry, an IndexedDB failure), the click does nothing and the document keeps its status. The final pass fixed the one known trigger (the future-date check west of UTC), not the silence.
@@ -1808,7 +1809,7 @@ addition to this one. Explicitly not folded in here (scope guard).
 **Update (2026-10-12, MUT-86):** the payment drawer, which was not listed but used the same lenient path (`formatCurrencyInput` filtering keystrokes, then `parseCurrencyInput`), now validates strictly. `describePaymentAmount` reads the text with `parseAmountInput`, and an unreadable amount or another currency's symbol is a field error. The three drawers above remain. `parseCurrencyInput` and `formatCurrencyInput` (`src/lib/utils.ts`) no longer have any production caller; delete them, and their `utils.test.ts` cases, when this entry closes.
 
 ### TD-046: `useTransactionActions.ts` is dead code carrying the same dateless mark-paid bug ADR-038 just fixed
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-11 (MUT-18)
 **Priority**: Low
 **Impact**: `src/hooks/useTransactionActions.ts` exports `handleMarkPaid`, which
@@ -1976,7 +1977,7 @@ carries no headers or body, so nothing leaks in practice; MUT-38 adds
 object carrying each credential and asserts `[redacted]`.
 
 ### TD-022: Release Pipeline Does Not Verify the Signer Against the Compiled-In Updater Key
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Added**: 2026-10-10
 **Priority**: High
 **Impact**: A release cut without the signing key configured, from the wrong
@@ -2051,7 +2052,7 @@ Test coverage has been significantly improved. Core pages and repositories now m
 ---
 
 ### TD-013: SQLite Migration for Tauri
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Priority**: Medium
 **Introduced**: 2024-06
 **Updated**: 2026-10-13 (MUT-47)
@@ -2372,7 +2373,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ### TD-023: `clearDatabase()` clears five tables, so a legacy import keeps stale optional-area data
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Priority**: Medium
 **Introduced**: pre-2026 (surfaced by MUT-12, 2026-10-10)
 **Impact**: A legacy ("replace all data") import wipes transactions, projects, clients, categories, fxRates and settings but leaves documents, expenses, vendors, retainers and plans. Since MUT-12, the post-import reconcile switches those areas on and the banner announces "your existing data" for rows that are leftovers from before the import.
@@ -2457,7 +2458,7 @@ Document PDF generation uses hardcoded templates (template1, template2, template
 ---
 
 ### TD-031: `RowActionsMenu` keeps its own menu listeners and has no arrow-key support
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Priority**: Low
 **Introduced**: MUT-15, 2026-10-11 (pre-existing; made visible by the new hook)
 **Impact**: `src/components/ui/RowActionsMenu.tsx` duplicates the outside-click
@@ -2515,7 +2516,7 @@ the receipts strings into singular/plural keys with "label: {count}" Arabic.
 ---
 
 ### TD-035: A locked income entry without a profile can't be assigned one
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Priority**: Low
 **Introduced**: found 2026-10-11 while building the unassigned-records drawer
 **Location**: `src/db/repository.ts` `transactionRepo.update` (lock guard), `src/components/drawers/OrphanedRecordsDrawer.tsx`
@@ -2536,7 +2537,7 @@ value is empty, with a repo test; the drawer needs no change.
 ---
 
 ### TD-036: The client and project drawers can save a record without a profile
-**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-202)
+**Status**: Resolved 2026-10-26 (MUT-445): the code it describes was retired with the free web app and the desktop app (ADR-203)
 **Priority**: Medium
 **Introduced**: found 2026-10-11 while tracing where unassigned records come from
 **Location**: `src/components/drawers/ClientDrawer.tsx:165` and `:66`, `src/components/drawers/ProjectDrawer.tsx:175` and `:76`

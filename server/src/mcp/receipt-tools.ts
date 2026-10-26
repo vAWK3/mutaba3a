@@ -38,7 +38,8 @@ const UPLOAD_OUTPUT = {
 const COMPLETE_OUTPUT = { receiptId: z.string(), expenseId: z.string().nullable(), status: z.string(), filingStatus: z.string() };
 
 export function registerReceiptTools(server: McpServer, ctx: McpContext, options: ReceiptToolOptions): void {
-  if (!hasScope(ctx, 'write')) return;
+  // Review D14 (MUT-437): like every write tool, only for a grant that can also read.
+  if (!hasScope(ctx, 'write') || !hasScope(ctx, 'read')) return;
   const deps: ReceiptDeps = { store: ctx.store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds };
   const actorFor = (organization: Organization): ReceiptActor => ({
     organization,
@@ -55,7 +56,7 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
     return organization;
   }
 
-  const expenseTarget = z.object({ kind: z.literal('expense'), expenseId: z.string().uuid().describe('An expense add_expense returned.') });
+  const expenseTarget = z.object({ kind: z.literal('expense'), expenseId: z.string().uuid().describe('An expense id: from add_expense, file_inbox_entry or find_similar_expenses.') });
   const target = options.receiptsLibrary
     ? z.discriminatedUnion('kind', [expenseTarget, z.object({ kind: z.literal('to_review') })]).describe('{ kind: "expense", expenseId } to attach it to that expense, or { kind: "to_review" } to leave it for the person to review in MTB3A.')
     : expenseTarget.describe('{ kind: "expense", expenseId }: the expense this receipt belongs to.');
@@ -67,7 +68,8 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
       description:
         'Get a short-lived URL to upload one receipt file (PDF, JPEG or PNG, up to 10 MB). Then PUT the file bytes to upload.url with exactly upload.headers ' +
         '(for example: curl -X PUT -T receipt.pdf -H "Content-Type: application/pdf" …), then call complete_receipt_upload. ' +
-        'If you cannot make HTTP requests yourself, do not call this: tell the person to attach the file in MTB3A. Each call holds an unfinished upload until it completes.',
+        'If you cannot make HTTP requests yourself, do not call this: tell the person to attach the file in MTB3A. Each call holds an unfinished upload until it completes. ' +
+        'For a receipt, call find_similar_expenses first and attach it to the look-alike the person confirms (one with hasReceipt false); after file_inbox_entry, use the expense id it returned.',
       inputSchema: {
         profileId: z.string().uuid().describe('A profile id from list_profiles.'),
         target,
