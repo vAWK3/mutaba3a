@@ -9,9 +9,9 @@ import { provisionUser } from './helpers/provision.js';
 
 /**
  * MUT-453 (ADR-206): a person reverses a payment and credits what is owed on a profile whose payments they may write.
- * The same two routes Malafat's key uses, now also for a session or device session, limited to rows a person recorded
- * (CAPTURE payments, ADJUSTMENT receivables): a disconnected Malafat firm reads as writer-null, and its own ledger
- * must stay out of reach (review D5).
+ * The same two routes Malafat's key uses, now also for a session or device session: only on a profile the person owns
+ * (its creator or a co-owner, `ownsProfile`; qa-reconcile D1 amendment), and only on rows a person recorded (CAPTURE
+ * payments, ADJUSTMENT receivables, review D5). A firm's members, a disconnected Malafat firm's included, get 403.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
@@ -187,11 +187,12 @@ describe('MUT-453: a person reverses a payment on their own profile', () => {
     expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain: 'payments', writerOfRecord: 'MALAFAT' } });
   });
 
-  it('on a disconnected Malafat firm, Malafat’s own payment → 404, untouched (D5)', async () => {
+  it('on a firm the person does not own (a disconnected Malafat firm), even Malafat’s own payment → 403 NOT_OWNER, untouched', async () => {
     const { h, gone, u } = await setup();
     const { payment, receivable } = await malafatRows(h, gone.id);
     const res = await reverse(h, u.as(gone.id), payment.id);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { reason: 'NOT_OWNER' } });
     expect(await h.store.payments.getById(gone.id, payment.id)).toMatchObject({ status: 'POSTED', allocatedMinor: 20000n });
     expect(await h.store.receivables.getById(gone.id, receivable.id)).toMatchObject({ paidMinor: 20000n });
   });
@@ -249,29 +250,78 @@ describe('MUT-453: a person credits what is owed on their own profile', () => {
     expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain: 'payments', writerOfRecord: 'MALAFAT' } });
   });
 
-  it('on a disconnected Malafat firm, an installment → 404, no credit (D5)', async () => {
+  it('on a firm the person does not own, an installment → 403 NOT_OWNER, no credit', async () => {
     const { h, gone, u } = await setup();
     const { receivable } = await malafatRows(h, gone.id);
     const res = await credit(h, u.as(gone.id), receivable.id, '10.00');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'NOT_OWNER' });
     expect(await h.store.receivables.listCredits(gone.id, receivable.id)).toEqual([]);
   });
 });
 
-describe('MUT-453: /v1/me tells the truth about payments (D1)', () => {
-  it('a profile says payments read-write exactly where a person-recorded row can be reversed', async () => {
+describe('MUT-453: /v1/me tells the truth about corrections (D1, owner-only)', () => {
+  it('a person may correct exactly where /v1/me says the profile is owned and its payments read-write', async () => {
     const { h, m, gone, u } = await setup();
     const me = await read(await h.app.request('/v1/me', { headers: u.as(u.personal) }));
-    const access = new Map((me.profiles as Loose[]).map((p) => [p.id as string, p.access.payments as string]));
-    expect(access.get(u.personal)).toBe('read-write');
-    expect(access.get(gone.id)).toBe('read-write');
-    expect(access.get(m.id)).toBe(sessionAccessFor('payments', 'MALAFAT'));
+    const may = new Map((me.profiles as Loose[]).map((p) => [p.id as string, p.owned === true && p.access.payments === 'read-write']));
+    expect(may.get(u.personal)).toBe(true);
+    expect(may.get(gone.id)).toBe(false);
+    expect(may.get(m.id)).toBe(false);
+    expect(sessionAccessFor('payments', 'MALAFAT')).not.toBe('read-write');
 
-    for (const profile of [u.personal, gone.id]) {
-      const { paymentId } = await settledOwed(h, u.as, profile);
-      expect((await reverse(h, u.as(profile), paymentId)).status).toBe(200);
-    }
+    const own = await settledOwed(h, u.as, u.personal);
+    expect((await reverse(h, u.as(u.personal), own.paymentId)).status).toBe(200);
+    const firm = await settledOwed(h, u.as, gone.id);
+    expect((await reverse(h, u.as(gone.id), firm.paymentId)).status).toBe(403);
+    expect((await credit(h, u.as(gone.id), firm.receivableId, '1.00')).status).toBe(403);
     expect((await reverse(h, u.as(m.id), MISSING)).status).toBe(403);
+  });
+});
+
+describe('MUT-453: a person reverses only what a person put on the books (review fix)', () => {
+  it('a captured payment applied to an entry Malafat posted → 404, nothing undone', async () => {
+    const { h, u } = await setup();
+    const { receivable } = await malafatRows(h, u.personal);
+    const { payment } = await h.store.payments.create(
+      { organizationId: u.personal, customerId: receivable.customerId, projectId: receivable.projectId, currency: 'ILS', amountMinor: 10000n, receivedOn: '2026-10-20', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 10000n }] },
+      h.clock.now,
+    );
+    const res = await reverse(h, u.as(u.personal), payment.id);
+    expect(res.status).toBe(404);
+    expect(await h.store.payments.getById(u.personal, payment.id)).toMatchObject({ status: 'POSTED', allocatedMinor: 10000n });
+  });
+});
+
+describe('MUT-453: a person’s credit is dated like any money they record (review fix)', () => {
+  it('after today or more than ten years back → 422 DATE_INVALID; a past date inside the window is kept', async () => {
+    const { h, u } = await setup();
+    const receivableId = await openOwed(h, u.as, u.personal, '100.00');
+    const dated = (effectiveDate: string) => h.app.request(`/v1/receivables/${receivableId}/credits`, json({ amount: '1.00', reason: 'Typo', effectiveDate }, { ...u.as(u.personal), ...idem() }));
+    for (const bad of ['2026-10-27', '2010-01-01']) {
+      const res = await dated(bad);
+      expect(res.status).toBe(422);
+      expect((await read(res)).error.details).toMatchObject({ reason: 'DATE_INVALID', field: 'effectiveDate' });
+    }
+    const ok = await dated('2026-10-20');
+    expect(ok.status).toBe(201);
+    expect((await read(ok)).credit).toMatchObject({ effectiveDate: '2026-10-20' });
+  });
+});
+
+describe('MUT-453: what the summaries say after a correction (plan test 13)', () => {
+  it('a reversed settle payment owes the entry again and applies nothing; a credit lowers what is outstanding', async () => {
+    const { h, u } = await setup();
+    const { customerId, paymentId } = await settledOwed(h, u.as, u.personal, '500.00');
+    expect((await reverse(h, u.as(u.personal), paymentId)).status).toBe(200);
+    const after = (await read(await h.app.request('/v1/summaries/organization', { headers: u.as(u.personal) }))).currencies.find((x: Loose) => x.currency === 'ILS');
+    expect(after.outstanding).toBe('500.00');
+    expect(after.customers.find((x: Loose) => x.customerId === customerId)).toMatchObject({ outstanding: '500.00', unallocated: '0.00', lastPaymentOn: null });
+
+    const owedId = (await read(await h.app.request('/v1/receivables', { headers: u.as(u.personal) }))).items[0].id as string;
+    expect((await credit(h, u.as(u.personal), owedId, '200.00')).status).toBe(201);
+    const credited = (await read(await h.app.request('/v1/summaries/organization', { headers: u.as(u.personal) }))).currencies.find((x: Loose) => x.currency === 'ILS');
+    expect(credited.outstanding).toBe('300.00');
   });
 });
 

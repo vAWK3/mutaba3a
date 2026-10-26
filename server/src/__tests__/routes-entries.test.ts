@@ -69,7 +69,7 @@ async function person(h: Harness, organizationIds: string[]) {
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const session = { cookie: `${COOKIE}=${token}`, ...SAME_ORIGIN };
   const as = (profile: string) => ({ ...session, 'x-mutaba3a-profile': profile });
-  return { session, as, userId: created.user.id };
+  return { session, as, userId: created.user.id as string, personal: created.personalProfile.id as string };
 }
 
 type Person = Awaited<ReturnType<typeof person>>;
@@ -291,7 +291,9 @@ describe('GET /v1/entries — what counts as an entry', () => {
   });
 
   it('shows what was credited on an Owed, and a person’s reversal with its reason; the reversed payment no longer settles it (MUT-453)', async () => {
-    const { h, b, u, feed } = await setup();
+    const { h, u, feed } = await setup();
+    // MUT-453 D1: only a profile the person owns takes corrections, so this runs on their personal one.
+    const b = { id: u.personal };
     const customerB = await customer(h, u.as(b.id));
     const owed = await income(h, u, b.id, { kind: 'owed', customerId: customerB.id, title: 'Logo', amount: '500.00' });
     h.tick();
