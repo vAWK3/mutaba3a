@@ -1,6 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { openFreshApp, logIncome, localDateFromToday } from '../../support/app';
 import { SCHEMES } from '../../support/brand';
 
 /**
@@ -64,18 +63,12 @@ async function expectTextLinkHover(page: Page, label: string, link: Locator) {
   await expect.poll(async () => (await after()).decoration, { message: `${label}: hovered underline` }).toBe('underline');
 }
 
-/** Settings › About asks GitHub for the latest release; answer 404 so nothing leaves the host and the fallback renders */
-async function stubGitHub(page: Page) {
-  await page.route('https://api.github.com/**', (route) => route.fulfill({ status: 404, body: '{}' }));
-}
-
 for (const scheme of SCHEMES) {
   test(
     `${scheme} mode: on the landing and privacy pages, hovered controls keep their label colour and text links underline`,
     { tag: '@web.brand.link-hover' },
     async ({ page, step }) => {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-      await stubGitHub(page);
 
       await step('Landing: the hero button and a Get it card keep their colours; the hero’s other link underlines', async () => {
         await page.goto('/');
@@ -99,37 +92,6 @@ for (const scheme of SCHEMES) {
       await step('Privacy: the back link underlines', async () => {
         await page.goto('/privacy');
         await expectTextLinkHover(page, 'privacy back link', page.locator('a.privacy-policy-back'));
-      });
-    },
-  );
-
-  test(
-    `${scheme} mode: in the app, hovered controls keep their label colour and text links underline`,
-    { tag: '@web.brand.link-hover' },
-    async ({ page, step }) => {
-      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-      await stubGitHub(page);
-      await openFreshApp(page, '/income');
-      await logIncome(page, { title: 'Logo redesign', amount: '1200', client: 'Acme Studio', dueDate: localDateFromToday(-5) });
-
-      await step('Home: the sidebar mark and the Needs attention client link keep their colours', async () => {
-        await page.goto('/app/');
-        await expectControlHover(page, 'sidebar mark', page.locator('a.brand'));
-        await expectControlHover(page, 'Needs attention client link', page.locator('a.home-attention-open').first());
-      });
-
-      await step('Clients: a client’s name underlines, and so does the breadcrumb back to Clients', async () => {
-        await page.goto('/app/clients');
-        const name = page.locator('a.client-index-name').filter({ hasText: 'Acme Studio' });
-        await expectTextLinkHover(page, 'client name', name);
-        await name.click();
-        await expect(page.getByRole('heading', { level: 1, name: 'Acme Studio' })).toBeVisible();
-        await expectTextLinkHover(page, 'breadcrumb', page.locator('a.breadcrumb-link'));
-      });
-
-      await step('Settings › About: the link buttons keep their labels', async () => {
-        await page.goto('/app/settings');
-        await expectControlHover(page, 'Buy Me a Coffee', page.getByRole('link', { name: 'Buy Me a Coffee' }));
       });
     },
   );

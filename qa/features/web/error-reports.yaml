@@ -37,21 +37,6 @@ features:
       - Open /terms/2026-10-19; something throws
     expect:
       - One report with route /terms/:version
-  - id: app-routes-silent
-    title: The free web app never sends an error report, even when reached from the website (MUT-150, ADR-024)
-    tier: core
-    legacy: [MUT-150]
-    paths:
-      - src/main.tsx
-    steps:
-      - Open the privacy policy and wait until its error reporting has loaded
-      - With error reporting live, the page moves to /app without reloading, and something throws there
-      - From the website, open the web app and log an income
-      - Something in the app throws an error nobody catches
-      - Open the app directly in a new tab, and something throws there too
-    expect:
-      - Not one request reaches Sentry
-      - The app never loads Sentry's code at all
   - id: landing-crash-screen
     title: A website page that can't load shows its own screen in the visitor's language and reports once (MUT-150)
     tier: secondary

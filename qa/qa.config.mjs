@@ -2,10 +2,9 @@
  * release-qa config for mini-crm (MUT-97, companion to MAL-1007).
  * Engine and docs: ~/Work/tools/release-qa (SKILL.md).
  *
- * mini-crm is a single local-first SPA: no server, no auth, no shared database.
- * Every browser context gets its own fresh IndexedDB, so there is no seed step and
- * no personas — each spec dismisses the first-run "Welcome" dialog itself
- * (support/app.ts openFreshApp), same as the e2e/ suite this catalog replaces.
+ * Apps: the website (landing, privacy, terms), the hosted portal on stubbed and on live
+ * APIs, and the carry-over between the portal's two addresses. The free web app at /app
+ * and the desktop apps are retired (MUT-445).
  */
 /** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
 export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
@@ -27,40 +26,41 @@ export default {
 
   apps: {
     web: {
-      label: 'Web app',
+      label: 'Website',
       platform: 'web',
       // `make release web` tags web-v<version> (scripts/tag-release.sh). The plain v* tags
-      // belong to the retired desktop pipeline and stopped at v0.0.67.
+      // belong to the retired desktop app and stopped at v0.0.67.
       release: { strategy: 'tag', pattern: 'web-v*', version: 'web-v(.+)' },
+      // What the website build loads (src/main.tsx), and what Netlify serves beside it. The rest of src/ outside
+      // src/hosted is the portal's, in its watch below.
       watch: [
-        'src/**',
+        'src/main.tsx',
+        'index.html',
+        'src/index.css',
+        'src/pages/landing/**',
+        'src/content/**',
+        'src/components/brand/**',
+        'src/components/ui/{ErrorBoundary,Input}.*',
+        'src/hooks/**',
+        'src/lib/{appVersion,dates,goHosted,utils}.ts',
+        'src/lib/{analytics,i18n,theme}/**',
+        'src/styles/**',
+        'src/assets/**',
+        'public/**',
+        'netlify.toml',
+        // MUT-387: Malafat's OAuth client document; `make release web` checks the live copy (release:oauth-client)
+        '!public/.well-known/**',
         '!src/**/__tests__/**',
         '!src/**/*.test.{ts,tsx}',
-        '!src/test/**',
-        '!src/**/*.d.ts',
-        '!src/hosted/**', // separate deploy target (MUT-34/45) — its own future qa app, not this one
-        '!src/demo/**', // seed data for local dev, not a user-facing flow
-        // Desktop-only (Tauri): they render nothing in a browser, so no web spec can reach them.
-        '!src/components/ui/UpdateBanner.*',
-        '!src/hooks/useTauriUpdater.ts',
-        // Only the hosted portal renders it; it is in the portal app's watch instead.
-        '!src/components/filters/SegmentedTabs.tsx',
-        // MUT-346: only the portal renders it (the Updated-terms dialog); the portal app's watch has it.
-        '!src/components/ui/{BlockingDialog.*,blockingLayer.ts}',
-        // MUT-291: the carry-over spans both apps; the carry-over app owns it.
-        '!src/pages/carryOver/**',
-        '!src/lib/carryOver/**',
       ],
       baseURL: 'http://localhost:5173',
       attachURL: 'http://localhost:5173',
-      // Plain `vite` (no --mode): __BUILD_MODE__ resolves to "web", which mounts the
-      // app under /app — every spec below navigates to /app/... to match.
       // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
       // answers every PostHog request locally, so nothing is ever sent.
       // MUT-150: the landing's error reports run on the same dummy DSN; every spec answers Sentry locally
       start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --port 5173 --strictPort`, env: { QA_VITE_ROLE: 'web', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN } },
       ready: 'http://localhost:5173',
-      personas: {}, // no auth — local-first, single-user
+      personas: {}, // no auth
     },
     portal: {
       label: 'Hosted portal',
@@ -70,7 +70,10 @@ export default {
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
       // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/components/filters/SegmentedTabs.tsx', 'src/components/ui/{BlockingDialog.*,blockingLayer.ts}', 'src/lib/observability/**', '!src/hosted/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/lib/observability/**',
+        // MUT-445: the shared UI only the portal renders now that the free web app is retired
+        'src/components/{expenses,filters,icons,ui}/**', 'src/lib/{dom,forms,motion,whatsNew}/**', 'src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts',
+        '!src/components/ui/{ErrorBoundary,Input}.*', '!src/hosted/**/__tests__/**', '!src/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
         '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
         '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts',
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
@@ -190,13 +193,12 @@ export default {
       personas: {},
     },
     'carry-over': {
-      label: 'Carry-over: the old web app and the old address to the new address',
+      label: 'Carry-over: the old address, or a file from the old web app, to the new address',
       platform: 'web',
-      // The receiver ships with the portal (api-v*); the old app's screen with the web app (web-v*). The receiver is
-      // the half every carry-over needs, so this app follows the API's tag.
+      // The receiver and both portals ship with the API (api-v*).
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
-      watch: ['src/pages/carryOver/**', 'src/lib/carryOver/**', 'src/hosted/pages/carry-over/**', 'src/hosted/local/carryOver/**', '!**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
-      // support/carry-over.mjs (MUT-291 R6): the old app on :5183, the old portal on :5187 and the new on :5188, all
+      watch: ['src/lib/carryOver/**', 'src/hosted/pages/carry-over/**', 'src/hosted/local/carryOver/**', '!**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
+      // support/carry-over.mjs (MUT-291 R6): the old portal on :5187 and the new on :5188, both
       // on the loopback, each told the others' origins through MUTABA3A_CARRY_OVER. No API runs; specs answer /v1.
       baseURL: 'http://127.0.0.1:5188',
       attachURL: 'http://127.0.0.1:5188',

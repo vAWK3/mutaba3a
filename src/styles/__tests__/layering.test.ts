@@ -5,10 +5,8 @@ import { parseCss, repoPath } from '../../test/css/brandCss';
 /**
  * Stacking order (MUT-92 F2): content sits at 100 or below, fixed top bars
  * above it, and drawers above any top bar, so a drawer header is never
- * clipped under the demo bar. Modals and toasts stay above drawers.
+ * clipped under a bar. Modals and toasts stay above drawers.
  */
-
-const CONTENT_MAX = 100;
 
 function zIndexOf(file: string, selector: string): number {
   let value: string | undefined;
@@ -28,12 +26,5 @@ describe('layering', () => {
 
   it('keeps the drawer above its own overlay', () => {
     expect(drawer).toBeGreaterThan(overlay);
-  });
-
-  it('puts the demo bar above content and below drawers', () => {
-    const demoBanner = zIndexOf('src/components/ui/DemoBanner.css', '.demo-banner');
-
-    expect(demoBanner).toBeGreaterThan(CONTENT_MAX);
-    expect(demoBanner).toBeLessThan(overlay);
   });
 });

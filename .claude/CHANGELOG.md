@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — The desktop apps and the free web app at /app are retired (MUT-445, ADR-202)
+
+**Why:** MTB3A runs on iOS, Android and the web portal only (Basel, 2026-10-26). MUT-382 removed `/download`; this removes what was left. Basel chose to retire `/app` now, carry-over sender included: a free user's records stay in that browser unless they saved a records file, which the portal still restores.
+
+### Removed
+- The Tauri app (`src-tauri/`), the `desktop` Vite mode, `deploy.sh`, `deploy.ps1`, `scripts/release.ts`/`release-steps.ts`/`release-files.ts`, `release.env.example`, `.github/workflows/build-windows.yml`, the `tauri`/`icons:desktop`/`*:desktop`/`deploy`/`release` npm scripts, and the `@tauri-apps/*`, `dexie`, `file-saver` and `vite-plugin-pwa` packages.
+- The GitHub-release update check: `useLatestRelease`, `useCheckForUpdates`, `useTauriUpdater`, `UpdateBanner`, the sidebar badge, Settings › About's update rows and `settings.updates.*`.
+- The free web app: everything under `src/` that only it reached (≈250 modules, Dexie, the router, drawers, pages, onboarding, What's new, the Go hosted card, the carry-over screen) and their tests; 2,200 lines of its translations (`i18n:check` orphans) and 14 locale files.
+- Release-QA: the web app's 18 app-only areas; the app halves of `brand`, `link-hover`, `error-reports`, `landing` and `landing-analytics`; the carry-over app's old-app flows and its third dev server.
+- The storage-seam lint rules, the bundle guard's `dist-desktop` and service-worker precache checks.
+
+### Changed
+- `src/main.tsx` renders the landing, `/privacy` and `/terms` and sends any other path home; Netlify redirects `/app` and `/app/*` to `/`; the apex no longer sends `/app` to the old host.
+- `public/sw.js` replaces the old Workbox worker: on the browser's update check it deletes every cache, unregisters and reloads open tabs.
+- `make release web` / `scripts/bump-version.sh web` bump `package.json` and its lock only.
+- `src/lib/goHosted.ts` keeps only `hostedPortalUrl`; `src/lib/malafatSuggestions.ts` only the portal's `pickClientsMoment`.
+- Release-QA: the `web` app watches the website only; the shared UI only the portal renders moved to the portal's watch (`portal.shell` paths); the carry-over app restores a records file written by the spec (`carry-over.carry.records-file`) and carries into a device with records from the old address; new `web.landing.retired-paths`.
+- `src/content/legal/termsManifest.ts` names Node's types itself.
+
+### Technical
+- ADR-202; ADR-016 and ADR-031 superseded, ADR-001/002 retired; TD-262, TD-263 added; TD-013, 022, 023, 031, 035, 036, 046, 050, 064, 071, 074, 134, 153, 207 resolved by the retirement.
+- Checks: `i18n:check`, lint, typecheck pass; the full Vitest run has one failure, `no-hardcoded-hosts`, which MUT-382's `info@mtb3a.com` copy causes on main too.
+
 ## [Unreleased] - 2026-10-26 — Claude can add expenses and receipts (MUT-436, ADR-201)
 
 **Why:** the epic's purpose: a person's own Claude logs receipts and statement lines as expenses, asked first and safe to retry.

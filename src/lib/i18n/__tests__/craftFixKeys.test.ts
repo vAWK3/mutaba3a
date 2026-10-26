@@ -38,11 +38,6 @@ describe('craft-fix i18n keys (MUT-92)', () => {
     }
   });
 
-  it('names the product in About in both languages (F9)', () => {
-    expect(lookup(en, 'settings.about.name')).toBe('MTB3A');
-    expect(lookup(ar, 'settings.about.name')).toBe('متابعة');
-  });
-
   it.each(LOCALES)('%s keeps the Today and Yesterday labels (F7)', (_locale, dict) => {
     for (const key of ['time.today', 'time.yesterday']) {
       expect(String(lookup(dict, key)).trim().length, key).toBeGreaterThan(0);

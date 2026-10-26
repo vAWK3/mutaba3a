@@ -655,8 +655,6 @@ describe('classed text links', () => {
     '.hp-back',
     '.hero-cta-alt',
     '.privacy-policy-back',
-    '.download-link',
-    '.download-alt-link',
   ];
 
   function hoverDecls(className: string): Record<string, string> {
@@ -904,10 +902,6 @@ describe('accent-text guard', () => {
  * data (category and business colours), listed here with the reason.
  */
 const ALLOWED_LITERAL_FILES: Record<string, string> = {
-  'src/db/defaultExpenseCategories.ts': 'user data: the default expense category colours a user can recolour',
-  'src/demo/seedData/categories.ts': 'user data: the sample session\'s category colours',
-  'src/demo/seedData/profile.ts': 'user data: the sample businesses\' chosen colours',
-  'src/components/ui/profileAvatarStyle.ts': 'user data: the default business colour and the ink on it (TD-079 picks the ink by luminance)',
 };
 
 /**

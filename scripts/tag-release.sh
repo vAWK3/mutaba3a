@@ -8,8 +8,8 @@
 #
 # release-qa (qa/qa.config.mjs) scopes a QA run to what changed since the newest
 # `web-v*` tag (web app) or `api-v*` tag (API + hosted portal, which ship
-# together through `make release server`). The desktop pipeline keeps its own
-# plain `v*` tags.
+# together through `make release server`). The plain `v*` tags belong to the
+# retired desktop app (MUT-445).
 #
 # A tag that already points at another commit is never moved — that happens
 # when a release keeps its version — and the script says so instead.

@@ -48,11 +48,6 @@ describe('posthog-js stays in the analytics modules', () => {
   it('forbids the shared library from loading the SDK itself (review F7)', async () => {
     expect(restricted(await rulesFor(VALUE_IMPORT, 'src/lib/analytics/posthogConfig.ts'))).toBe(true);
   }, 30_000);
-
-  it('keeps the storage seam in the shared library while adding the PostHog rule', async () => {
-    const dbImport = "import { db } from '../../db';\nexport const x = db;\n";
-    expect(restricted(await rulesFor(dbImport, 'src/lib/analytics/__probe__.ts'))).toBe(true);
-  }, 30_000);
 });
 
 describe('the counting code stays with the pages that count (review F2, F4)', () => {
@@ -63,7 +58,7 @@ describe('the counting code stays with the pages that count (review F2, F4)', ()
     expect(restricted(await rulesFor(LANDING_COUNTER, filePath))).toBe(true);
   }, 30_000);
 
-  it.each(['src/pages/clients/__probe__.tsx', 'src/pages/landing/__probe__.tsx', 'src/pages/download/__probe__.tsx'])(
+  it.each(['src/pages/clients/__probe__.tsx', 'src/pages/landing/__probe__.tsx'])(
     'forbids %s from loading the guard with the page, outside the analytics module',
     async (filePath) => {
       expect(restricted(await rulesFor(GUARD, filePath))).toBe(true);
@@ -71,7 +66,7 @@ describe('the counting code stays with the pages that count (review F2, F4)', ()
     30_000,
   );
 
-  it.each(['src/pages/landing/__probe__.tsx', 'src/pages/download/__probe__.tsx'])('lets the landing pages in %s call the counter', async (filePath) => {
+  it.each(['src/pages/landing/__probe__.tsx'])('lets the landing pages in %s call the counter', async (filePath) => {
     const fromPage = filePath.includes('download') ? LANDING_COUNTER : LANDING_COUNTER.replace('../landing/analytics', './analytics');
     expect(restricted(await rulesFor(fromPage, filePath))).toBe(false);
   }, 30_000);

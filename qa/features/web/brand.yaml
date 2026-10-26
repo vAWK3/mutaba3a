@@ -1,6 +1,6 @@
 app: web
 area: brand
-title: Brand v2 (tokens, type, contrast)
+title: Brand v2 on the website (tokens, contrast, layout)
 tier: core
 paths:
   - src/styles/**
@@ -12,19 +12,11 @@ paths:
   - public/favicon*
   - public/apple-touch-icon.png
   - public/og-card-*
+  - public/icons/**
   - src/components/brand/**
   - src/lib/theme/themeColorMeta.ts
   - src/assets/brand/**
 features:
-  - id: contrast-app
-    title: Home, the payment drawer, Income, the income drawer, Clients beside a profile and Settings pass axe in light and dark, colour contrast included (MUT-102)
-    tier: core
-    legacy: [MUT-102]
-    steps:
-      - Log two clients' income, one overdue
-      - In light mode, then in dark mode, open each surface and run axe
-    expect:
-      - No axe violation on any surface, colour-contrast included
   - id: contrast-landing
     title: The landing page passes axe in light and dark, colour contrast included
     tier: core
@@ -32,81 +24,30 @@ features:
       - Open / in light mode, then in dark mode
     expect:
       - No axe violation, colour-contrast included
-  - id: type
-    title: Thmanyah Sans body text, Serif Display 700 headings and Plex Mono tabular amounts, in English and Arabic, with no font CDN
-    tier: core
-    steps:
-      - Open Home, Income, Clients and the landing page, in English then Arabic
-    expect:
-      - The body computes Thmanyah Sans at 16px and the face is loaded
-      - Page headings and the landing headline (inner lines too, TD-048) compute Thmanyah Serif Display 700
-      - Amounts compute IBM Plex Mono with tabular-nums
-      - Every font and stylesheet request is same-origin
-  - id: theme-states
-    title: Under OS light and OS dark, the theme toggle's Light, Dark and System each paint the right canvas, and focus shows a ring
-    tier: secondary
-    paths:
-      - src/lib/theme/**
-      - src/components/layout/ThemeToggle.tsx
-    steps:
-      - Emulate OS light, then OS dark
-      - Toggle Light, Dark, System
-      - Tab to a button
-    expect:
-      - The computed --bg is the light or dark canvas the state calls for, in all four states
-      - The focused button has a box-shadow focus ring
   - id: layout
-    title: At 375px and 1280px, in English and Arabic, Home, Clients, Income, a drawer, Settings, the landing page and the privacy page fit the window
+    title: At 375px and 1280px, in English and Arabic, the landing page and the privacy page fit the window
     tier: secondary
     paths:
-      # Settings › Businesses' Hosted account row: its nowrap button once made Settings scroll sideways at 375px
-      - src/pages/settings/HostedAccountEntry.tsx
-      - src/pages/settings/HostedAccountEntry.css
-      # MUT-165 D9/D11: the spacing sweep's landing surfaces and the segmented control's inset
+      # MUT-165 D9: the spacing sweep's landing surfaces
       - src/pages/landing/LandingPage.css
       - src/pages/landing/PrivacyPolicyPage.css
       - src/pages/landing/components/HeroSection.css
-      - src/components/ui/SegmentedControl.css
     steps:
       - Set the window to 375 × 812, then 1280 × 720, in each language
-      - Open each surface, then the landing page and the privacy page
-      - On Settings, measure the Language and Theme controls' highlights
+      - Open the landing page and the privacy page
     expect:
-      - The page never scrolls sideways and the drawer sits inside the window
-      - Each segmented highlight's top and bottom inset equal its track's padding, so it sits centred
-      - A screenshot of each surface is attached for review
-  - id: date-width
-    title: "Income at 375px in Arabic is the same width on any date: compact dates use the tabular figure face (MUT-250)"
-    tier: secondary
-    legacy: [MUT-250]
-    paths:
-      - src/components/ui/CompactDate.tsx
-    steps:
-      - Set the clock to 11 November, 8 August and 1 October in turn
-      - Each time, log two entries and open Income in Arabic at 375px
-    expect:
-      - The page is the same width on every date, no wider than Income's known overflow
+      - The page never scrolls sideways
+      - A screenshot of each page is attached for review
   - id: chrome-icons
     title: The tab shows the Brand v2 favicon, a cream tile in a light browser and a plum tile in a dark one, and the head has the PNG fallbacks and apple-touch icon (MUT-104)
     tier: core
     legacy: [MUT-104]
     steps:
-      - Emulate OS light, then OS dark, and open /app/clients
+      - Emulate OS light, then OS dark, and open the landing page
       - Open /favicon.svg directly in each scheme
     expect:
       - The favicon tile is #FBF1D8 in light and #221B2D in dark, never black
       - The head links /favicon.svg, /favicon-32.png, /favicon-16.png and /apple-touch-icon.png, and each returns 200
-  - id: mark-follows-theme
-    title: The sidebar mark and the browser bar colour follow the theme toggle's Light, Dark and System (MUT-104)
-    tier: core
-    legacy: [MUT-104]
-    paths:
-      - src/components/layout/SidebarNav.tsx
-    steps:
-      - Under OS light, then OS dark, toggle Light, Dark, System
-    expect:
-      - The sidebar mark is mark.svg on the light canvas and mark-dark.svg on the dark one
-      - Both theme-color metas hold the chosen canvas for Light or Dark, and the per-scheme canvas for System
   - id: link-preview
     title: The built landing page carries the Arabic link-preview card (MUT-104)
     tier: secondary
@@ -122,41 +63,17 @@ features:
     tier: secondary
     paths:
       - src/pages/landing/**
-      - src/pages/clients/**
-      - src/pages/settings/AboutSection.tsx
-      - src/components/layout/**
-      - src/components/home/**
     steps:
-      - In light mode, then dark mode, hover the landing hero button, a Get it card, the sidebar mark, Home's Needs attention client link and Settings › About's link buttons
-      - Hover the hero's other link, the privacy page's back link, a client's name on Clients and the client breadcrumb
+      - In light mode, then dark mode, hover the landing hero button and a Get it card
+      - Hover the hero's other link and the privacy page's back link
       - Hover an unclassed link
     expect:
       - Controls keep their label colour (or the one their own hover sets) and computed text-decoration-line stays none
       - Text links compute text-decoration-line underline
       - The unclassed link takes --link-hover and an underline
 
-  - id: loader-slow-route
-    title: A slow route shows nothing for 0.4 s, then the bloom loader named "Loading" in the theme's colours, then the page; reduced motion holds the still mark with the word; it sits centred and unmirrored in English and Arabic (MUT-206)
-    tier: core
-    paths:
-      - src/components/brand/BrandLoader.tsx
-      - src/components/brand/BrandLoader.css
-      - src/components/brand/bloomLoaderData.ts
-      - src/router.tsx
-      - src/index.css
-    steps:
-      - Turn on Insights, then open it while its code is slow to download (held 2 s), in light and in dark
-      - Open it again with reduced motion on
-      - At 1440 × 900, open it in English, then in Arabic
-    expect:
-      - For the first 0.4 s the loader's status is empty and nothing is drawn
-      - Then the mark blooms (four path morphs and a turn), the status says "Loading", and the dot is the theme's mark colour
-      - axe finds no violation on the loader screen
-      - The page replaces the loader once its code arrives
-      - Under reduced motion the mark is still, with "Loading" written under it
-      - The mark's centre is the page column's centre (±1 px) and the mark is never mirrored
   - id: boot-splash
-    title: Before any JavaScript the app and the landing show the 80 px mark centred on the brand canvas, in the OS's light or dark scheme (MUT-207)
+    title: Before any JavaScript the landing shows the 80 px mark centred on the brand canvas, in the OS's light or dark scheme (MUT-207)
     tier: core
     paths:
       - index.html
@@ -165,7 +82,7 @@ features:
       - src/components/brand/bootDelay.ts
       - src/main.tsx
     steps:
-      - With scripts off, under OS light then OS dark, open /app/ and /
+      - With scripts off, under OS light then OS dark, open /
     expect:
       - The splash's background is the canvas the token file names for that scheme
       - The mark is loaded (the dark file under OS dark), 80 px, and centred in the window (±1 px)

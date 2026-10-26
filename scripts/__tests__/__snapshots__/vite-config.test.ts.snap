@@ -1,89 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`vite.config > leaves the desktop build exactly as it was 1`] = `
-{
-  "base": "./",
-  "build": {
-    "outDir": "dist-desktop",
-    "rollupOptions": {
-      "output": {
-        "manualChunks": {
-          "vendor-db": [
-            "dexie",
-          ],
-          "vendor-forms": [
-            "react-hook-form",
-            "zod",
-          ],
-          "vendor-query": [
-            "@tanstack/react-query",
-          ],
-          "vendor-react": [
-            "react",
-            "react-dom",
-            "react/jsx-runtime",
-          ],
-          "vendor-router": [
-            "@tanstack/react-router",
-          ],
-        },
-      },
-    },
-    "target": "esnext",
-  },
-  "clearScreen": false,
-  "define": {
-    "__APP_VERSION__": "<package.json version>",
-    "__BUILD_MODE__": ""desktop"",
-    "__CARRY_OVER__": "{"sources":{},"portalOrigin":null}",
-    "__LANDING_SENTRY_DSN__": """",
-    "__LANDING_SENTRY_ENABLED__": "false",
-    "__LANDING_SENTRY_ENVIRONMENT__": """",
-    "__LANDING_SENTRY_RELEASE__": """",
-    "__PORTAL_URL__": """",
-    "__POSTHOG_KEY__": """",
-  },
-  "plugins": [
-    "vite:react-babel",
-    "vite:react-refresh",
-    "vite:react-virtual-preamble",
-    "vite-plugin-pwa",
-    "vite-plugin-pwa:info",
-    "vite-plugin-pwa:build",
-    "vite-plugin-pwa:dev-sw",
-    "vite-plugin-pwa:pwa-assets",
-  ],
-  "server": {
-    "host": "127.0.0.1",
-    "port": 5173,
-    "proxy": {
-      "/download/mac": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/release-notes": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/windows": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/windows-exe": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-    },
-    "strictPort": true,
-  },
-}
-`;
-
-exports[`vite.config > leaves the web build exactly as it was 1`] = `
+exports[`vite.config > leaves the website build exactly as it was 1`] = `
 {
   "base": "/",
   "build": {
@@ -91,26 +8,13 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "rollupOptions": {
       "output": {
         "manualChunks": {
-          "vendor-db": [
-            "dexie",
-          ],
-          "vendor-forms": [
-            "react-hook-form",
-            "zod",
-          ],
           "vendor-posthog": [
             "posthog-js",
-          ],
-          "vendor-query": [
-            "@tanstack/react-query",
           ],
           "vendor-react": [
             "react",
             "react-dom",
             "react/jsx-runtime",
-          ],
-          "vendor-router": [
-            "@tanstack/react-router",
           ],
         },
       },
@@ -120,8 +24,6 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
   "clearScreen": false,
   "define": {
     "__APP_VERSION__": "<package.json version>",
-    "__BUILD_MODE__": ""web"",
-    "__CARRY_OVER__": "<config/hosts.json carry-over origins>",
     "__LANDING_SENTRY_DSN__": """",
     "__LANDING_SENTRY_ENABLED__": "false",
     "__LANDING_SENTRY_ENVIRONMENT__": """",
@@ -138,37 +40,10 @@ exports[`vite.config > leaves the web build exactly as it was 1`] = `
     "mutaba3a:legal-terms-manifest",
     "mutaba3a:domain-move-redirects",
     "mutaba3a:hosted-offer-dev-route",
-    "vite-plugin-pwa",
-    "vite-plugin-pwa:info",
-    "vite-plugin-pwa:build",
-    "vite-plugin-pwa:dev-sw",
-    "vite-plugin-pwa:pwa-assets",
   ],
   "server": {
     "host": "127.0.0.1",
     "port": 5173,
-    "proxy": {
-      "/download/mac": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/release-notes": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/windows": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-      "/download/windows-exe": {
-        "changeOrigin": true,
-        "rewrite": [Function],
-        "target": "https://github.com",
-      },
-    },
     "strictPort": true,
   },
 }

@@ -14,20 +14,12 @@ import { malafatUrl } from '../../../src/content/malafatLinks';
  * src/pages/landing/__tests__/landingCss.test.ts.
  */
 
-/** A release with both installers, so the button doesn't depend on GitHub's rate limit. */
-const RELEASE = {
-  tag_name: 'v0.1.4',
-  html_url: 'https://github.com/vAWK3/mutaba3a/releases/tag/v0.1.4',
-  assets: [{ name: 'Mutaba3a_0.1.4_aarch64.dmg' }, { name: 'Mutaba3a_0.1.4_x64_en-US.msi' }],
-};
-
 /** A stored language choice, as the EN/AR switch leaves it; without one the marketing site opens in Arabic (MUT-202). */
 async function preferLanguage(page: Page, language: 'en' | 'ar') {
   await page.addInitScript(chooseLanguageScript, [LANGUAGE_KEYS, language] as [typeof LANGUAGE_KEYS, 'en' | 'ar']);
 }
 
 async function openLanding(page: Page, language: 'en' | 'ar' = 'en') {
-  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
   await preferLanguage(page, language);
   await page.goto('/');
   await expect(page.locator('#hero-title')).toBeVisible();
@@ -303,7 +295,7 @@ test('chapter visuals rise in once on scroll, and are simply there under reduced
 });
 
 test('the privacy policy has the bar without the button, and its wordmark goes home', { tag: '@web.landing.privacy-bar' }, async ({ page }) => {
-  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+  // MUT-445: the website asks GitHub for nothing (the desktop apps' release check is gone)
   let releaseCalls = 0;
   page.on('request', (request) => {
     if (request.url().startsWith('https://api.github.com/')) releaseCalls += 1;
@@ -315,20 +307,14 @@ test('the privacy policy has the bar without the button, and its wordmark goes h
   expect(releaseCalls).toBe(0);
 });
 
-test('the download page renders with the landing bar and footer, not the app’s top bar', { tag: '@web.landing.download' }, async ({ page }) => {
-  // It mounts outside the router and React Query (src/main.tsx), so anything of the app's crashes it into the error boundary
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
-  await preferLanguage(page, 'en');
-  await page.goto('/download');
-  await expect(page.getByRole('heading', { level: 1, name: 'Download' })).toBeVisible();
-  await expect(page.locator('a.download-cta').first()).toBeVisible();
-  await expect(header(page).locator('.landing-header-brand')).toHaveAttribute('href', '/');
-  await expect(headerCta(page)).toHaveCount(0);
-  await expect(page.getByRole('contentinfo')).toBeVisible();
-  await expect(page.locator('.topbar')).toHaveCount(0);
-  expect(errors).toEqual([]);
+test('Old /app and /download links land on the home page (MUT-445, MUT-382)', { tag: '@web.landing.retired-paths' }, async ({ page, step }) => {
+  for (const path of ['/app', '/app/clients?client=c1', '/download']) {
+    await step(`Open ${path}`, async () => {
+      await page.goto(path);
+      await page.waitForURL((url) => url.pathname === '/');
+      await expect(page.locator('#hero-title')).toBeVisible();
+    });
+  }
 });
 
 test('Get it takes a request through every state in its card: two fields a row, errors, retry, success (MUT-186, redesign 2026-10-25)', { tag: '@web.landing.get-it-form' }, async ({ page, step }) => {
@@ -573,26 +559,18 @@ for (const language of ['en', 'ar'] as const) {
 test.describe('in an English browser with no stored choice', () => {
   test.use({ locale: 'en-US' });
 
-  test('the marketing site opens in Arabic, the web app too (MUT-209), and a chosen language sticks (MUT-202)', { tag: '@web.landing.arabic-default' }, async ({ page, step }) => {
-    await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
+  test('the marketing site opens in Arabic and a chosen language sticks (MUT-202)', { tag: '@web.landing.arabic-default' }, async ({ page, step }) => {
     const stored = () => page.evaluate(() => localStorage.getItem('mutaba3a-language'));
 
     await step('Every marketing page is in Arabic, right to left, and nothing is stored', async () => {
-      for (const path of ['/', '/hosted', '/privacy', '/download']) {
+      for (const path of ['/', '/privacy', '/terms']) {
         await page.goto(path);
         await expect(page.locator('html'), path).toHaveAttribute('lang', 'ar');
         await expect(page.locator('html'), path).toHaveAttribute('dir', 'rtl');
         await expect(page.getByRole('heading', { level: 1 }), path).toBeVisible();
         expect(await stored(), path).toBeNull();
       }
-      await attachScreenshot(page, 'arabic-default-download');
-    });
-
-    await step('The web app opens in Arabic too and stores nothing, since MUT-209', async () => {
-      await page.goto('/app/clients');
-      await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
-      await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-      expect(await stored()).toBeNull();
+      await attachScreenshot(page, 'arabic-default-terms');
     });
 
     await step('Back on the landing, still Arabic', async () => {
@@ -671,7 +649,6 @@ test('While signup is open, the landing leads with Create an account on the port
   const phone = page.locator('[data-part="phone"]');
 
   await step('Open the landing page in Arabic, its default: the hero leads with أنشئ حسابًا on /signup?lang=ar', async () => {
-    await page.route('https://api.github.com/**', (route) => route.fulfill({ json: RELEASE }));
     await page.goto('/');
     await expect(heroCta(page)).toHaveAttribute('href', SIGNUP_LINK('ar'));
     await expect(heroCta(page)).toContainText(ar.landing.hero.ctaCreate);

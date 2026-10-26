@@ -105,9 +105,8 @@ export interface FxRate {
   createdAt: string;
 }
 
-// Optional product areas that can be switched on in Settings (MUT-12).
-// The list of keys lives in src/lib/features/features.ts (FEATURE_KEYS);
-// this union is the type-level mirror so the types module stays import-free.
+// Optional product areas the retired local app switched on in Settings (MUT-12);
+// its backup files still carry them.
 export type FeatureKey =
   | 'expenses'
   | 'insights'

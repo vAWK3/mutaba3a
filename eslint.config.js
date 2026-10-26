@@ -5,56 +5,10 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
-// The storage seam's import patterns (MUT-47), shared by every block that sets
-// the TypeScript no-restricted-imports rule on app code: in flat config the
-// last block wins per rule, so a block that adds a path must repeat these.
-const STORAGE_SEAM_PATTERNS = [
-  {
-    regex: '(^|/)db/(repository|expenseRepository|dataset|demoData|seed|backup|profileImport|csvImport|integrityCheck|crossProfileStats|migration-safety)$',
-    allowTypeImports: true,
-    message: 'Storage modules are reached through getRepositories() (MUT-47).',
-  },
-  {
-    regex: '(^|/)db(/index|/database)?$',
-    importNames: [
-      'db',
-      'initDatabase',
-      'deleteAllData',
-      'clearDatabase',
-      'repairDatabase',
-      'createBackup',
-      'getLatestBackup',
-      'getAllBackups',
-      'restoreFromBackup',
-      'validateMigration',
-      'autoFixMigrationIssues',
-      'downloadBackup',
-      'exportCompleteBackup',
-      'importBackupFromFile',
-      'clientRepo',
-      'projectRepo',
-      'categoryRepo',
-      'transactionRepo',
-      'projectSummaryRepo',
-      'clientSummaryRepo',
-      'fxRateRepo',
-      'settingsRepo',
-      'businessProfileRepo',
-      'paymentRecordRepo',
-    ],
-    message: 'Use getRepositories() instead of the database or a repository object (MUT-47).',
-  },
-  {
-    regex: '(^|/)db/orphanedRecords$',
-    importNames: ['findOrphanedRecords'],
-    message: 'Use getRepositories().base.dataset.findOrphanedRecords() (MUT-47).',
-  },
-]
-
 /**
  * MUT-149 (ADR-091 am.11): the Sentry browser SDK loads only in the portal's
- * lazy crash-reporting chunk, so the local app, desktop and the landing never
- * carry it. Types stay importable for the shared, pure options builder.
+ * lazy crash-reporting chunk and the landing's own lazy chunks; nothing else
+ * carries it. Types stay importable for the shared, pure options builder.
  */
 const SENTRY_SDK_PATH = {
   name: '@sentry/browser',
@@ -110,7 +64,7 @@ const LOCAL_SERVER_ALLOWLIST = [
 ]
 
 export default defineConfig([
-  globalIgnores(['dist', 'dev-dist', 'src-tauri', 'server', '.claude/worktrees', 'coverage']),
+  globalIgnores(['dist', 'dev-dist', 'server', '.claude/worktrees', 'coverage']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -137,22 +91,16 @@ export default defineConfig([
     },
   },
   {
-    // The storage seam (MUT-47). Outside src/db, the app reaches storage only
-    // through getRepositories(): never `db`, a Dexie repository object, or a
-    // module whose exports read or write the database. Pure helpers, constants
-    // and types beside them stay importable. The one exception is
-    // initDatabase() in src/main.tsx (it opens Dexie before React mounts),
-    // which carries its own disable comment.
+    // The Sentry SDK outside the portal (MUT-149); the landing's own chunks have their exception below.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/db/**', 'src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
+    ignores: ['src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
     rules: {
-      '@typescript-eslint/no-restricted-imports': ['error', { paths: [SENTRY_SDK_PATH], patterns: STORAGE_SEAM_PATTERNS }],
+      '@typescript-eslint/no-restricted-imports': ['error', { paths: [SENTRY_SDK_PATH] }],
     },
   },
   {
     // ADR-090 (MUT-154): the PostHog SDK lives only in the landing's analytics
-    // module and the shared, types-only src/lib/analytics. The local app and
-    // the desktop build never carry it (ADR-024). The base rule is used here
+    // module and the shared, types-only src/lib/analytics. The base rule is used here
     // because the TypeScript variant above already guards this tree.
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/hosted/**', 'src/pages/landing/**', 'src/lib/analytics/**', 'src/**/__tests__/**', 'src/test/**'],
@@ -161,12 +109,11 @@ export default defineConfig([
         'error',
         {
           paths: [{ name: 'posthog-js', message: 'Only src/pages/landing/analytics and src/hosted/analytics may load PostHog (ADR-090).' }],
-          // Review F2: the counting code itself stays with the landing pages, so a
-          // lazily loaded /app page can never start it either
+          // Review F2: the counting code itself stays with the landing pages
           patterns: [
             { regex: '(^|/)landing/analytics(/|$)', message: 'Only the landing pages count visits (ADR-090, MUT-154).' },
             // MUT-150 review: the same for the website's error reports; main.tsx starts them with an inline exception
-            { regex: '(^|/)landing/observability(/|$)', message: "Only the website's pages report errors; the local app never loads them (ADR-024, MUT-150)." },
+            { regex: '(^|/)landing/observability(/|$)', message: "Only the website's pages report errors (MUT-150)." },
             { regex: '(^|/)lib/analytics/(posthogConfig|guard)$', message: 'The PostHog guard and options load only with the SDK, in the landing or portal analytics module (ADR-090).' },
           ],
         },
@@ -190,7 +137,6 @@ export default defineConfig([
   },
   {
     // Review F7: the shared library may import the SDK's types, never the SDK.
-    // The TypeScript variant, so it repeats the storage seam it replaces here.
     files: ['src/lib/analytics/**/*.{ts,tsx}'],
     ignores: ['src/lib/analytics/**/__tests__/**'],
     rules: {
@@ -198,7 +144,6 @@ export default defineConfig([
         'error',
         {
           paths: [{ name: 'posthog-js', allowTypeImports: true, message: 'src/lib/analytics is shared code: types only from posthog-js (ADR-090).' }, SENTRY_SDK_PATH],
-          patterns: STORAGE_SEAM_PATTERNS,
         },
       ],
     },
@@ -206,7 +151,7 @@ export default defineConfig([
   {
     // MUT-149 (ADR-091 am.11, eng D4): the browser Sentry options reuse MUT-148's
     // contract and scrubber, both pure and Node-free, and nothing else of the
-    // server. The TypeScript variant, so it repeats the storage seam it replaces.
+    // server.
     files: ['src/lib/observability/**/*.{ts,tsx}'],
     ignores: ['src/lib/observability/**/__tests__/**'],
     rules: {
@@ -214,20 +159,19 @@ export default defineConfig([
         'error',
         {
           paths: [SENTRY_SDK_PATH],
-          patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY],
+          patterns: [SERVER_SENTRY_CONTRACT_ONLY],
         },
       ],
     },
   },
   {
     // MUT-150: the landing's error reports, under the same server-import rule.
-    // The TypeScript variant, so it repeats the storage seam it replaces.
     files: ['src/pages/landing/observability/**/*.{ts,tsx}'],
     ignores: ['src/pages/landing/observability/**/__tests__/**'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
-        { paths: [SENTRY_SDK_PATH], patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY] },
+        { paths: [SENTRY_SDK_PATH], patterns: [SERVER_SENTRY_CONTRACT_ONLY] },
       ],
     },
   },
@@ -235,7 +179,7 @@ export default defineConfig([
     // The landing's lazy error-report chunk (MUT-150): the one landing file that loads the Sentry SDK.
     files: ['src/pages/landing/observability/landingSentry.ts'],
     rules: {
-      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [...STORAGE_SEAM_PATTERNS, SERVER_SENTRY_CONTRACT_ONLY] }],
+      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [SERVER_SENTRY_CONTRACT_ONLY] }],
     },
   },
   {

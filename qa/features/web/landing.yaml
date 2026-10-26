@@ -7,9 +7,12 @@ paths:
   - src/content/download-config.ts
   - src/content/malafatLinks.ts
   - src/lib/goHosted.ts
-  - src/hooks/useInView.ts
-  - src/hooks/useDocumentTitle.ts
-  - src/hooks/useLatestRelease.ts
+  - src/hooks/**
+  # The website's own shell (MUT-445: the free web app that shared it is retired)
+  - src/lib/i18n/**
+  - src/lib/theme/**
+  - src/lib/{appVersion,dates,utils}.ts
+  - src/components/ui/{ErrorBoundary,Input}.*
 features:
   - id: header-cta
     title: The header button appears only once the hero button has scrolled away, and goes to the same place (MUT-77)
@@ -76,15 +79,17 @@ features:
       - Open /privacy
     expect:
       - The landing bar shows without the button; the wordmark links home
-  - id: download
-    title: The download page renders with the landing bar and footer, not the app's top bar
+  - id: retired-paths
+    title: Old /app and /download links land on the home page; the free web app and the desktop apps are retired (MUT-445, MUT-382)
     tier: secondary
     paths:
-      - src/pages/download/**
+      - src/main.tsx
+      - netlify.toml
+      - public/sw.js
     steps:
-      - Open /download
+      - Open /app, then /app/clients?client=c1, then /download
     expect:
-      - The landing header and footer frame the page; the app's top bar is absent
+      - Each lands on the home page with the hero showing
   - id: get-it-form
     title: Get MTB3A puts the request card first and takes a request through every state, two fields a row on desktop (MUT-186, redesign 2026-10-25)
     tier: secondary
@@ -132,16 +137,15 @@ features:
       - The band speaks to law firms and accounting offices on Malafat (both named in Arabic too), ties the payment claim to a hosted account linked to the firm's Malafat and the phone app, and claims nothing automatic, no sync and no reports
       - The link reads at least 4.5:1 on the band, keeps its colour on hover, shows a ring in its own colour on keyboard focus in light and dark, and points at malafat.app in the page's language with Mutaba3a's referral tags in a new tab, which its accessible name announces
   - id: arabic-default
-    title: In an English browser with no stored choice, the marketing site opens in Arabic, the web app too (MUT-209), and a chosen language sticks (MUT-202)
+    title: In an English browser with no stored choice, the marketing site opens in Arabic, and a chosen language sticks (MUT-202)
     tier: secondary
     legacy: [MUT-202]
     paths:
       - src/lib/i18n/context.tsx
     steps:
-      - With an English browser and nothing chosen, open /, /hosted, /privacy and /download; open the web app; come back and press EN, then reload
+      - With an English browser and nothing chosen, open /, /privacy and /terms; come back and press EN, then reload
     expect:
       - Every marketing page is in Arabic, right to left, and no language is stored
-      - The web app opens in Arabic too, and nothing is stored (MUT-209)
       - Pressing EN switches to English, stores it, and it stays English after a reload
   - id: arabic-day-counts
     title: "The landing page's Clients and client-profile mocks word their overdue ages correctly in Arabic (MUT-179)"

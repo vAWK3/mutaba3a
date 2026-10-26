@@ -9,8 +9,8 @@
 
 | ID | Title | Status | Date |
 |----|-------|--------|------|
-| ADR-001 | Offline-First with IndexedDB | Active | 2024-01 |
-| ADR-002 | Repository Pattern for Storage Abstraction | Active | 2024-01 |
+| ADR-001 | Offline-First with IndexedDB | Retired with the local app by ADR-202 (2026-10-26) | 2024-01 |
+| ADR-002 | Repository Pattern for Storage Abstraction | Retired with the local app by ADR-202 (2026-10-26) | 2024-01 |
 | ADR-003 | Drawer-First UX Pattern | Active | 2024-01 |
 | ADR-004 | Multi-Currency as First-Class Citizen | Active | 2024-01 |
 | ADR-005 | No Server Backend for MVP | Active | 2024-01 |
@@ -24,7 +24,7 @@
 | ADR-013 | Local-Only Sync (LAN + File Bundle) | Superseded by ADR-053 (2026-10-12) | 2024-06 |
 | ADR-014 | Document Immutability After Export | Active | 2024-08 |
 | ADR-015 | Profile-Scoped Expenses | Active | 2024-09 |
-| ADR-016 | Tauri for Desktop Distribution | Active | 2024-03 |
+| ADR-016 | Tauri for Desktop Distribution | Superseded by ADR-202 (2026-10-26) | 2024-03 |
 | ADR-017 | React 19 with TypeScript Strict | Active | 2025-01 |
 | ADR-018 | CSS Variables for Theming | Active; amended by ADR-058 (Brand v2, 2026-10-12) | 2024-03 |
 | ADR-019 | i18n with Context + Intl APIs | Active | 2024-04 |
@@ -39,7 +39,7 @@
 | ADR-028 | Attachments Are Download-Only for the Pilot; No Malware Scanner Gates It | Active | 2026-10 |
 | ADR-029 | Removing a Feature's UI Never Removes Its Tables (overridden by ADR-053 for the eight sync tables only) | Active | 2026-10 |
 | ADR-030 | Overpayment Is Rejected; Locked Transactions Still Accept Payments | Active | 2026-10 |
-| ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Active | 2026-10 |
+| ADR-031 | The Updater Signing Key BEDF931CA1D6C777 Is Canonical; a Rotation Ships the New Public Key Before Signing Switches | Superseded by ADR-202 (2026-10-26) | 2026-10 |
 | ADR-032 | Optional Areas Are Per-Feature Switches on Settings, Off by Default, Auto-Enabled Only by Data | Active | 2026-10 |
 | ADR-033 | Owed Now Has One Definition; a Client's Payment History Is Reconciled on Read | Active | 2026-10 |
 | ADR-034 | The Sidebar Is a Fixed Core of Home, Clients, Income; Optional Areas Append Below; Switching an Area Off Re-Runs the Route Guards (Override of ADR-021 §1) | Active | 2026-10 |
@@ -67,6 +67,7 @@
 | ADR-088 | Operator-Issued One-Time Setup Links Replace Printed Passwords; the Only Public Account Routes Are Sign-In and Redeeming a Link (Partial Override of ADR-037 §1) | Active | 2026-10 |
 | ADR-097 | One App — Signed Out, the Portal Runs the Server's Own Routes in the Browser over a Persisted MemoryLedgerStore (Partial Override of ADR-037 §2; Overrides MUT-185 Decision 1) | Active | 2026-10 |
 | ADR-099 | Firm Books — Firms Are Flagged Organizations With Roles, Approval, Bills and a Month Lock; Receipts Are Read on the Device (Partial Overrides of ADR-037 Decision 1 and Its MUT-182 Amendment, MUT-252 Decision 5, Minimize-to-Core Decision 3) | Active | 2026-10 |
+| ADR-202 | MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445) | Active | 2026-10 |
 
 ---
 
@@ -5392,3 +5393,25 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - An unknown `'mcp'` on a pre-MUT-436 phone build: inbox writes stay off until the minimum build is raised.
 
 **Alternatives considered:** an `'agent'` principal with its own matrix column (review D2: rejected, no behaviour change, two sources of truth); file bytes inline in a tool argument (P2: rejected, the model would emit every byte as output); reading the marker from the audit row (P3: rejected, a read per drawer open, hidden from API keys).
+
+---
+
+## ADR-202: MTB3A Is iOS, Android and the Web Portal: the Desktop Apps and the Free Web App at /app Are Retired (MUT-445)
+
+**Status:** Accepted (2026-10-26, MUT-445; decided by Basel). Supersedes ADR-016 and ADR-031; retires ADR-001 and ADR-002 with the code they governed; folds in MUT-292.
+
+**Context:** MUT-382 removed `/download`, the installer redirects and the About screen's download rows, but left the Tauri app, its release pipeline and update check, and the free local web app at `/app` that shared its code. MUT-292 planned to retire `/app` 90 days after MUT-291's carry-over shipped; the carry-over's sender (the old app's screen) had not shipped.
+
+**Decision:**
+1. **No desktop app.** `src-tauri/`, the `desktop` Vite mode, `deploy.sh`/`deploy.ps1`, `scripts/release.ts` and its steps, the Windows workflow, `release.env.example` and the Tauri npm packages are deleted. `make release web` bumps only `package.json` and its lock.
+2. **No GitHub release fetch.** `useLatestRelease`, `useCheckForUpdates`, `useTauriUpdater`, the update banner, the sidebar badge and Settings › About's update rows are gone with the app.
+3. **No free web app, now (Basel, 2026-10-26).** Everything under `src/` that only the old app reached is deleted, with Dexie and the PWA. The carry-over's sender goes too: **a free user's records stay in that browser, and the only way across is a records file they already saved**, which the portal's Your data › Restore and `/carry-over/receive` still read. Data loss is accepted.
+4. **The website is the landing, privacy and terms.** `src/main.tsx` renders those and sends any other path home; Netlify redirects `/app` and `/app/*` to `/` (301). The apex no longer sends `/app` back to the old host.
+5. **The old service worker removes itself.** Everyone who opened `/app` (or the landing, which registered the same worker) runs a Workbox worker that serves the old app from cache. `public/sw.js` is now a worker that, when the browser checks for an update, deletes every cache, unregisters and reloads open tabs into the website.
+
+**Consequences:**
+- Release-QA's `web` app is the website; shared UI outside `src/hosted` that only the portal renders moved to the portal app's watch. The carry-over app runs the two portal origins only.
+- The portal's receiver still accepts the old landing origin as a carry-over source (`carryOverBuild`'s `web`), though nothing sends from it now (TD-262).
+- `src/types/index.ts` still declares the local app's record types that nothing reads (TD-263).
+
+**Alternatives considered:** keep `/app` until MUT-292's 90 days (Basel: no); keep `/app` as a carry-over-only bridge (Basel: no, delete it entirely).

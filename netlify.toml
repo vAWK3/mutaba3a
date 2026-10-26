@@ -1,7 +1,6 @@
 [build]
   publish = "dist-web"
-  # MUT-150 (TD-084): the bundle guard runs on every Netlify build, so the landing's
-  # Sentry chunks can never reach the local app's files or its service worker
+  # MUT-150 (TD-084): the bundle guard runs on every Netlify build
   command = "npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web"
 
 # MUT-382: MTB3A runs on iOS, Android and the web portal only; the free desktop apps' download page and
@@ -13,6 +12,18 @@
 
 [[redirects]]
   from = "/download/*"
+  to = "/"
+  status = 301
+
+# MUT-445: the free web app at /app is retired (MTB3A runs on iOS, Android and the web portal only).
+# Old links and home-screen icons land on the home page; public/sw.js removes the old service worker.
+[[redirects]]
+  from = "/app"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/app/*"
   to = "/"
   status = 301
 

@@ -1,21 +1,21 @@
 /**
- * `npm run test:bundles` (MUT-43, hosted-portal.md §8): after building all
- * three targets, prove the separation the brief promises instead of asserting
- * it. The web and desktop bundles carry no portal endpoint, cookie or header and
+ * `npm run test:bundles` (MUT-43, hosted-portal.md §8): after building both
+ * targets, prove the separation the brief promises instead of asserting
+ * it. The website bundle carries no portal endpoint, cookie or header and
  * reach no new origin; the hosted bundle has no IndexedDB, Dexie or service
  * worker, no self-service account door in either language, and no new origin.
  *
  * Brand v2 (MUT-102): every dist ships the delivered Thmanyah files
  * byte-identical, bundles no retired face, preloads no font (ADR-058), and
- * every CSS url() resolves to a file inside that dist (offline proof for
- * desktop; for web, no font silently answered by the index.html fallback).
+ * every CSS url() resolves to a file inside that dist (no font silently
+ * answered by the index.html fallback).
  *
  * Boot splash (MUT-207): every built entry HTML opens #root with the splash,
  * and its mark, dark mark and stylesheets resolve inside the dist (or are
  * data: URIs).
  *
- * Crash reports (MUT-149): the Sentry SDK is in no local build and only in the
- * portal's lazy chunk; no build carries the contract fixtures or an upload
+ * Crash reports (MUT-149): the Sentry SDK is only in the portal's lazy chunk
+ * and the landing's lazy chunks; no build carries the contract fixtures or an upload
  * token, and dist-hosted ships no source map.
  *
  * `--dist <dir>` checks one dist only: `deploy.sh` runs `--dist dist-hosted`
@@ -29,7 +29,6 @@ import { SENTRY_INGEST_ORIGIN } from '../server/src/observability/sentry-ingest'
 import {
   HOSTED_RULES,
   LOCAL_RULES,
-  POSTHOG_MARKER,
   bootSplashProblems,
   extractOrigins,
   findForbidden,
@@ -40,19 +39,16 @@ import {
   newOrigins,
   originsNeedingReview,
   posthogInEntryGraph,
-  posthogPrecached,
   sentryInEntryGraph,
   sentryOutsideLandingChunks,
   landingSentryChunks,
-  sentryPrecached,
-  sentryLeaks,
   sentrySecrets,
   sourceMaps,
   unresolvedUrls,
   type Rule,
 } from './bundle-rules';
 
-const DISTS = ['dist-web', 'dist-desktop', 'dist-hosted'] as const;
+const DISTS = ['dist-web', 'dist-hosted'] as const;
 const distFlag = process.argv.indexOf('--dist');
 /** `test:bundles` builds web with the QA DSN: the landing's chunks must exist, or every Sentry check above ran on nothing (review D1). */
 const expectLandingSentry = process.argv.includes('--expect-landing-sentry');
@@ -107,7 +103,6 @@ function checkBrandFonts(dir: string): string[] {
 /** The entry HTML files each dist serves. */
 const ENTRY_HTML: Record<string, string[]> = {
   'dist-web': ['index.html'],
-  'dist-desktop': ['index.html'],
   'dist-hosted': ['index.html'],
 };
 
@@ -121,14 +116,9 @@ function checkBootSplash(dir: string): string[] {
   });
 }
 
-/**
- * ADR-090: PostHog is loaded lazily by the landing pages only. In dist-web no
- * file the entry loads statically may mention it (the local app shares that
- * entry); dist-desktop must not mention it at all.
- */
-/** Why PostHog must stay out of each build's entry graph: the local app never counts; the portal loads it only after consent. */
+/** ADR-090: why PostHog must stay out of each build's entry graph: the landing loads it lazily; the portal only after consent. */
 const POSTHOG_LAZY_ONLY: Record<string, string> = {
-  'dist-web': 'so it would ship inside the local app (ADR-090)',
+  'dist-web': 'so every website page would load it up front (ADR-090)',
   'dist-hosted': 'so the portal would load it before anyone turns sharing on (MUT-155, README rule 4)',
 };
 
@@ -139,17 +129,6 @@ function checkPosthog(): string[] {
     const read = (path: string) => (existsSync(join(dir, path)) ? readFileSync(join(dir, path), 'utf8') : '');
     for (const name of ENTRY_HTML[dir]) {
       for (const path of posthogInEntryGraph(read(name), read)) problems.push(`${dir}/${path}: PostHog is statically reachable from ${name}, ${why}`);
-    }
-  }
-  if (wanted('dist-web') && existsSync('dist-web/sw.js')) {
-    const read = (path: string) => (existsSync(join('dist-web', path)) ? readFileSync(join('dist-web', path), 'utf8') : '');
-    for (const path of posthogPrecached(read('sw.js'), read)) {
-      problems.push(`dist-web/${path}: the service worker precaches PostHog, so it would be stored on every local-app device (add it to PWA_WORKBOX.globIgnores)`);
-    }
-  }
-  if (wanted('dist-desktop') && existsSync('dist-desktop')) {
-    for (const file of files('dist-desktop')) {
-      if (POSTHOG_MARKER.test(readFileSync(file, 'utf8'))) problems.push(`${file}: the desktop build must never carry PostHog (ADR-024, ADR-090)`);
     }
   }
   return problems;
@@ -192,7 +171,7 @@ function check(dir: string, rules: Rule[], origins: string[]): string[] {
 /** Why each dist may load the Sentry SDK only lazily: the portal signed in only (MUT-149), the landing on website pages only (MUT-150). */
 const SENTRY_LAZY_ONLY: Record<string, string> = {
   'dist-hosted': 'it loads lazily, signed in only (ADR-097 §10)',
-  'dist-web': 'it loads lazily, on website pages only, never for the local app (ADR-024)',
+  'dist-web': 'it loads lazily, on website pages only (ADR-091)',
 };
 
 /** MUT-149/150 (ADR-091): the Sentry SDK, its fixtures, upload tokens and source maps. */
@@ -202,7 +181,6 @@ function checkSentry(): string[] {
     for (const file of files(dir)) {
       const text = readFileSync(file, 'utf8');
       for (const finding of sentrySecrets(text)) problems.push(`${file}: ${finding.rule} ("${finding.match.slice(0, 12)}…") must never ship (MUT-149 AC8)`);
-      if (dir === 'dist-desktop' && sentryLeaks(text)) problems.push(`${file}: the Sentry SDK is in the desktop build, which never reports (ADR-024)`);
     }
   }
   for (const [dir, why] of Object.entries(SENTRY_LAZY_ONLY)) {
@@ -223,17 +201,13 @@ function checkSentry(): string[] {
     if (expectLandingSentry && landingSentryChunks(shipped).length === 0) {
       problems.push(`${web}: no landing Sentry chunk, though this build was made with a landing DSN (--expect-landing-sentry); the checks above proved nothing`);
     }
-    for (const path of sentryOutsideLandingChunks(shipped, read)) problems.push(`${web}/${path}: the Sentry SDK is outside the landing's lazy chunks; the local app loads this file (ADR-024)`);
-    for (const path of sentryPrecached(read('sw.js'), read)) {
-      problems.push(`${web}/${path}: the service worker precaches Sentry, so it would be stored on every local-app device (add it to SENTRY_PRECACHE_IGNORES)`);
-    }
+    for (const path of sentryOutsideLandingChunks(shipped, read)) problems.push(`${web}/${path}: the Sentry SDK is outside the landing's lazy chunks (ADR-091)`);
   }
   return problems;
 }
 
 const problems = [
   ...(wanted('dist-web') ? check('dist-web', LOCAL_RULES, allowlist.local) : []),
-  ...(wanted('dist-desktop') ? check('dist-desktop', LOCAL_RULES, allowlist.local) : []),
   ...(wanted('dist-hosted') ? check('dist-hosted', HOSTED_RULES, allowlist.hosted) : []),
   ...DISTS.filter(wanted).flatMap(checkBrandFonts),
   ...DISTS.filter(wanted).flatMap(checkBootSplash),
@@ -249,5 +223,5 @@ if (problems.length > 0) {
 if (only !== null) console.log(`Bundle check passed for ${only}.`);
 else
   console.log(
-    'Bundle check passed: dist-web and dist-desktop carry no portal code; PostHog is unreachable from the local app (lazy landing chunks only, never precached), lazy in the portal, and absent from desktop; dist-hosted opens IndexedDB only from its lazy local backend, loads jszip only on demand, and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve; Sentry is only in the portal\'s lazy chunk and the landing\'s lazy, never-precached chunks, with no fixtures, token or source map anywhere.',
+    'Bundle check passed: dist-web carries no portal code; PostHog is lazy on the website and in the portal; dist-hosted opens IndexedDB only from its lazy local backend, loads jszip only on demand, and carries no self-service account door; every dist ships Thmanyah unmodified, preloads no font, resolves every CSS url(), and opens on a boot splash whose assets resolve; Sentry is only in the portal\'s lazy chunk and the landing\'s lazy chunks, with no fixtures, token or source map anywhere.',
   );

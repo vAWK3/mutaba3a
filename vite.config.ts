@@ -2,7 +2,6 @@ import { defineConfig, type HtmlTagDescriptor, type Plugin, type PluginOption, t
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { SENTRY_INGEST_ORIGIN } from "./server/src/observability/sentry-ingest";
 import react from "@vitejs/plugin-react";
-import { VitePWA, type ManifestOptions, type VitePWAOptions } from "vite-plugin-pwa";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import pkg from "./package.json";
@@ -226,15 +225,15 @@ function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>;
 /**
  * The landing's error reports (MUT-150, ADR-091): the web build only, and only
  * with MUTABA3A_LANDING_SENTRY_DSN, in Netlify's production context (any other
- * Netlify context compiles it out). The desktop build always gets the "off" defines, so the gate folds away and no
+ * Netlify context compiles it out); without one the gate folds away and no
  * SDK chunk is emitted. A Netlify production build with a DSN but no upload
  * token fails: readable stacks are part of the feature, not optional.
  */
-function landingSentry(env: NodeJS.ProcessEnv, buildMode: "web" | "desktop"): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
+function landingSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
   // On Netlify only the production context reports (review D4): a DSN set for every context by mistake
   // must not send deploy previews' errors to the production project or spend the shared quota
   const reportingContext = env.CONTEXT === undefined || env.CONTEXT === "" || env.CONTEXT === "production";
-  const dsn = buildMode === "web" && reportingContext ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
+  const dsn = reportingContext ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
   // Release and environment are read only by the SDK chunk, which a build without a DSN never emits
   const release = dsn ? landingSentryRelease(env.COMMIT_REF) : "";
   const define = {
@@ -320,6 +319,9 @@ export interface SocialPage {
   description: string;
 }
 
+/** The site name on link previews (MUT-104). */
+const SITE_NAME = "متابعة";
+
 /** The landing page's card (MUT-104): the Arabic hero. */
 const HOME_PAGE: SocialPage = {
   path: "/",
@@ -343,7 +345,7 @@ export function socialMetaTags(origin: string, page: SocialPage = HOME_PAGE): Ht
   const image = `${base}${SOCIAL_CARD.path}`;
   const og = {
     "og:type": "website",
-    "og:site_name": PWA_MANIFEST.name,
+    "og:site_name": SITE_NAME,
     "og:url": `${base}${page.path}`,
     "og:title": title,
     "og:description": subheadline,
@@ -353,7 +355,7 @@ export function socialMetaTags(origin: string, page: SocialPage = HOME_PAGE): Ht
     "og:image:width": String(SOCIAL_CARD.width),
     "og:image:height": String(SOCIAL_CARD.height),
     // The one card image shows the home headline, so its description does too, on every page
-    "og:image:alt": `${PWA_MANIFEST.name}: ${HOME_PAGE.title}`,
+    "og:image:alt": `${SITE_NAME}: ${HOME_PAGE.title}`,
   };
   const twitter = {
     "twitter:card": "summary_large_image",
@@ -367,7 +369,7 @@ export function socialMetaTags(origin: string, page: SocialPage = HOME_PAGE): Ht
   ];
 }
 
-/** Adds the link-preview tags to the landing page's HTML. Web build only: desktop has no public URL. */
+/** Adds the link-preview tags to the landing page's HTML (web build). */
 function socialMeta(): Plugin {
   const tags = socialMetaTags(process.env.MUTABA3A_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN);
   return { name: "mutaba3a:social-meta", transformIndexHtml: () => tags };
@@ -376,8 +378,8 @@ function socialMeta(): Plugin {
 /**
  * The hidden static twin of /hosted's request form (MUT-186). Netlify registers
  * forms it finds in deployed HTML, and the real form is rendered by React, so
- * the twin names every field the page posts. Its own file, not index.html or
- * public/, because both are shared with the desktop build; noindex because it
+ * the twin names every field the page posts. Its own file, not index.html, so
+ * no page carries it; noindex because it
  * is a bare form, not a page (D2).
  */
 export function netlifyFormsHtml(): string {
@@ -473,9 +475,8 @@ function netlifyForms(): Plugin {
 
 /**
  * The landing pages a visitor on the old Netlify host is sent on to the apex at stage
- * "redirect" (config/hosts.json; MUT-326, ADR-155 D5). Never `/app/*`, its assets or
- * the service worker: the free web app's records live in that origin's IndexedDB
- * until MUT-291's bridge carries them over.
+ * "redirect" (config/hosts.json; MUT-326, ADR-155 D5). Never the service worker: the
+ * old host's /sw.js is what removes the retired free web app from browsers (MUT-445).
  */
 export const LEGACY_LANDING_PATHS = ["/", "/download", "/privacy", "/terms", "/terms/*"] as const;
 
@@ -488,8 +489,6 @@ function redirectLine(fromOrigin: string, path: string, toOrigin: string): strin
 /**
  * Netlify `_redirects` for the domain move, or "" while there is nothing to redirect.
  * Host-scoped, so deploy previews are untouched.
- * - From stage "live": the apex's `/app` goes back to the old host, where the free web
- *   app's data is (the landing links to `/app` relatively); MUT-291 retires this.
  * - From stage "live": the apex serves the portal's apple-app-site-association (MUT-115, ADR-190) by a 200
  *   proxy rewrite, so iOS trusts the apex, the passkey RP ID, for `webcredentials`. One source of truth: the
  *   server's APPLE_TEAM_ID/APPLE_BUNDLE_ID; never a redirect, which Apple refuses.
@@ -502,8 +501,6 @@ export function netlifyRedirects(hosts: Pick<ResolvedHosts, "stage" | "legacy" |
   const apex = `https://${hosts.frontDoor.landingHost}`;
   const old = hosts.legacy.landingOrigin;
   const lines = [
-    redirectLine(apex, "/app", old),
-    redirectLine(apex, "/app/*", old),
     `${apex}${APPLE_APP_SITE_ASSOCIATION_PATH} https://${hosts.frontDoor.portalHost}${APPLE_APP_SITE_ASSOCIATION_PATH} 200!`,
     ...(hosts.stage === "redirect" ? LEGACY_LANDING_PATHS.map((path) => redirectLine(old, path, apex)) : []),
   ];
@@ -521,89 +518,11 @@ function domainMoveRedirects(): Plugin {
   };
 }
 
-/**
- * The service worker's cache rules. Thmanyah (~1.2 MB of .otf, which the
- * licence forbids converting) is cached on use instead of being precached on
- * every install (MUT-102, PD10). No font is preloaded either: a preload
- * competed with the app code and delayed first paint by ~700 ms (ADR-058).
- */
-/** The web build's chunk for posthog-js (MUT-154): named, so the service worker can leave it out. */
+/** The web build's chunk for posthog-js (MUT-154): named, so check-bundles can find it. */
 export const POSTHOG_CHUNK = "vendor-posthog";
-
-/**
- * The landing's counting code is never precached (MUT-154 review F1): the
- * service worker installs for everyone who opens the local app, which must
- * never store PostHog. `posthogConfig-*` is the lazy chunk holding the
- * contract guard. check-bundles fails if any precached file mentions PostHog.
- */
-export const POSTHOG_PRECACHE_IGNORES = [`assets/${POSTHOG_CHUNK}-*.js`, "assets/posthogConfig-*.js"];
 
 /** The web build's chunk for @sentry/browser (MUT-150): named only when the landing DSN is set. */
 export const SENTRY_CHUNK = "vendor-sentry";
-
-/**
- * The landing's error-report chunks are never precached (MUT-150, as MUT-154
- * F1 for PostHog): the service worker installs for everyone who opens the
- * local app, which must never store the Sentry SDK (ADR-024). check-bundles
- * fails if any precached file carries it.
- */
-export const SENTRY_PRECACHE_IGNORES = [`assets/${SENTRY_CHUNK}-*.js`, "assets/landingSentry-*.js"];
-
-export const PWA_WORKBOX: VitePWAOptions["workbox"] = {
-  navigateFallback: "/index.html",
-  // Only serve SPA shell for /app/* routes
-  navigateFallbackAllowlist: [/^\/app/],
-  navigateFallbackDenylist: [
-    /^\/download(\/|$)/,  // /download/* never gets SPA
-    /^\/api\//,           // future-proofing for API routes
-  ],
-  // The service worker carries no source map: vite-plugin-pwa would emit sw.js.map whenever the
-  // landing's maps are "hidden" for the Sentry upload, and no map may ship (MUT-150 review)
-  sourcemap: false,
-  // Limit what files get precached
-  globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-  // Share cards are for crawlers, never shown in the app (MUT-104)
-  // The Netlify form twin is a bare form for the deploy bot, never opened in the app (MUT-186, D2)
-  // The landing's PostHog chunks are fetched only on the landing, never stored for the local app (MUT-154)
-  globIgnores: ["og-*.png", NETLIFY_FORMS_FILE, ...POSTHOG_PRECACHE_IGNORES, ...SENTRY_PRECACHE_IGNORES],
-  runtimeCaching: [
-    {
-      urlPattern: ({ request }) => request.destination === "font",
-      handler: "CacheFirst",
-      options: { cacheName: "fonts", expiration: { maxEntries: 12 } },
-    },
-  ],
-};
-
-/** Files in `public/` the service worker precaches beside the build, so the tab and home-screen icons work offline (MUT-104). */
-export const PWA_INCLUDE_ASSETS = [
-  "favicon.svg",
-  "favicon-32.png",
-  "favicon-16.png",
-  "apple-touch-icon.png",
-  "icons/icon-192.png",
-  "icons/icon-512.png",
-  "icons/maskable-512.png",
-];
-
-/**
- * The web app manifest. Splash and title bar use the Brand v2 light canvas,
- * `color.canvas` in `mutaba3a.tokens.json` (MUT-104); the scope is set per
- * build in the config below.
- */
-export const PWA_MANIFEST = {
-  name: "متابعة",
-  short_name: "متابعة",
-  description: "Offline-first mini CRM and finance tracker for freelancers.",
-  theme_color: "#FCF6ED",
-  background_color: "#FCF6ED",
-  display: "standalone",
-  icons: [
-    { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-    { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    { src: "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-  ],
-} satisfies Partial<ManifestOptions>;
 
 /**
  * The server's route modules call `Buffer.from(…)` as a Node global (MUT-286).
@@ -644,7 +563,7 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
       // they touch exactly two Node built-ins (`node:crypto`'s synchronous
       // surface and `node:async_hooks`'s `AsyncLocalStorage`, the latter only
       // because `hono/context-storage` imports it). Aliased here, not in the
-      // app's own `vite.config.ts` branch below, so the web/desktop builds and
+      // app's own `vite.config.ts` branch below, so the website build and
       // the server's own `tsc` build never see this redirection.
       alias: {
         "node:crypto": fileURLToPath(
@@ -672,7 +591,6 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
     },
     define: {
       __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
-      __BUILD_MODE__: JSON.stringify("hosted"),
       // The sign-in page's "No account? Request one" link (MUT-188): the landing's /hosted page
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // The terms the setup page, the Updated-terms step and the account menu link to (MUT-324)
@@ -725,96 +643,45 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
 export default defineConfig(({ mode, command }) => {
   if (mode === "hosted") return hostedConfig(command);
 
-  // Check both Tauri env vars AND the --mode flag
-  const isTauri = !!process.env.TAURI_PLATFORM || !!process.env.TAURI_FAMILY || mode === "desktop";
-  const buildMode = isTauri ? "desktop" : "web";
-  const sentry = landingSentry(process.env, buildMode);
+  // The website: the landing page, the privacy policy and the terms. The free web app at /app and the
+  // desktop apps are retired (MUT-445); public/sw.js removes the old app's service worker from browsers.
+  const sentry = landingSentry(process.env);
 
   return {
-    base: isTauri ? "./" : "/",
+    base: "/",
     define: {
       __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
-      __BUILD_MODE__: JSON.stringify(buildMode),
-      // The free web app's portal sign-in link (MUT-187); desktop carries no portal address
-      __PORTAL_URL__: JSON.stringify(buildMode === "web" ? portalUrl(process.env.MUTABA3A_PORTAL_URL) : ""),
-      // The carry-over (MUT-291): where the old app sends its records; off in the desktop build
-      // The dev server leaves it off unless MUTABA3A_CARRY_OVER turns it on: the app's own QA must open the app, not the gate
-      __CARRY_OVER__: JSON.stringify(buildMode === "web" ? carryOverBuild(HOSTS, process.env.MUTABA3A_CARRY_OVER, { offByDefault: command !== "build", release: command === "build" }) : CARRY_OVER_OFF),
-      // The landing's cookieless visit counts (MUT-154, ADR-090); the local app and desktop never use it
-      __POSTHOG_KEY__: JSON.stringify(buildMode === "web" ? posthogKey(process.env.MUTABA3A_POSTHOG_KEY) : ""),
-      // The landing's error reports (MUT-150); desktop always gets the "off" values
+      // The portal origin the landing's sign-in and signup links open (MUT-187, MUT-369)
+      __PORTAL_URL__: JSON.stringify(portalUrl(process.env.MUTABA3A_PORTAL_URL)),
+      // The landing's cookieless visit counts (MUT-154, ADR-090)
+      __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
+      // The landing's error reports (MUT-150)
       ...sentry.define,
     },
-  plugins: [
-    react(),
-    ...(buildMode === "web" ? [socialMeta(), netlifyForms(), legalTermsManifest(), domainMoveRedirects(), hostedOfferDevRoute()] : []),
-    ...sentry.plugins,
-    VitePWA({
-      disable: isTauri, // Disable PWA for desktop builds
-      registerType: "autoUpdate",
-      includeAssets: PWA_INCLUDE_ASSETS,
-      manifest: {
-        ...PWA_MANIFEST,
-        scope: isTauri ? "/" : "/app/",
-        start_url: isTauri ? "/" : "/app/",
-      },
-      workbox: PWA_WORKBOX,
-      devOptions: {
-        enabled: false,  // Disable PWA in dev to avoid caching issues
-      },
-    }),
-  ],
-  // Dev server only (MUT-150): pre-bundle the landing's SDK up front, or its first lazy load reloads the page
-  ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { optimizeDeps: { include: ["@sentry/browser"] } } : {}),
-  clearScreen: false,
-  server: {
-    port: 5173,
-    strictPort: true,
-    host: "127.0.0.1",
-    proxy: {
-      // Redirect /download/* to GitHub in dev (mirrors Netlify behavior)
-      '/download/mac': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-arm64.dmg',
-      },
-      '/download/windows': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64.msi',
-      },
-      '/download/windows-exe': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64-setup.exe',
-      },
-      '/download/release-notes': {
-        target: 'https://github.com',
-        changeOrigin: true,
-        rewrite: () => '/vAWK3/mutaba3a/releases/latest',
-      },
+    plugins: [react(), socialMeta(), netlifyForms(), legalTermsManifest(), domainMoveRedirects(), hostedOfferDevRoute(), ...sentry.plugins],
+    // Dev server only (MUT-150): pre-bundle the landing's SDK up front, or its first lazy load reloads the page
+    ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { optimizeDeps: { include: ["@sentry/browser"] } } : {}),
+    clearScreen: false,
+    server: {
+      port: 5173,
+      strictPort: true,
+      host: "127.0.0.1",
     },
-  },
-  build: {
-    target: "esnext",
-    outDir: isTauri ? "dist-desktop" : "dist-web",
-    // Maps only for the upload, and no sourceMappingURL comment (MUT-150 AC5); off without a DSN and token
-    ...(sentry.sourcemap ? { sourcemap: sentry.sourcemap } : {}),
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react/jsx-runtime"],
-          "vendor-router": ["@tanstack/react-router"],
-          "vendor-query": ["@tanstack/react-query"],
-          "vendor-forms": ["react-hook-form", "zod"],
-          "vendor-db": ["dexie"],
-          // Desktop never imports posthog-js; naming it there would emit the chunk anyway
-          ...(isTauri ? {} : { [POSTHOG_CHUNK]: ["posthog-js"] }),
-          // Named only when the landing reports: naming it would emit the chunk even unimported (eng O2)
-          ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { [SENTRY_CHUNK]: ["@sentry/browser"] } : {}),
+    build: {
+      target: "esnext",
+      outDir: "dist-web",
+      // Maps only for the upload, and no sourceMappingURL comment (MUT-150 AC5); off without a DSN and token
+      ...(sentry.sourcemap ? { sourcemap: sentry.sourcemap } : {}),
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            "vendor-react": ["react", "react-dom", "react/jsx-runtime"],
+            [POSTHOG_CHUNK]: ["posthog-js"],
+            // Named only when the landing reports: naming it would emit the chunk even unimported (eng O2)
+            ...(sentry.define.__LANDING_SENTRY_ENABLED__ === "true" ? { [SENTRY_CHUNK]: ["@sentry/browser"] } : {}),
+          },
         },
       },
     },
-  },
-};
+  };
 });

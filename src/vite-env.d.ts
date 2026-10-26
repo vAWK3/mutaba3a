@@ -10,8 +10,7 @@ interface ImportMeta {
 
 // Build-time constants
 declare const __APP_VERSION__: string;
-declare const __BUILD_MODE__: 'web' | 'desktop';
-/** The portal origin the web build's sign-in link opens; "" in the desktop build (MUT-187). */
+/** The portal origin the landing's sign-in and signup links open (MUT-187, MUT-369). */
 declare const __PORTAL_URL__: string;
 /** The landing's public /hosted page, set by the hosted build only (MUT-188); absent elsewhere. */
 declare const __HOSTED_OFFER_URL__: string;
@@ -23,5 +22,5 @@ declare const __TURNSTILE_SITE_KEY__: string;
 declare const __PASSKEY_RP_ID__: string;
 /** MUT-291: the carry-over's origins (vite.config.ts carryOverBuild); read through src/lib/carryOver/build.ts, absent in Vitest. */
 declare const __CARRY_OVER__: { sources: { web?: string; portal?: string }; portalOrigin: string | null };
-/** The PostHog project ingest key (ADR-090): "" when unset and always "" in the desktop build; absent in Vitest. */
+/** The PostHog project ingest key (ADR-090): "" when unset; absent in Vitest. */
 declare const __POSTHOG_KEY__: string;

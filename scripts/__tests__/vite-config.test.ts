@@ -1,17 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
 import type { ConfigEnv, PluginOption, UserConfig } from 'vite';
-import { existsSync } from 'node:fs';
 import configFn, {
   DEFAULT_PORTAL_URL,
   DEFAULT_PUBLIC_ORIGIN,
   hostedOfferUrl,
   termsUrl,
-  PWA_INCLUDE_ASSETS,
-  PWA_MANIFEST,
-  PWA_WORKBOX,
   POSTHOG_CHUNK,
-  POSTHOG_PRECACHE_IGNORES,
   appVersion,
   netlifyFormsHtml,
   netlifyRedirects,
@@ -28,7 +23,6 @@ import configFn, {
   sentryRelease,
   landingSentryRelease,
   SENTRY_CHUNK,
-  SENTRY_PRECACHE_IGNORES,
   socialMetaTags,
   withPageMeta,
 } from '../../vite.config';
@@ -40,7 +34,6 @@ import {
   NETLIFY_FORMS_PATH,
 } from '../../src/pages/landing/hostedRequest';
 import ar from '../../src/lib/i18n/translations/ar';
-import tokens from '../../src/styles/brand/mutaba3a.tokens.json';
 import pkg from '../../package.json';
 import { repoPath } from '../../src/test/css/brandCss';
 import { pngSize } from '../../src/test/pngSize';
@@ -49,9 +42,8 @@ import { CIMD_CLIENT_ID } from '../../src/services/oauth/oauth-client';
 import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-ingest';
 
 /**
- * hosted-portal.md §8: the hosted build target is additive. The `web` and
- * `desktop` configs were snapshotted before the `hosted` branch existed, so any
- * change to them fails here first. MUT-102 masks the release version so a
+ * hosted-portal.md §8: the hosted build target is additive. The `web` config
+ * (the website) is snapshotted, so any change to it fails here first. MUT-102 masks the release version so a
  * release bump doesn't break it.
  */
 
@@ -77,70 +69,32 @@ function maskPortalUrl(define: UserConfig['define']) {
   return define?.__PORTAL_URL__ === JSON.stringify(HOSTS.portalOrigin) ? { __PORTAL_URL__: '<config/hosts.json portalOrigin>' } : {};
 }
 
-/** MUT-291: the web build's carry-over origins come from config/hosts.json too. */
-function maskCarryOver(define: UserConfig['define']) {
-  return define?.__CARRY_OVER__ === JSON.stringify(carryOverBuild(HOSTS, undefined)) && define.__BUILD_MODE__ === JSON.stringify('web') ? { __CARRY_OVER__: '<config/hosts.json carry-over origins>' } : {};
-}
-
 function comparable(config: UserConfig) {
   return {
     ...config,
-    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define), ...maskCarryOver(config.define) },
+    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define) },
     plugins: pluginNames(config.plugins),
   };
 }
 
 
 describe('vite.config', () => {
-  it.each(['web', 'desktop'])('leaves the %s build exactly as it was', (mode) => {
+  it('leaves the website build exactly as it was', () => {
     // deploy.env/the shell may export a real MUTABA3A_POSTHOG_KEY (Makefile line 51, MUT-155)
     // for an actual release build; pin it so the snapshot never depends on that ambient state.
     vi.stubEnv('MUTABA3A_POSTHOG_KEY', '');
     try {
-      expect(comparable(resolve(mode))).toMatchSnapshot();
+      expect(comparable(resolve('web'))).toMatchSnapshot();
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
   describe('brand fonts (MUT-102)', () => {
-    it.each(['web', 'desktop', 'hosted'])('the %s build preloads no font: swap paints text first (ADR-058)', (mode) => {
+    it.each(['web', 'hosted'])('the %s build preloads no font: swap paints text first (ADR-058)', (mode) => {
       expect(pluginNames(resolve(mode).plugins).filter((name) => /preload/.test(name))).toEqual([]);
     });
 
-    it('caches fonts on first use instead of precaching ~1.2 MB of .otf on every install (PD10)', () => {
-      const { globPatterns, runtimeCaching } = PWA_WORKBOX;
-      expect(globPatterns?.join()).not.toMatch(/otf/);
-      const isFont = (rule: (typeof runtimeCaching & object)[number], destination: string) =>
-        typeof rule.urlPattern === 'function' && rule.urlPattern({ request: { destination } } as never) === true;
-      const fontRule = runtimeCaching?.find((rule) => isFont(rule, 'font'));
-      expect(fontRule).toMatchObject({ handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 12 } } });
-      expect(isFont(fontRule!, 'script')).toBe(false);
-    });
-  });
-
-  describe('PWA manifest (MUT-104)', () => {
-    it('paints the splash and title bar with the brand canvas from the token file', () => {
-      expect(PWA_MANIFEST.theme_color).toBe(tokens.color.canvas.hex);
-      expect(PWA_MANIFEST.background_color).toBe(tokens.color.canvas.hex);
-    });
-
-    it.each(PWA_MANIFEST.icons ?? [])('ships $src at its declared $sizes', ({ src, sizes }) => {
-      const file = repoPath(`public${src}`);
-      expect(existsSync(file), file).toBe(true);
-      expect(pngSize(file).join('x')).toBe(sizes);
-    });
-
-    it('keeps one maskable icon for Android launchers', () => {
-      expect((PWA_MANIFEST.icons ?? []).filter((icon) => icon.purpose === 'maskable')).toHaveLength(1);
-    });
-
-    it('includes the favicons and the apple-touch icon, and each exists in public/', () => {
-      expect(PWA_INCLUDE_ASSETS).toEqual(
-        expect.arrayContaining(['favicon.svg', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']),
-      );
-      for (const asset of PWA_INCLUDE_ASSETS) expect(existsSync(repoPath(`public/${asset}`)), asset).toBe(true);
-    });
   });
 
   describe('the carry-over origins (MUT-291 §3.2)', () => {
@@ -202,22 +156,16 @@ describe('vite.config', () => {
       expect(netlifyRedirects(hosts({ domain: 'placeholder.example', stage: 'proxy' }))).toBe('');
     });
 
-    it('live: the apex sends /app back to the old host, where the free web app\'s data is', () => {
-      expect(lines('live').slice(0, 2)).toEqual([
-        'https://placeholder.example/app https://old.netlify.example/app 302!',
-        'https://placeholder.example/app/* https://old.netlify.example/app/:splat 302!',
-      ]);
-    });
-
     it('live: the apex proxies the portal\'s apple-app-site-association with a 200, never a redirect (MUT-115)', () => {
       const aasa = 'https://placeholder.example/.well-known/apple-app-site-association https://app.placeholder.example/.well-known/apple-app-site-association 200!';
-      expect(lines('live')).toEqual([expect.any(String), expect.any(String), aasa]);
+      // Nothing goes back to the old host: the free web app it served is retired, and /app goes home (MUT-445)
+      expect(lines('live')).toEqual([aasa]);
       expect(lines('redirect')).toContain(aasa);
       expect(APPLE_APP_SITE_ASSOCIATION_PATH).toBe('/.well-known/apple-app-site-association');
     });
 
     it('redirect: also sends the old host\'s landing pages, and only those, on to the apex', () => {
-      expect(lines('redirect').slice(3)).toEqual([
+      expect(lines('redirect').slice(1)).toEqual([
         'https://old.netlify.example/ https://placeholder.example/ 302!',
         'https://old.netlify.example/download https://placeholder.example/download 302!',
         'https://old.netlify.example/privacy https://placeholder.example/privacy 302!',
@@ -226,16 +174,15 @@ describe('vite.config', () => {
       ]);
     });
 
-    it('never sends the old host\'s free web app, assets or service worker anywhere (their data lives there until MUT-291)', () => {
+    it('never sends the old host\'s assets or service worker anywhere: its sw.js removes the retired free web app (MUT-445)', () => {
       for (const line of lines('redirect')) expect(line).not.toMatch(/^https:\/\/old\.netlify\.example\/(app|assets|sw\.js|workbox|manifest)/);
       for (const path of LEGACY_LANDING_PATHS) expect(path).not.toMatch(/^\/(app|assets)/);
     });
 
     it('builds the checked-in config\'s rules into the web build only', () => {
       expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:domain-move-redirects');
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:domain-move-redirects');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:domain-move-redirects');
-      expect(netlifyRedirects(HOSTS)).toEqual(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining('/app'));
+      expect(netlifyRedirects(HOSTS)).toEqual(HOSTS.stage === 'legacy' || HOSTS.stage === 'proxy' ? '' : expect.stringContaining(APPLE_APP_SITE_ASSOCIATION_PATH));
     });
 
     /**
@@ -326,14 +273,9 @@ describe('vite.config', () => {
       expect(() => socialMetaTags(origin)).toThrow(/MUTABA3A_PUBLIC_ORIGIN/);
     });
 
-    it('adds the tags to the web build only: desktop has no public URL and the portal is noindex', () => {
+    it('adds the tags to the web build only: the portal is noindex', () => {
       expect(pluginNames(resolve('web').plugins)).toContain('mutaba3a:social-meta');
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:social-meta');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:social-meta');
-    });
-
-    it('keeps the share cards out of the service worker precache', () => {
-      expect(PWA_WORKBOX?.globIgnores).toContain('og-*.png');
     });
 
     it('hands Vite structured meta attrs (never raw HTML), so <, " and & in the copy get escaped at serialization, not double-escaped here', async () => {
@@ -387,9 +329,8 @@ describe('vite.config', () => {
   });
 
   describe('portal sign-in link (MUT-187)', () => {
-    it('defines the portal URL for the web build and leaves the desktop build without one', () => {
+    it('defines the portal URL for the web build', () => {
       expect(resolve('web').define?.__PORTAL_URL__).toBe(JSON.stringify(DEFAULT_PORTAL_URL));
-      expect(resolve('desktop').define?.__PORTAL_URL__).toBe(JSON.stringify(''));
     });
 
     it('defaults to the portal origin config/hosts.json names (MUT-326)', () => {
@@ -410,10 +351,9 @@ describe('vite.config', () => {
   });
 
   describe('portal request link (MUT-188)', () => {
-    it('gives the hosted build the public /hosted address, and the local builds none', () => {
+    it('gives the hosted build the public /hosted address, and the website build none', () => {
       expect(resolve('hosted').define?.__HOSTED_OFFER_URL__).toBe(JSON.stringify(`${DEFAULT_PUBLIC_ORIGIN}/hosted`));
       expect(resolve('web').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
-      expect(resolve('desktop').define).not.toHaveProperty('__HOSTED_OFFER_URL__');
     });
 
     it('links the portal to the landing terms, in the hosted build only (MUT-324)', () => {
@@ -491,26 +431,19 @@ describe('vite.config', () => {
       },
     );
 
-    it('keeps the SDK and the guard out of the service worker precache, so the local app never stores them (review F1)', () => {
-      expect(PWA_WORKBOX?.globIgnores).toEqual(expect.arrayContaining(POSTHOG_PRECACHE_IGNORES));
-      expect(POSTHOG_PRECACHE_IGNORES).toEqual([`assets/${POSTHOG_CHUNK}-*.js`, 'assets/posthogConfig-*.js']);
-    });
-
-    it('names the SDK chunk in the web build only; desktop never imports it', () => {
+    it('names the SDK chunk in the web build', () => {
       const chunks = (mode: string) => {
         const output = resolve(mode).build?.rollupOptions?.output;
         return (Array.isArray(output) ? output[0] : output)?.manualChunks as Record<string, string[]>;
       };
       expect(chunks('web')[POSTHOG_CHUNK]).toEqual(['posthog-js']);
-      expect(chunks('desktop')).not.toHaveProperty(POSTHOG_CHUNK);
     });
 
-    it('gives the web and hosted builds the key and the desktop build none', () => {
+    it('gives the web and hosted builds the key', () => {
       vi.stubEnv('MUTABA3A_POSTHOG_KEY', KEY);
       try {
         expect(resolve('web').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
         expect(resolve('hosted').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
-        expect(resolve('desktop').define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
       } finally {
         vi.unstubAllEnvs();
       }
@@ -577,7 +510,7 @@ describe('vite.config', () => {
       });
     });
 
-    it.each(['web', 'desktop'])("never gives the portal's DSN to the %s build (AC1)", (mode) => {
+    it.each(['web'])("never gives the portal's DSN to the %s build (AC1)", (mode) => {
       withEnv({ ...QUIET, MUTABA3A_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
         const define = resolve(mode).define ?? {};
         expect(Object.keys(define).filter((key) => key.startsWith('__SENTRY'))).toEqual([]);
@@ -651,16 +584,6 @@ describe('vite.config', () => {
       });
     });
 
-    it('never gives the desktop build the landing DSN, its chunk or the plugin (eng C1)', () => {
-      withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: 'sntrys_test', CONTEXT: 'production' }, () => {
-        const config = resolve('desktop');
-        expect(config.define?.__LANDING_SENTRY_ENABLED__).toBe('false');
-        expect(config.define?.__LANDING_SENTRY_DSN__).toBe(JSON.stringify(''));
-        expect(chunks('desktop')).not.toHaveProperty(SENTRY_CHUNK);
-        expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
-      });
-    });
-
     it("refuses a landing DSN off the org's EU ingest host, failing the build", () => {
       withEnv({ ...QUIET, MUTABA3A_LANDING_SENTRY_DSN: DSN.replace('.de.', '.') }, () => {
         expect(() => resolve('web')).toThrow(/MUTABA3A_LANDING_SENTRY_DSN/);
@@ -712,15 +635,6 @@ describe('vite.config', () => {
       },
     );
 
-    it("never gives the service worker a source map, even when the build's maps are hidden for the upload (MUT-150 review)", () => {
-      // vite-plugin-pwa turns workbox.sourcemap on for a "hidden" build unless it is set
-      expect(PWA_WORKBOX?.sourcemap).toBe(false);
-    });
-
-    it('keeps the SDK chunks out of the service worker precache, so the local app never stores them', () => {
-      expect(PWA_WORKBOX?.globIgnores).toEqual(expect.arrayContaining(SENTRY_PRECACHE_IGNORES));
-      expect(SENTRY_PRECACHE_IGNORES).toEqual([`assets/${SENTRY_CHUNK}-*.js`, 'assets/landingSentry-*.js']);
-    });
   });
 
   describe('Netlify form twin (MUT-186)', () => {
@@ -755,8 +669,7 @@ describe('vite.config', () => {
       expect(emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: NETLIFY_FORMS_PATH.slice(1), source: netlifyFormsHtml() });
     });
 
-    it('runs in the web build only: desktop and the portal are not served by Netlify', () => {
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:netlify-forms');
+    it('runs in the web build only: the portal is not served by Netlify', () => {
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:netlify-forms');
     });
 
@@ -774,13 +687,9 @@ describe('vite.config', () => {
       expect(route('/hosted?x=1')).toBe('/index.html?x=1');
       expect(route('/hosted.html')).toBe('/hosted.html');
       expect(route('/app/hosted')).toBe('/app/hosted');
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
       expect(pluginNames(resolve('hosted').plugins)).not.toContain('mutaba3a:hosted-offer-dev-route');
     });
 
-    it('keeps the twin out of the service worker precache (D2)', () => {
-      expect(PWA_WORKBOX?.globIgnores).toContain(NETLIFY_FORMS_PATH.slice(1));
-    });
   });
 
   describe('link preview (MUT-104)', () => {
@@ -840,7 +749,6 @@ describe('vite.config', () => {
       expect(String(config.build?.rollupOptions?.input)).toMatch(/hosted\.html$/);
       expect(config.publicDir).toBe('src/hosted/public');
       expect(config.base).toBe('/');
-      expect(config.define?.__BUILD_MODE__).toBe(JSON.stringify('hosted'));
     });
 
     it('loads no PWA plugin (no service worker, no cache) and emits the entry as index.html', () => {
@@ -877,7 +785,6 @@ describe('vite.config', () => {
     it('is in the hosted build and in no other', () => {
       expect(pluginNames(resolve('hosted').plugins)).toContain('mut-scope-server-buffer-shim');
       expect(pluginNames(resolve('web').plugins)).not.toContain('mut-scope-server-buffer-shim');
-      expect(pluginNames(resolve('desktop').plugins)).not.toContain('mut-scope-server-buffer-shim');
     });
   });
 });

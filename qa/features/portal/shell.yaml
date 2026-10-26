@@ -24,6 +24,10 @@ paths:
   - src/hosted/components/QueryView.tsx
   - src/hosted/components/Icons.tsx
   - src/hosted/components/Toast.tsx
+  # Shared UI outside src/hosted that only the portal renders now: the free web app that shared it is retired (MUT-445)
+  - src/components/{expenses,filters,icons,ui}/**
+  - src/lib/{dom,forms,motion,whatsNew}/**
+  - src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts
   - src/hosted/data/queries.ts
   - src/hosted/data/filters.ts
 features:

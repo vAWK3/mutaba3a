@@ -14,8 +14,6 @@ import {
   localBackendInEntryGraph,
   jszipInEntryGraph,
   indexedDbOutsideLocalBackend,
-  posthogPrecached,
-  precachedUrls,
   staticGraph,
   staticImports,
   unresolvedUrls,
@@ -31,7 +29,6 @@ import {
   PATTERN_SCOPED_ORIGINS,
   landingSentryChunks,
   sentryOutsideLandingChunks,
-  sentryPrecached,
 } from '../bundle-rules';
 import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-ingest';
 import { SENTRY_CHUNK } from '../../vite.config';
@@ -110,9 +107,8 @@ describe('hosted bundle rules', () => {
 
 /**
  * MUT-291 (R4): the carry-over's code, as the bundles will carry it. Comments are stripped (minification drops
- * them); every string and name stays. The portal's half must not say the old database's name; the free app's
- * half and the shared protocol go into the web bundle, so they must carry nothing of the portal. `test:bundles`
- * then checks the built output too.
+ * them); every string and name stays. None of it may say the old database's name: since the free app's half was
+ * retired (MUT-445), all of it ships in the portal. `test:bundles` then checks the built output too.
  */
 describe('the carry-over code (MUT-291)', () => {
   const sourcesIn = (dir: string) =>
@@ -120,12 +116,8 @@ describe('the carry-over code (MUT-291)', () => {
       .filter((name) => /\.tsx?$/.test(name) && !name.endsWith('.test.ts') && !name.endsWith('.test.tsx'))
       .map((name) => ({ name: `${dir}/${name}`, code: readFileSync(resolve(__dirname, '..', '..', dir, name), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '') }));
 
-  it.each([...sourcesIn('src/hosted/local/carryOver'), ...sourcesIn('src/hosted/pages/carry-over')])('$name passes the portal\'s rules', ({ code }) => {
+  it.each([...sourcesIn('src/hosted/local/carryOver'), ...sourcesIn('src/hosted/pages/carry-over'), ...sourcesIn('src/lib/carryOver')])('$name passes the portal\'s rules', ({ code }) => {
     expect(findForbidden(code, HOSTED_RULES)).toEqual([]);
-  });
-
-  it.each([...sourcesIn('src/pages/carryOver'), ...sourcesIn('src/lib/carryOver')])('$name passes the free app\'s rules', ({ code }) => {
-    expect(findForbidden(code, LOCAL_RULES)).toEqual([]);
   });
 
   it('would catch the old database\'s name in the portal\'s half', () => {
@@ -361,23 +353,6 @@ describe('PostHog stays out of the local app (ADR-090, MUT-154)', () => {
   it('does not mistake ordinary text for PostHog', () => {
     expect(POSTHOG_MARKER.test('the post hog went to market; postal code; $pageview')).toBe(false);
   });
-
-  describe('the service worker never stores PostHog on a local-app device (MUT-154 review F1)', () => {
-    const sw = 'define(["./workbox-1"],function(s){s.precacheAndRoute([{url:"index.html",revision:"1"},{url:"assets/index-a1.js",revision:null},{"url":"assets/LandingPage-e5.js","revision":null}],{})});';
-
-    it('reads the precache list in both quoting styles', () => {
-      expect(precachedUrls(sw)).toEqual(['index.html', 'assets/index-a1.js', 'assets/LandingPage-e5.js']);
-    });
-
-    it('passes when no precached file mentions PostHog', () => {
-      const clean = { ...files, 'assets/LandingPage-e5.js': 'const p=()=>import("./vendor-posthog-f6.js");' };
-      expect(posthogPrecached(sw, reader(clean))).toEqual([]);
-    });
-
-    it('names each precached file that carries PostHog', () => {
-      expect(posthogPrecached(sw, reader(files))).toEqual(['assets/LandingPage-e5.js']);
-    });
-  });
 });
 
 describe('Sentry stays in the portal lazy chunk (MUT-149, AC1, AC4, AC8)', () => {
@@ -476,11 +451,6 @@ describe('Sentry on the landing stays in its lazy chunks (MUT-150, ADR-024)', ()
     expect(sentryOutsideLandingChunks(Object.keys(all), reader(all))).toEqual(['index.html']);
   });
 
-  it('names each precached file that carries Sentry, so the local app never stores it', () => {
-    const sw = 'precacheAndRoute([{url:"index.html",revision:"1"},{url:"assets/index-a1.js",revision:null},{url:"assets/vendor-sentry-d4.js",revision:null}])';
-    expect(sentryPrecached(sw, reader(files))).toEqual(['assets/vendor-sentry-d4.js']);
-    expect(sentryPrecached(sw.replace(',{url:"assets/vendor-sentry-d4.js",revision:null}', ''), reader(files))).toEqual([]);
-  });
 
   it('allows the ingest host and the SDK\'s docs link inside the landing chunks only (eng O1)', () => {
     const sentryOrigins = [SENTRY_INGEST_ORIGIN, 'https://docs.sentry.io'];
