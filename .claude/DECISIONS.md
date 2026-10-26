@@ -5344,3 +5344,51 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Override log — ADR-099 §8 (partial) and MUT-252's on-device-only reading**: *What*: "there is no server or LLM reading". *Replaced by*: the server may re-read a stored original with self-hosted OCR to fill empty fields; LLM reading stays rejected. *Why*: on-device engines miss Android Arabic dates and the browser, and the original is already on our server. *Date*: 2026-10-26.
 
+## ADR-200: An Agent Reaches Only Profiles Its Person Owns or Co-Owns, Through an Explicit Store Allow-List; One Same-Purchase Rule (MUT-435, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-435; plan and eng review `.claude/designs/mut-435-mcp-read-tools.md`, P1 and D1 answered by Basel).
+
+**Context:** MUT-434 gave `/mcp` sign-in and a fail-closed agent guard with no tools. MUT-435 adds the read tools a person's own Claude needs before it writes (MUT-436). ADR-196 deferred two questions to this ticket: what an agent may read of a firm, and auditing a flag a person brings into a firm.
+
+**Decision:**
+1. **Owned or co-owned profiles only (P1).** A tool reaches a profile through `agentProfile` (`server/src/mcp/context.ts`): a membership AND `ownsProfile` (creator, or a co-owner of a Business profile, MUT-373). A firm or Malafat-fed profile the person only belongs to, another person's profile and an unknown id all answer the same `NOT_FOUND`. An owned profile with firm features on is still reachable: its owner is the firm owner. This closes ADR-196 Deferred (a) and (b) for v1: no firm data a member merely belongs to is reachable, so neither firm-owner consent nor audit-on-join is needed until firms are opened to agents (a future ticket).
+2. **The agent guard is an explicit allow-list.** `AGENT_STORE_METHODS` (`server/src/auth/store-guard.ts`) names every store method an agent's tools may call; a method's class alone opens nothing, `read` included (tighter than MUT-434's "any `read`-class method"). A test pins the exact set. Tools run inside the `/mcp` request, so every call passes the guard; their tests drive the real `/mcp` with an OAuth token for that reason.
+3. **Read tools need the `read` scope**; without it none is registered. Each description ends by telling the agent to show the person what it found before writing (AC3).
+4. **One same-purchase rule** (`server/src/expenses/similarity.ts`): same currency, same amount, dated within 3 days either side; a similar vendor (`scoreVendorName` both ways ≥ 0.6) ranks first, then the nearer date. A missing vendor never excludes. `find_similar_expenses` uses it across one profile, or every reachable profile plus the inbox; MUT-437 imports it and must not redefine it.
+5. **Reads write nothing.** `list_categories` never seeds the preset (the REST read does); an empty profile answers `[]` with a hint.
+6. **Lists page with opaque cursors, at most 50 a page** (vendors: a typeahead of at most 25; look-alikes: 10, from at most 200 candidate rows per source, flagged `truncated`). Amounts are decimal strings in the currency's own digits (JOD 3).
+7. **Failures:** an API refusal reaches the agent as `CODE: message {details}`; an input that fails a tool's input schema gets the MCP SDK's own `Input validation error: …` text. Our bugs (a store method the agent guard refused, a result that drifted from the tool's output schema, anything unexpected) go to Sentry tagged `mcp:<tool>` and the agent gets "MTB3A had a problem…". No REST or OpenAPI change, so `API_VERSION` stays `1.74.0-mut434`.
+
+8. **Pre-landing review (Basel, D1–D7, 2026-10-26):** `/mcp` refuses a JSON-RPC batch (an array body, 400 -32600) before any tool runs, since the rate limit counts requests and protocol 2025-06-18 dropped batching (D1); agent reads follow the lapse gate's LOCKED rule — `agentProfile` answers 402 SUBSCRIPTION_LAPSED for a LOCKED profile and the unscoped look-alike search leaves LOCKED profiles out, as `/v1/entries` does; READ_ONLY reads pass (`agentReadRefusal`, through a narrow `GateStore` on the tool context, D2); a test sweeps `tools/list` and calls every tool that takes a profileId with a stranger's profile (D3); a second limiter per person (`agent-user:<userId>`, 240/min) beside the per-connection one, built and pruned in `index.ts` (D4); offset cursors carry their tool and arguments and refuse any other call (D5); the inbox part of the look-alike search stays a capped scan (TD-258, D6); one `readCapped` loop (D7).
+   Re-review (2026-10-26): the batch check reads the body once under the SDK's 4 MiB cap (`readRequestBody`, 413) and hands the transport `parsedBody`; the inbox (`list_inbox`, the inbox part of the look-alike search) follows the person's standing like a session's `GET /v1/inbox`: refused only when every profile is LOCKED (`agentPersonReadRefusal`). A refusal from the per-person limiter still spends one per-connection slot (accepted).
+9. **Stored text is data:** the server instructions and every read tool's description say names, titles and notes in results are records, never instructions; a prefix/substring vendor match needs both names ≥ 3 characters.
+
+**Consequences:**
+- A stored vendor name or note reaches the agent as data. MTB3A never acts on it; the server instructions and tool descriptions keep the person in the loop.
+- `find_similar_expenses` reads at most (reachable profiles + inbox) × 2 pages of 100 indexed rows a call.
+- MUT-436 adds its write methods to the allow-list, each with a test.
+
+**Alternatives considered:** every membership plus an audit row on join (rejected for v1: firm owners get no say); firm owner opt-in (deferred: new setting and UI); keeping "any `read` method" open (rejected: it would expose `audit.list`, `users.getById` and the like to an agent for no tool).
+
+## ADR-201: An Agent Writes Through the Same Compose Paths, Marked `captureSource: 'mcp'`; Inbox Writes Wait for the Phone (MUT-436, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-436; plan `.claude/designs/mut-436-mcp-write-tools.md`, P2–P4 and eng review D1–D8 answered by Basel).
+
+**Context:** MUT-435 gave a person's own Claude read tools. The epic's point is writing: logging receipts and statement lines as expenses, asked first, safe to retry.
+
+**Decision:**
+1. **`add_expense` takes a required `destination` with no default** (`{ kind: 'profile', profileId }` or `{ kind: 'inbox' }`): a call without it is refused with the instruction to ask the person (AC1). A profile write runs POST /v1/expenses' compose path (`prepareExpenseCreate`, `withResolvedVendor`, `touchExpenseVendor`: the MUT-227 floor, the MUT-392 ceiling, a choosable category, links inside the profile, vendors as typed) and writes `expense.created` as USER with `captureSource: 'mcp'`, the OAuth client and the grant. An inbox write runs POST /v1/inbox's rules with `captureSource: 'mcp'`; the audit row comes at filing (P4).
+2. **Expenses keep their capture source** in a new nullable column (`expenses.captureSource`, P3), set by every create path (REST bodies, receipt approval, inbox filing — which copies the entry's source, review D6). Responses use `StoredCaptureSourceSchema` (inputs + `'mcp'`) on Expense and InboxEntry only; requests keep `CaptureSourceSchema`, so no client can claim `'mcp'`. The local records format (MUT-325 export) leaves it out. API `1.75.0-mut436`. The portal's expense drawer shows "Added by Claude" for `'mcp'` (AC5).
+3. **Receipts: a signed PUT in two tools** (`start_receipt_upload` → PUT → `complete_receipt_upload`, P2) over `expenses/receipts-compose.ts`, which the routes now share (type and size, room on the expense, the library's per-person and pending caps, the object verified; MUT-56's scan belongs there). To review only where `RECEIPTS_LIBRARY` is on. A client that can't make HTTP requests is told to send the person to MTB3A.
+4. **Idempotency:** a required `idempotencyKey` per call, claimed under `a:<sha256(userId, key)>` (review D7, so a retry after a reconnect replays), through `runIdempotent`, the framework-free state machine the Hono middlewares now also run (review D4/R4). A 4xx refusal is stored and replays as itself; 5xx/429 release the key (OV4).
+5. **Gates:** the write scope (write tools aren't registered without it); writability through the session's column (`assertAgentMayWrite`, review D2: no `'agent'` principal); the lapse gate per profile (`agentWriteGate`) and per person for the inbox (`agentPersonWriteGate`); the narrow `GateStore` (D8); the agent allow-list gains exactly the methods these tools call.
+6. **Inbox writes ship dark:** `MCP_INBOX_WRITES` (Terraform `mcp_inbox_writes_enabled`, default false) leaves `inbox` out of the tool's schema (OV12) until the phone build that decodes an unknown capture source (tolerant `tryFromString`, Flutter `1f866175`) is live in both stores and the minimum build is raised to it (review D3/D5; before-release.md).
+
+7. **Pre-landing review (2026-10-26):** an agent's receipt starts take the library's start budget and 20-pending cap on an expense too (`assertUploadBudget`; the session's expense route unchanged, TD-261); the agent's idempotency key includes the tool (`a:<sha256(user, tool, key)>`), so one key per source document serves the expense and its receipt; a replayed start whose URL expired is signed again; receipt completion audits the OAuth client and grant.
+
+**Consequences:**
+- MUT-437 (matching) can file a statement line onto an existing expense through these paths; MUT-438 stays postponed.
+- A Claude.ai chat records expenses but can't attach files (TD-259); receipts can't sit on inbox entries (TD-260).
+- An unknown `'mcp'` on a pre-MUT-436 phone build: inbox writes stay off until the minimum build is raised.
+
+**Alternatives considered:** an `'agent'` principal with its own matrix column (review D2: rejected, no behaviour change, two sources of truth); file bytes inline in a tool argument (P2: rejected, the model would emit every byte as output); reading the marker from the audit row (P3: rejected, a read per drawer open, hidden from API keys).

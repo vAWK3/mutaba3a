@@ -167,6 +167,10 @@ export default {
         'server/src/routes/oauth-cleanup.ts',
         'server/src/routes/mcp.ts',
         'server/src/mcp/**',
+        // MUT-435: the agent's read tools and the same-purchase rule they share with MUT-437.
+        'server/src/expenses/similarity.ts',
+        // MUT-436: the receipt upload path the agent's receipt tools share with the routes.
+        'server/src/expenses/receipts-compose.ts',
         'server/src/auth/agent-auth.ts',
         'src/hosted/pages/connect/**',
         'src/hosted/components/ConnectClaudeDrawer.tsx',

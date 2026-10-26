@@ -2,10 +2,9 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
-import { checkFile, receiptStorageKey } from '../attachments/rules.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
-import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
+import { completeLibraryReceipt, MAX_PENDING_LIBRARY_UPLOADS, receiptAudit, signReceiptUpload, startLibraryReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
 import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -35,8 +34,7 @@ import { serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem 
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 /** MUT-255 decision P3: unfinished library uploads one profile may hold from the last day, before a new one is refused. */
-export const MAX_PENDING_LIBRARY_UPLOADS = 20;
-const PENDING_WINDOW_MS = 24 * 60 * 60 * 1000;
+export { MAX_PENDING_LIBRARY_UPLOADS } from '../expenses/receipts-compose.js';
 /** MUT-255 decision P3: upload starts per person per minute. */
 export const RECEIPT_UPLOAD_POLICY = { perMinute: 30 } as const;
 
@@ -69,7 +67,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
 
   function audit(c: Context<AppEnv>, action: string, entityType: 'expense' | 'expense_receipt', entityId: string, metadata?: JsonObject) {
     const auth = sessionAuth(c);
-    return store.audit.append({ organizationId: auth.organization.id, actorType: 'USER', actorId: auth.user.id, action, entityType, entityId, ...(metadata ? { metadata } : {}), requestId: c.get('requestId') });
+    return receiptAudit(store, { organizationId: auth.organization.id, userId: auth.user.id, requestId: c.get('requestId') })(action, entityType, entityId, metadata);
   }
 
   async function mustGet(organizationId: string, id: string): Promise<ExpenseReceiptRecord> {
@@ -78,9 +76,15 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
     return receipt;
   }
 
-  async function signUpload(receipt: ExpenseReceiptRecord, now: Date) {
-    const upload = await storage().signUpload(receipt.storageKey, { mimeType: receipt.mimeType, sizeBytes: receipt.sizeBytes, ttlSeconds: options.urlTtlSeconds, now });
-    return { url: upload.url, method: 'PUT' as const, headers: upload.headers, expiresAt: upload.expiresAt.toISOString() };
+  const receiptDeps: ReceiptDeps = { store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds };
+
+  function receiptActor(c: Context<AppEnv>): ReceiptActor {
+    const { organization, user } = sessionAuth(c);
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args) };
+  }
+
+  function signUpload(receipt: ExpenseReceiptRecord, now: Date) {
+    return signReceiptUpload(receiptDeps, receipt, now);
   }
 
   /** 409 naming where the receipt is filed, so a client whose first answer was lost can still open the expense. */
@@ -102,27 +106,15 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       responses: { 201: { description: 'Upload started', content: { 'application/json': { schema: CreateReceiptUploadResponseSchema } } }, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
-      storage();
-      const { organization, user } = sessionAuth(c);
       const body = c.req.valid('json');
-      const now = c.get('now')();
-      const check = checkFile(body);
-      if (!check.ok) throw validationError(check.reason, `Upload refused: ${check.reason}`);
-      const decision = await options.uploadLimiter.check(`receipt-upload:${user.id}`, now);
-      if (!decision.allowed) {
-        c.header('Retry-After', String(decision.retryAfterSeconds));
-        throw new ApiError('RATE_LIMITED', 'Too many receipt uploads; try again shortly', { retryAfterSeconds: decision.retryAfterSeconds });
+      try {
+        const { receipt, upload } = await startLibraryReceipt({ ...receiptDeps, uploadLimiter: options.uploadLimiter }, receiptActor(c), body);
+        return c.json({ receipt: serializeExpenseReceipt(receipt), upload }, 201);
+      } catch (err) {
+        const retryAfter = err instanceof ApiError ? (err.details as { retryAfterSeconds?: number } | undefined)?.retryAfterSeconds : undefined;
+        if (retryAfter !== undefined) c.header('Retry-After', String(retryAfter));
+        throw err;
       }
-      if ((await store.expenseReceipts.countPendingSince(organization.id, new Date(now.getTime() - PENDING_WINDOW_MS))) >= MAX_PENDING_LIBRARY_UPLOADS) {
-        // A 429, not a 422: nothing was done, so the Idempotency-Key stays free for the same request once there is room.
-        throw new ApiError('RATE_LIMITED', `This profile already has ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads; finish or delete one first`, { reason: 'TOO_MANY_PENDING_UPLOADS' });
-      }
-      const created = await store.expenseReceipts.create(
-        { organizationId: organization.id, expenseId: null, filename: body.filename, mimeType: body.mimeType, sizeBytes: body.sizeBytes, receivedOn: todayFor(organization, now), suggested: body.suggested ?? null, uploadedByUserId: user.id, requestId: c.get('requestId') },
-        now,
-      );
-      const keyed = (await store.expenseReceipts.setKey(organization.id, created.id, receiptStorageKey(organization.id, created.id))) ?? created;
-      return c.json({ receipt: serializeExpenseReceipt(keyed), upload: await signUpload(keyed, now) }, 201);
     },
   );
 
@@ -160,18 +152,9 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       responses: { 200: { description: 'READY', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
-      const s = storage();
-      const { organization } = sessionAuth(c);
-      const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
       // A receipt started on an expense (MUT-44) completes through that expense's route, which checks the expense is
       // live and has room; finishing it here would skip both (review finding: MAX_RECEIPTS_PER_EXPENSE bypass).
-      if (receipt.expenseId !== null) throw new ApiError('NOT_FOUND', 'No such receipt in the library');
-      if (receipt.status === 'READY') return c.json(serializeExpenseReceipt(receipt), 200);
-      await verifyUploadedObject(s, receipt);
-      const ready = await store.expenseReceipts.complete(organization.id, receipt.id, c.get('now')());
-      if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
-      await audit(c, 'expense_receipt.added', 'expense_receipt', ready.id, { expenseId: ready.expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes });
-      return c.json(serializeExpenseReceipt(ready), 200);
+      return c.json(serializeExpenseReceipt(await completeLibraryReceipt(receiptDeps, receiptActor(c), c.req.valid('param').receiptId)), 200);
     },
   );
 

@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
+import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createLogger } from './logger.js';
 import { shutdownAndFlush } from './observability/reporter.js';
@@ -68,6 +68,8 @@ const emailWebhookIpLimiter = new SlidingWindowRateLimiter(EMAIL_WEBHOOK_POLICY.
 // MUT-434: built here (not inside createApp) so the timer below can prune them; a client_id key is attacker-chosen.
 const oauthLimiters = defaultOAuthLimiters();
 const agentLimiter = new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE);
+// MUT-435 (review D4): a person's agents together.
+const agentPersonLimiter = new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE);
 
 // MUT-359 (ADR-159 §5): config has already refused every half-configured mailer, and log/memory in production.
 const memoryOutbox = config.MAILER === 'memory' ? new MemoryMailTransport() : null;
@@ -147,6 +149,7 @@ const app = createApp({
   localAttachments,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
+  mcpInboxWrites: config.MCP_INBOX_WRITES,
   billingGate: config.BILLING_GATE,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
@@ -174,7 +177,7 @@ const app = createApp({
   publicFxIpLimiter,
   stripe,
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
-  oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter } : null,
+  oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter, agentPersonLimiter } : null,
   stripeWebhookIpLimiter,
   billingSessionLimiter,
   mailer,
@@ -238,6 +241,7 @@ const pruneTimer = setInterval(() => {
   selfService.addressDayLimiter.prune(now);
   for (const limiter of Object.values(oauthLimiters)) limiter.prune(now);
   agentLimiter.prune(now);
+  agentPersonLimiter.prune(now);
 }, 60_000);
 pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {

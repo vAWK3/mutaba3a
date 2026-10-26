@@ -124,6 +124,12 @@ variable "receipts_library_enabled" {
   default     = false
 }
 
+variable "mcp_inbox_writes_enabled" {
+  description = "MUT-436 (review D3/D5): sets MCP_INBOX_WRITES=true, so a person's own Claude may add expenses to their inbox (captureSource 'mcp'). false (default) = add_expense offers profiles only. Turn on only after the phone release that decodes an unknown capture source is live AND the iOS/Android minimum build is raised to it (docs/operations/before-release.md); an older phone build fails to load an inbox holding an 'mcp' entry."
+  type        = bool
+  default     = false
+}
+
 variable "billing_gate_enabled" {
   description = "MUT-361 (ADR-181): the lapse gate. true (default) leaves BILLING_GATE unset, and the API enforces it: a READ_ONLY profile refuses session writes and a LOCKED one everything but the records export. false sets BILLING_GATE=false, the operator's kill switch (a pilot person `npm run billing:uncovered` lists still waits for a grant). Nothing is ever deleted either way."
   type        = bool

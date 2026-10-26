@@ -390,16 +390,55 @@ export function principalStoreGuard(principal: Principal, profileWriter: Profile
 }
 
 /**
- * MUT-434: the guard for an MCP agent (an OAuth access token on /mcp). It fails closed: only methods classified `read`
- * (no domain, no person) pass; everything else — `sessionOnly`, domain reads and writes, `control`, `operator` — is
- * refused until MUT-435/436 open each tool's methods deliberately, with tests. This ticket opens no data.
+ * MUT-435: every store method an MCP agent's tools may call, by name — the agent's whole reach into the store. A
+ * method's class alone opens nothing (not even `read`); a tool that needs a method adds it here, with a test. Which
+ * profile a call may touch is the tool's check (mcp/context.ts `agentProfile`: owned or co-owned, P1), not this list's.
+ */
+export const AGENT_STORE_METHODS: ReadonlySet<string> = new Set([
+  'memberships.find',
+  'memberships.listByUser',
+  'organizations.getById',
+  'expenseCategories.list',
+  'customers.list',
+  'vendors.search',
+  'inboxEntries.list',
+  'expenses.list',
+  // MUT-436 write tools: add_expense (profile: compose + vendors + audit; inbox: create) and their idempotency claims.
+  'idempotency.claim',
+  'idempotency.complete',
+  'idempotency.fail',
+  'userIdempotency.claim',
+  'userIdempotency.complete',
+  'userIdempotency.fail',
+  'expenses.create',
+  'expenses.getById',
+  'expenseCategories.getById',
+  'customers.getById',
+  'projects.getById',
+  'vendors.resolve',
+  'vendors.touch',
+  'inboxEntries.create',
+  'audit.append',
+  // MUT-436 receipt tools (expenses/receipts-compose.ts).
+  'expenseReceipts.create',
+  'expenseReceipts.setKey',
+  'expenseReceipts.getById',
+  'expenseReceipts.listByExpense',
+  'expenseReceipts.completeOnExpense',
+  'expenseReceipts.complete',
+  'expenseReceipts.countPendingSince',
+]);
+
+/**
+ * MUT-434/435: the guard for an MCP agent (an OAuth access token on /mcp). It fails closed: only the methods named in
+ * AGENT_STORE_METHODS pass, whatever their class; an unclassified method still throws.
  */
 export function agentStoreGuard(): StoreGuard {
   return {
     assertCanCall(repo, method) {
       const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess> | undefined>)[repo]?.[method];
       if (!access) throw new Error(`Unclassified store method ${repo}.${method}`);
-      if (access !== 'read') throw principalNotAccepted();
+      if (!AGENT_STORE_METHODS.has(`${repo}.${method}`)) throw principalNotAccepted();
     },
   };
 }

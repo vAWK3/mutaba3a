@@ -1,8 +1,7 @@
-import { createHash, randomBytes } from 'node:crypto';
-import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { address, chooseLanguage, grantFeature, liveState, operatorAccount, signInThroughForm } from '../../support/selfService';
+import { chooseLanguage, liveState } from '../../support/selfService';
 import { openYou, youRow } from '../../support/you';
+import { catchCallback, connect, exchange, mcpInitialize, person, registerAgent } from '../../support/agent';
 
 /**
  * MUT-434: an MCP agent signs in with OAuth 2.1, against the live dev API (support/selfservice-live.mjs, with
@@ -10,83 +9,6 @@ import { openYou, youRow } from '../../support/you';
  * person in the browser. The agent's redirect is a loopback address (Claude Code listens on one); the page routes it,
  * so the browser "arrives" there and the spec reads the code from the URL.
  */
-
-const PASSWORD = 'the first long passphrase';
-const HOME = /\/p\/[0-9a-f-]{36}$/;
-const CALLBACK = 'http://127.0.0.1:59871/callback';
-
-interface Agent {
-  clientId: string;
-  verifier: string;
-  authorizeUrl: string;
-}
-
-/** The agent's half: DCR registration, then the authorize link it would open in the browser. */
-async function registerAgent(): Promise<Agent> {
-  const { origin } = liveState();
-  const res = await fetch(`${origin}/oauth/register`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ client_name: 'Claude Code', redirect_uris: [CALLBACK], token_endpoint_auth_method: 'none', application_type: 'native' }),
-  });
-  expect(res.status, `register ${await res.clone().text()}`).toBe(201);
-  const { client_id: clientId } = (await res.json()) as { client_id: string };
-  const verifier = randomBytes(32).toString('base64url');
-  const challenge = createHash('sha256').update(verifier).digest('base64url');
-  const query = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: CALLBACK, code_challenge: challenge, code_challenge_method: 'S256', state: 'qa-state', resource: `${origin}/mcp` });
-  return { clientId, verifier, authorizeUrl: `${origin}/oauth/authorize?${query.toString()}` };
-}
-
-/** Answers the loopback redirect inside the page, as the agent's local listener would, and returns where it landed. */
-async function catchCallback(page: Page): Promise<() => Promise<URL>> {
-  let landed: URL | null = null;
-  await page.route(`${CALLBACK}**`, async (route) => {
-    landed = new URL(route.request().url());
-    await route.fulfill({ status: 200, contentType: 'text/html', body: '<p>You can close this window.</p>' });
-  });
-  return async () => {
-    await expect.poll(() => landed?.toString() ?? null, { message: 'the browser reached the agent’s redirect' }).not.toBeNull();
-    return landed!;
-  };
-}
-
-async function exchange(agent: Agent, code: string): Promise<string> {
-  const { origin } = liveState();
-  const res = await fetch(`${origin}/oauth/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'authorization_code', client_id: agent.clientId, code, code_verifier: agent.verifier, redirect_uri: CALLBACK, resource: `${origin}/mcp` }).toString(),
-  });
-  expect(res.status, `token ${await res.clone().text()}`).toBe(200);
-  return ((await res.json()) as { access_token: string }).access_token;
-}
-
-function mcpInitialize(accessToken: string): Promise<Response> {
-  return fetch(`${liveState().origin}/mcp`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${accessToken}` },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'qa', version: '1' } } }),
-  });
-}
-
-async function person(page: Page, { agentAccess }: { agentAccess: boolean }) {
-  const email = address('agent');
-  const { id } = await operatorAccount(email, 'en', PASSWORD);
-  if (agentAccess) await grantFeature(id);
-  await signInThroughForm(page, email, PASSWORD);
-  await expect(page).toHaveURL(HOME);
-}
-
-/** Sign in, approve on the consent page, exchange: a connected agent's access token. */
-async function connect(page: Page): Promise<string> {
-  const agent = await registerAgent();
-  const landed = await catchCallback(page);
-  await page.goto(agent.authorizeUrl);
-  await expect(page.getByRole('heading', { name: 'Connect an app' })).toBeVisible();
-  await page.getByRole('button', { name: 'Allow' }).click();
-  const code = (await landed()).searchParams.get('code') ?? '';
-  return exchange(agent, code);
-}
 
 test.beforeEach(async ({ page }) => {
   await chooseLanguage(page, 'en');

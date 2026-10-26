@@ -2197,6 +2197,12 @@ export const PaymentStatusSchema = z.enum(['POSTED', 'REVERSED']).openapi('Payme
 export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');
 /** MUT-66 persists this on an inbox entry, so the serializer needs the type, not just the schema. */
 export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
+/**
+ * MUT-436 (ADR-201): a stored capture source, as responses carry it — every input value, plus 'mcp' (the person's own
+ * Claude), which only the MCP tools write. Requests keep CaptureSourceSchema, so no client can claim 'mcp'.
+ */
+export const StoredCaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share', 'mcp']).openapi('StoredCaptureSource');
+export type StoredCaptureSource = z.infer<typeof StoredCaptureSourceSchema>;
 /** MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed. */
 export const PaymentOriginSchema = z.enum(['integration', 'capture']).openapi('PaymentOrigin');
 /** MUT-61: how much of a payment has been applied; a REVERSED payment reads `unallocated` (see status). */
@@ -2709,6 +2715,7 @@ export const ExpenseSchema = z
     projectId: uuid.nullable(),
     notes: z.string().nullable(),
     createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
+    captureSource: StoredCaptureSourceSchema.nullable().openapi({ description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436." }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -2809,7 +2816,7 @@ export const CreateExpenseRequestSchema = z
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
     notes: expenseNotes.optional(),
-    /** MUT-65: where the write came from; audit metadata only, never persisted on the row. */
+    /** MUT-65: where the write came from. In the audit metadata, and since MUT-436 (ADR-201) kept on the expense row too. */
     captureSource: CaptureSourceSchema.optional(),
     /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
     capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
@@ -3195,7 +3202,7 @@ export const InboxEntrySchema = z
     occurredOn: IsoDateSchema,
     note: z.string().nullable(),
     /** Persisted here, unlike on an expense or income write: an entry can sit unfiled, and still shows how it arrived. */
-    captureSource: CaptureSourceSchema.nullable(),
+    captureSource: StoredCaptureSourceSchema.nullable(),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),

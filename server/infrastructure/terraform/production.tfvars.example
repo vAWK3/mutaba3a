@@ -19,6 +19,8 @@ log_level           = "info"
 # sentry_enabled      = false
 # MUT-389: the receipts library. Set true when MUT-260 or MUT-258 ships, and leave it on (server/DEPLOYMENT.md).
 # receipts_library_enabled = false
+# MUT-436: agents adding to the inbox. Only after the phone release decoding 'mcp' is live and the minimum build is raised.
+# mcp_inbox_writes_enabled = false
 # Uptime alerts (MUT-328, server/DEPLOYMENT.md §6b). Real values only in the git-ignored production.tfvars.
 # alert_email      = "you@example.com"
 # alert_sms_number = "+9725XXXXXXXX"   # E.164; verify the SMS channel once after the apply

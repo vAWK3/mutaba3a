@@ -115,6 +115,8 @@ export interface ExpenseCreateBody {
   customerId?: string | undefined;
   projectId?: string | undefined;
   notes?: string | undefined;
+  /** MUT-436: kept on the row (ADR-201) as well as in the audit metadata. */
+  captureSource?: string | undefined;
 }
 
 /**
@@ -127,7 +129,7 @@ export async function prepareExpenseCreate(store: LedgerStore, organizationId: s
   const amountMinor = parseExpenseAmount(body.amount, body.currency);
   const links = await resolveLinks(store, organizationId, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
   if (body.categoryId) await assertCategoryChoosable(store, organizationId, body.categoryId);
-  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId };
+  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId, ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
 }
 
 /**

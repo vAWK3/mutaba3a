@@ -707,6 +707,15 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-436 (review D3/D5): agents may add to the inbox only once the phone decodes 'mcp' (its minimum build raised).
+      dynamic "env" {
+        for_each = var.mcp_inbox_writes_enabled ? { MCP_INBOX_WRITES = "true" } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       dynamic "env" {
         for_each = local.app_association_env
         content {

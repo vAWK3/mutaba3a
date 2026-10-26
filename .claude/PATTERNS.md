@@ -2811,8 +2811,23 @@ Imported data is never written field by field into the live store. It is mapped 
 - A new kind of caller (an MCP agent's OAuth token) gets its own guard that refuses every store method except `read`-class ones (`agentStoreGuard`, `server/src/auth/store-guard.ts`), instead of borrowing the session's. Each feature that needs data opens the exact methods it uses, with tests, in its own ticket.
 - Its authentication reads the raw store (like `authenticate()` reads sessions) and re-checks the flag, the account's status and closure on every request: no cached decision outlives a revoke.
 - **First instance:** `authenticateAgent` on `/mcp` (MUT-434); MUT-435/436 widen it per tool.
+- **Since MUT-435:** the guard is an explicit allow-list of `repo.method` names (`AGENT_STORE_METHODS`), pinned by a test; a method's class alone opens nothing.
 
 ### Pattern: A retried single-use credential returns the same answer, derived, not stored (MUT-434)
 - When a once-only exchange (a refresh rotation) can be retried by an honest client (a lost response, parallel calls), make the successor a deterministic function of the presented secret and a recorded id — `HMAC(key, parent ∥ successorId)` — so any re-presentation inside a short window re-derives the identical answer without storing plaintext. Outside the window, re-presentation is the theft signal.
 - Pair it with a conditional claim (`UPDATE … WHERE rotatedAt IS NULL`, proceed on one changed row) so exactly one request records the successor id.
 - **First instance:** `OAuthService.refresh` (`server/src/oauth/service.ts`, D19).
+
+### Pattern: An MCP tool is context → agentProfile → compose/store → runTool (MUT-435)
+- Register tools in `server/src/mcp/*-tools.ts` with a Zod input and output schema; the handler is `runTool(ctx, async () => …)`, which returns structured content (plus a text copy) or a tool error the agent can read (`CODE: message`; anything unexpected to Sentry as a plain retry message).
+- A tool that names a profile resolves it with `agentProfile(ctx, profileId)` first; reuse the REST layer's compose helpers and serializers, never the routes over HTTP.
+- Test it through the real `/mcp` with an OAuth token (`__tests__/helpers/oauth-agent.ts`), so the agent store guard applies; the guard is read from the request context and lets everything through outside one.
+- **First instance:** `server/src/mcp/read-tools.ts`.
+
+### Pattern: One idempotency state machine for every door (MUT-436)
+- `runIdempotent(ops, { key, operation, fingerprints, now }, run)` in `server/src/idempotency.ts` is the claim → run → complete-or-fail machine; `run` returns `{ status, body }`. 5xx/429 release the key; any other status is stored and replays. HTTP middlewares adapt Hono to it; MCP tools call it through `withToolIdempotency` (a 4xx `ApiError` becomes a stored outcome and is rethrown on replay).
+- Partition by the principal's namespace: sessions `s:<sha256>`, agents `a:<sha256(user, key)>`, API keys bare.
+
+### Pattern: Upload rules live in a compose module, not a route (MUT-436)
+- `server/src/expenses/receipts-compose.ts` owns start/complete for receipts (checks in order, the audit row via an injected writer). Routes and MCP tools call it; a new door adds no copy of the rules, and a new rule (MUT-56's scan) lands once.
+

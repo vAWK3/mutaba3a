@@ -17,7 +17,10 @@ export interface AgentAuthOptions {
   service: OAuthService | null;
   /** The raw store, read the way authenticate() reads sessions. */
   store: LedgerStore;
+  /** Per connection (OAuth grant). */
   rateLimiter: RateLimiter;
+  /** MUT-435 (review D4): per person, across all their connections, so connecting again doesn't multiply the budget. */
+  personRateLimiter: RateLimiter;
 }
 
 function bearerOf(c: Context): string | null {
@@ -59,7 +62,8 @@ export function authenticateAgent(options: AgentAuthOptions): MiddlewareHandler<
       throw new ApiError('FEATURE_NOT_ENABLED', 'Connecting an agent is not turned on for this account', { feature: 'agent_access' });
     }
 
-    const decision = await options.rateLimiter.check(`agent:${grant.id}`, now);
+    let decision = await options.rateLimiter.check(`agent:${grant.id}`, now);
+    if (decision.allowed) decision = await options.personRateLimiter.check(`agent-user:${user.id}`, now);
     if (!decision.allowed) {
       c.header('Retry-After', String(decision.retryAfterSeconds));
       throw new ApiError('RATE_LIMITED', 'Too many requests from this agent', { retryAfterSeconds: decision.retryAfterSeconds });

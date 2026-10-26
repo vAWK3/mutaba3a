@@ -113,6 +113,8 @@ const envSchema = z.object({
    * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
    */
   RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  // MUT-436 (review D3/D5): an agent may add to the inbox only once the phone decodes 'mcp' and its minimum build is raised.
+  MCP_INBOX_WRITES: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-361 (ADR-181 D7): the lapse gate — a READ_ONLY profile refuses session writes and a LOCKED one everything but
    * the records export (billing/gate.ts). On unless exactly "false": the operator's kill switch, e.g. while a pilot user

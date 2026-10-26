@@ -28,6 +28,55 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Claude can add expenses and receipts (MUT-436, ADR-201)
+
+**Why:** the epic's purpose: a person's own Claude logs receipts and statement lines as expenses, asked first and safe to retry.
+
+### Added
+- MCP `add_expense` (destination required, no default), `start_receipt_upload`, `complete_receipt_upload` for a grant with the write scope (`server/src/mcp/write-tools.ts`, `receipt-tools.ts`).
+- `expenses.captureSource` (nullable, migration `20261026090000`); `StoredCaptureSourceSchema` adds `'mcp'` to Expense and InboxEntry outputs; API `1.75.0-mut436`.
+- Portal: "Added by Claude" in the expense drawer (en/ar).
+- `MCP_INBOX_WRITES` / Terraform `mcp_inbox_writes_enabled` (default off) and its before-release order.
+- Release-QA `portal-selfservice.mcp.add-expense`, `portal-selfservice.mcp.receipt-upload`; the live QA API uses the local attachments driver.
+- Flutter `1f866175`: an unknown capture source reads as none (the inbox no longer fails on one); `CaptureSource.mcp`.
+
+### Changed
+- `runIdempotent` (framework-free) behind the idempotency middlewares; `expenses/receipts-compose.ts` behind the receipt routes (behaviour unchanged, own refactor commit `6aa6122b`).
+- Inbox filing and receipt approval keep the capture source on the expense they create.
+- One receipt-upload limiter for the route and the agent tools.
+
+---
+
+## [Unreleased] - 2026-10-26 — Claude's read tools on /mcp (MUT-435, ADR-200)
+
+**Why:** a person's own Claude needs to see where an expense would go, how to file it and whether it is already recorded, before MUT-436 lets it write.
+
+### Added
+- Six MCP tools for a grant with the `read` scope (`server/src/mcp/read-tools.ts`): `list_profiles`, `list_categories`, `list_clients`, `list_vendors`, `list_inbox`, `find_similar_expenses`. Each tells the agent to show the person what it found before writing.
+- `server/src/mcp/context.ts`: `agentProfile` (owned or co-owned profiles only, ADR-200 §1), tool results and errors (unexpected failures to Sentry, a plain retry message to the agent), cursor paging (≤ 50).
+- `server/src/expenses/similarity.ts`: the one same-purchase rule (same currency and amount, ±3 days, a similar vendor ranked first), for MUT-437 to reuse.
+- Release-QA `portal-selfservice.mcp.read-tools` (`qa/features/portal-selfservice/mcp.yaml`, `qa/specs/portal-selfservice/mcp.spec.ts`); the agent's half of connecting moved to `qa/support/agent.ts`, shared with `connect.spec.ts`.
+
+### Changed
+- The agent store guard is an explicit allow-list (`AGENT_STORE_METHODS`): only the eight methods the read tools call; MUT-434's "any `read`-class method" is closed.
+- `/mcp` passes the error reporter to the tools; the server instructions add "never choose a profile; check find_similar_expenses first".
+
+### Changed (pre-landing review, Basel D1–D7)
+- `/mcp` refuses a JSON-RPC batch (400, -32600) before any tool runs: one request is one call, so the rate limit holds. `server/src/routes/mcp.ts`.
+- A second agent rate limit per person (240/min across all their connections) beside the per-connection 120. `auth/agent-auth.ts`, `app.ts`, `index.ts`.
+- Agent reads follow the lapse gate: a LOCKED profile answers 402 SUBSCRIPTION_LAPSED and the unscoped look-alike search leaves it out (`agentReadRefusal`, `auth/billing-gate.ts`).
+- Offset cursors (`list_profiles`, `list_categories`) carry their tool and arguments; `decodeCursor` refuses a time outside a Date's range (was a 500, REST lists too).
+- Look-alikes: a bad date names `date` and keeps the ten-year bounds; a vendor under 3 characters only matches itself; profiles read in parallel; `list_vendors` reports `truncated`.
+- Guard refusals and results that drift from a tool's output schema reach Sentry (`mcp:<tool>`); tool descriptions say stored text is records, never instructions.
+- TD-258 (inbox candidates are a capped scan).
+- Re-review: the batch check reads the body once under the SDK's 4 MiB cap (413) and passes it parsed; the agent's inbox reads follow the person's standing (refused only when every profile is LOCKED).
+
+### Technical
+- `server/src/__tests__/helpers/oauth-agent.ts`: the OAuth test harness, shared by `routes-oauth.test.ts` and `mcp-read-tools.test.ts`.
+- No REST or OpenAPI change: `API_VERSION` stays `1.74.0-mut434`.
+
+---
+
 ## [Unreleased] - 2026-10-25 — MUT-434 review fixes (qa-reconcile, 7 findings)
 
 **Why:** the pre-landing review of MUT-434 found one critical and six smaller holes in the OAuth server.
