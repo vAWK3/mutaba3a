@@ -2,7 +2,7 @@
 #
 # Interactive version bump.
 #
-#   scripts/bump-version.sh web      # app version: package.json + lock, tauri.conf.json, Cargo.toml + lock
+#   scripts/bump-version.sh web      # website version: package.json + lock
 #   scripts/bump-version.sh server   # API version: server/package.json + lock
 #
 # Asks for patch / minor / major / custom / keep, then writes the new version
@@ -12,9 +12,6 @@
 # Non-interactive:
 #   BUMP=patch|minor|major|keep scripts/bump-version.sh web
 #   BUMP=custom BUMP_VERSION=1.2.3 scripts/bump-version.sh web
-#
-# The app bump reuses update_version() from deploy.sh rather than re-deriving
-# which files carry the version; deploy.sh stays the single definition.
 
 set -euo pipefail
 
@@ -32,7 +29,7 @@ C_DIM=$'\033[2m'; C_BOLD=$'\033[1m'; C_RED=$'\033[0;31m'; C_NC=$'\033[0m'
 
 if [[ "$MODE" == "web" ]]; then
   MANIFEST="package.json"
-  LABEL="app (web + desktop share one version)"
+  LABEL="website"
 else
   MANIFEST="server/package.json"
   LABEL="API service"
@@ -153,26 +150,6 @@ if [[ "$MODE" == "server" ]]; then
   exit 0
 fi
 
-# web/desktop: deploy.sh owns the list of manifests that carry the app version.
-# Sourcing it is safe — its interactive menu only runs when executed directly.
-# shellcheck disable=SC1091
-source ./deploy.sh
-update_version "$NEW"
+npm version "$NEW" --no-git-tag-version --allow-same-version --ignore-scripts >/dev/null
 refresh_install_stamp .
-
-# deploy.sh's update_version rewrites Cargo.toml but leaves Cargo.lock to the
-# next cargo build. The web release never builds Rust, so refresh the lock's
-# own entry here; otherwise the two drift and a later desktop release tags a
-# stale lockfile (the v0.0.65 failure).
-if command -v cargo >/dev/null 2>&1; then
-  if cargo update --manifest-path src-tauri/Cargo.toml --offline -p app --precise "$NEW" >/dev/null 2>&1 \
-     || cargo update --manifest-path src-tauri/Cargo.toml --offline -p app >/dev/null 2>&1; then
-    printf '%s✓%s src-tauri/Cargo.lock in sync\n' "$C_GREEN" "$C_NC"
-  else
-    printf '%s!%s could not refresh src-tauri/Cargo.lock — run a desktop build before the next DMG release\n' "$C_YELLOW" "$C_NC"
-  fi
-else
-  printf '%s!%s cargo not installed; src-tauri/Cargo.lock still says %s\n' "$C_YELLOW" "$C_NC" "$CURRENT"
-fi
-
-printf '%s✓%s app version → %s%s%s\n' "$C_GREEN" "$C_NC" "$C_GREEN" "$NEW" "$C_NC"
+printf '%s✓%s package.json + package-lock.json → %s%s%s\n' "$C_GREEN" "$C_NC" "$C_GREEN" "$NEW" "$C_NC"

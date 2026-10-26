@@ -1,8 +1,8 @@
 /**
  * What the built bundles may and may not contain (hosted-portal.md §8,
  * MUT-43; brand fonts, MUT-102). Pure, so `check-bundles.test.ts` can prove
- * each rule fires; `check-bundles.ts` applies them to `dist-web`,
- * `dist-desktop` and `dist-hosted`.
+ * each rule fires; `check-bundles.ts` applies them to `dist-web` and
+ * `dist-hosted`.
  */
 import { dirname, join, resolve, sep } from 'node:path';
 import { CIMD_CLIENT_ID } from '../src/services/oauth/oauth-client';
@@ -19,7 +19,7 @@ export interface Finding {
 }
 
 /**
- * The local builds (web, desktop) must carry nothing of the portal: no endpoint,
+ * The website build must carry nothing of the portal: no endpoint,
  * cookie or header. Nor anything of retired device sync (MUT-73, ADR-053): the
  * three exact strings below shipped with the bundle and pairing UI, and are
  * specific enough not to match a library's own "sync".
@@ -92,7 +92,7 @@ export const LANDING_SENTRY_CHUNK = /^assets\/(?:vendor-sentry|landingSentry)-[A
  * Origins only files matching a pattern may name (MUT-150 eng O1). Hashed chunk
  * names can't be listed path by path. The landing's Sentry chunks send to the
  * org's ingest host and carry the SDK's docs link; the rest of dist-web, which
- * the local app shares, may name neither.
+ * every website page loads, may name neither.
  */
 export const PATTERN_SCOPED_ORIGINS: ReadonlyArray<{ pattern: RegExp; origins: readonly string[] }> = [
   { pattern: LANDING_SENTRY_CHUNK, origins: [SENTRY_INGEST_ORIGIN, 'https://docs.sentry.io'] },
@@ -282,9 +282,9 @@ export function staticGraph(html: string, read: (path: string) => string): strin
 }
 
 /**
- * The statically loaded files of the web entry that mention PostHog: the
- * local app at /app shares that entry, so any hit means the SDK (or its host)
- * ships inside the local app (ADR-024, ADR-090). Empty when it is clean.
+ * The statically loaded files of the web entry that mention PostHog: any hit
+ * means every website page loads the SDK up front instead of lazily (ADR-090).
+ * Empty when it is clean.
  */
 export function posthogInEntryGraph(html: string, read: (path: string) => string): string[] {
   return staticGraph(html, read).filter((path) => POSTHOG_MARKER.test(read(path)));
@@ -332,20 +332,6 @@ export function indexedDbOutsideLocalBackend(paths: readonly string[], read: (pa
   });
 }
 
-/** The files a Workbox `sw.js` precaches, from its `{url:"…"}` entries (minified or JSON-quoted). */
-export function precachedUrls(sw: string): string[] {
-  return [...sw.matchAll(/\{\s*"?url"?\s*:\s*"([^"]+)"/g)].map((match) => match[1]);
-}
-
-/**
- * The precached files that mention PostHog: the service worker installs for
- * everyone who opens the local app, so a hit means the SDK would be stored on
- * their device even though it never runs there (MUT-154 review F1). Empty when clean.
- */
-export function posthogPrecached(sw: string, read: (path: string) => string): string[] {
-  return precachedUrls(sw).filter((path) => POSTHOG_MARKER.test(read(path)));
-}
-
 /**
  * What only the Sentry browser SDK or our DSN carries (MUT-149): its global
  * carrier, its SDK name, its auth query key, the EU ingest host. Not bare
@@ -353,7 +339,7 @@ export function posthogPrecached(sw: string, read: (path: string) => string): st
  */
 export const SENTRY_MARKER = /__SENTRY__|sentry\.javascript|\bsentry_key\b|ingest\.de\.sentry\.io/;
 
-/** True when a local build (web, desktop) file carries the SDK: only the portal and the landing's chunks may (AC1). */
+/** True when a file carries the SDK: only the portal's and the landing's lazy chunks may (AC1). */
 export function sentryLeaks(text: string): boolean {
   return SENTRY_MARKER.test(text);
 }
@@ -365,19 +351,10 @@ export function landingSentryChunks(paths: readonly string[]): string[] {
 
 /**
  * dist-web files that carry the SDK outside the landing's lazy chunks (MUT-150):
- * the local app loads the rest of dist-web, and never the SDK (ADR-024). Empty when clean.
+ * every website page loads the rest of dist-web. Empty when clean.
  */
 export function sentryOutsideLandingChunks(paths: readonly string[], read: (path: string) => string): string[] {
   return paths.filter((path) => !LANDING_SENTRY_CHUNK.test(path) && sentryLeaks(read(path)));
-}
-
-/**
- * The precached files that carry the SDK (MUT-150): the service worker installs
- * for everyone who opens the local app, so a hit means Sentry would be stored on
- * their device. Empty when clean.
- */
-export function sentryPrecached(sw: string, read: (path: string) => string): string[] {
-  return precachedUrls(sw).filter((path) => SENTRY_MARKER.test(read(path)));
 }
 
 /**

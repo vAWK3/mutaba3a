@@ -1,10 +1,11 @@
 app: carry-over
 area: carry
-title: Bringing records from the old web app and the old address to the new address
+title: Bringing records from the old address, or a file saved from the old web app, to the new address
 tier: secondary
-# MUT-291 (epic MUT-284, ADR-185): the old web app's records, and the old address's signed-out records, carried to the
-# new address in one hand-off between two browser windows, or by file when the windows can't talk. Three origins run
-# on the loopback (qa/support/carry-over.mjs); every /v1 request is answered by the spec (signed out).
+# MUT-291 (epic MUT-284, ADR-185): the old address's signed-out records, carried to the new address in one hand-off
+# between two browser windows. The free web app that also sent its records is retired (MUT-445); a records file saved
+# from it still restores. Two origins run on the loopback (qa/support/carry-over.mjs); every /v1 request is answered by
+# the spec (signed out).
 paths:
   - src/lib/carryOver/**
   - src/hosted/local/carryOver/**
@@ -13,51 +14,19 @@ paths:
   # Another tab's mode change must leave the carry-over pages where they are.
   - src/hosted/session/SessionBridge.tsx
 features:
-  - id: free-app
-    title: The old web app's records arrive on the new address with the same totals, and the summary lists what didn't come
-    paths:
-      - src/pages/carryOver/CarryOverScreen.tsx
-      - src/pages/carryOver/CarriedBanner.tsx
-      - src/pages/carryOver/carryOver.css
+  - id: records-file
+    title: A records file saved from the old web app restores on the new address with the same summary
     steps:
-      - In the old web app, have a business with a client, money received, money still owed, an expense, a saved vendor and a recurring expense rule
-      - Open the old app
-      - Choose Carry my records over
-      - On the new address, check the summary and choose Save on this device
-      - Back in the old app, keep using it
+      - On the new address's carry-over page, choose a records file the old web app saved
+      - Open Not carried
     expect:
-      - The old app asks first, naming how many records this browser holds
-      - The summary shows the counts and the totals per currency, and lists the saved vendor list and the recurring rule as not carried
-      - After saving, the new address says "Your records are here." and the old app says they're on the new address
-      - The old app opens under the banner saying changes made there won't follow
-  - id: fallback
-    title: When the new address can't be reached, the old app's records file restores on the new address with the same summary
-    paths:
-      - src/pages/carryOver/CarryOverScreen.tsx
-    steps:
-      - Have records in the old web app, in a browser that blocks the pop-up
-      - Choose Carry my records over
-      - Download my records file
-      - On the new address, choose that file
-    expect:
-      - The old app says the new page couldn't be reached and offers the file and a link to the new address
-      - The new address reads the file and shows the same counts and totals before Save
-  - id: keep-old
-    title: Keep using the old app opens it for now, and the next visit asks again
-    paths:
-      - src/pages/carryOver/CarryOverScreen.tsx
-    steps:
-      - Have records in the old web app
-      - Open it and choose Keep using the old app for now
-      - Open the old app again in a new tab
-    expect:
-      - The old app opens with its records
-      - The new tab asks again
+      - The new address reads the file and shows its counts and totals before Save
+      - The saved vendor list and the recurring rule are listed as not carried
   - id: replace-existing
     title: Carrying into a device that already has records warns, offers a download first, and replaces only on a second confirm
     steps:
-      - Have records on the new address already, and records in the old web app
-      - Carry the old app's records over
+      - Have records on the new address already, and records on the old address
+      - Carry the old address's records over
       - On the new address, download what's here first, then replace
     expect:
       - The summary warns how many records this device already has
@@ -74,22 +43,3 @@ features:
     expect:
       - The old address offers the move instead of sending me on
       - The new address shows the money received, and the old link's page opened there
-  - id: empty
-    title: Opening the old app with nothing in it goes straight to the new address
-    paths:
-      - src/pages/carryOver/CarryOverScreen.tsx
-    steps:
-      - Open the old web app in a browser with nothing in it
-    expect:
-      - The new address opens instead
-  - id: installed
-    title: From a home-screen install, the old app leads with the file, which restores on the new address
-    paths:
-      - src/pages/carryOver/CarryOverScreen.tsx
-    steps:
-      - Have records in the old web app, opened from the home screen
-      - Download my records file
-      - On the new address, choose that file and save
-    expect:
-      - The old app explains the file path and offers no one-click carry-over
-      - The new address saves the records from the file

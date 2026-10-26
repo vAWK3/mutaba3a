@@ -2,11 +2,9 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import type { CrashReportSpy, SentErrorEvent } from '../../support/sentry';
 import { chooseLanguageScript, LANGUAGE_KEYS, ar as arCopy } from '../../support/i18n';
-import { logIncome } from '../../support/app';
 
 /**
- * MUT-150 (ADR-091): the website's pages report errors to Sentry, and the
- * local app at /app never does (ADR-024). The QA web server carries a dummy
+ * MUT-150 (ADR-091): the website's pages report errors to Sentry. The QA web server carries a dummy
  * DSN on the org's ingest host (qa.config.mjs), and qa/support/sentry.ts
  * answers every Sentry request, so nothing a run does reaches Sentry.
  */
@@ -37,9 +35,6 @@ async function oneReport(page: Page, crashReports: CrashReportSpy, message: stri
   expect(withMessage(crashReports, message)).toHaveLength(1);
   return withMessage(crashReports, message)[0];
 }
-
-/** The landing's Sentry code, as the dev server or a build serves it: any request for it from /app is the leak. */
-const SENTRY_CODE = /landingSentry|vendor-sentry|sentry_browser|@sentry\//;
 
 test('an error on the home page is reported once: the landing, its route and language, no account', { tag: '@web.error-reports.landing-crash-reported' }, async ({ page, step, crashReports }) => {
   await step('Open the home page in English', async () => {
@@ -87,59 +82,6 @@ test('errors on a frozen terms version are reported, the version never in the ro
 
   await step('One report with the route template /terms/:version', async () => {
     expect((await oneReport(page, crashReports, 'MUT-150 QA terms')).tags).toMatchObject({ route: '/terms/:version' });
-  });
-});
-
-test('the free web app never sends a report, even when reached from the website', { tag: '@web.error-reports.app-routes-silent' }, async ({ page, step, crashReports }) => {
-  await step('Open the privacy policy in English and wait until its error reporting has loaded', async () => {
-    await preferLanguage(page, 'en');
-    const sdkLoaded = page.waitForRequest(/landingSentry/, { timeout: SDK_WAIT_MS });
-    await page.goto('/privacy');
-    await sdkLoaded;
-  });
-
-  await step('With error reporting live, the page moves to /app without reloading, and something throws there', async () => {
-    // The risky path (eng R1): the SDK is already running when the address becomes an app route
-    await page.evaluate(() => window.history.pushState(null, '', '/app/clients'));
-    await throwUncaught(page, 'MUT-150 QA in-page app');
-    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await page.waitForLoadState('networkidle');
-    expect(crashReports.requestCount()).toBe(0);
-  });
-
-  // From here on, any request for Sentry's code is the app loading it
-  const sentryCode: string[] = [];
-  page.context().on('request', (request) => {
-    if (SENTRY_CODE.test(request.url())) sentryCode.push(request.url());
-  });
-
-  await step('From the website, open the web app and log an income', async () => {
-    // MUT-382: no website page links to /app any more (the download page is gone), so the visit goes there.
-    await page.goto('/privacy');
-    sentryCode.length = 0;
-    await page.goto('/app');
-    await page.waitForURL(/\/app/);
-    await page.getByRole('dialog', { name: 'Welcome to MTB3A' }).getByRole('button', { name: 'Skip for now' }).click();
-    await logIncome(page, { title: 'QA landing check', amount: '120', client: 'Layla Haddad' });
-  });
-
-  await step('Something in the app throws an error nobody catches', async () => {
-    await throwUncaught(page, 'MUT-150 QA app via landing');
-    await page.waitForLoadState('networkidle');
-  });
-
-  await step('Open the app directly in a new tab, and something throws there too', async () => {
-    // Same browser context, so the Sentry spy sees it; the profile from the first tab means no welcome dialog
-    const fresh = await page.context().newPage();
-    await fresh.goto('/app/clients');
-    await expect(fresh.getByRole('main')).toBeVisible();
-    await throwUncaught(fresh, 'MUT-150 QA app direct');
-    await fresh.waitForLoadState('networkidle');
-  });
-
-  await step('Not one request ever reached Sentry, and the app never even loaded its code', async () => {
-    expect(crashReports.requestCount()).toBe(0);
-    expect(sentryCode).toEqual([]);
   });
 });
 

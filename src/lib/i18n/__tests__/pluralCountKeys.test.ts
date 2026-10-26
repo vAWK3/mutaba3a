@@ -8,24 +8,10 @@ import { createPluralTranslator } from '../plural';
 
 /** Counted strings and the named placeholders (besides {count}) each must keep. */
 const PLURALS: Record<string, readonly string[]> = {
+  // The landing's mocks (MUT-179); the local app's counted strings were retired with it (MUT-445)
   'transactions.status.overdue': [],
   'transactions.status.dueIn': [],
   'clients.index.oldestOverdue': [],
-  'clients.summary.clientsCount': [],
-  'clients.emptyFilteredCount': [],
-  'clients.crossProfileTxCount': [],
-  'projects.summary.projectsCount': [],
-  'expenses.receiptsAttached': [],
-  'expenses.recurring.occurrence.dueIn': [],
-  'expenses.recurring.occurrence.overdueDays': [],
-  'settings.exportReceiptsDesc': [],
-  'settings.exportReceiptsDone': [],
-  'settings.importBackupDone': ['{version}'],
-  'orphanedRecords.assigned': [],
-  'orphanedRecords.partialFailure': [],
-  'integrity.orphanedRecord': [],
-  'integrity.checkIssues': ['{total}'],
-  'integrity.toastIssues': [],
 };
 
 /** Hand-rolled singular/plural keys that tp() replaces. */
@@ -83,19 +69,10 @@ describe('Counted strings (MUT-179)', () => {
     for (const key of RETIRED) expect(lookup(dict, key), key).toBeUndefined();
   });
 
-  it('keeps the count-neutral orphaned-records group titles, which the drawer still reads', () => {
-    expect(lookup(en, 'orphanedRecords.groups.clients')).toContain('{count}');
-    expect(lookup(ar, 'orphanedRecords.groups.clients')).toContain('{count}');
-  });
-
   it('reads English counts in the singular at 1', () => {
-    expect(tpEn('projects.summary.projectsCount', 1)).toBe('1 project');
-    expect(tpEn('projects.summary.projectsCount', 2)).toBe('2 projects');
-    expect(tpEn('clients.summary.clientsCount', 1)).toBe('1 client');
     expect(tpEn('transactions.status.dueIn', 1)).toBe('Due in 1d');
+    expect(tpEn('transactions.status.dueIn', 2)).toBe('Due in 2d');
     expect(tpEn('transactions.status.overdue', 1)).toBe('1d overdue');
-    expect(tpEn('expenses.receiptsAttached', 1)).toBe('1 receipt attached');
-    expect(tpEn('expenses.recurring.occurrence.dueIn', 1)).toBe('Due in 1 day');
   });
 
   it('reads Arabic day counts in the few and many forms', () => {

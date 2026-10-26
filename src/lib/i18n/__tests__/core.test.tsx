@@ -31,7 +31,7 @@ function Probe() {
     <div>
       <span data-testid="lang">{language}</span>
       <span data-testid="dir">{direction}</span>
-      <span data-testid="text">{t('nav.home')}</span>
+      <span data-testid="text">{t('common.search')}</span>
       <button onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}>switch</button>
     </div>
   );
@@ -65,7 +65,7 @@ describe('LanguageProvider (the app) behaves as before the split', () => {
     );
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
     expect(screen.getByTestId('dir')).toHaveTextContent('rtl');
-    expect(screen.getByTestId('text')).toHaveTextContent('الرئيسية');
+    expect(screen.getByTestId('text')).toHaveTextContent('بحث...');
     act(() => screen.getByText('switch').click());
     expect(screen.getByTestId('lang')).toHaveTextContent('en');
     expect(localStorage.getItem('mutaba3a-language')).toBe('en');

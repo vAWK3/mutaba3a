@@ -3898,6 +3898,23 @@ Tests first for each unit (seen failing: modules missing, or the old script text
 Also run by hand, read-only, against the local dev database: `rollback:check` for api-v0.8.0 (0), api-v0.6.0 (2, MUT-333 and MUT-115 counted 0) and HEAD (1, an unapplied migration); every hazard query executes.
 And read-only against production's Artifact Registry (gcloud token): `release-image rollback` found api-v0.8.0's (`8acc5022`) and api-v0.6.0's (`d9edb43f`) images, each warning it has no revision label; `deploy-plan` refused `8acc5022` from another HEAD with a dirty tree and said `build` for an unused tag (it also said `reuse` for `8acc5022` at its own commit then; since the pre-landing review an unlabelled image is never reused).
 
+
+## MUT-445 — the desktop apps and the free web app retired (2026-10-26, ADR-203)
+
+A removal: the deleted code's tests went with it (≈210 files: the local app's components, pages, hooks, Dexie and i18n key tests, the updater and release-files tests, 18 release-QA web areas). What changed in what stays:
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `scripts/__tests__/vite-config.test.ts` (+ snapshot) | Config | changed | the website build is snapshotted alone (no desktop mode, no PWA); the apex sends nothing back to the old host (`live`: only the AASA proxy); the old host's assets and `sw.js` are never redirected |
+| `scripts/__tests__/check-bundles.test.ts` | Unit | changed | `src/lib/carryOver` passes the portal's rules (it ships in the portal only); the precache helpers are gone with the worker they read |
+| `src/lib/__tests__/goHosted.test.ts`, `malafatSuggestions.test.ts` | Unit | trimmed | what the landing and the portal still call |
+| `src/lib/i18n/__tests__/{loaderKeys,pluralCountKeys,craftFixKeys,core}.test.*` | Unit | trimmed | the website's surviving keys |
+| `src/styles/__tests__/{brand,direction,layering}.test.ts` | Structural | trimmed | the deleted files leave the allowlists |
+| `qa/specs/web/landing.spec.ts` `@web.landing.retired-paths` | Release-QA (dev server) | +1 | `/app`, `/app/clients?…` and `/download` land on the home page (`src/main.tsx`; Netlify's 301s in production) |
+| `qa/specs/carry-over/carry-over.spec.ts` | Release-QA | rewritten | `records-file`: a records file the free app saved (written by the spec) restores with its counts, totals and Not carried list; `replace-existing` now carries from the old address |
+
+**Not run:** the release-QA specs (no QA env was started for this change: `web.landing.retired-paths` and the carry-over app's two rewritten flows have not passed yet), and `public/sw.js` in a browser that has the old worker installed.
+
 ## MUT-437 — One purchase is one expense (2026-10-26, ADR-202)
 
 The store contracts and the rule/read-tool tests were written first and watched failing (6 red before T3). The write-path tests (`mcp-write-tools.test.ts`, +15) were written right after the T4 code, not before it (disclosed). The refactor commit's proof is the existing inbox suites, unchanged.

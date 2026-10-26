@@ -4,9 +4,6 @@
 #   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh → tag api-v<x>)
 #   make release full     web, then server — each gated and confirmed on its own
 #
-# Desktop (DMG, notarization, GitHub release) is a separate pipeline
-# (`npm run release`) and is deliberately not part of `full` — see ADR-043.
-#
 # All three run scripts/preflight.sh first: clean tree on main, nothing unmerged, no
 # stray worktrees, in sync with origin, the right node, and the tools and
 # secrets that target needs. A failed check stops the release before anything
@@ -136,7 +133,7 @@ help:
 	@printf '\n$(C_BOLD)Pieces$(C_OFF)\n'
 	@printf '  make bump-web          choose patch/minor/major for the app version\n'
 	@printf '  make bump-server       choose patch/minor/major for the API version\n'
-	@printf '  make clean-dist        remove dist-web/ dist-desktop/ dist-hosted/\n'
+	@printf '  make clean-dist        remove dist-web/ dist-hosted/\n'
 	@printf '\n$(C_BOLD)Overrides$(C_OFF) $(C_DIM)(prefix any target)$(C_OFF)\n'
 	@printf '  ALLOW_DIRTY=1 ALLOW_UNMERGED=1 ALLOW_WORKTREES=1 ALLOW_NODE_MAJOR=1\n'
 	@printf '  SKIP_REMOTE=1          offline: do not contact origin or GCP\n'
@@ -146,8 +143,7 @@ help:
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
 	@printf '  AUTO=1                 skip the final "deploy now?" confirmation\n'
 	@printf '  RELEASE_BRANCH=  ENVIRONMENT=  GCP_PROJECT_ID=  TF_STATE_BUCKET=\n'
-	@printf '\n$(C_DIM)node $(NODE_MAJOR_REQUIRED) is required for the gates: nvm use $(NODE_MAJOR_REQUIRED)$(C_OFF)\n'
-	@printf '$(C_DIM)Desktop (DMG + GitHub release) is a different pipeline: npm run release$(C_OFF)\n\n'
+	@printf '\n$(C_DIM)node $(NODE_MAJOR_REQUIRED) is required for the gates: nvm use $(NODE_MAJOR_REQUIRED)$(C_OFF)\n\n'
 
 release:
 	@case '$(RELEASE_ARGS)' in \
@@ -271,13 +267,13 @@ release-web: preflight-web
 	@version=$$(node -p "require('./package.json').version"); \
 	if ! npm run --silent release:notes -- "$$version"; then \
 	  printf '\n$(C_YEL)Write what v%s changes for people in release-notes.json (en + ar), then re-run — the release commit includes it.$(C_OFF)\n' "$$version"; \
-	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock$(C_OFF)\n'; \
+	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json$(C_OFF)\n'; \
 	  exit 1; \
 	fi; \
 	printf '\n$(C_BOLD)Building v%s$(C_OFF)\n' "$$version"; \
 	if ! npm run --silent test:bundles; then \
 	  printf '\n$(C_YEL)Build failed after the version bump. Nothing was committed.$(C_OFF)\n'; \
-	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock$(C_OFF)\n'; \
+	  printf '$(C_DIM)Undo the bump with: git checkout -- package.json package-lock.json$(C_OFF)\n'; \
 	  exit 1; \
 	fi; \
 	printf '\n$(C_BOLD)About to deploy the web app$(C_OFF)\n'; \
@@ -291,7 +287,7 @@ release-web: preflight-web
 	  printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; \
 	  exit 0; \
 	fi; \
-	git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock release-notes.json; \
+	git add package.json package-lock.json release-notes.json; \
 	git diff --cached --quiet || git commit -m "release: web v$$version"; \
 	git push origin $(RELEASE_BRANCH); \
 	scripts/tag-release.sh web "$$version" --push; \
@@ -376,8 +372,7 @@ release-server: preflight-server
 # wait for the build, then release server. The portal ships inside the server
 # image, so no frontend here calls an API the release hasn't shipped.
 # Each half keeps its own preflight, gates, version bump and confirmation;
-# declining one does not block the other. Desktop is excluded on purpose
-# (ADR-043) — it stays its own pipeline: npm run release.
+# declining one does not block the other.
 # ---------------------------------------------------------------------------
 
 release-full: release-web release-server
@@ -397,5 +392,5 @@ rollback-server:
 # ---------------------------------------------------------------------------
 
 clean-dist:
-	@rm -rf dist-web dist-desktop dist-hosted server/dist-hosted
+	@rm -rf dist-web dist-hosted server/dist-hosted
 	@printf '$(C_GREEN)✓ build output removed$(C_OFF)\n'

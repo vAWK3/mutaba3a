@@ -3,6 +3,8 @@
 > **Purpose**: Document all reusable components to prevent duplication.
 > **Rule**: Check this registry before creating any new component.
 
+> **2026-10-26 (MUT-445, ADR-203):** the free web app and the desktop app are retired. Entries below for components under `src/components/{layout,drawers,modals,home,clients,onboarding,csv}`, `src/pages/` outside `landing/`, `src/db/`, `src/hooks/` (bar `useDocumentTitle`, `useInView`, `usePrefersReducedMotion`) and the updater are history: the files are deleted. `src/components/{ui,icons,expenses,filters,brand,malafat}` stay, rendered by the portal or the website.
+
 ---
 
 ## Quick Lookup

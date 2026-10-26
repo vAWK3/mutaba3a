@@ -33,9 +33,6 @@ type Kind = 'ltr' | 'rtl' | 'auto';
  */
 const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // B: text that reads left to right in any language
-  'src/components/layout/FxRateReadout.tsx': { ltr: 2 }, // the rate formula
-  'src/pages/clients/ClientDetailPage.tsx': { ltr: 1 }, // email and phone
-  'src/components/modals/WhatsNewModal.tsx': { ltr: 1 }, // version number
   'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
   'src/hosted/shell/YouIsland.tsx': { auto: 1 }, // MUT-426: the open profile's name on the island (D)
   'src/hosted/pages/you/YouProfiles.tsx': { auto: 1 }, // MUT-425: each profile's name (D)
@@ -59,21 +56,13 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/FilterControls.tsx': { ltr: 1 }, // date input
   'src/pages/landing/components/HostedRequestForm.tsx': { ltr: 2 }, // email, phone
   // A′: Expenses' "coming up" amounts, left to right before MUT-109 and kept so (brief D2)
-  'src/components/ui/CurrencyAmounts.tsx': { ltr: 1 },
-  'src/components/expenses/RecurringAttentionList.tsx': { ltr: 1 },
   // C: amount inputs and their currency groups
-  'src/components/drawers/IncomeDrawer.tsx': { ltr: 1 },
-  'src/components/drawers/PartialPaymentDrawer.tsx': { ltr: 1 },
   'src/components/expenses/ExpenseFormFields.tsx': { ltr: 1 },
-  'src/components/drawers/ConversionDrawer.tsx': { ltr: 2 },
   'src/hosted/components/IncomeCaptureDrawer.tsx': { ltr: 1 },
   'src/hosted/components/ConversionDrawer.tsx': { ltr: 2 },
   'src/hosted/components/RecordPaymentDrawer.tsx': { ltr: 1 },
   // D: a title that takes its direction from its own first letter
-  'src/components/ui/TruncatedTitle.tsx': { auto: 2 },
   // E: Arabic text
-  'src/components/layout/SidebarNav.tsx': { rtl: 1 }, // the Arabic wordmark (lang="ar" too)
-  'src/components/drawers/BusinessProfileDrawer.tsx': { rtl: 1 }, // the Arabic business name input
   // F: a legal text in the language a /terms?lang link names, when it isn't the page's (MUT-324 review fix 1)
   'src/pages/landing/LegalPage.tsx': { ltr: 1, rtl: 1 },
   // G: the portal's last-resort crash screen, above the language provider: Arabic, then English (MUT-149 design D8)
@@ -86,12 +75,6 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
  * had on screen. dir="ltr" here would flip them (what reverted MUT-79).
  */
 const PLAIN_AMOUNT_BDI = [
-  'src/components/clients/OwedNowSummary.tsx',
-  'src/components/clients/ClientWorkSection.tsx',
-  'src/pages/clients/ClientsPage.tsx',
-  'src/components/home/HomeRecentPayments.tsx',
-  'src/components/home/HomeAttentionRow.tsx',
-  'src/components/drawers/OrphanedRecordsDrawer.tsx',
   'src/hosted/format/DecimalAmount.tsx',
 ];
 

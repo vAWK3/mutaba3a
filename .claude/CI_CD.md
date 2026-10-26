@@ -24,24 +24,8 @@
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CD Pipeline                                     │
-│                                                                              │
-│         Web (PWA)                        Desktop (Tauri)                    │
-│  ┌──────────────────┐           ┌────────────────────────────┐             │
-│  │                  │           │                            │             │
-│  │  Netlify Deploy  │           │  ┌──────┐    ┌──────────┐ │             │
-│  │  (Automatic)     │           │  │macOS │    │ Windows  │ │             │
-│  │                  │           │  │ DMG  │    │ MSI/EXE  │ │             │
-│  │  - dist-web/     │           │  └───┬──┘    └────┬─────┘ │             │
-│  │  - Preview on PR │           │      │            │       │             │
-│  │  - Prod on main  │           │      └─────┬──────┘       │             │
-│  │                  │           │            ▼              │             │
-│  └──────────────────┘           │    GitHub Releases        │             │
-│                                 │    (Manual trigger)       │             │
-│                                 └────────────────────────────┘             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+CD: `make release web` pushes main and Netlify builds the website (dist-web); `make release server` deploys
+the API with the portal (dist-hosted) inside its image. The desktop pipeline was retired (MUT-445, ADR-203).
 ```
 
 ---
@@ -70,87 +54,9 @@ Never lower them to land a change.
 
 ---
 
-### 2. Desktop Release Workflow (`.github/workflows/release-desktop.yml`)
+### 2. Desktop Release Workflow (retired)
 
-> **Target, not current state (MUT-33).** This workflow does not exist. Today the macOS release is operator-run via `./deploy.sh` and Windows installers come from `.github/workflows/build-windows.yml`, which reads `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. See ADR-031 and TD-022.
-
-```yaml
-name: Release Desktop
-
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version (e.g., 0.0.49)'
-        required: true
-
-jobs:
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - run: npm run tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-bundle
-          path: src-tauri/target/release/bundle/
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - run: npm run tauri build
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-bundle
-          path: src-tauri/target/release/bundle/
-
-  release:
-    needs: [build-macos, build-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-      - uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Release v${{ github.event.inputs.version }}
-          files: |
-            macos-bundle/**/*.dmg
-            windows-bundle/**/*.msi
-            windows-bundle/**/*.exe
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
----
+The desktop apps were retired by MUT-445 (ADR-203): there is no desktop build, release workflow, updater or GitHub release. The Windows workflow and `deploy.sh` are deleted.
 
 ### 3b. Contracts CI (`.github/workflows/contracts-ci.yml`, since 2026-10-17, MUT-147)
 
@@ -180,36 +86,7 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 ### 3. Web Deploy (Netlify Configuration)
 
-**`netlify.toml`**:
-```toml
-[build]
-  command = "npm run build:web"
-  publish = "dist-web"
-
-[build.environment]
-  NODE_VERSION = "20"
-
-# SPA routing - all /app/* routes to index.html
-[[redirects]]
-  from = "/app/*"
-  to = "/app/index.html"
-  status = 200
-
-# Download redirects to GitHub releases
-[[redirects]]
-  from = "/download/mac"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-universal.dmg"
-  status = 302
-
-[[redirects]]
-  from = "/download/windows"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64.msi"
-  status = 302
-
-# Preview deploys for PRs
-[context.deploy-preview]
-  command = "npm run build:web"
-```
+`netlify.toml` builds the website (`npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web`) and publishes `dist-web`. Its redirects send `/download`, `/download/*`, `/app`, `/app/*` and `/hosted` home (301) before the SPA fallback; `public/sw.js` removes the retired free web app's service worker (MUT-445, ADR-203). The domain move's host-scoped rules are emitted as `_redirects` by `vite.config.ts` (ADR-155).
 
 ---
 
@@ -234,23 +111,14 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 | Secret | Purpose |
 |--------|---------|
-| `TAURI_SIGNING_PRIVATE_KEY` | Tauri update signing key |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Tauri key password |
-| `APPLE_CERTIFICATE` | macOS code signing cert (base64) |
-| `APPLE_CERTIFICATE_PASSWORD` | Cert password |
-| `APPLE_SIGNING_IDENTITY` | Signing identity name |
-| `APPLE_ID` | Apple Developer account |
-| `APPLE_PASSWORD` | App-specific password |
-| `APPLE_TEAM_ID` | Apple team ID |
 | `CODECOV_TOKEN` | Coverage upload token |
 
 ### Build-Time Variables
 
-| Variable | Web | Desktop | Purpose |
-|----------|-----|---------|---------|
-| `__APP_VERSION__` | Yes | Yes | Package version |
-| `__BUILD_MODE__` | Yes | Yes | 'web' or 'desktop' |
-| `TAURI_PLATFORM` | No | Yes | Tauri platform identifier |
+| Variable | Purpose |
+|----------|---------|
+| `__APP_VERSION__` | Package version |
+| `__PORTAL_URL__` | The portal origin the landing links to (website build) |
 
 ---
 
@@ -260,23 +128,7 @@ operator-run (see "Hosted API Deployment" below and `server/DEPLOYMENT.md`).
 
 1. **On PR**: Netlify creates preview deploy
 2. **On merge to main**: Netlify deploys to production
-3. **URL**: mutaba3a.netlify.app/app/ (the landing is at mtb3a.com; `mtb3a.com/app/*` 302s here)
-
-### Desktop Release (Manual)
-
-1. **Trigger**: `npm run release` on the operator's Mac (`scripts/release.ts`,
-   which sources `./deploy.sh` and calls `build_and_release_mac`).
-2. **Process**: bump the version → build, sign and notarize macOS locally →
-   commit, tag and push → publish the GitHub release. Publishing triggers
-   `.github/workflows/build-windows.yml`, which checks out the **tag** and
-   builds the Windows installers.
-3. **Release commit**: exactly `RELEASE_COMMIT_FILES` in
-   `scripts/release-files.ts` (package.json, package-lock.json,
-   tauri.conf.json, Cargo.toml, Cargo.lock), enforced against deploy.sh by
-   `scripts/__tests__/release-files.test.ts`. The lockfiles must be in it: the
-   mac build rewrites `Cargo.lock`, and the Windows build fails Tauri's
-   npm-vs-crate version check on a stale one (v0.0.65).
-4. **Auto-update**: Tauri apps check for updates on launch
+3. **URL**: mtb3a.com (the landing, `/privacy`, `/terms`); the free web app at mutaba3a.netlify.app/app is retired (MUT-445)
 
 ### Hosted API Deployment (operator, manual)
 
@@ -293,17 +145,7 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 
 ### Release Checklist
 
-```markdown
-- [ ] Update version in package.json
-- [ ] Update CHANGELOG.md
-- [ ] Create git tag: `git tag v0.0.X`
-- [ ] Push tag: `git push origin v0.0.X`
-- [ ] Trigger desktop release workflow
-- [ ] Verify GitHub release artifacts
-- [ ] Confirm src-tauri/capabilities/default.json grants `updater:default` and `process:allow-restart` (MUT-99)
-- [ ] Test auto-update on existing install
-- [ ] Update landing page if needed
-```
+`make release web` and `make release server` run their own gates and preflight (ADR-043); `docs/operations/before-release.md` lists the open operator steps.
 
 ---
 
@@ -349,14 +191,8 @@ Production only for now. Full runbook: `server/DEPLOYMENT.md`. Infra:
 ### Prerequisites
 
 ```bash
-# Node.js 20+
-node --version  # v20.x.x
-
-# Rust (for Tauri)
-rustc --version  # 1.70+
-
-# Optional: Tauri CLI
-cargo install tauri-cli
+# Node.js 22 (Node 25+ breaks every localStorage test, TD-054)
+node --version
 ```
 
 ### Commands
@@ -366,9 +202,8 @@ cargo install tauri-cli
 npm install
 
 # Development
-npm run dev           # Default (auto-detect)
-npm run dev:web       # Web mode
-npm run dev:desktop   # Desktop mode (Tauri)
+npm run dev           # The website on :5173
+npm run dev:hosted    # The portal on :5175
 
 # Quality checks
 npm run lint          # ESLint
@@ -378,8 +213,8 @@ npm run test:coverage # Coverage report
 
 # Build
 npm run build:web     # → dist-web/
-npm run build:desktop # → dist-desktop/
-npm run tauri build   # Full desktop bundle
+npm run build:hosted  # → dist-hosted/
+npm run test:bundles  # build both, then the bundle guard
 
 # Preview
 npm run preview:web   # Serve dist-web/
@@ -406,10 +241,3 @@ npm run preview:web   # Serve dist-web/
 | Old content | CDN cache | Clear cache in dashboard |
 | Build timeout | Dependencies | Check build command |
 
-### Tauri Issues
-
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| Signing failed | Missing secrets | Check GitHub secrets |
-| Build failed | Rust version | Update Rust toolchain |
-| Update failed | Bad signature | Never regenerate the key. Verify the signer key id (signature line 2, bytes 2..10) equals the compiled-in `plugins.updater.pubkey` (ADR-031, MUT-51) |

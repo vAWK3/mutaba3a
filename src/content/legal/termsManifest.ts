@@ -1,3 +1,5 @@
+/// <reference types="node" />
+// Node's types by name: since the local app's retirement (MUT-445) nothing else brings them into the app's typecheck
 import { createHash } from 'node:crypto';
 
 /**
