@@ -690,3 +690,8 @@ Keys live under `hosted.reports.glance.*`; "reuse" rows are existing keys.
 | (reuse) `firstRun.*` | Your reports start with your first payment or expense … | تبدأ تقاريرك مع أول دفعة أو مصروف … |
 
 Notes: ▲/▼ are prepended in the UI, not in the strings (screen readers get the words). Amounts are `<bdi>`, with − (U+2212) for negatives. Copy choices to confirm: (1) Arabic "kept": Glance uses «تبقّى لك» (screens, OQ5); the per-profile page keeps «المتبقي». (2) A business with no expenses reads "income only" / «دخل فقط», not "earned" / «ربح», because ربح means profit, the reading R3-5 warns about.
+
+## Build notes
+
+- **C2 withdrawn (2026-10-26, during the build):** the portal ships inside the API image (`server/scripts/deploy.sh` builds `dist-hosted`), so the Glance and the verdict route always deploy together. There is no before-release item.
+

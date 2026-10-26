@@ -5470,3 +5470,31 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:** API 1.76.0-mut447. Each request reads ≈6N+1 times for N profiles in memory (TD-264). Portal Glance (MUT-448) and phone Glance (MUT-449) consume it; Explore (MUT-451/452) waits for the validation gate MUT-450.
 
 **Alternatives considered:** client-side fan-out per profile (rejected at intake: two copies of the money rules); strict owned + co-owned (rejected: Sader Law Firm and pilot firms would vanish); 503 on FX outage; `period`/`at` query; importing the month rule into the portal (refused by the ADR-097 lint guard).
+
+## ADR-205: Reports Glance Lives at /reports, Shows the Verdict As Sent, and Borrows a Profile for the Shell (MUT-448)
+
+**Status:** Accepted (2026-10-26, MUT-448; epic MUT-446).
+- Plan, eng review D1–D10, design review DD1–DD11 and the approved copy: `.claude/designs/mut-448-reports-glance.md`.
+- It narrows ADR-189 D5 further, as ADR-204 began. One profile's Reports (`/p/:id/reports`) is now the Glance's drill-down.
+
+**Context:** MUT-447 gives one cross-profile verdict. The portal is profile-scoped (MUT-423 D6), and its shell's pill needs a profile.
+
+**Decision:**
+1. **Route:** `/reports`, a child of the authed route outside `/p/:id` (like `/you`). The corner icon links there with `?back=<page>` and is lit on both report routes. A second press returns to `back`, using the island's `backOf` check (MUT-426 D7).
+2. **Shell profile (D8):** the `back` profile if it is open and `canReadReports`, else the first profile that is both, else the first open one. A locked profile hides the shell's chrome.
+3. **Figures as sent:** the portal does no conversion, summing or median. `data/verdict.ts` only picks which figure a line shows. ≈ appears only when other currencies were converted (DD8). Usual appears only on finished months, because the server sends it for the month in progress too (DD1; the phone, MUT-449, needs the same rule).
+4. **Freshness (D9):** the query is under no profile's keys, so it refetches on every visit (staleTime 10 s) instead of being invalidated by saves. The default month asks with no dates, and `asOf` is "today" (D4).
+5. **All locked (D7):** decided from `/v1/me` (`billingGateOf`), with no request. A late 402 shows the same LockedScreen.
+6. **Layout (DD7):** one centred 560px column at every width until MUT-451 adds Explore's column. This replaces the ticket's desktop side area.
+
+**Consequences:**
+- No release-order step: the portal ships inside the API image (`server/scripts/deploy.sh` builds `dist-hosted`), so `/reports` and `GET /v1/summaries/verdict` always deploy together. The eng review's C2 assumed separate releases and is withdrawn.
+- `report_viewed` gains `layer` (taxonomy 2.3.0).
+- A new account can step back into empty months: the verdict carries no `dataSince` (D10; MUT-450 observes it).
+
+**Alternatives considered:**
+- `/p/:id/reports` as the Glance (breaks existing links).
+- No profile in the shell (the pill disappears).
+- Invalidating on every save path (D3, superseded).
+- A two-column desktop with a placeholder card (DD7).
+

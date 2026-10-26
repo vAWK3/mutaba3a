@@ -2129,6 +2129,21 @@ Tests: `components/groups/__tests__/CategoryBars.test.tsx`.
 ### ReportControls — `src/hosted/components/reports/ReportControls.tsx`
 **Purpose**: Week | Month | Year radiogroup (arrows follow reading order; Year `aria-disabled` with "Unlocks in …"), the All profiles `role="switch"`, and ‹ › in reading order with bounds. All targets ≥ 44px.
 
+### GlancePage — `src/hosted/pages/views/GlancePage.tsx` (MUT-448, ADR-205)
+**Purpose**: account-level Reports at `/reports`. It shows the verdict as sent: the kept hero (≈ only when converted; usual only on finished months), one row per profile (`<ul>` with whole-row links named like a sentence), owed, the footnote and a hint, in one centred 560px column. It also covers first run, skeleton, refresh-failure and all-locked states. Composition only; the in-file `Ledger`, `Row` and `AmountsPanel` aren't shared yet (MUT-451 may lift the ledger into `components/reports/`).
+Tests: `pages/__tests__/Glance.test.tsx`.
+
+### Glance data — `src/hosted/data/verdict.ts`, `verdictQueries.ts`
+**Purpose**:
+- `glanceOf` shapes GET /v1/summaries/verdict into hero, rows, owed and footnote, with no money maths of its own.
+- `isFirstRun`, `glanceShellProfile` (the shell's profile on `/reports`) and `allLocked`.
+- `useVerdict`: refetch on every visit, staleTime 10 s, no profile header.
+- `verdictKey`, `verdictQueryOptions`.
+Tests: `data/__tests__/verdict.test.ts`, `verdictQueries.test.tsx`.
+
+### BreakdownButton — `src/hosted/components/reports/HeroFigures.tsx` (exported by MUT-448)
+**Purpose**: the ≈ figure as a 44px button that opens a caller-supplied panel (`panel`), with the popover rules pinned in `reportsComponents.test.tsx`. Reports' hero passes `RateBreakdown`; the Glance passes per-currency amounts and the ECB date.
+
 ### Reports data — `src/hosted/data/reports.ts`, `reportInsights.ts`, `reportQueries.ts`
 **Purpose**: periods and stepping, complete months / stage / unlock month, `combine` (All profiles), `chooseUnit`/`inUnit`/`convertMoney`, `chartBars`/`shareRows`/`monthPoints` (rows arrive shaped); `buildInsights`/`recordViews`; per-profile queries with their own status (`useReportActivity`, `useOwedSummaries`, `useNameDirectories`).
 Tests: `data/__tests__/reports.test.ts`, `reportInsights.test.ts`; page: `pages/__tests__/Reports.test.tsx`.
