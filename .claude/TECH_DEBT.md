@@ -18,6 +18,14 @@
 
 ## Open Debt
 
+### TD-264: The Reports verdict aggregates every included profile in memory on each request
+**Status**: Open
+**Ticket**: MUT-447
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: `GET /v1/summaries/verdict` reads ≈6N+1 times for N profiles (12 months of payments and expenses, open receivables, two earlier-data probes, catch-up posting) and sums in memory, like TD-237. Fine at pilot volumes (N ≤ 6, hundreds of rows a year per profile).
+**Fix**: when a profile passes ~10k rows a year or the route's p95 (measured with posting on) passes 500 ms, push the monthly sums into SQL (GROUP BY month, currency) or cache per (profile, month).
+
 ### TD-263: `src/types/index.ts` still declares the retired local app's record types
 **Status**: Open
 **Ticket**: MUT-445

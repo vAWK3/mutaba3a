@@ -5440,3 +5440,23 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - `src/types/index.ts` still declares the local app's record types that nothing reads (TD-263).
 
 **Alternatives considered:** keep `/app` until MUT-292's 90 days (Basel: no); keep `/app` as a carry-over-only bridge (Basel: no, delete it entirely).
+
+## ADR-204: The Reports Verdict Is One Server Read Across a Person's Profiles; Firms the Person Owns Count (MUT-447)
+
+**Status:** Accepted (2026-10-26, MUT-447; epic MUT-446). Narrows ADR-189 D5 to per-profile pages. Plan + eng review D1–D12: `.claude/designs/mut-447-verdict-api-plan.md`. Design doc (office hours, APPROVED): `~/.gstack/projects/vAWK3-mutaba3a/basel-main-design-20261026-111558.md`.
+
+**Context:** Reports becomes account-level: a Glance (one row per profile, what you kept, what you're owed) above an Explore layer, on the portal and the Flutter phone in the same stage. Computing the verdict in both clients would write the money rules twice (TypeScript and Dart).
+
+**Decision:**
+1. **One read, `GET /v1/summaries/verdict?from&to`**, person-level (no `X-Mutaba3a-Profile`; gate class `person`, like `GET /v1/entries`). Same date rules and errors as `/v1/summaries/activity` (shared `reportRange` + `readActivityWindow`); the client still owns week bounds (MUT-175 D1). Defaults and `asOf` use the base profile's timezone (D12).
+2. **Which profiles (D2):** owned + co-owned (`ownsProfile`) + operator firms where the person's membership is OWNER (`verdictProfilesOf`, kind `FIRM`); never a firm they staff. `shared` = more than one OWNER member; shared lines count in full (R6, provisional). This widens R2 for a person's own Reports only; MUT-435 P1 (what an agent may see) is unchanged.
+3. **Basis (R1):** cash — POSTED payments by `receivedOn`, expenses by `occurredOn`; kept = Σ received − spent over every included profile (a personal profile is shown as spent; the sum is the same). Totals per currency (ADR-004) plus one figure in `base` (R4: the oldest personal profile's currency, else the oldest included) at today's ECB rates through `convertToBase`.
+4. **Owed matches Overview (D3/D7):** due installments post first through `lazyPostingOf` (SYSTEM); `postingActorOf` treats a request with no selected profile as SYSTEM, so `unguarded()` stays pinned to `auth/middleware.ts`. LOCKED profiles are dropped (and listed in `unavailable`) before any posting.
+5. **FX down (D4):** never a 503 — per-currency figures, converted null (except when everything is already in base), `rates: null`.
+6. **Usual (R8, D9, D11):** median kept over the up-to-6 months before a whole calendar month, counting a month only when every included profile was complete in it (the 7th-day rule, or records before the read window); null below 3 months. The 7th-day rule lives in `server/src/summaries/months.ts` and, because `src/hosted` may not import server code, in `src/hosted/data/reports.ts` too — `reportsMonthParity.test.ts` fails the moment they differ (Basel, during build).
+7. **Partial failure:** a profile that fails to read is named in `unavailable` (code) and, if it isn't an ApiError, reported through the new `reportError` context function (`app-shell.ts`); the rest answers.
+8. **Local mode:** registered in the local app's organization-independent set (`routes/summaries` added to `LOCAL_SERVER_ALLOWLIST`; it is already in the chunk through `portal-routes`); `send()` warms reference rates before the cross-tab lock for it (MUT-287 D2). Local profiles hold no agreements, so its posting is a no-op (D10).
+
+**Consequences:** API 1.76.0-mut447. Each request reads ≈6N+1 times for N profiles in memory (TD-264). Portal Glance (MUT-448) and phone Glance (MUT-449) consume it; Explore (MUT-451/452) waits for the validation gate MUT-450.
+
+**Alternatives considered:** client-side fan-out per profile (rejected at intake: two copies of the money rules); strict owned + co-owned (rejected: Sader Law Firm and pilot firms would vanish); 503 on FX outage; `period`/`at` query; importing the month rule into the portal (refused by the ADR-097 lint guard).
