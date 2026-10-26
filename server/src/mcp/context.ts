@@ -149,11 +149,12 @@ export const idempotencyKeyInput = z
   .describe('One key per source document (a receipt, a statement line), reused only to retry that same call: never for another purchase.');
 
 /**
- * Review D7/R7: an agent key lives in its person's namespace (`a:` + SHA-256 of person and key), so a retry after a
+ * Review D7/R7: an agent key lives in its person's namespace (`a:` + SHA-256 of person, tool and key), so a retry after a
  * reconnect (a new OAuth grant) still replays, and it can never collide with a session's or an API key's key.
  */
-export function agentClaimKey(userId: string, key: string): string {
-  return `a:${createHash('sha256').update(`${userId}\n${key}`).digest('hex')}`;
+export function agentClaimKey(userId: string, tool: string, key: string): string {
+  // The tool is part of the key (review): one key per source document can serve add_expense and its receipt upload.
+  return `a:${createHash('sha256').update(`${userId}\n${tool}\n${key}`).digest('hex')}`;
 }
 
 /**
@@ -168,7 +169,7 @@ export async function withToolIdempotency<T extends Record<string, unknown>>(
   work: () => Promise<T>,
 ): Promise<T & { replayed: boolean }> {
   const { idempotencyKey, ...meaning } = args;
-  const key = agentClaimKey(ctx.agent.user.id, String(idempotencyKey));
+  const key = agentClaimKey(ctx.agent.user.id, tool, String(idempotencyKey));
   const ops: ClaimOps =
     scope.kind === 'profile'
       ? {

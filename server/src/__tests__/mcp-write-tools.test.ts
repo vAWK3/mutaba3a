@@ -148,6 +148,42 @@ describe('receipts (AC4)', () => {
     expect(toReview.expenseId).toBeNull();
   });
 
+  it('lets one key per source document serve the expense and its receipt (the key is per tool)', async () => {
+    const { h, p, bearer } = await setup({ attachments: new MemoryAttachmentStorage() });
+    const sourceKey = key();
+    const expense = await tool(h, bearer, 'add_expense', { ...expenseArgs(p.personalId), idempotencyKey: sourceKey });
+    const started = await tool(h, bearer, 'start_receipt_upload', { profileId: p.personalId, target: { kind: 'expense', expenseId: expense.id }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, idempotencyKey: sourceKey });
+    expect(started).toMatchObject({ expenseId: expense.id, replayed: false });
+  });
+
+  it('caps an agent’s unfinished uploads on an expense as on the library (20 pending), with a 429', async () => {
+    const { h, p, bearer } = await setup({ attachments: new MemoryAttachmentStorage() });
+    const expense = await tool(h, bearer, 'add_expense', expenseArgs(p.personalId));
+    const start = () => rpc(h, bearer, 'tools/call', { name: 'start_receipt_upload', arguments: { profileId: p.personalId, target: { kind: 'expense', expenseId: expense.id }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, idempotencyKey: key() } });
+    for (let i = 0; i < 20; i++) expect((await start()).result.isError, `start ${i}`).toBeFalsy();
+    const refused = await start();
+    expect(refused.result.isError).toBe(true);
+    expect(JSON.stringify(refused.result.content)).toContain('TOO_MANY_PENDING_UPLOADS');
+  });
+
+  it('gives a replay a fresh upload URL once the first one expired, and audits completion with the grant', async () => {
+    const storage = new MemoryAttachmentStorage();
+    const { h, p, bearer } = await setup({ attachments: storage });
+    const expense = await tool(h, bearer, 'add_expense', expenseArgs(p.personalId));
+    const args = { profileId: p.personalId, target: { kind: 'expense', expenseId: expense.id }, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, idempotencyKey: key() };
+    const first = await tool(h, bearer, 'start_receipt_upload', args);
+    h.setNow(new Date(h.now().getTime() + 16 * 60_000));
+    const again = await tool(h, bearer, 'start_receipt_upload', args);
+    expect(again).toMatchObject({ receiptId: first.receiptId, replayed: true });
+    expect(Date.parse(again.upload.expiresAt)).toBeGreaterThan(h.now().getTime());
+
+    const stored = await h.store.expenseReceipts.getById(p.personalId, first.receiptId);
+    storage.put(stored!.storageKey, { sizeBytes: 10, contentType: 'application/pdf' });
+    await tool(h, bearer, 'complete_receipt_upload', { profileId: p.personalId, receiptId: first.receiptId });
+    const audit = await h.store.audit.list(p.personalId, { entityId: first.receiptId }, { limit: 10, cursor: null });
+    expect(audit.items[0]?.metadata).toMatchObject({ captureSource: 'mcp', grantId: expect.any(String), oauthClientId: expect.any(String) });
+  });
+
   it('answers ATTACHMENTS_NOT_CONFIGURED where the deployment has no bucket', async () => {
     const { h, p, bearer } = await setup();
     const expense = await tool(h, bearer, 'add_expense', expenseArgs(p.personalId));

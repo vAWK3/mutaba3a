@@ -34,6 +34,14 @@
 **Impact**: `users.setPassword` (operator `rotate:password`), setup-link `issue` with a lock and `redeem` (recovery) revoke sessions but leave OAuth grants live, so an agent connected by someone who knew the old password survives a recovery.
 **Fix**: revoke grants (`password_changed`, audited) in those three store transactions, as `changePassword` does; decide with Basel whether the setup link for a brand-new account counts.
 
+### TD-261: Unfinished receipt uploads are never swept
+**Status**: Open
+**Ticket**: MUT-436 (review)
+**Added**: 2026-10-26
+**Priority**: Medium
+**Impact**: a PENDING_UPLOAD receipt whose bytes never arrive keeps its row (and any partial object) forever; the bucket lifecycle only aborts multipart uploads. An agent's starts are capped (20 pending per profile per day, the per-person budget), but the session's MUT-44 expense route still has no start budget.
+**Fix**: a nightly job that soft-deletes PENDING_UPLOAD receipts older than a day and removes their objects; apply `assertUploadBudget` to the session's expense route too (a behaviour change: decide with the phone, which retries uploads).
+
 ### TD-260: Receipts can't sit on an inbox entry
 **Status**: Open
 **Ticket**: MUT-436

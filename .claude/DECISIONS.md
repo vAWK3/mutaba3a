@@ -5384,6 +5384,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 5. **Gates:** the write scope (write tools aren't registered without it); writability through the session's column (`assertAgentMayWrite`, review D2: no `'agent'` principal); the lapse gate per profile (`agentWriteGate`) and per person for the inbox (`agentPersonWriteGate`); the narrow `GateStore` (D8); the agent allow-list gains exactly the methods these tools call.
 6. **Inbox writes ship dark:** `MCP_INBOX_WRITES` (Terraform `mcp_inbox_writes_enabled`, default false) leaves `inbox` out of the tool's schema (OV12) until the phone build that decodes an unknown capture source (tolerant `tryFromString`, Flutter `1f866175`) is live in both stores and the minimum build is raised to it (review D3/D5; before-release.md).
 
+7. **Pre-landing review (2026-10-26):** an agent's receipt starts take the library's start budget and 20-pending cap on an expense too (`assertUploadBudget`; the session's expense route unchanged, TD-261); the agent's idempotency key includes the tool (`a:<sha256(user, tool, key)>`), so one key per source document serves the expense and its receipt; a replayed start whose URL expired is signed again; receipt completion audits the OAuth client and grant.
+
 **Consequences:**
 - MUT-437 (matching) can file a statement line onto an existing expense through these paths; MUT-438 stays postponed.
 - A Claude.ai chat records expenses but can't attach files (TD-259); receipts can't sit on inbox entries (TD-260).

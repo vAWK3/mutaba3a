@@ -2816,7 +2816,7 @@ export const CreateExpenseRequestSchema = z
     customerId: uuid.optional(),
     projectId: uuid.optional().openapi({ description: 'With projectId alone, customerId is the project\'s customer' }),
     notes: expenseNotes.optional(),
-    /** MUT-65: where the write came from; audit metadata only, never persisted on the row. */
+    /** MUT-65: where the write came from. In the audit metadata, and since MUT-436 (ADR-201) kept on the expense row too. */
     captureSource: CaptureSourceSchema.optional(),
     /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
     capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),

@@ -6,6 +6,7 @@ import {
   completeExpenseReceipt,
   completeLibraryReceipt,
   receiptAudit,
+  signReceiptUpload,
   startExpenseReceipt,
   startLibraryReceipt,
   type ReceiptActor,
@@ -82,13 +83,21 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
       runTool(ctx, 'start_receipt_upload', UPLOAD_OUTPUT, async () => {
         const organization = await writableProfile(args.profileId);
         const file = { filename: args.filename, mimeType: args.mimeType, sizeBytes: args.sizeBytes };
-        return withToolIdempotency(ctx, { kind: 'profile', organizationId: organization.id }, 'start_receipt_upload', args, async () => {
+        const result = await withToolIdempotency(ctx, { kind: 'profile', organizationId: organization.id }, 'start_receipt_upload', args, async () => {
+          // The start budget and pending cap apply on both targets for an agent (review: no unlimited pending uploads).
+          const limited = { ...deps, uploadLimiter: options.uploadLimiter };
           const started =
             args.target.kind === 'expense'
-              ? await startExpenseReceipt(deps, actorFor(organization), args.target.expenseId, file)
-              : await startLibraryReceipt({ ...deps, uploadLimiter: options.uploadLimiter }, actorFor(organization), file);
+              ? await startExpenseReceipt(limited, actorFor(organization), args.target.expenseId, file)
+              : await startLibraryReceipt(limited, actorFor(organization), file);
           return { receiptId: started.receipt.id, expenseId: started.receipt.expenseId, upload: started.upload };
         });
+        // A replay after the signed URL expired gets a fresh one for the same receipt (review), not a dead URL.
+        if (result.replayed && Date.parse(result.upload.expiresAt) <= ctx.now().getTime()) {
+          const receipt = await ctx.store.expenseReceipts.getById(organization.id, result.receiptId);
+          if (receipt && receipt.status !== 'READY') return { ...result, upload: await signReceiptUpload(deps, receipt, ctx.now()) };
+        }
+        return result;
       }),
   );
 
@@ -106,7 +115,7 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
         const organization = await writableProfile(profileId);
         const receipt = await ctx.store.expenseReceipts.getById(organization.id, receiptId);
         if (!receipt) throw new ApiError('NOT_FOUND', 'No such receipt');
-        const audit = { captureSource: CAPTURE_SOURCE_MCP };
+        const audit = { captureSource: CAPTURE_SOURCE_MCP, oauthClientId: ctx.agent.grant.clientId, grantId: ctx.agent.grant.id };
         if (receipt.expenseId === null && !options.receiptsLibrary) throw new ApiError('NOT_FOUND', 'No such receipt');
         const done =
           receipt.expenseId !== null

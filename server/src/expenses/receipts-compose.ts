@@ -82,10 +82,31 @@ async function createKeyed(deps: ReceiptDeps, input: Parameters<LedgerStore['exp
   return (await deps.store.expenseReceipts.setKey(input.organizationId, created.id, receiptStorageKey(input.organizationId, created.id))) ?? created;
 }
 
+/**
+ * The per-person start budget and the profile's pending cap: a 429 either way, so an idempotency key stays free. The
+ * library always applies them (P3); MUT-436's agent applies them on an expense too (review: an agent looping on fresh
+ * keys would otherwise mint unlimited pending uploads). The session's expense route keeps its MUT-44 behaviour.
+ */
+export async function assertUploadBudget(deps: ReceiptDeps & { uploadLimiter: RateLimiter }, actor: ReceiptActor): Promise<void> {
+  const { organization, now } = actor;
+  const decision = await deps.uploadLimiter.check(`receipt-upload:${actor.userId}`, now);
+  if (!decision.allowed) throw new ApiError('RATE_LIMITED', 'Too many receipt uploads; try again shortly', { retryAfterSeconds: decision.retryAfterSeconds });
+  if ((await deps.store.expenseReceipts.countPendingSince(organization.id, new Date(now.getTime() - PENDING_WINDOW_MS))) >= MAX_PENDING_LIBRARY_UPLOADS) {
+    // A 429, not a 422: nothing was done, so the Idempotency-Key stays free for the same request once there is room.
+    throw new ApiError('RATE_LIMITED', `This profile already has ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads; finish or delete one first`, { reason: 'TOO_MANY_PENDING_UPLOADS' });
+  }
+}
+
 /** MUT-44: a PENDING_UPLOAD receipt on an existing expense, FILED from the start. The room check here is advisory; completion re-checks it under the expense lock (MUT-397). */
-export async function startExpenseReceipt(deps: ReceiptDeps, actor: ReceiptActor, expenseId: string, file: ReceiptFile): Promise<{ receipt: ExpenseReceiptRecord; upload: SignedReceiptUpload }> {
+export async function startExpenseReceipt(
+  deps: ReceiptDeps & { uploadLimiter?: RateLimiter },
+  actor: ReceiptActor,
+  expenseId: string,
+  file: ReceiptFile,
+): Promise<{ receipt: ExpenseReceiptRecord; upload: SignedReceiptUpload }> {
   requireStorage(deps);
   assertFile(file);
+  if (deps.uploadLimiter) await assertUploadBudget({ ...deps, uploadLimiter: deps.uploadLimiter }, actor);
   const { organization } = actor;
   const expense = await mustGetExpense(deps, organization.id, expenseId);
   if ((await deps.store.expenseReceipts.listByExpense(organization.id, expense.id)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
@@ -123,13 +144,8 @@ export async function startLibraryReceipt(
 ): Promise<{ receipt: ExpenseReceiptRecord; upload: SignedReceiptUpload }> {
   requireStorage(deps);
   assertFile(file);
+  await assertUploadBudget(deps, actor);
   const { organization, now } = actor;
-  const decision = await deps.uploadLimiter.check(`receipt-upload:${actor.userId}`, now);
-  if (!decision.allowed) throw new ApiError('RATE_LIMITED', 'Too many receipt uploads; try again shortly', { retryAfterSeconds: decision.retryAfterSeconds });
-  if ((await deps.store.expenseReceipts.countPendingSince(organization.id, new Date(now.getTime() - PENDING_WINDOW_MS))) >= MAX_PENDING_LIBRARY_UPLOADS) {
-    // A 429, not a 422: nothing was done, so the Idempotency-Key stays free for the same request once there is room.
-    throw new ApiError('RATE_LIMITED', `This profile already has ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads; finish or delete one first`, { reason: 'TOO_MANY_PENDING_UPLOADS' });
-  }
   const receipt = await createKeyed(
     deps,
     { organizationId: organization.id, expenseId: null, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes, receivedOn: todayFor(organization, now), suggested: file.suggested ?? null, uploadedByUserId: actor.userId, requestId: actor.requestId },
