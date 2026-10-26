@@ -424,10 +424,12 @@ you start (§5.3 template).
 First:
 
 ```bash
-gcloud sql backups create --instance="$INSTANCE" --project=$GCP_PROJECT_ID --description="before restore $(date -u +%FT%RZ)"   # the undo point
+gcloud sql backups create --instance="$INSTANCE" --project=$GCP_PROJECT_ID --description="before restore $(date -u +%FT%RZ)"   # the undo point: delete it within 14 days (below)
 gcloud scheduler jobs pause mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID                         # once Stripe is on (§1.7); NOT_FOUND = off, go on
 gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=internal                       # stop portal, phone and Malafat traffic
 ```
+
+Delete the undo point within 14 days of a confirmed restore, because the privacy policy says backups clear within 14 days and an on-demand backup never expires by itself (MUT-382): run `gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID --filter="type=ON_DEMAND"`, then `gcloud sql backups delete <id> --instance="$INSTANCE" --project=$GCP_PROJECT_ID`.
 
 Pause the nightly Stripe reconcile first: Cloud Scheduler counts as internal traffic, so it still reaches a closed
 API and would write while you restore.
@@ -591,8 +593,8 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 ## 6. Support
 
 - **Channel:** email only.
-  - The inbox is **info@malafat.app**, named in the terms (`src/content/legal/terms/2026-10-19.*.json`)
-    and pilot-offer §4.
+  - The inbox is **info@mtb3a.com** (MUT-382, B2), named in the terms, the privacy policy, the portal (`SUPPORT_EMAIL`) and the phone (`legal_links.dart`)
+    and pilot-offer §4. info@malafat.app keeps forwarding to it for older app builds.
   - There's no WhatsApp and no phone (Basel, 2026-10-19).
   - **⚠ Basel decides:** keep the shared Malafat inbox, or move Mutaba3a to its own address once the
     domain lands (MUT-326). Either way the terms text and this line must match.

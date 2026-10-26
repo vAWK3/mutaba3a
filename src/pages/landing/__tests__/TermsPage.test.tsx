@@ -3,8 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { LATEST_TERMS_VERSION } from '../../../content/legal/terms';
-import en from '../../../content/legal/terms/2026-10-19.en.json';
-import ar from '../../../content/legal/terms/2026-10-19.ar.json';
+import en from '../../../content/legal/terms/2026-10-26.en.json';
+import ar from '../../../content/legal/terms/2026-10-26.ar.json';
+import enFrozen from '../../../content/legal/terms/2026-10-19.en.json';
 import { TermsPage } from '../TermsPage';
 
 /** MUT-324: /terms shows the latest frozen text, /terms/<version> that version's, in the page language. */
@@ -34,7 +35,7 @@ describe('TermsPage (MUT-324)', () => {
     renderPage('en');
     await loaded(en);
     expect(screen.getByRole('heading', { level: 1, name: en.title })).toBeInTheDocument();
-    expect(LATEST_TERMS_VERSION).toBe('2026-10-19');
+    expect(LATEST_TERMS_VERSION).toBe('2026-10-26');
     for (const section of en.sections) expect(screen.getByRole('heading', { level: 2, name: section.title })).toBeInTheDocument();
     expect(screen.getByText(en.updated)).toBeInTheDocument();
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
@@ -49,8 +50,8 @@ describe('TermsPage (MUT-324)', () => {
 
   it('/terms/<version> shows that frozen version', async () => {
     renderPage('en', '/terms/2026-10-19');
-    await loaded(en);
-    expect(screen.getByText(en.updated)).toBeInTheDocument();
+    await loaded(enFrozen);
+    expect(screen.getByText(enFrozen.updated)).toBeInTheDocument();
   });
 
   it('an unknown version says so and links to the current terms', async () => {
@@ -91,9 +92,9 @@ describe('TermsPage (MUT-324)', () => {
   describe('?lang, the language the portal records (review fix 1)', () => {
     it('shows that language over the page language, marked for direction, without storing it', async () => {
       renderPage('ar', '/terms/2026-10-19', '?lang=en');
-      await loaded(en);
-      expect(screen.getByRole('heading', { level: 1, name: en.title })).toBeInTheDocument();
-      const text = textOf(en);
+      await loaded(enFrozen);
+      expect(screen.getByRole('heading', { level: 1, name: enFrozen.title })).toBeInTheDocument();
+      const text = textOf(enFrozen);
       expect(text).toHaveAttribute('lang', 'en');
       expect(text).toHaveAttribute('dir', 'ltr');
       expect(localStorage.getItem('mutaba3a-language')).toBe('ar');

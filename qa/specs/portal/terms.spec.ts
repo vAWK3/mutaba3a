@@ -72,7 +72,7 @@ test('someone behind on the terms agrees once on the Updated-terms step, then wo
     await api.open(page, `/p/${OFFICE_A}`, 'en');
     await expect(page.getByRole('heading', { level: 1, name: "We've updated our terms" })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', new RegExp(`/terms/${QA_TERMS_VERSION}\\?lang=en$`));
-    await expect(page.getByText(/info@malafat\.app/)).toBeVisible();
+    await expect(page.getByText(/info@mtb3a\.com/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expect(page.getByRole('navigation')).toHaveCount(0);
   });

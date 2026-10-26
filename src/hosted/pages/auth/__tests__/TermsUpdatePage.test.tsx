@@ -40,7 +40,7 @@ describe('the Updated terms step (MUT-324)', () => {
     const read = screen.getByRole('link', { name: 'Read the terms' });
     expect(read).toHaveAttribute('href', `${TERMS_URL}/${CURRENT}?lang=en`);
     expect(read).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('link', { name: 'info@malafat.app' })).toHaveAttribute('href', 'mailto:info@malafat.app');
+    expect(screen.getByRole('link', { name: 'info@mtb3a.com' })).toHaveAttribute('href', 'mailto:info@mtb3a.com');
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });

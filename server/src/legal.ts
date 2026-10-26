@@ -22,10 +22,10 @@ export interface CurrentTerms {
 }
 
 export const CURRENT_TERMS: CurrentTerms = {
-  version: '2026-10-19',
+  version: '2026-10-26',
   sha256: {
-    en: '2ed299dc133d011452175ef182ae3701ab126dc8a316d0c3befe49c4833c864c',
-    ar: '7f997e6b13e6a7ed0259f71523c8c2e5b0a8ead0ed9a405be6851753b77272cc',
+    en: 'c81b2eaa8d880f8a2742e6aa588de421fbb0491828f7b45fa142b74fe9663669',
+    ar: 'b5362228222b06304e81f3fe91d932b0c43a2e8360a368aab029753db15e8b88',
   },
 };
 

@@ -4,30 +4,17 @@
   # Sentry chunks can never reach the local app's files or its service worker
   command = "npm run build:web && npx tsx scripts/check-bundles.ts --dist dist-web"
 
-# Stable download URLs - redirect to GitHub Releases latest artifacts
+# MUT-382: MTB3A runs on iOS, Android and the web portal only; the free desktop apps' download page and
+# installer links are gone. Old links land on the home page. Before the fallback.
 [[redirects]]
-  from = "/download/mac"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-macos-arm64.dmg"
-  status = 302
-  force = true
+  from = "/download"
+  to = "/"
+  status = 301
 
 [[redirects]]
-  from = "/download/windows"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64.msi"
-  status = 302
-  force = true
-
-[[redirects]]
-  from = "/download/windows-exe"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest/download/mutaba3a-windows-x64-setup.exe"
-  status = 302
-  force = true
-
-[[redirects]]
-  from = "/download/release-notes"
-  to = "https://github.com/vAWK3/mutaba3a/releases/latest"
-  status = 302
-  force = true
+  from = "/download/*"
+  to = "/"
+  status = 301
 
 # /hosted (the free-vs-hosted comparison) is retired: hosted is the only plan now,
 # and its request form lives inline on the home page. Before the fallback.
