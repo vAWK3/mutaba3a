@@ -46,6 +46,7 @@
 ### Fixed
 - The entries feed no longer links a reversed payment to the Owed it once settled (D3).
 - Undo on a capture a person reversed says "already reversed", not "Malafat reversed" (D6).
+- qa-reconcile (Basel): corrections are **owner-only** (creator or co-owner; else 403 NOT_OWNER); a person's reversal never reopens an entry Malafat posted (404); a person's credit date is bounded like any money they record; the new feed fields are optional; the portal retries a 409 with a new attempt, and Cancel says what is still owed if the entry grew meanwhile.
 
 ### Technical
 - `payments.ts` keeps a key-only `keyActorOf` for create/allocate; reverse uses the shared `actorOf`. Docs: ADR-206, TD-126 resolved, COMPONENT_REGISTRY, TEST_PLAN, `.claude/designs/mut-453-owner-corrections.md`.

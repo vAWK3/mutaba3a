@@ -319,3 +319,9 @@ NO UNRESOLVED DECISIONS
 | `credit-over-outstanding` | "I try to reduce by more than is left." | Refused before sending, with what is left shown. |
 | `cancel-owed` | "The client dropped the job; cancel what they owe." | Cancel amount owed with a reason: the entry reads Cancelled. |
 | `correct-malafat-readonly` | "On my firm's Malafat profile I want to fix a payment." | No correction is offered there (Malafat keeps that ledger). |
+
+---
+## qa-reconcile amendment (2026-10-26, Basel)
+- D1 is owner-only: `ownsProfile` (creator or co-owner) before any lookup, else 403 READ_ONLY_PROFILE {reason: NOT_OWNER}. /v1/me truth = `owned && access.payments === 'read-write'`.
+- Fixes from review: allocation guard on a person's reversal (404 if it paid any non-ADJUSTMENT entry); `pastMoneyDate` on a person's credit `effectiveDate`; IncomeResponse new fields optional; portal rotates the attempt key after 409; Cancel reports a partial cancel and toasts a 422.
+- Follow-ups filed: audit rows inside the reverse/credit transaction (+ allocationsUndone race, audit-lookup ordering); "Cancelled" label for a partly paid, fully credited entry; MUT-454 handles ALREADY_REVERSED on the shipped phone's Undo.
