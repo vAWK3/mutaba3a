@@ -57,6 +57,26 @@ export async function ownedOrCoOwnedProfilesOf(store: Pick<LedgerStore, 'members
   return (await memberProfilesOf(store, userId)).filter(({ organization, role }) => ownsProfile(organization, userId, role)).map(({ organization }) => organization);
 }
 
+/**
+ * MUT-447 (eng review D2): the profiles a person's Reports verdict counts — the ones they own or co-own
+ * (`ownsProfile`), plus operator firms where their membership is OWNER (a lawyer's own practice), never a firm they
+ * staff (BOOKKEEPER/SUBMITTER). Wider than MUT-435 P1 on purpose: that rule is what an agent may see. `shared` = more
+ * than one OWNER member (R6).
+ */
+export async function verdictProfilesOf(
+  store: Pick<LedgerStore, 'memberships' | 'organizations'>,
+  userId: string,
+): Promise<{ organization: Organization; kind: 'BUSINESS' | 'PERSONAL' | 'FIRM'; shared: boolean }[]> {
+  const held = (await memberProfilesOf(store, userId)).filter(({ organization, role }) => ownsProfile(organization, userId, role) || (profileOwnerOf(organization) === null && role === 'OWNER'));
+  return Promise.all(
+    held.map(async ({ organization }) => {
+      if (profileTypeOf(organization) === 'PERSONAL') return { organization, kind: 'PERSONAL' as const, shared: false };
+      const owners = (await store.memberships.listByOrganization(organization.id)).filter((m) => m.role === 'OWNER').length;
+      return { organization, kind: profileOwnerOf(organization) ? ('BUSINESS' as const) : ('FIRM' as const), shared: owners > 1 };
+    }),
+  );
+}
+
 async function memberProfilesOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string): Promise<{ organization: Organization; role: MembershipRole }[]> {
   const memberships = await store.memberships.listByUser(userId);
   const organizations = await Promise.all(memberships.map((membership) => store.organizations.getById(membership.organizationId)));

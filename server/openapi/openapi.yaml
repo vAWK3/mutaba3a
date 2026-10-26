@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.75.0-mut436
+  version: 1.76.0-mut447
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -5501,6 +5501,325 @@ components:
         - currencies
         - history
         - daysToPaid
+    Verdict:
+      type: object
+      properties:
+        from:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Today in the base profile's timezone
+        base:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+            - description: "The currency converted figures are in: the oldest personal profile’s default, else the oldest included profile’s (R4)"
+        rates:
+          type: object
+          nullable: true
+          properties:
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            source:
+              type: string
+              enum:
+                - live
+                - stale
+          required:
+            - date
+            - source
+          description: The ECB reference day the converted figures used; null when no rates were available (every converted figure that needs one is then null)
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              profileId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              kind:
+                type: string
+                enum:
+                  - BUSINESS
+                  - PERSONAL
+                  - FIRM
+                description: BUSINESS and FIRM lines show net; a PERSONAL line is shown as spent (+ came in)
+              shared:
+                type: boolean
+                description: More than one owner; its whole net counts in the total (R6)
+              currencies:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    currency:
+                      $ref: "#/components/schemas/Currency"
+                    received:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    spent:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    net:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  required:
+                    - currency
+                    - received
+                    - spent
+                    - net
+              converted:
+                type: object
+                nullable: true
+                properties:
+                  received:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  spent:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  net:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                required:
+                  - received
+                  - spent
+                  - net
+              history:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    month:
+                      type: string
+                      pattern: ^\d{4}-\d{2}$
+                      description: Calendar month, YYYY-MM
+                    currencies:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          currency:
+                            $ref: "#/components/schemas/Currency"
+                          received:
+                            type: string
+                            pattern: ^-?\d+(\.\d+)?$
+                            description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                          spent:
+                            type: string
+                            pattern: ^-?\d+(\.\d+)?$
+                            description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                          byCategory:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                categoryId:
+                                  type: string
+                                  nullable: true
+                                  format: uuid
+                                total:
+                                  type: string
+                                  pattern: ^-?\d+(\.\d+)?$
+                                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                                count:
+                                  type: integer
+                              required:
+                                - categoryId
+                                - total
+                                - count
+                          byCustomer:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                customerId:
+                                  type: string
+                                  nullable: true
+                                  format: uuid
+                                total:
+                                  type: string
+                                  pattern: ^-?\d+(\.\d+)?$
+                                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                                count:
+                                  type: integer
+                              required:
+                                - customerId
+                                - total
+                                - count
+                            description: Received per client, largest first; null = no client, last
+                        required:
+                          - currency
+                          - received
+                          - spent
+                          - byCategory
+                          - byCustomer
+                  required:
+                    - month
+                    - currencies
+                description: The 12 calendar months ending with to’s month, as GET /v1/summaries/activity
+              owed:
+                type: object
+                properties:
+                  currencies:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        currency:
+                          $ref: "#/components/schemas/Currency"
+                        outstanding:
+                          type: string
+                          pattern: ^-?\d+(\.\d+)?$
+                          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                        overdue:
+                          type: string
+                          pattern: ^-?\d+(\.\d+)?$
+                          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                      required:
+                        - currency
+                        - outstanding
+                        - overdue
+                  overdueCount:
+                    type: integer
+                    description: Open entries past their due date
+                required:
+                  - currencies
+                  - overdueCount
+            required:
+              - profileId
+              - name
+              - kind
+              - shared
+              - currencies
+              - converted
+              - history
+              - owed
+        total:
+          type: object
+          properties:
+            label:
+              type: string
+              enum:
+                - kept
+                - businessNet
+              description: kept when a personal profile is included; businessNet otherwise
+            currencies:
+              type: array
+              items:
+                type: object
+                properties:
+                  currency:
+                    $ref: "#/components/schemas/Currency"
+                  net:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                required:
+                  - currency
+                  - net
+              description: Σ received − spent across every included profile, per currency (never summed across currencies)
+            converted:
+              type: string
+              nullable: true
+              pattern: ^-?\d+(\.\d+)?$
+              description: The same in base at one rate set; null when a currency has no rate
+            inCurrencyOnly:
+              allOf:
+                - $ref: "#/components/schemas/Currency"
+                - nullable: true
+                  description: "When converted is null: the currency with the most records, to show on its own"
+            sharedInFull:
+              type: boolean
+          required:
+            - label
+            - currencies
+            - converted
+            - inCurrencyOnly
+            - sharedInFull
+        usual:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Median kept over the up to 6 months before a calendar-month period in which every included profile was complete; null for weeks, years, fewer than 3 such months or missing rates
+        owed:
+          type: object
+          properties:
+            currencies:
+              type: array
+              items:
+                type: object
+                properties:
+                  currency:
+                    $ref: "#/components/schemas/Currency"
+                  outstanding:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  overdue:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                required:
+                  - currency
+                  - outstanding
+                  - overdue
+            overdueCount:
+              type: integer
+              description: Open entries past their due date
+            converted:
+              type: string
+              nullable: true
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          required:
+            - currencies
+            - overdueCount
+            - converted
+        unavailable:
+          type: array
+          items:
+            type: object
+            properties:
+              profileId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              code:
+                type: string
+            required:
+              - profileId
+              - name
+              - code
+          description: "Profiles left out: locked by billing (SUBSCRIPTION_LAPSED) or that failed to read (INTERNAL)"
+      required:
+        - from
+        - to
+        - asOf
+        - base
+        - rates
+        - profiles
+        - total
+        - usual
+        - owed
+        - unavailable
     CreateUploadResponse:
       type: object
       properties:
@@ -14083,6 +14402,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActivitySummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/verdict:
+    get:
+      tags:
+        - Summaries
+      summary: "What you kept across your profiles over a range: per profile, per currency and converted, with your usual and what you are owed (portal + phone Reports)"
+      description: "MUT-447 (ADR-204). Names no profile (no X-Mutaba3a-Profile): it reads the profiles you own or co-own, plus operator firms where your membership is OWNER, never a firm you staff. A profile LOCKED by billing is left out and listed in `unavailable`. Per profile, as GET /v1/summaries/activity: received = POSTED payments by receivedOn, spent = expenses by occurredOn, history = the 12 months ending with to’s month. Due installments are posted first, so owed matches GET /v1/summaries/organization (each profile in its own timezone). Totals are per currency (never summed across currencies) plus one figure converted to `base` at today’s ECB rates; when rates are unavailable the converted figures that need them are null and the read still answers 200. from/to default to this month in the base profile’s timezone; usual is set only for a whole calendar month. A profile that fails to read is listed in `unavailable` and the rest answers."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: "Inclusive; defaults to the first of this month in the base profile's timezone (R4: the oldest personal profile, else the oldest included one). The same date rules and errors as GET /v1/summaries/activity"
+          required: false
+          description: "Inclusive; defaults to the first of this month in the base profile's timezone (R4: the oldest personal profile, else the oldest included one). The same date rules and errors as GET /v1/summaries/activity"
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG)
+          required: false
+          description: Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG)
+          name: to
+          in: query
+      responses:
+        "200":
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Verdict"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

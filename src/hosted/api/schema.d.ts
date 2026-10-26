@@ -7701,6 +7701,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/summaries/verdict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What you kept across your profiles over a range: per profile, per currency and converted, with your usual and what you are owed (portal + phone Reports)
+         * @description MUT-447 (ADR-204). Names no profile (no X-Mutaba3a-Profile): it reads the profiles you own or co-own, plus operator firms where your membership is OWNER, never a firm you staff. A profile LOCKED by billing is left out and listed in `unavailable`. Per profile, as GET /v1/summaries/activity: received = POSTED payments by receivedOn, spent = expenses by occurredOn, history = the 12 months ending with to’s month. Due installments are posted first, so owed matches GET /v1/summaries/organization (each profile in its own timezone). Totals are per currency (never summed across currencies) plus one figure converted to `base` at today’s ECB rates; when rates are unavailable the converted figures that need them are null and the read still answers 200. from/to default to this month in the base profile’s timezone; usual is set only for a whole calendar month. A profile that fails to read is listed in `unavailable` and the rest answers.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Inclusive; defaults to the first of this month in the base profile's timezone (R4: the oldest personal profile, else the oldest included one). The same date rules and errors as GET /v1/summaries/activity */
+                    from?: string;
+                    /** @description Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG) */
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Verdict */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Verdict"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/attachments/uploads": {
         parameters: {
             query?: never;
@@ -17792,6 +17872,128 @@ export interface components {
                 /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
                 samples: number[];
             };
+        };
+        Verdict: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            from: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            to: string;
+            /** @description Today in the base profile's timezone */
+            asOf: string;
+            base: components["schemas"]["Currency"] & unknown;
+            /** @description The ECB reference day the converted figures used; null when no rates were available (every converted figure that needs one is then null) */
+            rates: {
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                date: string;
+                /** @enum {string} */
+                source: "live" | "stale";
+            } | null;
+            profiles: {
+                /** Format: uuid */
+                profileId: string;
+                name: string;
+                /**
+                 * @description BUSINESS and FIRM lines show net; a PERSONAL line is shown as spent (+ came in)
+                 * @enum {string}
+                 */
+                kind: "BUSINESS" | "PERSONAL" | "FIRM";
+                /** @description More than one owner; its whole net counts in the total (R6) */
+                shared: boolean;
+                currencies: {
+                    currency: components["schemas"]["Currency"];
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    received: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    spent: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                }[];
+                converted: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    received: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    spent: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                } | null;
+                /** @description The 12 calendar months ending with to’s month, as GET /v1/summaries/activity */
+                history: {
+                    /** @description Calendar month, YYYY-MM */
+                    month: string;
+                    currencies: {
+                        currency: components["schemas"]["Currency"];
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        received: string;
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        spent: string;
+                        byCategory: {
+                            /** Format: uuid */
+                            categoryId: string | null;
+                            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                            total: string;
+                            count: number;
+                        }[];
+                        /** @description Received per client, largest first; null = no client, last */
+                        byCustomer: {
+                            /** Format: uuid */
+                            customerId: string | null;
+                            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                            total: string;
+                            count: number;
+                        }[];
+                    }[];
+                }[];
+                owed: {
+                    currencies: {
+                        currency: components["schemas"]["Currency"];
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        outstanding: string;
+                        /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                        overdue: string;
+                    }[];
+                    /** @description Open entries past their due date */
+                    overdueCount: number;
+                };
+            }[];
+            total: {
+                /**
+                 * @description kept when a personal profile is included; businessNet otherwise
+                 * @enum {string}
+                 */
+                label: "kept" | "businessNet";
+                /** @description Σ received − spent across every included profile, per currency (never summed across currencies) */
+                currencies: {
+                    currency: components["schemas"]["Currency"];
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                }[];
+                /** @description The same in base at one rate set; null when a currency has no rate */
+                converted: string | null;
+                inCurrencyOnly: components["schemas"]["Currency"] & unknown;
+                sharedInFull: boolean;
+            };
+            /** @description Median kept over the up to 6 months before a calendar-month period in which every included profile was complete; null for weeks, years, fewer than 3 such months or missing rates */
+            usual: string | null;
+            owed: {
+                currencies: {
+                    currency: components["schemas"]["Currency"];
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    outstanding: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    overdue: string;
+                }[];
+                /** @description Open entries past their due date */
+                overdueCount: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                converted: string | null;
+            };
+            /** @description Profiles left out: locked by billing (SUBSCRIPTION_LAPSED) or that failed to read (INTERNAL) */
+            unavailable: {
+                /** Format: uuid */
+                profileId: string;
+                name: string;
+                code: string;
+            }[];
         };
         CreateUploadResponse: {
             attachment: components["schemas"]["Attachment"];

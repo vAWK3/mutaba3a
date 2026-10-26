@@ -76,6 +76,8 @@ export type AppEnv = {
     passkeys: boolean;
     /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
     personEntitlements: ReadonlyMap<string, Entitlement>;
+    /** MUT-447: report an error a route handled itself (a partial answer), as the shell reports an unhandled one (ADR-091). */
+    reportError: (err: unknown) => void;
   };
 };
 
@@ -455,8 +457,10 @@ export function sessionAuth(c: AuthReader): SessionAuth {
  * work done early, not the person writing the ledger.
  */
 export function postingActorOf(c: AuthReader): PostingActor {
-  const auth = c.get('auth');
-  return auth.kind === 'apiKey'
+  // MUT-447: a person-level session read (the verdict) selects no profile, so authenticate() set no `auth`; a
+  // session's catch-up posting is SYSTEM either way.
+  const auth = c.get('auth') as AuthContext | undefined;
+  return auth?.kind === 'apiKey'
     ? { actorType: 'API_KEY', actorId: auth.apiKey.id, requestId: c.get('requestId') }
     : { actorType: 'SYSTEM', actorId: null, requestId: c.get('requestId') };
 }

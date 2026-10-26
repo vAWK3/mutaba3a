@@ -3100,6 +3100,52 @@ export const ActivitySummarySchema = z
   })
   .openapi('ActivitySummary');
 
+// ---- MUT-447: the Reports verdict across a person's profiles (ADR-204) ---------------
+
+export const VerdictQuerySchema = z.object({
+  from: IsoDateSchema.optional().openapi({ description: "Inclusive; defaults to the first of this month in the base profile's timezone (R4: the oldest personal profile, else the oldest included one). The same date rules and errors as GET /v1/summaries/activity" }),
+  to: IsoDateSchema.optional().openapi({ description: `Inclusive; defaults to the last of this month; not before from (422 END_BEFORE_START) and within the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month (422 RANGE_TOO_LONG)` }),
+});
+const flowStrings = { received: AmountSchema, spent: AmountSchema, net: AmountSchema };
+const owedBlock = z.object({ currency: CurrencySchema, outstanding: AmountSchema, overdue: AmountSchema });
+const owedSchema = { currencies: z.array(owedBlock), overdueCount: z.number().int().openapi({ description: 'Open entries past their due date' }) };
+export const VERDICT_PROFILE_KINDS = ['BUSINESS', 'PERSONAL', 'FIRM'] as const;
+export const VERDICT_TOTAL_LABELS = ['kept', 'businessNet'] as const;
+export const VerdictSchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    asOf: IsoDateSchema.openapi({ description: "Today in the base profile's timezone" }),
+    base: CurrencySchema.openapi({ description: 'The currency converted figures are in: the oldest personal profile’s default, else the oldest included profile’s (R4)' }),
+    rates: z
+      .object({ date: IsoDateSchema, source: z.enum(['live', 'stale']) })
+      .nullable()
+      .openapi({ description: 'The ECB reference day the converted figures used; null when no rates were available (every converted figure that needs one is then null)' }),
+    profiles: z.array(
+      z.object({
+        profileId: uuid,
+        name: z.string(),
+        kind: z.enum(VERDICT_PROFILE_KINDS).openapi({ description: 'BUSINESS and FIRM lines show net; a PERSONAL line is shown as spent (+ came in)' }),
+        shared: z.boolean().openapi({ description: 'More than one owner; its whole net counts in the total (R6)' }),
+        currencies: z.array(z.object({ currency: CurrencySchema, ...flowStrings })),
+        converted: z.object(flowStrings).nullable(),
+        history: z.array(z.object({ month: IsoMonthSchema, currencies: z.array(currencyActivity) })).openapi({ description: 'The 12 calendar months ending with to’s month, as GET /v1/summaries/activity' }),
+        owed: z.object(owedSchema),
+      }),
+    ),
+    total: z.object({
+      label: z.enum(VERDICT_TOTAL_LABELS).openapi({ description: 'kept when a personal profile is included; businessNet otherwise' }),
+      currencies: z.array(z.object({ currency: CurrencySchema, net: AmountSchema })).openapi({ description: 'Σ received − spent across every included profile, per currency (never summed across currencies)' }),
+      converted: AmountSchema.nullable().openapi({ description: 'The same in base at one rate set; null when a currency has no rate' }),
+      inCurrencyOnly: CurrencySchema.nullable().openapi({ description: 'When converted is null: the currency with the most records, to show on its own' }),
+      sharedInFull: z.boolean(),
+    }),
+    usual: AmountSchema.nullable().openapi({ description: 'Median kept over the up to 6 months before a calendar-month period in which every included profile was complete; null for weeks, years, fewer than 3 such months or missing rates' }),
+    owed: z.object({ ...owedSchema, converted: AmountSchema.nullable() }),
+    unavailable: z.array(z.object({ profileId: uuid, name: z.string(), code: z.string() })).openapi({ description: 'Profiles left out: locked by billing (SUBSCRIPTION_LAPSED) or that failed to read (INTERNAL)' }),
+  })
+  .openapi('Verdict');
+
 // ---- MUT-267: expense groups (ADR-094) -----------------------------------------
 
 const groupName = z.string().trim().max(GROUP_NAME_MAX);

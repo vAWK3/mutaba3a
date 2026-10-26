@@ -318,6 +318,7 @@ describe('the escape hatch', () => {
       'routes/summaries.ts',
       'routes/summaries.ts',
       'routes/summaries.ts',
+      'routes/summaries.ts',
     ]);
   });
 });
