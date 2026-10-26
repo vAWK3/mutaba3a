@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseReports, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
+import { omitShellOverlay, parseClientDetail, parseReports, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseGlance, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -137,5 +137,19 @@ describe('Reports search (MUT-175): one filters object in the URL', () => {
   it('drops bad values, and the default scope (one profile) never reaches the URL', () => {
     expect(parseReports({ period: 'quarter', at: '2026-3-4', scope: 'profile', skip: R })).toEqual({});
     expect(parseReports({ scope: 'everyone' })).toEqual({});
+  });
+});
+
+describe('Glance search (MUT-448): period, day and the page the Reports icon was pressed on', () => {
+  const A = '11111111-1111-4111-8111-111111111111';
+  it('keeps a valid period, day and a back path inside a profile', () => {
+    expect(parseGlance({ period: 'week', at: '2026-10-22', back: `/p/${A}/payments` })).toEqual({ period: 'week', at: '2026-10-22', back: `/p/${A}/payments` });
+  });
+
+  it('drops a back that could leave the portal or carry a query, and any unknown key', () => {
+    for (const back of ['//evil.example', 'https://evil.example', `/p/${A}/payments?x=1`, `/p/${A}/../you`, '/reports']) {
+      expect(parseGlance({ back })).toEqual({});
+    }
+    expect(parseGlance({ scope: 'all', period: 'quarter' })).toEqual({});
   });
 });

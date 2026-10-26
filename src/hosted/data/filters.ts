@@ -1,6 +1,7 @@
 import type { Currency } from '../api/client';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { PERIODS, type Period } from './reports';
+import { backOf } from '../shell/youRoutes';
 
 /**
  * One filters object per list view, kept in the URL's search params and updated
@@ -56,6 +57,18 @@ export interface ReportsSearch {
   scope?: 'all';
 }
 export const parseReports = (raw: Raw): ReportsSearch => compact({ period: oneOf(raw.period, PERIODS), at: day(raw.at), scope: raw.scope === 'all' ? ('all' as const) : undefined });
+
+/**
+ * The Glance (MUT-448, `/reports`): the period, any day inside it, and `back`, the profile page its corner icon was
+ * pressed on (eng P2): the icon's second press returns there, and the shell keeps that profile (D8). `back` passes the
+ * same check as the You island's (MUT-426 D7), so it never leaves the portal.
+ */
+export interface GlanceSearch {
+  period?: Period;
+  at?: string;
+  back?: string;
+}
+export const parseGlance = (raw: Raw): GlanceSearch => compact({ period: oneOf(raw.period, PERIODS), at: day(raw.at), back: backOf(raw.back) });
 
 export interface ClientsFilters {
   q?: string;

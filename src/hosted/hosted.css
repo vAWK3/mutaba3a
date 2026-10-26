@@ -931,6 +931,39 @@ button.hp-profile-row:hover, button.hp-profile-row:focus-visible { background: v
 .hp-report-skeleton-chart { height: 168px; }
 .hp-report-skeleton-row { height: 20px; }
 
+/* MUT-448: the Glance (account-level Reports). One centred column at every width until Explore (DD7); the ledger is a
+   plain grouped list, no glass on content (DD10: glass is the chrome's); rows are 44px links with press feedback. */
+.hp-glance { max-inline-size: 560px; margin-inline: auto; }
+.hp-glance-hero { display: grid; gap: var(--space-1); margin-block: var(--space-4) var(--space-3); }
+.hp-glance-figure { justify-self: start; font-family: var(--font-mono); font-size: var(--text-figure-fluid); font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1.1; white-space: nowrap; color: var(--text); }
+.hp-glance-figure.is-negative, .hp-glance-amount.is-negative { color: var(--m-rose-ink); }
+.hp-glance-usual { margin: 0; font-size: var(--text-label); }
+.hp-glance-usual.is-above { color: var(--m-mint-ink); }
+.hp-glance-usual.is-below { color: var(--m-rose-ink); }
+.hp-glance-usual.is-about { color: var(--muted); }
+.hp-glance-leaves { margin: 0 0 var(--space-3); }
+.hp-glance-list { margin: 0; padding: 0; list-style: none; border-radius: var(--m-radius-lg); background: var(--surface); overflow: hidden; }
+.hp-glance-list > li + li { border-block-start: 1px solid var(--m-line); }
+.hp-glance-row { display: flex; align-items: center; gap: var(--space-3); min-height: 44px; padding: var(--space-2) var(--space-4); color: var(--text); text-decoration: none; }
+a.hp-glance-row:hover { background: var(--surface-2); }
+a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-glance-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); flex: 1; min-width: 0; }
+.hp-glance-kind { font-size: var(--text-label); color: var(--muted); }
+.hp-glance-shared { padding: 0 var(--space-2); border-radius: var(--m-radius-pill); background: var(--m-lavender); color: var(--m-lavender-ink); font-size: var(--text-label); }
+.hp-glance-figures { display: grid; justify-items: end; gap: var(--space-1); }
+.hp-glance-amount { display: inline-flex; gap: var(--space-2); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hp-glance-extra, .hp-glance-nothing { font-size: var(--text-label); color: var(--muted); white-space: nowrap; }
+.hp-glance-chevron { color: var(--muted); }
+.hp-glance-owed { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 44px; margin-block-start: var(--space-3); padding: var(--space-2) var(--space-4); border-radius: var(--m-radius-lg); background: var(--surface); }
+.hp-glance-owed.is-none { color: var(--muted); }
+.hp-glance-owed-label { display: grid; gap: var(--space-1); }
+.hp-glance-overdue { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-label); color: var(--muted); }
+.hp-glance-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--m-butter); }
+.hp-glance-footnote, .hp-glance-hint { margin-block: var(--space-3) 0; }
+.hp-glance-refresh { max-inline-size: 560px; margin-inline: auto; }
+.hp-glance .hp-report-breakdown-panel { max-inline-size: min(320px, 100vw - 32px); }
+.hp-glance-skeleton-row { height: 44px; }
+
 /* 4A, 22A: members by day, Left out */
 .hp-members { position: relative; overflow: hidden; margin: 0 0 var(--space-5); }
 .hp-members .table-wrapper { overflow-x: auto; }

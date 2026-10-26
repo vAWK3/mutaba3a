@@ -3942,3 +3942,24 @@ The store contracts and the rule/read-tool tests were written first and watched 
 | `server/src/__tests__/route-security.test.ts`, `writability-routes.test.ts` | pins | session-only surface gains the verdict; `lazyPostingOf` call sites gain one, `unguarded()` stays in middleware.ts; lazy posting on a person-level read is SYSTEM with an identity and refused without one |
 | `src/hosted/local/__tests__/createLocalApp.test.ts` | +1 | signed out the verdict answers with the local profile owned; two reads identical (no posting locally, D10) |
 | `src/hosted/local/__tests__/fx-outside-lock.test.ts` | +1 | a save never waits for a verdict whose FX fetch is stuck (fails without the fix) |
+
+## MUT-448 — Reports Glance (2026-10-26, ADR-205)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `src/hosted/data/__tests__/verdict.test.ts` | 24 | Two rows plus kept and owed (AC1). Five rows in API order, with the hero = the API's kept (AC2). Income-only (R3-5) and empty rows (R3-4). Came in only when non-zero. ≈ only with another currency, plus the shared tag. Unconverted rows stacked, never summed. Links only for readable profiles. Locked/failed rows named and left out. Hero: negative; ≈ + breakdown only when converted; inCurrencyOnly with no rate date; businessNet. Usual: above/below/about on a finished month, hidden while the month runs, on Week, when null, or when nothing was converted (DD1). Owed none and ≈ mixed. Footnote. First run (DD4). Shell picker (D8). All locked (D7). |
+| `src/hosted/data/__tests__/verdictQueries.test.tsx` | 5 | No dates on the default view and a separate key (D4). refetchOnMount always + staleTime 10 s (D9). Not under a profile key. Disabled when all locked. Previous verdict kept, dimmed, while the next period loads. |
+| `src/hosted/pages/__tests__/Glance.test.tsx` | 14 | AC1 rows/hero/owed with no profile header. A row links to the profile's Reports for the period, with amounts in `<bdi>`. Usual hidden while running, shown on a finished month. `back` survives stepping. Negative kept. Income-only and quiet rows named. Nothing owed. First run. All locked → LockedScreen with no request. Late 402 → LockedScreen. Refresh failure keeps figures + Retry (DD6). Error card with no data. Skeleton shape (DD5). Arabic RTL. |
+| `src/hosted/components/reports/__tests__/reportsComponents.test.tsx` | +6 | The ≈ popover's rules, pinned before BreakdownButton was shared (D6). |
+| `src/hosted/format/__tests__/reportFormat.test.ts` | 3 | `formatSigned`: +/− (U+2212), never a sign on zero, Arabic. |
+| `src/hosted/shell/__tests__/HostedShell.test.tsx` | +3 | The icon opens `/reports?back=`, is lit on both report routes, and a second press returns. The shell keeps the back profile, and skips a locked one. |
+| `src/hosted/shell/__tests__/pageMotion.test.ts` | +3 | A Glance row slides forward, Back slides back, and the icon's second press doesn't move. |
+| `src/hosted/data/__tests__/filters.test.ts`, `api/__tests__/client.test.ts`, `analytics/__tests__/reportViewed.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` | +5 | `parseGlance` drops an unsafe `back`. The verdict call carries no profile header. `layer` is glance/profile. Taxonomy 2.3.0 is pinned. |
+| `qa/specs/portal/reports-glance.spec.ts` | 9 | Release-QA: two-profiles, five-profiles, arabic, local-mode, negative-month, row-drilldown, desktop-layout, first-run, owed-zero. `reports.first-run`, `reports.signed-out` and `shell.island` now reach a profile's Reports through the Glance. |
+
+Review fixes (qa-reconcile, 2026-10-26):
+- `verdict.test.ts`: +4 (`outsideProfiles`, `verdictAllLocked`, usual "about" under one unit, ≈ gap).
+- `reportFormat.test.ts`: +1 (`formatReportDay` en and Levantine ar).
+- `Glance.test.tsx`: +5 (an empty past period keeps the controls; a failed period keeps the controls; a staffed firm listed outside the total; staff-only 404 shows its firms; all counted locked → LockedScreen).
+- QA: `portal.reports-glance.staff-firm`.
+

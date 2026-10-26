@@ -44,6 +44,15 @@ describe('request', () => {
     expect(lastCall().headers.has('x-mutaba3a-profile')).toBe(false);
   });
 
+  it('reads the Reports verdict across profiles: no profile header, and no dates unless given (MUT-448 D4)', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, {})));
+    await api.verdict();
+    expect(lastCall().url).toBe('/v1/summaries/verdict');
+    expect(lastCall().headers.has('x-mutaba3a-profile')).toBe(false);
+    await api.verdict({ from: '2026-09-01', to: '2026-09-30' });
+    expect(lastCall().url).toBe('/v1/summaries/verdict?from=2026-09-01&to=2026-09-30');
+  });
+
   it('drops empty query values and encodes the rest', async () => {
     fetchMock.mockResolvedValue(json(200, { items: [], nextCursor: null }));
     await api.receivables('org-1', { status: 'OPEN', customerId: undefined, dueAfter: '', cursor: 'a b&c' });

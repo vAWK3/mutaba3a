@@ -1,5 +1,5 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -105,11 +105,12 @@
     },
     "report_viewed": {
       "emitters": ["portal"],
-      "description": "MUT-175: Reports was opened, or its period or scope changed (debounced 1 s). Never amounts, names or profile ids; signed out never sends.",
+      "description": "MUT-175: Reports was opened, or its period or scope changed (debounced 1 s). MUT-448: also the account-level Glance, told apart by layer. Never amounts, names or profile ids; signed out never sends.",
       "properties": {
+        "layer": { "type": "enum", "values": ["glance", "profile"], "description": "MUT-448: glance = the account-level Reports across every profile (/reports); profile = one profile's Reports (/p/:id/reports)." },
         "period": { "type": "enum", "values": ["week", "month", "year"], "description": "The period shown." },
-        "scope": { "type": "enum", "values": ["profile", "all"], "description": "One profile, or All profiles combined." },
-        "stage": { "type": "enum", "values": ["stage_1", "stage_2", "stage_3"], "description": "How much history the report had: stage_1 = no complete month, stage_2 = one, stage_3 = two or more." }
+        "scope": { "type": "enum", "values": ["profile", "all"], "description": "One profile, or All profiles combined. Sent with layer profile only." },
+        "stage": { "type": "enum", "values": ["stage_1", "stage_2", "stage_3"], "description": "How much history the report had: stage_1 = no complete month, stage_2 = one, stage_3 = two or more. Sent with layer profile only." }
       }
     }
   }

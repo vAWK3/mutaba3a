@@ -1,4 +1,4 @@
-import { isYouPath } from './youRoutes';
+import { isYouPath, sectionOf } from './youRoutes';
 
 /**
  * MUT-426 (eng D6): how a page moves, from the two pathnames alone. Going deeper slides forward, coming back slides
@@ -17,6 +17,8 @@ export interface PageTransitionOption {
 const PROFILE_SEGMENT = 'p';
 /** The shell's profile-less page (no profile yet), which the profile-less You returns to */
 const HOME_PATH = '/';
+/** MUT-448: the account-level Reports, one level above each profile's own Reports */
+const GLANCE_PATH = '/reports';
 const ID_INDEX = 2; // '' / 'p' / ':id' / …
 const REST_INDEX = 3;
 
@@ -53,6 +55,9 @@ export function pageMotionOf(prev: string | undefined, next: string): PageMotion
   if (isYouPath(next)) return isYouPath(prev) ? 'none' : 'island';
   // Back to a shell page; sign-out and setup leave the shell, and never move
   if (isYouPath(prev)) return inProfile(next) || next === HOME_PATH ? 'back' : 'none';
+  // MUT-448 (eng D5): a Glance row opens that profile's Reports, one level in; its Back returns to the Glance
+  if (prev === GLANCE_PATH && sectionOf(next) === 'reports') return 'forward';
+  if (next === GLANCE_PATH && sectionOf(prev) === 'reports') return 'back';
   // Sign-in, setup and the home redirect never move
   if (!inProfile(prev) || !inProfile(next)) return 'none';
   if (profileIdOf(prev) !== profileIdOf(next)) return 'fade';

@@ -337,7 +337,7 @@ function useInsights(lately: Combined, stage: Stage, unit: Unit, today: string, 
 }
 
 /** DR6/DR8: no records yet — one block and the two capture actions this profile allows. */
-function FirstRun({ header, profile, writable }: { header: ReactNode; profile: HostedProfile; writable: boolean }) {
+export function FirstRun({ header, profile, writable }: { header: ReactNode; profile: HostedProfile; writable: boolean }) {
   const { t } = useLanguage();
   const canIncome = writable && profile.access.capture === 'read-write' && profile.income.received;
   const canExpense = writable && profile.access.expenses === 'read-write';
