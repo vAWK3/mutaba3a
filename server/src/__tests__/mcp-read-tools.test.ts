@@ -91,6 +91,9 @@ describe('tools/list (AC3)', () => {
     // No tool is registered, so the SDK has no tools capability to list: nothing is offered either way.
     const listed = await rpc(h, bearer, 'tools/list');
     expect(listed.result?.tools ?? []).toEqual([]);
+    const called = await rpc(h, bearer, 'tools/call', { name: 'list_profiles', arguments: {} });
+    expect(called.error ?? called.result?.isError, JSON.stringify(called)).toBeTruthy();
+    expect(called.result?.structuredContent).toBeUndefined();
   });
 });
 
@@ -143,10 +146,30 @@ describe('list_categories', () => {
 
   it('never seeds a profile’s categories (a read writes nothing) and says how to get them', async () => {
     const { h, p, bearer } = await setup();
-    const before = await h.store.expenseCategories.list(p.personalId, { includeArchived: true });
+    expect(await h.store.expenseCategories.list(p.personalId, { includeArchived: true })).toHaveLength(0);
     const out = await tool(h, bearer, 'list_categories', { profileId: p.personalId });
-    expect(await h.store.expenseCategories.list(p.personalId, { includeArchived: true })).toHaveLength(before.length);
-    if (before.length === 0) expect(out).toMatchObject({ items: [], hint: expect.stringContaining('open it in MTB3A') });
+    expect(await h.store.expenseCategories.list(p.personalId, { includeArchived: true })).toHaveLength(0);
+    expect(out).toMatchObject({ items: [], hint: expect.stringContaining('open it in MTB3A') });
+  });
+});
+
+describe('offset cursors (list_profiles, list_categories)', () => {
+  it('walks a profile’s categories page by page and refuses a cursor no tool issued', async () => {
+    const { h, p, bearer } = await setup();
+    const studio = await business(h, p);
+    const all = (await read(await h.app.request('/v1/expense-categories', { headers: asPerson(p, studio) }))).items as Loose[];
+    expect(all.length).toBeGreaterThan(2);
+    const first = await tool(h, bearer, 'list_categories', { profileId: studio, limit: 2 });
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const rest = await tool(h, bearer, 'list_categories', { profileId: studio, limit: 50, cursor: first.nextCursor });
+    expect(rest.nextCursor).toBeNull();
+    expect([...first.items, ...rest.items].map((c: Loose) => c.id)).toEqual(all.map((c) => c.id));
+    const forged = Buffer.from(JSON.stringify({ o: -1 })).toString('base64url');
+    for (const [name, args] of [['list_categories', { profileId: studio }], ['list_profiles', {}], ['list_inbox', {}]] as const) {
+      expect(await toolError(h, bearer, name, { ...args, cursor: forged }), name).toMatch(/cursor/i);
+      expect(await toolError(h, bearer, name, { ...args, cursor: 'not-a-cursor' }), name).toMatch(/cursor/i);
+    }
   });
 });
 
@@ -154,6 +177,8 @@ describe('list_clients (AC4)', () => {
   it('pages a profile’s clients with a cursor and caps the page size', async () => {
     const { h, p, bearer } = await setup();
     for (const name of ['Amal', 'Bassam', 'Carmel']) expect((await h.app.request('/v1/customers', json({ name }, asPerson(p, p.personalId)))).status).toBe(201);
+    const gone = await read(await h.app.request('/v1/customers', json({ name: 'Dalia (archived)' }, asPerson(p, p.personalId))));
+    expect(await h.store.customers.archive(p.personalId, gone.id, h.now())).not.toBeNull();
 
     const first = await tool(h, bearer, 'list_clients', { profileId: p.personalId, limit: 2 });
     expect(first.items).toHaveLength(2);
@@ -172,6 +197,8 @@ describe('list_vendors', () => {
     await expense(h, p, p.personalId, { amount: '20.00', vendor: 'كارفور' });
     const out = await tool(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'كار' });
     expect(out.items[0]).toMatchObject({ name: 'كارفور' });
+    expect(out.truncated).toBe(false);
+    expect(await tool(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'كار', limit: 1 })).toMatchObject({ truncated: true });
   });
 });
 
@@ -214,6 +241,30 @@ describe('find_similar_expenses (AC2)', () => {
     expect(scoped.items).toEqual([]);
   });
 
+  it('never offers an income inbox entry as a look-alike', async () => {
+    const { h, p, bearer } = await setup();
+    const income = await inbox(h, p, { kind: 'income', amount: '45.90', occurredOn: '2026-10-20' });
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20' });
+    expect(out.items.map((i: Loose) => i.id)).not.toContain(income);
+  });
+
+  it('says when a source had more candidates than it reads, and returns at most 10', async () => {
+    const { h, p, bearer } = await setup();
+    for (let i = 0; i < 201; i++) {
+      await h.store.expenses.create({ organizationId: p.personalId, occurredOn: '2026-10-20', amountMinor: 4590n, currency: 'ILS', vendor: null, title: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vendorId: null } as Loose, h.now());
+    }
+    const out = await tool(h, bearer, 'find_similar_expenses', { amount: '45.90', currency: 'ILS', date: '2026-10-20', profileId: p.personalId });
+    expect(out.truncated).toBe(true);
+    expect(out.items).toHaveLength(10);
+  });
+
+  it('refuses a date that is not a calendar date or is outside the ten-year bounds, naming `date`', async () => {
+    const { h, bearer } = await setup();
+    for (const date of ['2026-02-30', 'yesterday', '2015-01-01', '0099-01-01', '9999-12-31']) {
+      expect(await toolError(h, bearer, 'find_similar_expenses', { amount: '1.00', currency: 'ILS', date }), date).toContain('"field":"date"');
+    }
+  });
+
   it('reads a three-decimal currency in its own digits', async () => {
     const { h, p, bearer } = await setup();
     await expense(h, p, p.personalId, { amount: '12.345', currency: 'JOD' });
@@ -229,7 +280,9 @@ describe('the agent store guard applies inside tools (OV1)', () => {
     const methods = AGENT_STORE_METHODS as Set<string>;
     methods.delete('vendors.search');
     try {
-      expect(await toolError(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'a' })).toContain('PRINCIPAL_NOT_ACCEPTED');
+      // A refusal here is our bug (a tool calling outside the list): Sentry hears it, the agent gets a retry message.
+      expect(await toolError(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'a' })).toContain('MTB3A had a problem');
+      expect(h.exceptions).toEqual([{ error: expect.objectContaining({ code: 'PRINCIPAL_NOT_ACCEPTED' }), context: expect.objectContaining({ route: 'mcp:list_vendors' }) }]);
     } finally {
       methods.add('vendors.search');
     }
@@ -243,5 +296,13 @@ describe('errors', () => {
     const text = await toolError(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'a' });
     expect(text).toContain('MTB3A had a problem');
     expect(text).not.toContain('db-internal');
+    expect(h.exceptions).toEqual([{ error: expect.objectContaining({ message: 'connection to db-internal-7 lost' }), context: expect.objectContaining({ route: 'mcp:list_vendors' }) }]);
+  });
+
+  it('reports a result that drifted from its output schema instead of failing silently', async () => {
+    const { h, p, bearer } = await setup();
+    vi.spyOn(h.store.vendors, 'search').mockResolvedValueOnce([{ vendor: { id: 'v1', canonicalName: 42 }, matchedName: 'x', score: 1, exact: false } as Loose]);
+    expect(await toolError(h, bearer, 'list_vendors', { profileId: p.personalId, q: 'a' })).toContain('MTB3A had a problem');
+    expect(h.exceptions).toEqual([{ error: expect.objectContaining({ message: expect.stringContaining('list_vendors result does not match its output schema') }), context: expect.objectContaining({ route: 'mcp:list_vendors' }) }]);
   });
 });

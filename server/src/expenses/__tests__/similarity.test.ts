@@ -63,6 +63,15 @@ describe('matchScore', () => {
   });
 });
 
+describe('short vendor names', () => {
+  it('counts a one- or two-letter vendor only when it is the same name, never as a prefix', () => {
+    expect(matchScore({ ...probe, vendor: 'A' }, candidate({ vendor: 'Amazon' })).reasons).not.toContain('vendor');
+    expect(matchScore({ ...probe, vendor: 'Carrefour' }, candidate({ vendor: 'Ca' })).reasons).not.toContain('vendor');
+    expect(matchScore({ ...probe, vendor: 'BP' }, candidate({ vendor: 'bp' })).reasons).toContain('vendor');
+    expect(matchScore({ ...probe, vendor: 'Car' }, candidate({ vendor: 'Carrefour' })).reasons).toContain('vendor');
+  });
+});
+
 describe('rankMatches', () => {
   it('keeps only matches, best first: vendor match, then the nearest date', () => {
     const ranked = rankMatches(probe, [

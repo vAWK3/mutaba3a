@@ -28,7 +28,10 @@ export function decodeCursor(encoded: string): PageCursor {
   if (!parsed || typeof parsed !== 'object') throw invalidCursor();
   const { t, id } = parsed as { t?: unknown; id?: unknown };
   if (typeof t !== 'number' || !Number.isFinite(t) || typeof id !== 'string' || !UUID_RE.test(id)) throw invalidCursor();
-  return { createdAt: new Date(t), id };
+  // A finite number can still be outside a Date's range; the store would throw on it as a 500.
+  const createdAt = new Date(t);
+  if (Number.isNaN(createdAt.getTime())) throw invalidCursor();
+  return { createdAt, id };
 }
 
 export function parseLimit(value: number | undefined): number {

@@ -29,7 +29,7 @@ export function mcpRoutes(options: McpRouteOptions): Hono<AppEnv> {
   });
 
   app.post('/mcp', async (c) => {
-    const server = createMcpServer({ agent: c.get('agent'), store: options.guardedStore, reporter: options.reporter, version: options.version });
+    const server = createMcpServer({ agent: c.get('agent'), store: options.guardedStore, reporter: options.reporter, now: c.get('now'), requestId: c.get('requestId'), version: options.version });
     // No sessionIdGenerator: stateless mode, a fresh server per request.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);

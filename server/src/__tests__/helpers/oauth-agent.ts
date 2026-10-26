@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../../app.js';
 import { s256Challenge } from '../../oauth/protocol.js';
-import type { ErrorReporter } from '../../observability/reporter.js';
+import type { ErrorContext, ErrorReporter } from '../../observability/reporter.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { provisionUser } from './provision.js';
@@ -29,14 +29,20 @@ export const MCP_HEADERS = { 'content-type': 'application/json', accept: 'applic
 
 export function recordingReporter() {
   const messages: Array<{ level: string; message: string; tags: Record<string, string> | undefined }> = [];
-  const reporter: ErrorReporter = { enabled: true, captureException: () => undefined, captureMessage: (level, message, tags) => void messages.push({ level, message, tags }), flush: async () => true };
-  return { reporter, messages };
+  const exceptions: Array<{ error: unknown; context: ErrorContext | undefined }> = [];
+  const reporter: ErrorReporter = {
+    enabled: true,
+    captureException: (error, context) => void exceptions.push({ error, context }),
+    captureMessage: (level, message, tags) => void messages.push({ level, message, tags }),
+    flush: async () => true,
+  };
+  return { reporter, messages, exceptions };
 }
 
 export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   let now = T0;
-  const { reporter, messages } = recordingReporter();
+  const { reporter, messages, exceptions } = recordingReporter();
   const fetchMetadata = vi.fn();
   const app = createApp({
     store,
@@ -65,7 +71,7 @@ export function harness(options: { oauth?: boolean; registerLimit?: number; toke
             },
           },
   });
-  return { app, store, messages, fetchMetadata, setNow: (at: Date) => void (now = at), now: () => now };
+  return { app, store, messages, exceptions, fetchMetadata, setNow: (at: Date) => void (now = at), now: () => now };
 }
 export type Harness = ReturnType<typeof harness>;
 

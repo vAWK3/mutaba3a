@@ -29,6 +29,11 @@ describe('cursor pagination', () => {
     }
   });
 
+  it('rejects a cursor whose time is outside what a Date can hold (MUT-435 review)', () => {
+    const forged = Buffer.from(JSON.stringify({ t: 9e15, id }), 'utf8').toString('base64url');
+    expect(() => decodeCursor(forged)).toThrow(ApiError);
+  });
+
   it('parses limit with a default of 50 and a hard cap of 200', () => {
     expect(parseLimit(undefined)).toBe(50);
     expect(parseLimit(1)).toBe(1);

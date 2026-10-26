@@ -15,6 +15,8 @@ export interface McpContext {
   agent: AgentIdentity;
   store: LedgerStore;
   reporter: ErrorReporter;
+  now: () => Date;
+  requestId: string;
 }
 
 export function hasScope(ctx: McpContext, scope: OAuthScope): boolean {
@@ -41,24 +43,38 @@ export function toolResult<T extends Record<string, unknown>>(structuredContent:
   return { structuredContent, content: [{ type: 'text', text: JSON.stringify(structuredContent) }] };
 }
 
+const RETRY_TEXT = 'INTERNAL: MTB3A had a problem answering this. Try again in a moment.';
+
+/** Our own bug, not the agent's: Sentry hears it (tagged with the tool), the agent gets a plain retry message. */
+function internalError(ctx: McpContext, tool: string, err: unknown): CallToolResult {
+  ctx.reporter.captureException(err, { requestId: ctx.requestId, route: `mcp:${tool}` });
+  return { isError: true, content: [{ type: 'text', text: RETRY_TEXT }] };
+}
+
 /**
- * A tool's failure as something the agent can read and act on: an API refusal keeps its code and message; anything
- * unexpected becomes a plain retry message (the internals go to Sentry, never to the agent).
+ * A tool's failure as something the agent can read and act on: an API refusal keeps its code and message. A store
+ * method the agent guard refused (a tool calling outside AGENT_STORE_METHODS) and anything unexpected are our bugs.
  */
-export function toolError(ctx: McpContext, err: unknown): CallToolResult {
-  if (err instanceof ApiError) {
+export function toolError(ctx: McpContext, tool: string, err: unknown): CallToolResult {
+  if (err instanceof ApiError && err.code !== 'PRINCIPAL_NOT_ACCEPTED') {
     const details = err.details ? ` ${JSON.stringify(err.details)}` : '';
     return { isError: true, content: [{ type: 'text', text: `${err.code}: ${err.message}${details}` }] };
   }
-  ctx.reporter.captureException(err);
-  return { isError: true, content: [{ type: 'text', text: 'INTERNAL: MTB3A had a problem answering this. Try again in a moment.' }] };
+  return internalError(ctx, tool, err);
 }
 
-export async function runTool(ctx: McpContext, run: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
+/**
+ * Runs one tool call. The result is checked against the tool's own output schema here, before the SDK checks it again,
+ * so drift between data and schema reaches Sentry instead of only the agent (the SDK reports nothing).
+ */
+export async function runTool(ctx: McpContext, tool: string, output: z.ZodRawShape, run: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
   try {
-    return toolResult(await run());
+    const result = await run();
+    const checked = z.object(output).safeParse(result);
+    if (!checked.success) return internalError(ctx, tool, new Error(`${tool} result does not match its output schema: ${checked.error.message}`));
+    return toolResult(result);
   } catch (err) {
-    return toolError(ctx, err);
+    return toolError(ctx, tool, err);
   }
 }
 

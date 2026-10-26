@@ -1,4 +1,4 @@
-import type { IsoDate } from '../dates.js';
+import { addDays, daysBetween, type IsoDate } from '../dates.js';
 import { FUZZY_SUGGESTION_FLOOR, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
 
 /**
@@ -33,32 +33,26 @@ export interface MatchResult {
   reasons: MatchReason[];
 }
 
-const DAY_MS = 86_400_000;
-
-function dayNumber(date: IsoDate): number {
-  return Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / DAY_MS;
-}
-
-function isoOf(day: number): IsoDate {
-  return new Date(day * DAY_MS).toISOString().slice(0, 10);
-}
-
 /** The inclusive date range a candidate must fall in: the store's `from`/`to` filter for a probe. */
 export function dateWindow(occurredOn: IsoDate): { from: IsoDate; to: IsoDate } {
-  const day = dayNumber(occurredOn);
-  return { from: isoOf(day - MATCH_DATE_WINDOW_DAYS), to: isoOf(day + MATCH_DATE_WINDOW_DAYS) };
+  return { from: addDays(occurredOn, -MATCH_DATE_WINDOW_DAYS), to: addDays(occurredOn, MATCH_DATE_WINDOW_DAYS) };
 }
+
+/** Below this, a prefix or a substring says nothing ("a" starts "amazon"): only the same name counts. */
+export const MIN_VENDOR_KEY_FOR_PARTIAL = 3;
 
 /** Typeahead scoring is one-directional (query prefix of a name); a match reads both ways. */
 function vendorSimilarity(a: string | null | undefined, b: string | null | undefined): number {
   const ka = a ? vendorNameKey(a) : '';
   const kb = b ? vendorNameKey(b) : '';
   if (!ka || !kb) return 0;
+  if (ka === kb) return 1;
+  if (Math.min([...ka].length, [...kb].length) < MIN_VENDOR_KEY_FOR_PARTIAL) return 0;
   return Math.max(scoreVendorName(ka, kb), scoreVendorName(kb, ka));
 }
 
 export function matchScore(probe: MatchProbe, candidate: MatchCandidate): MatchResult {
-  const daysApart = Math.abs(dayNumber(candidate.occurredOn) - dayNumber(probe.occurredOn));
+  const daysApart = Math.abs(daysBetween(probe.occurredOn, candidate.occurredOn));
   const matches = probe.currency === candidate.currency && probe.amountMinor === candidate.amountMinor && daysApart <= MATCH_DATE_WINDOW_DAYS;
   const vendor = vendorSimilarity(probe.vendor, candidate.vendor);
   const reasons: MatchReason[] = ['currency', 'amount', 'date'];

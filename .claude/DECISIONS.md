@@ -5357,7 +5357,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 4. **One same-purchase rule** (`server/src/expenses/similarity.ts`): same currency, same amount, dated within 3 days either side; a similar vendor (`scoreVendorName` both ways ≥ 0.6) ranks first, then the nearer date. A missing vendor never excludes. `find_similar_expenses` uses it across one profile, or every reachable profile plus the inbox; MUT-437 imports it and must not redefine it.
 5. **Reads write nothing.** `list_categories` never seeds the preset (the REST read does); an empty profile answers `[]` with a hint.
 6. **Lists page with opaque cursors, at most 50 a page** (vendors: a typeahead of at most 25; look-alikes: 10, from at most 200 candidate rows per source, flagged `truncated`). Amounts are decimal strings in the currency's own digits (JOD 3).
-7. **Failures:** an API refusal reaches the agent as `CODE: message`; anything unexpected goes to Sentry and the agent gets "MTB3A had a problem…". No REST or OpenAPI change, so `API_VERSION` stays `1.74.0-mut434`.
+7. **Failures:** an API refusal reaches the agent as `CODE: message {details}`; an input that fails a tool's input schema gets the MCP SDK's own `Input validation error: …` text. Our bugs (a store method the agent guard refused, a result that drifted from the tool's output schema, anything unexpected) go to Sentry tagged `mcp:<tool>` and the agent gets "MTB3A had a problem…". No REST or OpenAPI change, so `API_VERSION` stays `1.74.0-mut434`.
 
 **Consequences:**
 - A stored vendor name or note reaches the agent as data. MTB3A never acts on it; the server instructions and tool descriptions keep the person in the loop.

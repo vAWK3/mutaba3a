@@ -77,7 +77,6 @@ export async function connect(page: Page): Promise<string> {
   return exchange(agent, code);
 }
 
-
 /** One JSON-RPC call to /mcp as the agent; the parsed body. */
 export async function mcpCall(accessToken: string, method: string, params: Record<string, unknown> = {}): Promise<{ result?: Record<string, unknown>; error?: unknown }> {
   const res = await fetch(`${liveState().origin}/mcp`, {
