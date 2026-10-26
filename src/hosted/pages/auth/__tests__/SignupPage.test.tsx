@@ -161,7 +161,7 @@ describe('/signup open', () => {
     const view = await showForm(open(), 'fail');
     const message = await screen.findByText(/The check that you're a person couldn't run/);
     expect(within(message).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(within(message).getByRole('link', { name: 'info@malafat.app' })).toHaveAttribute('href', 'mailto:info@malafat.app');
+    expect(within(message).getByRole('link', { name: 'info@mtb3a.com' })).toHaveAttribute('href', 'mailto:info@mtb3a.com');
     await ask(view, 'rana@studio.example');
     expect(view.api.count(SIGNUP)).toBe(0);
   });
