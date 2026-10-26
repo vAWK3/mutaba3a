@@ -171,6 +171,18 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       expect((await store.entries.settledOwedIds([w.b.id], [])).size).toBe(0);
     });
 
+    it('a reversed settle payment no longer settles its Owed (MUT-453 review D3: reversal keeps the allocation rows)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await w.owed(1);
+      const { payment } = await store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: owed.id, amountMinor: 50_000n }] }, at(3));
+      expect((await store.entries.settledOwedIds([w.b.id], [payment.id])).get(payment.id)).toBe(owed.id);
+
+      await store.payments.reverse(w.b.id, payment.id, 'Wrong job', at(4));
+
+      expect((await store.entries.settledOwedIds([w.b.id], [payment.id])).has(payment.id)).toBe(false);
+    });
+
     it('counts READY, live receipts per expense, within the given organizations', async () => {
       const store = await makeStore();
       const w = await world(store);

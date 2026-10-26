@@ -1,3 +1,4 @@
+import { parseAmountInput } from '../../lib/utils';
 import type { HostedProfile, Payment, Receivable, Schemas } from '../api/client';
 
 /**
@@ -90,4 +91,56 @@ export function redateAffordancesFor(profile: HostedProfile, writable = true): {
  */
 export function canRedatePayment(profile: HostedProfile, payment: Payment, userId: string, writable = true): boolean {
   return redateAffordancesFor(profile, writable).payments && payment.origin === 'capture' && payment.status === 'POSTED' && payment.capturedBy?.userId === userId;
+}
+
+/**
+ * MUT-453: corrections stand on `payments` (POST /v1/payments/{id}/reverse and POST /v1/receivables/{id}/credits are
+ * `payments:write`), on a profile the person owns (ADR-066, as every portal write), and only on rows a person recorded:
+ * the server answers 404 to a person for Malafat's own payments and installments (review D5). Unlike re-dating, a
+ * partner's row on a shared profile counts too (D2): the history and the audit say who corrected it.
+ */
+function correctable(profile: HostedProfile, writable: boolean): boolean {
+  return writable && profile.owned && profile.access.payments === 'read-write';
+}
+
+/** Whether a payment offers Reverse payment: one a person recorded, still posted (a reversal is whole and final). */
+export function canReversePayment(profile: HostedProfile, payment: Payment, writable = true): boolean {
+  return correctable(profile, writable) && payment.origin === 'capture' && payment.status === 'POSTED';
+}
+
+/** Whether an Owed entry offers Reduce amount owed and Cancel: one a person recorded with something still left. */
+export function canCreditOwed(profile: HostedProfile, receivable: Receivable, writable = true): boolean {
+  return correctable(profile, writable) && receivable.origin === 'ADJUSTMENT' && !CLOSED_STATUSES.has(receivable.status) && minorOf(receivable.outstanding, receivable) > 0;
+}
+
+/** The reason a person's own Undo records (server CAPTURE_UNDO_REASON): an undone capture is gone, not "reversed". */
+const CAPTURE_UNDO_REASON = 'capture_undo';
+
+/**
+ * MUT-453: whether a payment row opens its drawer: to change its date, to reverse it, or to show its reversal. A
+ * reversed payment a person recorded still opens, read-only, so its reason can be read; one they undid does not.
+ */
+export function canOpenPayment(profile: HostedProfile, payment: Payment, userId: string, writable = true): boolean {
+  return canRedatePayment(profile, payment, userId, writable) || (correctable(profile, writable) && payment.origin === 'capture' && payment.reversalReason !== CAPTURE_UNDO_REASON);
+}
+
+/** MUT-453: whether an Owed row opens its drawer: to change its date, to credit it, or to show its payments and credits. */
+export function canOpenOwed(profile: HostedProfile, receivable: Receivable, userId: string, writable = true): boolean {
+  return canRedateOwed(profile, receivable, userId, writable) || (correctable(profile, writable) && receivable.origin === 'ADJUSTMENT' && receivable.status !== 'VOID');
+}
+
+/** MUT-453: an Owed credited in full with nothing paid reads "Cancelled" (the server keeps it SETTLED). */
+export function isCancelledOwed(receivable: Receivable): boolean {
+  const credited = minorOf(receivable.credited, receivable);
+  return minorOf(receivable.paid, receivable) === 0 && credited > 0 && credited === minorOf(receivable.gross, receivable);
+}
+
+/** MUT-453: whether anything was credited off an entry (its drawer then lists the credits). */
+export function hasCredits(receivable: Receivable): boolean {
+  return minorOf(receivable.credited, receivable) > 0;
+}
+
+/** A decimal amount of the receivable's currency in minor units (0 if unreadable): compared exactly, never as a float. */
+function minorOf(value: string, receivable: Receivable): number {
+  return parseAmountInput(value, { currency: receivable.currency }) ?? 0;
 }

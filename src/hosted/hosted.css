@@ -1210,3 +1210,7 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 @keyframes hp-vt-grow-from-left { from { opacity: 0; transform: scale(0.94) translateX(-24px); } }
 @keyframes hp-vt-fade-in { from { opacity: 0; } }
 @keyframes hp-vt-fade-out { to { opacity: 0; } }
+
+/* MUT-453: Reverse payment / Reduce / Cancel, under an entry's details in its drawer. Wraps at phone width. */
+.hp-correct-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-5); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border); }
+.hp-correct-explain { margin: 0 0 var(--space-4); }

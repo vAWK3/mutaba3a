@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Correct money you recorded: reverse a payment, reduce or cancel what is owed (MUT-453, ADR-206)
+
+**Why:** on a profile a person writes, a wrong amount owed or a payment on the wrong job could not be fixed by its owner (TD-126); it took a one-off production script. Planned and eng-reviewed; Basel's answers D1–D6 (Jira comment 12699). The phone half is MUT-454.
+
+### Added
+- Server: `POST /v1/payments/{id}/reverse` and `POST /v1/receivables/{id}/credits` accept a session or device session (gate `payments:write`, person-recorded rows only; audited USER). API 1.77.0-mut453.
+- `IncomeResponse.reversalReason` and `.credited` (additive) in the entries feed and POST /v1/income.
+- Portal: Reverse payment, Reduce amount owed and Cancel amount owed in the entry drawer (`CorrectionPane`), each with a reason; a reversed payment shows its date and reason; an Owed lists its credits; a fully credited, unpaid entry reads Cancelled.
+- Release-QA: five portal income scenarios (see TEST_PLAN).
+
+### Changed
+- A partner's payment or Owed on a shared profile opens read-only with corrections (re-dating stays per person).
+- Record payment's note: "You can change the date or reverse the payment later."
+- Undo on a credited Owed says "paid or credited".
+
+### Fixed
+- The entries feed no longer links a reversed payment to the Owed it once settled (D3).
+- Undo on a capture a person reversed says "already reversed", not "Malafat reversed" (D6).
+- qa-reconcile (Basel): corrections are **owner-only** (creator or co-owner; else 403 NOT_OWNER); a person's reversal never reopens an entry Malafat posted (404); a person's credit date is bounded like any money they record; the new feed fields are optional; the portal retries a 409 with a new attempt, and Cancel says what is still owed if the entry grew meanwhile.
+
+### Technical
+- `payments.ts` keeps a key-only `keyActorOf` for create/allocate; reverse uses the shared `actorOf`. Docs: ADR-206, TD-126 resolved, COMPONENT_REGISTRY, TEST_PLAN, `.claude/designs/mut-453-owner-corrections.md`.
+
 ## [Unreleased] - 2026-10-26 — Reports Glance: what you kept across your profiles (MUT-448, ADR-205)
 
 **Why:** Reports becomes account-level (epic MUT-446). The quick answer, "am I ahead, and which part pays?", across a person's profiles. It shows MUT-447's verdict as the server sends it. Planned with eng D1–D10 and design DD1–DD11, and Basel approved the copy (`.claude/designs/mut-448-reports-glance.md`).

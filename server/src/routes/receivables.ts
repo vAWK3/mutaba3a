@@ -1,10 +1,11 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { keyAuth, lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { actorOf, lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
-import { pastMoneyDate } from '../income/compose.js';
+import { isOwnProfile, pastMoneyDate } from '../income/compose.js';
+import { notOwner } from '../personal-profile.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
@@ -91,22 +92,32 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/receivables/{receivableId}/credits',
       tags: ['Receivables'],
       summary: 'Credit a posted receivable without changing its posted figures',
-      description: 'Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to.',
-      security: [{ apiKey: [] }],
+      description: 'Append-only. outstanding = gross − paid − credited; the credit’s VAT share is split at the receivable’s frozen rate and treatment. A credit beyond the outstanding is refused with 422 CREDIT_EXCEEDS_OUTSTANDING (what was paid is not refunded by a credit). This is the explicit adjustment the supplement safeguard, a waived-but-posted retainer month and the archive guard point to. MUT-453: a session or device session may credit on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only an amount owed a person recorded (origin ADJUSTMENT); any other is 404. A person’s effectiveDate is not after today nor more than ten years back (422 DATE_INVALID).',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.credit')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(CreditRequestSchema) },
       responses: { 201: { description: 'Credited', content: { 'application/json': { schema: CreditResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = keyAuth(c);
+      const { organization } = c.get('auth');
+      const actor = actorOf(c);
+      // MUT-453 (D1, owner-only, qa-reconcile): as reverse; checked before any lookup.
+      if (actor.actorType === 'USER') {
+        const { user, membershipRole } = sessionAuth(c);
+        if (!isOwnProfile(organization, user.id, membershipRole)) throw notOwner();
+      }
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      if (!receivable) throw new ApiError('NOT_FOUND', 'No such receivable');
+      // MUT-453 (review D5): a person credits only what a person recorded; a disconnected Malafat firm's installments and
+      // retainer charges stay Malafat's (the same rule settle keeps below).
+      if (!receivable || (actor.actorType === 'USER' && receivable.origin !== 'ADJUSTMENT')) throw new ApiError('NOT_FOUND', 'No such receivable');
       const currency = receivable.currency as Currency;
       const amountMinor = parseAmount(body.amount, currency);
-      const effectiveDate = body.effectiveDate ? assertIsoDate(body.effectiveDate, 'effectiveDate') : today;
+      // MUT-453 (review fix): a person's credit is dated like any money they record (not after today, ten-year floor,
+      // ADR-086); Malafat's key keeps its own dating.
+      const effectiveDate = !body.effectiveDate ? today : actor.actorType === 'USER' ? pastMoneyDate(body.effectiveDate, today, 'effectiveDate') : assertIsoDate(body.effectiveDate, 'effectiveDate');
       const check = checkCredit({ amountMinor, outstandingMinor: outstandingMinor(receivable), status: receivable.status });
       if (!check.ok) {
         throw validationError(check.reason, check.reason === 'CREDIT_EXCEEDS_OUTSTANDING' ? 'The credit exceeds what is outstanding on this receivable' : check.reason === 'RECEIVABLE_NOT_OPEN' ? 'Nothing is outstanding on this receivable' : 'amount must be positive', {
@@ -122,7 +133,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         throw err;
       }
       if (!result) throw new ApiError('NOT_FOUND', 'No such receivable');
-      await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
+      await store.audit.append({ organizationId: organization.id, ...actor, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
       return c.json({ receivable: serializeReceivable(result.receivable, today), credit: serializeCredit(result.credit, currency) }, 201);
     },
   );

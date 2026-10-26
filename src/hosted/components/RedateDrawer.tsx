@@ -5,12 +5,13 @@ import { BrandLoader } from '../../components/brand/BrandLoader';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
 import { ApiError, type HostedProfile, type Payment, type Receivable } from '../api/client';
-import { canRedateOwed, canRedatePayment } from '../data/incomeAffordances';
-import { usePayment, usePaymentsForEntry, useReceivable, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
+import { canCreditOwed, canOpenOwed, canOpenPayment, canRedateOwed, canRedatePayment, canReversePayment, hasCredits } from '../data/incomeAffordances';
+import { usePayment, usePaymentsForEntry, useReceivable, useReceivableCredits, useRedateOwed, useRedatePayment } from '../data/incomeQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
-import { formatDay, moneyDateCeiling, moneyDateFloor, owedDefaultDueDate, todayInZone } from '../format/dates';
+import { formatDay, formatInstant, moneyDateCeiling, moneyDateFloor, owedDefaultDueDate, todayInZone } from '../format/dates';
 import { profileKey } from '../session/me';
+import { CorrectionPane, type CorrectionMode } from './CorrectionPane';
 import { Drawer } from './Drawer';
 import { mapRedateError } from './incomeApiErrors';
 import { Empty, Unreachable } from './QueryView';
@@ -29,6 +30,10 @@ import { useToast } from './Toast';
  *
  * A record the server would refuse (undone, someone else's, Malafat's) shows "no longer available" instead of a form,
  * whether a stale link opened it or it changed while open: GET still answers 200 there, only the PATCH says 404.
+ *
+ * MUT-453: the same drawer is where money is corrected. A payment a person recorded offers Reverse payment, an Owed
+ * entry with something left Reduce amount owed and Cancel (CorrectionPane). A partner's row on a shared profile opens
+ * too, with its date read-only, and a reversed payment or a credited entry opens to show what happened to it.
  */
 
 export type RedateKind = 'owed' | 'payment';
@@ -82,14 +87,21 @@ export function RedateDrawer({ kind, profile, id, userId, onClose, onOpenPayment
       </Drawer>
     );
   }
-  const editable = kind === 'owed' ? canRedateOwed(profile, loaded.data as Receivable, userId) : canRedatePayment(profile, loaded.data as Payment, userId);
-  if (!editable) return goneDrawer;
+  const record = loaded.data;
+  const opens = kind === 'owed' ? canOpenOwed(profile, record as Receivable, userId) : canOpenPayment(profile, record as Payment, userId);
+  if (!opens) return goneDrawer;
+  const dateEditable = kind === 'owed' ? canRedateOwed(profile, record as Receivable, userId) : canRedatePayment(profile, record as Payment, userId);
+  const corrections: CorrectionMode[] =
+    kind === 'owed' ? (canCreditOwed(profile, record as Receivable) ? ['reduce', 'cancel'] : []) : canReversePayment(profile, record as Payment) ? ['reverse'] : [];
   return (
     <RedateForm
       kind={kind}
       profile={profile}
-      record={loaded.data}
-      title={title}
+      record={record}
+      title={dateEditable ? title : t(kind === 'owed' ? 'hosted.correct.owedTitle' : 'hosted.correct.paymentTitle')}
+      dateEditable={dateEditable}
+      corrections={corrections}
+      onReread={() => void loaded.refetch()}
       onClose={onClose}
       onOpenPayment={onOpenPayment}
       onSeePayments={onSeePayments}
@@ -100,13 +112,18 @@ export function RedateDrawer({ kind, profile, id, userId, onClose, onOpenPayment
 interface RedateFormProps extends Omit<RedateDrawerProps, 'id' | 'userId'> {
   record: Receivable | Payment;
   title: string;
+  /** MUT-453: false on a row someone else recorded, or a reversed payment: the date is shown, not editable. */
+  dateEditable: boolean;
+  /** MUT-453: the corrections this row offers, in order. */
+  corrections: CorrectionMode[];
+  onReread: () => void;
 }
 
 function dateOf(kind: RedateKind, record: Receivable | Payment): string {
   return kind === 'owed' ? (record as Receivable).postingDate : (record as Payment).receivedOn;
 }
 
-function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSeePayments }: RedateFormProps) {
+function RedateForm({ kind, profile, record, title, dateEditable, corrections, onReread, onClose, onOpenPayment, onSeePayments }: RedateFormProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const queryClient = useQueryClient();
@@ -124,6 +141,7 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
   const [seen, setSeen] = useState({ version: record.version, date: loadedDate });
   const [refillOnReread, setRefillOnReread] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<CorrectionMode | null>(null);
   // A new version refills the date after a 409's re-read, or when nothing was typed; a background refetch never
   // replaces what the person typed (it then saves at the new version). Adjusted during render, not in an effect.
   if (record.version !== seen.version) {
@@ -181,25 +199,47 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
     ? [client ?? '—', matter ?? '—', money(amount)]
     : [t('hosted.redate.number', { number: isolate(pay!.number) }), client ?? '—', money(amount)];
 
+  if (correcting) {
+    return <CorrectionPane mode={correcting} profile={profile} record={record} onBack={() => setCorrecting(null)} onDone={onClose} onReread={onReread} />;
+  }
+
   return (
     <Drawer
       title={title}
       onClose={onClose}
       closeLabel={t('common.close')}
       footer={
-        <div className="drawer-footer-right">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" form={FORM_ID} disabled={saving}>
-            {saving ? t('common.saving') : t('common.save')}
-          </Button>
-        </div>
+        dateEditable ? (
+          <div className="drawer-footer-right">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" form={FORM_ID} disabled={saving}>
+              {saving ? t('common.saving') : t('common.save')}
+            </Button>
+          </div>
+        ) : (
+          <div className="drawer-footer-right">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              {t('common.close')}
+            </Button>
+          </div>
+        )
       }
     >
       <form id={FORM_ID} onSubmit={onSubmit} noValidate>
         <p className="hp-settle-context">{context.join(' · ')}</p>
-        <div className="form-group">
+        {pay?.status === 'REVERSED' && (
+          <p className="hp-settle-note">
+            {t('hosted.correct.reversedLine', { date: formatInstant(pay.reversedAt, language, profile.timezone), reason: pay.reversalReason ?? '—' })}
+          </p>
+        )}
+        {!dateEditable && (
+          <p className="hp-settle-note">
+            {t(kind === 'owed' ? 'hosted.redate.date' : 'hosted.redate.receivedOn')}: {formatDay(loadedDate, language)}
+          </p>
+        )}
+        <div className="form-group" hidden={!dateEditable}>
           <label className="form-label" htmlFor="hosted-redate-date">
             {t(kind === 'owed' ? 'hosted.redate.date' : 'hosted.redate.receivedOn')}
           </label>
@@ -218,9 +258,19 @@ function RedateForm({ kind, profile, record, title, onClose, onOpenPayment, onSe
           />
           {dateError && <p className="form-error">{dateError}</p>}
         </div>
-        {receivable && <DueNote dueDate={receivable.dueDate} date={date} />}
+        {receivable && dateEditable && <DueNote dueDate={receivable.dueDate} date={date} />}
         {receivable && PAID_STATUSES.has(receivable.status) && (
           <EntryPayments profile={profile} receivable={receivable} onOpenPayment={onOpenPayment} onSeePayments={onSeePayments} />
+        )}
+        {receivable && hasCredits(receivable) && <EntryCredits profile={profile} receivable={receivable} />}
+        {corrections.length > 0 && (
+          <section className="hp-correct-actions" aria-label={t('hosted.correct.actions')}>
+            {corrections.map((mode) => (
+              <Button key={mode} type="button" variant="secondary" size="sm" onClick={() => setCorrecting(mode)}>
+                {t(`hosted.correct.${mode}`)}
+              </Button>
+            ))}
+          </section>
         )}
       </form>
     </Drawer>
@@ -274,6 +324,27 @@ function EntryPayments({
           {t('hosted.redate.seePayments')}
         </Button>
       )}
+    </section>
+  );
+}
+
+/** MUT-453: what was credited off an Owed entry (reduced or cancelled), newest first, with the reason given. */
+function EntryCredits({ profile, receivable }: { profile: HostedProfile; receivable: Receivable }) {
+  const { t, language } = useLanguage();
+  const credits = useReceivableCredits(profile.id, receivable.id, true);
+  if (!credits.data || credits.data.credits.length === 0) return null;
+  return (
+    <section className="hp-redate-payments" aria-labelledby="hosted-entry-credits">
+      <h3 id="hosted-entry-credits" className="form-label">
+        {t('hosted.correct.credits')}
+      </h3>
+      <ul className="hp-redate-payment-list">
+        {credits.data.credits.map((c) => (
+          <li key={c.id} className="hp-settle-note">
+            {t('hosted.correct.creditLine', { date: formatDay(c.effectiveDate, language), amount: isolateAmount(formatDecimal(c.amount, receivable.currency, language)), reason: c.reason })}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

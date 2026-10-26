@@ -311,7 +311,8 @@
         "OVERDUE": "Overdue",
         "PARTIALLY_PAID": "Partly paid",
         "PAID": "Paid",
-        "VOID": "Void"
+        "VOID": "Void",
+        "CANCELLED": "Cancelled"
       },
       "customer": {
         "SETTLED": "Settled",
@@ -656,7 +657,7 @@
       "paidInFull": "Paid in full",
       "stillOwed": "{amount} still owed",
       "exceeds": "Exceeds what's left ({amount})",
-      "honest": "You can fix the date later; the amount can’t be changed yet.",
+      "honest": "You can change the date or reverse the payment later.",
       "nothingLeft": "Nothing left to pay on this entry",
       "nothingLeftBody": "It was paid or removed since this page loaded.",
       "saved": "Payment recorded · {amount} from {client}",
@@ -1710,6 +1711,42 @@
         "body": "Connecting Claude isn’t turned on for your account yet. Ask MTB3A support to turn it on, then try again.",
         "back": "Back to {name}"
       }
+    },
+    "correct": {
+      "reverse": "Reverse payment",
+      "reduce": "Reduce amount owed",
+      "cancel": "Cancel amount owed",
+      "reverseTitle": "Reverse payment {number}",
+      "reduceTitle": "Reduce amount owed",
+      "cancelTitle": "Cancel amount owed",
+      "reverseExplain": "The payment stays in the history as reversed. Whatever it paid is owed again.",
+      "cancelExplain": "Everything still owed ({amount}) is cancelled. What was paid stays paid.",
+      "amount": "Reduce by ({currency})",
+      "left": "{amount} left after this",
+      "reason": "Reason",
+      "reasonHint": "Shown in the history, e.g. “Applied to the wrong job”.",
+      "reasonRequired": "Say why, so the history makes sense later.",
+      "confirmReverse": "Reverse payment",
+      "confirmReduce": "Reduce",
+      "confirmCancel": "Cancel amount owed",
+      "back": "Back",
+      "working": "Saving…",
+      "reversed": "Payment reversed · {amount}",
+      "reduced": "Amount owed reduced by {amount}",
+      "cancelled": "Amount owed cancelled",
+      "reversedLine": "Reversed on {date} · {reason}",
+      "credits": "Credits",
+      "creditLine": "{date} · {amount} · {reason}",
+      "errors": {
+        "exceedsNow": "That’s more than what’s left now ({outstanding})",
+        "nothingLeft": "Nothing is left on this entry any more.",
+        "alreadyReversed": "This payment was already reversed. Showing the latest.",
+        "changed": "This changed while you were saving. Showing the latest."
+      },
+      "owedTitle": "Amount owed",
+      "paymentTitle": "Payment",
+      "actions": "Correct this entry",
+      "cancelledPart": "Cancelled {amount}; {left} is still owed, because it changed while you were cancelling."
     }
   }
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { ApiError } from './errors.js';
 import type { VerdictProfileKind } from './summaries/verdict.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore, MembershipRole, Organization, OwnedProfileAudit, ProfileType, ProfileTypeChange, UpdateOwnedProfileAudit, UserLocale } from './repositories/ports.js';
 
@@ -41,6 +42,11 @@ export function canCoOwn(organization: Pick<Organization, 'ownerUserId' | 'perso
  */
 export function ownsProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>, userId: string, role: MembershipRole | null): boolean {
   return profileOwnerOf(organization) === userId || (role === 'OWNER' && canCoOwn(organization));
+}
+
+/** What a person is told when `ownsProfile` says no: profile edits (MUT-182/183), and correcting money (MUT-453 D1). */
+export function notOwner(): ApiError {
+  return new ApiError('READ_ONLY_PROFILE', 'Only the person who owns a profile can change it; this one was set up for you by your account administrator', { reason: 'NOT_OWNER' });
 }
 
 /**

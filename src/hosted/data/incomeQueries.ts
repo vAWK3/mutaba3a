@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CreateIncomeRequest, type Payment, type SettleReceivableRequest } from '../api/client';
+import { api, type CreateIncomeRequest, type CreditRequest, type Payment, type SettleReceivableRequest } from '../api/client';
 import { profileKey } from '../session/me';
 
 /**
@@ -11,7 +11,7 @@ import { profileKey } from '../session/me';
  */
 
 function invalidateIncome(queryClient: ReturnType<typeof useQueryClient>, profileId: string) {
-  for (const key of ['receivables', 'payments', 'receivable', 'payment', 'paymentsForEntry', 'summary'] as const) {
+  for (const key of ['receivables', 'payments', 'receivable', 'payment', 'paymentsForEntry', 'credits', 'summary'] as const) {
     void queryClient.invalidateQueries({ queryKey: profileKey(profileId, key) });
   }
 }
@@ -57,6 +57,35 @@ export function usePaymentsForEntry(profileId: string, customerId: string, recei
       return { payments, complete: page.nextCursor === null };
     },
     enabled,
+  });
+}
+
+/** MUT-453: what was credited off an Owed entry, newest first (its drawer's history). */
+export function useReceivableCredits(profileId: string, receivableId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: profileKey(profileId, 'credits', receivableId),
+    queryFn: () => api.receivableCredits(profileId, receivableId),
+    enabled,
+  });
+}
+
+/** MUT-453: reverse a payment a person recorded; the Owed it paid reopens, so every income figure refetches. */
+export function useReversePayment(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ paymentId, reason, idempotencyKey }: { paymentId: string; reason: string; idempotencyKey: string }) =>
+      api.reversePayment(profileId, paymentId, { reason }, idempotencyKey),
+    onSuccess: () => invalidateIncome(queryClient, profileId),
+  });
+}
+
+/** MUT-453: reduce or cancel what is owed (a credit); Cancel is a credit of everything left. */
+export function useCreditReceivable(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ receivableId, body, idempotencyKey }: { receivableId: string; body: CreditRequest; idempotencyKey: string }) =>
+      api.creditReceivable(profileId, receivableId, body, idempotencyKey),
+    onSuccess: () => invalidateIncome(queryClient, profileId),
   });
 }
 

@@ -8,7 +8,7 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type ReceivableFilters, type ReceivablesPageSearch, type ReceivableStatusFilter } from '../../data/filters';
-import { canRedateOwed, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
+import { canOpenOwed, incomeAffordancesFor, isCancelledOwed, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
@@ -51,9 +51,11 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     gross: r.gross,
     paid: r.paid,
     outstanding: r.outstanding,
-    status: r.status,
+    // MUT-453: credited in full with nothing paid reads Cancelled, not Paid.
+    status: isCancelledOwed(r) ? 'CANCELLED' : r.status,
     settleable: isSettleable(r),
-    redatable: canRedateOwed(profile, r, userId, writable),
+    // MUT-453: opens to change its date, to correct it, or to show its payments and credits.
+    redatable: canOpenOwed(profile, r, userId, writable),
   }));
 }
 

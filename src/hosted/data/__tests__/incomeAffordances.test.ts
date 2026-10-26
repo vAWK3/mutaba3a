@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { HostedProfile, Payment, Receivable } from '../../api/client';
 import { profile } from '../../__tests__/harness';
 import { payment, receivable } from '../../pages/__tests__/fixtures';
-import { canAddClient, canRedateOwed, canRedatePayment, incomeAffordancesFor, isSettleable, redateAffordancesFor } from '../incomeAffordances';
+import { canAddClient, canCreditOwed, canOpenOwed, canOpenPayment, canRedateOwed, canRedatePayment, canReversePayment, incomeAffordancesFor, isSettleable, isCancelledOwed, redateAffordancesFor } from '../incomeAffordances';
 
 const PERSONAL_RULES = { received: true, owed: true, customer: 'optional' } as const;
 const MALAFAT_RULES = { received: true, owed: false, customer: 'linked-required' } as const;
@@ -138,5 +138,53 @@ describe('the lapse gate (MUT-361)', () => {
     expect(redateAffordancesFor(owned, false)).toEqual({ owed: false, payments: false });
     expect(canAddClient(owned, false)).toBe(false);
     expect(canAddClient(owned, true)).toBe(true);
+  });
+});
+
+describe('corrections (MUT-453)', () => {
+  const ME = 'user-me';
+  const recorded = (over: Partial<Payment> = {}): Payment => ({ ...payment('p1', 'PAY-2026-0001'), origin: 'capture', status: 'POSTED', capturedBy: { userId: 'partner', displayName: 'Partner' }, ...over });
+  const owed = (over: Partial<Receivable> = {}): Receivable => ({ ...receivable('r1', 'c1', 'p1', '100.00', 'DUE'), origin: 'ADJUSTMENT', capturedByUserId: 'partner', ...over });
+  const malafat = profile({ writerOfRecord: 'MALAFAT', isPersonalDefault: false, owned: false, access: { payments: 'read', capture: 'read-write' }, income: { ...MALAFAT_RULES } });
+  const firm = personal({ isPersonalDefault: false, owned: false, type: null });
+
+  it('reverses any payment a person recorded on an owned profile, a partner’s included; never twice', () => {
+    expect(canReversePayment(personal(), recorded())).toBe(true);
+    expect(canReversePayment(personal(), recorded({ status: 'REVERSED' }))).toBe(false);
+    expect(canReversePayment(personal(), recorded({ origin: 'integration' }))).toBe(false);
+  });
+
+  it('credits an Owed a person recorded while something is left', () => {
+    expect(canCreditOwed(personal(), owed())).toBe(true);
+    expect(canCreditOwed(personal(), owed({ status: 'PARTIALLY_PAID', outstanding: '40.00' }))).toBe(true);
+    expect(canCreditOwed(personal(), owed({ status: 'PAID', outstanding: '0.00' }))).toBe(false);
+    expect(canCreditOwed(personal(), owed({ status: 'VOID' }))).toBe(false);
+    expect(canCreditOwed(personal(), owed({ origin: 'INSTALLMENT' }))).toBe(false);
+  });
+
+  it('offers neither on a Malafat-fed profile, a firm nobody owns (ADR-066), without payments access, or when lapsed', () => {
+    for (const p of [malafat, firm, personal({ access: { ...PERSONAL_ACCESS, payments: 'read' } })]) {
+      expect(canReversePayment(p, recorded())).toBe(false);
+      expect(canCreditOwed(p, owed())).toBe(false);
+    }
+    expect(canReversePayment(personal(), recorded(), false)).toBe(false);
+    expect(canCreditOwed(personal(), owed(), false)).toBe(false);
+  });
+
+  it('opens a payment or an Owed when its date can change, it can be corrected, or to show what happened to it', () => {
+    expect(canOpenPayment(personal(), recorded(), ME)).toBe(true);
+    expect(canOpenPayment(personal(), recorded({ status: 'REVERSED', reversalReason: 'Wrong job' }), ME)).toBe(true);
+    expect(canOpenPayment(personal(), recorded({ status: 'REVERSED', reversalReason: 'capture_undo' }), ME)).toBe(false);
+    expect(canOpenPayment(personal(), recorded({ origin: 'integration' }), ME)).toBe(false);
+    expect(canOpenPayment(malafat, recorded(), ME)).toBe(false);
+    expect(canOpenOwed(personal(), owed({ status: 'PAID', outstanding: '0.00' }), ME)).toBe(true);
+    expect(canOpenOwed(personal(), owed({ status: 'VOID' }), ME)).toBe(false);
+    expect(canOpenOwed(personal(), owed({ origin: 'INSTALLMENT' }), ME)).toBe(false);
+  });
+
+  it('reads Cancelled when everything was credited and nothing paid', () => {
+    expect(isCancelledOwed(owed({ status: 'PAID', paid: '0.00', credited: '1170.00', gross: '1170.00', outstanding: '0.00' }))).toBe(true);
+    expect(isCancelledOwed(owed({ status: 'PAID', paid: '170.00', credited: '1000.00', gross: '1170.00', outstanding: '0.00' }))).toBe(false);
+    expect(isCancelledOwed(owed({ credited: '100.00' }))).toBe(false);
   });
 });

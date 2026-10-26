@@ -138,6 +138,9 @@ describe('the lapse gate on a profile (MUT-361)', () => {
       expect(body.error.details).toMatchObject({ profileId: p.personalId, state: 'READ_ONLY' });
       expect((await h.app.request('/v1/income', json({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-05' }, { ...p.on(), ...idem() }))).status).toBe(402);
       expect((await h.app.request('/v1/conversions', json({ fromAmount: '10.00', fromCurrency: 'USD', toAmount: '36.00', toCurrency: 'ILS', occurredOn: '2026-10-05' }, { ...p.on(), ...idem() }))).status).toBe(402);
+      // MUT-453: a person's reverse and credit are writes like any other.
+      expect((await h.app.request(`/v1/payments/${randomUUID()}/reverse`, json({ reason: 'Typo' }, { ...p.on(), ...idem() }))).status).toBe(402);
+      expect((await h.app.request(`/v1/receivables/${randomUUID()}/credits`, json({ amount: '1.00', reason: 'Typo' }, { ...p.on(), ...idem() }))).status).toBe(402);
     });
   }
 
