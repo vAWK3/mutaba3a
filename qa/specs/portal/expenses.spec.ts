@@ -187,7 +187,7 @@ test('Edit an expense: attach a receipt, download and remove it, and save a chan
   });
 });
 
-test('Delete an expense after confirming, and a stale edit is refused with a message', { tag: '@portal.expenses.delete' }, async ({ page, step }) => {
+test('Delete an expense after confirming in place, and a stale edit is refused with a message', { tag: '@portal.expenses.delete' }, async ({ page, step }) => {
   const lunch = expense(1, { amount: '80.00', title: 'Client lunch', categoryId: travel.id });
   const parking = expense(2, { amount: '15.00', title: 'Parking', categoryId: travel.id, occurredOn: '2026-10-02' });
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [travel], expenses: [lunch, parking] });
@@ -208,11 +208,30 @@ test('Delete an expense after confirming, and a stale edit is refused with a mes
     await expect(drawer).toBeVisible();
   });
 
-  await step('Delete it, confirming the browser prompt', async () => {
-    page.once('dialog', (dialog) => void dialog.accept());
+  // MUT-417: the footer turns into a confirm in place; the browser's own prompt never appears.
+  let browserPrompts = 0;
+  page.on('dialog', (dialog) => {
+    browserPrompts += 1;
+    void dialog.dismiss();
+  });
+  const confirm = drawer.getByRole('group', { name: /^Delete “Client lunch” \(.*80\.00\)\? This can't be undone\.$/ });
+
+  await step('Choose Delete, then Cancel: the footer asked in place, naming the lunch, and nothing is deleted', async () => {
     await drawer.getByRole('button', { name: 'Delete' }).click();
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: 'Delete' })).toBeFocused();
+    expect(api.calls('DELETE', /^\/v1\/expenses\//)).toHaveLength(0);
+  });
+
+  await step('Choose Delete and confirm it', async () => {
+    await drawer.getByRole('button', { name: 'Delete' }).click();
+    await confirm.getByRole('button', { name: 'Delete' }).click();
     await expect(drawer).toHaveCount(0);
     expect(api.calls('DELETE', new RegExp(`^/v1/expenses/${lunch.id}$`))).toHaveLength(1);
+    expect(browserPrompts).toBe(0);
   });
 
   await step('Only Parking is left', async () => {

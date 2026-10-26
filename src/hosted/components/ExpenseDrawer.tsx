@@ -3,11 +3,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
+import type { Language } from '../../lib/i18n/types';
 import { expenseKey, useCreateExpense, useDeleteExpense, useExpense, useUpdateExpense } from '../data/expenseQueries';
 import { useToast } from './Toast';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { ReceiptUploader } from './ReceiptUploader';
 import { Drawer, ReadOnlyFields } from './Drawer';
+import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
+import { formatDecimal } from '../format/DecimalAmount';
 import { applyExpenseApiError } from './expenseApiErrors';
 import { useAttemptKey } from '../data/attemptKey';
 import { ApiError, type CreateExpenseRequest, type Expense, type UpdateExpenseRequest } from '../api/client';
@@ -47,7 +50,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const showToast = useToast();
   const queryClient = useQueryClient();
 
@@ -114,14 +117,17 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     }
   };
 
+  // DESIGN.md › Destructive confirm (MUT-417): the footer turns into a confirm naming the expense, never window.confirm.
+  const { open: confirmingDelete, ask: askDelete, cancel: cancelDelete, close: closeDelete, triggerRef: deleteTriggerRef } = useConfirmStep();
+  const deleteMessage = existingExpense ? expenseDeleteMessage(existingExpense, language, t) : '';
   const handleDelete = async () => {
     if (!existingExpense) return;
-    if (!confirm(t('common.delete'))) return;
     try {
       await deleteMutation.mutateAsync(existingExpense.id);
       if (onDeleted) onDeleted(existingExpense.id);
       else onClose();
     } catch (error) {
+      closeDelete();
       applyExpenseApiError(error, setError, errorLabels, showToast);
     }
   };
@@ -146,10 +152,20 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       closeLabel={t('common.close')}
       readOnly={readOnly}
       footer={
+        confirmingDelete ? (
+          <InPlaceConfirm
+            message={deleteMessage}
+            cancelLabel={t('common.cancel')}
+            confirmLabel={t('common.delete')}
+            busy={deleteMutation.isPending}
+            onCancel={cancelDelete}
+            onConfirm={() => void handleDelete()}
+          />
+        ) : (
         <>
           <div className="drawer-footer-left">
             {mode === 'edit' && (
-              <Button type="button" variant="danger" onClick={handleDelete} disabled={deleteMutation.isPending}>
+              <Button ref={deleteTriggerRef} type="button" variant="danger" onClick={askDelete}>
                 {t('common.delete')}
               </Button>
             )}
@@ -163,6 +179,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
             </Button>
           </div>
         </>
+        )
       }
     >
       {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
@@ -180,6 +197,13 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {mode === 'edit' && existingExpense && <InGroupsLine profileId={profileId} expense={existingExpense} readOnly={readOnly} />}
     </Drawer>
   );
+}
+
+/** The delete confirm's sentence: the expense's title (else its vendor) and its amount as the list shows it. */
+function expenseDeleteMessage(expense: Expense, language: Language, t: ReturnType<typeof useLanguage>['t']): string {
+  const amount = formatDecimal(expense.amount, expense.currency, language);
+  const name = expense.title?.trim() || expense.vendor?.trim();
+  return name ? t('hosted.expenses.drawer.deleteConfirmNamed', { name, amount }) : t('hosted.expenses.drawer.deleteConfirm', { amount });
 }
 
 function valuesOf(expense: Expense): HostedExpenseFormValues {

@@ -40,7 +40,8 @@ One colour, one meaning:
 - Text on a lavender ground is `lavenderInk`, never purple (5.52:1).
 - Rose means an error or money going the wrong way. On Reports (MUT-448, `.hp-glance-*`) "below your usual" and a negative business net are rose ink, always with words and the minus sign so colour never carries the meaning alone.
 - Don't use mint for a warning or butter for an error.
-- Peach is the phone's Malafat role. On the web it currently marks a group member's "kept" pill (`.hp-kept`) only; don't add other uses without deciding the role first.
+- Peach is the phone's Malafat role and has no role on the web, so the portal doesn't use it. A group member's "kept" pill (`.hp-kept`) is the neutral badge pair (`--badge-neutral-bg` / `--badge-neutral-text`): it states a fact about the row and isn't a warning.
+- Lavender means Personal on the phone, so a shared profile is never marked with a lavender pill. On Reports the shared cue is plain caption text (`.hp-glance-shared`: `--text-label`, `--muted`), as on the phone.
 
 Status chips use `Badge` (`src/components/ui/Badge.tsx`, `.badge-paid` / `-unpaid` / `-overdue` / `-neutral` / `-success` / `-warning` / `-error` / `-info` / `-accent`), or a portal chip class that pairs one ground with its own ink (`.hp-receipt-chip-*`, `.hp-group-chip-*`).
 
@@ -86,6 +87,7 @@ Spacing is `--space-*` (N × 4px, from the token file's one scale, MUT-165); rad
   - `.hp-banner-ok`.
   The drawer's profile forms use `ProfileBanner` (`src/hosted/components/ProfileBanner.tsx`). Elsewhere the markup is inline (`ChangePasswordDrawer.tsx`, `PasskeysDrawer.tsx`).
 - It holds what went wrong with the whole submit ("current password is wrong", "unreachable") and stays until the next submit or until it's resolved. It is never a toast. A field's own error goes under the field (`form-group`). The one placed exception is a step-up prompt that belongs with its action: Passkeys' password field sits above the footer (MUT-115 DR6).
+- **Different from the phone, on purpose:** the phone's banner sits just above its pinned primary action, because the keyboard lifts that action into view. A portal drawer's footer sits outside the scrolling body, so its banner goes at the top of the body, where it is read first. Both are announced (`role="alert"`). Decided 2026-10-27 (MUT-417).
 - **Page notices:** one-time or dismissible notes at the top of `<main>` reuse the same classes: `UsagePrompt`, `FirmOnBanner`, `PasskeySuggestion`. The trial is one quiet line (`.hp-trial-line`), not a box (MUT-426 D4).
 
 ### Toasts
@@ -99,17 +101,14 @@ Spacing is `--space-*` (N × 4px, from the token file's one scale, MUT-165); rad
 
 ### Destructive confirm
 
-- **In place, never `window.confirm`** (MUT-115 DR7). The control that deletes turns its row or section into a confirm state. The state has a sentence that names the thing and the consequence, with numbers when there are any ("3 expenses will become uncategorized"), then Cancel (`Button variant="secondary"`, focused) and the action (`Button variant="danger"`). Escape cancels the confirm before it can close the drawer. Cancelling returns focus to the control that opened it.
+- **In place, never `window.confirm`** (MUT-115 DR7). Use `InPlaceConfirm` with `useConfirmStep` (`src/hosted/components/InPlaceConfirm.tsx`), which already implements the rules below. The control that deletes turns its row or section into a confirm state. The state has a sentence that names the thing and the consequence, with numbers when there are any ("3 expenses will become uncategorized"), then Cancel (`Button variant="secondary"`, focused) and the action (`Button variant="danger"`). Escape cancels the confirm before it can close the drawer. Cancelling returns focus to the control that opened it.
 - **Recipes:**
+  - in a drawer footer: the footer's Delete turns the whole footer into `InPlaceConfirm` (`ExpenseDrawer.tsx`, `ConversionDrawer.tsx`);
   - in a row: `.hp-passkey-confirm`, a `role="group"` labelled by its sentence (`PasskeysDrawer.tsx`, `PasskeyRow`);
   - in a section: `.hp-confirm`, an `h3` plus a body (`GroupDrawer.tsx`, `ProfileOwnersSection.tsx`, `ProfileEditForm.tsx`'s type change);
   - in a pane: `CorrectionPane.tsx` (a reason is required and the danger button submits).
 - **Blocking dialog:** `BlockingDialog` (`src/components/ui/BlockingDialog.tsx`) is only for something that must be answered before anything else (terms that changed mid-session, MUT-346). It isn't a confirm.
-- **Still on `window.confirm`** (follow-ups, out of scope here):
-  - `src/hosted/components/ExpenseDrawer.tsx:119`: Delete asks `confirm(t('common.delete'))`, a bare "Delete".
-  - `src/hosted/components/ConversionDrawer.tsx:140`: Delete asks `hosted.conversions.drawer.deleteConfirm`.
-
-  Both should become the in-place recipe above, from the footer's Delete.
+- The portal has no `window.confirm` left (MUT-417 moved the expense and conversion deletes in place). Don't add one.
 
 ### List rows
 

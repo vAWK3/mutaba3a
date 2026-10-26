@@ -7,6 +7,7 @@ import { useLanguage } from '../../lib/i18n/core';
 import { conversionKey, useConversion, useCreateConversion, useDeleteConversion, useUpdateConversion } from '../data/conversionQueries';
 import { useSavedFlashStore } from '../../lib/savedFlashStore';
 import { useToast } from './Toast';
+import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { Drawer, ReadOnlyFields } from './Drawer';
 import { Empty, Unreachable } from './QueryView';
 import { applyConversionApiError } from './conversionApiErrors';
@@ -132,17 +133,23 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
     }
   };
 
+  // D7: name both legs, formatted as the list shows them (DecimalAmount's formatter), and say it is permanent. The footer
+  // turns into that confirm in place (DESIGN.md › Destructive confirm, MUT-417), never window.confirm.
+  const { open: confirmingDelete, ask: askDelete, cancel: cancelDelete, close: closeDelete, triggerRef: deleteTriggerRef } = useConfirmStep();
+  const deleteMessage = existing
+    ? t('hosted.conversions.drawer.deleteConfirm', {
+        from: formatDecimal(existing.amount, existing.currency, language),
+        to: formatDecimal(existing.toAmount, existing.toCurrency, language),
+      })
+    : '';
   const handleDelete = async () => {
     if (!existing) return;
-    // D7: name both legs, formatted as the list shows them (DecimalAmount's formatter), and say it is permanent.
-    const from = formatDecimal(existing.amount, existing.currency, language);
-    const to = formatDecimal(existing.toAmount, existing.toCurrency, language);
-    if (!confirm(t('hosted.conversions.drawer.deleteConfirm', { from, to }))) return;
     try {
       await deleteMutation.mutateAsync(existing.id);
       if (onDeleted) onDeleted(existing.id);
       else onClose();
     } catch (error) {
+      closeDelete();
       applyConversionApiError(error, setError, errorLabels, showToast);
     }
   };
@@ -190,10 +197,20 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
       closeLabel={t('common.close')}
       readOnly={readOnly}
       footer={
+        confirmingDelete ? (
+          <InPlaceConfirm
+            message={deleteMessage}
+            cancelLabel={t('common.cancel')}
+            confirmLabel={t('common.delete')}
+            busy={deleteMutation.isPending}
+            onCancel={cancelDelete}
+            onConfirm={() => void handleDelete()}
+          />
+        ) : (
         <>
           <div className="drawer-footer-left">
             {editing && (
-              <Button type="button" variant="danger" onClick={handleDelete} disabled={deleteMutation.isPending}>
+              <Button ref={deleteTriggerRef} type="button" variant="danger" onClick={askDelete}>
                 {t('common.delete')}
               </Button>
             )}
@@ -207,6 +224,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
             </Button>
           </div>
         </>
+        )
       }
     >
       <ReadOnlyFields readOnly={readOnly}>

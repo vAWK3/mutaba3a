@@ -3978,3 +3978,12 @@ Review fixes (qa-reconcile, 2026-10-26):
 - `Glance.test.tsx`: +5 (an empty past period keeps the controls; a failed period keeps the controls; a staffed firm listed outside the total; staff-only 404 shows its firms; all counted locked → LockedScreen).
 - QA: `portal.reports-glance.staff-firm`.
 
+## MUT-417 follow-ups — in-place delete confirms, shared and kept colours (2026-10-27)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `src/hosted/components/__tests__/InPlaceConfirm.test.tsx` | 5 | A group named by its sentence, Cancel focused, danger action. Confirm and Cancel callbacks. Escape cancels and never reaches a document listener. Busy disables the action only. `useConfirmStep` returns focus to the trigger. |
+| `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` | +2 | No `window.confirm`: the footer becomes a confirm naming the title and amount, and its Delete removes the expense. No title → the vendor is named; Escape cancels and keeps the drawer open. |
+| `src/hosted/components/__tests__/ConversionDrawer.test.tsx` | 3 changed | The confirm names both legs (en and ar); Cancel and Escape send nothing and return focus to Delete. |
+| `src/hosted/pages/__tests__/afterSave.test.tsx`, `ConversionsList.test.tsx` | 3 changed | The deletes go through the in-place confirm. |
+| `qa/specs/portal/expenses.spec.ts`, `conversions.spec.ts` | 2 changed | Release-QA `@portal.expenses.delete`, `@portal.conversions.delete`: Cancel then Delete in place, and no browser prompt ever appears. |

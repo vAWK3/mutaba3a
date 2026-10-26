@@ -61,14 +61,17 @@ features:
       - Download hands the signed link to the browser as a download; Delete removes it
       - PATCH carries If-Match 1 and the new title, which the list shows
   - id: delete
-    title: Delete an expense after confirming; a refused stale save keeps the drawer open with a message
+    title: Delete an expense after confirming in place; a refused stale save keeps the drawer open with a message (MUT-417)
+    paths:
+      - src/hosted/components/InPlaceConfirm.tsx
     tier: secondary
     steps:
       - Open an expense and save a change the server refuses as stale
-      - Delete it and confirm the prompt
+      - Choose Delete, then Cancel; choose Delete again and confirm
     expect:
       - '"This expense changed elsewhere" is shown and the drawer stays open'
-      - DELETE is sent, the drawer closes and the row is gone
+      - The footer turns into a confirm naming the expense ("Delete “Client lunch” (…80.00)? This can't be undone."), Cancel focused, no browser prompt; Cancel sends nothing and focus returns to Delete
+      - Confirming sends DELETE, the drawer closes and the row is gone
   - id: saved-show
     title: An expense saved outside the current filter is announced with Show, which starts the list at it; a gone anchor drops itself (MUT-91)
     tier: secondary

@@ -542,7 +542,9 @@
           "deleteFailed": "تعذّر حذف الإيصال. حاول مجدداً.",
           "badName": "لا يمكن استخدام اسم هذا الملف. غيّر اسمه (بلا شرطات مائلة، و200 حرف على الأكثر) وحاول مجددًا."
         },
-        "addedByClaude": "أضافها {claude}"
+        "addedByClaude": "أضافها {claude}",
+        "deleteConfirm": "حذف هذا المصروف ({amount})؟ لا يمكن التراجع عن ذلك.",
+        "deleteConfirmNamed": "حذف «{name}» ({amount})؟ لا يمكن التراجع عن ذلك."
       },
       "errors": {
         "categoryArchived": "هذه الفئة لم تعد متاحة — اختر فئة أخرى",
