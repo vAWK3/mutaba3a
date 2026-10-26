@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../Toast';
@@ -594,3 +594,64 @@ function renderDrawerUnmountable() {
     </QueryClientProvider>,
   );
 }
+
+describe('ExpenseDrawer delete confirm (DESIGN.md › Destructive confirm, MUT-417)', () => {
+  function expenseRoutes(expense: Record<string, unknown>, deletes: string[]) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(String(input), 'http://portal.test');
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (method === 'GET' && url.pathname === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+      if (method === 'GET' && (url.pathname === '/v1/customers' || url.pathname === '/v1/projects')) return ok(EMPTY_DIRECTORY);
+      if (method === 'GET' && url.pathname === '/v1/expenses/e1') {
+        return ok({
+          id: 'e1', occurredOn: '2026-09-01', amount: '99.99', currency: 'ILS', title: 'Hosting', vendor: 'ACME',
+          categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', version: 3,
+          createdAt: '', updatedAt: '', receipts: [], ...expense,
+        });
+      }
+      if (method === 'DELETE' && url.pathname === '/v1/expenses/e1') {
+        deletes.push(url.pathname);
+        return new Response(null, { status: 204 });
+      }
+      return fail(404, 'NOT_FOUND');
+    });
+  }
+
+  it('never calls window.confirm: Delete turns the footer into a confirm naming the expense, and its Delete removes it', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmSpy);
+    const deletes: string[] = [];
+    expenseRoutes({}, deletes);
+    const onDeleted = vi.fn();
+    renderDrawer({ mode: 'edit', expenseId: 'e1', onDeleted });
+    await screen.findByDisplayValue('ACME');
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const group = screen.getByRole('group', { name: /^Delete “Hosting” \(.*99\.99\)\? This can't be undone\.$/ });
+    expect(within(group).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(deletes).toEqual([]);
+
+    await user.click(within(group).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('e1'));
+    expect(deletes).toEqual(['/v1/expenses/e1']);
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it('names the vendor when there is no title, and Escape cancels without closing the drawer', async () => {
+    const user = userEvent.setup();
+    const deletes: string[] = [];
+    expenseRoutes({ title: null }, deletes);
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1' });
+    await screen.findByDisplayValue('ACME');
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('group', { name: /^Delete “ACME”/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('group', { name: /^Delete “ACME”/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(deletes).toEqual([]);
+  });
+});

@@ -117,7 +117,6 @@ describe('ConversionsList', () => {
 
   it('deleting the anchored conversion drops the anchor and closes the drawer', async () => {
     const ID = 'c0000000-0000-4000-8000-000000000002';
-    vi.stubGlobal('confirm', vi.fn(() => true));
     let deleted = false;
     const { user, router, api } = portal(`/p/${ORG_A}/conversions?anchor=${ID}&conversion=${ID}`, {
       'GET /v1/conversions': () => ok(page(deleted ? [] : [conversion({ id: ID })])),
@@ -130,6 +129,8 @@ describe('ConversionsList', () => {
     await screen.findByText('Edit conversion', { selector: '.drawer-title' });
     await waitFor(() => expect((screen.getByLabelText('From amount') as HTMLInputElement).value).toBe('100.00'));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
+    // MUT-417: the footer turns into an in-place confirm; its own Delete removes the record.
+    await user.click(within(screen.getByRole('group', { name: /^Delete / })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(locationOf(router)).not.toContain('anchor='));
     expect(locationOf(router)).not.toContain('conversion=');
     expect(api.count(`DELETE /v1/conversions/${ID}`)).toBe(1);

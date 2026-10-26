@@ -116,37 +116,44 @@ test('Edit a conversion: a change made elsewhere first is loaded into the drawer
   });
 });
 
-test('Delete a conversion: the prompt names both legs, Cancel keeps it, OK removes it, and its old link says it is gone', { tag: '@portal.conversions.delete' }, async ({ page, step }) => {
+test('Delete a conversion: the in-place confirm names both legs, Cancel keeps it, Delete removes it, and its old link says it is gone', { tag: '@portal.conversions.delete' }, async ({ page, step }) => {
   const rent = conversion(1, { amount: '1000.00', currency: 'USD', toAmount: '3700.00', toCurrency: 'ILS', notes: 'Rent transfer' });
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], conversions: [rent] });
   const drawer = page.getByRole('dialog', { name: 'Edit conversion' });
-  let prompt = '';
 
   await step('Open the rent transfer', async () => {
     await api.open(page, `/p/${OFFICE_A}/conversions?conversion=${rent.id}`);
     await expect(drawer.getByLabel('From amount')).toHaveValue('1000.00');
   });
 
-  await step('Delete, then Cancel the prompt: nothing is deleted', async () => {
-    page.once('dialog', (dialog) => {
-      prompt = dialog.message();
-      void dialog.dismiss();
-    });
+  // MUT-417: the footer turns into a confirm in place; the browser's own prompt never appears.
+  let browserPrompts = 0;
+  page.on('dialog', (dialog) => {
+    browserPrompts += 1;
+    void dialog.dismiss();
+  });
+  const confirm = drawer.getByRole('group', { name: /^Delete this conversion \(/ });
+
+  await step('Choose Delete, then Cancel: the confirm names both legs, and nothing is deleted', async () => {
     await drawer.getByRole('button', { name: 'Delete' }).click();
-    await expect.poll(() => prompt).toContain('Delete this conversion');
-    expect(prompt).toContain('$1,000.00');
-    expect(prompt).toContain('3,700.00');
-    expect(prompt).toContain("This can't be undone.");
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText('$1,000.00');
+    await expect(confirm).toContainText('3,700.00');
+    await expect(confirm).toContainText("This can't be undone.");
+    await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toHaveCount(0);
     await expect(drawer).toBeVisible();
     expect(api.calls('DELETE', /^\/v1\/conversions\//)).toHaveLength(0);
   });
 
-  await step('Delete, and OK the prompt', async () => {
-    page.once('dialog', (dialog) => void dialog.accept());
+  await step('Choose Delete and confirm it', async () => {
     await drawer.getByRole('button', { name: 'Delete' }).click();
+    await confirm.getByRole('button', { name: 'Delete' }).click();
     await expect(drawer).toHaveCount(0);
     expect(api.calls('DELETE', new RegExp(`^/v1/conversions/${rent.id}$`))).toHaveLength(1);
     await expect(page.getByRole('heading', { name: 'No conversions logged on this profile yet' })).toBeVisible();
+    expect(browserPrompts).toBe(0);
   });
 
   await step('Open its old link: the drawer says it no longer exists', async () => {

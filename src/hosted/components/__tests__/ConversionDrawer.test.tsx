@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HostedLanguageProvider } from '../../i18n/HostedLanguageProvider';
@@ -306,7 +306,7 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.ifMatch)).toEqual(['3', '4']);
   });
 
-  it('Delete confirms naming both legs and that it can\'t be undone, then DELETEs and reports the id (D7)', async () => {
+  it('Delete turns the footer into a confirm naming both legs, then DELETEs and reports the id (D7, MUT-417)', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.fn(() => true);
     vi.stubGlobal('confirm', confirmSpy);
@@ -315,20 +315,28 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
     const { onClose } = renderDrawer({ mode: 'edit', conversionId: ID, onDeleted });
     await waitFor(() => expect(fields().fromAmount.value).toBe('100.00'));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const confirmGroup = screen.getByRole('group', { name: "Delete this conversion ($100.00 → ₪365.00)? This can't be undone." });
+    expect(within(confirmGroup).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    await user.click(within(confirmGroup).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(ID));
-    expect(confirmSpy).toHaveBeenCalledWith("Delete this conversion ($100.00 → ₪365.00)? This can't be undone.");
+    expect(confirmSpy).not.toHaveBeenCalled();
     expect(calls.some((c) => c.method === 'DELETE' && c.path === `/v1/conversions/${ID}`)).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('a cancelled confirm sends nothing and keeps the drawer open', async () => {
+  it('Cancel (or Escape) in the confirm sends nothing, keeps the drawer open and returns focus to Delete', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal('confirm', vi.fn(() => false));
     const calls = server();
     const onDeleted = vi.fn();
     const { onClose } = renderDrawer({ mode: 'edit', conversionId: ID, onDeleted });
     await waitFor(() => expect(fields().fromAmount.value).toBe('100.00'));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus());
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('group', { name: /Delete this conversion/ })).not.toBeInTheDocument();
     expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
     expect(onDeleted).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
@@ -352,15 +360,11 @@ describe('ConversionDrawer (hosted) edit mode (MUT-194)', () => {
   it('shows the Arabic edit title and delete confirm (AC9)', async () => {
     const user = userEvent.setup();
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
-    const confirmSpy = vi.fn(() => false);
-    vi.stubGlobal('confirm', confirmSpy);
     server();
     renderDrawer({ mode: 'edit', conversionId: ID });
     expect(await screen.findByText('تعديل التحويل')).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'حذف' }));
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    const message = (confirmSpy.mock.calls[0] as unknown as [string])[0];
-    expect(message).toContain('حذف هذا التحويل');
+    const message = screen.getByRole('group', { name: /حذف هذا التحويل/ }).textContent ?? '';
     expect(message).toContain('100.00');
     expect(message).toContain('365.00');
   });

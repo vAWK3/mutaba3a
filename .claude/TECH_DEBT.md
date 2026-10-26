@@ -19,7 +19,7 @@
 ## Open Debt
 
 ### TD-265: Two portal deletes still ask with `window.confirm`
-**Status**: Open
+**Status**: Resolved 2026-10-27 (`InPlaceConfirm`, MUT-417 follow-ups)
 **Ticket**: MUT-417 (follow-up)
 **Added**: 2026-10-27
 **Priority**: Low

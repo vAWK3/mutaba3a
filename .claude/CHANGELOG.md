@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-417 follow-ups: deletes confirm in place; shared and kept colours match the phone
+
+**Why:** writing DESIGN.md turned up two deletes still on `window.confirm` (TD-265), and two colours that mean something else on the phone. Basel chose the fixes on 2026-10-27.
+
+### Changed
+- `ExpenseDrawer` and `ConversionDrawer`: Delete turns the footer into an in-place confirm, never `window.confirm`. The expense one now names the expense (its title, else its vendor) and its amount; the conversion keeps its two-leg sentence. New strings `hosted.expenses.drawer.deleteConfirm` / `deleteConfirmNamed` (en, ar).
+- Reports: the "Shared" cue on a profile row is plain caption text, not a lavender pill (lavender means Personal on the phone).
+- Groups: a member's "kept" pill uses the neutral badge colours instead of peach (peach means Malafat on the phone).
+- DESIGN.md: records the above, and records that the banner sits at the top of a drawer on purpose (the phone puts it above the action).
+
+### Added
+- `InPlaceConfirm` / `useConfirmStep` (`src/hosted/components/InPlaceConfirm.tsx`).
+
+### Fixed
+- TD-265 resolved.
+
 ## [Unreleased] - 2026-10-27 — DESIGN.md for the portal (MUT-417)
 
 **Why:** the phone app has a DESIGN.md that says which component to use for what; the portal had none, so every design review worked the rules out again from the code (MUT-115 pinned a component map by hand, DR10).

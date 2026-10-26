@@ -538,7 +538,9 @@
           "deleteFailed": "Couldn't remove the receipt. Try again.",
           "badName": "This file's name can't be used. Rename it (no slashes, at most 200 characters) and try again."
         },
-        "addedByClaude": "Added by {claude}"
+        "addedByClaude": "Added by {claude}",
+        "deleteConfirm": "Delete this expense ({amount})? This can't be undone.",
+        "deleteConfirmNamed": "Delete “{name}” ({amount})? This can't be undone."
       },
       "errors": {
         "categoryArchived": "This category is no longer available — pick another",

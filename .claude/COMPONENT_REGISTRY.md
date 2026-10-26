@@ -2171,6 +2171,9 @@ Tests: `src/lib/motion/__tests__/rowEnter.test.ts`.
 ### useMediaQuery / usePrefersReducedMotion — `src/lib/motion/mediaQuery.ts`
 **Purpose**: a media query as state via `useSyncExternalStore` (false without `matchMedia`). Moved from `src/hooks` so the portal can use it; `src/hooks/usePrefersReducedMotion.ts` re-exports.
 
+### InPlaceConfirm / useConfirmStep — `src/hosted/components/InPlaceConfirm.tsx` (new, MUT-417)
+DESIGN.md's destructive confirm as one component: `InPlaceConfirm({ message, cancelLabel, confirmLabel, busy, onCancel, onConfirm })` is a `role="group"` named by its sentence, Cancel focused on mount, the action `variant="danger"` (`isLoading` while busy), and Escape cancels without reaching the drawer's document listener. `useConfirmStep()` gives `{ open, ask, cancel, close, triggerRef }`: put `triggerRef` on the Delete that opens it, and `cancel` returns focus there. Used in place of the drawer footer by `ExpenseDrawer` and `ConversionDrawer`. CSS `hp-confirm-inline`, `hp-confirm-actions`. Older hand-rolled copies (`GroupDrawer`, `ProfileOwnersSection`, `PasskeyRow`) predate it. Tests: `components/__tests__/InPlaceConfirm.test.tsx`.
+
 ### Toast action — `src/hosted/components/Toast.tsx`
 `show(message, { tone, action: { label, onAction } })`: a `.press` link-button in either tone; using it closes the toast; hover/focus holds the 6 s timer.
 

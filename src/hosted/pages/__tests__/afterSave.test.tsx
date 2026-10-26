@@ -131,7 +131,6 @@ describe('portal expenses: after save', () => {
   });
 
   it('a delete neither tints nor raises a notice', async () => {
-    vi.stubGlobal('confirm', () => true);
     let deleted = false;
     const { user } = portal(`/p/${ORG_A}/expenses`, {
       'GET /v1/expenses': () => ok(page(deleted ? [] : [expense()])),
@@ -143,6 +142,8 @@ describe('portal expenses: after save', () => {
     });
     await user.click(await rowWith('Office supplies'));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    // MUT-417: the footer turns into an in-place confirm; its own Delete removes the record.
+    await user.click(within(screen.getByRole('group', { name: /^Delete / })).getByRole('button', { name: 'Delete' }));
     await screen.findByText('No expenses recorded on this profile yet');
     await new Promise((resolve) => setTimeout(resolve, BACKSTOP_MS + 100)); // past the backstop
     expect(useSavedFlashStore.getState().pending).toBeNull();
@@ -251,7 +252,6 @@ describe('portal expenses: an anchored list', () => {
   });
 
   it('deleting the record the list is anchored on drops the anchor instead of a 404 dead end', async () => {
-    vi.stubGlobal('confirm', () => true);
     let deleted = false;
     const { user, router } = portal(`/p/${ORG_A}/expenses?anchor=${E2}`, {
       'GET /v1/expenses': (req) => {
@@ -268,6 +268,8 @@ describe('portal expenses: an anchored list', () => {
     });
     await user.click(await rowWith('Printer ink'));
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    // MUT-417: the footer turns into an in-place confirm; its own Delete removes the record.
+    await user.click(within(screen.getByRole('group', { name: /^Delete / })).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(locationOf(router)).not.toContain('anchor'));
     expect(await screen.findByText('Office supplies')).toBeInTheDocument();
     expect(screen.queryByText('Showing from a saved entry')).not.toBeInTheDocument();

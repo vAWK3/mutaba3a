@@ -717,6 +717,10 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 .hp-confirm h3:focus { outline: none; }
 .hp-confirm p { margin: 0 0 var(--space-2); }
 .hp-confirm-count { font-weight: var(--weight-medium); }
+/* MUT-417: InPlaceConfirm. In a drawer footer it takes the whole row; its buttons wrap under the sentence at 375 px. */
+.hp-confirm-inline { padding: var(--space-3); }
+.drawer-footer > .hp-confirm-inline { flex: 1; min-width: 0; }
+.hp-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 
 /* Design review Issue 1: the Manage list. */
 .hp-profiles { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -949,7 +953,8 @@ a.hp-glance-row:hover { background: var(--surface-2); }
 a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-glance-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); flex: 1; min-width: 0; }
 .hp-glance-kind { font-size: var(--text-label); color: var(--muted); }
-.hp-glance-shared { padding: 0 var(--space-2); border-radius: var(--m-radius-pill); background: var(--m-lavender); color: var(--m-lavender-ink); font-size: var(--text-label); }
+/* MUT-417: a plain caption, as on the phone. Lavender means Personal there, so the shared cue is never a lavender pill. */
+.hp-glance-shared { font-size: var(--text-label); color: var(--muted); }
 .hp-glance-figures { display: grid; justify-items: end; gap: var(--space-1); }
 .hp-glance-amount { display: inline-flex; gap: var(--space-2); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hp-glance-extra, .hp-glance-nothing { font-size: var(--text-label); color: var(--muted); white-space: nowrap; }
@@ -977,7 +982,8 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-member-sub { display: block; font-size: var(--text-label); color: var(--muted); }
 .hp-member-out .hp-member-title { color: var(--muted); }
 .hp-member-action { text-align: end; width: 1%; white-space: nowrap; }
-.hp-kept { margin-inline-start: var(--space-2); font-size: var(--text-micro); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--m-peach); color: var(--m-peach-ink); }
+/* MUT-417: a fact about the row, so the neutral badge pair. Peach is Malafat's colour on the phone. */
+.hp-kept { margin-inline-start: var(--space-2); font-size: var(--text-micro); padding: 0 var(--space-2); border-radius: var(--radius-pill); background: var(--badge-neutral-bg); color: var(--badge-neutral-text); }
 .hp-member-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: var(--text-label); }
 .hp-filter-pill { border: 0; border-radius: var(--radius-pill); padding: var(--space-0-5) var(--space-2-5); background: var(--m-lavender); color: var(--m-lavender-ink); font: inherit; cursor: pointer; }
 .hp-filter-pill:focus-visible { outline: none; box-shadow: var(--focus-ring); }
