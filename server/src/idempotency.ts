@@ -31,28 +31,39 @@ function requireKey(c: Context<AppEnv>, operation: string): string {
   return key;
 }
 
-interface ClaimOps {
+export interface ClaimOps {
   claim(args: { key: string; operation: string; fingerprint: string; at: Date }): Promise<IdempotencyClaim | UserIdempotencyClaim>;
   complete(args: { key: string; responseStatus: number; responseBody: unknown; at: Date }): Promise<void>;
   fail(args: { key: string; at: Date }): Promise<void>;
 }
 
-/**
- * The claim/next()/complete-or-fail flow every idempotent write follows,
- * regardless of what it's partitioned by (organization or user, MUT-131).
- * [ops] already closes over that partition key.
- */
-async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string, claimKey: string, ops: ClaimOps) {
-  const now = c.get('now')();
-  const body = await c.req.raw.clone().text();
-  const fingerprint = requestFingerprint(c.req.method, c.req.path, body);
+/** What one idempotent attempt produced: an HTTP-style status and the body a replay returns. */
+export interface IdempotentOutcome {
+  status: number;
+  body: unknown;
+}
 
-  let claim = await ops.claim({ key: claimKey, operation, fingerprint, at: now });
-  if (claim.kind === 'mismatch') {
-    // A key stored before MUT-199 carries the byte fingerprint; a byte-identical replay of it must still replay.
-    // Comparing is all a claim does to an existing key, so the second call has no other effect.
-    const legacy = byteFingerprint(c.req.method, c.req.path, body);
-    if (legacy !== fingerprint) claim = await ops.claim({ key: claimKey, operation, fingerprint: legacy, at: now });
+/**
+ * The claim → run → complete-or-fail state machine, free of any framework (MUT-436, review R4/OV4): the Hono
+ * middlewares below and the MCP write tools both run it. `fingerprints` are tried in order, the first being the
+ * current one; a later one only matches a key stored under it (the pre-MUT-199 byte fingerprint).
+ *   new         → run; a 5xx or a 429 releases the key (nothing was done), any other status is stored and replays
+ *   replay      → the stored outcome, `replayed: true`
+ *   mismatch    → 422 IDEMPOTENCY_KEY_REUSED
+ *   in_progress → 409 OPERATION_IN_PROGRESS
+ * A thrown error releases the key and rethrows: callers that want a refusal stored return it as an outcome instead.
+ */
+export async function runIdempotent(
+  ops: ClaimOps,
+  input: { key: string; operation: string; fingerprints: readonly [string, ...string[]]; now: Date; completedAt?: () => Date },
+  run: () => Promise<IdempotentOutcome>,
+): Promise<IdempotentOutcome & { replayed: boolean }> {
+  const { key, operation, now } = input;
+  let claim = await ops.claim({ key, operation, fingerprint: input.fingerprints[0], at: now });
+  // Comparing is all a claim does to an existing key, so a later fingerprint has no other effect.
+  for (const fingerprint of input.fingerprints.slice(1)) {
+    if (claim.kind !== 'mismatch' || fingerprint === input.fingerprints[0]) break;
+    claim = await ops.claim({ key, operation, fingerprint, at: now });
   }
 
   switch (claim.kind) {
@@ -61,34 +72,57 @@ async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string
     case 'in_progress':
       throw new ApiError('OPERATION_IN_PROGRESS', 'A request with this Idempotency-Key is still being processed');
     case 'replay':
-      c.header('Idempotent-Replayed', 'true');
-      return c.json(claim.record.responseBody as object, (claim.record.responseStatus ?? 200) as 200);
+      return { status: claim.record.responseStatus ?? 200, body: claim.record.responseBody, replayed: true };
     case 'new':
       break;
   }
 
+  let outcome: IdempotentOutcome;
   try {
-    await next();
+    outcome = await run();
   } catch (err) {
-    await ops.fail({ key: claimKey, at: now });
+    await ops.fail({ key, at: now });
     throw err;
   }
-
-  const res = c.res;
   // A 5xx or a 429 means nothing was done: release the key so the same request can be sent again with it (MUT-255
   // review). Every other answer, 4xx included, is the request's final one and replays as such.
-  if (res.status >= 500 || res.status === 429) {
-    await ops.fail({ key: claimKey, at: now });
-    return;
+  if (outcome.status >= 500 || outcome.status === 429) {
+    await ops.fail({ key, at: now });
+  } else {
+    await ops.complete({ key, responseStatus: outcome.status, responseBody: outcome.body, at: (input.completedAt ?? (() => now))() });
   }
-  const text = await res.clone().text();
-  let parsed: unknown = null;
-  try {
-    parsed = text ? JSON.parse(text) : null;
-  } catch {
-    parsed = null;
+  return { ...outcome, replayed: false };
+}
+
+/**
+ * The claim/next()/complete-or-fail flow every idempotent write follows,
+ * regardless of what it's partitioned by (organization or user, MUT-131).
+ * [ops] already closes over that partition key.
+ */
+async function withIdempotency(c: Context<AppEnv>, next: Next, operation: string, claimKey: string, ops: ClaimOps) {
+  const body = await c.req.raw.clone().text();
+  const fingerprint = requestFingerprint(c.req.method, c.req.path, body);
+  // A key stored before MUT-199 carries the byte fingerprint; a byte-identical replay of it must still replay.
+  const legacy = byteFingerprint(c.req.method, c.req.path, body);
+
+  const outcome = await runIdempotent(ops, { key: claimKey, operation, fingerprints: [fingerprint, legacy], now: c.get('now')(), completedAt: () => c.get('now')() }, async () => {
+    await next();
+    const res = c.res;
+    if (res.status >= 500 || res.status === 429) return { status: res.status, body: null };
+    const text = await res.clone().text();
+    let parsed: unknown = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      parsed = null;
+    }
+    return { status: res.status, body: parsed };
+  });
+  if (outcome.replayed) {
+    c.header('Idempotent-Replayed', 'true');
+    return c.json(outcome.body as object, outcome.status as 200);
   }
-  await ops.complete({ key: claimKey, responseStatus: res.status, responseBody: parsed, at: c.get('now')() });
+  return undefined;
 }
 
 /**
