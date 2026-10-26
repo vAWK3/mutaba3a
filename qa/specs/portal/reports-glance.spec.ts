@@ -80,6 +80,11 @@ test('Five profiles read as five rows, and the kept figure is the server’s', {
     await expect(rows(page).nth(3)).toHaveAccessibleName('Barmajiyat, net −₪3,100');
     await expect(page.getByRole('region', { name: 'Kept' }).locator('.sr-only')).toHaveText('₪4,480');
   });
+
+  await step('A business with no expenses reads "income only", never as profit (AC3)', async () => {
+    await expect(rows(page).nth(1)).toHaveAccessibleName('Sader Law, income only +₪4,200');
+    await expect(rows(page).nth(1).locator('.hp-glance-kind')).toHaveText('income only');
+  });
 });
 
 test('In Arabic on a phone, the Glance reads right to left', { tag: '@portal.reports-glance.arabic' }, async ({ page, step }) => {
@@ -173,6 +178,14 @@ test('On a desktop the Glance is one centred column with a hint toward each prof
     await openGlance(page, api);
   });
 
+  await step('With reduced motion the kept figure shows its final value at once, no count-up (AC5)', async () => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.reload();
+    await expect(rows(page)).toHaveCount(2);
+    // Read at once: with motion the figure would still be counting up (0.6 s)
+    expect(await page.locator('.hp-glance-figure .hp-countup').textContent()).toBe('₪2,690');
+  });
+
   await step('The ledger is at most 560px wide and centred, the hint under it', async () => {
     const box = (await page.locator('.hp-glance').boundingBox())!;
     const main = (await page.getByRole('main').boundingBox())!;
@@ -197,7 +210,7 @@ test('With nothing on record, the Glance starts the first payment or expense', {
 });
 
 test('With nothing open, the owed line says nothing is owed', { tag: '@portal.reports-glance.owed-zero' }, async ({ page, step }) => {
-  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nal Software'), office(OFFICE_B, 'Personal')], verdicts: { current: verdictBody([business, personal], thisMonth) } });
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nal Software'), office(OFFICE_B, 'Personal')], verdicts: { current: verdictBody([business, { ...personal, spent: '0.00' }], thisMonth) } });
 
   await step('Open Reports with no open Owed entries', async () => {
     await openGlance(page, api);
@@ -206,6 +219,11 @@ test('With nothing open, the owed line says nothing is owed', { tag: '@portal.re
   await step('“Nothing owed to you”, with no overdue count', async () => {
     await expect(page.locator('.hp-glance-owed')).toHaveText('Nothing owed to you');
     await expect(page.locator('.hp-glance-overdue')).toHaveCount(0);
+  });
+
+  await step('A profile with nothing this period says "Nothing recorded", never a blank (AC3)', async () => {
+    await expect(rows(page).nth(1)).toHaveAccessibleName('Personal, spent Nothing recorded');
+    await expect(rows(page).nth(1).locator('.hp-glance-nothing')).toHaveText('Nothing recorded');
   });
 });
 

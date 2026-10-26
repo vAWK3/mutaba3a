@@ -27,6 +27,7 @@ features:
     expect:
       - Five rows in the server's order, one marked shared
       - The kept figure equals the verdict's total
+      - A business with no expenses reads "income only", never as profit
   - id: arabic
     title: In Arabic on a phone, the Glance reads right to left
     tier: secondary
@@ -64,6 +65,7 @@ features:
     steps:
       - Open Reports at 1280px wide
     expect:
+      - With reduced motion the kept figure shows its final value at once
       - The ledger is at most 560px wide and centred
       - '"Open a profile for its charts" sits under it'
   - id: first-run
@@ -80,6 +82,7 @@ features:
       - Open Reports with no open Owed entries
     expect:
       - '"Nothing owed to you", with no overdue count'
+      - A profile with nothing this period reads "Nothing recorded"
   - id: staff-firm
     title: A firm you staff, which no total counts, still opens its own Reports from the Glance
     tier: secondary
