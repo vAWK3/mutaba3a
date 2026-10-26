@@ -22,5 +22,8 @@ export function termsHref(language: Language, version?: string): string {
  */
 export const TERMS_CLIENT_RELEASE = `web-v${APP_VERSION}`;
 
-/** The address people write to for help, and to close their account (the pilot's support promise, MUT-323). */
-export const SUPPORT_EMAIL = 'info@malafat.app';
+/**
+ * The address people write to for help (the pilot's support promise, MUT-323). MUT-382 (B2): MTB3A's own domain;
+ * info@malafat.app keeps forwarding for older builds.
+ */
+export const SUPPORT_EMAIL = 'info@mtb3a.com';

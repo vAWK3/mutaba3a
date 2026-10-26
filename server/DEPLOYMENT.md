@@ -879,7 +879,7 @@ app (native assertions carry `https://<apex>`).
 | Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Stripe webhook and nightly reconcile: apply, turn on, rotate (MUT-360) | §6e |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
-| Backups | Cloud SQL automated daily at 03:00 (14 kept) + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg`. Receipt files aren't in them: the bucket's 14-day soft delete covers them (§6c) |
+| Backups | Cloud SQL automated daily at 03:00 (14 kept, stored in me-west1: `location = var.region`, MUT-382) + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg`, and **delete it within 14 days** (`gcloud sql backups delete <id>`), because the privacy policy says backups clear within 14 days and on-demand ones never expire by themselves. Receipt files aren't in them: the bucket's 14-day soft delete covers them (§6c) |
 | Pilot operator runbook and restore drill (MUT-327) | [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md): onboard, reset, restore one profile or the whole database, incidents, support, offboard; `scripts/restore-drill.sh` (Basel runs it, results in its §10) |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
@@ -1195,6 +1195,8 @@ It pauses the nightly Stripe reconcile first, if the job exists and runs (§6e):
    ```bash
    gcloud sql backups create --instance=mutaba3a-pg2 --project=$GCP_PROJECT_ID --description="after the MUT-381 cutover"
    ```
+
+   **Within 14 days, delete it and the cutover's own `mut-381-*` backup of `mutaba3a-pg`** (MUT-382: the privacy policy says backups clear within 14 days, and on-demand backups never expire by themselves). By then the automated daily backups cover the same window. List them with `gcloud sql backups list --instance=<instance> --project=$GCP_PROJECT_ID --filter="type=ON_DEMAND"`, then run `gcloud sql backups delete <id> --instance=<instance> --project=$GCP_PROJECT_ID`.
 
 4. Only now set `cmek_stage = "active"` in `production.tfvars` (and in every other checkout you release from).
 5. Reopen:

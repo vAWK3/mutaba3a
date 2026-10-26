@@ -49,7 +49,7 @@ features:
       - The Arabic policy shows, reading right to left, and the site stays in English
       - An unknown language shows the site's own language
   - id: privacy-error-reports
-    title: The privacy policy says the website, our servers, the hosted portal and the phone apps send error reports, what a report holds, that Sentry keeps them in the EU, and that the free apps never send them (MUT-148, MUT-149, MUT-150, MUT-151, ADR-091)
+    title: The privacy policy says the website, our servers, the hosted portal and the phone apps send error reports, what a report holds, that Sentry keeps them in the EU, and that our own logs hold no IP address (MUT-148, MUT-149, MUT-150, MUT-151, MUT-382, ADR-091)
     tier: secondary
     legacy: [MUT-148, MUT-149, MUT-150, MUT-151]
     paths:
@@ -59,10 +59,10 @@ features:
     steps:
       - Open the privacy policy in English, then in Arabic
     expect:
-      - An "Error reports" section follows "Anonymous usage counts" and says a report never holds amounts, names, notes, contact details, request contents, an IP address or anything typed
-      - It says the website (when a page crashes or hits an error, with no account, and never from the free web app), our servers, the hosted portal (when a page crashes) and the iPhone and Android apps send reports, and that the apps never attach screenshots
+      - An "Error reports" section follows "Anonymous usage counts" and says amounts, names, notes, contact details, request contents, the IP address and anything typed are removed before a report is sent
+      - It says the website (when a page crashes or hits an error, with no account), our servers, the hosted portal (when a page crashes), the iPhone and Android apps, and the iPhone app's share extension, widgets and Siri shortcuts send reports, and that the apps never attach screenshots
       - '"What reaches the network" says the mobile apps connect to Sentry for error reports, and the hosted portal sends its error reports to Sentry'
-      - '"No ads, no tracking" no longer says the apps use no crash reporting, and says the free Mac, Windows and browser apps never send reports'
+      - '"No ads, no tracking" no longer says the apps use no crash reporting, names no free apps, and says our own log lines never include the IP address'
       - '"Who else handles your data" names Sentry, hosted in the EU'
       - The Arabic page says the same, right to left
   - id: links
