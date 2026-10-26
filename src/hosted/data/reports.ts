@@ -81,8 +81,8 @@ export function hasPrevious(period: Period, at: Day, since: Day | null, earlier:
   return previous.to >= since;
 }
 
-/** The first month that counts as complete-able: since's own month if records began by its 7th day, else the next. */
-function firstCountedMonth(since: Day): Month {
+/** The first month that counts as complete-able: since's own month if records began by its 7th day, else the next. Kept in step with server/src/summaries/months.ts by a parity test (MUT-447). */
+export function firstCountedMonth(since: Day): Month {
   return since.slice(8, 10) <= String(COMPLETE_MONTH_CUTOFF_DAY).padStart(2, '0') ? monthOf(since) : addMonths(monthOf(since), 1);
 }
 
