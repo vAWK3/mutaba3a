@@ -37,8 +37,11 @@ const THIS_FILE = 'scripts/__tests__/no-hardcoded-hosts.test.ts';
  */
 const RETIRED_HOST_REFUSERS = new Set(['server/src/email/ports.ts']);
 
-/** Every host the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
-const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9-])${escape(host)}(?![a-z0-9-])`, 'i');
+/**
+ * A host as a host: not part of a longer name, and not the domain of a mailbox. A mail address such as info@mtb3a.com
+ * names who to write to, not where the apps are served, so it doesn't move with a domain change (Basel, 2026-10-26).
+ */
+const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9@-])${escape(host)}(?![a-z0-9-])`, 'i');
 
 /** The legacy hosts the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
 function legacyPatterns(config: unknown): RegExp[] {
@@ -79,6 +82,8 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(hardcodedHosts(`url: https://mutaba3a-${'worker-abc123-ew'}.a.run.app`, planted)).toHaveLength(1);
     expect(hardcodedHosts('const ok = "https://notplaceholder.example";', planted)).toEqual([]);
     expect(hardcodedHosts('const ok = "https://example.a.run.app";', planted)).toEqual([]);
+    expect(hardcodedHosts('const mail = "info@placeholder.example";', planted)).toEqual([]);
+    expect(hardcodedHosts('const host = "mail.placeholder.example";', planted)).toHaveLength(1);
   });
 
   /** Every scanned file's hits, each file checked against the patterns `patternsFor` picks for it. */
