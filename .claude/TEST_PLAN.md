@@ -3832,6 +3832,22 @@ Tests written before the code (not run red first: the worktree was still install
 | Pre-landing review (regression-first, each seen failing) | Route + contract + CLI | +6 | a delete racing a grant or revoke answers 404, not 500 (D1); a retired name is off and nobody holds it, on both stores (D2); an API key's `/v1/audit` never lists feature grants while the admin audit does (D3); `feature-list` says `no one holds <feature>` (D5); the disabled-account case asserts the disable; both stores refuse a grant for an unknown person |
 
 
+## MUT-436 — MCP write tools (2026-10-26, ADR-201)
+
+The refactor's boundary tests were written with the extraction (the existing suites, unchanged, were the before/after proof); the write-tool route tests were written after the tools (disclosed).
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/__tests__/run-idempotent.test.ts` | Unit | 6 | new/replay; key reuse refused; legacy fingerprint replays; in-progress; 4xx stored and replayed, 5xx/429 release; a throw releases and rethrows |
+| `server/src/expenses/__tests__/receipts-compose.test.ts` | Unit | 4 | expense receipt start/complete with extra audit metadata, idempotent once READY; no storage, bad type, unknown expense, full expense (READY only); library start/complete, an expense's receipt refused there; per-person 429 with retryAfter |
+| `server/src/__tests__/expense-capture-source.test.ts` | Route | 3 | a phone source kept and returned, null when none; 'mcp' refused from a client (422); inbox filing carries the entry's source (R6) |
+| `server/src/__tests__/mcp-write-tools.test.ts` | Route (real /mcp + OAuth) | 12 | AC1 refusal text and nothing written; inbox absent while off and refused; inbox on: entry marked mcp, links refused; profile write through compose, mcp + vendor as typed and linked + audit with grant; date floor/ceiling and archived category refused; lapse gate per profile and per person; AC3 same key replays (also after reconnect), different request refused, a refusal replays as itself; read-only grant gets no write tool and can't call one; receipts start → UPLOAD_INCOMPLETE → complete READY FILED audited mcp; bad type and To review only with the library; no bucket → ATTACHMENTS_NOT_CONFIGURED |
+| `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` | Portal | +3 | "Added by Claude" for mcp in en and ar with Claude in <bdi>; nothing for siri or none |
+| `server/infrastructure/terraform/tests/mcp_inbox_writes.tftest.hcl` | Terraform | 2 runs | off by default (no env); on sets MCP_INBOX_WRITES=true |
+| Flutter `test/data/repositories/inbox_repository_test.dart` | Unit | +2 | reads mcp; an unknown source reads as none instead of failing |
+| `qa/specs/portal-selfservice/mcp.spec.ts` | Release-QA (live API) | +2 | add-expense (refused without destination, once, retry replays, drawer chip); receipt-upload (PUT to the local driver, READY, listed in the drawer) |
+| Regression | Unit + route | changed | store-guard allow-list (30 methods); read-tools sweep covers the receipt tools and add_expense's destination; write-only grant now gets write tools; routes-m2..m8 API 1.75.0-mut436 |
+
 ## MUT-435 — MCP read tools (2026-10-26, ADR-200)
 
 Tests written first (seen failing: no tools registered; `AGENT_STORE_METHODS` missing), then the tools.

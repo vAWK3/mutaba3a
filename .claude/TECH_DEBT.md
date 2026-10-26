@@ -34,6 +34,22 @@
 **Impact**: `users.setPassword` (operator `rotate:password`), setup-link `issue` with a lock and `redeem` (recovery) revoke sessions but leave OAuth grants live, so an agent connected by someone who knew the old password survives a recovery.
 **Fix**: revoke grants (`password_changed`, audited) in those three store transactions, as `changePassword` does; decide with Basel whether the setup link for a brand-new account counts.
 
+### TD-260: Receipts can't sit on an inbox entry
+**Status**: Open
+**Ticket**: MUT-436
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: an agent that adds a receipt's amount to the inbox can't attach the file there; it has to file the expense to a profile first (the tool description says so).
+**Fix**: inbox attachments (a receipt on an InboxEntry, moved onto the expense at filing), if inbox-first agent flows need it.
+
+### TD-259: A Claude.ai chat can record expenses but not upload receipt files
+**Status**: Open
+**Ticket**: MUT-436 (P2)
+**Added**: 2026-10-26
+**Priority**: Low
+**Impact**: the receipt tools return a signed PUT URL; a client with no way to make HTTP requests (a Claude.ai chat) can't send the bytes, so the person attaches the file in MTB3A. Claude Code and other HTTP-capable clients upload directly.
+**Fix**: revisit if MCP gains a client-to-server file transfer primitive.
+
 ### TD-258: The inbox part of `find_similar_expenses` is a capped scan
 **Status**: Open
 **Ticket**: MUT-435 (review D6) — fix with MUT-437

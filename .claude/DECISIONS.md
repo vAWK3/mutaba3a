@@ -5369,3 +5369,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - MUT-436 adds its write methods to the allow-list, each with a test.
 
 **Alternatives considered:** every membership plus an audit row on join (rejected for v1: firm owners get no say); firm owner opt-in (deferred: new setting and UI); keeping "any `read` method" open (rejected: it would expose `audit.list`, `users.getById` and the like to an agent for no tool).
+
+## ADR-201: An Agent Writes Through the Same Compose Paths, Marked `captureSource: 'mcp'`; Inbox Writes Wait for the Phone (MUT-436, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-436; plan `.claude/designs/mut-436-mcp-write-tools.md`, P2–P4 and eng review D1–D8 answered by Basel).
+
+**Context:** MUT-435 gave a person's own Claude read tools. The epic's point is writing: logging receipts and statement lines as expenses, asked first, safe to retry.
+
+**Decision:**
+1. **`add_expense` takes a required `destination` with no default** (`{ kind: 'profile', profileId }` or `{ kind: 'inbox' }`): a call without it is refused with the instruction to ask the person (AC1). A profile write runs POST /v1/expenses' compose path (`prepareExpenseCreate`, `withResolvedVendor`, `touchExpenseVendor`: the MUT-227 floor, the MUT-392 ceiling, a choosable category, links inside the profile, vendors as typed) and writes `expense.created` as USER with `captureSource: 'mcp'`, the OAuth client and the grant. An inbox write runs POST /v1/inbox's rules with `captureSource: 'mcp'`; the audit row comes at filing (P4).
+2. **Expenses keep their capture source** in a new nullable column (`expenses.captureSource`, P3), set by every create path (REST bodies, receipt approval, inbox filing — which copies the entry's source, review D6). Responses use `StoredCaptureSourceSchema` (inputs + `'mcp'`) on Expense and InboxEntry only; requests keep `CaptureSourceSchema`, so no client can claim `'mcp'`. The local records format (MUT-325 export) leaves it out. API `1.75.0-mut436`. The portal's expense drawer shows "Added by Claude" for `'mcp'` (AC5).
+3. **Receipts: a signed PUT in two tools** (`start_receipt_upload` → PUT → `complete_receipt_upload`, P2) over `expenses/receipts-compose.ts`, which the routes now share (type and size, room on the expense, the library's per-person and pending caps, the object verified; MUT-56's scan belongs there). To review only where `RECEIPTS_LIBRARY` is on. A client that can't make HTTP requests is told to send the person to MTB3A.
+4. **Idempotency:** a required `idempotencyKey` per call, claimed under `a:<sha256(userId, key)>` (review D7, so a retry after a reconnect replays), through `runIdempotent`, the framework-free state machine the Hono middlewares now also run (review D4/R4). A 4xx refusal is stored and replays as itself; 5xx/429 release the key (OV4).
+5. **Gates:** the write scope (write tools aren't registered without it); writability through the session's column (`assertAgentMayWrite`, review D2: no `'agent'` principal); the lapse gate per profile (`agentWriteGate`) and per person for the inbox (`agentPersonWriteGate`); the narrow `GateStore` (D8); the agent allow-list gains exactly the methods these tools call.
+6. **Inbox writes ship dark:** `MCP_INBOX_WRITES` (Terraform `mcp_inbox_writes_enabled`, default false) leaves `inbox` out of the tool's schema (OV12) until the phone build that decodes an unknown capture source (tolerant `tryFromString`, Flutter `1f866175`) is live in both stores and the minimum build is raised to it (review D3/D5; before-release.md).
+
+**Consequences:**
+- MUT-437 (matching) can file a statement line onto an existing expense through these paths; MUT-438 stays postponed.
+- A Claude.ai chat records expenses but can't attach files (TD-259); receipts can't sit on inbox entries (TD-260).
+- An unknown `'mcp'` on a pre-MUT-436 phone build: inbox writes stay off until the minimum build is raised.
+
+**Alternatives considered:** an `'agent'` principal with its own matrix column (review D2: rejected, no behaviour change, two sources of truth); file bytes inline in a tool argument (P2: rejected, the model would emit every byte as output); reading the marker from the audit row (P3: rejected, a read per drawer open, hidden from API keys).

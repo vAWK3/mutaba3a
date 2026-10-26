@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — Claude can add expenses and receipts (MUT-436, ADR-201)
+
+**Why:** the epic's purpose: a person's own Claude logs receipts and statement lines as expenses, asked first and safe to retry.
+
+### Added
+- MCP `add_expense` (destination required, no default), `start_receipt_upload`, `complete_receipt_upload` for a grant with the write scope (`server/src/mcp/write-tools.ts`, `receipt-tools.ts`).
+- `expenses.captureSource` (nullable, migration `20261026090000`); `StoredCaptureSourceSchema` adds `'mcp'` to Expense and InboxEntry outputs; API `1.75.0-mut436`.
+- Portal: "Added by Claude" in the expense drawer (en/ar).
+- `MCP_INBOX_WRITES` / Terraform `mcp_inbox_writes_enabled` (default off) and its before-release order.
+- Release-QA `portal-selfservice.mcp.add-expense`, `portal-selfservice.mcp.receipt-upload`; the live QA API uses the local attachments driver.
+- Flutter `1f866175`: an unknown capture source reads as none (the inbox no longer fails on one); `CaptureSource.mcp`.
+
+### Changed
+- `runIdempotent` (framework-free) behind the idempotency middlewares; `expenses/receipts-compose.ts` behind the receipt routes (behaviour unchanged, own refactor commit `6aa6122b`).
+- Inbox filing and receipt approval keep the capture source on the expense they create.
+- One receipt-upload limiter for the route and the agent tools.
+
+---
+
 ## [Unreleased] - 2026-10-26 — Claude's read tools on /mcp (MUT-435, ADR-200)
 
 **Why:** a person's own Claude needs to see where an expense would go, how to file it and whether it is already recorded, before MUT-436 lets it write.
