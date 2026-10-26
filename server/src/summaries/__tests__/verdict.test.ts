@@ -253,6 +253,12 @@ describe('owedOf', () => {
     });
   });
 
+  it('re-review: an overdue entry in a retired currency is returned but not counted, since its amount is left out', () => {
+    const owed = owedOf([rec({ currency: 'AED', dueDate: '2026-10-01' }), rec({ dueDate: '2026-10-01' })], today);
+    expect(owed.currencies.map((c) => c.currency)).toEqual(['AED', 'ILS']);
+    expect(owed.overdueCount).toBe(1);
+  });
+
   it('combines across profiles and converts', () => {
     const v = composeVerdict({
       ...OCT,

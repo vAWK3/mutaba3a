@@ -47,7 +47,7 @@
 - `server/src/expenses/__tests__/presets.test.ts` no longer reads `src/db/defaultExpenseCategories.ts`, which MUT-445 deleted with the free app (main's server suite failed on it); the server's presets are now the only copy, so the offline-drift case is removed (Basel, 2026-10-26).
 
 ### Technical
-- Tests: `summaries/__tests__/verdict.test.ts` (22), `months.test.ts`, `__tests__/routes-verdict.test.ts` (16), LOCKED and no-posting-into-locked cases in `billing-gate-routes.test.ts`, `src/hosted/data/__tests__/reportsMonthParity.test.ts`, two local-mode cases. TD-264.
+- Tests: `summaries/__tests__/verdict.test.ts` (23), `months.test.ts`, `__tests__/routes-verdict.test.ts` (16), LOCKED and no-posting-into-locked cases in `billing-gate-routes.test.ts`, `src/hosted/data/__tests__/reportsMonthParity.test.ts`, two local-mode cases. TD-264.
 
 ## [Unreleased] - 2026-10-26 — The desktop apps and the free web app at /app are retired (MUT-445, ADR-203)
 

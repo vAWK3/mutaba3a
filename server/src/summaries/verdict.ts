@@ -250,7 +250,8 @@ function median(values: readonly bigint[]): bigint {
 
 /**
  * One profile's open balance per currency as of `today`, with how many entries are overdue (the Overview's rules).
- * Rows in a retired currency come back too, formatted as stored; composeVerdict leaves them out and names them.
+ * Rows in a retired currency come back too, formatted as stored; composeVerdict leaves them out and names them, so
+ * they aren't counted as overdue either (re-review).
  */
 export function owedOf(receivables: readonly ReceivableRecord[], today: IsoDate): Owed {
   const rows = receivables.flatMap((r) => {
@@ -261,6 +262,6 @@ export function owedOf(receivables: readonly ReceivableRecord[], today: IsoDate)
   const overdue = sumByCurrency(rows.filter((r) => r.overdue));
   return {
     currencies: outstanding.map(({ currency, minor }) => ({ currency, outstanding: formatMoney({ minor, currency }), overdue: formatMoney({ minor: overdue.find((o) => o.currency === currency)?.minor ?? 0n, currency }) })),
-    overdueCount: rows.filter((r) => r.overdue).length,
+    overdueCount: rows.filter((r) => r.overdue && isSupportedCurrency(r.currency)).length,
   };
 }
