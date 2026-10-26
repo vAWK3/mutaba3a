@@ -18,6 +18,8 @@ export type Me = Schemas['Me'];
 export type MeTermsMayBeNull = AssertTrue<null extends Me['terms'] ? true : false>;
 type AssertTrue<T extends true> = T;
 export type HostedProfile = Schemas['HostedProfile'];
+/** MUT-448: one cross-profile read for the Reports Glance (MUT-447, ADR-204). */
+export type Verdict = Schemas['Verdict'];
 /** MUT-115: one of the person's passkeys. */
 export type Passkey = Schemas['Passkey'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
@@ -562,6 +564,10 @@ export const api = {
   // MUT-175: Reports — what came in and went out over a period, with a 12-month history.
   activitySummary: (profileId: string, query: Query<'/v1/summaries/activity'>) =>
     request<Get<'/v1/summaries/activity'>>('GET', '/v1/summaries/activity', { profileId, query }),
+
+  // MUT-448: the Reports Glance's one read across the person's profiles (MUT-447): no X-Mutaba3a-Profile. With no
+  // from/to the server picks this month in the base profile's timezone (eng D4).
+  verdict: (query: Query<'/v1/summaries/verdict'> = {}) => request<Get<'/v1/summaries/verdict'>>('GET', '/v1/summaries/verdict', { query }),
 
   // Receipts: start has no Idempotency-Key, like M6's attachment-upload start — a repeat
   // leaves an unlisted PENDING row rather than replaying (mut-42-hosted-expenses.md §10).
