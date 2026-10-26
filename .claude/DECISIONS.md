@@ -4261,6 +4261,8 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - **Tripwire:** `no-hardcoded-hosts.test.ts` fails if `config/hosts.json`'s domain stops being the identity's host, so a domain move must decide the identity's fate.
 - **What it doesn't change:** Malafat marks every CIMD client outside its allowlist UNVERIFIED (MAL-224), ours included (loopback redirects). Someone can still register `mutaba3a.app` and name a client "Mutaba3a". The move makes the one id we ship ours. Nothing calls the flow yet (TD-075).
 
+**Amendment (2026-10-26, Basel):** a mailbox is not a host. `no-hardcoded-hosts.test.ts` ignores the domain when it follows `@` (`info@mtb3a.com`, MUT-382's contact address in the terms, privacy policy, sign-in pages, `SUPPORT_EMAIL` and `MAIL_REPLY_TO`'s description), because where people write to doesn't move with where the apps are served. A subdomain (`mail.mtb3a.com`) is still a host and still fails.
+
 ## ADR-156: Signed In, "Download My Records" Writes the Local-Mode Records File — Built in the Portal From a Streamed Per-Profile Export (MUT-325)
 
 **Date:** 2026-10-20 · **Status:** Accepted (D1–D5 reviewed and accepted by Basel, 2026-10-20; see the members note under Consequences) · **Epic:** MUT-322 (pilot gate) · **Format owner:** MUT-286/287

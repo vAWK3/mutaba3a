@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — The host check no longer counts mail addresses (ADR-155 amendment)
+
+**Why:** MUT-382 put `info@mtb3a.com` in the terms, privacy policy and sign-in pages, and `no-hardcoded-hosts.test.ts` failed main on all 17 lines. A mailbox names who to write to, not where the apps are served (Basel, 2026-10-26).
+
+### Fixed
+- `scripts/__tests__/no-hardcoded-hosts.test.ts`: a domain right after `@` is not a host; a subdomain still is. Two planted cases pin both.
+
 ## [Unreleased] - 2026-10-26 — One verdict across your profiles for Reports (MUT-447, ADR-204)
 
 **Why:** Reports becomes account-level (epic MUT-446): one row per profile, what you kept and what you're owed, on the portal and the phone. One server read keeps both apps on the same numbers.
