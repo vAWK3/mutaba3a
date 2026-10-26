@@ -14,12 +14,17 @@ import { formatDecimal } from './DecimalAmount';
 
 const at = (day: string) => new Date(`${day}T00:00:00Z`);
 const formatters = new Map<string, Intl.DateTimeFormat>();
+/**
+ * MUT-448 (AC6): Reports name Arabic months the Levantine way (تشرين الأول, not أكتوبر), with Latin digits like every
+ * amount beside them. Only Reports' dates (Basel, 2026-10-26); the rest of the portal still formats with plain `ar`.
+ */
+const REPORTS_ARABIC_DATES = 'ar-PS-u-nu-latn';
 
 function dates(language: Language, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   const key = `${language}|${JSON.stringify(options)}`;
   let formatter = formatters.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat(getLocale(language), { ...options, timeZone: 'UTC' });
+    formatter = new Intl.DateTimeFormat(language === 'ar' ? REPORTS_ARABIC_DATES : getLocale(language), { ...options, timeZone: 'UTC' });
     formatters.set(key, formatter);
   }
   return formatter;

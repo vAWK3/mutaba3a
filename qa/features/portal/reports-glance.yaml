@@ -1,0 +1,82 @@
+app: portal
+area: reports-glance
+title: Reports Glance — what you kept across your profiles (MUT-448)
+tier: secondary
+paths:
+  - src/hosted/pages/views/GlancePage.tsx
+  - src/hosted/data/verdict.ts
+  - src/hosted/data/verdictQueries.ts
+  - src/hosted/format/reportFormat.ts
+  - server/src/summaries/verdict.ts
+  - server/src/summaries/months.ts
+features:
+  - id: two-profiles
+    title: A business and a personal profile read as two rows, then what you kept and what you're still owed
+    tier: secondary
+    steps:
+      - Press the Reports icon on a business + personal account
+    expect:
+      - Reports opens at /reports with the icon lit
+      - Two rows, "net +₪…" for the business and "spent ₪…" for the personal profile
+      - Kept is the large figure; "Still owed to you" with the overdue count sits under the rows
+  - id: five-profiles
+    title: Five profiles read as five rows, and the kept figure is the server's
+    tier: secondary
+    steps:
+      - Open Reports on an account with five profiles
+    expect:
+      - Five rows in the server's order, one marked shared
+      - The kept figure equals the verdict's total
+  - id: arabic
+    title: In Arabic on a phone, the Glance reads right to left
+    tier: secondary
+    steps:
+      - Open Reports in Arabic at phone width
+    expect:
+      - The page is RTL, the hero reads «تبقّى لك» and the caption names the month in Levantine Arabic
+      - Each row ends in the › chevron, mirrored by the browser
+  - id: local-mode
+    title: Signed out on this device, the Glance runs on the records kept in the browser
+    tier: secondary
+    steps:
+      - Signed out, record income, then press the Reports icon
+    expect:
+      - The Glance shows the kept figure from the browser's records
+      - No report request reaches the server
+  - id: negative-month
+    title: A month where more went out than came in says so
+    tier: secondary
+    steps:
+      - Open Reports for a month with more spent than received
+    expect:
+      - The kept figure is negative, in rose, with "Spent more than came in"
+  - id: row-drilldown
+    title: A row opens that profile's Reports for the same period, and Back returns
+    tier: secondary
+    steps:
+      - Step to last month, then tap a business row
+    expect:
+      - That profile's Reports opens for last month
+      - Back returns to the Glance
+  - id: desktop-layout
+    title: On a desktop the Glance is one centred column with a hint toward each profile's charts
+    tier: secondary
+    steps:
+      - Open Reports at 1280px wide
+    expect:
+      - The ledger is at most 560px wide and centred
+      - '"Open a profile for its charts" sits under it'
+  - id: first-run
+    title: With nothing on record, the Glance starts the first payment or expense
+    tier: secondary
+    steps:
+      - Open Reports on an account with no records
+    expect:
+      - '"Your reports start with your first payment or expense" with its actions; no ledger'
+  - id: owed-zero
+    title: With nothing open, the owed line says nothing is owed
+    tier: secondary
+    steps:
+      - Open Reports with no open Owed entries
+    expect:
+      - '"Nothing owed to you", with no overdue count'

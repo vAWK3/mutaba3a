@@ -1,4 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
+import type { Verdict } from '../../src/hosted/api/client';
 import { QA_TERMS_VERSION, QA_USER_ID, customer, meBody, openSignedInPortal, type StubProfile } from './portal';
 
 /**
@@ -437,6 +438,11 @@ export interface FakeApiSeed {
   billing?: Json;
   /** MUT-175: each profile's money for GET /v1/summaries/activity; a profile not named reads the shared payments and expenses. */
   reports?: Record<string, StubReportRecords>;
+  /**
+   * MUT-448: GET /v1/summaries/verdict, canned (build one with verdictBody): `current` answers the parameterless
+   * default view, a `from` date answers that period, `*` any other. Absent: every profile with nothing in it (first run).
+   */
+  verdicts?: Record<string, Verdict | { refuse: 402 | 500 }>;
   /** MUT-333: the account is already closing (signing in during the grace): /v1/me carries it. */
   closure?: { requestedAt: string; deleteAfter: string };
   /**
@@ -464,6 +470,62 @@ function daysToPaidOf(given: StubReportRecords['daysToPaid']) {
   const mid = Math.floor(samples.length / 2);
   const median = samples.length % 2 === 1 ? samples[mid]! : Math.round((samples[mid - 1]! + samples[mid]!) / 2);
   return { overall: samples.length >= 3 ? { median, n: samples.length } : null, byCustomer: given?.byCustomer ?? [], samples };
+}
+
+export interface StubVerdictLine {
+  profileId: string;
+  name: string;
+  kind?: 'BUSINESS' | 'PERSONAL' | 'FIRM';
+  shared?: boolean;
+  received?: string;
+  spent?: string;
+}
+
+/**
+ * MUT-448: a canned GET /v1/summaries/verdict in shekels. The portal shows the verdict as the server sends it and does
+ * no maths of its own, so a spec gives the figures (MUT-447's server tests own the money rules); this only fills the
+ * shape, kept = Σ received − spent unless given.
+ */
+export function verdictBody(lines: StubVerdictLine[], o: { from: string; to: string; asOf: string; kept?: string; usual?: string | null; owed?: string; overdueCount?: number }): Verdict {
+  const profiles = lines.map((l) => {
+    const received = l.received ?? '0.00';
+    const spent = l.spent ?? '0.00';
+    const net = toDecimal(toMinor(received) - toMinor(spent));
+    const moved = toMinor(received) !== 0 || toMinor(spent) !== 0;
+    return {
+      profileId: l.profileId,
+      name: l.name,
+      kind: l.kind ?? 'BUSINESS',
+      shared: l.shared ?? false,
+      currencies: moved ? [{ currency: 'ILS' as const, received, spent, net }] : [],
+      converted: { received, spent, net },
+      history: [],
+      owed: { currencies: [], overdueCount: 0 },
+      omittedCurrencies: [],
+    };
+  });
+  const kept = o.kept ?? toDecimal(profiles.reduce((sum, p) => sum + toMinor(p.converted.net), 0));
+  const owed = o.owed ?? '0.00';
+  return {
+    from: o.from,
+    to: o.to,
+    asOf: o.asOf,
+    base: 'ILS',
+    rates: { date: o.asOf, source: 'live' },
+    profiles,
+    total: { label: lines.some((l) => l.kind === 'PERSONAL') ? 'kept' : 'businessNet', currencies: toMinor(kept) === 0 ? [] : [{ currency: 'ILS', net: kept }], converted: kept, inCurrencyOnly: null, sharedInFull: lines.some((l) => l.shared), partial: false },
+    usual: o.usual ?? null,
+    owed: { currencies: toMinor(owed) === 0 ? [] : [{ currency: 'ILS', outstanding: owed, overdue: '0.00' }], overdueCount: o.overdueCount ?? 0, converted: owed },
+    unavailable: [],
+  };
+}
+
+/** MUT-448: a canned verdict for this month (today in the stub profiles' zone), for specs that only pass through the Glance. */
+export function currentVerdict(lines: StubVerdictLine[]): Verdict {
+  const today = todayInJerusalem();
+  const month = today.slice(0, 7);
+  const to = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  return verdictBody(lines, { from: `${month}-01`, to, asOf: today });
 }
 
 const addMonthTo = (month: string, n: number) => {
@@ -577,6 +639,8 @@ export class FakeApi {
   private readonly gone = new Set<string>();
   /** MUT-175: per-profile Reports records. */
   private readonly reports: Record<string, StubReportRecords>;
+  /** MUT-448: canned verdicts (FakeApiSeed.verdicts). */
+  private readonly verdicts: Record<string, Verdict | { refuse: 402 | 500 }>;
   /** MUT-333: set while the account is closing; then only Me, Keep my account and sign-out answer (403 ACCOUNT_CLOSING). */
   closure: { requestedAt: string; deleteAfter: string } | null;
   /** MUT-260: the receipts library; null = off (404). */
@@ -584,6 +648,7 @@ export class FakeApi {
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
+    this.verdicts = { ...(seed.verdicts ?? {}) };
     this.signedIn = seed.signedIn ?? true;
     this.billingStanding = seed.billingStanding ?? null;
     this.billingOverview = seed.billing ?? null;
@@ -620,6 +685,16 @@ export class FakeApi {
     const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
     const bucket = q('bucket') === 'month' ? 'month' : 'day';
     return json(activitySummary(records, q('from') ?? `${month}-01`, q('to') ?? lastDay, bucket, this.today));
+  }
+
+  /** MUT-448: GET /v1/summaries/verdict, canned; with none given, every profile with nothing in this month. */
+  private verdictAnswer(q: (key: string) => string | undefined) {
+    const given = this.verdicts[q('from') ?? 'current'] ?? this.verdicts['*'];
+    if (given && 'refuse' in given) return json({ error: { code: given.refuse === 402 ? 'SUBSCRIPTION_LAPSED' : 'INTERNAL', message: 'Refused' } }, given.refuse);
+    if (given) return json(given);
+    const month = this.today.slice(0, 7);
+    const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+    return json(verdictBody(this.profiles.map((p) => ({ profileId: p.stub.id, name: p.stub.name })), { from: q('from') ?? `${month}-01`, to: q('to') ?? lastDay, asOf: this.today }));
   }
 
   /** MUT-175: a profile's Reports answers normally again (after a `refuse`). */
@@ -779,6 +854,7 @@ export class FakeApi {
     if (resource === 'summaries') {
       if (id === 'organization') return json({ asOf: '2026-10-15', currencies: this.summary });
       if (id === 'activity') return this.activityAnswer(named, q);
+      if (id === 'verdict') return this.verdictAnswer(q);
       if (id === 'customers' && sub) return this.customerSummaries.has(sub) ? json(this.customerSummaries.get(sub)) : notFound();
     }
     if (resource === 'customers' && method === 'POST' && !id) {

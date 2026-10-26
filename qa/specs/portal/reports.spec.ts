@@ -62,8 +62,8 @@ test('With no records, Reports is one block that starts the first payment or exp
   const api = world({ reports: { [OFFICE_A]: { payments: [], expenses: [] } } });
 
   await step('Open Reports on a profile with no payments or expenses', async () => {
-    await api.open(page, `/p/${OFFICE_A}`);
-    await page.getByRole('link', { name: 'Reports', exact: true }).click();
+    // MUT-448: the corner icon opens the Glance; a profile's own Reports is its drill-down
+    await api.open(page, reportsPath());
   });
 
   await step('One block invites the first payment or expense, with nothing else around it', async () => {
@@ -294,7 +294,9 @@ test('Signed out on this device, Reports runs on the records kept in the browser
     await drawer.getByLabel('Amount').fill('250.00');
     await drawer.getByRole('button', { name: 'Save income' }).click();
     await expect(drawer).toBeHidden();
+    // MUT-448: the icon opens the Glance; its row opens this profile's own Reports
     await page.getByRole('link', { name: 'Reports', exact: true }).click();
+    await page.getByRole('list', { name: 'Your profiles' }).getByRole('link').first().click();
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪250');
   });
 
