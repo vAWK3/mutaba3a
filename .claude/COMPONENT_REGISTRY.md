@@ -9,6 +9,8 @@
 
 ## Quick Lookup
 
+> **Which component for which pattern** (drawer footers, banners, toasts, confirms, rows, icons, RTL and 375 px) is in `DESIGN.md` at the repo root (MUT-417). Since MUT-445 the local app's rows below (`AppShell`, the `src/components/drawers` drawers, `Modal`) are retired history; the portal's parts are under "Hosted portal".
+
 | Category | Components |
 |----------|------------|
 | **Layout** | AppShell, SidebarNav, BrandMark, BrandLoader (page/section waits), BootSplash (landing Suspense fallback), TopBar, PageHeader, FeatureNoticeBanner, ClientsLayout (Clients split view), ClientWorkSection, ClientPaymentsSection, BREAKPOINTS + useIsSplitView |

@@ -238,7 +238,7 @@ docs/
 Claude MUST consult `docs/` before implementing any feature, fix, or enhancement:
 1. Before any new feature: read `docs/admin-panel/05-FEATURES.md`
 2. Before architecture decisions: check `docs/admin-panel/02-ARCHITECTURE.md` + `docs/architecture/SYSTEM-ARCHITECTURE.md`
-3. Before UI work: follow `docs/admin-panel/04-UI-UX-DESIGN.md`
+3. Before UI work: follow `DESIGN.md` (which component, colour role and type style each pattern uses in the portal) and `docs/admin-panel/04-UI-UX-DESIGN.md`
 4. Before data model changes: consult `docs/admin-panel/03-DATA-MODELS.md`
 5. Before starting any phase: reference `docs/roadmap/ROADMAP.md`
 6. Before security-related work: read `docs/admin-panel/06-SECURITY.md`
