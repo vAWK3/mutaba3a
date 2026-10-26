@@ -487,3 +487,42 @@ describe('RedateDrawer — corrections (MUT-453)', () => {
     expect(screen.queryByRole('button', { name: 'Reverse payment' })).toBeNull();
   });
 });
+
+describe('RedateDrawer — corrections, review fixes (MUT-453 qa-reconcile)', () => {
+  const posts = (calls: StubRequest[]) => calls.filter((c) => c.method === 'POST');
+
+  it('a retry after a 409 conflict sends a new Idempotency-Key, so it is not the stored refusal again', async () => {
+    let n = 0;
+    const { calls } = stub({ post: () => (n++ === 0 ? fail(409, 'CONFLICT', { reason: 'VERSION_MISMATCH' }) : json(mine({ status: 'REVERSED', reversalReason: 'Typo' }))) });
+    const { user, onClose } = renderDrawer('payment');
+    await user.click(await screen.findByRole('button', { name: 'Reverse payment' }));
+    await user.type(screen.getByLabelText('Reason'), 'Typo');
+    await user.click(screen.getByRole('button', { name: 'Reverse payment' }));
+    expect(await screen.findByText(/changed while you were saving/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reverse payment' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const [first, second] = posts(calls);
+    expect(first!.headers.get('idempotency-key')).not.toBe(second!.headers.get('idempotency-key'));
+  });
+
+  it('Cancel that left something owed (it grew meanwhile) says what is still owed, not "cancelled"', async () => {
+    stub({ post: () => json({ receivable: owed({ outstanding: '200.00', credited: '500.00', status: 'DUE' }), credit: {} }, 201) });
+    const { user, onClose } = renderDrawer('owed');
+    await user.click(await screen.findByRole('button', { name: 'Cancel amount owed' }));
+    await user.type(screen.getByLabelText('Reason'), 'Client dropped the job');
+    await user.click(screen.getByRole('button', { name: 'Cancel amount owed' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(await screen.findByText(/200\.00.* is still owed/)).toBeInTheDocument();
+    expect(screen.queryByText('Amount owed cancelled')).toBeNull();
+  });
+
+  it('Cancel refused because less is left now shows the new figure, not silence', async () => {
+    stub({ post: () => fail(422, 'VALIDATION_FAILED', { reason: 'CREDIT_EXCEEDS_OUTSTANDING', outstanding: '100.00' }) });
+    const { user, onClose } = renderDrawer('owed');
+    await user.click(await screen.findByRole('button', { name: 'Cancel amount owed' }));
+    await user.type(screen.getByLabelText('Reason'), 'Client dropped the job');
+    await user.click(screen.getByRole('button', { name: 'Cancel amount owed' }));
+    expect(await screen.findByText(/more than what’s left now \(.*100\.00.*\)/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount, parseAmountInput } from '../../lib/utils';
-import type { HostedProfile, Payment, Receivable } from '../api/client';
+import { ApiError, type HostedProfile, type Payment, type Receivable } from '../api/client';
 import { useAttemptKey } from '../data/attemptKey';
 import { useCreditReceivable, useReversePayment } from '../data/incomeQueries';
 import { formatDecimal } from '../format/DecimalAmount';
@@ -94,16 +94,28 @@ export function CorrectionPane({ mode, profile, record, onBack, onDone, onReread
       } else if (owed) {
         const credited = mode === 'cancel' ? owed.outstanding : parsed.kind === 'ok' ? parsed.canonical : owed.outstanding;
         const body = { amount: credited, reason: trimmed };
-        await credit.mutateAsync({ receivableId: owed.id, body, idempotencyKey: attempt.keyFor({ receivableId: owed.id, ...body }) });
+        const result = await credit.mutateAsync({ receivableId: owed.id, body, idempotencyKey: attempt.keyFor({ receivableId: owed.id, ...body }) });
         attempt.succeeded();
-        if (mounted.current) showToast(mode === 'cancel' ? t('hosted.correct.cancelled') : t('hosted.correct.reduced', { amount: money(credited) }), { tone: 'info' });
+        // Cancel credits what was left when the drawer read it; if more became owed meanwhile, say so instead of "cancelled".
+        const stillOwed = parseAmountInput(result.receivable.outstanding, { currency }) ?? 0;
+        if (mounted.current) {
+          if (mode === 'cancel' && stillOwed > 0) showToast(t('hosted.correct.cancelledPart', { amount: money(credited), left: money(result.receivable.outstanding) }));
+          else showToast(mode === 'cancel' ? t('hosted.correct.cancelled') : t('hosted.correct.reduced', { amount: money(credited) }), { tone: 'info' });
+        }
       }
       if (mounted.current) onDone();
     } catch (error) {
       if (!mounted.current) return;
+      // A stored 409 replays for the same key and body: a retry after one starts a new attempt (the routes say so).
+      if (error instanceof ApiError && error.code === 'CONFLICT') attempt.succeeded();
       const mapped = mapCorrectionError(error);
       const amountField = mapped.fields.find((f) => f.field === 'amount');
-      if (amountField) setServerAmountError(t(amountField.key, amountField.params?.outstanding ? { outstanding: money(amountField.params.outstanding) } : amountField.params));
+      if (amountField) {
+        const message = t(amountField.key, amountField.params?.outstanding ? { outstanding: money(amountField.params.outstanding) } : amountField.params);
+        // Reduce shows it under its amount; Cancel and Reverse have no amount field, so it is a toast.
+        if (mode === 'reduce') setServerAmountError(message);
+        else showToast(message);
+      }
       if (mapped.toast) showToast(t(mapped.toast));
       if (mapped.reread) onReread();
     }

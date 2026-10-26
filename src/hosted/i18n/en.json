@@ -1745,7 +1745,8 @@
       },
       "owedTitle": "Amount owed",
       "paymentTitle": "Payment",
-      "actions": "Correct this entry"
+      "actions": "Correct this entry",
+      "cancelledPart": "Cancelled {amount}; {left} is still owed, because it changed while you were cancelling."
     }
   }
 }
