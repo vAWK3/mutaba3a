@@ -69,6 +69,20 @@ export function formatWhole(minor: number, currency: Currency, language: Languag
   return formatter.format(wholeUnits(minor, currency));
 }
 
+/**
+ * MUT-448: a business line's net with its sign, "+₪9,040" or "−₪3,100" (U+2212, not a hyphen); zero carries none.
+ * The sign is part of the same Intl string, so Arabic places it as the locale does inside the amount's <bdi>.
+ */
+export function formatSigned(minor: number, currency: Currency, language: Language): string {
+  const key = `${language}|${currency}|signed`;
+  let formatter = wholeFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(getLocale(language), { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0, signDisplay: 'exceptZero' });
+    wholeFormatters.set(key, formatter);
+  }
+  return formatter.format(wholeUnits(minor, currency)).replace('-', '\u2212');
+}
+
 /** Whole units, halves away from zero, and never −0 (review: a 0.40 loss read "-₪0"). */
 export function wholeUnits(minor: number, currency: Currency): number {
   const units = minor / 10 ** currencyExponent(currency);

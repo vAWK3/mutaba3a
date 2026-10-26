@@ -1591,6 +1591,48 @@
         },
         "typicallySameDay": "typically the same day",
         "biggestChange": "biggest change"
+      },
+      "glance": {
+        "label": {
+          "kept": "Kept",
+          "keptApprox": "≈ Kept",
+          "businessNet": "Business net",
+          "businessNetApprox": "≈ Business net"
+        },
+        "usual": {
+          "above": "{amount} above your usual",
+          "below": "{amount} below your usual",
+          "about": "About your usual"
+        },
+        "inOnly": "In {currency} only",
+        "leavesOut": "Leaves out {names}",
+        "row": {
+          "net": "net",
+          "spent": "spent",
+          "incomeOnly": "income only",
+          "cameIn": "came in {amount}",
+          "shared": "shared",
+          "nothing": "Nothing recorded",
+          "locked": "Locked · billing",
+          "failed": "Couldn't load",
+          "linkName": "{name}, {kind} {amount}",
+          "linkNameShared": "{name}, shared, {kind} {amount}"
+        },
+        "owed": {
+          "label": "Still owed to you",
+          "none": "Nothing owed to you",
+          "overdue": {
+            "one": "1 overdue",
+            "other": "{count} overdue"
+          }
+        },
+        "footnote": {
+          "shared": "Includes shared businesses in full",
+          "omitted": "Leaves out records in {currencies}"
+        },
+        "hint": "Open a profile for its charts",
+        "refreshFailed": "Couldn't refresh",
+        "profilesLabel": "Your profiles"
       }
     },
     "passkeys": {

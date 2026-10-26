@@ -53,7 +53,7 @@ export interface YouSearch {
  */
 const BACK_PATH = /^\/p\/([\w-]+)(?:\/([a-z]+)(?:\/[\w-]+)*)?$/;
 
-function backOf(value: unknown): string | undefined {
+export function backOf(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const match = BACK_PATH.exec(value);
   if (!match) return undefined;
