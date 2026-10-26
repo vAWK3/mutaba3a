@@ -25,6 +25,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.1.0': '0f4724d88bc4e745b3892fb39f03cab16855c10ed5c645941a731d9cbb1e831c',
   // MUT-175: report_viewed (portal only).
   '2.2.0': '8a050a2241c72c64415dd213e9ac367f2ab7be8d8f8eef920c872d3beb44615a',
+  // MUT-448: report_viewed gains layer (glance | profile).
+  '2.3.0': '6c6d5fd1fb03bd9e921047533f2cafb4c6bfca3e746e815452f4f7d3c26ac563',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
