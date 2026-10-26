@@ -477,8 +477,8 @@
 **Fix**: set an explicit `soft_delete_policy { retention_duration_seconds = 1209600 }` (14 days, matching the backups) on the bucket in Terraform. Or turn on versioning with a lifecycle rule that keeps non-current versions 14 days. Basel applies either. Then the runbook's §4.4 window matches the backups.
 
 ### TD-191: A free-app user's data can't be moved into a hosted account without retyping
-**Status**: Open (decision for Basel, runbook §3)
-**Ticket**: MUT-290 (Backlog) is the in-app move
+**Status**: Resolved (2026-10-27, won't fix: Basel closed MUT-290 as won't do. The free web app is gone (MUT-445, ADR-203), the "nothing to type again" copy is gone, and someone who used the portal signed out moves with Download my records and retyping, runbook §3)
+**Ticket**: MUT-290 (closed, won't do)
 **Added**: 2026-10-20
 **Priority**: High for the pilot's promise
 **Impact**: /hosted and `docs/commercial/pilot-offer.md` §4 say "We'll move them into your hosted account with you, by hand. Nothing to type again." Nothing imports a records file into a hosted profile, so the by-hand move today is re-entering with the person.

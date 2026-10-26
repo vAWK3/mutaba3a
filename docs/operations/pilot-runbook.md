@@ -281,29 +281,22 @@ npm run rotate:password -- --url "$URL" --email nour@example.com --lock
   Disabling also cancels any open links.
 - **Only sign them out:** `npm run revoke:sessions -- --url "$URL" --email <email>`.
 
-## 3. Move a free-app user's data
+## 3. Move a signed-out user's data into an account
 
-/hosted and pilot-offer §4 promise: *"We'll move them into your hosted account with you, by hand.
-Nothing to type again."*
+**There's no tool for this, and none is planned.** Basel closed MUT-290 (the in-app move on
+sign-in) as won't do on 2026-10-27. Nothing on the server imports a records file into a hosted
+profile. The free web app at `/app` is gone too (MUT-445, ADR-203), so this section covers only
+people who used the portal signed out.
 
-**There's no tool for this yet.** MUT-290 (in Backlog) is the in-app, one-time move on sign-in.
-Nothing on the server imports a records file into a hosted profile. Until MUT-290 ships:
+The procedure:
 
-1. **⚠ Basel decides:**
-   - either prioritise MUT-290 before the first free-app user moves in;
-   - or soften the promise to "we'll move them with you", dropping "nothing to type again" (TD-191).
-2. Meanwhile, the honest procedure:
-   1. The person keeps their free-app data where it is. Nothing is lost by waiting.
-   2. They make a copy for safety:
-      - in the free web app: Settings › Your data › **Back up now**, plus Export receipts ›
-        **Download ZIP**;
-      - in the portal's signed-out mode: **Download my records**, the `.zip` with `records.json`
-        and `receipts/` (MUT-286/287).
-   3. Book a screen-share. They re-enter their clients and open receivables in the portal (or the
-      phone) with you, into the profile you agree on.
-   4. Then they compare the totals on the free app's Overview with the portal's Money summary for
-      the same month. Note the check in the offboarding log's onboarding line.
-3. Never ask for their records file by email to type it in yourself. It's their financial data, and
+1. They make a copy for safety: in the portal's signed-out mode, Your data › **Download my
+   records**, the `.zip` with `records.json` and `receipts/` (MUT-286/287).
+2. Book a screen-share. They re-enter their clients and open receivables in the portal (or the
+   phone) with you, into the profile you agree on.
+3. They compare the signed-out Money summary with the account's for the same month. Note the check
+   in the offboarding log's onboarding line.
+4. Never ask for their records file by email to type it in yourself. It's their financial data, and
    the pilot promises it doesn't travel.
 
 ## 4. Restore: one profile or the whole database
@@ -801,7 +794,7 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 | §1.4 firm switch | ❌ | not on `main` (MUT-300) | Walk once MUT-300 merges |
 | §2 `rotate:password` | ✅ | local API | Old password 201 until the link was used, then 401; old session 401 |
 | §2 `rotate:password --lock` | ✅ | local API | Session and password 401 at once; link restores access |
-| §3 free-app move | ❌ | no tool (MUT-290) | Procedure only; ⚠ decision open |
+| §3 move a signed-out user's data | ❌ | no tool (MUT-290 won't do) | Procedure only: Download, then retype |
 | §4.1 clone or backup into a scratch instance | ⚠ dry run only | needs production | The drill's dry run prints the exact sequence |
 | §4.2 restore one profile (dry run, then for real) | ✅ | dev copy → dev | Deleted expense came back; dry run changed nothing; `organization.restored` audited; 7 s |
 | §4.3 B whole database, `pg_dump` + `pg_restore --single-transaction` | ✅ | dev copy → new database, and `--clean` over a populated one | Every count matched (users 12, organizations 24, expenses 523, audit 4160, migrations 30); 1–2 s. **Found:** pg_dump 18 output fails on Postgres 16; use v16 tools (§0) |

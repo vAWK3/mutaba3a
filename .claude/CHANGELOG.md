@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-290 and MUT-292 closed as won't do
+
+**Why:** MUT-445 (ADR-203) already retired the free web app, so MUT-292 has nothing left to do. Basel dropped MUT-290: nothing moves a signed-out portal's records into an account; people use Download my records and retype.
+
+### Changed
+- `docs/operations/pilot-runbook.md` §3: now covers only people who used the portal signed out. There's no tool and none is planned; the procedure is Download, screen-share, retype, compare totals. The walk-log row says so.
+- `.claude/TECH_DEBT.md`: TD-191 resolved (won't fix).
+- `.claude/SYSTEM_OVERVIEW.md`: the signed-in export no longer says a move into an account is coming.
+
 ## [Unreleased] - 2026-10-26 — `signups:review` gets the admin token from gcloud
 
 **Why:** `npm run signups:review` stopped at "MUTABA3A_ADMIN_TOKEN is not set" and defaulted to localhost, so every review meant fetching the secret by hand.

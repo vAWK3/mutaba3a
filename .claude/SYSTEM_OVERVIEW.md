@@ -336,7 +336,7 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
 - Billing never travels with a profile's data: it isn't in the local snapshot, in a profile export, or rolled back by a restore.
 
 ### Taking your records with you (MUT-325, ADR-156)
-Signed in, Your data › Download my records writes the chosen profiles to the same records file the signed-out portal restores (`records.json` + receipt files, labelled as an export from the account). The server streams each profile (`GET /v1/records-export`, audited `records.exported`) re-homed to the device's one person: no password, no other person's row or email, no Malafat connection or documents. It's an export, not a backup: nothing restores into an account yet (MUT-290).
+Signed in, Your data › Download my records writes the chosen profiles to the same records file the signed-out portal restores (`records.json` + receipt files, labelled as an export from the account). The server streams each profile (`GET /v1/records-export`, audited `records.exported`) re-homed to the device's one person: no password, no other person's row or email, no Malafat connection or documents. It's an export, not a backup: nothing restores into an account (MUT-290, the move on sign-in, closed as won't do on 2026-10-27).
 
 ### Data Residency
 - **All data stored locally** in browser IndexedDB or Tauri app storage
