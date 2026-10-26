@@ -49,6 +49,7 @@
 **Priority**: Low
 **Impact**: an agent that adds a receipt's amount to the inbox can't attach the file there; it has to file the expense to a profile first (the tool description says so).
 **Fix**: inbox attachments (a receipt on an InboxEntry, moved onto the expense at filing), if inbox-first agent flows need it.
+**Update (MUT-437)**: an agent now files the entry first (`file_inbox_entry`), then attaches to the expense it returns; inbox attachments are still not needed for the agent flow.
 
 ### TD-259: A Claude.ai chat can record expenses but not upload receipt files
 **Status**: Open
@@ -59,7 +60,7 @@
 **Fix**: revisit if MCP gains a client-to-server file transfer primitive.
 
 ### TD-258: The inbox part of `find_similar_expenses` is a capped scan
-**Status**: Open
+**Status**: Resolved (2026-10-26, MUT-437: `inboxEntries.listMatchCandidates` filtered by window, currency, amount and kind, index `(userId, occurredOn)`)
 **Ticket**: MUT-435 (review D6) — fix with MUT-437
 **Added**: 2026-10-26
 **Priority**: Low

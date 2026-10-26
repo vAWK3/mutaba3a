@@ -5392,3 +5392,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - An unknown `'mcp'` on a pre-MUT-436 phone build: inbox writes stay off until the minimum build is raised.
 
 **Alternatives considered:** an `'agent'` principal with its own matrix column (review D2: rejected, no behaviour change, two sources of truth); file bytes inline in a tool argument (P2: rejected, the model would emit every byte as output); reading the marker from the audit row (P3: rejected, a read per drawer open, hidden from API keys).
+
+## ADR-202: Every Agent Expense Write Checks for the Same Purchase First, Under a Per-Person Lock (MUT-437, epic MUT-432)
+
+**Status:** Accepted (2026-10-26, MUT-437; plan `.claude/designs/mut-437-statement-receipt-matching.md`, eng review D1–D18 answered by Basel).
+
+**Context:** MUT-435 shipped the same-purchase rule (`expenses/similarity.ts`, ADR-200) and `find_similar_expenses`; MUT-436's `add_expense` relied on the agent calling it. A card statement and a folder of receipts describe the same purchases, so an agent working through both would record each one twice.
+
+**Decision:**
+1. **The server enforces it.** `add_expense` (both destinations) and the new `file_inbox_entry` run, inside the person's write lock: validate (no writes, D17) → `findLookAlikes` across every profile the person owns or co-owns (LOCKED left out) and their inbox (D4) → write. Any look-alike answers `{ outcome: 'matched', expense: null, candidates }`, a normal result (D5): nothing is written (not even a vendor) and the idempotency key is released (the internal `LookAlikesFound` is not an `ApiError`, so `runIdempotent` fails the claim).
+2. **The person answers, the agent retries with the same key.** `notDuplicateOf` (≤100 ids, kept out of the fingerprint) lists the look-alikes the person called a different purchase; they are dropped before the top-10 cut, so each retry shows the next ones and a frequent same-price purchase is recorded once all are answered (D3, D12).
+3. **The rule is unchanged and shared (AC4):** a different vendor never excludes, it ranks lower and reads `vendorMatch: 'different'` (D2: Arabic/Hebrew receipts against Latin card descriptors). An inbox entry's vendor for ranking is its note's text before " · " (D16). Each look-alike says `hasReceipt` and `canAttachReceipt` (false for an inbox entry).
+4. **Reads that cannot miss:** the expense read filters on currency, amount and the ±3-day window in the database (`ExpenseFilter.amountMinor`); the inbox read is `inboxEntries.listMatchCandidates` with a `(userId, occurredOn)` index (TD-258 fixed, D6).
+5. **`file_inbox_entry` (D7):** files a captured entry to a chosen profile through `inbox/file-expense.ts` (`prepareInboxExpenseFiling` + `commitInboxExpenseFiling`, shared with POST /v1/inbox/{id}/file-as-expense, D11/D18), keeping the entry's capture source; it is outside `MCP_INBOX_WRITES` (D10), since filing never creates an 'mcp' inbox row, and runs the same check with the entry excluded (D13). Receipts then attach to the expense it returns.
+6. **One write at a time per person (D15):** `agentWriteLock.run(userId, fn)` takes `pg_advisory_xact_lock(437, hashtext(userId))` in an interactive transaction (15 s) while `fn` runs on the pool (memory: a per-person promise chain), so two parallel tool calls cannot both pass the check.
+7. **Write needs read (D14):** write and receipt tools register only for a grant with both scopes, so a `matched` answer never shows records to a grant that cannot read.
+8. **Descriptions** tell the agent to use the purchase date (not the posting date) and, for a foreign charge, the original amount and currency (D8, D9).
+
+**Consequences:**
+- MUT-436's `add_expense` output changes to `{ outcome, expense, candidates, replayed }` (unreleased, so no client depended on it).
+- Each agent write holds one pooled connection for its run; the per-person agent limiter (240/min) bounds it.
+- The session's own filing route keeps no look-alike check (out of scope).
+
+**Alternatives considered:** a different vendor excluding (D2: misses transliterated duplicates); a `confirmedNew` boolean (D3: lets the agent skip the question); an error instead of a result (D5: invites "fix and retry"); an in-process per-person queue (D15: Basel chose the database lock so it holds across instances); destination-only search (D4: one purchase in two profiles).
+

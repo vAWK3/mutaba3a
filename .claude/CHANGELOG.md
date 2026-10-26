@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-26 — One purchase is one expense when Claude logs it (MUT-437, ADR-202)
+
+**Why:** a card statement and the receipts behind it describe the same purchases; Claude must not record each twice.
+
+### Added
+- Every agent expense write (`add_expense`, new `file_inbox_entry`) checks for look-alikes after validating and before writing, and answers `outcome: 'matched'` with the candidates instead of writing; `notDuplicateOf` records it once the person says it is different (`server/src/mcp/write-tools.ts`).
+- `file_inbox_entry`: files a captured inbox entry to a profile so a receipt can attach (not behind `MCP_INBOX_WRITES`).
+- Look-alikes carry `vendorMatch`, `hasReceipt`, `canAttachReceipt`; an inbox note's first part ranks as its vendor.
+- `agentWriteLock` (Postgres advisory lock per person), `inboxEntries.listMatchCandidates` + index migration `20261026120000`, `ExpenseFilter.amountMinor`.
+- Release-QA `portal-selfservice.mcp.statement-match`, `portal-selfservice.mcp.file-inbox-entry`.
+
+### Changed
+- `add_expense`'s output is `{ outcome, expense, candidates, replayed }`.
+- Write and receipt tools need the `read` scope as well as `write`.
+- Inbox filing moved into `server/src/inbox/file-expense.ts` (route behaviour unchanged, own refactor commit `324f4039`).
+
+### Fixed
+- TD-258: the inbox look-alike search no longer misses a capture older than the newest 200.
+
+---
+
 ## [Unreleased] - 2026-10-26 — Claude can add expenses and receipts (MUT-436, ADR-201)
 
 **Why:** the epic's purpose: a person's own Claude logs receipts and statement lines as expenses, asked first and safe to retry.

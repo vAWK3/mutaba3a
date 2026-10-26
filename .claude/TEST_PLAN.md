@@ -3898,3 +3898,18 @@ Tests first for each unit (seen failing: modules missing, or the old script text
 Also run by hand, read-only, against the local dev database: `rollback:check` for api-v0.8.0 (0), api-v0.6.0 (2, MUT-333 and MUT-115 counted 0) and HEAD (1, an unapplied migration); every hazard query executes.
 And read-only against production's Artifact Registry (gcloud token): `release-image rollback` found api-v0.8.0's (`8acc5022`) and api-v0.6.0's (`d9edb43f`) images, each warning it has no revision label; `deploy-plan` refused `8acc5022` from another HEAD with a dirty tree and said `build` for an unused tag (it also said `reuse` for `8acc5022` at its own commit then; since the pre-landing review an unlabelled image is never reused).
 
+## MUT-437 — One purchase is one expense (2026-10-26, ADR-202)
+
+Tests written first for the store, the rule and the tools (watched failing: 6 red before T3, the D17/D12/D15 tests with T4); the refactor commit's proof is the existing inbox suites, unchanged.
+
+| File | Kind | Count | What it proves |
+|---|---|---|---|
+| `server/src/expenses/__tests__/similarity.test.ts` | Unit | +2 | vendorMatch similar/different/unknown; Arabic vs Latin stays a match, marked different |
+| `server/src/__tests__/mcp-read-tools.test.ts` | Route (real /mcp) | +4 | hasReceipt/canAttachReceipt/vendorMatch; the amount pre-filter finds one among 250; an inbox capture older than 205 newer ones is found (TD-258); an inbox note's vendor ranks first (D16); sweep covers file_inbox_entry |
+| `server/src/__tests__/mcp-write-tools.test.ts` | Route (real /mcp + OAuth) | +15 | matched writes nothing (no vendor), same key then creates with notDuplicateOf, replays never self-match; similar vendor first and excluded ids dropped; 15 look-alikes come 10 then 5 then create (D12); another profile and the inbox block (D4); validation before the check (D17); two parallel calls → one created, one matched (D15); inbox destination checks too; AC2 statement-first then receipt attached, hasReceipt; file_inbox_entry files with the entry's source and grant audit, replays, receipt attaches to the returned id; filing matched then filed with notDuplicateOf (D13); NOT_FOUND / ENTRY_KIND_MISMATCH / lapse; a write-only grant gets no write tools (D14) |
+| `server/src/repositories/__tests__/store-contract-inbox.ts` | Contract (memory + Postgres) | +1 | listMatchCandidates window edges, currency, amount, kind, person, cap with truncated |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` | Contract (memory + Postgres) | +1 | expenses.list amountMinor |
+| `server/src/repositories/__tests__/store-contract-agent-lock.ts` | Contract (memory + Postgres) | 2 | runs for one person never overlap, another person's do; a throwing run releases the lock |
+| `qa/specs/portal-selfservice/mcp.spec.ts` | Release-QA (live API) | +2 | statement-match; file-inbox-entry (filed, receipt uploaded, listed in the drawer) |
+| Regression | Route + unit | unchanged/changed | inbox-filing, expense-capture-source, routes-vendors, inbox-isolation, route-security unchanged across the refactor; store-guard allow-list (35 methods) and inbox classification; add-expense/receipt specs read the new output |
+

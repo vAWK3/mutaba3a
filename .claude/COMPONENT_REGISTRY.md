@@ -2286,6 +2286,15 @@ the cap's reserve), and in `RECIPIENT_CAP_EXEMPT` only if it is credential-gated
 `sendPasswordNotice(mailer, logger, person, { first, signInLink, requestId })` is the template for a post-commit
 notice. Tests: `server/src/email/__tests__/`.
 
+### findLookAlikes / LOOK_ALIKE_ITEM — `server/src/mcp/read-tools.ts` (MUT-437, ADR-202)
+- The look-alikes of one purchase (the `expenses/similarity.ts` rule), best first, ≤10: one profile or every owned/co-owned profile (LOCKED left out) plus the inbox; `exclude` drops ids before the cut; each item has `vendorMatch`, `hasReceipt`, `canAttachReceipt`. Used by `find_similar_expenses` and every agent expense write (`assertNoLookAlikes`). Tests: `mcp-read-tools.test.ts`, `mcp-write-tools.test.ts`.
+
+### prepareInboxExpenseFiling / commitInboxExpenseFiling — `server/src/inbox/file-expense.ts` (MUT-437)
+- Filing an inbox entry as an expense: prepare runs every rule (kind, currency, the date bounds in the profile's timezone, links, category) and writes nothing; commit resolves the vendor, creates the expense and removes the entry in one transaction, touches the vendor and audits (`auditMetadata` for extras). Used by POST /v1/inbox/{id}/file-as-expense and `file_inbox_entry`. Tests: `inbox-filing.test.ts`, `mcp-write-tools.test.ts`.
+
+### agentWriteLock — `LedgerStore.agentWriteLock.run(userId, fn)` (MUT-437)
+- One agent expense write per person at a time: Postgres `pg_advisory_xact_lock(437, hashtext(userId))` in a 15 s transaction; memory, a promise chain. Agents only (`sessionOnly`). Contract: `store-contract-agent-lock.ts`.
+
 ### selfServiceRoutes / SELF_SERVICE_POLICY / createTurnstileVerifier — `server/src/routes/self-service.ts`, `server/src/auth/{self-service,turnstile}.ts` (MUT-366, ADR-175)
 `selfServiceRoutes({ store, settings, mailer, logger, options })` mounts `POST /v1/signups` and
 `POST /v1/account-recovery`; `defaultSelfServiceOptions()` gives the production budgets with signup off.
