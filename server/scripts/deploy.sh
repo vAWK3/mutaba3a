@@ -71,7 +71,8 @@ guard_release() {
   (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
-    && guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
+    && guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
+    && guard_min_build_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}")
 }
 # MUT-148 (ADR-091): pre-roll and post-roll run here, not in Cloud Run, so they get the API's DSN from Secret
 # Manager. Re-read before each step: the release that turns sentry_enabled on creates the secret in step 4.
@@ -177,6 +178,9 @@ EXPECT_ERROR_REPORTING="off"; [[ "${SENTRY_ENABLED}" == "true" ]] && EXPECT_ERRO
 # MUT-359 (D22): never switch mail off as a side effect of a release (a checkout whose production.tfvars lacks
 # mailer = "resend"). On by default; SKIP_MAILER_GUARD=1 skips it (lib/release-guard.sh).
 guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+# MUT-471: never change the phone minimum builds or their kill switch as a side effect of a release (a stale or
+# incomplete production.tfvars). ALLOW_MIN_BUILD_CHANGE names a meant change; SKIP_MIN_BUILD_GUARD=1 skips it (lib/release-guard.sh).
+guard_min_build_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # MUT-368 (D6): with mail on, the portal built below must carry the production Turnstile site key, not a test key.
 guard_turnstile_site_key "${TF_ARGS[@]}"
 # First run only: the registry must exist before `docker push`, the database

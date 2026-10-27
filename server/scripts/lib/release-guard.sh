@@ -278,3 +278,88 @@ guard_turnstile_site_key() {
   [[ -n "${key}" && ! "${key}" =~ ^[123]x ]] && return 0
   die "mailer = \"resend\" mails signup and recovery links, but MUTABA3A_TURNSTILE_SITE_KEY is ${key:-unset}${key:+ (a Cloudflare test key)}. Put the production widget's site key in deploy.env (DEPLOYMENT.md §6f), then release."
 }
+
+# MUT-471: refuse a release whose checkout would change the phone minimum builds production serves (MUT-293 /
+# MUT-457) without saying so. The floors, the recommended builds and min_build_check_disabled live in the git-ignored
+# production.tfvars, so a copy that never got the lines drops the floors, and a copy that is behind can re-raise a bad
+# floor after an incident lowered it, or switch the kill switch off while a bad floor still serves: the phones it hit
+# are locked out again. Any difference between what this checkout's local.min_build_env would send and what the
+# service's template has is refused unless ALLOW_MIN_BUILD_CHANGE names it (comma- or space-separated env names);
+# a raise is named too, since a stale raise is exactly the lockout. A removed floor removes its recommended build
+# (the precondition in main.tf), so both are named. SKIP_MIN_BUILD_GUARD=1 skips the guard, only for when it can't
+# read terraform or Cloud Run itself. Fails closed. In a rollback, rollback_infra_gate has already refused any env
+# change, so ALLOW_MIN_BUILD_CHANGE never helps one through.
+MIN_BUILD_ENV_NAMES="IOS_MIN_BUILD ANDROID_MIN_BUILD IOS_RECOMMENDED_BUILD ANDROID_RECOMMENDED_BUILD MIN_BUILD_CHECK_DISABLED"
+
+# guard_min_build_release <suffix> <service> <region> <project> <terraform args…>
+guard_min_build_release() {
+  if [[ "${SKIP_MIN_BUILD_GUARD:-0}" == "1" ]]; then
+    warn "min-build release guard skipped (SKIP_MIN_BUILD_GUARD=1): use it only when the guard itself can't read terraform or Cloud Run; this release ships whatever minimum builds this checkout's production.tfvars says"
+    return 0
+  fi
+  local suffix="$1" service="$2" region="$3" project="$4"; shift 4
+  guard_var_args "$@"
+
+  local name allowed=" "
+  for name in $(tr ',' ' ' <<<"${ALLOW_MIN_BUILD_CHANGE:-}"); do
+    [[ " ${MIN_BUILD_ENV_NAMES} " == *" ${name} "* ]] \
+      || die "ALLOW_MIN_BUILD_CHANGE names '${name}', which isn't one of ${MIN_BUILD_ENV_NAMES}"
+    allowed+="${name} "
+  done
+
+  # One expression: Terraform 1.15's console answers only the last of several lines (MUT-475).
+  local keys="" plan
+  for name in ${MIN_BUILD_ENV_NAMES}; do keys+="${keys:+, }\"${name}\""; done
+  plan="$(printf 'join(" ", [for k in [%s] : lookup(local.min_build_env, k, "unset")])\n' "${keys}" \
+    | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+    || die "could not evaluate local.min_build_env with terraform console (above); refusing to release on a guess"
+  plan="$(sed -n '1{s/"//g;p;}' <<<"${plan}")"
+  [[ "${plan}" =~ ^(([1-9][0-9]*|unset)\ ){4}(true|unset)$ ]] \
+    || die "terraform console gave '${plan}' for the minimum builds (${MIN_BUILD_ENV_NAMES}); refusing to release on a guess"
+
+  local json err rc=0
+  err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
+  json="$(gcloud run services describe "${service}" --region="${region}" --project="${project}" --format=json 2>"${err}")" || rc=$?
+  if (( rc != 0 )); then
+    if grep -qiE 'cannot find service|could not be found|NOT_FOUND' "${err}"; then
+      rm -f "${err}"; return 0 # first deploy: no service, nothing to change
+    fi
+    cat "${err}" >&2; rm -f "${err}"
+    die "could not read ${service}'s env (above); refusing to release on a guess"
+  fi
+  rm -f "${err}"
+  # One word per name: its value, "unset" when the service doesn't have it, "?" when it isn't a plain word.
+  local live
+  live="$(printf '%s' "${json}" | node -e '
+    let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      const env = JSON.parse(s).spec?.template?.spec?.containers?.[0]?.env ?? [];
+      process.stdout.write(process.argv[1].split(" ").map((n) => {
+        const e = env.find((x) => x.name === n);
+        return !e ? "unset" : typeof e.value === "string" && /^[A-Za-z0-9._-]+$/.test(e.value) ? e.value : "?";
+      }).join(" "));
+    });' "${MIN_BUILD_ENV_NAMES}")" || die "could not parse ${service}'s env; refusing to release on a guess"
+
+  local i=0 want have changes="" names="" unnamed=""
+  local -a plan_v live_v
+  read -r -a plan_v <<<"${plan}"
+  read -r -a live_v <<<"${live}"
+  for name in ${MIN_BUILD_ENV_NAMES}; do
+    want="${plan_v[i]}"; have="${live_v[i]:-?}"; i=$((i + 1))
+    [[ "${have}" == "?" || ( "${name}" != "MIN_BUILD_CHECK_DISABLED" && ! "${have}" =~ ^([1-9][0-9]*|unset)$ ) ]] \
+      && die "could not read ${service}'s ${name} (not a whole number or plain value); refusing to release on a guess"
+    [[ "${want}" == "${have}" ]] && continue
+    changes+=$'\n'"  ${name}: production has ${have}, this checkout would set ${want} ($(tr '[:upper:]' '[:lower:]' <<<"${name}"))"
+    names+="${names:+,}${name}"
+    [[ "${allowed}" == *" ${name} "* ]] || unnamed+=" ${name}"
+  done
+  for name in ${allowed}; do
+    [[ ",${names}," == *",${name},"* ]] || warn "ALLOW_MIN_BUILD_CHANGE names ${name}, which this release doesn't change"
+  done
+  [[ -z "${changes}" ]] && return 0
+  if [[ -z "${unnamed}" ]]; then
+    warn "this release changes the phone minimum builds, as ALLOW_MIN_BUILD_CHANGE allows:${changes}"
+    return 0
+  fi
+  die "this release would change the phone minimum builds production serves:${changes}
+production.tfvars is git-ignored, so a checkout that is behind (or never got these lines) would ship this silently and can lock phones out. If this checkout is stale, fix its production.tfvars, then release. If you mean every change above, release with ALLOW_MIN_BUILD_CHANGE=${names} (DEPLOYMENT.md \"Raise the minimum app build\"). SKIP_MIN_BUILD_GUARD=1 only if the guard itself can't read terraform or Cloud Run."
+}
