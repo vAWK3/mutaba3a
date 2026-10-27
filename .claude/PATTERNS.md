@@ -2845,3 +2845,6 @@ A read across a person's profiles (`GET /v1/summaries/verdict`, like `GET /v1/en
 
 An operator action lives once in `server/src/operator/actions/<area>.ts`, taking an `ActionContext` with an `OperatorActor` (`server/src/operator/actor.ts`): `TOKEN_ACTOR` from `/admin/v1/*` (the CLI) or `{ kind: 'operator', userId }` from `/v1/operator/*` (the portal). The two route files are thin adapters, so the console's results are the CLI's by construction. `auditActorIdOf` and `byLabelOf` are the only places the doors differ: the token keeps `actorId: null` and its old labels (`admin-token`, `admin`); an operator writes its id and `operator:<id>`. Moving an existing admin handler into an action keeps that route's test file unchanged as the regression proof.
 
+## Pattern: a mail's look is data; the frame draws it (MUT-468)
+**Where**: `server/src/email/templates/look.ts` (`LOOK: Record<CustomerTemplateId, Look>`), `layout.ts` (`renderLayout(locale, body, look, frame)`).
+**Rule**: a new customer mail adds one `LOOK` row (mood, header art, chip) and its copy with `headline` and `preheader`; the types fail the build without them. Pictures come only from `look.ts` file names under `<artOrigin>/mail/v1/`; new art goes in a new versioned folder, never over `v1`. Text on a mood tint is the ink only (`TEXT_PAIRS`, contrast test).

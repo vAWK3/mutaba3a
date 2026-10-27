@@ -85,6 +85,9 @@ const mailer = createMailer({
   fromAddress: config.MAIL_FROM_ADDRESS ?? 'no-reply@example.invalid',
   replyTo: config.MAIL_REPLY_TO ?? null,
   limits: { daily: config.MAIL_DAILY_CAP, securityReserve: config.MAIL_SECURITY_RESERVE, perRecipient: config.MAIL_RECIPIENT_DAILY_CAP },
+  // MUT-468: the mail art is served by the portal; the Privacy link goes to the website.
+  ...(config.PORTAL_ORIGIN ? { artOrigin: config.PORTAL_ORIGIN } : {}),
+  ...(config.WEBSITE_ORIGIN ? { websiteOrigin: config.WEBSITE_ORIGIN } : {}),
 });
 /** MUT-359 (D2): the send log keeps 30 days; pruned hourly. */
 const MAIL_LOG_RETENTION_MS = 30 * 24 * 3_600_000;

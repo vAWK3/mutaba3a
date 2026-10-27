@@ -58,6 +58,10 @@ export interface MailerOptions {
   fromAddress: string;
   replyTo: string | null;
   limits: MailLimits;
+  /** MUT-468: PORTAL_ORIGIN, where the mail art is served (`/mail/v1/`). Unset = mails without pictures. */
+  artOrigin?: string;
+  /** MUT-468: WEBSITE_ORIGIN, for the footer's Privacy link. Unset = no Privacy link. */
+  websiteOrigin?: string;
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -82,7 +86,7 @@ export function createMailer(options: MailerOptions): Mailer {
       const to = normalizeEmail(input.to);
       if (!isPlainAddress(to)) return refused('INVALID_ADDRESS');
       if (isUnownedDomain(to)) return refused('UNOWNED_DOMAIN');
-      const rendered = renderMail(template, locale, input.vars);
+      const rendered = renderMail(template, locale, input.vars, { to, artOrigin: options.artOrigin, websiteOrigin: options.websiteOrigin });
 
       if (transport.kind === 'noop') {
         if (!warnedDisabled) logger.warn({ template }, 'MAILER is not configured; no mail is sent');

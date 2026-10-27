@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { TEMPLATE_IDS, type MailTemplateId, type TemplateVars } from '../ports.js';
 import { renderMail } from '../templates/index.js';
 import { mailDay } from '../templates/copy.js';
+import { SECONDARY_INK, TEXT_PAIRS } from '../templates/layout.js';
+import { ART_FILES, type CustomerTemplateId } from '../templates/look.js';
 
 /**
  * MUT-359 A1 (ADR-159 §5, brief §8.4): every mail exists in English and Arabic, Arabic is RTL, nothing but the
@@ -177,5 +179,218 @@ describe('templates', () => {
     }
     expect(renderMail('trial-ended', 'ar', SAMPLE['trial-ended']).text).toContain('نزّل سجلاتي');
     expect(renderMail('trial-ended', 'en', SAMPLE['trial-ended']).subject).toBe('Your MTB3A account is read-only');
+  });
+});
+
+/**
+ * MUT-468 (plan §5, regression contract R2/D3): the frame. The rules above stay unchanged; with no art origin they
+ * also prove the images-off render. These add the pictures, the headline and preview line, the footer, contrast and
+ * size, and pin every subject to today's wording.
+ */
+const ART_ORIGIN = 'https://app.example.test';
+const WEBSITE = 'https://site.example.test';
+const RECIPIENT = 'person@example.test';
+const FRAME = { to: RECIPIENT, artOrigin: ART_ORIGIN, websiteOrigin: WEBSITE };
+const CUSTOMER_IDS = TEMPLATE_IDS.filter((id): id is CustomerTemplateId => id !== 'review-digest');
+const ART_URLS = ART_FILES.map((file) => `${ART_ORIGIN}/mail/v1/${file}`);
+const LOCALES = ['en', 'ar'] as const;
+/** Today's subjects (captured before the rewrite); the frame must not change a word. */
+const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
+  'finish-signup': { en: 'Finish creating your MTB3A account', ar: 'أكمل إنشاء حسابك في متابعة' },
+  'account-exists': { en: 'You already have an MTB3A account', ar: 'لديك حساب في متابعة بالفعل' },
+  'reset-password': { en: 'Set a new MTB3A password', ar: 'عيّن كلمة مرور جديدة لحسابك في متابعة' },
+  'finish-setup': { en: 'Finish setting up your MTB3A account', ar: 'أكمل إعداد حسابك في متابعة' },
+  'password-changed': { en: 'Your MTB3A password was changed', ar: 'تم تغيير كلمة مرور حسابك في متابعة' },
+  'account-under-review': { en: "We're reviewing your MTB3A account", ar: 'نراجع حسابك في متابعة' },
+  'account-ready': { en: 'Your MTB3A account is ready', ar: 'حسابك في متابعة جاهز' },
+  'account-declined': { en: 'About your MTB3A account request', ar: 'بخصوص طلب حسابك في متابعة' },
+  'trial-ending-soon': { en: 'Your MTB3A free trial ends within 3 days', ar: 'تنتهي تجربتك المجانية في متابعة خلال 3 أيام' },
+  'trial-ended': { en: 'Your MTB3A account is read-only', ar: 'حسابك في متابعة للقراءة فقط' },
+  'trial-locking-soon': { en: 'Your MTB3A account locks within 2 days', ar: 'يُقفَل حسابك في متابعة خلال يومين' },
+  'account-closing': { en: 'Your MTB3A account will be deleted on November 23, 2026', ar: 'سيُحذف حسابك في متابعة بتاريخ 23 نوفمبر 2026' },
+  'passkey-added': { en: 'A passkey was added to your MTB3A account', ar: 'أُضيف مفتاح مرور إلى حسابك في متابعة' },
+};
+const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
+const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
+
+/** WCAG relative luminance and contrast ratio, from #RRGGBB. */
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const contrast = (a: string, b: string) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+describe.each(CUSTOMER_IDS)('MUT-468 frame: %s', (id) => {
+  const vars = SAMPLE[id];
+  const mails = LOCALES.map((locale) => ({ locale, mail: renderMail(id, locale, vars as never, FRAME) }));
+
+  it("loads pictures only from the portal's /mail/v1/, each one named in look.ts, with alt text and a size", () => {
+    for (const { mail } of mails) {
+      const imgs = tagsOf(mail.html, 'img');
+      expect(imgs).toHaveLength(2); // the header art and the chip
+      for (const img of imgs) {
+        expect(ART_URLS).toContain(attrOf(img, 'src'));
+        expect(attrOf(img, 'alt')?.trim()).toBeTruthy();
+        expect(Number(attrOf(img, 'width'))).toBeGreaterThan(0);
+        expect(Number(attrOf(img, 'height'))).toBeGreaterThan(0);
+      }
+      expect(mail.html).not.toMatch(/<style|<script|<link|url\(|background-image/i);
+    }
+  });
+
+  it('links only to the links passed in, its pictures and the Privacy page in its own language', () => {
+    for (const { locale, mail } of mails) {
+      const privacy = `${WEBSITE}/privacy?lang=${locale}`;
+      const hrefs = [...mail.html.matchAll(/href="([^"]*)"/g)].map((m) => m[1]!.replace(/&amp;/g, '&'));
+      const allowed = [...LINKS_OF(vars), ...('supportAddress' in vars ? [`mailto:${vars.supportAddress}`] : []), privacy];
+      for (const href of hrefs) expect(allowed).toContain(href);
+      expect(hrefs).toContain(privacy);
+      const urls = [...mail.html.matchAll(/https?:\/\/[^\s"<]+/g)].map((m) => m[0].replace(/&amp;/g, '&'));
+      for (const url of urls) expect([...LINKS_OF(vars), ...ART_URLS, privacy]).toContain(url);
+    }
+  });
+
+  it('opens with a hidden preview line, then exactly one headline', () => {
+    for (const { mail } of mails) {
+      const preview = mail.html.indexOf('data-preheader');
+      expect(preview).toBeGreaterThan(-1);
+      expect(tagsOf(mail.html, 'h1')).toHaveLength(1);
+      expect(preview).toBeLessThan(mail.html.indexOf('<h1'));
+    }
+  });
+
+  it('names the recipient left-to-right and keeps the password line in the footer', () => {
+    for (const { locale, mail } of mails) {
+      expect(mail.html).toContain(`<bdi dir="ltr">${RECIPIENT}</bdi>`);
+      expect(mail.html).toContain(locale === 'ar' ? 'تطلب منك متابعة كلمة المرور' : 'never asks for your password');
+    }
+  });
+
+  it('keeps its subject word for word', () => {
+    for (const { locale, mail } of mails) expect(mail.subject).toBe(SUBJECTS[id][locale]);
+  });
+
+  it('stays under 100 KB, so Gmail never clips it', () => {
+    for (const { mail } of mails) expect(Buffer.byteLength(mail.html)).toBeLessThan(100_000);
+  });
+});
+
+describe('MUT-468 frame', () => {
+  it('keeps the first-password subject word for word', () => {
+    const first = { first: true, signInLink: 'https://portal.example.test/' };
+    expect(renderMail('password-changed', 'en', first, FRAME).subject).toBe('Your MTB3A password is set');
+    expect(renderMail('password-changed', 'ar', first, FRAME).subject).toBe('تم تعيين كلمة مرور حسابك في متابعة');
+  });
+
+  it('faces directional art right to left in Arabic, and never in English', () => {
+    for (const [id, file] of [['account-ready', 'mail-header-hello-milestone-firm'], ['account-closing', 'mail-header-goodbye-destructive-confirmation']] as const) {
+      expect(renderMail(id, 'ar', SAMPLE[id] as never, FRAME).html).toContain(`/mail/v1/${file}-rtl-2x.png`);
+      const en = renderMail(id, 'en', SAMPLE[id] as never, FRAME).html;
+      expect(en).toContain(`/mail/v1/${file}-2x.png`);
+      expect(en).not.toContain('-rtl-');
+    }
+    // Art without a direction has one file for both languages.
+    expect(renderMail('finish-signup', 'ar', SAMPLE['finish-signup'], FRAME).html).toContain('/mail/v1/mail-header-hello-spot-email-2x.png');
+  });
+
+  it('keeps the operator digest plain: no pictures, no headline', () => {
+    const digest = renderMail('review-digest', 'en', SAMPLE['review-digest'], FRAME).html;
+    expect(digest).not.toContain('<img');
+    expect(digest).not.toContain('<h1');
+  });
+
+  it('drops the Privacy link without a website origin, and every picture without an art origin', () => {
+    const noSite = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { to: RECIPIENT, artOrigin: ART_ORIGIN }).html;
+    expect(noSite).not.toContain('/privacy');
+    const noArt = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { to: RECIPIENT, websiteOrigin: WEBSITE }).html;
+    expect(noArt).not.toContain('<img');
+    // The images-off render still has its headline, button and copyable link.
+    expect(noArt).toContain('<h1');
+    expect(noArt).toContain(`<bdi dir="ltr">${LINK}</bdi>`);
+  });
+
+  it('uses only the origin of an art origin given with a trailing slash', () => {
+    const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { ...FRAME, artOrigin: `${ART_ORIGIN}/` }).html;
+    expect(html).toContain(`src="${ART_ORIGIN}/mail/v1/`);
+  });
+
+  it('escapes a hostile recipient and passkey name in the footer and the details panel', () => {
+    const mail = renderMail('passkey-added', 'en', { passkeyName: '<b>evil</b>', signInLink: 'https://portal.example.test/' }, { ...FRAME, to: 'a<script>@example.test' });
+    expect(mail.html).not.toContain('<script>');
+    expect(mail.html).not.toContain('<b>evil</b>');
+    expect(mail.html).toContain('&lt;b&gt;evil&lt;/b&gt;');
+  });
+
+  it('shows the passkey name and the deletion day in a details panel and in the text part; no other mail has a panel', () => {
+    const passkey = renderMail('passkey-added', 'en', SAMPLE['passkey-added'], FRAME);
+    expect(passkey.html).toContain('data-details');
+    expect(passkey.text).toContain('Passkey: iCloud Keychain');
+    const closing = renderMail('account-closing', 'ar', SAMPLE['account-closing'], FRAME);
+    expect(closing.html).toContain('data-details');
+    expect(closing.text).toContain(`يوم الحذف: ${mailDay(SAMPLE['account-closing'].deleteOn, 'ar')}`);
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing')) {
+      expect(renderMail(id, 'en', SAMPLE[id] as never, FRAME).html).not.toContain('data-details');
+    }
+  });
+
+  it('puts the headline in the text part too', () => {
+    expect(renderMail('account-ready', 'en', SAMPLE['account-ready'], FRAME).text).toContain('Your account is ready');
+    expect(renderMail('account-ready', 'ar', SAMPLE['account-ready'], FRAME).text).toContain('حسابك جاهز');
+  });
+
+  it('reaches 7:1 (AAA) for every text colour on every background the layout puts it on', () => {
+    expect(TEXT_PAIRS.length).toBeGreaterThan(0);
+    for (const { fg, bg, where } of TEXT_PAIRS) expect(contrast(fg, bg), `${where}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(7);
+  });
+
+  it('never puts the secondary ink on a mood tint: the details panel is ink only', () => {
+    const html = renderMail('passkey-added', 'en', SAMPLE['passkey-added'], FRAME).html;
+    const panel = html.slice(html.indexOf('data-details'), html.indexOf('</table>', html.indexOf('data-details')));
+    expect(panel).not.toContain(SECONDARY_INK);
+  });
+});
+
+/** MUT-468 review fixes (specialist T1/T4, adversarial 3/4). */
+describe('MUT-468 frame: review fixes', () => {
+  /** The words a reader sees in the HTML: tags, comments and entities removed. */
+  const visibleText = (html: string) => html.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]*>/g, ' ').replace(/&#?[a-z0-9]+;/gi, ' ');
+
+  it.each(CUSTOMER_IDS)('%s: no amount, currency or date in the HTML-only text either (preview line, footer, alt text)', (id) => {
+    const allowed = NUMERIC_VARS[id] ?? [];
+    for (const locale of LOCALES) {
+      const html = renderMail(id, locale, SAMPLE[id] as never, FRAME).html;
+      let rest = visibleText(html).split('MTB3A').join('');
+      for (const link of [...LINKS_OF(SAMPLE[id]), ...ART_URLS, `${WEBSITE}/privacy?lang=${locale}`]) rest = rest.split(link).join('');
+      for (const n of allowed) rest = rest.split(n).join('');
+      expect(rest).not.toMatch(CURRENCY);
+      expect(rest).not.toMatch(/[\d٠-٩۰-۹]/u);
+      // Alt text is read aloud and shown with images off; it is attribute text, so check it on its own.
+      for (const img of tagsOf(html, 'img')) expect(attrOf(img, 'alt')).not.toMatch(/[\d٠-٩۰-۹]/u);
+    }
+  });
+
+  it('keeps only the origin of an art or website origin given with a path or query, and refuses a non-http one', () => {
+    const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { to: RECIPIENT, artOrigin: `${ART_ORIGIN}/x?a="b`, websiteOrigin: `${WEBSITE}/some/page` }).html;
+    expect(html).toContain(`src="${ART_ORIGIN}/mail/v1/`);
+    expect(html).not.toContain('?a=');
+    expect(html).toContain(`href="${WEBSITE}/privacy?lang=en"`);
+    expect(() => renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { artOrigin: 'javascript:alert(1)' })).toThrow(/link/i);
+  });
+
+  it('isolates a details value so a Latin name reads correctly inside an Arabic mail', () => {
+    const html = renderMail('passkey-added', 'ar', { passkeyName: 'YubiKey 5C (USB)', signInLink: 'https://portal.example.test/' }, FRAME).html;
+    expect(html).toContain('<bdi>YubiKey 5C (USB)</bdi>');
+  });
+
+  it('holds the card at its width in Outlook desktop, which ignores max-width', () => {
+    const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], FRAME).html;
+    expect(html).toContain('<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->');
+    expect(html.match(/<!--\[if mso\]>/g)?.length).toBe(html.match(/<!\[endif\]-->/g)?.length);
   });
 });
