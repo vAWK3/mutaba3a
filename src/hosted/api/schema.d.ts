@@ -1147,7 +1147,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, ACCOUNT_CLOSING, or (an operator) RECENT_SIGN_IN_REQUIRED {method:"passkey"} */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -1158,6 +1158,15 @@ export interface paths {
                 };
                 /** @description NOT_FOUND — no such passkey of yours (or passkeys are not configured) */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason OPERATOR_NEEDS_PASSKEY — an operator's last passkey */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1335,7 +1344,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them */
+                /** @description ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them. CONFLICT reason OPERATOR_ACCOUNT: an operator (MUT-459) */
                 409: {
                     headers: {
                         [name: string]: unknown;

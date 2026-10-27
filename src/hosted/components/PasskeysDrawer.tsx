@@ -27,7 +27,7 @@ import { useToast } from './Toast';
 const FORM_ID = 'hosted-passkeys-step-up';
 const NAME_MAX = 64;
 
-type Banner = 'addFailed' | 'wrongPassword' | 'renameFailed' | 'removeFailed' | 'unreachable';
+type Banner = 'addFailed' | 'wrongPassword' | 'renameFailed' | 'removeFailed' | 'unreachable' | 'operatorPasskeyFirst';
 
 export function PasskeysDrawer({ onClose, review }: { onClose: () => void; review?: 'password' | 'recovery' | undefined }) {
   const t = useT();
@@ -71,6 +71,9 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
         return;
       case 'stepUp':
         setStepUp(true);
+        return;
+      case 'operatorPasskeyFirst':
+        setBanner('operatorPasskeyFirst');
         return;
       case 'wrongPassword':
         setBanner('wrongPassword');
@@ -187,6 +190,8 @@ const BANNER_KEYS: Record<Banner, string> = {
   renameFailed: 'hosted.account.passkeys.renameFailed',
   removeFailed: 'hosted.account.passkeys.removeFailed',
   unreachable: 'hosted.auth.unreachable',
+  // MUT-459: an operator confirms with an existing passkey, never the password (ADR-208).
+  operatorPasskeyFirst: 'hosted.account.passkeys.operatorPasskeyFirst',
 };
 
 type RowMode = 'view' | 'rename' | 'confirm';

@@ -9834,13 +9834,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, ACCOUNT_CLOSING, or (an operator) RECENT_SIGN_IN_REQUIRED {method:"passkey"}
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: NOT_FOUND — no such passkey of yours (or passkeys are not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT reason OPERATOR_NEEDS_PASSKEY — an operator's last passkey
           content:
             application/json:
               schema:
@@ -9900,7 +9906,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them"
+          description: "ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them. CONFLICT reason OPERATOR_ACCOUNT: an operator (MUT-459)"
           content:
             application/json:
               schema:

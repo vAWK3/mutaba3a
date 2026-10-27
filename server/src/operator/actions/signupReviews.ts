@@ -36,6 +36,9 @@ export interface ActionContext {
 
 export type MailOutcome = SendResult['status'];
 
+/** "Send again" sends at most once per this window (its idempotency key); a double tap is one mail. */
+const RESEND_BUCKET_MS = 60_000;
+
 export function signupReviewActions(options: SignupReviewActionOptions) {
   const { store, mailer, logger, settings, supportAddress } = options;
 
@@ -75,14 +78,20 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
 
   /**
    * MUT-459 (design 9A): "Send again" after an approval whose mail didn't go. Only an approved review whose person
-   * still exists; each attempt is its own send (a fresh idempotency key), so a retry is never swallowed as a duplicate.
+   * still exists and is still an open account (review finding 4: not disabled, not closing). One send per minute: the
+   * idempotency key is the minute, so a double tap mails once while a later retry is a real new send. Audited.
    */
   async function resendApproval(userId: string, ctx: ActionContext) {
     const review = await store.signupReviews.findByUser(userId);
     const user = review ? await store.users.getById(userId) : null;
     if (!review || !user) throw new ApiError('NOT_FOUND', 'No signup review for this user');
     if (review.decision !== 'APPROVED') throw new ApiError('CONFLICT', 'Only an approved signup can be mailed again', { reason: 'NOT_APPROVED', decision: review.decision });
-    const mail = await sendAccountReady(user, `account-ready:${review.id}:again:${ctx.at.getTime()}`, ctx.requestUrl);
+    if (user.status !== 'ACTIVE' || user.closure) throw new ApiError('CONFLICT', 'This account is no longer open; it can’t be mailed again', { reason: 'NOT_ACTIVE' });
+    const minute = Math.floor(ctx.at.getTime() / RESEND_BUCKET_MS);
+    const mail = await sendAccountReady(user, `account-ready:${review.id}:again:${minute}`, ctx.requestUrl);
+    for (const m of await store.memberships.listByUser(userId)) {
+      await store.audit.append({ organizationId: m.organizationId, actorType: 'ADMIN', actorId: auditActorIdOf(ctx.actor), action: 'user.signup_approval_mailed_again', entityType: 'user', entityId: userId, metadata: { mail }, requestId: ctx.requestId });
+    }
     logger.info({ reviewId: review.id, domain: review.domain, mail, operatorUserId: auditActorIdOf(ctx.actor) }, 'user.signup_approval_mailed_again');
     return { review: serializeReview({ ...review, person: { email: user.email, displayName: user.displayName, locale: user.locale } }), mail };
   }
@@ -103,8 +112,6 @@ export function signupReviewActions(options: SignupReviewActionOptions) {
 
   return { list, approve, decline, resendApproval };
 }
-
-export type SignupReviewActions = ReturnType<typeof signupReviewActions>;
 
 function alreadyDecided(review: SignupReviewRecord): ApiError {
   return new ApiError('CONFLICT', 'This signup was already decided', { reason: 'ALREADY_DECIDED', decision: review.decision });

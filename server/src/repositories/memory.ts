@@ -602,6 +602,8 @@ export class MemoryLedgerStore implements LedgerStore {
       } else {
         // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
         kept.credentialsVerifiedAt = input.at;
+        // MUT-459 (re-review C): a password change proves the password only, so the kept session loses its step-up.
+        kept.stepUpAt = null;
       }
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       // MUT-434 (D11): a password change disconnects every agent too.
@@ -655,7 +657,8 @@ export class MemoryLedgerStore implements LedgerStore {
         revokedReason: null,
         userAgent: input.userAgent,
         passkeyId: input.passkeyId ?? null,
-        stepUpAt: null,
+        // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
+        stepUpAt: input.passkeyId ? input.at : null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -755,9 +758,11 @@ export class MemoryLedgerStore implements LedgerStore {
       p.name = name;
       return clonePasskey(p);
     },
-    remove: async ({ userId, id, exceptSessionId, at, audit }) => {
+    remove: async ({ userId, id, exceptSessionId, at, audit, keepOne }) => {
       const p = this.passkeyMap.get(id);
       if (!p || p.userId !== userId) return null;
+      // MUT-459: counted with no await before the delete, so two racing removals can't both pass.
+      if (keepOne && [...this.passkeyMap.values()].filter((k) => k.userId === userId).length <= 1) throw new StateConflict('passkey', 'LAST_PASSKEY');
       let revokedSessions = 0;
       for (const s of this.sessionsById.values()) {
         if (s.passkeyId !== id) continue;
@@ -3322,6 +3327,8 @@ function rotatedSession(kept: SessionRecord, rotation: { tokenDigest: string; id
     idleExpiresAt,
     revokedAt: null,
     revokedReason: null,
+    // MUT-459 (review): a password change proves the password only, so the rotated session starts with no step-up.
+    stepUpAt: null,
   };
 }
 

@@ -16,9 +16,6 @@ import { ErrorEnvelopeSchema, SignupReviewDecisionSchema, SignupReviewListQueryS
  */
 export type AdminSignupReviewOptions = SignupReviewActionOptions;
 
-/** D15: the admin token carries no identity. */
-export { REVIEW_DECIDED_BY } from '../operator/actions/signupReviews.js';
-
 const adminErrors = {
   401: { description: 'Missing or invalid admin token', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
 } as const;

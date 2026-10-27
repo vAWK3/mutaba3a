@@ -40,6 +40,15 @@
   - `POST /v1/operator/signup-reviews/{userId}/approve`, `/decline`, `/resend` (resend: "Send again" after a mail that didn't go).
   - `POST /v1/operator/step-up/options` and `POST /v1/operator/step-up`: a passkey-only step-up, 10 minutes.
 - `/v1/me` `user.operator: true` for operators only. New error code `PASSKEY_NOT_ACCEPTED` (403). OpenAPI tag `Operator`.
+- Pre-merge review fixes (qa-reconcile, approved by Basel):
+  - The window reads only `sessions.stepUpAt`, stamped by a passkey sign-in or step-up. A password-change rotation no longer reopens it.
+  - Operators add a passkey only after a passkey step-up.
+  - `operatorGate` refuses device sessions with 404.
+  - "Send again" is audited, refuses an account that isn't active, and sends at most once a minute.
+  - Step-ups are audited, and a cloned passkey on a step-up is audited as at sign-in.
+  - Re-review: renaming or removing an operator's passkey needs a passkey step-up, and the last one can't be removed. Any password change clears `stepUpAt`. The portal's Passkeys drawer tells an operator to confirm with a passkey first (`hosted.account.passkeys.operatorPasskeyFirst`, en/ar; TD-266).
+  - Re-review cycle 3: the last-passkey check moved into `passkeys.remove` (`keepOne`, row-locked). Closing an operator's account answers 409 `OPERATOR_ACCOUNT`.
+  - Gap tests were added.
 
 ### Changed
 - `/admin/v1/signup-reviews` is now a thin adapter over `server/src/operator/actions/signupReviews.ts`, shared with the operator routes. Its answers are unchanged.

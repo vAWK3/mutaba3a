@@ -447,6 +447,8 @@ export class PrismaLedgerStore implements LedgerStore {
                 absoluteExpiresAt: kept.absoluteExpiresAt,
                 userAgent: kept.userAgent,
                 passkeyId: kept.passkeyId,
+                // MUT-459 (review): a password change proves the password only; the rotated session has no step-up.
+                stepUpAt: null,
               },
             });
           } else {
@@ -454,7 +456,8 @@ export class PrismaLedgerStore implements LedgerStore {
             // middleware's passwordChangedAt check lets it through. Its deadlines stay where sign-in put them.
             await tx.session.updateMany({
               where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
-              data: { credentialsVerifiedAt: input.at },
+              // MUT-459 (re-review C): a password change proves the password only, so the kept session loses its step-up.
+              data: { credentialsVerifiedAt: input.at, stepUpAt: null },
             });
           }
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
@@ -511,6 +514,8 @@ export class PrismaLedgerStore implements LedgerStore {
         absoluteExpiresAt: input.absoluteExpiresAt,
         userAgent: input.userAgent,
         ...(input.passkeyId === undefined ? {} : { passkeyId: input.passkeyId }),
+        // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
+        ...(input.passkeyId ? { stepUpAt: input.at } : {}),
       };
       const { verifiedPasswordHash } = input;
       if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
@@ -726,10 +731,13 @@ export class PrismaLedgerStore implements LedgerStore {
       const { count } = await this.prisma.passkey.updateMany({ where: { id, userId }, data: { name } });
       return count === 0 ? null : mapNullable(await this.prisma.passkey.findUnique({ where: { id } }), toPasskey);
     },
-    remove: ({ userId, id, exceptSessionId, at, audit }) =>
+    remove: ({ userId, id, exceptSessionId, at, audit, keepOne }) =>
       this.prisma.$transaction(async (tx) => {
+        // MUT-459: the person's row lock serializes removals, so the last-passkey count below can't be raced.
+        if (keepOne) await tx.$queryRaw`SELECT id FROM "users" WHERE "id" = ${userId}::uuid FOR NO KEY UPDATE`;
         const row = await tx.passkey.findFirst({ where: { id, userId } });
         if (!row) return null;
+        if (keepOne && (await tx.passkey.count({ where: { userId } })) <= 1) throw new StateConflict('passkey', 'LAST_PASSKEY');
         // A2: the sessions it opened end with it; the caller's own stays. Revoked before the delete nulls passkeyId.
         const { count } = await tx.session.updateMany({
           where: { passkeyId: id, revokedAt: null, id: { not: exceptSessionId } },

@@ -97,5 +97,49 @@ export function describeLedgerStoreOperatorContract(name: string, makeStore: () 
       const sign = await store.passkeys.createChallenge({ challenge: 'a1', purpose: 'authentication', userId: null, at: at(0), expiresAt: at(5) });
       expect(await store.passkeys.consumeChallenge(sign.id, 'step_up', user.id, at(1))).toBeNull();
     });
+
+    it('an expired step-up challenge is refused, and a creation challenge never passes as a step-up', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const late = await store.passkeys.createChallenge({ challenge: 's2', purpose: 'step_up', userId: user.id, at: at(0), expiresAt: at(5) });
+      expect(await store.passkeys.consumeChallenge(late.id, 'step_up', user.id, at(5))).toBeNull();
+      const creation = await store.passkeys.createChallenge({ challenge: 'c1', purpose: 'creation', userId: user.id, at: at(0), expiresAt: at(5) });
+      expect(await store.passkeys.consumeChallenge(creation.id, 'step_up', user.id, at(1))).toBeNull();
+      expect(await store.passkeys.consumeChallenge(creation.id, 'creation', user.id, at(1))).toEqual({ challenge: 'c1' });
+    });
+
+    it('a passkey sign-in session starts stepped up; a password one does not; a password-change rotation drops the stamp', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const passkey = await store.passkeys.create({ userId: user.id, credentialId: `cred-${unique()}`, publicKey: new Uint8Array([1]), signCount: 0, transports: [], deviceType: 'multiDevice', backedUp: true, aaguid: '00000000-0000-0000-0000-000000000000', name: 'Key', at: at(0), limit: 10, audit: [] });
+      const byPasskey = await store.sessions.create({ userId: user.id, tokenDigest: `digest-${unique()}`, kind: 'cookie', at: at(1), idleExpiresAt: at(50), absoluteExpiresAt: at(59), userAgent: null, passkeyId: passkey.id });
+      expect(byPasskey.stepUpAt).toEqual(at(1));
+      expect((await session(store, user.id)).stepUpAt).toBeNull();
+
+      const rotatedDigest = `digest-${unique()}`;
+      await store.users.changePassword({ userId: user.id, passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3', verifiedPasswordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', exceptSessionId: byPasskey.id, rotation: { tokenDigest: rotatedDigest, idleMs: 60 * 60_000 }, at: at(12), audit: [] });
+      expect(await store.sessions.findByDigest(rotatedDigest)).toMatchObject({ passkeyId: passkey.id, stepUpAt: null });
+    });
+
+    it('remove with keepOne never takes the last passkey, even when two removals race', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const key = () => store.passkeys.create({ userId: user.id, credentialId: `cred-${unique()}`, publicKey: new Uint8Array([1]), signCount: 0, transports: [], deviceType: 'multiDevice', backedUp: true, aaguid: '00000000-0000-0000-0000-000000000000', name: 'Key', at: at(0), limit: 10, audit: [] });
+      const [a, b] = [await key(), await key()];
+      const s = await session(store, user.id);
+      const results = await Promise.allSettled([a, b].map((p) => store.passkeys.remove({ userId: user.id, id: p.id, exceptSessionId: s.id, at: at(2), audit: [], keepOne: true })));
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((r) => r.status === 'rejected').map((r) => ((r as PromiseRejectedResult).reason as { reason?: string }).reason)).toEqual(['LAST_PASSKEY']);
+      expect(await store.passkeys.listByUser(user.id)).toHaveLength(1);
+    });
+
+    it('a password change that keeps its session also drops the stamp (re-review C)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const s = await session(store, user.id);
+      await store.sessions.markStepUp(s.id, at(2));
+      await store.users.changePassword({ userId: user.id, passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3', verifiedPasswordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', exceptSessionId: s.id, at: at(3), audit: [] });
+      expect(await store.sessions.findByDigest(s.tokenDigest)).toMatchObject({ stepUpAt: null, revokedAt: null });
+    });
   });
 }

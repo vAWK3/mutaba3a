@@ -1643,6 +1643,11 @@ export interface RemovePasskeyInput {
   exceptSessionId: string;
   at: Date;
   audit: AuditEventInput[];
+  /**
+   * MUT-459: an operator keeps at least one passkey. Counted inside the removal, under the person's row lock, so two
+   * removals racing can't both pass: StateConflict('passkey', 'LAST_PASSKEY') and nothing is written.
+   */
+  keepOne?: boolean;
 }
 
 /**

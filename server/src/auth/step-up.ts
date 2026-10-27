@@ -1,25 +1,23 @@
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { ApiError } from '../errors.js';
+import type { Logger } from '../logger.js';
 import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { CHALLENGE_TTL_MS, STEP_UP_WINDOW_MS, stepUpOptions, verifyAssertion, type WebauthnConfig } from './webauthn.js';
 
 /**
- * MUT-459 (ADR-208, D7): an operator's step-up is passkey-only. A write passes while either is under 10 minutes old:
- *
- *   - the session itself was opened with a passkey (`passkeyId` set; `createdAt` is that sign-in), or
- *   - the session's last passkey step-up (`stepUpAt`).
- *
- * A fresh password sign-in never counts: the password alone was the admin token's weakest substitute. The step-up
- * stamps its own column and never `credentialsVerifiedAt`, which the password-change revocation reads (MUT-238): a
- * step-up must not revive a session a password change or a setup-link lock just ended.
+ * MUT-459 (ADR-208, D7): an operator's step-up is passkey-only. A write passes while `sessions.stepUpAt` is under 10
+ * minutes old. Only a passkey sets it: a passkey sign-in (the session is created stamped) or a passkey step-up here.
+ * A password never does, a password sign-in included, and a password change's rotated session starts unstamped
+ * (review finding 1: inferring the proof from `createdAt` let a password change reopen the window). The step-up never
+ * touches `credentialsVerifiedAt`, which the password-change revocation reads (MUT-238): a step-up must not revive a
+ * session a password change or a setup-link lock just ended.
  */
 export const OPERATOR_STEP_UP_WINDOW_MS = STEP_UP_WINDOW_MS;
 
 /** When this session's operator step-up lapses, or null when it already has (or there never was one). */
-export function operatorStepUpUntil(session: Pick<SessionRecord, 'passkeyId' | 'createdAt' | 'stepUpAt'>, now: Date): Date | null {
-  const proofs = [session.passkeyId ? session.createdAt : null, session.stepUpAt].filter((d): d is Date => d !== null);
-  if (proofs.length === 0) return null;
-  const until = new Date(Math.max(...proofs.map((d) => d.getTime())) + OPERATOR_STEP_UP_WINDOW_MS);
+export function operatorStepUpUntil(session: Pick<SessionRecord, 'stepUpAt'>, now: Date): Date | null {
+  if (!session.stepUpAt) return null;
+  const until = new Date(session.stepUpAt.getTime() + OPERATOR_STEP_UP_WINDOW_MS);
   return until.getTime() > now.getTime() ? until : null;
 }
 
@@ -44,21 +42,44 @@ export async function beginOperatorStepUp(store: LedgerStore, webauthn: Webauthn
  * refused like any other failure.
  */
 export async function finishOperatorStepUp(
-  store: LedgerStore,
-  webauthn: WebauthnConfig,
+  deps: { store: LedgerStore; webauthn: WebauthnConfig; logger: Logger },
   identity: { user: UserRecord; session: SessionRecord },
   presented: { challengeId: string; response: AuthenticationResponseJSON },
-  now: Date,
+  context: { now: Date; requestId: string | null },
 ): Promise<Date> {
+  const { store, webauthn, logger } = deps;
+  const { now, requestId } = context;
+  const refuse = (reason: string): ApiError => {
+    // Review finding 5: a refused step-up on the most privileged surface leaves a trace (never the credential).
+    logger.warn({ userId: identity.user.id, sessionId: identity.session.id, reason, requestId }, 'operator.step_up_refused');
+    return notAccepted();
+  };
   const challenge = await store.passkeys.consumeChallenge(presented.challengeId, 'step_up', identity.user.id, now);
   const passkey = challenge ? await store.passkeys.findByCredentialId(presented.response.id) : null;
-  if (!challenge || !passkey || passkey.userId !== identity.user.id) throw notAccepted();
+  if (!challenge) throw refuse('challenge');
+  if (!passkey || passkey.userId !== identity.user.id) throw refuse('passkey');
   const outcome = await verifyAssertion(webauthn, presented.response, challenge.challenge, passkey);
-  if (outcome.kind !== 'verified') throw notAccepted();
+  // A cloned authenticator is audited as at sign-in (auth/sign-in.ts), so it is noticed wherever it is used.
+  if (outcome.kind === 'counter-regressed') await auditOnProfiles(store, identity.user, 'user.passkey_counter_regressed', { actorType: 'SYSTEM', actorId: null }, { method: 'step_up', passkeyId: passkey.id }, requestId);
+  if (outcome.kind !== 'verified') throw refuse(outcome.kind);
   await store.passkeys.recordUse(passkey.id, outcome.signCount, now);
   // A session revoked meanwhile (a password change, a lock, a disable) stays revoked: the stamp is conditional.
   if (!(await store.sessions.markStepUp(identity.session.id, now))) throw new ApiError('UNAUTHENTICATED', 'This session has ended; sign in again');
+  await auditOnProfiles(store, identity.user, 'user.operator_stepped_up', { actorType: 'USER', actorId: identity.user.id }, { passkeyId: passkey.id }, requestId);
   return new Date(now.getTime() + OPERATOR_STEP_UP_WINDOW_MS);
+}
+
+async function auditOnProfiles(
+  store: LedgerStore,
+  user: UserRecord,
+  action: 'user.operator_stepped_up' | 'user.passkey_counter_regressed',
+  actor: { actorType: 'USER' | 'SYSTEM'; actorId: string | null },
+  metadata: { method?: string; passkeyId: string },
+  requestId: string | null,
+): Promise<void> {
+  for (const m of await store.memberships.listByUser(user.id)) {
+    await store.audit.append({ organizationId: m.organizationId, ...actor, action, entityType: 'user', entityId: user.id, metadata, requestId });
+  }
 }
 
 function notAccepted(): ApiError {

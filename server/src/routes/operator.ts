@@ -55,7 +55,7 @@ const UserIdParam = z.object({ userId: z.string().uuid().openapi({ param: { name
 
 export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEnv> {
   const actions = signupReviewActions(options);
-  const { store, webauthn } = options;
+  const { store, webauthn, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -152,7 +152,12 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     }),
     async (c) => {
       const body = c.req.valid('json');
-      const until = await finishOperatorStepUp(store, configured(), c.get('identity'), { challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON }, c.get('now')());
+      const until = await finishOperatorStepUp(
+        { store, webauthn: configured(), logger },
+        c.get('identity'),
+        { challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON },
+        { now: c.get('now')(), requestId: c.get('requestId') },
+      );
       return c.json({ stepUpUntil: until.toISOString() }, 200);
     },
   );
