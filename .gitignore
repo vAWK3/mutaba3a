@@ -174,3 +174,6 @@ dist-web/
 dist-hosted/
 dist-desktop/
 dist/src-tauri/target/
+
+# MUT-468: npm --prefix server run mail:preview output
+server/.mail-preview/

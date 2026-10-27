@@ -210,7 +210,6 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     `<tr><td align="center" style="padding:0 16px 32px;">`,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:${CARD_MAX_PX}px;">`,
     `<tr><td dir="${dir}" bgcolor="${SURFACE}" style="background:${SURFACE};border:1px solid ${LINE};${cardTop};font-size:16px;line-height:1.6;color:${INK};text-align:${align};">`,
-    ...(body.headline ? [] : [`<p style="margin:0 0 24px;font-size:18px;font-weight:700;color:${INK};">${escapeHtml(BRAND_NAME[locale])}</p>`]),
     ...body.intro.map((p) => paragraphHtml(p)),
     ...(body.details && body.details.length > 0 ? [details(body.details, look, align)] : []),
     ...(action

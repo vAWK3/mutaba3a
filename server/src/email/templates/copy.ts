@@ -259,7 +259,6 @@ const trialEndingSoon: Copy<'trial-ending-soon'> = {
     preheader: 'Add a card so nothing stops.',
     headline: `Your free trial ends within ${enDays(daysLeft)}`,
     intro: [
-      [`Your MTB3A free trial ends within ${enDays(daysLeft)}.`],
       ["After that your account becomes read-only: you can still see and download everything, but you can't add or change anything until you subscribe."],
       ['Add a card now so nothing stops.'],
     ],
@@ -271,7 +270,6 @@ const trialEndingSoon: Copy<'trial-ending-soon'> = {
     preheader: 'أضف بطاقة كي لا يتوقف شيء.',
     headline: `تنتهي تجربتك المجانية خلال ${arDays(daysLeft)}`,
     intro: [
-      [`تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}.`],
       ['بعدها يصبح حسابك للقراءة فقط: يمكنك رؤية كل شيء وتنزيله، لكن لا يمكنك إضافة أي شيء أو تعديله إلى أن تشترك.'],
       ['أضف بطاقة الآن كي لا يتوقف شيء.'],
     ],
@@ -313,7 +311,7 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
     preheader: 'Nothing is deleted when it locks.',
     headline: `Your account locks within ${enDays(daysLeft)}`,
     intro: [
-      [`Your MTB3A account locks within ${enDays(daysLeft)}. After that you can only subscribe or download your records.`],
+      ['After that you can only subscribe or download your records.'],
       ['You can still download all your records, now or after the lock.'],
     ],
     action: { label: 'Subscribe', href: subscribeLink },
@@ -325,7 +323,7 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
     preheader: 'لا يُحذف أي شيء عند الإقفال.',
     headline: `يُقفَل حسابك خلال ${arDays(daysLeft)}`,
     intro: [
-      [`يُقفَل حسابك في متابعة خلال ${arDays(daysLeft)}. بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.`],
+      ['بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.'],
       ['ما زال بإمكانك تنزيل كل سجلاتك، الآن أو بعد الإقفال.'],
     ],
     action: { label: 'اشترك', href: subscribeLink },
@@ -348,7 +346,7 @@ const accountClosing: Copy<'account-closing'> = {
     preheader: 'You can still sign in and keep it.',
     headline: `Your account will be deleted on ${mailDay(deleteOn, 'en')}`,
     intro: [
-      [`You closed your MTB3A account. We'll delete it, with all its records and receipts, on ${mailDay(deleteOn, 'en')}.`],
+      ["You closed your MTB3A account. We'll delete it, with all its records and receipts, on that day."],
       ["Until then you can sign in and keep it. After that it can't be recovered, and the copies in our backups expire two weeks later."],
     ],
     details: [{ label: 'Deletion day', value: mailDay(deleteOn, 'en') }],
@@ -360,7 +358,7 @@ const accountClosing: Copy<'account-closing'> = {
     preheader: 'ما زال بإمكانك تسجيل الدخول والإبقاء عليه.',
     headline: `سيُحذف حسابك بتاريخ ${mailDay(deleteOn, 'ar')}`,
     intro: [
-      [`أغلقتَ حسابك في متابعة. سنحذفه مع كل سجلاته وإيصالاته بتاريخ ${mailDay(deleteOn, 'ar')}.`],
+      ['أغلقتَ حسابك في متابعة. سنحذفه مع كل سجلاته وإيصالاته في ذلك اليوم.'],
       ['حتى ذلك الحين يمكنك تسجيل الدخول والإبقاء عليه. بعدها لا يمكن استعادته، وتنتهي النسخ الموجودة في نسخنا الاحتياطية بعد أسبوعين.'],
     ],
     details: [{ label: 'يوم الحذف', value: mailDay(deleteOn, 'ar') }],
