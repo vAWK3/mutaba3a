@@ -203,6 +203,12 @@ const envSchema = z.object({
    * production, `fixture` elsewhere.
    */
   EMAIL_DOMAIN_CHECKER: z.enum(['dns', 'fixture']).optional(),
+  /**
+   * MUT-474: how many profiles one person may own on a dev server, so local QA runs that each make a throwaway
+   * profile don't hit the product limit (MAX_OWNED_PROFILES, 6) part-way. Never below it; refused in production and
+   * staging. Unset = the product limit.
+   */
+  QA_MAX_OWNED_PROFILES: z.coerce.number().int().min(6).max(1000).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -276,6 +282,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // subscriptions would then cover real people) is refused there.
   if (config.STRIPE_SECRET_KEY && config.API_KEY_ENVIRONMENT === 'live' && !/^rk_live_/.test(config.STRIPE_SECRET_KEY)) {
     throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live server needs a restricted live key (rk_live_…), never sk_ or a test key');
+  }
+  if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    throw new ConfigError(`Invalid configuration:\n  QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only, never ${config.NODE_ENV}`);
   }
   for (const { min, recommended } of MIN_BUILD_PLATFORMS) {
     const floor = config[min];

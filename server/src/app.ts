@@ -148,6 +148,8 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
+  maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
   trialMail?: { refuseLoopbackLinks: boolean };
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
@@ -274,7 +276,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn) });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
