@@ -266,7 +266,14 @@ test('Sign a person out everywhere; their password still works', { tag: '@portal
 
 test('Disable an account and enable it again, in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.account-disable-enable' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await chooseLanguage(page, 'ar');
+  // No chooseLanguage here: the browser has no stored language, so this proves the Arabic default (MUT-209, ADR-077).
+  await step('With no language chosen, the portal opens in Arabic, right to left', async () => {
+    await page.goto('/sign-in');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('button', { name: 'تسجيل الدخول', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('mutaba3a-portal-language'))).toBeNull();
+  });
   await operator(page, 'ar');
   const person = await target('disable');
   await step('Open their account from الحسابات: right to left, no sideways scroll', async () => {

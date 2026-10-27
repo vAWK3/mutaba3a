@@ -107,10 +107,12 @@ features:
     title: Disable an account and enable it again, in Arabic on a 375 px phone
     tickets: [MUT-461]
     steps:
-      - Sign in in Arabic on a 375 px phone; the person is signed in on another device
+      - On a 375 px phone with no language chosen, open the portal
+      - Sign in (the account is Arabic); the person is signed in on another device
       - Open their account from الحسابات, press تعطيل الحساب and confirm with the passkey
       - Press تفعيل الحساب and confirm
     expect:
+      - With no language chosen the portal opens in Arabic, right to left
       - The page reads right to left with no sideways scroll, and the address reads left to right
       - After disabling, the page says the account is disabled and offers only تفعيل الحساب; their device is signed out and their password no longer signs in
       - After enabling, their password signs in again
