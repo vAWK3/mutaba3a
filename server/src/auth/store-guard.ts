@@ -67,6 +67,8 @@ export const STORE_ACCESS: StoreAccess = {
     findByEmail: 'read',
     setPassword: 'operator',
     setStatus: 'operator',
+    // MUT-459: only the admin token (CLI) marks an operator; the console never can.
+    setOperator: 'operator',
     recordFailedSignIn: 'control',
     recordSignIn: 'control',
     // MUT-191: a person's own preference, written by their session (identity row)
@@ -87,7 +89,7 @@ export const STORE_ACCESS: StoreAccess = {
   // MUT-373: co-owners are added by the operator; a co-owner leaves, or the creator removes one, from their session (the
   // checks run inside removeOwner's transaction). The owners list is read on /v1/me.
   memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
-  sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator' },
+  sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator', markStepUp: { write: 'identity' } },
   // MUT-115: a person's own passkeys, written by their session (identity row, like changePassword). Sign-in finds a
   // credential, stamps its use and consumes its challenge on the public routes, which run with no guard, so those
   // methods are refused to every principal; pruning is the server's timer.

@@ -339,6 +339,16 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
+    // MUT-459: under the person's row lock, so two racing grants change (and audit) once.
+    setOperator: async ({ userId, operator, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const [locked] = await tx.$queryRaw<Array<{ operatorAt: Date | null }>>`SELECT "operatorAt" FROM "users" WHERE "id" = ${userId}::uuid FOR NO KEY UPDATE`;
+        if (!locked) return null;
+        if ((locked.operatorAt !== null) === operator) return { user: toUser((await tx.user.findUniqueOrThrow({ where: { id: userId } }))), changed: false };
+        const user = await tx.user.update({ where: { id: userId }, data: { operatorAt: operator ? at : null, updatedAt: at } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { user: toUser(user), changed: true };
+      }),
     setStatus: async (id, status, at) =>
       this.prisma.$transaction(async (tx) => {
         const { count } = await tx.user.updateMany({ where: { id }, data: { status, updatedAt: at } });
@@ -526,6 +536,8 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     revokeAllForUser: async (userId, reason, at) =>
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
+    // MUT-459: conditional on the session still being live, so a revocation that commits first wins.
+    markStepUp: async (id, at) => (await this.prisma.session.updateMany({ where: { id, revokedAt: null }, data: { stepUpAt: at } })).count === 1,
   };
 
   readonly features: FeaturesRepository = {
@@ -3447,6 +3459,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     trialPrompt: row.trialPrompt === null ? null : resolveTrialPrompt(row.trialPrompt),
     closure: closureOf(row),
+    operatorAt: row.operatorAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -3516,6 +3529,7 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     revokedReason: row.revokedReason,
     userAgent: row.userAgent,
     passkeyId: row.passkeyId,
+    stepUpAt: row.stepUpAt,
   };
 }
 

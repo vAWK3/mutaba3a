@@ -532,6 +532,14 @@ export class MemoryLedgerStore implements LedgerStore {
       if (status === 'DISABLED') this.cancelOpenSetupLinks(id, at);
       return { ...u };
     },
+    setOperator: async ({ userId, operator, at, audit }) => {
+      const u = this.people.get(userId);
+      if (!u) return null;
+      if ((u.operatorAt !== null) === operator) return { user: { ...u }, changed: false };
+      Object.assign(u, { operatorAt: operator ? at : null, updatedAt: at });
+      for (const event of audit) await this.audit.append(event);
+      return { user: { ...u }, changed: true };
+    },
     recordFailedSignIn: async (id, at, lockUntil) => {
       const u = this.people.get(id);
       if (!u) return null;
@@ -646,6 +654,7 @@ export class MemoryLedgerStore implements LedgerStore {
         revokedReason: null,
         userAgent: input.userAgent,
         passkeyId: input.passkeyId ?? null,
+        stepUpAt: null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -662,6 +671,12 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...s };
     },
     revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
+    markStepUp: async (id, at) => {
+      const s = this.sessionsById.get(id);
+      if (!s || s.revokedAt) return false;
+      s.stepUpAt = at;
+      return true;
+    },
   };
 
   readonly features: FeaturesRepository = {
@@ -761,7 +776,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     createChallenge: async (input) => {
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('webauthn_challenges.userId');
-      if ((input.purpose === 'creation') !== (input.userId !== null)) throw new Error('A creation challenge names its person; a sign-in challenge names no one');
+      if ((input.purpose === 'authentication') === (input.userId !== null)) throw new Error('A creation or step-up challenge names its person; a sign-in challenge names no one');
       const id = randomUUID();
       this.challenges.set(id, { challenge: input.challenge, purpose: input.purpose, userId: input.userId, expiresAt: input.expiresAt, consumedAt: null });
       return { id };
@@ -1014,6 +1029,7 @@ export class MemoryLedgerStore implements LedgerStore {
       malafatSuggestions: null,
       trialPrompt: null,
       closure: null,
+      operatorAt: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
