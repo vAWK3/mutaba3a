@@ -181,8 +181,12 @@ export function attachment(n: number, a: { filename: string; kind?: 'INVOICE' | 
   };
 }
 
-export function category(n: number, name: string) {
-  return { id: uid(0xf, n), name, color: null, archived: false, version: 1, createdAt: STAMP, updatedAt: STAMP };
+/**
+ * A category as GET /v1/expense-categories answers it. MUT-464: a seeded one (`seeded` given) is named in the request's
+ * Accept-Language, else the account's, as the server does; a typed one keeps `name` in both.
+ */
+export function category(n: number, name: string, seeded?: { presetKey: string; ar: string }) {
+  return { id: uid(0xf, n), name, presetKey: seeded?.presetKey ?? null, color: null, archived: false, version: 1, createdAt: STAMP, updatedAt: STAMP, ...(seeded ? { nameAr: seeded.ar } : {}) };
 }
 
 interface StubReceipt {
@@ -894,7 +898,11 @@ export class FakeApi {
       if (found && sub === 'download') return json({ url: `${STORAGE}/${encodeURIComponent(found.filename)}`, expiresAt: '2026-10-15T12:15:00Z', filename: found.filename, mimeType: found.mimeType });
       return notFound();
     }
-    if (resource === 'expense-categories' && method === 'GET') return json({ items: this.categories });
+    if (resource === 'expense-categories' && method === 'GET') {
+      const asked = e.headers['accept-language'];
+      const lang = asked === 'en' || asked === 'ar' ? asked : language;
+      return json({ items: this.categories.map(({ nameAr, ...c }: ReturnType<typeof category> & { nameAr?: string }) => (nameAr && lang === 'ar' ? { ...c, name: nameAr } : c)) });
+    }
     if (resource === 'expenses') return this.expenseAnswer(e, id, sub, subId, action);
     if (resource === 'vendors' && method === 'GET') return this.vendorAnswer(e);
     if (resource === 'expense-groups') return this.groupAnswer(e, id, sub, subId);

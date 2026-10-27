@@ -263,7 +263,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.77.0-mut453';
+export const API_VERSION = '1.78.0-mut464';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -587,6 +587,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization\'s today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.',
         'Correcting money (MUT-453): on a profile the person owns (`/v1/me` `owned`, its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER) whose payments are read-write, POST /v1/payments/{id}/reverse { reason } reverses a payment a person recorded (origin CAPTURE, a settle payment included, whoever recorded it; not one Malafat applied to its own entries), undoing its allocations so the Owed it paid reopens, and POST /v1/receivables/{id}/credits { amount, reason, effectiveDate? } credits an Owed entry (origin ADJUSTMENT) up to what is left (more → 422 CREDIT_EXCEEDS_OUTSTANDING); crediting all of it cancels it. The same routes and codes Malafat\'s key uses, audited as USER. Malafat\'s own payments and installments answer 404 to a person; on a Malafat-fed profile both answer 403 READ_ONLY_PROFILE before any lookup. IncomeResponse adds `reversalReason` and `credited`.',
+        'Category names (MUT-464): GET, POST and PATCH /v1/expense-categories show a category the profile was seeded with in the request language — the first ar or en tag of Accept-Language, else the signed-in person\'s language (Content-Language says which; Vary: Accept-Language). A name a person typed shows as typed. Each category carries `presetKey`, the preset entry it is (`other` for the automatic Other) or null, worked out from the stored name. Adding or renaming to a seeded category\'s other-language name answers 409 CATEGORY_NAME_TAKEN.',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are MTB3A\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),

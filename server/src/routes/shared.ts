@@ -1,7 +1,9 @@
 import { z } from '@hono/zod-openapi';
+import type { Context } from 'hono';
+import { sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
-import type { ExternalEntityType, ExternalReferenceRecord, IntegrationProvider, LedgerStore, PageCursor, PageRequest } from '../repositories/ports.js';
+import type { ExternalEntityType, ExternalReferenceRecord, IntegrationProvider, LedgerStore, PageCursor, PageRequest, UserLocale } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema } from '../schemas.js';
 
 /** Responses every authenticated route can produce. */
@@ -26,6 +28,32 @@ export const notFoundResponse = {
 export const IdempotencyHeaderSchema = z.object({
   'idempotency-key': z.string().min(8).max(128).openapi({ description: 'Client-generated key, unique per operation attempt (plan §14.2).' }),
 });
+
+/**
+ * MUT-464: the language a session request reads in — the first Arabic or English tag of `Accept-Language` by quality
+ * (the portal sends its UI language), else the account's locale. Sets `Content-Language` and `Vary` on the response.
+ */
+export function requestLanguage(c: Context<AppEnv>): UserLocale {
+  c.header('Vary', 'Accept-Language', { append: true });
+  const lang = preferredLanguage(c.req.header('accept-language')) ?? sessionAuth(c).user.locale;
+  c.header('Content-Language', lang);
+  return lang;
+}
+
+export function preferredLanguage(header: string | undefined): UserLocale | null {
+  if (!header) return null;
+  const tags = header
+    .split(',')
+    .map((part, index) => {
+      const [tag = '', ...params] = part.trim().split(';');
+      const q = params.map((p) => /^\s*q=([\d.]+)\s*$/.exec(p)?.[1]).find((v) => v !== undefined);
+      return { primary: tag.trim().toLowerCase().split('-')[0], q: q === undefined ? 1 : Number(q), index };
+    })
+    .filter((t) => t.q > 0)
+    .sort((a, b) => b.q - a.q || a.index - b.index);
+  const match = tags.find((t) => t.primary === 'ar' || t.primary === 'en');
+  return match ? (match.primary as UserLocale) : null;
+}
 
 /** External references and imports need a CONNECTED integration for the provider. */
 export async function requireConnectedIntegration(store: LedgerStore, organizationId: string, provider: IntegrationProvider): Promise<void> {

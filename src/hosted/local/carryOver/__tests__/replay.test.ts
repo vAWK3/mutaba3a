@@ -102,6 +102,28 @@ describe('replayCarryOver', () => {
     expect(result.report.changed).toEqual([{ code: 'link-dropped', count: 1 }]);
   });
 
+  // MUT-464: the profile is seeded in the person's language; a backup category that is the same seeded entry in the
+  // other language is that category, not a refused duplicate (its expense would lose the category).
+  it('files a backup category under the seeded one when it is the same entry in the other language', async () => {
+    const plan: CarryOverPlan = {
+      ops: [
+        { op: 'profile', ref: 'p', source: { table: 'businessProfiles', id: 'b' }, name: 'B', defaultCurrency: 'ILS' },
+        { op: 'category', ref: 'k', source: { table: 'expenseCategories', id: 'k' }, profile: 'p', name: 'إيجار المكتب' },
+        { op: 'category', ref: 'q', source: { table: 'expenseCategories', id: 'q' }, profile: 'p', name: 'قهوة' },
+        { op: 'expense', ref: 'e', source: { table: 'expenses', id: 'e' }, profile: 'p', amountMinor: 100, currency: 'ILS', occurredOn: '2026-02-01', category: 'k' },
+      ],
+      report: { changed: [], notCarried: [], jodEntries: 0 },
+    };
+    const result = await replayCarryOver(plan, OPTIONS);
+    const cats = [...result.snapshot.maps.expCats.values()];
+    const rent = cats.filter((c) => c.name === 'Office Rent' || c.name === 'إيجار المكتب');
+    expect(rent).toHaveLength(1);
+    expect(cats.some((c) => c.name === 'قهوة')).toBe(true);
+    expect([...result.snapshot.maps.exps.values()][0]!.categoryId).toBe(rent[0]!.id);
+    expect(result.report.notCarried).toEqual([]);
+    expect(result.report.changed).toEqual([]);
+  });
+
   it('gives the browser its page back while it works, and reports progress (R5)', async () => {
     const backup = freeAppBackup({ businessProfiles: [business('b1')], expenses: Array.from({ length: 450 }, (_, i) => expense(`e${i}`, 'b1')) });
     const progress: Array<[number, number]> = [];

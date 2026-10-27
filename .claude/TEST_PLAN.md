@@ -3988,3 +3988,18 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `src/hosted/components/__tests__/ConversionDrawer.test.tsx` | 3 changed | The confirm names both legs (en and ar); Cancel and Escape send nothing and return focus to Delete. |
 | `src/hosted/pages/__tests__/afterSave.test.tsx`, `ConversionsList.test.tsx` | 3 changed | The deletes go through the in-place confirm. |
 | `qa/specs/portal/expenses.spec.ts`, `conversions.spec.ts` | 2 changed | Release-QA `@portal.expenses.delete`, `@portal.conversions.delete`: Cancel then Delete in place, and no browser prompt ever appears. |
+
+## MUT-464 — seeded category names follow the viewer's language (2026-10-27, ADR-208)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/expenses/__tests__/presets.test.ts` | +9 | One key per concept in every preset, one name never two keys, both languages and retired names resolve, retired names are never seeded, `presetNameKeys`; `displayCategoryNames` translates seeded names, keeps typed ones, and translates only the oldest of a cross-language pair. |
+| `server/src/__tests__/routes-expenses.test.ts` | +5, 1 changed | Accept-Language beats the account locale (by quality, unknown tags ignored), Content-Language and Vary; typed and renamed names show as typed; POST/PATCH answer in the request language; 409 for the other-language twin, while a seeded row may take its own other name. |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` | +1 (memory + Postgres) | Both stores refuse a category that is an existing entry in the other language, even archived, and only within the profile. |
+| `server/src/__tests__/mcp-read-tools.test.ts` | +1 | `list_categories` names seeded categories in the account language. |
+| `server/src/vendors/__tests__/keys.test.ts` | +1 | The automatic Other is the preset key in either language. |
+| `src/hosted/api/__tests__/client.test.ts`, `i18n/__tests__/HostedLanguageProvider.test.tsx` | +2 | Every call carries the portal language once set, and it follows a switch and an adopted account locale. |
+| `src/hosted/data/__tests__/reportQueries.test.tsx` | +1 | `expenseCategoriesKey` differs by language and archived, and stays under the profile's category prefix. |
+| `src/hosted/local/carryOver/__tests__/replay.test.ts` | +1 | A backup category that is the seeded entry in the other language files its expense under the seeded one. |
+| `qa/specs/portal/expenses.spec.ts` | +2 | Release-QA `@portal.expenses.categories-follow-language`, `@portal.expenses.renamed-category-keeps-name`. |
+
