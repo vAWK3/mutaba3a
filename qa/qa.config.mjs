@@ -200,6 +200,9 @@ export default {
         'server/src/auth/operator-gate.ts',
         'server/src/auth/step-up.ts',
         'server/src/email/review-digest.ts',
+        // MUT-482: the summaries Malafat reads with an API key, checked on the live API.
+        'server/src/summaries/compute.ts',
+        'server/src/routes/summaries.ts',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
       ],
