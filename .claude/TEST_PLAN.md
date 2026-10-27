@@ -4010,6 +4010,15 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `server/infrastructure/terraform/tests/min_build.tftest.hcl` (new; mocked Google + random) | 7 | Nothing set: none of the five env vars, today's gate unchanged. Set floors reach Cloud Run as exactly those strings. `min_build_check_disabled = true` sends `"true"`; `false` sends nothing. A recommended build below its floor, or without one, fails the plan; a 0 floor fails validation. |
 | `server/src/__tests__/config.test.ts` | +5 | `MIN_BUILD_CHECK_DISABLED="false"` keeps the gate on (it used to switch it off); `1`, `yes`, `TRUE` and empty refuse to boot. |
 
+## MUT-463 — the API listens where HOST says (2026-10-27, ADR-210)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` "listen address" | 12 | HOST unset by default; `127.0.0.1`, `::1`, `0.0.0.0`, `::` accepted; `''`, `localhost`, a machine name, `256.1.1.1`, `host:port`, `[::1]`, a leading space each refuse to boot, naming HOST. |
+| `server/src/__tests__/listen.test.ts` | 3 | Real sockets through `startServer` (the function `index.ts` uses), port 0. HOST=127.0.0.1: bound to 127.0.0.1, answers 200; a connect to the machine's LAN IPv4 is refused (skipped when there is none). HOST unset: bound exactly where a bare `net` server binds by default (`::` on dual-stack), so a default of `0.0.0.0` fails. Checked by mutation: both regressions turn the suite red. |
+| `qa/support/port-check.mjs` | probe | Not in a suite (QA tooling): a scratch probe showed it refuses when a server holds the port on `::`, `::1` or `127.0.0.1`, and passes when the port is free (review D1). |
+| Release-QA, `portal-selfservice` | 2 specs run | `@portal-selfservice.passkeys.add` and `.sign-in` pass (2026-10-27, d88a7a14, again at 0872e3d1 with the port check): the harness's API on 127.0.0.1 still serves the `http://localhost:8791` origin to Chromium. While up: `lsof` shows `127.0.0.1:8791`, `curl` 127.0.0.1 and localhost answer 200, the LAN address is refused, and the listening log says `"address":"127.0.0.1"`. No `portal-live` run (review D6). |
+
 ## MUT-472 — placeholder secrets refused at boot (2026-10-27, ADR-211)
 
 | Test | Cases | What it proves |

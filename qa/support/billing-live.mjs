@@ -20,6 +20,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertPortFree } from './port-check.mjs';
 
 export const API_PORT = 8790;
 export const PORTAL_PORT = 5176;
@@ -155,6 +156,7 @@ async function main() {
     await ensureCatalog(key);
     return;
   }
+  await assertPortFree(API_PORT, 'portal-live');
   ensureDatabase();
   await ensureCatalog(key);
   const whsec = webhookSecret(key);
@@ -187,6 +189,8 @@ async function main() {
       ...withoutAppAssociation(process.env),
       NODE_ENV: 'development',
       PORT: String(API_PORT),
+      // MUT-463: loopback only, so the committed admin token can't be used from the network.
+      HOST: '127.0.0.1',
       DATABASE_URL,
       MUTABA3A_ADMIN_TOKEN: ADMIN_TOKEN,
       API_KEY_ENVIRONMENT: 'test',
