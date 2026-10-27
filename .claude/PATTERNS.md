@@ -2848,3 +2848,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: a mail's look is data; the frame draws it (MUT-468)
 **Where**: `server/src/email/templates/look.ts` (`LOOK: Record<CustomerTemplateId, Look>`), `layout.ts` (`renderLayout(locale, body, look, frame)`).
 **Rule**: a new customer mail adds one `LOOK` row (mood, header art, chip) and its copy with `headline` and `preheader`; the types fail the build without them. Pictures come only from `look.ts` file names under `<artOrigin>/mail/v1/`; new art goes in a new versioned folder, never over `v1`. Text on a mood tint is the ink only (`TEXT_PAIRS`, contrast test).
+
+## Pattern: classify a receivable once (MUT-482)
+**Where**: `server/src/summaries/compute.ts` `dayBucketOf(r, today)`.
+**Rule**: anything that depends on whether a receivable is overdue, due today or not yet due (an amount, a date, a count, a status) reads `dayBucketOf`, never its own `dueDate < today` check. It already applies OPEN, `countsOn` (MUT-392) and "something outstanding".

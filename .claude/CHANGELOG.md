@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-482: the oldest overdue due date per customer in the summaries (ADR-219)
+
+**Why:** Malafat's Money overview (MAL-1366, epic MAL-1410) opens with a chase list, longest late first ("overdue since 1 Jun · 148 days"). The organization summary gave each customer's overdue amount but not since when, and Malafat may not work that out from receivables itself (Malafat ADR-150), nor make a call per client.
+
+### Added
+- `GET /v1/summaries/organization`: each customer row (per currency) carries `oldestOverdueDueDate`, the earliest due date among the receivables counted in its `overdue`, and `daysOverdue`, whole days from it to `asOf`. Both are null exactly when `overdue` is 0.
+- `GET /v1/summaries/customers/{customerId}`: the same two fields on each currency block, over the same receivables as the block's buckets (a matter's other-currency Owed counts in its own block, MUT-488).
+- A part-paid overdue receivable keeps its date; paid or credited in full, it drops out. API 1.82.0-mut482 (additive); `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- Release-QA feature `portal-selfservice.summaries.overdue-since` (live dev API, an API key as Malafat uses).
+
+### Technical
+- `server/src/summaries/compute.ts`: `dayBucketOf` is the one per-receivable rule (OPEN, counts today, something outstanding, then overdue / due today / not yet due); `bucketize` and the new `oldestOverdueDueDate` both read it (refactor in its own commit, bucket tests unchanged).
+- No new store calls: computed in memory over the lists each summary already loads. A route test counts repository calls and finds the same number for one and five overdue customers.
+- Signed-out portal mode runs the same routes, so it carries the fields too (parity tests unchanged).
+- Files: `server/src/summaries/compute.ts`, `server/src/routes/summaries.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, tests in `server/src/summaries/__tests__/compute.test.ts`, `server/src/__tests__/routes-m6.test.ts`, `server/src/__tests__/income-routes.test.ts` (and the version pin in routes-m2..m8), `qa/features/portal-selfservice/summaries.yaml`, `qa/specs/portal-selfservice/summaries.spec.ts`, `qa/qa.config.mjs`.
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-488: summaries total a matter's other-currency Owed in its own currency (ADR-218)
 
 **Why:** found in MUT-478's qa-reconcile. The customer summary added every receivable of a matter to the block for the matter's currency, so a USD Owed on an ILS matter raised the ILS outstanding by its USD minor units (ADR-004). That also broke the statement's promise "closing balance = summary outstanding − unallocated", and Malafat's Money pages (MAL-1410) read both.

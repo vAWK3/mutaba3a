@@ -4090,3 +4090,12 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | `server/src/__tests__/income-routes.test.ts` "MUT-488: an Owed in another currency on a matter…" | 1 | A 500 ILS and an 80 USD Owed on one ILS matter. Customer summary: the ILS block and the matter's row show 500.00; the USD block shows 80.00 with no project row. Project summary: posted and outstanding 500.00. The organization summary agrees per currency. Red before the fix (ILS 580.00). |
 | Manual, on a throwaway merge with `feature/mut-478-customer-statement` | 1 | With an 80 USD Owed added to the ILS project of the statement's AC1 ledger, closing balance = summary outstanding − unallocated holds in ILS and in USD. Without the fix ILS fails (566.00 vs 646.00). Not committed: the statement isn't on this branch. When both land, add the case to `customer-statement.test.ts` AC1. |
 
+## MUT-482 — the oldest overdue due date per customer in the summaries (2026-10-27, ADR-219)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/summaries/__tests__/compute.test.ts` "oldest overdue due date (MUT-482)" | 3 | `dayBucketOf` places overdue / due today / not yet due, and none for settled, fully paid+credited and a not-yet-counting Owed; `oldestOverdueDueDate` takes the earliest, keeps a part-paid one, drops paid or credited in full; over every subset of a 6-receivable pool it is null exactly when `bucketize` gives 0 overdue. |
+| `server/src/__tests__/routes-m6.test.ts` "oldest overdue since (MUT-482)" | 3 | AC1–AC3 on both summaries at a 27 Oct clock: 1 Jun / 148 days; part paid stays; June paid in full → 1 Sep / 56; all overdue paid → null with overdue 0.00. Per currency: ILS and USD blocks each carry their own date. AC4: the org summary's repository-call count is the same for 1 and 5 overdue customers (test-only counting Proxy). |
+| `server/src/__tests__/income-routes.test.ts` "MUT-482: a matter’s Owed in another currency…" | 1 | A USD Owed on an ILS matter dates the USD block (11 days) and the ILS Owed the ILS block (7), and the org rows agree with the customer blocks. |
+| `routes-m2..m8` version pins | 6 | AC5: API_VERSION and the OpenAPI `info.version` are 1.82.0-mut482. |
+| `qa/specs/portal-selfservice/summaries.spec.ts` `@portal-selfservice.summaries.overdue-since` | 1 | On the live dev API with an API key: 148 days, then 56 after the older one is paid, on both summaries. |
