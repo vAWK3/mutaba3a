@@ -78,7 +78,7 @@ export function AuthGate() {
  * component still renders with the *new* location, and reading it then would
  * make `next` point at sign-in itself.
  */
-function RedirectToSignIn() {
+export function RedirectToSignIn() {
   const router = useRouter();
   const navigate = useNavigate();
   const sent = useRef(false);

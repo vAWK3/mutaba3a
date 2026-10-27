@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-268: The operator step-up asks the server for its challenge after the tap (iOS Safari gesture window)
+**Status**: Open (MUT-460, 2026-10-27; pre-merge review, Basel's choice: ship as is, check on a real iPhone after deploy)
+- **What:** "Approve with passkey" fetches `/v1/operator/step-up/options`, then calls `navigator.credentials.get`. WebKit keeps a tap's activation only briefly; a slow answer (a Cloud Run cold start) can let it lapse, and Safari then refuses with NotAllowedError, which the portal treats as a cancel (no message). The passkey sign-in button (MUT-115) has the same shape.
+- **Why it's acceptable:** same pattern as the live passkey sign-in; a second tap works once the server is warm; one operator.
+- **Fix:** if the iPhone check shows it, fetch the options when a stale confirm opens (single use, 5 minutes) so the tap goes straight to the sheet; same for the sign-in button.
+
+### TD-267: OperatorConfirm duplicates InPlaceConfirm
+**Status**: Open (MUT-460, 2026-10-27; pre-merge review, Basel's choice: fold in with MUT-461)
+- **What:** `src/hosted/operator/OperatorStepUp.tsx` `OperatorConfirm` repeats `src/hosted/components/InPlaceConfirm.tsx` (Cancel focused, Escape cancels, `role="group"`), adding a rich message, an error slot, primary/danger and a busy label; `SignupRow.cancel` repeats `useConfirmStep`'s focus return.
+- **Why it's acceptable:** changing the shared confirm on the release's critical path risked the expense and conversion drawers' delete confirms.
+- **Fix:** MUT-461 extends `InPlaceConfirm` (variant, ReactNode message, children/error slot, keepLabelWhileLoading) and builds `OperatorConfirm` on it.
+
 ### TD-266: An operator can't add or remove a passkey from the phone, or from a password-only portal session
 **Status**: Open (MUT-459, 2026-10-27; pre-merge review, Basel's choice: the portal now, the phone later)
 - **What:** for an operator, adding, renaming or removing a passkey needs a passkey step-up (ADR-212 D7, review findings 2 and A).

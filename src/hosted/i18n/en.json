@@ -1750,6 +1750,68 @@
       "paymentTitle": "Payment",
       "actions": "Correct this entry",
       "cancelledPart": "Cancelled {amount}; {left} is still owed, because it changed while you were cancelling."
+    },
+    "operator": {
+      "title": "Operator",
+      "rowSub": "Signups waiting for review",
+      "failed": "That didn't go through. Try again.",
+      "tabs": {
+        "signups": "Signups",
+        "signupsCount": "Signups · {count}"
+      },
+      "signups": {
+        "listLabel": "Signups waiting for review",
+        "signedUp": "Signed up {time}",
+        "longWait": "Waiting 1 day+",
+        "approve": "Approve",
+        "decline": "Decline",
+        "approveWithPasskey": "Approve with passkey",
+        "declineWithPasskey": "Decline with passkey",
+        "confirmApprove": "{email} can sign in. We'll email them now.",
+        "confirmDecline": "{email}'s account will be deleted. We'll email them; they can sign up again.",
+        "approved": "{email} approved · email sent",
+        "declined": "{email} declined · email sent",
+        "emptyTitle": "No one is waiting",
+        "emptyBody": "The digest emails you when someone signs up.",
+        "mailFailedApproved": "Approved. The email didn't send.",
+        "mailFailedDeclined": "Declined. The email didn't send.",
+        "emailLabel": "Their email address",
+        "sendAgain": "Send again",
+        "sendAgainWithPasskey": "Send again with passkey",
+        "resent": "Email sent to {email}",
+        "done": "Done",
+        "alreadyDecided": "Already decided",
+        "notEmpty": "This account has records now, so it can't be declined.",
+        "writeYourself": "Write to them yourself from your own email."
+      },
+      "chips": {
+        "webmail": "Webmail",
+        "relay": "Mail relay",
+        "invalidDomain": "Invalid domain",
+        "checkError": "Check failed",
+        "noMx": "No mail server",
+        "noWeb": "No website",
+        "timeout": "Check timed out",
+        "dnsUnavailable": "DNS unavailable",
+        "rdapNoDate": "No registration date",
+        "rdapNotFound": "Not in the registry",
+        "rdapUnsupportedTld": "Registry not checked",
+        "rdapError": "Registry error",
+        "business": "Business domain",
+        "unverified": "Unverified domain",
+        "youngDomain": {
+          "one": "Domain {count} day old",
+          "other": "Domain {count} days old"
+        },
+        "domainToday": "Domain registered today"
+      },
+      "stepUp": {
+        "confirmWithPasskey": "Confirm with passkey",
+        "refused": "Your passkey wasn't accepted. Try again.",
+        "otherDevice": "A passkey on another device works too: choose the QR code option.",
+        "noPasskey": "Operator actions need a passkey.",
+        "addPasskey": "Add one in Account › Passkeys"
+      }
     }
   }
 }

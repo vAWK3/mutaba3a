@@ -72,7 +72,7 @@ export interface TemplateVars {
   'account-ready': { signInLink: string };
   'account-declined': { supportAddress: string };
   /** MUT-367: to the operator. */
-  'review-digest': { pending: number; command: string };
+  'review-digest': { pending: number; command: string; reviewLink: string | null };
   /**
    * MUT-419: the trial reminders. `daysLeft` is whole days left, rounded up (1-3), always worded "within N days" (D2).
    * `subscribeLink` opens Billing's Subscribe step; `exportLink` opens Your data (the records export).

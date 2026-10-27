@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useRef } from 'react';
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
@@ -7,7 +8,8 @@ import { SignupPage } from './pages/auth/SignupPage';
 import { RecoverPage } from './pages/auth/RecoverPage';
 import { CarryOverPage } from './pages/carry-over/CarryOverPage';
 import { ReceivePage } from './pages/carry-over/ReceivePage';
-import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
+import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout, RedirectToSignIn } from './session/AuthGate';
+import { useIsLocalMode } from './session/mode';
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
@@ -36,6 +38,9 @@ import { HostedShell } from './shell/HostedShell';
 import { supportsViewTransitionTypes, viewTransitionOption } from './shell/pageMotion';
 import { YOU_PARTS, parseYouSearch, youPath } from './shell/youRoutes';
 import { useMe, useProfile } from './session/me';
+import { useIsOperator } from './session/features';
+import { OperatorLayout } from './pages/operator/OperatorLayout';
+import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -326,6 +331,32 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     return { inProfile, noProfile };
   });
 
+  /**
+   * MUT-460 (ADR-213, design 6A): the operator console, outside any profile. Only an operator (/v1/me says so) sees it;
+   * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
+   */
+  const operatorRoute = createRoute({ getParentRoute: () => authedRoute, path: '/operator', component: () => <Navigate to="/operator/signups" replace /> });
+  const operatorSignupsRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/signups',
+    component: function OperatorSignups() {
+      const operator = useIsOperator();
+      const local = useIsLocalMode();
+      const heading = useRef<HTMLHeadingElement>(null);
+      // Signed out, the portal runs on this device and AuthGate never asks for a sign-in: the digest link must (2A).
+      if (local) return <RedirectToSignIn />;
+      if (!operator) return <Navigate to="/" replace />;
+      return (
+        <HostedShell profile={null}>
+          <OperatorLayout headingRef={heading}>
+            <OperatorSignupsPage headingRef={heading} />
+          </OperatorLayout>
+        </HostedShell>
+      );
+    },
+  });
+
   const routeTree = rootRoute.addChildren([
     signInRoute,
     setupRoute,
@@ -338,6 +369,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       captureRoute,
       connectApproveRoute,
       glanceRoute,
+      operatorRoute,
+      operatorSignupsRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

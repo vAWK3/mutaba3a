@@ -2,10 +2,10 @@ import { useNavigate } from '@tanstack/react-router';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
-import { RowButton, RowGroup } from '../../components/YouRows';
+import { RowButton, RowGroup, RowNavLink } from '../../components/YouRows';
 import { billingRowOf, type BillingRow } from '../../data/trialPrompt';
 import { useMe } from '../../session/me';
-import { useHasFeature } from '../../session/features';
+import { useHasFeature, useIsOperator } from '../../session/features';
 import { useIsLocalMode } from '../../session/mode';
 import { useSignOut } from '../../session/useSignOut';
 import { useAccountDrawers } from '../../shell/AccountDrawers';
@@ -23,6 +23,7 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
   const drawers = useAccountDrawers();
   const navigate = useNavigate();
   const agentAccess = useHasFeature('agent_access');
+  const operator = useIsOperator();
 
   if (local) {
     return (
@@ -44,6 +45,12 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         {/* MUT-434: only for a person the operator gave agent_access */}
         {agentAccess && <RowButton label={t('hosted.connect.title')} sub={t('hosted.connect.rowSub')} onClick={drawers.openConnectClaude} />}
       </RowGroup>
+      {/* MUT-460 (6A): the operator console's way in, for operators only */}
+      {operator && (
+        <RowGroup>
+          <RowNavLink label={t('hosted.operator.title')} sub={t('hosted.operator.rowSub')} to="/operator/signups" />
+        </RowGroup>
+      )}
       <SignOutGroup />
       {/* MUT-333: set apart, last: it can't be undone after 30 days */}
       <RowGroup>

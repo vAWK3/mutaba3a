@@ -1,0 +1,72 @@
+app: portal-selfservice
+area: operator
+title: Operator console (signup reviews)
+tier: secondary
+# MUT-460 (ADR-213): the operator reviews waiting signups in the portal instead of the CLI, against the live dev API's
+# real operator gate and passkey step-up (MUT-459). Chromium's virtual authenticator answers the passkey sheet
+# (support/passkeys.ts); waiting signups are made as /signup and /setup make them (support/selfService.ts pendingSignup).
+paths:
+  - src/hosted/pages/operator/**
+  - src/hosted/operator/**
+  - src/hosted/data/operatorQueries.ts
+  - src/hosted/data/signupReviews.ts
+  - server/src/operator/**
+  - server/src/routes/operator.ts
+  - server/src/auth/operator-gate.ts
+  - server/src/auth/step-up.ts
+  - server/src/email/review-digest.ts
+features:
+  - id: signups-approve
+    title: From the digest mail, sign in with a passkey and approve a waiting signup
+    tickets: [MUT-460]
+    tier: core
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - server/src/email/templates/copy.ts
+    steps:
+      - Someone signs up with an @gmail.com address and finishes setting a password
+      - Open the "Review signups" link in the operator's digest mail while signed out
+      - Sign in with the passkey, which the sign-in page offers first
+      - Find the signup in the list, press Approve and confirm
+    expect:
+      - The signup is listed with its wait and a Webmail chip
+      - The confirm says "‹email› can sign in. We'll email them now."
+      - '"‹email› approved · email sent", the row leaves the list, and no second passkey prompt was needed'
+      - The person gets the "your account is ready" mail and can sign in
+  - id: signups-decline
+    title: Decline a waiting signup, in Arabic on a 375 px phone
+    tickets: [MUT-460]
+    steps:
+      - Sign in with the password on a 375 px phone in Arabic
+      - Find the signup, press رفض and confirm with the passkey
+    expect:
+      - The confirm says the account will be deleted and they can sign up again
+      - The toast says the signup was declined and the mail went
+      - The person gets the decline mail and can no longer sign in
+      - The page reads right to left with no sideways scroll
+  - id: step-up-passkey
+    title: A stale step-up asks for the passkey on the same tap; cancelling it changes nothing
+    tickets: [MUT-460]
+    paths:
+      - src/hosted/passkeys/webauthn.ts
+    steps:
+      - Sign in with the password (no passkey step-up yet)
+      - Press Approve on a waiting signup
+      - Dismiss the passkey sheet, then press Approve with passkey again and confirm on the device
+    expect:
+      - The confirm button reads "Approve with passkey"
+      - Dismissing the sheet leaves the confirm as it was, with no message and nothing approved
+      - Confirming on the device approves the signup
+  - id: hidden-for-non-operator
+    title: Someone who isn't an operator never sees the console
+    tickets: [MUT-460]
+    paths:
+      - src/hosted/pages/you/YouAccount.tsx
+      - src/hosted/router.tsx
+      - src/hosted/session/features.ts
+    steps:
+      - Sign in as someone who isn't an operator
+      - Look at You › Account, then open /operator/signups directly
+    expect:
+      - You › Account has no Operator row
+      - /operator/signups goes to Home, and the server refuses the list with 404

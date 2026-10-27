@@ -1081,6 +1081,14 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-copy-row { display: flex; gap: var(--space-2); align-items: stretch; }
 .hp-copy-row .input { flex: 1; min-width: 0; font-family: var(--font-mono, ui-monospace, monospace); }
 .hp-copy-field .form-hint:empty { display: none; }
+
+/* ---------- MUT-460: the operator console (design 6A, 7A) ---------- */
+.hp-operator { max-width: 720px; margin-inline: auto; }
+.hp-operator .hp-section-tabs { margin-block-end: var(--space-4); }
+.hp-operator-list + .hp-operator-list, .hp-operator-list + .hp-empty { margin-block-start: var(--space-3); }
+.hp-operator-chips { display: flex; flex-wrap: wrap; gap: var(--space-1-5); margin-block-start: var(--space-1-5); }
+.hp-operator-chips:empty { display: none; }
+.hp-operator-list .hp-banner, .hp-operator-list .hp-copy-field { flex: 1 1 100%; margin: 0; }
 .hp-connect-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .hp-connect-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
 .hp-connect-steps code { overflow-wrap: anywhere; font-size: var(--text-label); }

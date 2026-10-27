@@ -12,6 +12,8 @@ import type { Mailer, SendResult } from './ports.js';
  * sends nothing.
  */
 export const REVIEW_COMMAND = 'npm --prefix server run signups:review';
+/** MUT-460: the portal page the digest links to, under PORTAL_ORIGIN. */
+export const REVIEW_PAGE_PATH = '/operator/signups';
 /** The sweep runs this long after each UTC hour, so a review is announced within about an hour (D27). */
 export const DIGEST_SWEEP_OFFSET_MS = 5 * 60_000;
 const HOUR_MS = 3_600_000;
@@ -29,10 +31,13 @@ export interface ReviewDigestOptions {
   now: () => Date;
   /** OPERATOR_ALERT_EMAIL; null = no digest (boot warns). */
   to: string | null;
+  /** MUT-460: the portal's operator signups page; null (no PORTAL_ORIGIN) = the mail names only the command. */
+  reviewLink?: string | null;
 }
 
 export function createReviewDigest(options: ReviewDigestOptions): ReviewDigest {
   const { store, mailer, logger, now, to } = options;
+  const reviewLink = options.reviewLink ?? null;
   let running: Promise<SendResult['status'] | 'idle'> | null = null;
 
   async function run(): Promise<SendResult['status'] | 'idle'> {
@@ -41,7 +46,7 @@ export function createReviewDigest(options: ReviewDigestOptions): ReviewDigest {
     if (facts.unannounced.length === 0) return 'idle';
     const at = now();
     const hour = at.toISOString().slice(0, 13);
-    const result = await mailer.send({ to, template: 'review-digest', locale: 'en', vars: { pending: facts.pending, command: REVIEW_COMMAND }, idempotencyKey: `review-digest:${hour}` });
+    const result = await mailer.send({ to, template: 'review-digest', locale: 'en', vars: { pending: facts.pending, command: REVIEW_COMMAND, reviewLink }, idempotencyKey: `review-digest:${hour}` });
     if (result.status === 'sent') await store.signupReviews.markNotified(facts.unannounced, at);
     else if (result.status !== 'duplicate') logger.warn({ outcome: result.status, pending: facts.pending }, 'signup review digest not sent; the next sweep tries again');
     return result.status;

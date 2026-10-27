@@ -57,6 +57,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-460: the operator's signup review page (portal) and the digest link
+
+**Why:** MUT-459 gave operators an identity and `/v1/operator/*`; this puts the signup review queue in the portal, so a waiting signup can be decided from the digest mail on a phone (ADR-213).
+
+### Added
+- Portal `/operator/signups` (and `/operator` → it), operators only, in the shell with no profile: waiting signups oldest first with email, wait (`Intl.RelativeTimeFormat`, Western digits), domain and reason chips; "Waiting 1 day+" past a day; refetch on focus. In-row Approve/Decline confirms that say what will be mailed; a toast, focus to the next row, the empty state. Mail not sent → a warning with the address (`CopyField`) and Send again after an approval; already decided → says so and re-reads; NOT_EMPTY → says why.
+- The passkey step-up on the same tap: `src/hosted/operator/stepUp.ts` (`isStepUpFresh`, `stepUpWithPasskey`, `runOperatorAction`), `OperatorStepUp.tsx` (`OperatorStepUpProvider`, `useOperatorRun`, `OperatorConfirm`, `StepUpFailureBanner`).
+- `api.operatorSignupReviews`, `decideSignupReview`, `operatorStepUpOptions`, `operatorStepUp`; `data/operatorQueries.ts`; `data/signupReviews.ts` (`reviewChips`, `waitingOf`, `mailWentOut`); `useIsOperator`.
+- Signed out (local mode), `/operator/signups` goes to sign-in with `next` (AuthGate's `RedirectToSignIn`, exported), so the digest link works from any browser.
+- You › Account › "Operator" for operators. Sign-in with `?next=/operator…` makes "Sign in with a passkey" the primary button.
+- `hosted.operator.*` strings (en, ar).
+- Server: the review digest carries a "Review signups" button to `<PORTAL_ORIGIN>/operator/signups` (`createReviewDigest` `reviewLink`, `REVIEW_PAGE_PATH`); the CLI line stays.
+- Release-QA: `qa/features/portal-selfservice/operator.yaml` + `qa/specs/portal-selfservice/operator.spec.ts` (`signups-approve`, `signups-decline`, `step-up-passkey`, `hidden-for-non-operator`); `qa/support/selfService.ts` `pendingSignup`, `grantOperator`, `signsIn`; the live env sets `OPERATOR_ALERT_EMAIL`.
+
+- Pre-merge review fixes (qa-reconcile): the digest's command line moved under the button; a 403 marks every row "with passkey" and Cancel drops the fallback; Cancel and Escape wait while a decision is in flight; a 404 on a decision re-reads `/v1/me` (a revoked operator leaves); "refused" only for `PASSKEY_NOT_ACCEPTED`; Send again only for a failed or capped send (`mailRetryable`); "Domain registered today"; `?next=/operator#…` is passkey-first. TD-267 (OperatorConfirm duplicates InPlaceConfirm, MUT-461) and TD-268 (iOS gesture window, check on an iPhone) recorded.
+
+### Files
+- `server/src/email/{review-digest.ts,ports.ts,templates/copy.ts}`, `server/src/index.ts`
+- `src/hosted/{router.tsx,api/client.ts,session/features.ts,hosted.css,i18n/en.json,i18n/ar.json}`, `src/hosted/operator/**`, `src/hosted/pages/operator/**`, `src/hosted/data/{operatorQueries,signupReviews}.ts`, `src/hosted/pages/you/YouAccount.tsx`, `src/hosted/pages/auth/SignInPage.tsx`
+- `qa/qa.config.mjs`, `qa/support/{selfService.ts,selfservice-live.mjs}`
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-459: operator accounts and the /v1/operator gate (server foundation of the operator console)
 
 **Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-212).
