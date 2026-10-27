@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-488: summaries total a matter's other-currency Owed in its own currency (ADR-218)
+
+**Why:** found in MUT-478's qa-reconcile. The customer summary added every receivable of a matter to the block for the matter's currency, so a USD Owed on an ILS matter raised the ILS outstanding by its USD minor units (ADR-004). That also broke the statement's promise "closing balance = summary outstanding − unallocated", and Malafat's Money pages (MAL-1410) read both.
+
+### Fixed
+- `GET /v1/summaries/customers/{customerId}`: a matter's Owed in another currency counts in that currency's block, as an Owed with no matter does, with no project row there. The matter's row and its currency block count only receivables in the matter's currency.
+- `GET /v1/summaries/projects/{projectId}`: posted, paid, credited, buckets and status count only receivables in the project's currency.
+- The two routes' OpenAPI descriptions state the rule (no schema change; API version unchanged). `src/hosted/api/schema.d.ts` regenerated.
+
+### Technical
+- `projectSummary` filters to the project's currency before `projectFigures`; the customer route's `matterless` became `outsideRows` (no matter, or not in its matter's currency). `GET /v1/summaries/organization` already filtered by currency.
+- Signed-out portal mode runs the same routes, so it gets the fix too.
+- Files: `server/src/routes/summaries.ts`, `server/src/__tests__/income-routes.test.ts`, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-215)
 
 **Why:** seeing an account's state, disabling one, signing it out or sending a reset needed the CLI and the right command. Epic MUT-458's third step: the operator console gets an Accounts tab.

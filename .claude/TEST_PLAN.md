@@ -4073,3 +4073,11 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Unit | `mailer.test.ts`, `config.test.ts`, `portal.test.ts`, Terraform `domain.tftest.hcl` | the mailer passes recipient and origins; `WEBSITE_ORIGIN` is an https origin only; production mail needs `PORTAL_ORIGIN`; `/mail/` hits immutable, misses fall to the SPA shell; Terraform sets `WEBSITE_ORIGIN` at stage live |
 | Browser | `qa/specs/portal-selfservice/mail.spec.ts` (`@portal-selfservice.mail.mail-frame`) | the Arabic signup mail from the live API's outbox: RTL, art loaded from the portal, immutable PNG, images off still reads, the button opens /setup |
 | Manual | `npm --prefix server run mail:preview -- --send <inbox>` | Gmail web and app, Apple Mail light and dark, Outlook web and desktop, images on and off |
+
+## MUT-488 — summaries keep a matter's other-currency Owed in its own currency (2026-10-27, ADR-218)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/income-routes.test.ts` "MUT-488: an Owed in another currency on a matter…" | 1 | A 500 ILS and an 80 USD Owed on one ILS matter. Customer summary: the ILS block and the matter's row show 500.00; the USD block shows 80.00 with no project row. Project summary: posted and outstanding 500.00. The organization summary agrees per currency. Red before the fix (ILS 580.00). |
+| Manual, on a throwaway merge with `feature/mut-478-customer-statement` | 1 | With an 80 USD Owed added to the ILS project of the statement's AC1 ledger, closing balance = summary outstanding − unallocated holds in ILS and in USD. Without the fix ILS fails (566.00 vs 646.00). Not committed: the statement isn't on this branch. When both land, add the case to `customer-statement.test.ts` AC1. |
+

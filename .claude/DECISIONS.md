@@ -5690,3 +5690,21 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A new `ACCOUNT_NOT_FOUND` error code. Rejected: a reason on `NOT_FOUND` says the same, and every client already handles 404.
 - Allowing a reset link on your own account without `lock`. Rejected: the console isn't where you manage your own account, and one rule is easier to trust.
+
+## ADR-218: A Project's Figures Are in Its Own Currency; a Matter's Other-Currency Owed Counts in Its Own Block (MUT-488)
+
+**Status:** Accepted (2026-10-27, MUT-488). Applies ADR-004.
+
+**Context:** an Owed can be captured in any currency on any matter (`income/compose.ts` checks the currency only for a Received under `linked-required`). The customer and project summaries built a matter's figures from all its receivables and formatted the sum in the matter's currency.
+
+**Decision:**
+1. **A project's figures count only receivables in the project's currency:** posted, paid, credited, buckets and status, on `GET /v1/summaries/projects/{id}` and on the project rows of the customer summary. The wire keeps one currency per project.
+2. **In the customer summary, a matter's Owed in another currency counts in that currency's block,** like an Owed with no matter: in the block's totals and status, with no project row there. A currency with only such an Owed still gets a block (unless the Owed is dated ahead, MUT-392).
+3. So the customer summary, the organization summary and the customer statement (MUT-478) give the same figure per customer and currency.
+
+**Consequences:** the project summary doesn't show a matter's Owed in another currency, and the matter's status ignores it (TD-273).
+
+**Alternatives considered:**
+- One block per currency on the project summary. Rejected for now: it changes the shape Malafat and the phone read, for a case only an Owed can create. TD-273 records how to add it without a break.
+- Refusing an Owed whose currency differs from its matter's. Rejected: a person may agree a fee in another currency on the same matter, and money keeps the currency it was agreed in.
+

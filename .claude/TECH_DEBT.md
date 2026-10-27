@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-273: The project summary leaves out a matter's Owed in another currency
+**Status**: Open (MUT-488, 2026-10-27, ADR-218)
+- **What:** `GET /v1/summaries/projects/{id}` and the customer summary's project rows count only receivables in the project's currency. A USD Owed on an ILS matter shows in the customer's USD block but on no project row, and the matter's status ignores it.
+- **Why it's acceptable:** only an Owed can differ from its matter's currency, and the customer summary, the organization summary and the statement all show it in its own currency.
+- **Fix:** if people need it on the matter, add an additive `otherCurrencies: [{currency, outstanding, overdue, dueToday, notYetDue}]` to the project wire, and decide whether it moves the matter's status.
+
 ### TD-269: The operator's account page can't say when an account was disabled
 **Status**: Open (MUT-461, 2026-10-27)
 - **What:** design 5A's banner reads "Disabled ‹date›", but no column records when an account was disabled (`users.status` only; `updatedAt` moves on any change). The banner says "This account is disabled" with no date.
