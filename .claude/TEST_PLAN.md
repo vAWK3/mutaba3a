@@ -176,6 +176,14 @@ MUT-459 (server):
 - Regression proof: `routes-signup-review.test.ts` is unchanged and green.
 - QA (release-qa): no user-visible surface yet. MUT-460's `portal-selfservice/operator.yaml` specs cover it end to end.
 
+MUT-460 (portal + digest link):
+- `src/hosted/operator/__tests__/stepUp.test.ts` (12): freshness margin; the step-up's outcomes (ok, cancelled, refused by the platform or the server, no passkey, failed); fresh acts with no prompt; stale steps up first and reports the window; a failed step-up never runs the action; a 403 on a direct action asks without prompting; a second 403 is refused.
+- `src/hosted/data/__tests__/signupReviews.test.ts` (7): reason chips and tones, domain age, unknown codes raw, classification fallback; waiting units and the day mark; which mail outcomes went out.
+- `src/hosted/pages/operator/__tests__/OperatorSignupsPage.test.tsx` (21): non-operator redirect and no list read; the You row for operators only; `/operator` → Signups; rows oldest first with chips, wait and the 1-day chip; empty and loading states; Arabic RTL with Western digits; approve/decline confirms, Escape and focus return, toast, focus to the next row or heading; already decided; NOT_EMPTY; mail-failed approve (Send again) and decline (no resend); stale "with passkey" one-tap step-up, the remembered step-up, cancel, refused, no passkey (link), and the 403 "Confirm with passkey" fallback.
+- `SignInPasskey.test.tsx`: passkey first for `?next=/operator…`, password first elsewhere.
+- Server `review-digest.test.ts`: the link with `PORTAL_ORIGIN`, none without; `templates.test.ts` renders the button.
+- Release-QA: `qa/features/portal-selfservice/operator.yaml` + `qa/specs/portal-selfservice/operator.spec.ts`.
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)

@@ -17,6 +17,8 @@ interface LiveState {
   adminToken: string;
   database: string;
   container: string;
+  /** MUT-460: OPERATOR_ALERT_EMAIL, the digest's address. */
+  operatorDigest: string;
 }
 
 export interface Mail {
@@ -113,6 +115,51 @@ export async function decideReview(email: string, decision: 'approve' | 'decline
   expect(review?.userId, `a pending review for ${email}`).toBeTruthy();
   const decided = await fetch(`${origin}/admin/v1/signup-reviews/${review!.userId}/${decision}`, { method: 'POST', headers: admin(), body: '{}' });
   expect(decided.status, `${decision} ${await decided.clone().text()}`).toBe(200);
+}
+
+/** MUT-460: a random client address per request, so the API's per-IP budgets (one trusted proxy hop) never add up. */
+const randomIp = () => `10.${[0, 0, 0].map(() => Math.floor(Math.random() * 254) + 1).join('.')}`;
+export const SIGNUP_PASSWORD = 'a waiting signup passphrase';
+
+/**
+ * MUT-460: a signup waiting for the operator, made as /signup and /setup make one (Turnstile's always-pass test secret
+ * on this dev API): an @gmail.com address is webmail, so it waits for review. Returns the address.
+ */
+export async function pendingSignup(label: string): Promise<string> {
+  const { origin } = liveState();
+  const email = address(label, 'gmail.com');
+  const asked = await fetch(`${origin}/v1/signups`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': randomIp() },
+    body: JSON.stringify({ email, locale: 'en', turnstileToken: 'qa-turnstile-test-token' }),
+  });
+  expect(asked.status, `signup ${await asked.clone().text()}`).toBe(202);
+  const token = new URL(setupLinkIn(await mailTo(email, 'finish-signup'))).hash.slice(1);
+  const set = await fetch(`${origin}/v1/account-setup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': randomIp() },
+    body: JSON.stringify({ token, password: SIGNUP_PASSWORD, acceptedTermsVersion: CURRENT_TERMS.version, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }),
+  });
+  expect(set.ok, `finish signup ${set.status}`).toBe(true);
+  expect(((await set.json()) as { status: string }).status).toBe('PENDING_REVIEW');
+  return email;
+}
+
+/** MUT-460: makes a person an operator (MUT-459). The admin route refuses one with no passkey, so add one first. */
+export async function grantOperator(userId: string): Promise<void> {
+  const res = await fetch(`${liveState().origin}/admin/v1/users/${userId}/operator`, { method: 'PUT', headers: admin() });
+  expect(res.status, `grant operator ${await res.clone().text()}`).toBe(200);
+}
+
+/** MUT-460: whether `email` can sign in with `password` now (an approved signup can; one under review or gone can't). */
+export async function signsIn(email: string, password: string): Promise<boolean> {
+  const { origin } = liveState();
+  const res = await fetch(`${origin}/v1/sessions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': randomIp() },
+    body: JSON.stringify({ email, password }),
+  });
+  return res.ok;
 }
 
 /** Age every open SIGNUP link for `email` past its 24 h, in the QA database (D12): no waiting, no clock route. */

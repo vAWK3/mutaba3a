@@ -9,6 +9,11 @@ import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
  * so @simplewebauthn/browser is replaced.
  */
 const browser = vi.hoisted(() => ({ startAuthentication: vi.fn() }));
+const mode = vi.hoisted(() => ({ local: false }));
+vi.mock('../../../session/mode', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../../session/mode')>();
+  return { ...real, useIsLocalMode: () => mode.local, useMode: () => (mode.local ? 'local' : 'remote') };
+});
 vi.mock('@simplewebauthn/browser', async (importOriginal) => {
   const real = await importOriginal<typeof import('@simplewebauthn/browser')>();
   return { ...real, startAuthentication: browser.startAuthentication, browserSupportsWebAuthn: () => true, browserSupportsWebAuthnAutofill: async () => false };
@@ -73,6 +78,7 @@ beforeEach(() => {
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   vi.stubGlobal('__PASSKEY_RP_ID__', 'localhost');
   browser.startAuthentication.mockReset().mockResolvedValue(ASSERTION);
+  mode.local = false;
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -83,6 +89,13 @@ describe('who sees the console (AC5)', () => {
   it('a non-operator gets the not-found answer, and the list is never asked for', async () => {
     const { router, api } = portal({ account: me([profile()]) });
     await waitFor(() => expect(locationOf(router)).not.toContain('/operator'));
+    expect(api.count('GET /v1/operator/signup-reviews')).toBe(0);
+  });
+
+  it('signed out on this device (the digest link): sign in first, then come back to the signups', async () => {
+    mode.local = true;
+    const { router, api } = portal();
+    await waitFor(() => expect(locationOf(router)).toBe('/sign-in?next=%2Foperator%2Fsignups'));
     expect(api.count('GET /v1/operator/signup-reviews')).toBe(0);
   });
 

@@ -34,6 +34,8 @@ const ATTACHMENTS = path.join(ROOT, 'qa', '.state', 'selfservice-attachments');
 // Local QA-only values, not secrets: the API runs on loopback for the length of a QA run.
 const ADMIN_TOKEN = 'qa-portal-selfservice-admin-token-0123456789';
 const PEPPER = 'qa-portal-selfservice-session-pepper-0123456789';
+/** MUT-460: where the operator digest goes (read through the outbox; the state file names it for the specs). */
+const OPERATOR_DIGEST_ADDRESS = 'qa-operator-digest@business.example';
 
 /** A shell that exports APPLE_TEAM_ID for fastlane would half-set the API's app association, which it refuses. */
 const APP_ASSOCIATION_VARS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'];
@@ -101,6 +103,8 @@ async function main() {
       SELF_SIGNUP_ENABLED: 'true',
       EMAIL_DOMAIN_CHECKER: 'fixture',
       SIGNUP_RESPONSE_FLOOR_MS: '100',
+      // MUT-460: the operator digest, whose link opens the portal's signups page (operator.spec.ts).
+      OPERATOR_ALERT_EMAIL: OPERATOR_DIGEST_ADDRESS,
       RECOVERY_RESPONSE_FLOOR_MS: '100',
       // MUT-115: passkeys, checked by Chromium's virtual authenticator (support/passkeys.ts).
       WEBAUTHN_RP_ID: 'localhost',
@@ -134,7 +138,7 @@ async function main() {
   process.on('SIGTERM', () => stop());
 
   mkdirSync(path.dirname(STATE), { recursive: true });
-  writeFileSync(STATE, JSON.stringify({ origin: ORIGIN, adminToken: ADMIN_TOKEN, database: DB_NAME, container: PG_CONTAINER }, null, 2));
+  writeFileSync(STATE, JSON.stringify({ origin: ORIGIN, adminToken: ADMIN_TOKEN, database: DB_NAME, container: PG_CONTAINER, operatorDigest: OPERATOR_DIGEST_ADDRESS }, null, 2));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

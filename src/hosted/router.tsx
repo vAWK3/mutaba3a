@@ -8,7 +8,8 @@ import { SignupPage } from './pages/auth/SignupPage';
 import { RecoverPage } from './pages/auth/RecoverPage';
 import { CarryOverPage } from './pages/carry-over/CarryOverPage';
 import { ReceivePage } from './pages/carry-over/ReceivePage';
-import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout } from './session/AuthGate';
+import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout, RedirectToSignIn } from './session/AuthGate';
+import { useIsLocalMode } from './session/mode';
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
@@ -341,7 +342,10 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     path: '/operator/signups',
     component: function OperatorSignups() {
       const operator = useIsOperator();
+      const local = useIsLocalMode();
       const heading = useRef<HTMLHeadingElement>(null);
+      // Signed out, the portal runs on this device and AuthGate never asks for a sign-in: the digest link must (2A).
+      if (local) return <RedirectToSignIn />;
       if (!operator) return <Navigate to="/" replace />;
       return (
         <HostedShell profile={null}>
