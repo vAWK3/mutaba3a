@@ -82,6 +82,19 @@ describe('mailer (memory transport)', () => {
     expect(h.transport.list({ to: 'rana+password-changed@studio.example' })).toHaveLength(2);
   });
 
+  it('MUT-468: draws each mail with its recipient, the art origin and the website origin', async () => {
+    const h = harness({ artOrigin: 'https://app.example.test', websiteOrigin: 'https://site.example.test' });
+    await h.mailer.send(signup('Rana@Studio.Example'));
+    const [mail] = h.transport.list();
+    expect(mail!.html).toContain('<bdi dir="ltr">rana@studio.example</bdi>');
+    expect(mail!.html).toContain('src="https://app.example.test/mail/v1/mail-header-hello-spot-email-2x.png"');
+    expect(mail!.html).toContain('href="https://site.example.test/privacy?lang=en"');
+    // Without the origins (development, tests) the mail has no pictures and no Privacy link.
+    const bare = harness();
+    await bare.mailer.send(signup('rana@studio.example'));
+    expect(bare.transport.list()[0]!.html).not.toMatch(/<img|\/privacy/);
+  });
+
   it('never sends the same key twice', async () => {
     const h = harness();
     const input = signup('a@studio.example');
