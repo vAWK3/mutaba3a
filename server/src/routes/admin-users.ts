@@ -1,8 +1,6 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { generateSetupToken, SETUP_LINK_POLICY, setupLinkOrigin, setupUrl } from '../auth/account-setup.js';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
-import { sessionDigest } from '../auth/sessions.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { isFeature } from '../features.js';
@@ -11,8 +9,10 @@ import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from '../observability/reporter.js';
-import { ForeignKeyViolation, StateConflict, UniqueViolation } from '../repositories/memory.js';
-import { SETUP_LINK_STATUSES, type AuditEventInput, type JsonObject, type LedgerStore, type Organization, type PersonSetupLinkPurpose, type UserRecord } from '../repositories/ports.js';
+import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
+import { accountActions, accountAudit, mintSetupLink, setupLinkAuditMetadata, type AccountAuditAction } from '../operator/actions/accounts.js';
+import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
+import { type AuditEventInput, type JsonObject, type LedgerStore, type Organization, type UserRecord } from '../repositories/ports.js';
 import {
   CreateUserRequestSchema,
   CreateUserResponseSchema,
@@ -89,18 +89,6 @@ const MembershipParams = UserIdParam.extend({
   organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }),
 });
 
-type AuditAction =
-  | 'user.created'
-  | 'user.setup_link_issued'
-  | 'user.disabled'
-  | 'user.enabled'
-  | 'user.feature_granted'
-  | 'user.feature_revoked'
-  | 'user.operator_granted'
-  | 'user.operator_revoked'
-  | 'user.agent_disconnected'
-  | 'membership.granted'
-  | 'membership.revoked';
 
 /**
  * MUT-120: the personal profile's currency and timezone. The request wins; else the firm's;
@@ -118,28 +106,17 @@ function resolvePersonalSettings(
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
   const { store, logger, sessions, terms } = options;
   const reporter = options.reporter ?? NOOP_REPORTER;
+  // MUT-461 (ADR-212 D1): the account actions live in operator/actions/accounts.ts, shared with /v1/operator/accounts.
+  const accounts = accountActions(options);
+  const { memberOrganizations } = accounts;
   const app = new OpenAPIHono<AppEnv>();
 
-  function auditEvents(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject): AuditEventInput[] {
-    return organizationIds.map((organizationId) => ({
-      organizationId,
-      actorType: 'ADMIN',
-      actorId: null,
-      action,
-      entityType: 'user',
-      entityId: userId,
-      ...(metadata ? { metadata } : {}),
-      requestId: c.get('requestId'),
-    }));
-  }
-
-  /** MUT-434 (D12, D14): an operator-forced disconnect of every agent, audited on each profile and noted in Sentry. */
-  async function revokeAgentGrants(c: Context<AppEnv>, userId: string, reason: 'disabled' | 'operator'): Promise<number> {
-    const organizationIds = await memberOrganizations(userId);
-    const count = await store.oauth.revokeAllForUser({ userId, reason, at: c.get('now')(), audit: auditEvents(c, organizationIds, userId, 'user.agent_disconnected', { reason }) });
-    if (count > 0) reporter.captureMessage('info', 'OAuth grants revoked', { reason, count: String(count) });
-    return count;
-  }
+  /** The admin token's request facts: no identity, so the audit rows keep actorId null. */
+  const ctxOf = (c: Context<AppEnv>): ActionContext => ({ actor: TOKEN_ACTOR, at: c.get('now')(), requestId: c.get('requestId'), requestUrl: c.req.url });
+  const auditEvents = (c: Context<AppEnv>, organizationIds: string[], userId: string, action: AccountAuditAction, metadata?: JsonObject): AuditEventInput[] =>
+    accountAudit(ctxOf(c), organizationIds, userId, action, metadata);
+  const audit = (c: Context<AppEnv>, organizationIds: string[], userId: string, action: AccountAuditAction, metadata?: JsonObject) => accounts.audit(ctxOf(c), organizationIds, userId, action, metadata);
+  const mustGetUser = accounts.mustGet;
 
   /** MUT-373 (ADR-163): the pilot's one way to add a co-owner (design review DR11: at most MAX_PROFILE_OWNERS). */
   async function grantCoOwner(c: Context<AppEnv>, user: UserRecord, organizationId: string) {
@@ -164,61 +141,6 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       case 'role_conflict':
         throw new ApiError('CONFLICT', `Already a member as ${result.role}; changing a role isn't supported yet`, { reason: 'ROLE_CHANGE_NOT_SUPPORTED', role: result.role });
     }
-  }
-
-  /**
-   * MUT-235: a fresh link. The token appears only in `view.url`, returned once; the store gets its digest.
-   */
-  function newSetupLink(c: Context<AppEnv>, purpose: PersonSetupLinkPurpose, validHours: number | undefined) {
-    const at = c.get('now')();
-    const token = generateSetupToken();
-    const expiresAt = new Date(at.getTime() + (validHours ?? SETUP_LINK_POLICY.defaultHours) * 3_600_000);
-    const view = { url: setupUrl(setupLinkOrigin(sessions.portalOrigin, c.req.url), token), expiresAt: expiresAt.toISOString(), purpose };
-    return { at, tokenDigest: sessionDigest(sessions.pepper, token), purpose, expiresAt, view };
-  }
-
-  const setupLinkMetadata = (link: ReturnType<typeof newSetupLink>, lock: boolean): JsonObject => ({
-    purpose: link.purpose,
-    expiresAt: link.view.expiresAt,
-    ...(lock ? { lock: true } : {}),
-  });
-
-  /**
-   * MUT-235: one transaction cancels the person's open link, issues this one and audits it (and, with `lock`,
-   * clears the password and revokes every session).
-   */
-  async function issueSetupLink(c: Context<AppEnv>, user: UserRecord, options: { purpose: PersonSetupLinkPurpose; validHours?: number | undefined; lock: boolean }) {
-    const link = newSetupLink(c, options.purpose, options.validHours);
-    const organizationIds = await memberOrganizations(user.id);
-    if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.setup_link_issued' }, 'account change on a user with no memberships; no organization to audit');
-    await store.accountSetup.issue({
-      userId: user.id,
-      tokenDigest: link.tokenDigest,
-      purpose: link.purpose,
-      at: link.at,
-      expiresAt: link.expiresAt,
-      lock: options.lock,
-      audit: auditEvents(c, organizationIds, user.id, 'user.setup_link_issued', setupLinkMetadata(link, options.lock)),
-    });
-    return link.view;
-  }
-
-  async function audit(c: Context<AppEnv>, organizationIds: string[], userId: string, action: AuditAction, metadata?: JsonObject) {
-    if (organizationIds.length === 0) {
-      logger.info({ requestId: c.get('requestId'), userId, action }, 'account change on a user with no memberships; no organization to audit');
-      return;
-    }
-    for (const event of auditEvents(c, organizationIds, userId, action, metadata)) await store.audit.append(event);
-  }
-
-  async function memberOrganizations(userId: string): Promise<string[]> {
-    return (await store.memberships.listByUser(userId)).map((m) => m.organizationId);
-  }
-
-  async function mustGetUser(userId: string): Promise<UserRecord> {
-    const user = await store.users.getById(userId);
-    if (!user) throw new ApiError('NOT_FOUND', 'User not found');
-    return user;
   }
 
   app.openapi(
@@ -247,7 +169,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       if (!settings) throw new ApiError('VALIDATION_FAILED', 'defaultCurrency and timezone are required when no organizationId is given');
       // MUT-235: no password until the person sets one through their link, and that first link commits with the user
       // (review fix), so a create never leaves an account with neither.
-      const link = newSetupLink(c, 'SETUP', body.setupLinkValidHours);
+      const link = mintSetupLink(sessions, { purpose: 'SETUP', validHours: body.setupLinkValidHours, at: c.get('now')(), requestUrl: c.req.url });
       let created: Awaited<ReturnType<typeof store.users.create>>;
       try {
         created = await store.users.create({
@@ -281,7 +203,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       });
       const organizationIds = memberships.map((m) => m.organizationId);
       await audit(c, organizationIds, user.id, 'user.created', { email: user.email, displayName: user.displayName });
-      await audit(c, organizationIds, user.id, 'user.setup_link_issued', setupLinkMetadata(link, false));
+      await audit(c, organizationIds, user.id, 'user.setup_link_issued', setupLinkAuditMetadata(link, false));
       return c.json(
         {
           user: serializeUser(user),
@@ -458,27 +380,16 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       },
     }),
     async (c) => {
-      const user = await mustGetUser(c.req.valid('param').userId);
-      if (!SETUP_LINK_STATUSES.has(user.status)) throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
-      // The body is optional: with none, the validator is skipped and nothing is defaulted, hence the explicit fallbacks.
+      // The body is optional: with none, the validator is skipped and nothing is defaulted (the action falls back).
       const body: { validHours?: number | undefined; lock?: boolean | undefined } = c.req.valid('json') ?? {};
-      const purpose: PersonSetupLinkPurpose = user.passwordHash === null ? 'SETUP' : 'RESET';
-      const lock = body.lock === true;
-      let setupLink: Awaited<ReturnType<typeof issueSetupLink>>;
-      try {
-        setupLink = await issueSetupLink(c, user, { purpose, validHours: body.validHours, lock });
-      } catch (err) {
-        // A disable that committed after the check above: the store refuses under its row lock (MUT-235 review).
-        if (err instanceof StateConflict) throw new ApiError('CONFLICT', 'A disabled user cannot use a setup link; enable them first', { reason: 'USER_DISABLED' });
-        throw err;
-      }
-      return c.json({ user: serializeUser((await store.users.getById(user.id)) ?? user), setupLink, lock }, 200);
+      const result = await accounts.issueSetupLink(c.req.valid('param').userId, body, ctxOf(c));
+      return c.json({ ...result, user: serializeUser(result.user) }, 200);
     },
   );
 
-  for (const [verb, status, action] of [
-    ['disable', 'DISABLED', 'user.disabled'],
-    ['enable', 'ACTIVE', 'user.enabled'],
+  for (const [verb, status] of [
+    ['disable', 'DISABLED'],
+    ['enable', 'ACTIVE'],
   ] as const) {
     app.openapi(
       createRoute({
@@ -496,19 +407,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         },
       }),
       async (c) => {
-        const existing = await mustGetUser(c.req.valid('param').userId);
-        // MUT-367 (D11): approve and decline are a pending signup's only ways out (the trial and the mail go with them).
-        if (existing.status === 'PENDING_REVIEW') {
-          throw new ApiError('CONFLICT', 'This signup is waiting for review; approve or decline it (signups:review)', { reason: 'USER_PENDING_REVIEW' });
-        }
-        const now = c.get('now')();
-        const user = await store.users.setStatus(existing.id, status, now);
-        if (!user) throw new ApiError('NOT_FOUND', 'User not found');
-        if (status === 'DISABLED') {
-          await store.sessions.revokeAllForUser(user.id, 'disabled', now);
-          await revokeAgentGrants(c, user.id, 'disabled');
-        }
-        if (existing.status !== status) await audit(c, await memberOrganizations(user.id), user.id, action);
+        const { user } = await accounts.setStatus(c.req.valid('param').userId, verb, ctxOf(c));
         return c.json({ user: serializeUser(user) }, 200);
       },
     );
@@ -687,11 +586,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
       },
     }),
     async (c) => {
-      const user = await mustGetUser(c.req.valid('param').userId);
-      const revoked = await store.sessions.revokeAllForUser(user.id, 'operator', c.get('now')());
-      // MUT-434 (D12): "everywhere" includes connected agents; the flag stays, so the owner can reconnect.
-      const agentGrantsRevoked = await revokeAgentGrants(c, user.id, 'operator');
-      return c.json({ revoked, agentGrantsRevoked }, 200);
+      return c.json(await accounts.revokeSessions(c.req.valid('param').userId, ctxOf(c)), 200);
     },
   );
 

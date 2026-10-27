@@ -5,7 +5,7 @@ import type { Logger } from '../../logger.js';
 import { decodeCursor, encodeCursor, parseLimit } from '../../pagination.js';
 import type { LedgerStore, SignupReviewRecord, SignupReviewRow, SignupReviewState, UserLocale } from '../../repositories/ports.js';
 import { signInLinkOf } from '../../routes/account-setup.js';
-import { auditActorIdOf, byLabelOf, type OperatorActor } from '../actor.js';
+import { auditActorIdOf, byLabelOf, type ActionContext } from '../actor.js';
 
 /**
  * MUT-367 (ADR-178) and MUT-459 (ADR-212): the signup review queue's actions, shared by /admin/v1/signup-reviews (the
@@ -25,14 +25,6 @@ export interface SignupReviewActionOptions {
 
 /** D15: what the admin token stores as `decidedBy`; an operator stores `operator:<id>`. */
 export const REVIEW_DECIDED_BY = 'admin-token';
-
-/** The request facts every action needs. */
-export interface ActionContext {
-  actor: OperatorActor;
-  at: Date;
-  requestId: string | null;
-  requestUrl: string;
-}
 
 export type MailOutcome = SendResult['status'];
 

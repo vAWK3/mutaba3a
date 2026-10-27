@@ -89,7 +89,7 @@ export const STORE_ACCESS: StoreAccess = {
   // MUT-373: co-owners are added by the operator; a co-owner leaves, or the creator removes one, from their session (the
   // checks run inside removeOwner's transaction). The owners list is read on /v1/me.
   memberships: { grant: 'operator', revoke: 'operator', grantOwner: 'operator', removeOwner: 'sessionOnly', find: 'read', listByUser: 'read', listByOrganization: 'read', listOwnersOf: 'read' },
-  sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator', markStepUp: { write: 'identity' } },
+  sessions: { create: { write: 'identity' }, findByDigest: 'read', touch: 'control', revoke: { write: 'identity' }, revokeAllForUser: 'operator', markStepUp: { write: 'identity' }, countLiveForUser: 'operator' },
   // MUT-115: a person's own passkeys, written by their session (identity row, like changePassword). Sign-in finds a
   // credential, stamps its use and consumes its challenge on the public routes, which run with no guard, so those
   // methods are refused to every principal; pruning is the server's timer.
