@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-463: local QA APIs listen on 127.0.0.1 only (HOST)
+
+**Why:** every copy of the API listened on every interface. The local QA copies run with admin tokens committed to the repo, and `server/.env.example` ships a placeholder token that passes validation, so anyone on the same network could call their `/admin/v1/*` (found in the MAL-1400 review). ADR-210.
+
+### Added
+- `server/src/config.ts`: optional `HOST`, an IP address only; a name, an empty value or `host:port` refuses to boot, naming the variable.
+- `server/src/listen.ts`: `startServer`, the one caller of `serve`; passes `HOST` as the hostname or, unset, nothing (Node's `::` default, as Cloud Run needs).
+- `server/src/__tests__/listen.test.ts`: real-socket tests through `startServer`.
+
+### Changed
+- `server/src/index.ts`: starts through `startServer`; the "listening" log carries the bound address.
+- `qa/support/selfservice-live.mjs`, `qa/support/billing-live.mjs`: the QA APIs start with `HOST=127.0.0.1`; origins unchanged.
+- `server/.env.example`: `HOST=127.0.0.1`, with how to remove it for phone-on-LAN testing. Existing `.env` files are untouched.
+
+### Technical
+- MAL-1407 (Malafat's :8795 harness) is blocked by this.
+
 ## [Unreleased] - 2026-10-27 — MUT-445 follow-ups: the carry-over forgets the free app, src/types goes, CLAUDE.md says what the repo is
 
 **Why:** MUT-445 (ADR-203) retired the free web app but left its carry-over source in the portal (TD-262), its record types in `src/types/index.ts` (TD-263), and a CLAUDE.md that still described the old local app.

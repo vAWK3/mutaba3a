@@ -3988,3 +3988,11 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `src/hosted/components/__tests__/ConversionDrawer.test.tsx` | 3 changed | The confirm names both legs (en and ar); Cancel and Escape send nothing and return focus to Delete. |
 | `src/hosted/pages/__tests__/afterSave.test.tsx`, `ConversionsList.test.tsx` | 3 changed | The deletes go through the in-place confirm. |
 | `qa/specs/portal/expenses.spec.ts`, `conversions.spec.ts` | 2 changed | Release-QA `@portal.expenses.delete`, `@portal.conversions.delete`: Cancel then Delete in place, and no browser prompt ever appears. |
+
+## MUT-463 — the API listens where HOST says (2026-10-27, ADR-210)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` "listen address" | 12 | HOST unset by default; `127.0.0.1`, `::1`, `0.0.0.0`, `::` accepted; `''`, `localhost`, a machine name, `256.1.1.1`, `host:port`, `[::1]`, a leading space each refuse to boot, naming HOST. |
+| `server/src/__tests__/listen.test.ts` | 3 | Real sockets through `startServer` (the function `index.ts` uses), port 0. HOST=127.0.0.1: bound to 127.0.0.1, answers 200; a connect to the machine's LAN IPv4 is refused (skipped when there is none). HOST unset: bound exactly where a bare `net` server binds by default (`::` on dual-stack), so a default of `0.0.0.0` fails. Checked by mutation: both regressions turn the suite red. |
+| Release-QA, `portal-selfservice` | 2 specs run | `@portal-selfservice.passkeys.add` and `.sign-in` pass (2026-10-27, d88a7a14): the harness's API on 127.0.0.1 still serves the `http://localhost:8791` origin to Chromium. While up: `lsof` shows `127.0.0.1:8791`, `curl` 127.0.0.1 and localhost answer 200, the LAN address is refused, and the listening log says `"address":"127.0.0.1"`. No `portal-live` run (review D6). |
