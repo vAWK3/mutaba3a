@@ -7469,7 +7469,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One customer: buckets, unallocated and status per currency, with a summary per project */
+        /**
+         * One customer: buckets, unallocated and status per currency, with a summary per project
+         * @description Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency's block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -7552,7 +7555,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status */
+        /**
+         * One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status
+         * @description In the project's currency only: an Owed on the project in another currency is left out here and counts in that currency's block of GET /v1/summaries/customers/{customerId} (MUT-488).
+         */
         get: {
             parameters: {
                 query?: never;

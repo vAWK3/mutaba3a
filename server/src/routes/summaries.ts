@@ -96,6 +96,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       path: '/v1/summaries/customers/{customerId}',
       tags: ['Summaries'],
       summary: 'One customer: buckets, unallocated and status per currency, with a summary per project',
+      description: 'Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency\'s block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392).',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: CustomerIdParamSchema },
@@ -118,15 +119,18 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       // "Owed with a client, no matter" is MUT-65's default capture shape and belongs to no project, so it
       // would otherwise reach no bucket here while the organization summary counts it — the same client,
       // two different answers. Bucketed through the very helper that summary uses (ADR-033: one definition).
-      // MUT-392 review: as on the organization summary, a matterless Owed dated ahead opens no block until its day.
-      const matterless = receivables.filter((r) => r.projectId === null && countsOn(r, today));
-      const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency), ...matterless.map((r) => r.currency)])].sort();
+      // MUT-488: so is an Owed on a matter in another currency — the matter's row counts only its own currency
+      // (projectSummary), so the Owed counts here, in its own currency's block (ADR-004).
+      // MUT-392 review: as on the organization summary, such an Owed dated ahead opens no block until its day.
+      const projectCurrency = new Map(projects.map((p) => [p.id, p.currency]));
+      const outsideRows = receivables.filter((r) => (r.projectId === null || r.currency !== projectCurrency.get(r.projectId)) && countsOn(r, today));
+      const currencies = [...new Set([...projects.map((p) => p.currency), ...payments.map((p) => p.currency), ...outsideRows.map((r) => r.currency)])].sort();
       const blocks = currencies.map((currency) => {
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const own = projects.filter((p) => p.currency === currency);
         const b = addBuckets(
           own.reduce((acc, p) => addBuckets(acc, figures.get(p.id)!.figures.buckets), emptyBuckets()),
-          bucketize(matterless.filter((r) => r.currency === currency), today),
+          bucketize(outsideRows.filter((r) => r.currency === currency), today),
         );
         const u = unallocatedOf(payments.filter((p) => p.currency === currency));
         return { currency: currency as Currency, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), status: customerStatus(b), projects: own.map((p) => projectWire(p, figures.get(p.id)!)) };
@@ -141,6 +145,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       path: '/v1/summaries/projects/{projectId}',
       tags: ['Summaries'],
       summary: 'One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status',
+      description: 'In the project\'s currency only: an Owed on the project in another currency is left out here and counts in that currency\'s block of GET /v1/summaries/customers/{customerId} (MUT-488).',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: ProjectIdParamSchema },
@@ -298,7 +303,10 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       if ((a.type === 'FIXED' || a.type === 'CONTINGENCY') && a.status === 'ACTIVE') installments.push(...(await store.agreements.listInstallments(organization.id, a.id)));
       if (a.type === 'RECURRING' && a.status === 'ACTIVE') monthlyMinor = latestTerms(termsTimeline(a, await store.agreements.listVersions(organization.id, a.id))).grossMinor;
     }
-    return { figures: projectFigures({ agreements, installments, receivables, monthlyMinor, today }), proposal: currentProposal(proposals) };
+    // MUT-488: a project's figures are formatted in its currency, so they count only its receivables in that currency;
+    // an Owed on it in another currency counts in the customer summary's block for that currency instead.
+    const inCurrency = receivables.filter((r) => r.currency === project.currency);
+    return { figures: projectFigures({ agreements, installments, receivables: inCurrency, monthlyMinor, today }), proposal: currentProposal(proposals) };
   }
 
   return app;

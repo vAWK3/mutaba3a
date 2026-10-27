@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-273: The project summary leaves out a matter's Owed in another currency
+**Status**: Open (MUT-488, 2026-10-27, ADR-218)
+- **What:** `GET /v1/summaries/projects/{id}` and the customer summary's project rows count only receivables in the project's currency. A USD Owed on an ILS matter shows in the customer's USD block but on no project row, and the matter's status ignores it.
+- **Why it's acceptable:** only an Owed can differ from its matter's currency, and the customer summary, the organization summary and the statement all show it in its own currency.
+- **Fix:** if people need it on the matter, add an additive `otherCurrencies: [{currency, outstanding, overdue, dueToday, notYetDue}]` to the project wire, and decide whether it moves the matter's status.
+
 ### TD-270: Enabling a firm request checks it is pending, then switches, in two steps
 - **Where:** `server/src/operator/actions/firms.ts` `enableRequest` (MUT-462, ADR-216).
 - **What:** the console's Enable reads the organization (pending?) and then calls `setFirm`. A decline that lands between the two (the CLI, another tab) is followed by an enable anyway.

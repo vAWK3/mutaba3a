@@ -613,6 +613,33 @@ describe('read-surface agreement (AC 3): captured income shows up where its mone
     expect(orgSummary.currencies.find((x: Loose) => x.currency === 'USD').customers.find((x: Loose) => x.customerId === c.id).outstanding).toBe('80.00');
   });
 
+  it('MUT-488: an Owed in another currency on a matter counts in its own currency block, never in the matter’s', async () => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    const matter = await project(h, u, p.id, c.id);
+    await create({ ...BASE_OWED, customerId: c.id, projectId: matter.id, amount: '500.00', dueDate: '2026-10-15' });
+    await create({ ...BASE_OWED, customerId: c.id, projectId: matter.id, amount: '80.00', currency: 'USD', dueDate: '2026-10-15' });
+
+    const customerSummary = await read(await h.app.request(`/v1/summaries/customers/${c.id}`, { headers: u.as(p.id) }));
+    const ils = customerSummary.currencies.find((x: Loose) => x.currency === 'ILS');
+    const usd = customerSummary.currencies.find((x: Loose) => x.currency === 'USD');
+    expect(ils).toMatchObject({ outstanding: '500.00', notYetDue: '500.00' });
+    // The matter's row is in the matter's currency, so it holds only what was captured in it.
+    expect(ils.projects).toHaveLength(1);
+    expect(ils.projects[0]).toMatchObject({ projectId: matter.id, currency: 'ILS', posted: '500.00', outstanding: '500.00' });
+    // The USD Owed belongs to an ILS matter, so its block has the money but no matter row, like a matterless Owed.
+    expect(usd).toMatchObject({ outstanding: '80.00', notYetDue: '80.00', status: 'UP_TO_DATE', projects: [] });
+
+    const projectSummary = await read(await h.app.request(`/v1/summaries/projects/${matter.id}`, { headers: u.as(p.id) }));
+    expect(projectSummary).toMatchObject({ currency: 'ILS', posted: '500.00', outstanding: '500.00' });
+
+    // The client summary and the organization summary agree, currency by currency.
+    const orgSummary = await read(await h.app.request('/v1/summaries/organization', { headers: u.as(p.id) }));
+    for (const block of [ils, usd]) {
+      expect(orgSummary.currencies.find((x: Loose) => x.currency === block.currency).customers.find((x: Loose) => x.customerId === c.id).outstanding).toBe(block.outstanding);
+    }
+  });
+
   it('two currencies captured on the same profile: each currency block is independent, never summed together', async () => {
     const { h, p, u, create } = await setup();
     const c = await customer(h, u, p.id);
