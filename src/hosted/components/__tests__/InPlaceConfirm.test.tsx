@@ -58,6 +58,45 @@ describe('InPlaceConfirm (DESIGN.md › Destructive confirm, MUT-115 DR7)', () =
   });
 });
 
+describe('InPlaceConfirm options (MUT-461, TD-267: the operator console builds on it)', () => {
+  it('takes a rich message, a slot under it, the primary style, the in-row look and a label kept while busy', () => {
+    render(
+      <InPlaceConfirm
+        {...LABELS}
+        message={
+          <>
+            <bdi>sara@studio.example</bdi> can sign in.
+          </>
+        }
+        variant="primary"
+        appearance="row"
+        keepLabelWhileLoading
+        busy
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      >
+        <p role="alert">Your passkey wasn’t accepted.</p>
+      </InPlaceConfirm>,
+    );
+    const group = screen.getByRole('group', { name: 'sara@studio.example can sign in.' });
+    expect(group).toHaveClass('hp-passkey-confirm');
+    expect(group).not.toHaveClass('hp-confirm');
+    expect(screen.getByRole('alert')).toHaveTextContent('Your passkey wasn’t accepted.');
+    const action = screen.getByRole('button', { name: /Delete/ });
+    expect(action).toHaveClass('btn-primary');
+    expect(action).toHaveTextContent('Delete');
+  });
+
+  it('with cancelWhileBusy off, a confirm in flight can be neither cancelled nor escaped: its answer belongs to it', async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(<InPlaceConfirm {...LABELS} busy cancelWhileBusy={false} onCancel={onCancel} onConfirm={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await user.keyboard('{Escape}');
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+});
+
 describe('useConfirmStep', () => {
   function Harness() {
     const { open, ask, cancel, triggerRef } = useConfirmStep();

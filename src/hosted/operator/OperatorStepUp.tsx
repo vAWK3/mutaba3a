@@ -1,9 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
-import { Button } from '../../components/ui/Button';
 import { AlertIcon } from '../components/Icons';
+import { InPlaceConfirm } from '../components/InPlaceConfirm';
 import { isStepUpFresh, runOperatorAction, type OperatorActionOutcome, type StepUpFailure } from './stepUp';
 
 /**
@@ -13,8 +13,8 @@ import { isStepUpFresh, runOperatorAction, type OperatorActionOutcome, type Step
  *   the window acts directly even before the list is read again.
  * - `useOperatorRun` runs one action: straight away while fresh, after the passkey sheet when stale, and offers
  *   "Confirm with passkey" after a 403. It keeps the busy flag and the failure to show.
- * - `OperatorConfirm` is the in-row confirm (the passkey row's recipe): Cancel focused, Escape cancels, failures in
- *   the row.
+ * - `OperatorConfirm` is the in-row confirm (InPlaceConfirm, the passkey row's look): Cancel focused, Escape cancels,
+ *   failures in the row.
  */
 const StepUpContext = createContext<{ until: string | null; note: (until: string) => void }>({ until: null, note: () => {} });
 
@@ -115,33 +115,25 @@ interface OperatorConfirmProps {
   onCancel: () => void;
 }
 
+/** The in-row confirm (InPlaceConfirm in the passkey row's look, TD-267), with the step-up's label and failures. */
 export function OperatorConfirm({ text, labels, variant, run, error, onConfirm, onCancel }: OperatorConfirmProps) {
   const t = useT();
-  const id = useId();
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => cancelRef.current?.focus(), []);
-
-  function onKeyDown(event: KeyboardEvent) {
-    if (event.key !== 'Escape') return;
-    event.stopPropagation();
-    // A decision in flight finishes first: its answer belongs to this confirm.
-    if (!run.busy) onCancel();
-  }
-
   const label = run.label === 'confirm' ? t('hosted.operator.stepUp.confirmWithPasskey') : run.label === 'passkey' ? labels.passkey : labels.plain;
   return (
-    <div className="hp-passkey-confirm" role="group" aria-labelledby={`${id}-text`} onKeyDown={onKeyDown}>
-      <p id={`${id}-text`}>{text}</p>
+    <InPlaceConfirm
+      message={text}
+      cancelLabel={t('common.cancel')}
+      confirmLabel={label}
+      variant={variant}
+      appearance="row"
+      busy={run.busy}
+      keepLabelWhileLoading
+      cancelWhileBusy={false}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+    >
       {run.failure && <StepUpFailureBanner failure={run.failure} />}
       {error}
-      <div className="hp-passkey-actions">
-        <Button ref={cancelRef} type="button" variant="secondary" size="sm" disabled={run.busy} onClick={onCancel}>
-          {t('common.cancel')}
-        </Button>
-        <Button type="button" variant={variant} size="sm" isLoading={run.busy} keepLabelWhileLoading onClick={onConfirm}>
-          {label}
-        </Button>
-      </div>
-    </div>
+    </InPlaceConfirm>
   );
 }
