@@ -36,6 +36,7 @@
 - `server/src/config.ts`: optional `HOST`, an IP address only; a name, an empty value or `host:port` refuses to boot, naming the variable.
 - `server/src/listen.ts`: `startServer`, the one caller of `serve`; passes `HOST` as the hostname or, unset, nothing (Node's `::` default, as Cloud Run needs).
 - `server/src/__tests__/listen.test.ts`: real-socket tests through `startServer`.
+- `qa/support/port-check.mjs`: both QA harnesses refuse to start when anything already answers on their port over `::1` or `127.0.0.1` (review D1). With the API on 127.0.0.1, a second server on `::` would otherwise start silently and answer `localhost` in its place.
 
 ### Changed
 - `server/src/index.ts`: starts through `startServer`; the "listening" log carries the bound address.

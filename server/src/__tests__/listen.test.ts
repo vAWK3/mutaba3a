@@ -38,6 +38,11 @@ function nodeDefaultAddress(): Promise<string> {
 function dial(port: number, host: string): Promise<string> {
   return new Promise((resolve) => {
     const socket = connect(port, host);
+    // An interface that drops packets (VPN, firewall) fails fast as 'timeout' instead of hanging the suite.
+    socket.setTimeout(1000, () => {
+      socket.destroy();
+      resolve('timeout');
+    });
     socket.once('connect', () => {
       socket.destroy();
       resolve('connected');

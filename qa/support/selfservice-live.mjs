@@ -8,8 +8,9 @@
  *   1. a QA database of its own on the test Postgres (`mutaba3a-test-pg`), named per launch and migrated;
  *   2. the built portal (`vite build --mode hosted`), served by the API itself as production serves it, so the
  *      real PORTAL_CSP applies (review P1-4);
- *   3. the API on localhost:8791, which is also the portal's origin. `localhost`, not 127.0.0.1: MUT-115's passkey
- *      flows need a WebAuthn relying-party ID, and an IP address can't be one (WEBAUTHN_RP_ID=localhost here).
+ *   3. the API listening on 127.0.0.1:8791 only (HOST, MUT-463) and reached at http://localhost:8791, which is also
+ *      the portal's origin. The origin is `localhost`, not 127.0.0.1: MUT-115's passkey flows need a WebAuthn
+ *      relying-party ID, and an IP address can't be one (WEBAUTHN_RP_ID=localhost here).
  *
  * Cloudflare's widget script is answered by the specs themselves (support/turnstile.ts), never fetched.
  * It writes qa/.state/portal-selfservice.json (origin, admin token, database name) for the specs, and drops the
@@ -19,6 +20,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertPortFree } from './port-check.mjs';
 
 export const API_PORT = 8791;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -72,6 +74,7 @@ function buildPortal() {
 }
 
 async function main() {
+  await assertPortFree(API_PORT, 'portal-selfservice');
   buildPortal();
   createDatabase();
 
