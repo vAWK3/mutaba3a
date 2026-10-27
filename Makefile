@@ -140,6 +140,8 @@ help:
 	@printf '  SKIP_TERMS_CHECK=1     server: skip the terms-are-live check (an emergency fix that keeps the terms version)\n'
 	@printf '  SKIP_CMEK_GUARD=0      server: run the CMEK release guard (off by default until MUT-385)\n'
 	@printf '  SKIP_STRIPE_GUARD=1    server: skip the Stripe release guard (MUT-360; on by default)\n'
+	@printf '  ALLOW_MIN_BUILD_CHANGE=IOS_MIN_BUILD,…  server: let this release change those phone minimum builds (MUT-471)\n'
+	@printf '  SKIP_MIN_BUILD_GUARD=1 server: skip the min-build release guard (only when it cannot read terraform or Cloud Run)\n'
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
 	@printf '  AUTO=1                 skip the final "deploy now?" confirmation\n'
 	@printf '  RELEASE_BRANCH=  ENVIRONMENT=  GCP_PROJECT_ID=  TF_STATE_BUCKET=\n'

@@ -532,3 +532,165 @@ describe('deploy.sh wires the site-key guard (MUT-368)', () => {
     expect(at).toBeLessThan(deploy.indexOf('npm run --silent build:hosted'));
   });
 });
+
+/**
+ * MUT-471: guard_min_build_release keeps a checkout's git-ignored production.tfvars from silently changing the phone
+ * minimum builds production serves (MUT-293 / MUT-457). Any difference between what the checkout would send
+ * (local.min_build_env) and what the service has is refused unless ALLOW_MIN_BUILD_CHANGE names it: a stale copy can
+ * drop a floor, re-raise a bad one after an incident, or switch the kill switch off or on.
+ */
+const MIN_BUILD_NAMES = ['IOS_MIN_BUILD', 'ANDROID_MIN_BUILD', 'IOS_RECOMMENDED_BUILD', 'ANDROID_RECOMMENDED_BUILD', 'MIN_BUILD_CHECK_DISABLED'] as const;
+type MinBuildValues = Partial<Record<(typeof MIN_BUILD_NAMES)[number], string>>;
+type MinBuildOpts = {
+  plan?: MinBuildValues; // what local.min_build_env holds in this checkout (absent = not sent)
+  planWords?: string; // raw console answer instead of plan
+  consoleFails?: boolean;
+  live?: MinBuildValues | 'missing' | 'error'; // the service template's env
+  liveExtra?: object[]; // more env entries on the service
+  allow?: string; // ALLOW_MIN_BUILD_CHANGE
+  skip?: string; // SKIP_MIN_BUILD_GUARD
+};
+
+function minBuildGuard(o: MinBuildOpts) {
+  const bin = join(dir, 'bin');
+  const log = join(dir, 'calls.log');
+  spawnSync('mkdir', ['-p', bin]);
+  const words = o.planWords ?? MIN_BUILD_NAMES.map((n) => o.plan?.[n] ?? 'unset').join(' ');
+  // Like Terraform 1.15's console: several lines on stdin answer only the last one.
+  writeFileSync(join(bin, 'terraform'), [
+    '#!/bin/bash',
+    `echo "terraform $*" >> "${log}"`,
+    'case "$1" in console)',
+    '  last=""; while IFS= read -r line || [[ -n "$line" ]]; do [[ -n "$line" ]] && last="$line"; done',
+    `  echo "console> $last" >> "${log}"`,
+    `  ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `if [[ "$last" == *local.min_build_env* ]]; then printf '"%s"\\n' '${words}'; else echo '"something else"'; fi`} ;;`,
+    'esac',
+    'exit 0',
+  ].join('\n') + '\n');
+  const live = o.live ?? {};
+  const env = typeof live === 'string' ? [] : [
+    { name: 'PORT', value: '8080' },
+    { name: 'DATABASE_URL', valueFrom: { secretKeyRef: { name: 'db', key: 'latest' } } },
+    ...Object.entries(live).map(([name, value]) => ({ name, value })),
+    ...(o.liveExtra ?? []),
+  ];
+  const service = JSON.stringify({ spec: { template: { spec: { containers: [{ image: 'x', env }] } } } });
+  writeFileSync(join(dir, 'service.json'), service);
+  writeFileSync(join(bin, 'gcloud'), [
+    '#!/bin/bash',
+    `echo "gcloud $*" >> "${log}"`,
+    'case "$*" in',
+    `  *"run services describe"*"--format=json"*) ${live === 'missing' ? 'echo "ERROR: (gcloud.run.services.describe) Cannot find service [mutaba3a-api]" >&2; exit 1' : live === 'error' ? 'echo "ERROR: (gcloud.run.services.describe) There was a problem refreshing your current auth tokens" >&2; exit 1' : `cat "${join(dir, 'service.json')}"`} ;;`,
+    '  *) echo "unexpected gcloud call: $*" >&2; exit 98 ;;',
+    'esac',
+  ].join('\n') + '\n');
+  chmodSync(join(bin, 'terraform'), 0o755);
+  chmodSync(join(bin, 'gcloud'), 0o755);
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_min_build_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc && echo PASSED`;
+  const e: NodeJS.ProcessEnv = { ...process.env, ALLOW_MIN_BUILD_CHANGE: o.allow, SKIP_MIN_BUILD_GUARD: o.skip, PATH: `${bin}:${process.env.PATH}` };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
+}
+
+describe('guard_min_build_release (MUT-471, deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
+  it('lets a release through when the checkout sends what production has', () => {
+    expect(minBuildGuard({}).out).toMatch(/PASSED/);
+    const same = { ANDROID_MIN_BUILD: '12', ANDROID_RECOMMENDED_BUILD: '13', MIN_BUILD_CHECK_DISABLED: 'true' };
+    const r = minBuildGuard({ plan: same, live: same });
+    expect(r.out).toMatch(/PASSED/);
+    expect(r.err).toBe('');
+  });
+
+  it.each([
+    ['drops a floor', { live: { IOS_MIN_BUILD: '8' }, plan: {} }, 'IOS_MIN_BUILD', 'ios_min_build', '8', 'unset'],
+    ['lowers a floor', { live: { ANDROID_MIN_BUILD: '12' }, plan: { ANDROID_MIN_BUILD: '11' } }, 'ANDROID_MIN_BUILD', 'android_min_build', '12', '11'],
+    ['raises a floor (a stale copy re-raising a bad one)', { live: { ANDROID_MIN_BUILD: '10' }, plan: { ANDROID_MIN_BUILD: '12' } }, 'ANDROID_MIN_BUILD', 'android_min_build', '10', '12'],
+    ['adds a floor production lacks', { live: {}, plan: { IOS_MIN_BUILD: '8' } }, 'IOS_MIN_BUILD', 'ios_min_build', 'unset', '8'],
+    ['drops a recommended build', { live: { ANDROID_MIN_BUILD: '12', ANDROID_RECOMMENDED_BUILD: '13' }, plan: { ANDROID_MIN_BUILD: '12' } }, 'ANDROID_RECOMMENDED_BUILD', 'android_recommended_build', '13', 'unset'],
+    ['drops the kill switch', { live: { IOS_MIN_BUILD: '9', MIN_BUILD_CHECK_DISABLED: 'true' }, plan: { IOS_MIN_BUILD: '9' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'true', 'unset'],
+    ['turns the kill switch on', { live: {}, plan: { MIN_BUILD_CHECK_DISABLED: 'true' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'unset', 'true'],
+  ] as const)('refuses a release that %s unless it is named, and names the variable', (_what, values, name, tfvar, from, to) => {
+    const change = `${name}: production has ${from === 'unset' ? 'none' : from}, this checkout would ${to === 'unset' ? 'remove it' : `set ${to}`}`;
+    const r = minBuildGuard(values);
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain(`${change} (${tfvar})`);
+    expect(r.err).toContain(`ALLOW_MIN_BUILD_CHANGE=${name}`);
+    const named = minBuildGuard({ ...values, allow: name });
+    expect(named.out).toMatch(/PASSED/);
+    expect(named.err).toContain(change);
+  });
+
+  it('counts a live MIN_BUILD_CHECK_DISABLED="false" as a value the release would remove', () => {
+    const r = minBuildGuard({ live: { MIN_BUILD_CHECK_DISABLED: 'false' } });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain('MIN_BUILD_CHECK_DISABLED: production has false, this checkout would remove it');
+  });
+
+  it('lists every change and prints the whole override when only some are named', () => {
+    const r = minBuildGuard({ live: { IOS_MIN_BUILD: '8', MIN_BUILD_CHECK_DISABLED: 'true' }, plan: {}, allow: 'MIN_BUILD_CHECK_DISABLED' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toContain('IOS_MIN_BUILD: production has 8');
+    expect(r.err).toContain('MIN_BUILD_CHECK_DISABLED: production has true');
+    expect(r.err).toContain('ALLOW_MIN_BUILD_CHANGE=IOS_MIN_BUILD,MIN_BUILD_CHECK_DISABLED');
+  });
+
+  it('removing a floor with its recommended build needs both names (the precondition removes them together)', () => {
+    const values = { live: { ANDROID_MIN_BUILD: '12', ANDROID_RECOMMENDED_BUILD: '13' }, plan: {} };
+    expect(minBuildGuard({ ...values, allow: 'ANDROID_MIN_BUILD' }).status).not.toBe(0);
+    expect(minBuildGuard({ ...values, allow: 'ANDROID_MIN_BUILD,ANDROID_RECOMMENDED_BUILD' }).out).toMatch(/PASSED/);
+    expect(minBuildGuard({ ...values, allow: 'ANDROID_MIN_BUILD ANDROID_RECOMMENDED_BUILD' }).out).toMatch(/PASSED/);
+  });
+
+  it('refuses a name that is not one of the five, so a typo never passes', () => {
+    const r = minBuildGuard({ live: { IOS_MIN_BUILD: '8' }, plan: {}, allow: 'IOS_MIN_BUILD,IOS_MINBUILD' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/ALLOW_MIN_BUILD_CHANGE names 'IOS_MINBUILD'/);
+  });
+
+  it('warns about a named value this release does not change', () => {
+    const r = minBuildGuard({ allow: 'IOS_MIN_BUILD' });
+    expect(r.out).toMatch(/PASSED/);
+    expect(r.err).toMatch(/ALLOW_MIN_BUILD_CHANGE names IOS_MIN_BUILD, which this release doesn't change/);
+  });
+
+  it('reads local.min_build_env with one expression and the release\'s own var files', () => {
+    const r = minBuildGuard({});
+    expect(r.calls).toMatch(/terraform console -var-file=production.tfvars -var image_tag=abc/);
+    expect(r.calls).toMatch(/console> .*local\.min_build_env/);
+  });
+
+  it('lets a first deploy through: no service yet, nothing to change', () => {
+    expect(minBuildGuard({ live: 'missing', plan: { IOS_MIN_BUILD: '8' } }).out).toMatch(/PASSED/);
+  });
+
+  it('refuses rather than guess when it cannot read either side', () => {
+    expect(minBuildGuard({ live: 'error' }).err).toMatch(/could not read mutaba3a-api's env/);
+    expect(minBuildGuard({ consoleFails: true }).err).toMatch(/could not evaluate local\.min_build_env/);
+    expect(minBuildGuard({ planWords: 'unset unset unset unset' }).err).toMatch(/terraform console gave 'unset unset unset unset'/);
+    expect(minBuildGuard({ planWords: 'tonumber(null) unset unset unset unset' }).err).toMatch(/terraform console gave/);
+    expect(minBuildGuard({ planWords: '8 unset unset unset false' }).err).toMatch(/terraform console gave/);
+    expect(minBuildGuard({ live: { IOS_MIN_BUILD: 'eight' } }).err).toMatch(/could not read mutaba3a-api's IOS_MIN_BUILD/);
+    expect(minBuildGuard({ live: {}, liveExtra: [{ name: 'IOS_MIN_BUILD', valueFrom: { secretKeyRef: { name: 's', key: '1' } } }] }).err)
+      .toMatch(/could not read mutaba3a-api's IOS_MIN_BUILD/);
+  });
+
+  it('SKIP_MIN_BUILD_GUARD=1 skips it for a broken read: says so, and touches neither terraform nor gcloud', () => {
+    const r = minBuildGuard({ live: { IOS_MIN_BUILD: '8' }, plan: {}, skip: '1' });
+    expect(r.out).toMatch(/PASSED/);
+    expect(r.err).toMatch(/min-build release guard skipped \(SKIP_MIN_BUILD_GUARD=1\)/);
+    expect(r.calls).toBe('');
+  });
+});
+
+describe('deploy.sh wires the min-build guard (MUT-471)', () => {
+  const deploy = readFileSync(DEPLOY, 'utf-8');
+  it('runs guard_min_build_release before bootstrap, and guard_release() runs it too', () => {
+    // The step-0 call stands on its own line; the first textual match is inside guard_release(), which also precedes ensure_bootstrap.
+    const step0 = deploy.search(/^guard_min_build_release "/m);
+    expect(step0).toBeGreaterThan(-1);
+    expect(step0).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
+    expect(wrapper).toMatch(/guard_min_build_release/);
+  });
+});

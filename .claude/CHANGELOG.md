@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-471: a release can't silently change the phone minimum builds
+
+**Why:** the floors, the recommended builds and `min_build_check_disabled` live in the git-ignored `production.tfvars`. A release from a copy without the lines dropped the floors; one that was behind could re-raise a floor an incident had lowered, or drop the kill switch while a bad floor still served.
+
+### Added
+- `guard_min_build_release` (`server/scripts/lib/release-guard.sh`), run by `deploy.sh` at step 0 and in `guard_release()`: any difference between this checkout's `local.min_build_env` and the live service's five env values is refused unless `ALLOW_MIN_BUILD_CHANGE` names it. A raise is named too. `SKIP_MIN_BUILD_GUARD=1` only when the guard can't read Terraform or Cloud Run. Fails closed.
+- `make help` lists both overrides.
+
+### Changed
+- `server/DEPLOYMENT.md` "Raise the minimum app build" / "Undo a bad floor": release with `ALLOW_MIN_BUILD_CHANGE` naming each changed value (a removed floor and its recommended build together); the "release only from the one checkout" rule is gone.
+
+### Technical
+- The guard reads all five values with one `terraform console` expression: Terraform 1.15's console answers only the last of several stdin lines. The CMEK guard's two-line read has that bug: MUT-475 (blocks MUT-385).
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-459: operator accounts and the /v1/operator gate (server foundation of the operator console)
 
 **Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-212).

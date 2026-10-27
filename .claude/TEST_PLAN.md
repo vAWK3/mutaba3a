@@ -4039,3 +4039,12 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `server/src/__tests__/config.test.ts` | +8 | The `.env.example` placeholder is refused as each of the five secrets, with a `ConfigError` naming the variable; the admin token exactly as `.env.example` ships it (read from the file) is refused; the prefix matches in any case; a real secret with `replace-with-` later in it still boots. |
 
 Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports both shipped placeholders (admin token, pepper) and does not boot.
+
+## MUT-471 — the min-build release guard (2026-10-27)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/scripts/__tests__/release-guard.test.ts` "guard_min_build_release" | 17 | Matching values pass. Drop, lower, raise and add of a floor, drop of a recommended build, kill switch off and on: each refused unnamed (the message names the env var and the tfvars variable), passes named. A live `"false"` counts as a value. A partial name list refuses and prints the whole override; a floor and its recommended build need both names; an unknown name refuses; an unused one warns. One console expression on `local.min_build_env` with the release's var files, against a fake console that answers only the last stdin line (like TF 1.15). First deploy passes; unreadable console, wrong word count, `tonumber(null)`, `false`, a non-numeric or secret-backed live floor, a gcloud error: refused. `SKIP_MIN_BUILD_GUARD=1` calls nothing. |
+| same file, "deploy.sh wires the min-build guard" | 1 | Runs before `ensure_bootstrap` and inside `guard_release()` (steps 3, 4, rollback). |
+| Manual | 2 | The expression in the real module (scratch copy, TF 1.15.4): `"unset unset unset unset unset"` with nothing set, `"unset 12 unset 13 true"` with Android floors and the kill switch. The guard under macOS `/bin/bash` 3.2: refuses unnamed, passes named. |
+
