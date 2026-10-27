@@ -195,8 +195,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 5 (MUT-418): `people` gained `trialPrompt`.
  * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
  * 7 (MUT-333): `people` gained `closure`.
+ * 8 (MUT-459): `people` gained `operatorAt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 7;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 8;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every

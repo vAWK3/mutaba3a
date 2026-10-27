@@ -140,6 +140,18 @@ function addClosure(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-459, 7 → 8: people gain `operatorAt`. Operators are hosted accounts marked by the admin token; a device's person
+ * is never one: null.
+ */
+function addOperatorAt(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'operatorAt'>>;
+  return {
+    ...snapshot,
+    maps: { ...snapshot.maps, people: new Map([...people].map(([id, person]) => [id, { ...person, operatorAt: null }])) },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -152,6 +164,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 4, to: 5, migrate: addTrialPrompt },
   { from: 5, to: 6, migrate: addVendors },
   { from: 6, to: 7, migrate: addClosure },
+  { from: 7, to: 8, migrate: addOperatorAt },
 ];
 
 /**

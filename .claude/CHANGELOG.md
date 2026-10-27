@@ -46,6 +46,7 @@
 
 ### Technical
 - API 1.78.0-mut459; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- The local-mode snapshot and records file go to format version 8: `people` gained `operatorAt`. Migration 7 → 8 (`src/hosted/local/migrations/index.ts`) sets it to null, since a device's person is never an operator. The fingerprint table and fixture were updated with it.
 - ADR-208; plan + reviews in `.claude/designs/mut-458-operator-console.md`.
 - Inventories updated: `route-security.test.ts` (OPERATOR_OPERATIONS, cookie only), `store-guard.test.ts` (`users.setOperator` is operator-only), and the lapse-gate classification.
 
