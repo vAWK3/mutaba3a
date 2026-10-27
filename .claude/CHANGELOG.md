@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-472: the API refuses the placeholder secrets from server/.env.example
+
+**Why:** the example's `replace-with-…` admin token and session pepper passed the 32-character minimum, so a copied example served `/admin/v1/*` with a token anyone can read in the repo. ADR-211.
+
+### Fixed
+- `server/src/config.ts`: `secret(name)` builds the schema of every 32-character secret (`MUTABA3A_ADMIN_TOKEN`, `SESSION_TOKEN_PEPPER`, `FRONT_DOOR_TOKEN`, `MUTABA3A_JOB_TOKEN`, `OAUTH_DERIVE_KEY`) and refuses a value starting with `replace-with-`, naming the variable.
+
+### Changed
+- `server/README.md` "Run locally": a one-liner puts real secrets in the copied `.env`. `server/.env.example` comments say the placeholders are refused (values unchanged).
+
+### Technical
+- Checked: the QA harnesses (`qa/support/*-live.mjs`), the server-ci smoke test, the server test fixtures and Terraform (`random_password`) use no placeholder.
+- Files: `server/src/config.ts`, `server/src/__tests__/config.test.ts`, `server/.env.example`, `server/README.md`, `.claude/designs/mut-472-placeholder-secrets.md`.
+
 ## [Unreleased] - 2026-10-27 — MUT-474: a dev server can raise the owned-profile cap for local QA
 
 **Why:** 21 phone QA flows each make a throwaway profile, and the server has no delete. `disown-qa-profiles.sh` frees the QA account's slots once before each run, leaving 4, so a combined run of more of them failed at setup with 409 `PROFILE_LIMIT`.

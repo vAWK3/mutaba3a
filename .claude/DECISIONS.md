@@ -5586,3 +5586,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Accepting any host name: `localhost` would bind `::1` only on macOS (P1).
 - `LISTEN_HOST`: clearer, but the ticket and MAL-1407 name `HOST` (review OV-5).
 - Leaving new dev setups on every interface (the plan's first D4; Basel chose review D4 A).
+
+## ADR-211: The API Refuses the Placeholder Secrets From server/.env.example (MUT-472)
+
+**Status:** Accepted (2026-10-27, MUT-472; found in the MUT-463 review, finding OV-2). Plan: `.claude/designs/mut-472-placeholder-secrets.md`. Basel chose the scope and the QA-token answer.
+
+**Context:** `server/.env.example` ships `replace-with-32-plus-…-from-secret-manager` for `MUTABA3A_ADMIN_TOKEN` and `SESSION_TOKEN_PEPPER` (and, commented out, `OAUTH_DERIVE_KEY`). Each is longer than the 32-character minimum, so a copied example booted. `/admin/v1/*` then answered to a token anyone can read in the repo, from the network too when the `.env` predates MUT-463's `HOST`.
+
+**Decision:**
+1. **Every 32-character secret goes through one schema helper,** `secret(name)` in `config.ts`: `MUTABA3A_ADMIN_TOKEN`, `SESSION_TOKEN_PEPPER`, `FRONT_DOOR_TOKEN`, `MUTABA3A_JOB_TOKEN`, `OAUTH_DERIVE_KEY`. It keeps the 32-character minimum and refuses a value starting with `replace-with-` (any case), naming the variable and how to make a real one.
+2. **Prefix, not exact strings:** the misspelled admin placeholder and any placeholder added later are covered without a list to keep in step.
+3. **The committed QA tokens are not refused**, whatever `HOST` is. Server config would have to list test fixtures; MUT-463 (ADR-210) pins the QA harnesses to 127.0.0.1; the CI smoke container has to bind every interface.
+
+**Consequences:**
+- A developer whose `.env` still holds a placeholder gets a boot error and must put real secrets in (`server/README.md` "Run locally" has the one-liner).
+- Production is unaffected: Terraform generates every one of these secrets with `random_password`.
+- A new secret added to the schema should use `secret(name)`.
+
+**Alternatives considered:**
+- Matching the exact `.env.example` strings: misses a fixed typo or a new placeholder.
+- Blank values in `.env.example`: a fresh clone then fails on a missing value instead of a placeholder, and the example no longer shows what goes there (left out of this ticket).
+- Refusing the QA tokens off loopback: decision 3.

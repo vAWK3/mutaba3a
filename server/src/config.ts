@@ -20,6 +20,20 @@ function isHttpsOrLocalHttp(value: string): boolean {
 export const SENTRY_EU_DSN =/^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
 
 /**
+ * MUT-472 (ADR-211): the values server/.env.example ships for secrets all start with "replace-with-", and each is long
+ * enough to pass the 32-character minimum. A copied example must not boot a server anyone could sign in to as operator.
+ */
+const PLACEHOLDER_SECRET = /^replace-with-/i;
+
+/** A secret of at least 32 characters that is not the .env.example placeholder; both messages name the variable. */
+function secret(name: string) {
+  return z
+    .string()
+    .min(32, `${name} must be at least 32 characters`)
+    .refine((value) => !PLACEHOLDER_SECRET.test(value), `${name} is the placeholder from server/.env.example; put a real secret here (openssl rand -hex 32)`);
+}
+
+/**
  * Validated process configuration. Fails fast at boot with a readable list of
  * what is missing — a half-configured ledger service must not start.
  *
@@ -36,7 +50,7 @@ const envSchema = z.object({
   HOST: z.string().refine((value) => isIP(value) !== 0, 'must be an IP address, such as 127.0.0.1').optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().url(),
-  MUTABA3A_ADMIN_TOKEN: z.string().min(32, 'MUTABA3A_ADMIN_TOKEN must be at least 32 characters'),
+  MUTABA3A_ADMIN_TOKEN: secret('MUTABA3A_ADMIN_TOKEN'),
   API_KEY_ENVIRONMENT: z.enum(['live', 'test']),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
   SERVICE_VERSION: z.string().min(1).default('0.0.0-dev'),
@@ -64,7 +78,7 @@ const envSchema = z.object({
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
   ARGON2_PARALLELISM: z.coerce.number().int().min(ARGON2_MINIMUMS.parallelism).default(ARGON2_MINIMUMS.parallelism),
   /** HMAC key for session-token digests (MUT-38). Secret Manager; rotating it signs every user out. */
-  SESSION_TOKEN_PEPPER: z.string().min(32, 'SESSION_TOKEN_PEPPER must be at least 32 characters'),
+  SESSION_TOKEN_PEPPER: secret('SESSION_TOKEN_PEPPER'),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
   SESSION_ABSOLUTE_HOURS: z.coerce.number().int().min(1).max(168).default(12),
   /** Device-session (MUT-64) lifetime: longer than a browser session because capture happens days apart. */
@@ -107,7 +121,7 @@ const envSchema = z.object({
    * (Secret Manager, written by server/infrastructure/frontdoor). Needs PORTAL_ORIGIN.
    * Unset = no front door: every request is judged exactly as before.
    */
-  FRONT_DOOR_TOKEN: z.string().min(32, 'FRONT_DOOR_TOKEN must be at least 32 characters').optional(),
+  FRONT_DOOR_TOKEN: secret('FRONT_DOOR_TOKEN').optional(),
   /**
    * MUT-326 stage "redirect": portal page visits that bypass the front door go to the
    * same-origin carry-over page, which sends them on to PORTAL_ORIGIN. Only "true" turns
@@ -137,13 +151,13 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().regex(/^(rk|sk)_(test|live)_[A-Za-z0-9_]+$/, 'must be a Stripe secret or restricted key (sk_/rk_)').optional(),
   STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9_]+$/, 'must be a Stripe webhook signing secret (whsec_)').optional(),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
-  MUTABA3A_JOB_TOKEN: z.string().min(32, 'MUTABA3A_JOB_TOKEN must be at least 32 characters').optional(),
+  MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**
    * MUT-434 (D19): the secret an agent's renewed tokens are derived under, so a retried refresh gets the same pair.
    * Secret Manager. Needs PORTAL_ORIGIN (the issuer). Unset = the OAuth endpoints and /mcp answer 503. Rotating it
    * breaks only retries inside the 30-second window; rotating SESSION_TOKEN_PEPPER is what signs agents out.
    */
-  OAUTH_DERIVE_KEY: z.string().min(32, 'OAUTH_DERIVE_KEY must be at least 32 characters').optional(),
+  OAUTH_DERIVE_KEY: secret('OAUTH_DERIVE_KEY').optional(),
   /**
    * MUT-148 (ADR-091): the api project's DSN (Secret Manager, mounted once sentry_enabled is applied). Unset = no
    * error reports. Only an EU-region DSN starts: a US one would send events outside the region ADR-091 chose (D5).
