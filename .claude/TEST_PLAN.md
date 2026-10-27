@@ -3988,3 +3988,10 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `src/hosted/components/__tests__/ConversionDrawer.test.tsx` | 3 changed | The confirm names both legs (en and ar); Cancel and Escape send nothing and return focus to Delete. |
 | `src/hosted/pages/__tests__/afterSave.test.tsx`, `ConversionsList.test.tsx` | 3 changed | The deletes go through the in-place confirm. |
 | `qa/specs/portal/expenses.spec.ts`, `conversions.spec.ts` | 2 changed | Release-QA `@portal.expenses.delete`, `@portal.conversions.delete`: Cancel then Delete in place, and no browser prompt ever appears. |
+
+## MUT-457 — the phone minimum build from Terraform (2026-10-27)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/infrastructure/terraform/tests/min_build.tftest.hcl` (new; mocked Google + random) | 7 | Nothing set: none of the five env vars, today's gate unchanged. Set floors reach Cloud Run as exactly those strings. `min_build_check_disabled = true` sends `"true"`; `false` sends nothing. A recommended build below its floor, or without one, fails the plan; a 0 floor fails validation. |
+| `server/src/__tests__/config.test.ts` | +5 | `MIN_BUILD_CHECK_DISABLED="false"` keeps the gate on (it used to switch it off); `1`, `yes`, `TRUE` and empty refuse to boot. |

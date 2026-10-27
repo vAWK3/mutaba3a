@@ -69,6 +69,18 @@ locals {
     ANDROID_SHA256_FINGERPRINTS = var.android_sha256_fingerprints
   }
 
+  # MUT-293 / MUT-457: the phone's minimum and recommended builds, only those set. Nothing set = no env
+  # var, so the gate stays off as before. The kill switch goes out only as "true": absent is off.
+  min_build_env = merge(
+    { for name, build in {
+      IOS_MIN_BUILD             = var.ios_min_build
+      ANDROID_MIN_BUILD         = var.android_min_build
+      IOS_RECOMMENDED_BUILD     = var.ios_recommended_build
+      ANDROID_RECOMMENDED_BUILD = var.android_recommended_build
+    } : name => tostring(build) if build != null },
+    var.min_build_check_disabled ? { MIN_BUILD_CHECK_DISABLED = "true" } : {},
+  )
+
   labels = {
     app         = "mutaba3a-api"
     environment = var.environment
@@ -716,6 +728,15 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      # MUT-457: the phone floor (MUT-293), set in production.tfvars (DEPLOYMENT.md "Raise the minimum app build").
+      dynamic "env" {
+        for_each = local.min_build_env
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       dynamic "env" {
         for_each = local.app_association_env
         content {
@@ -806,6 +827,16 @@ resource "google_cloud_run_v2_service" "api" {
       # MUT-366: the server refuses this again at boot; signup mails a link, so it needs mail on.
       condition     = !var.self_signup_enabled || var.mailer == "resend"
       error_message = "self_signup_enabled needs mailer = \"resend\": signup mails a link (MUT-366, DEPLOYMENT.md §6f)."
+    }
+
+    precondition {
+      # MUT-457: the server only nudges a platform that has a floor (minimum-build.ts), and config.ts refuses a
+      # recommended build below it. null checks short-circuit with try(), since required_version allows < 1.12.
+      condition = alltrue([for p in [
+        { min = var.ios_min_build, recommended = var.ios_recommended_build },
+        { min = var.android_min_build, recommended = var.android_recommended_build },
+      ] : p.recommended == null || try(p.min != null && p.recommended >= p.min, false)])
+      error_message = "ios_recommended_build / android_recommended_build each need that platform's min build, and must be at least it: without a floor the server ignores them (MUT-457, DEPLOYMENT.md \"Raise the minimum app build\")."
     }
   }
 
