@@ -16,6 +16,9 @@ const daysAfter = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+/** Whole days from `from` to `to`. */
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+
 interface Firm {
   auth: Record<string, string>;
   customerId: string;
@@ -45,7 +48,8 @@ test('A client’s oldest overdue due date and its days, moving on when that rec
   let firm!: Firm;
   let asOf = '';
   const org = async () => (await (await request.get(`${origin}/v1/summaries/organization`, { headers: firm.auth })).json()) as { asOf: string; currencies: Array<{ currency: string; customers: Array<Record<string, unknown>> }> };
-  const row = async () => (await org()).currencies.find((c) => c.currency === 'ILS')!.customers.find((c) => c.customerId === firm.customerId)!;
+  /** The days a summary should report for `due`, counted to that summary's own asOf, so a run across midnight still holds. */
+  const since = (due: string, now: string) => ({ oldestOverdueDueDate: due, daysOverdue: daysBetween(due, now) });
 
   await step('Create a firm with an API key, and a client owed 1000 ILS due 148 days ago and 500 ILS due 56 days ago', async () => {
     firm = await firmWithKey(request);
@@ -69,7 +73,10 @@ test('A client’s oldest overdue due date and its days, moving on when that rec
   });
 
   await step('Read the organization summary', async () => {
-    expect(await row()).toMatchObject({ overdue: '1500.00', status: 'OVERDUE', oldestOverdueDueDate: daysAfter(asOf, -148), daysOverdue: 148 });
+    const summary = await org();
+    const first = summary.currencies.find((c) => c.currency === 'ILS')!.customers.find((c) => c.customerId === firm.customerId)!;
+    expect(first).toMatchObject({ overdue: '1500.00', status: 'OVERDUE', ...since(daysAfter(asOf, -148), summary.asOf) });
+    expect(first.daysOverdue).toBeGreaterThanOrEqual(148);
   });
 
   await step('Pay the older one in full', async () => {
@@ -86,9 +93,9 @@ test('A client’s oldest overdue due date and its days, moving on when that rec
   });
 
   await step('Read the organization summary and the client’s summary again', async () => {
-    const since = { oldestOverdueDueDate: daysAfter(asOf, -56), daysOverdue: 56 };
-    expect(await row()).toMatchObject({ overdue: '500.00', ...since });
-    const customer = (await (await request.get(`${origin}/v1/summaries/customers/${firm.customerId}`, { headers: firm.auth })).json()) as { currencies: Array<Record<string, unknown>> };
-    expect(customer.currencies.find((c) => c.currency === 'ILS')).toMatchObject({ overdue: '500.00', ...since });
+    const summary = await org();
+    expect(summary.currencies.find((c) => c.currency === 'ILS')!.customers.find((c) => c.customerId === firm.customerId)).toMatchObject({ overdue: '500.00', ...since(daysAfter(asOf, -56), summary.asOf) });
+    const customer = (await (await request.get(`${origin}/v1/summaries/customers/${firm.customerId}`, { headers: firm.auth })).json()) as { asOf: string; currencies: Array<Record<string, unknown>> };
+    expect(customer.currencies.find((c) => c.currency === 'ILS')).toMatchObject({ overdue: '500.00', ...since(daysAfter(asOf, -56), customer.asOf) });
   });
 });

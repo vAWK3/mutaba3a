@@ -655,6 +655,10 @@ describe('read-surface agreement (AC 3): captured income shows up where its mone
       expect(block).toMatchObject({ oldestOverdueDueDate: date, daysOverdue: days });
       expect(row).toMatchObject({ oldestOverdueDueDate: date, daysOverdue: days, overdue: block.overdue });
     }
+    // The date and the amount come from one rule: on every block and row, no date exactly when nothing is overdue.
+    for (const block of [...customerSummary.currencies, ...orgSummary.currencies.flatMap((x: Loose) => x.customers)]) {
+      expect(block.oldestOverdueDueDate === null).toBe(Number(block.overdue) === 0);
+    }
   });
 
   it('two currencies captured on the same profile: each currency block is independent, never summed together', async () => {
