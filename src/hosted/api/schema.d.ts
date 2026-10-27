@@ -9193,7 +9193,7 @@ export interface paths {
         };
         /**
          * The profile’s expense categories, in creation order
-         * @description The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true.
+         * @description Names of seeded categories follow Accept-Language (ar or en, else the signed-in user’s language); names people typed show as typed. The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true.
          */
         get: {
             parameters: {
@@ -9256,7 +9256,7 @@ export interface paths {
         put?: never;
         /**
          * Add an expense category
-         * @description 409 CATEGORY_NAME_TAKEN when the profile already has the name in any letter case.
+         * @description 409 CATEGORY_NAME_TAKEN when the profile already has the name in any letter case, or has the seeded category it names in the other language.
          */
         post: {
             parameters: {
@@ -18289,7 +18289,10 @@ export interface components {
         ExpenseCategory: {
             /** Format: uuid */
             id: string;
+            /** @description MUT-464: a seeded category’s name in the request language (Accept-Language ar/en, else the account’s); a name a person typed, as typed. */
             name: string;
+            /** @description MUT-464: the preset entry this category is (`other` for the automatic Other), or null for one a person named. Worked out from the name, never stored. */
+            presetKey: string | null;
             color: string | null;
             archived: boolean;
             version: number;

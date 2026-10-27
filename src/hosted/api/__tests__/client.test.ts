@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api, ApiError, apiErrorReason, request, setUnauthorisedHandler } from '../client';
+import { api, ApiError, apiErrorReason, request, setRequestLanguage, setUnauthorisedHandler } from '../client';
 
 const fetchMock = vi.fn();
 
@@ -150,6 +150,21 @@ describe('expenses (MUT-44)', () => {
     const { url, headers } = lastCall();
     expect(url).toBe('/v1/expense-categories');
     expect(headers.has('idempotency-key')).toBe(false);
+  });
+
+  // MUT-464: the server names seeded categories in this language; until the portal knows one, it sends none.
+  it('sends the portal language as Accept-Language once it is set', async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(json(200, { items: [] })));
+    setRequestLanguage(null);
+    await api.expenseCategories('org-1');
+    expect(lastCall().headers.has('accept-language')).toBe(false);
+    setRequestLanguage('en');
+    await api.expenseCategories('org-1');
+    expect(lastCall().headers.get('accept-language')).toBe('en');
+    setRequestLanguage('ar');
+    await api.me();
+    expect(lastCall().headers.get('accept-language')).toBe('ar');
+    setRequestLanguage(null);
   });
 
   it('expenseSummary sends the date range', async () => {

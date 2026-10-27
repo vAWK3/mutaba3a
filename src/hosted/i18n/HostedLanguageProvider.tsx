@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { DEFAULT_LANGUAGE, I18nProvider, type Dictionary } from '../../lib/i18n/core';
+import { setRequestLanguage } from '../api/client';
 import type { Language } from '../../lib/i18n/types';
 import en from './en.json';
 import ar from './ar.json';
@@ -42,23 +43,32 @@ function persist(key: string, language: Language) {
   }
 }
 
+/**
+ * MUT-464: the API learns a language when the portal does, before the render that keys queries on it, so a refetch
+ * never goes out in the old one.
+ */
+function sendsLanguage(language: Language): Language {
+  setRequestLanguage(language);
+  return language;
+}
+
 const AdoptContext = createContext<(locale: Language) => void>(() => {});
 
 export function HostedLanguageProvider({ children, linkedLanguage = null }: { children: ReactNode; linkedLanguage?: Language | null }) {
   // The link's `?lang` (MUT-369 D5: the landing's page language, never stored), else a choice here, else the last
   // account's locale, else Arabic (MUT-209); never the browser's language
-  const [language, setLanguageState] = useState<Language>(
-    () => linkedLanguage ?? storedChoice() ?? storedLanguage(PORTAL_ACCOUNT_LOCALE_KEY) ?? DEFAULT_LANGUAGE,
+  const [language, setLanguageState] = useState<Language>(() =>
+    sendsLanguage(linkedLanguage ?? storedChoice() ?? storedLanguage(PORTAL_ACCOUNT_LOCALE_KEY) ?? DEFAULT_LANGUAGE),
   );
 
   const choose = useCallback((next: Language) => {
     persist(PORTAL_LANGUAGE_KEY, next);
-    setLanguageState(next);
+    setLanguageState(sendsLanguage(next));
   }, []);
 
   const adoptAccountLocale = useCallback((locale: Language) => {
     persist(PORTAL_ACCOUNT_LOCALE_KEY, locale);
-    if (storedChoice() === null) setLanguageState(locale);
+    if (storedChoice() === null) setLanguageState(sendsLanguage(locale));
   }, []);
 
   return (
