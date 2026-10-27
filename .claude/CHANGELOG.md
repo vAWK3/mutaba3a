@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-464: seeded expense categories follow the viewer's language
+
+**Why:** a profile's preset categories stayed in the language of whoever first opened them, so a co-owner or member in the other language never saw their own. ADR-208.
+
+### Added
+- `presets.ts`: a `key` on every preset entry, `RETIRED_TEMPLATES`, `presetKeyForName`, `presetNameKeys`, `displayCategoryNames`.
+- `routes/shared.ts`: `requestLanguage` / `preferredLanguage` (Accept-Language, else the account locale).
+- `ExpenseCategory.presetKey` (derived). API 1.78.0-mut464.
+- Portal: `setRequestLanguage` in `api/client.ts` (set by `HostedLanguageProvider`), `expenseCategoriesKey`.
+- QA: `portal.expenses.categories-follow-language`, `portal.expenses.renamed-category-keeps-name`.
+
+### Changed
+- `/v1/expense-categories` (GET, POST, PATCH) and MCP `list_categories` name seeded categories in the viewer's language; stored names are unchanged.
+- Adding or renaming to a seeded category's other-language name answers 409 `CATEGORY_NAME_TAKEN` (both stores).
+- The automatic Other is found by preset key (`vendors/keys.ts`).
+- Both portal category queries carry the language in their keys, so a switch refetches.
+
+### Fixed
+- Carry-over files a backup category under the profile's seeded entry when it is the same one in the other language, instead of dropping it from its expenses.
+
 ## [Unreleased] - 2026-10-27 — MUT-417 follow-ups: deletes confirm in place; shared and kept colours match the phone
 
 **Why:** writing DESIGN.md turned up two deletes still on `window.confirm` (TD-265), and two colours that mean something else on the phone. Basel chose the fixes on 2026-10-27.

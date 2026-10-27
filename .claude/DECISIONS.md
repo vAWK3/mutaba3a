@@ -5522,6 +5522,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Amendment (qa-reconcile, 2026-10-26, Basel):** decision 2 is **owner-only**. A session corrects money only on a profile the person owns (`ownsProfile`: its creator or a co-owner), checked before any lookup; anyone else, a firm's members and a disconnected Malafat firm's included, gets 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` (`notOwner()`, now shared from `personal-profile.ts` with the profile routes). `/v1/me` stays truthful without a new field: a person may correct exactly where `owned && access.payments === 'read-write'`, which is the portal's gate. Also from the review: a person's reversal is refused (404) when the capture paid anything but person-recorded entries, so it never reopens an installment Malafat's key applied it to; a person's credit `effectiveDate` follows `pastMoneyDate`; the new IncomeResponse fields are optional (pre-1.77.0 replays); the portal starts a new attempt after a 409 and Cancel reports a partial cancel. Override log: replaces decision 2's "anyone whose session holds `payments:write`"; reason: a firm's staff could otherwise reverse any capture through the API.
 
+## ADR-208: Seeded Category Names Follow the Viewer's Language, Worked Out From the Stored Name (MUT-464)
+
+**Status:** Accepted (2026-10-27, MUT-464). Plan and eng review: `.claude/designs/mut-464-category-names-follow-language.md` (D1–D10, Basel's answers D1, D4, D5).
+
+**Context:** a hosted profile's preset categories were written once, in the language of whoever first listed them. A co-owner or member in the other language saw that language for good. The portal's local mode runs the same routes on a `MemoryLedgerStore` in the browser, so a server-side backfill would never reach it.
+
+**Decision:**
+1. **Nothing is stored.** Every preset entry has a `key` (`presets.ts`); `presetKeyForName(name)` maps a stored name, in English or Arabic, back to it. `RETIRED_TEMPLATES` keeps the old legal-only list and the personal "Projects" resolving without seeding them. No column, no backfill, no snapshot migration.
+2. **The server names it.** `requestLanguage(c)` (`routes/shared.ts`): the first `ar`/`en` tag of `Accept-Language` by quality, else the account locale; it sets `Content-Language` and `Vary`. `displayCategoryNames` shows a seeded name in that language. When two rows are the same entry, only the oldest follows the language and carries `presetKey`; the other keeps its own name.
+3. **One entry per profile.** Both stores refuse a new or renamed category whose name is an entry another category already is (409 `CATEGORY_NAME_TAKEN`), under the same organization lock as the `nameKey` index.
+4. **Contract.** `ExpenseCategory.presetKey` (derived, nullable) and API 1.78.0-mut464. The portal sends its UI language on every call and keys both category queries on it. MCP `list_categories` uses the account locale. The records export keeps stored names. The automatic Other is `presetKey === 'other'`.
+
+**Consequences:**
+- Changing a template's wording means moving the old pair to `RETIRED_TEMPLATES` under the same key; `presets.test.ts` pins that every name maps to one key.
+- A person who types a preset name ("Rent") gets a category that follows the language. That is intended.
+- The phone shows `user.locale` names until its half ships (separate ticket).
+
+**Alternatives considered:**
+- A stored `presetKey` column with a backfill (the first plan): it misses local mode and needs a migration path for every store (Basel chose D4).
+- Translating in each client: two more copies of the strings, and the MCP tools would still need one.
+
 ## ADR-207: The Portal and the Phone Shape the Verdict From One Contract (MUT-449)
 
 **Status:** Accepted (2026-10-26, MUT-449; epic MUT-446). The phone-side plan, eng review D1–D5 and design review PD1–PD16 are in `~/.gstack/projects/vAWK3-mutaba3a/mut-449-phone-glance-plan.md` and in `mutaba3a-flutter` `.claude/designs/mut-449-reports-glance.md`.
