@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-467: the mail kit's art lands in assets/email/
+
+**Why:** epic MUT-466 gives the transactional mails colour, our icons and illustrations. MUT-468 builds the new mail frame from this art.
+
+### Added
+- `assets/email/`: 34 PNG @2x files exported from the Claude Design mail kit. There are 16 header illustrations and 18 icon chips across four mood groups (hello, safety, trial, goodbye), with `-rtl-` copies of the art that has a direction. All are opaque and 18 KB or less.
+- `assets/email/README.md`: the groups, the file naming, the proposed header for each mail, and what MUT-467 still owes: a hello-tinted client chip, the official store badges and the approved frame mockup.
+
+### Technical
+- Nothing reads these files yet. MUT-468 serves them from the website host and replaces `server/src/email/templates/layout.ts`.
+
 ## [Unreleased] - 2026-10-27 — MUT-472: the API refuses the placeholder secrets from server/.env.example
 
 **Why:** the example's `replace-with-…` admin token and session pepper passed the 32-character minimum, so a copied example served `/admin/v1/*` with a token anyone can read in the repo. ADR-211.
