@@ -5,6 +5,7 @@ import { normalizeEmail } from '../../auth/users.js';
 import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../../billing/coverage.js';
 import type { Entitlement } from '../../billing/entitlement.js';
 import { ApiError } from '../../errors.js';
+import { FEATURES } from '../../features.js';
 import type { Logger } from '../../logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from '../../observability/reporter.js';
 import { profileOwnerOf } from '../../personal-profile.js';
@@ -217,6 +218,7 @@ export function accountActions(options: AccountActionOptions) {
       features,
       activeSessionCount,
       agentGrantCount: agentGrants.length,
+      availableFeatures: [...FEATURES],
       profiles,
     };
   }

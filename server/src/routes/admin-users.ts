@@ -3,12 +3,12 @@ import type { Context } from 'hono';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
-import { isFeature } from '../features.js';
+import { featureActions, featureOf } from '../operator/actions/features.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
-import { NOOP_REPORTER, type ErrorReporter } from '../observability/reporter.js';
+import type { ErrorReporter } from '../observability/reporter.js';
 import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
 import { accountActions, accountAudit, mintSetupLink, setupLinkAuditMetadata, type AccountAuditAction } from '../operator/actions/accounts.js';
 import { ForeignKeyViolation, UniqueViolation } from '../repositories/memory.js';
@@ -70,21 +70,6 @@ const UserFeatureParams = UserIdParam.extend(FeatureParam.shape);
 
 const unknownUser = { description: 'Unknown user', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } as const;
 
-/** Review D1: the person (or a profile being audited) was deleted between the lookup and the write. */
-async function goneIsNotFound<T>(write: () => Promise<T>): Promise<T> {
-  try {
-    return await write();
-  } catch (err) {
-    if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'User not found');
-    throw err;
-  }
-}
-
-function featureOf(name: string) {
-  if (!isFeature(name)) throw new ApiError('VALIDATION_FAILED', `Unknown feature: ${name}`, { field: 'feature' });
-  return name;
-}
-
 const MembershipParams = UserIdParam.extend({
   organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }),
 });
@@ -105,9 +90,10 @@ function resolvePersonalSettings(
 
 export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> {
   const { store, logger, sessions, terms } = options;
-  const reporter = options.reporter ?? NOOP_REPORTER;
   // MUT-461 (ADR-212 D1): the account actions live in operator/actions/accounts.ts, shared with /v1/operator/accounts.
   const accounts = accountActions(options);
+  // MUT-462: the feature flags live in operator/actions/features.ts, shared with /v1/operator/accounts.
+  const features = featureActions(options);
   const { memberOrganizations } = accounts;
   const app = new OpenAPIHono<AppEnv>();
 
@@ -493,24 +479,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     }),
     async (c) => {
       const params = c.req.valid('param');
-      const feature = featureOf(params.feature);
-      const user = await mustGetUser(params.userId);
-      // Eng review D5: a pending signup has no approved profile to audit on; approve it first.
-      if (user.status === 'PENDING_REVIEW') {
-        throw new ApiError('CONFLICT', 'This signup is waiting for review; approve it before granting a feature', { reason: 'USER_PENDING_REVIEW' });
-      }
-      const organizationIds = await memberOrganizations(user.id);
-      if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_granted' }, 'account change on a user with no memberships; no organization to audit');
-      const { grant, granted } = await goneIsNotFound(() =>
-        store.features.grant({
-          userId: user.id,
-          feature,
-          grantedBy: 'admin',
-          at: c.get('now')(),
-          audit: auditEvents(c, organizationIds, user.id, 'user.feature_granted', { feature }),
-        }),
-      );
-      return c.json({ feature, grantedAt: grant.grantedAt.toISOString(), granted }, 200);
+      return c.json(await features.grant(params.userId, params.feature, ctxOf(c)), 200);
     },
   );
 
@@ -531,22 +500,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     }),
     async (c) => {
       const params = c.req.valid('param');
-      const feature = featureOf(params.feature);
-      const user = await mustGetUser(params.userId);
-      const organizationIds = await memberOrganizations(user.id);
-      if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action: 'user.feature_revoked' }, 'account change on a user with no memberships; no organization to audit');
-      const { revoked, agentGrantsRevoked } = await goneIsNotFound(() =>
-        store.features.revoke({
-          userId: user.id,
-          feature,
-          at: c.get('now')(),
-          audit: auditEvents(c, organizationIds, user.id, 'user.feature_revoked', { feature }),
-          // MUT-434 AC7: taking agent access away disconnects every agent, in the same transaction (OV10).
-          ...(feature === 'agent_access' ? { agentGrants: { audit: auditEvents(c, organizationIds, user.id, 'user.agent_disconnected', { reason: 'feature_revoked' }) } } : {}),
-        }),
-      );
-      if (agentGrantsRevoked > 0) reporter.captureMessage('info', 'OAuth grants revoked', { reason: 'feature_revoked', count: String(agentGrantsRevoked) });
-      return c.json({ feature, revoked }, 200);
+      return c.json(await features.revoke(params.userId, params.feature, ctxOf(c)), 200);
     },
   );
 

@@ -129,6 +129,16 @@ const OPERATOR_OPERATIONS = [
   'POST /v1/operator/accounts/{userId}/enable',
   'POST /v1/operator/accounts/{userId}/sessions/revoke',
   'POST /v1/operator/accounts/{userId}/setup-link',
+  // MUT-462: grants, flags and firm requests.
+  'GET /v1/operator/accounts/{userId}/billing-grants',
+  'POST /v1/operator/accounts/{userId}/billing-grants',
+  'DELETE /v1/operator/accounts/{userId}/billing-grants/{grantId}',
+  'PUT /v1/operator/accounts/{userId}/features/{feature}',
+  'DELETE /v1/operator/accounts/{userId}/features/{feature}',
+  'GET /v1/operator/firm-requests',
+  'GET /v1/operator/firm-requests/{organizationId}',
+  'POST /v1/operator/firm-requests/{organizationId}/enable',
+  'POST /v1/operator/firm-requests/{organizationId}/decline',
 ];
 
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */

@@ -7,10 +7,23 @@ import type { WebauthnConfig } from '../auth/webauthn.js';
 import { ApiError } from '../errors.js';
 import type { ErrorReporter } from '../observability/reporter.js';
 import { accountActions, type AccountStatusVerb } from '../operator/actions/accounts.js';
+import { billingGrantActions } from '../operator/actions/billingGrants.js';
+import { featureActions } from '../operator/actions/features.js';
+import { firmActions } from '../operator/actions/firms.js';
 import { signupReviewActions, type SignupReviewActionOptions } from '../operator/actions/signupReviews.js';
 import {
+  EntitlementGrantSchema,
   ErrorEnvelopeSchema,
+  FeatureGrantResponseSchema,
+  FeatureRevokeResponseSchema,
   IssueSetupLinkRequestSchema,
+  OperatorBillingGrantListSchema,
+  OperatorCreateBillingGrantRequestSchema,
+  OperatorEnableFirmRequestSchema,
+  OperatorFirmRequestDetailSchema,
+  OperatorFirmRequestListSchema,
+  OrganizationResponseSchema,
+  RevokeEntitlementGrantResponseSchema,
   IssueSetupLinkResponseSchema,
   OperatorAccountSearchSchema,
   OperatorAccountStatusResponseSchema,
@@ -24,7 +37,7 @@ import {
   SignupReviewListQuerySchema,
 } from '../schemas.js';
 import type { PasskeyRequestOptionsSchema } from '../schemas.js';
-import { serializeUser } from '../serializers.js';
+import { serializeAdminOrganization, serializeGrant, serializeUser } from '../serializers.js';
 
 /**
  * MUT-459 (ADR-212): the portal's operator console, signed in as an operator. Mounted behind the /v1 authenticate()
@@ -45,6 +58,15 @@ import { serializeUser } from '../serializers.js';
  *   GET  /v1/operator/accounts?email=                      exact email (D5): one match or null
  *   GET  /v1/operator/accounts/{userId}                    the account view
  *   POST /v1/operator/accounts/{userId}/disable|enable|sessions/revoke|setup-link
+ *
+ * MUT-462: billing grants and feature flags on an account (actions shared with /admin/v1/billing/grants and
+ * /admin/v1/users/{id}/features; E10 again: never the operator's own), and firm requests (shared with
+ * /admin/v1/firm-requests and /admin/v1/organizations/{id}).
+ *
+ *   GET|POST /v1/operator/accounts/{userId}/billing-grants        DELETE …/billing-grants/{grantId}
+ *   PUT|DELETE /v1/operator/accounts/{userId}/features/{feature}
+ *   GET  /v1/operator/firm-requests                        GET /v1/operator/firm-requests/{organizationId}
+ *   POST /v1/operator/firm-requests/{organizationId}/enable|decline
  */
 export interface OperatorRouteOptions extends SignupReviewActionOptions {
   webauthn: WebauthnConfig | null;
@@ -68,6 +90,15 @@ export const OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new
   'POST /v1/operator/accounts/:userId/enable',
   'POST /v1/operator/accounts/:userId/sessions/revoke',
   'POST /v1/operator/accounts/:userId/setup-link',
+  'GET /v1/operator/accounts/:userId/billing-grants',
+  'POST /v1/operator/accounts/:userId/billing-grants',
+  'DELETE /v1/operator/accounts/:userId/billing-grants/:grantId',
+  'PUT /v1/operator/accounts/:userId/features/:feature',
+  'DELETE /v1/operator/accounts/:userId/features/:feature',
+  'GET /v1/operator/firm-requests',
+  'GET /v1/operator/firm-requests/:organizationId',
+  'POST /v1/operator/firm-requests/:organizationId/enable',
+  'POST /v1/operator/firm-requests/:organizationId/decline',
 ]);
 
 const SESSION = [{ session: [] }];
@@ -78,11 +109,19 @@ const operatorErrors = {
   404: errorResponse('Not an operator (or, on a decision, no review for this user)'),
 } as const;
 const UserIdParam = z.object({ userId: z.string().uuid().openapi({ param: { name: 'userId', in: 'path' } }) });
+const GrantParams = UserIdParam.extend({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
+/** A plain string, checked by the action so an unknown name answers 422 with `{ field: 'feature' }`, as /admin does. */
+const FeatureParams = UserIdParam.extend({ feature: z.string().max(64).openapi({ param: { name: 'feature', in: 'path' }, example: 'agent_access' }) });
+const OrganizationIdParam = z.object({ organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }) });
 
 export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEnv> {
   const actions = signupReviewActions(options);
   const { store, webauthn, logger, settings } = options;
-  const accounts = accountActions({ store, logger, sessions: settings, ...(options.reporter ? { reporter: options.reporter } : {}) });
+  const accountOptions = { store, logger, sessions: settings, ...(options.reporter ? { reporter: options.reporter } : {}) };
+  const accounts = accountActions(accountOptions);
+  const grants = billingGrantActions({ store });
+  const features = featureActions(accountOptions);
+  const firms = firmActions({ store });
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -311,6 +350,186 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       const result = await accounts.issueSetupLink(userId, body, contextOf(c));
       return c.json({ ...result, user: serializeUser(result.user) }, 200);
     },
+  );
+
+  // ---- MUT-462: billing grants and feature flags on an account ----------------------------------------------------
+
+  const ownOrUnknown = errorResponse('CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)');
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/operator/accounts/{userId}/billing-grants',
+      tags: ['Operator'],
+      summary: 'An account’s billing grants, newest first, revoked ones included (MUT-462)',
+      security: SESSION,
+      request: { params: UserIdParam },
+      responses: {
+        200: { description: 'The grants, and when the step-up lapses', content: { 'application/json': { schema: OperatorBillingGrantListSchema } } },
+        ...accountErrors,
+      },
+    }),
+    async (c) => {
+      const user = await accounts.mustGet(c.req.valid('param').userId);
+      const list = await store.billing.listGrants({ userId: user.id });
+      return c.json({ grants: list.map(serializeGrant), stepUpUntil: stepUpUntilOf(c) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/operator/accounts/{userId}/billing-grants',
+      tags: ['Operator'],
+      summary: 'Grant billing coverage to the person’s own profiles, with a reason and an optional expiry (MUT-462)',
+      security: SESSION,
+      request: { params: UserIdParam, body: { required: true, content: { 'application/json': { schema: OperatorCreateBillingGrantRequestSchema } } } },
+      responses: {
+        201: { description: 'Granted; grantedBy is operator:<your id>', content: { 'application/json': { schema: EntitlementGrantSchema } } },
+        409: ownOrUnknown,
+        422: errorResponse('Validation failed (an expiry in the past: details.field expiresAt)'),
+        ...accountErrors,
+      },
+    }),
+    async (c) => {
+      const userId = c.req.valid('param').userId;
+      notOwn(c, userId);
+      const user = await accounts.mustGet(userId);
+      const body = c.req.valid('json');
+      const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, contextOf(c));
+      return c.json(serializeGrant(grant), 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/v1/operator/accounts/{userId}/billing-grants/{grantId}',
+      tags: ['Operator'],
+      summary: 'Revoke one of the account’s grants (kept, with revokedAt set); revoking twice changes nothing (MUT-462)',
+      security: SESSION,
+      request: { params: GrantParams },
+      responses: {
+        200: { description: 'Revoked, or already revoked', content: { 'application/json': { schema: RevokeEntitlementGrantResponseSchema } } },
+        409: ownOrUnknown,
+        ...operatorErrors,
+        404: errorResponse('Not an operator, ACCOUNT_NOT_FOUND, or no such grant on this account'),
+      },
+    }),
+    async (c) => {
+      const { userId, grantId } = c.req.valid('param');
+      notOwn(c, userId);
+      const user = await accounts.mustGet(userId);
+      const result = await grants.revoke(grantId, contextOf(c), { userId: user.id });
+      return c.json({ grant: serializeGrant(result.grant), revoked: result.revoked }, 200);
+    },
+  );
+
+  const featureErrors = { ...accountErrors, 409: ownOrUnknown, 422: errorResponse('Unknown feature (VALIDATION_FAILED, details.field feature)') } as const;
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/operator/accounts/{userId}/features/{feature}',
+      tags: ['Operator'],
+      summary: 'Turn a feature on for the person (idempotent; a second grant keeps the first grantedAt) (MUT-462)',
+      security: SESSION,
+      request: { params: FeatureParams },
+      responses: { 200: { description: 'The flag is on', content: { 'application/json': { schema: FeatureGrantResponseSchema } } }, ...featureErrors },
+    }),
+    async (c) => {
+      const { userId, feature } = c.req.valid('param');
+      notOwn(c, userId);
+      return c.json(await features.grant(userId, feature, contextOf(c)), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/v1/operator/accounts/{userId}/features/{feature}',
+      tags: ['Operator'],
+      summary: 'Turn a feature off for the person (idempotent); agent access off disconnects every agent (MUT-462)',
+      security: SESSION,
+      request: { params: FeatureParams },
+      responses: { 200: { description: 'The flag is off', content: { 'application/json': { schema: FeatureRevokeResponseSchema } } }, ...featureErrors },
+    }),
+    async (c) => {
+      const { userId, feature } = c.req.valid('param');
+      notOwn(c, userId);
+      return c.json(await features.revoke(userId, feature, contextOf(c)), 200);
+    },
+  );
+
+  // ---- MUT-462: firm requests -----------------------------------------------------------------------------------
+
+  const firmErrors = { ...operatorErrors, 404: errorResponse('Not an operator, or NOT_FOUND with details.reason FIRM_REQUEST_NOT_FOUND: nothing pending on this profile') } as const;
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/operator/firm-requests',
+      tags: ['Operator'],
+      summary: 'Pending requests for firm features, oldest first, as the admin list, plus when the step-up lapses (MUT-462)',
+      security: SESSION,
+      request: { query: z.object({ limit: z.coerce.number().int().optional(), cursor: z.string().optional() }) },
+      responses: {
+        200: { description: 'Pending requests', content: { 'application/json': { schema: OperatorFirmRequestListSchema } } },
+        422: errorResponse('Validation failed'),
+        ...operatorErrors,
+      },
+    }),
+    async (c) => c.json({ ...(await firms.list(c.req.valid('query'))), stepUpUntil: stepUpUntilOf(c) }, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/operator/firm-requests/{organizationId}',
+      tags: ['Operator'],
+      summary: 'One pending request and the profile’s members, to name its owners (MUT-462)',
+      security: SESSION,
+      request: { params: OrganizationIdParam },
+      responses: { 200: { description: 'The request and its members', content: { 'application/json': { schema: OperatorFirmRequestDetailSchema } } }, ...firmErrors },
+    }),
+    async (c) => c.json({ ...(await firms.detail(c.req.valid('param').organizationId)), stepUpUntil: stepUpUntilOf(c) }, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/operator/firm-requests/{organizationId}/enable',
+      tags: ['Operator'],
+      summary: 'Turn firm features on for a pending request: the named owners become OWNER, everyone else BOOKKEEPER (MUT-462)',
+      description: 'As PATCH /admin/v1/organizations/{id} with firmEnabled true: an owned Business profile is enabled in place and keeps its owners (`ownerUserIds` is not needed); an operator firm needs at least one, each already a member.',
+      security: SESSION,
+      request: { params: OrganizationIdParam, body: { required: false, content: { 'application/json': { schema: OperatorEnableFirmRequestSchema } } } },
+      responses: {
+        200: { description: 'Enabled', content: { 'application/json': { schema: OrganizationResponseSchema } } },
+        409: errorResponse('CONFLICT with details.reason PERSONAL_PROFILE, NOT_BUSINESS or NOT_A_MEMBER'),
+        422: errorResponse('Validation failed, or an operator firm with no owner named (details.field ownerUserIds)'),
+        ...firmErrors,
+      },
+    }),
+    async (c) => {
+      // The body is optional: an owned profile names no owners.
+      const body: { ownerUserIds?: string[] | undefined } = c.req.valid('json') ?? {};
+      const organization = await firms.enableRequest(c.req.valid('param').organizationId, body.ownerUserIds ?? [], contextOf(c));
+      return c.json({ organization: serializeAdminOrganization(organization) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/operator/firm-requests/{organizationId}/decline',
+      tags: ['Operator'],
+      summary: 'Decline a pending request for firm features: the profile stays as it was, and the owner may ask again (MUT-462)',
+      security: SESSION,
+      request: { params: OrganizationIdParam },
+      responses: { 200: { description: 'Declined', content: { 'application/json': { schema: OrganizationResponseSchema } } }, ...firmErrors },
+    }),
+    async (c) => c.json({ organization: serializeAdminOrganization(await firms.decline(c.req.valid('param').organizationId, contextOf(c))) }, 200),
   );
 
   return app;
