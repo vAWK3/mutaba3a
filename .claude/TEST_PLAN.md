@@ -4018,3 +4018,12 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `server/src/__tests__/listen.test.ts` | 3 | Real sockets through `startServer` (the function `index.ts` uses), port 0. HOST=127.0.0.1: bound to 127.0.0.1, answers 200; a connect to the machine's LAN IPv4 is refused (skipped when there is none). HOST unset: bound exactly where a bare `net` server binds by default (`::` on dual-stack), so a default of `0.0.0.0` fails. Checked by mutation: both regressions turn the suite red. |
 | `qa/support/port-check.mjs` | probe | Not in a suite (QA tooling): a scratch probe showed it refuses when a server holds the port on `::`, `::1` or `127.0.0.1`, and passes when the port is free (review D1). |
 | Release-QA, `portal-selfservice` | 2 specs run | `@portal-selfservice.passkeys.add` and `.sign-in` pass (2026-10-27, d88a7a14, again at 0872e3d1 with the port check): the harness's API on 127.0.0.1 still serves the `http://localhost:8791` origin to Chromium. While up: `lsof` shows `127.0.0.1:8791`, `curl` 127.0.0.1 and localhost answer 200, the LAN address is refused, and the listening log says `"address":"127.0.0.1"`. No `portal-live` run (review D6). |
+
+## MUT-471 — the min-build release guard (2026-10-27)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/scripts/__tests__/release-guard.test.ts` "guard_min_build_release" | 17 | Matching values pass. Drop, lower, raise and add of a floor, drop of a recommended build, kill switch off and on: each refused unnamed (the message names the env var and the tfvars variable), passes named. A live `"false"` counts as a value. A partial name list refuses and prints the whole override; a floor and its recommended build need both names; an unknown name refuses; an unused one warns. One console expression on `local.min_build_env` with the release's var files, against a fake console that answers only the last stdin line (like TF 1.15). First deploy passes; unreadable console, wrong word count, `tonumber(null)`, `false`, a non-numeric or secret-backed live floor, a gcloud error: refused. `SKIP_MIN_BUILD_GUARD=1` calls nothing. |
+| same file, "deploy.sh wires the min-build guard" | 1 | Runs before `ensure_bootstrap` and inside `guard_release()` (steps 3, 4, rollback). |
+| Manual | 2 | The expression in the real module (scratch copy, TF 1.15.4): `"unset unset unset unset unset"` with nothing set, `"unset 12 unset 13 true"` with Android floors and the kill switch. The guard under macOS `/bin/bash` 3.2: refuses unnamed, passes named. |
+
