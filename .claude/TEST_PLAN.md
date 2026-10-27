@@ -184,6 +184,15 @@ MUT-460 (portal + digest link):
 - Server `review-digest.test.ts`: the link with `PORTAL_ORIGIN`, none without; `templates.test.ts` renders the button.
 - Release-QA: `qa/features/portal-selfservice/operator.yaml` + `qa/specs/portal-selfservice/operator.spec.ts`.
 
+MUT-461 (accounts, server + portal):
+- `server/src/__tests__/routes-operator-accounts.test.ts` (16): exact normalised search, no match 200 `{account:null}`, 422 without an email; the account view (status, last sign-in, passkeys, flags, live devices, agents, profiles with billing, no credential or link in it); an operator shown as one; 404 `ACCOUNT_NOT_FOUND`; every action needs a passkey step-up; disable ends sessions, blocks sign-in, says how many, audited with the operator, idempotent, enable audited; pending signup 409; sign out everywhere ends live sessions, the password still works, `user.sessions_revoked` audited; the setup link once, valid, audited, never in the view; lock signs out and stops the password; disabled 409; unknown 404 on every action; E10 `OWN_ACCOUNT` on all four, acting on another operator is fine; parity with `/admin` answers and audit trails row for row.
+- The gate sweeps in `routes-operator.test.ts` pick the new routes up from `OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES` (404 non-operator, 401 signed out, 404 device session); `route-security.test.ts` pins them session-only.
+- `store-contract-operator.ts` (memory + Prisma): `countLiveForUser` counts only unrevoked, unexpired sessions of that person.
+- Regression proof: `routes-users.test.ts` and the other admin-route suites are unchanged and green.
+- `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` (18): search keeps `?email=` and opens the match; no match with the address; non-operator → Home with no read; the page's header, Access rows with counts, profiles with billing; disabled → only Enable; pending → link to Signups; not found; skeleton; own account inert; Arabic RTL; confirm text, Cancel/Escape focus return; fresh disable with toast and Enable; stale "with passkey" one tap; enable; a 409 explained in the row; the reset link with lock (body `{lock:true, validHours:24}`), not in the cache, URL or text; without lock; gone after leaving.
+- `InPlaceConfirm.test.tsx` (+2): rich message, slot, primary, row look, label kept; `cancelWhileBusy={false}`.
+- Release-QA: `portal-selfservice.operator` `account-find`, `account-revoke-sessions`, `account-disable-enable`, `account-setup-link`.
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)

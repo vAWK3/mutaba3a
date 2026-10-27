@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-269: The operator's account page can't say when an account was disabled
+**Status**: Open (MUT-461, 2026-10-27)
+- **What:** design 5A's banner reads "Disabled ‹date›", but no column records when an account was disabled (`users.status` only; `updatedAt` moves on any change). The banner says "This account is disabled" with no date.
+- **Why it's acceptable:** the operator acts on the state, not its date; the audit trail (`user.disabled`, per profile) has the time for anyone who needs it.
+- **Fix:** a `users.disabledAt` column set by `setStatus`, or read the latest `user.disabled` audit row in the account view.
+
 ### TD-268: The operator step-up asks the server for its challenge after the tap (iOS Safari gesture window)
 **Status**: Open (MUT-460, 2026-10-27; pre-merge review, Basel's choice: ship as is, check on a real iPhone after deploy)
 - **What:** "Approve with passkey" fetches `/v1/operator/step-up/options`, then calls `navigator.credentials.get`. WebKit keeps a tap's activation only briefly; a slow answer (a Cloud Run cold start) can let it lapse, and Safari then refuses with NotAllowedError, which the portal treats as a cancel (no message). The passkey sign-in button (MUT-115) has the same shape.
@@ -25,7 +31,7 @@
 - **Fix:** if the iPhone check shows it, fetch the options when a stale confirm opens (single use, 5 minutes) so the tap goes straight to the sheet; same for the sign-in button.
 
 ### TD-267: OperatorConfirm duplicates InPlaceConfirm
-**Status**: Open (MUT-460, 2026-10-27; pre-merge review, Basel's choice: fold in with MUT-461)
+**Status**: Resolved (MUT-461, 2026-10-27): `InPlaceConfirm` gained `variant`, a ReactNode message, a slot, `appearance="row"`, `keepLabelWhileLoading` and `cancelWhileBusy`; `OperatorConfirm` is a thin wrapper over it. (Opened MUT-460, 2026-10-27; pre-merge review, Basel's choice: fold in with MUT-461.)
 - **What:** `src/hosted/operator/OperatorStepUp.tsx` `OperatorConfirm` repeats `src/hosted/components/InPlaceConfirm.tsx` (Cancel focused, Escape cancels, `role="group"`), adding a rich message, an error slot, primary/danger and a busy label; `SignupRow.cancel` repeats `useConfirmStep`'s focus return.
 - **Why it's acceptable:** changing the shared confirm on the release's critical path risked the expense and conversion drawers' delete confirms.
 - **Fix:** MUT-461 extends `InPlaceConfirm` (variant, ReactNode message, children/error slot, keepLabelWhileLoading) and builds `OperatorConfirm` on it.
