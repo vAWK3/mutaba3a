@@ -5,7 +5,7 @@ import { stubTurnstile } from '../../support/turnstile';
 /**
  * MUT-468: the new mail frame, on the live dev API (support/selfservice-live.mjs). The API mails into its memory
  * outbox and serves the built portal on its own origin, which is also PORTAL_ORIGIN, so the mail's pictures load
- * from <origin>/mail/v1 exactly as they will from app.mtb3a.com. The mail is opened in the page as a mail app would.
+ * from <origin>/mail/v1 exactly as they will from the production portal. The mail is opened in the page as a mail app would.
  */
 
 const HEADLINE = 'خطوة أخيرة: عيّن كلمة المرور';
