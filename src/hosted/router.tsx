@@ -43,6 +43,7 @@ import { OperatorLayout } from './pages/operator/OperatorLayout';
 import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
 import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
+import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -382,10 +383,23 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/accounts/$userId',
+    // MUT-462 (14A): `?grant=new` opens the grant drawer.
+    validateSearch: (search: Record<string, unknown>): { grant?: 'new' } => (search.grant === 'new' ? { grant: 'new' } : {}),
     component: function OperatorAccount() {
       const { userId } = operatorAccountRoute.useParams();
-      return <OperatorPage>{() => <OperatorAccountPage key={userId} userId={userId} />}</OperatorPage>;
+      const { grant } = operatorAccountRoute.useSearch();
+      const navigate = useNavigate();
+      const onGrantOpen = (open: boolean) => void navigate({ to: '/operator/accounts/$userId', params: { userId }, search: open ? { grant: 'new' } : {} });
+      return <OperatorPage>{() => <OperatorAccountPage key={userId} userId={userId} grantOpen={grant === 'new'} onGrantOpen={onGrantOpen} />}</OperatorPage>;
     },
+  });
+
+  /** MUT-462 (16A): pending firm requests, enable with owners or decline. */
+  const operatorFirmsRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/firms',
+    component: () => <OperatorPage>{(heading) => <OperatorFirmsPage headingRef={heading} />}</OperatorPage>,
   });
 
   const routeTree = rootRoute.addChildren([
@@ -404,6 +418,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       operatorSignupsRoute,
       operatorAccountsRoute,
       operatorAccountRoute,
+      operatorFirmsRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

@@ -14,9 +14,12 @@ import { useToast } from '../../components/Toast';
 import { RowButton, RowGroup } from '../../components/YouRows';
 import { operatorAccountKey, patchOperatorAccount, useOperatorAccount } from '../../data/operatorQueries';
 import { OperatorConfirm, useOperatorRun } from '../../operator/OperatorStepUp';
+import { isolated } from '../../operator/text';
 import { agoText, dayText, instantText } from '../../operator/time';
 import { ME_KEY, useMe } from '../../session/me';
 import { AccountStatusBadge } from './AccountStatusBadge';
+import { OperatorBillingSection } from './OperatorBillingSection';
+import { OperatorFeaturesSection } from './OperatorFeaturesSection';
 
 /**
  * MUT-461 (design 3A, 4A, 5A, 12A): one account, as the operator sees it before acting. The header says who and how
@@ -26,6 +29,8 @@ import { AccountStatusBadge } from './AccountStatusBadge';
  * Every action confirms in its row and goes through the operator step-up (OperatorStepUp.tsx). The reset link lives
  * only in this page's state: shown once, never in a toast, the URL or a query, and gone when the page is left (12A).
  * The operator's own account shows the rows inert with the reason (E10); the server refuses them regardless.
+ *
+ * MUT-462 (5A): Billing (grants, the grant drawer) and Features (flag switches) follow Access, before the profiles.
  */
 type Action = 'signOut' | 'disable' | 'enable' | 'reset';
 
@@ -33,7 +38,13 @@ type Action = 'signOut' | 'disable' | 'enable' | 'reset';
 const RESET_LINK_HOURS = 24;
 const SKELETON_ROWS = 4;
 
-export function OperatorAccountPage({ userId }: { userId: string }) {
+/** MUT-462 (14A): the grant drawer is in the address (`?grant=new`), so Back closes it. */
+interface GrantDrawerState {
+  grantOpen: boolean;
+  onGrantOpen: (open: boolean) => void;
+}
+
+export function OperatorAccountPage({ userId, grantOpen = false, onGrantOpen = () => {} }: { userId: string } & Partial<GrantDrawerState>) {
   const t = useT();
   const query = useOperatorAccount(userId);
   return (
@@ -43,12 +54,12 @@ export function OperatorAccountPage({ userId }: { userId: string }) {
       loading={<Skeleton rows={SKELETON_ROWS} />}
       notFound={<Empty title={t('hosted.operator.accounts.notFoundTitle')} body={t('hosted.operator.accounts.notFoundBody')} />}
     >
-      {(view) => <AccountDetail account={view.account} stepUpUntil={view.stepUpUntil} />}
+      {(view) => <AccountDetail account={view.account} stepUpUntil={view.stepUpUntil} grantOpen={grantOpen} onGrantOpen={onGrantOpen} />}
     </QueryView>
   );
 }
 
-function AccountDetail({ account, stepUpUntil }: { account: OperatorAccount; stepUpUntil: string | null }) {
+function AccountDetail({ account, stepUpUntil, grantOpen, onGrantOpen }: { account: OperatorAccount; stepUpUntil: string | null } & GrantDrawerState) {
   const t = useT();
   const { language } = useLanguage();
   const own = useMe().user.id === account.id;
@@ -74,6 +85,8 @@ function AccountDetail({ account, stepUpUntil }: { account: OperatorAccount; ste
       </header>
       <StatusBanner account={account} />
       <AccessGroup account={account} stepUpUntil={stepUpUntil} own={own} />
+      <OperatorBillingSection account={account} stepUpUntil={stepUpUntil} own={own} grantOpen={grantOpen} onGrantOpen={onGrantOpen} />
+      <OperatorFeaturesSection account={account} stepUpUntil={stepUpUntil} own={own} />
       <ProfilesGroup account={account} />
     </div>
   );
@@ -288,8 +301,6 @@ function ActionConfirm({
   );
 }
 
-/** The address isolated in the sentence (FSI … PDI), so it reads left to right and never reorders an Arabic line. */
-const isolated = (email: string) => `\u2068${email}\u2069`;
 
 /** 12A: the reset link, once. Copy or share it, then Done; leaving the page discards it. */
 function ResetLink({ email, link, onDone }: { email: string; link: IssueSetupLinkResponse; onDone: () => void }) {

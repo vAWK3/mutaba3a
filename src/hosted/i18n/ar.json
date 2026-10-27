@@ -1845,12 +1845,14 @@
     },
     "operator": {
       "title": "المشغّل",
-      "rowSub": "التسجيلات والحسابات",
+      "rowSub": "التسجيلات والحسابات والمكاتب",
       "failed": "لم يتم ذلك. حاول مرة أخرى.",
       "tabs": {
         "signups": "التسجيلات",
         "signupsCount": "التسجيلات · {count}",
-        "accounts": "الحسابات"
+        "accounts": "الحسابات",
+        "firms": "المكاتب",
+        "firmsCount": "المكاتب · {count}"
       },
       "signups": {
         "listLabel": "طلبات تسجيل بانتظار المراجعة",
@@ -2008,6 +2010,80 @@
         },
         "billingUntil": "حتى {date}",
         "noProfiles": "لا ملفات."
+      },
+      "billing": {
+        "title": "الدفع",
+        "none": "لا منح.",
+        "grant": "منح تغطية",
+        "grantSub": "تشمل الملفات التي أنشأها، كما تفعل خطة مدفوعة",
+        "grantAction": "منح",
+        "grantWithPasskey": "منح بمفتاح المرور",
+        "revoke": "سحب",
+        "revokeWithPasskey": "سحب بمفتاح المرور",
+        "until": "حتى {date}",
+        "noEnd": "بلا تاريخ انتهاء",
+        "noEndHint": "تبقى حتى تسحبها.",
+        "revokedOn": "سُحبت في {date}",
+        "endedOn": "انتهت في {date}",
+        "confirmRevoke": "سيفقد {email} تغطية {tier} هذه. تعود ملفاته إلى خطته أو تجربته.",
+        "revoked": "سُحبت التغطية من {email}",
+        "granted": "مُنحت التغطية لـ {email}",
+        "drawerTitle": "منح تغطية",
+        "drawerFor": "للملفات التي أنشأها",
+        "tierLabel": "الخطة",
+        "tier": {
+          "FREELANCER": "المستقل",
+          "FIRM": "المكتب"
+        },
+        "tierNote": {
+          "FREELANCER": "عمل شخص واحد",
+          "FIRM": "حسابات مكتب مع فريقه"
+        },
+        "reason": "السبب",
+        "reasonHint": "يُحفظ في سجل التدقيق، مثل «منحة تجريبية».",
+        "reasonRequired": "اذكر سبب المنح.",
+        "ends": "تنتهي",
+        "presetDays": "{count} يومًا",
+        "dayInvalid": "اختر يومًا بعد اليوم، أو «بلا تاريخ انتهاء»."
+      },
+      "features": {
+        "title": "الميزات",
+        "turnOff": "إيقاف",
+        "turnOffWithPasskey": "إيقاف بمفتاح المرور",
+        "confirmOff": "سيفقد {email} ميزة {feature}.",
+        "pendingRefused": "هذا التسجيل بانتظار المراجعة. وافق عليه أولًا.",
+        "tapAgain": "اضغط مرة أخرى للتأكيد بمفتاح المرور.",
+        "agent_access": {
+          "label": "ربط Claude",
+          "sub": "يمكنه ربط Claude الخاص به لتسجيل الإيصالات والكشوف",
+          "confirmOff": "سيفقد {email} الوصول عبر Claude، ويُفصل أي Claude ربطه الآن."
+        }
+      },
+      "firms": {
+        "listLabel": "طلبات المكاتب",
+        "emptyTitle": "لا طلبات مكاتب",
+        "emptyBody": "حين يطلب مالكٌ ميزات المكتب، يظهر الطلب هنا.",
+        "requestedBy": "طلبها",
+        "owned": "ملف أعماله الخاص",
+        "operatorFirm": "مكتب له أعضاء",
+        "enable": "تفعيل",
+        "enableWithPasskey": "تفعيل بمفتاح المرور",
+        "decline": "رفض",
+        "declineWithPasskey": "رفض بمفتاح المرور",
+        "ownersLabel": "المالكون",
+        "confirmEnable": "سيحصل {name} على ميزات المكتب. المالكون: {owners}. يصبح الباقون محاسبين.",
+        "confirmEnableOwned": "سيحصل {name} على ميزات المكتب. يبقى {owners} مالكيه، ويصبح الباقون محاسبين.",
+        "confirmDecline": "يبقى {name} ملفًا عاديًا. يمكن لمالكه أن يطلب من جديد.",
+        "enabled": "فُعّلت ميزات المكتب لـ {name}",
+        "declined": "رُفض طلب {name}",
+        "ownersRequired": "اختر مالكًا واحدًا على الأقل.",
+        "notMember": "يجب أن يكون المالك عضوًا في هذا الملف. اقرأ القائمة من جديد واختر.",
+        "notBusiness": "ميزات المكتب لملفات الأعمال فقط.",
+        "memberStatus": {
+          "ACTIVE": "نشط",
+          "DISABLED": "معطّل: لا يمكن أن يكون مالكًا",
+          "PENDING_REVIEW": "بانتظار المراجعة: لا يمكن أن يكون مالكًا"
+        }
       }
     }
   }

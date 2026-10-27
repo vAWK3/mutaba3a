@@ -1753,12 +1753,14 @@
     },
     "operator": {
       "title": "Operator",
-      "rowSub": "Signups and accounts",
+      "rowSub": "Signups, accounts and firms",
       "failed": "That didn't go through. Try again.",
       "tabs": {
         "signups": "Signups",
         "signupsCount": "Signups · {count}",
-        "accounts": "Accounts"
+        "accounts": "Accounts",
+        "firms": "Firms",
+        "firmsCount": "Firms · {count}"
       },
       "signups": {
         "listLabel": "Signups waiting for review",
@@ -1904,6 +1906,80 @@
         },
         "billingUntil": "until {date}",
         "noProfiles": "No profiles."
+      },
+      "billing": {
+        "title": "Billing",
+        "none": "No grants.",
+        "grant": "Grant coverage",
+        "grantSub": "Covers the profiles they created, as a paid plan would",
+        "grantAction": "Grant",
+        "grantWithPasskey": "Grant with passkey",
+        "revoke": "Revoke",
+        "revokeWithPasskey": "Revoke with passkey",
+        "until": "Until {date}",
+        "noEnd": "No end date",
+        "noEndHint": "It lasts until you revoke it.",
+        "revokedOn": "Revoked {date}",
+        "endedOn": "Ended {date}",
+        "confirmRevoke": "{email} loses this {tier} coverage. Their profiles go back to their own plan or trial.",
+        "revoked": "Coverage revoked for {email}",
+        "granted": "Coverage granted to {email}",
+        "drawerTitle": "Grant coverage",
+        "drawerFor": "For the profiles created by",
+        "tierLabel": "Plan",
+        "tier": {
+          "FREELANCER": "Freelancer",
+          "FIRM": "Firm"
+        },
+        "tierNote": {
+          "FREELANCER": "One person's own work",
+          "FIRM": "A firm's books with its team"
+        },
+        "reason": "Reason",
+        "reasonHint": "Kept in the audit trail, for example \"Pilot comp\".",
+        "reasonRequired": "Say why you're granting it.",
+        "ends": "Ends",
+        "presetDays": "{count} days",
+        "dayInvalid": "Choose a day after today, or No end date."
+      },
+      "features": {
+        "title": "Features",
+        "turnOff": "Turn off",
+        "turnOffWithPasskey": "Turn off with passkey",
+        "confirmOff": "{email} loses {feature}.",
+        "pendingRefused": "This signup is waiting for review. Approve it first.",
+        "tapAgain": "Tap again to confirm with your passkey.",
+        "agent_access": {
+          "label": "Connect Claude",
+          "sub": "They can connect their own Claude to log receipts and statements",
+          "confirmOff": "{email} loses Claude access, and any Claude they connected is disconnected now."
+        }
+      },
+      "firms": {
+        "listLabel": "Firm requests",
+        "emptyTitle": "No firm requests",
+        "emptyBody": "When an owner asks for firm features, the request shows here.",
+        "requestedBy": "Asked by",
+        "owned": "Their own business profile",
+        "operatorFirm": "Firm with members",
+        "enable": "Enable",
+        "enableWithPasskey": "Enable with passkey",
+        "decline": "Decline",
+        "declineWithPasskey": "Decline with passkey",
+        "ownersLabel": "Owners",
+        "confirmEnable": "{name} gets firm features. Owners: {owners}. Everyone else becomes a bookkeeper.",
+        "confirmEnableOwned": "{name} gets firm features. {owners} stay its owners; everyone else becomes a bookkeeper.",
+        "confirmDecline": "{name} stays a regular profile. Its owner can ask again.",
+        "enabled": "Firm features on for {name}",
+        "declined": "Request for {name} declined",
+        "ownersRequired": "Choose at least one owner.",
+        "notMember": "An owner has to be a member of this profile. Read the list again and choose.",
+        "notBusiness": "Only a business profile can get firm features.",
+        "memberStatus": {
+          "ACTIVE": "Active",
+          "DISABLED": "Disabled: can't be an owner",
+          "PENDING_REVIEW": "Waiting for review: can't be an owner"
+        }
       }
     }
   }
