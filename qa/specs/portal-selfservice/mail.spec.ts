@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { address, liveState, mailTo, setupLinkIn } from '../../support/selfService';
+import { address, decideReview, liveState, mailTo, setupLinkIn } from '../../support/selfService';
 import { stubTurnstile } from '../../support/turnstile';
 
 /**
@@ -62,5 +62,38 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
     // The portal strips the token from the address bar on arrival (MUT-236), so the URL ends at /setup.
     await expect(page).toHaveURL(/\/setup$/);
     await expect(page.getByRole('heading', { level: 1, name: 'أكمل إنشاء حسابك' })).toBeVisible();
+  });
+});
+
+test("An approved Arabic account's ready mail faces its directional art right to left", { tag: '@portal-selfservice.mail.mail-directional-art' }, async ({ page, step }) => {
+  // A webmail address waits for the operator (MUT-367); approving it sends account-ready, whose milestone art has a direction.
+  const email = address('mail-rtl-art', 'gmail.com');
+  const origin = liveState().origin;
+
+  await step('Sign up in Arabic with a webmail address and finish /setup: it waits for review', async () => {
+    await page.goto('/signup');
+    await page.getByLabel('البريد الإلكتروني').fill(email);
+    await page.getByRole('button', { name: 'متابعة' }).click();
+    await expect(page.getByText(email)).toBeVisible();
+    await page.goto(setupLinkIn(await mailTo(email, 'finish-signup')));
+    await page.getByLabel('كلمة المرور الجديدة').fill('a long enough passphrase');
+    await page.getByRole('checkbox', { name: /شروط الخدمة/ }).check();
+    await page.getByRole('button', { name: 'أنشئ الحساب' }).click();
+    await expect(page.getByText('سنراسلك خلال يومَي عمل.')).toBeVisible();
+  });
+
+  await step('The operator approves the account', async () => {
+    await decideReview(email, 'approve');
+  });
+
+  await step('Open the account-ready mail: Arabic, right to left, headed by the mirrored milestone picture, loaded', async () => {
+    const mail = await mailTo(email, 'account-ready');
+    expect(mail.locale).toBe('ar');
+    await page.setContent(mail.html, { waitUntil: 'load' });
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('heading', { level: 1, name: 'حسابك جاهز' })).toBeVisible();
+    const header = page.getByRole('img', { name: 'ثلاث درجات وعلم فوقها' });
+    await expect(header).toHaveAttribute('src', `${origin}/mail/v1/mail-header-hello-milestone-firm-rtl-2x.png`);
+    expect(await header.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(320);
   });
 });

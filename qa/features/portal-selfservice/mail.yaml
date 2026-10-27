@@ -22,7 +22,19 @@ features:
       - Turn images off and open it again
       - Press the mail's button
     expect:
-      - The mail is Arabic, right to left, with the hello band, the envelope picture and chip, and the headline "خطوة أخيرة: عيّن كلمة المرور"
+      - 'The mail is Arabic, right to left, with the hello band, the envelope picture and chip, and the headline "خطوة أخيرة: عيّن كلمة المرور"'
       - Its pictures come from the portal's /mail/v1/ as PNGs cached for a year, and the footer names the recipient
       - With images off the headline, the button and the copyable link are all still there
       - The button opens /setup, "Finish creating your account"
+  - id: mail-directional-art
+    title: An approved Arabic account's ready mail faces its directional art right to left
+    tier: secondary
+    paths:
+      - server/src/email/templates/look.ts
+    steps:
+      - Sign up in Arabic with a webmail address and finish /setup (it waits for review)
+      - The operator approves the account
+      - Open the account-ready mail
+    expect:
+      - The ready mail is Arabic, right to left, headed "حسابك جاهز"
+      - Its header is the mirrored milestone picture (mail-header-hello-milestone-firm-rtl-2x.png) and it loads from the portal
