@@ -1688,17 +1688,22 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     listCredits: (organizationId, receivableId) => this.prisma.receivableCredit.findMany({ where: { organizationId, receivableId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
-    // MUT-478: six independent queries, each filtered through its parent's (organizationId, customerId) index; never one per row.
+    // MUT-478: six queries, each filtered through its parent's (organizationId, customerId) index; never one per row. One
+    // REPEATABLE READ snapshot, so a payment and the charge it pays, committed together between two reads, never land on
+    // one page without the other.
     statementSources: async (organizationId, customerId, currency) => {
       const agreement = { organizationId, customerId, currency };
-      const [receivables, credits, payments, allocations, installments, charges] = await Promise.all([
-        this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
-        this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
-        this.prisma.payment.findMany({ where: { organizationId, customerId, currency } }),
-        this.prisma.paymentAllocation.findMany({ where: { organizationId, payment: { customerId, currency } } }),
-        this.prisma.installment.findMany({ where: { organizationId, agreement } }),
-        this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
-      ]);
+      const [receivables, credits, payments, allocations, installments, charges] = await this.prisma.$transaction(
+        [
+          this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
+          this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
+          this.prisma.payment.findMany({ where: { organizationId, customerId, currency } }),
+          this.prisma.paymentAllocation.findMany({ where: { organizationId, payment: { customerId, currency } } }),
+          this.prisma.installment.findMany({ where: { organizationId, agreement } }),
+          this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
+        ],
+        { isolationLevel: 'RepeatableRead' },
+      );
       return { receivables, credits, payments, allocations, installments, charges };
     },
     list: async (organizationId, filter: ReceivableFilter, page) => {

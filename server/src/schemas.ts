@@ -1817,6 +1817,8 @@ export const VALIDATION_REASONS = [
   // MUT-115: the passkey registration didn't verify (challenge used, expired or not the caller's; origin, RP ID or user
   // verification wrong).
   'PASSKEY_NOT_VERIFIED',
+  // MUT-478: a statement whose `from` is after its `to`.
+  'PERIOD_INVALID',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
