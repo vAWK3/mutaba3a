@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paymentNumber, paymentYear } from '../numbering.js';
+import { backfillReceivableNumbers, paymentNumber, paymentYear, receivableNumber } from '../numbering.js';
 import { allocationSnapshot, paymentPreviewToken } from '../preview-token.js';
 
 describe('payment numbers', () => {
@@ -14,6 +14,26 @@ describe('payment numbers', () => {
     expect(paymentYear('2026-12-31')).toBe(2026);
     expect(paymentYear('2027-01-01')).toBe(2027);
     expect(() => paymentYear('soon')).toThrow();
+  });
+});
+
+describe('receivable numbers (MUT-478)', () => {
+  it('formats CHG-YYYY-NNNN', () => {
+    expect(receivableNumber(2026, 7)).toBe('CHG-2026-0007');
+  });
+
+  it('backfills per organization and posting year, by posting date, then posted at, then id', () => {
+    const at = (iso: string) => new Date(iso);
+    const rows = [
+      { id: 'b', organizationId: 'o1', postingDate: '2026-03-01', postedAt: at('2026-03-01T10:00:00Z') },
+      { id: 'a', organizationId: 'o1', postingDate: '2026-03-01', postedAt: at('2026-03-01T10:00:00Z') },
+      { id: 'c', organizationId: 'o1', postingDate: '2026-01-05', postedAt: at('2026-02-01T00:00:00Z') },
+      { id: 'd', organizationId: 'o1', postingDate: '2025-12-31', postedAt: at('2025-12-31T00:00:00Z') },
+      { id: 'e', organizationId: 'o2', postingDate: '2026-03-01', postedAt: at('2026-03-01T00:00:00Z') },
+    ];
+    const { numbers, counters } = backfillReceivableNumbers(rows);
+    expect(Object.fromEntries(numbers)).toEqual({ d: 'CHG-2025-0001', c: 'CHG-2026-0001', a: 'CHG-2026-0002', b: 'CHG-2026-0003', e: 'CHG-2026-0001' });
+    expect(Object.fromEntries(counters)).toEqual({ 'o1:CHG:2025': 1, 'o1:CHG:2026': 3, 'o2:CHG:2026': 1 });
   });
 });
 

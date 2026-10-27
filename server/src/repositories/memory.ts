@@ -186,6 +186,7 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
+import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -197,8 +198,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
  * 7 (MUT-333): `people` gained `closure`.
  * 8 (MUT-459): `people` gained `operatorAt`.
+ * 9 (MUT-478): `recs` gained `number`; `counters` gained `${organizationId}:CHG:${year}` keys.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 8;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 9;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -1952,7 +1954,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const seq = (this.counters.get(counterKey) ?? 0) + 1;
       this.counters.set(counterKey, seq);
       const { allocations: requested, ...rest } = input;
-      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: `PAY-${year}-${String(seq).padStart(4, '0')}`, allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
+      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
       this.pays.set(payment.id, payment);
       const allocations = this.applyAllocations(payment, requested, at);
       return { payment: { ...payment }, allocations };
@@ -2077,14 +2079,20 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   private newReceivable(
-    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId'> & {
+    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number'> & {
       title?: string | null;
       createdByUserId?: string | null;
     },
   ): ReceivableRecord {
+    // MUT-478: every receivable is numbered as it posts, from its organization's counter for the posting year.
+    const year = ledgerYear(input.postingDate);
+    const counterKey = receivableCounterKey(input.organizationId, year);
+    const seq = (this.counters.get(counterKey) ?? 0) + 1;
+    this.counters.set(counterKey, seq);
     const receivable: ReceivableRecord = {
       id: randomUUID(),
       ...input,
+      number: receivableNumber(year, seq),
       title: input.title ?? null,
       createdByUserId: input.createdByUserId ?? null,
       paidMinor: 0n,

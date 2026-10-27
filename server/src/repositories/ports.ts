@@ -760,6 +760,8 @@ export interface ReceivableRecord {
   createdByUserId: string | null;
   /** Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt. Null for every receivable this ticket does not create. */
   deletedAt: Date | null;
+  /** MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of `postingDate`, assigned when it posts (`receivable_counters`). */
+  number: string;
   version: number;
   createdAt: Date;
 }
