@@ -193,6 +193,16 @@ export function retryMinutes(error: ApiError): number {
   return Math.max(1, Math.ceil((error.retryAfterSeconds ?? SECONDS_PER_MINUTE) / SECONDS_PER_MINUTE));
 }
 
+/**
+ * MUT-464: the language the portal shows, sent as `Accept-Language` on every call so the server names seeded expense
+ * categories in it (local mode too: the local backend runs the same routes). Set by HostedLanguageProvider.
+ */
+let requestLanguage: 'en' | 'ar' | null = null;
+
+export function setRequestLanguage(language: 'en' | 'ar' | null): void {
+  requestLanguage = language;
+}
+
 type UnauthorisedHandler = (error: ApiError) => void;
 let unauthorisedHandler: UnauthorisedHandler | null = null;
 
@@ -400,6 +410,7 @@ export async function send(method: Method, path: string, options: RequestOptions
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
+  if (requestLanguage) headers['Accept-Language'] = requestLanguage;
 
   const url = withQuery(path, options.query);
   const sentUnder = credentialGeneration;

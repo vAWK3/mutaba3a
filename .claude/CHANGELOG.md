@@ -44,6 +44,26 @@
 ### Technical
 - The phone side (every iOS release takes the highest build ever uploaded + 1) is in mutaba3a-flutter's `ios/fastlane/Fastfile`.
 
+## [Unreleased] - 2026-10-27 — MUT-464: seeded expense categories follow the viewer's language
+
+**Why:** a profile's preset categories stayed in the language of whoever first opened them, so a co-owner or member in the other language never saw their own. ADR-208.
+
+### Added
+- `presets.ts`: a `key` on every preset entry, `RETIRED_TEMPLATES`, `presetKeyForName`, `presetNameKeys`, `displayCategoryNames`.
+- `routes/shared.ts`: `requestLanguage` / `preferredLanguage` (Accept-Language, else the account locale).
+- `ExpenseCategory.presetKey` (derived). API 1.78.0-mut464.
+- Portal: `setRequestLanguage` in `api/client.ts` (set by `HostedLanguageProvider`), `expenseCategoriesKey`.
+- QA: `portal.expenses.categories-follow-language`, `portal.expenses.renamed-category-keeps-name`.
+
+### Changed
+- `/v1/expense-categories` (GET, POST, PATCH) and MCP `list_categories` name seeded categories in the viewer's language; stored names are unchanged.
+- Adding or renaming to a seeded category's other-language name answers 409 `CATEGORY_NAME_TAKEN` (both stores).
+- The automatic Other is found by preset key (`vendors/keys.ts`).
+- Both portal category queries carry the language in their keys, so a switch refetches.
+
+### Fixed
+- Carry-over files a backup category under the profile's seeded entry when it is the same one in the other language, instead of dropping it from its expenses.
+
 ## [Unreleased] - 2026-10-27 — MUT-445 follow-ups: the carry-over forgets the free app, src/types goes, CLAUDE.md says what the repo is
 
 **Why:** MUT-445 (ADR-203) retired the free web app but left its carry-over source in the portal (TD-262), its record types in `src/types/index.ts` (TD-263), and a CLAUDE.md that still described the old local app.

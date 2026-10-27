@@ -638,7 +638,7 @@ describe('expense categories', () => {
     const list = () => h.app.request('/v1/expense-categories', { headers: p.as(a.org.id) });
     const first = await read(await list());
     expect(first.items.map((c: Loose) => c.name)).toEqual(LAW_FIRM_PRESET.map((c) => c.nameAr));
-    expect(first.items[0]).toEqual({ id: expect.any(String), name: LAW_FIRM_PRESET[0]!.nameAr, color: LAW_FIRM_PRESET[0]!.color, archived: false, version: 1, createdAt: expect.any(String), updatedAt: expect.any(String) });
+    expect(first.items[0]).toEqual({ id: expect.any(String), name: LAW_FIRM_PRESET[0]!.nameAr, presetKey: LAW_FIRM_PRESET[0]!.key, color: LAW_FIRM_PRESET[0]!.color, archived: false, version: 1, createdAt: expect.any(String), updatedAt: expect.any(String) });
     await list();
     const seeded = (await h.store.audit.list(a.org.id, { action: 'expense_category.seeded' }, { limit: 10, cursor: null })).items;
     expect(seeded).toHaveLength(1);
@@ -682,6 +682,69 @@ describe('expense categories', () => {
     expect(visible).not.toContain(cat.id);
     const all = (await read(await h.app.request('/v1/expense-categories?includeArchived=true', { headers: p.as(a.org.id) }))).items.map((c: Loose) => c.id);
     expect(all).toContain(cat.id);
+  });
+});
+
+describe('expense category names follow the viewer’s language (MUT-464)', () => {
+  // The test clock is fixed, so rows share createdAt and list order falls to random ids: find rows by key, never position.
+  const names = async (h: Harness, headers: Record<string, string>) => {
+    const res = await h.app.request('/v1/expense-categories', { headers });
+    return { res, items: (await read(res)).items as Loose[] };
+  };
+
+  it('shows an Arabic-seeded list in English to an English request, and in the account language without a header', async () => {
+    const { h, b, p } = await setup({ locale: 'ar' });
+    const arabic = await names(h, p.as(b.org.id));
+    expect(arabic.items.map((c) => c.name)).toEqual(GENERAL_PRESET.map((c) => c.nameAr));
+    expect(arabic.res.headers.get('content-language')).toBe('ar');
+    const english = await names(h, p.as(b.org.id, { 'accept-language': 'en' }));
+    expect(english.items.map((c) => c.name)).toEqual(GENERAL_PRESET.map((c) => c.name));
+    expect(english.items.map((c) => c.presetKey)).toEqual(GENERAL_PRESET.map((c) => c.key));
+    expect(english.items.map((c) => c.id)).toEqual(arabic.items.map((c) => c.id));
+    expect(english.res.headers.get('content-language')).toBe('en');
+    expect(english.res.headers.get('vary')).toMatch(/accept-language/i);
+  });
+
+  it('reads the first Arabic or English tag by quality and ignores the rest', async () => {
+    const { h, b, p } = await setup({ locale: 'ar' });
+    await names(h, p.as(b.org.id));
+    expect((await names(h, p.as(b.org.id, { 'accept-language': 'fr' }))).res.headers.get('content-language')).toBe('ar');
+    expect((await names(h, p.as(b.org.id, { 'accept-language': 'he-IL,he;q=0.9,en-US;q=0.8,ar;q=0.5' }))).res.headers.get('content-language')).toBe('en');
+    expect((await names(h, p.as(b.org.id, { 'accept-language': 'en;q=0.4, ar-PS;q=0.9' }))).res.headers.get('content-language')).toBe('ar');
+  });
+
+  it('shows typed and renamed categories exactly as typed in both languages', async () => {
+    const { h, b, p } = await setup({ locale: 'ar' });
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
+    await h.app.request('/v1/expense-categories', json({ name: 'Coffee' }, { ...p.as(b.org.id), ...idem() }));
+    const renamed = await read(await h.app.request(`/v1/expense-categories/${rent.id}`, json({ name: 'Studio rent' }, { ...p.as(b.org.id, { 'accept-language': 'ar' }), 'if-match': '1' }, 'PATCH')));
+    expect(renamed).toMatchObject({ name: 'Studio rent', presetKey: null });
+    for (const lang of ['ar', 'en']) {
+      const items = (await names(h, p.as(b.org.id, { 'accept-language': lang }))).items;
+      expect(items.find((c) => c.id === rent.id)).toMatchObject({ name: 'Studio rent', presetKey: null });
+      expect(items.find((c) => c.name === 'Coffee')).toMatchObject({ presetKey: null });
+    }
+  });
+
+  it('answers a create or change in the request language', async () => {
+    const { h, b, p } = await setup({ locale: 'ar' });
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
+    const recoloured = await read(await h.app.request(`/v1/expense-categories/${rent.id}`, json({ color: '#123abc' }, { ...p.as(b.org.id, { 'accept-language': 'en' }), 'if-match': '1' }, 'PATCH')));
+    expect(recoloured).toMatchObject({ name: 'Office Rent', presetKey: 'office_rent', color: '#123abc' });
+  });
+
+  it('refuses a new or renamed category that is a seeded one in the other language', async () => {
+    const { h, b, p } = await setup({ locale: 'ar' });
+    await names(h, p.as(b.org.id));
+    const add = await h.app.request('/v1/expense-categories', json({ name: 'office rent' }, { ...p.as(b.org.id, { 'accept-language': 'en' }), ...idem() }));
+    expect(add.status).toBe(409);
+    expect((await read(add)).error.details.reason).toBe('CATEGORY_NAME_TAKEN');
+    const coffee = await read(await h.app.request('/v1/expense-categories', json({ name: 'Coffee' }, { ...p.as(b.org.id), ...idem() })));
+    const rename = await h.app.request(`/v1/expense-categories/${coffee.id}`, json({ name: 'Other' }, { ...p.as(b.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(rename.status).toBe(409);
+    // A seeded category may take its own other-language name: it is still the same entry.
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
+    expect((await h.app.request(`/v1/expense-categories/${rent.id}`, json({ name: 'Office Rent' }, { ...p.as(b.org.id), 'if-match': '1' }, 'PATCH'))).status).toBe(200);
   });
 });
 

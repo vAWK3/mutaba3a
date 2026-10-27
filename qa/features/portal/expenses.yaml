@@ -117,6 +117,33 @@ features:
       - On a firm's business profile, open Expenses and choose an expense that has a category, a client and a matter
     expect:
       - The expense's drawer shows its category, its client and its matter
+  - id: categories-follow-language
+    title: A seeded expense category is named in the portal's language, and switching the language renames it (MUT-464)
+    tier: secondary
+    tickets: [MUT-464]
+    paths:
+      - src/hosted/api/client.ts
+      - src/hosted/i18n/HostedLanguageProvider.tsx
+      - src/hosted/data/expenseQueries.ts
+      - src/hosted/data/reportQueries.ts
+    steps:
+      - Open Expenses in Arabic on a profile whose rent expense is under the seeded Office Rent category
+      - Switch to English on You › App and go back to Expenses
+    expect:
+      - In Arabic the row names its category إيجار المكتب, and GET /v1/expense-categories was sent Accept-Language ar
+      - After the switch the categories are fetched again with Accept-Language en and the row says Office Rent
+  - id: renamed-category-keeps-name
+    title: A category a person named or renamed keeps that name in both languages (MUT-464)
+    tier: secondary
+    tickets: [MUT-464]
+    paths:
+      - src/hosted/data/expenseQueries.ts
+    steps:
+      - Open Expenses in English on a profile with a seeded Office Rent and a named Studio rent category
+      - Switch to Arabic on You › App and go back to Expenses
+    expect:
+      - In English the rows say Office Rent and Studio rent
+      - In Arabic the seeded one says إيجار المكتب and the named one still says Studio rent
   - id: date-too-far
     title: An expense may be dated ahead up to ten years; a date the server refuses as more than ten years ahead is said at the date field (MUT-392)
     tier: secondary

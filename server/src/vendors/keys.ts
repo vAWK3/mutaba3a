@@ -4,15 +4,15 @@
  * suggestions (`scoreVendorName`). Pure functions, shared by the Prisma and memory stores.
  */
 
-import { categoryNameKey } from '../expenses/names.js';
+import { presetKeyForName } from '../expenses/presets.js';
 
 /**
  * The profile's automatic "Other" category (the presets' last entry, in English or Arabic): the phone files an
- * expense there when nothing was picked, so it never becomes a vendor's default (MUT-254 A3).
+ * expense there when nothing was picked, so it never becomes a vendor's default (MUT-254 A3). MUT-464: the preset
+ * key, not a second list of its names.
  */
-const AUTOMATIC_OTHER_NAME_KEYS = new Set(['other', 'أخرى']);
 export function isAutomaticOtherCategory(name: string): boolean {
-  return AUTOMATIC_OTHER_NAME_KEYS.has(categoryNameKey(name));
+  return presetKeyForName(name) === 'other';
 }
 
 const TASHKEEL_AND_TATWEEL = /[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]/g;

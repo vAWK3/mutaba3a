@@ -1,4 +1,5 @@
-import type { ExpenseCategoryInput, ProfileType } from '../repositories/ports.js';
+import type { ExpenseCategoryInput, ProfileType, UserLocale } from '../repositories/ports.js';
+import { categoryNameKey } from './names.js';
 import type { ProfileWriter } from '../auth/writability.js';
 
 /**
@@ -15,28 +16,30 @@ import type { ProfileWriter } from '../auth/writability.js';
  * general on a BUSINESS one or any other firm.
  */
 export interface CategoryTemplate {
+  /** MUT-464: the entry's identity across languages and presets ("Other" is `other` everywhere). Never stored. */
+  key: string;
   name: string;
   nameAr: string;
   color: string;
 }
 
 export const GENERAL_PRESET: readonly CategoryTemplate[] = [
-  { name: 'Office Rent', nameAr: 'إيجار المكتب', color: '#6366f1' },
-  { name: 'Utilities', nameAr: 'المرافق', color: '#8b5cf6' },
-  { name: 'Software & Subscriptions', nameAr: 'البرمجيات والاشتراكات', color: '#3b82f6' },
-  { name: 'AI Services', nameAr: 'خدمات الذكاء الاصطناعي', color: '#06b6d4' },
-  { name: 'Cloud & Hosting', nameAr: 'الاستضافة والسحابة', color: '#0ea5e9' },
-  { name: 'Communication', nameAr: 'الاتصالات', color: '#10b981' },
-  { name: 'Marketing & Ads', nameAr: 'التسويق والإعلانات', color: '#f59e0b' },
-  { name: 'Travel & Transport', nameAr: 'السفر والمواصلات', color: '#ef4444' },
-  { name: 'Equipment & Hardware', nameAr: 'المعدات والأجهزة', color: '#ec4899' },
-  { name: 'Professional Services', nameAr: 'الخدمات المهنية', color: '#14b8a6' },
-  { name: 'Insurance', nameAr: 'التأمين', color: '#f97316' },
-  { name: 'Bank Fees', nameAr: 'رسوم بنكية', color: '#64748b' },
-  { name: 'Taxes & Licenses', nameAr: 'الضرائب والتراخيص', color: '#a855f7' },
-  { name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
-  { name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
-  { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
+  { key: 'office_rent', name: 'Office Rent', nameAr: 'إيجار المكتب', color: '#6366f1' },
+  { key: 'utilities', name: 'Utilities', nameAr: 'المرافق', color: '#8b5cf6' },
+  { key: 'software_subscriptions', name: 'Software & Subscriptions', nameAr: 'البرمجيات والاشتراكات', color: '#3b82f6' },
+  { key: 'ai_services', name: 'AI Services', nameAr: 'خدمات الذكاء الاصطناعي', color: '#06b6d4' },
+  { key: 'cloud_hosting', name: 'Cloud & Hosting', nameAr: 'الاستضافة والسحابة', color: '#0ea5e9' },
+  { key: 'communication', name: 'Communication', nameAr: 'الاتصالات', color: '#10b981' },
+  { key: 'marketing_ads', name: 'Marketing & Ads', nameAr: 'التسويق والإعلانات', color: '#f59e0b' },
+  { key: 'travel_transport', name: 'Travel & Transport', nameAr: 'السفر والمواصلات', color: '#ef4444' },
+  { key: 'equipment_hardware', name: 'Equipment & Hardware', nameAr: 'المعدات والأجهزة', color: '#ec4899' },
+  { key: 'professional_services', name: 'Professional Services', nameAr: 'الخدمات المهنية', color: '#14b8a6' },
+  { key: 'insurance', name: 'Insurance', nameAr: 'التأمين', color: '#f97316' },
+  { key: 'bank_fees', name: 'Bank Fees', nameAr: 'رسوم بنكية', color: '#64748b' },
+  { key: 'taxes_licenses', name: 'Taxes & Licenses', nameAr: 'الضرائب والتراخيص', color: '#a855f7' },
+  { key: 'office_supplies', name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
+  { key: 'salaries', name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
+  { key: 'other', name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
 /**
@@ -47,28 +50,28 @@ export const GENERAL_PRESET: readonly CategoryTemplate[] = [
  * bank fees or taxes.
  */
 export const LAW_FIRM_PRESET: readonly CategoryTemplate[] = [
-  { name: 'Office Rent', nameAr: 'إيجار المكتب', color: '#6366f1' },
-  { name: 'Utilities', nameAr: 'المرافق', color: '#8b5cf6' },
-  { name: 'Software & Subscriptions', nameAr: 'البرمجيات والاشتراكات', color: '#3b82f6' },
-  { name: 'AI Services', nameAr: 'خدمات الذكاء الاصطناعي', color: '#06b6d4' },
-  { name: 'Cloud & Hosting', nameAr: 'الاستضافة والسحابة', color: '#0ea5e9' },
-  { name: 'Communication', nameAr: 'الاتصالات', color: '#10b981' },
-  { name: 'Marketing & Ads', nameAr: 'التسويق والإعلانات', color: '#f59e0b' },
-  { name: 'Travel & Transport', nameAr: 'السفر والمواصلات', color: '#ef4444' },
-  { name: 'Equipment & Hardware', nameAr: 'المعدات والأجهزة', color: '#ec4899' },
-  { name: 'Professional Services', nameAr: 'الخدمات المهنية', color: '#14b8a6' },
-  { name: 'Insurance', nameAr: 'التأمين', color: '#f97316' },
-  { name: 'Bank Fees', nameAr: 'رسوم بنكية', color: '#64748b' },
-  { name: 'Taxes & Licenses', nameAr: 'الضرائب والتراخيص', color: '#a855f7' },
-  { name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
-  { name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
-  { name: 'Court & Filing Fees', nameAr: 'رسوم المحاكم والتسجيل', color: '#b45309' },
-  { name: 'Notary & Service Fees', nameAr: 'رسوم الكاتب العدل والتبليغ', color: '#0f766e' },
-  { name: 'Experts & Translation', nameAr: 'الخبراء والترجمة', color: '#be185d' },
-  { name: 'Professional Association Fees', nameAr: 'رسوم النقابات المهنية', color: '#7c3aed' },
-  { name: 'Professional Liability Insurance', nameAr: 'تأمين المسؤولية المهنية', color: '#dc2626' },
-  { name: 'Continuing Professional Education', nameAr: 'التعليم المهني المستمر', color: '#4f46e5' },
-  { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
+  { key: 'office_rent', name: 'Office Rent', nameAr: 'إيجار المكتب', color: '#6366f1' },
+  { key: 'utilities', name: 'Utilities', nameAr: 'المرافق', color: '#8b5cf6' },
+  { key: 'software_subscriptions', name: 'Software & Subscriptions', nameAr: 'البرمجيات والاشتراكات', color: '#3b82f6' },
+  { key: 'ai_services', name: 'AI Services', nameAr: 'خدمات الذكاء الاصطناعي', color: '#06b6d4' },
+  { key: 'cloud_hosting', name: 'Cloud & Hosting', nameAr: 'الاستضافة والسحابة', color: '#0ea5e9' },
+  { key: 'communication', name: 'Communication', nameAr: 'الاتصالات', color: '#10b981' },
+  { key: 'marketing_ads', name: 'Marketing & Ads', nameAr: 'التسويق والإعلانات', color: '#f59e0b' },
+  { key: 'travel_transport', name: 'Travel & Transport', nameAr: 'السفر والمواصلات', color: '#ef4444' },
+  { key: 'equipment_hardware', name: 'Equipment & Hardware', nameAr: 'المعدات والأجهزة', color: '#ec4899' },
+  { key: 'professional_services', name: 'Professional Services', nameAr: 'الخدمات المهنية', color: '#14b8a6' },
+  { key: 'insurance', name: 'Insurance', nameAr: 'التأمين', color: '#f97316' },
+  { key: 'bank_fees', name: 'Bank Fees', nameAr: 'رسوم بنكية', color: '#64748b' },
+  { key: 'taxes_licenses', name: 'Taxes & Licenses', nameAr: 'الضرائب والتراخيص', color: '#a855f7' },
+  { key: 'office_supplies', name: 'Office Supplies', nameAr: 'مستلزمات المكتب', color: '#22c55e' },
+  { key: 'salaries', name: 'Salaries', nameAr: 'معاشات', color: '#64748b' },
+  { key: 'court_filing_fees', name: 'Court & Filing Fees', nameAr: 'رسوم المحاكم والتسجيل', color: '#b45309' },
+  { key: 'notary_service_fees', name: 'Notary & Service Fees', nameAr: 'رسوم الكاتب العدل والتبليغ', color: '#0f766e' },
+  { key: 'experts_translation', name: 'Experts & Translation', nameAr: 'الخبراء والترجمة', color: '#be185d' },
+  { key: 'professional_association_fees', name: 'Professional Association Fees', nameAr: 'رسوم النقابات المهنية', color: '#7c3aed' },
+  { key: 'professional_liability_insurance', name: 'Professional Liability Insurance', nameAr: 'تأمين المسؤولية المهنية', color: '#dc2626' },
+  { key: 'continuing_professional_education', name: 'Continuing Professional Education', nameAr: 'التعليم المهني المستمر', color: '#4f46e5' },
+  { key: 'other', name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
 /**
@@ -77,18 +80,18 @@ export const LAW_FIRM_PRESET: readonly CategoryTemplate[] = [
  * Shopping, Communications & Internet and Health & Insurance.
  */
 export const PERSONAL_PRESET: readonly CategoryTemplate[] = [
-  { name: 'Groceries', nameAr: 'البقالة', color: '#22c55e' },
-  { name: 'Transportation', nameAr: 'المواصلات', color: '#0ea5e9' },
-  { name: 'Car', nameAr: 'السيارة', color: '#ef4444' },
-  { name: 'Rent', nameAr: 'الإيجار', color: '#6366f1' },
-  { name: 'Shopping', nameAr: 'التسوق', color: '#f97316' },
-  { name: 'Communications & Internet', nameAr: 'الاتصالات والإنترنت', color: '#3b82f6' },
-  { name: 'Health & Insurance', nameAr: 'الصحة والتأمين', color: '#d946ef' },
-  { name: 'Investments', nameAr: 'الاستثمارات', color: '#a855f7' },
-  { name: 'Leisure', nameAr: 'الترفيه', color: '#f59e0b' },
-  { name: 'Gifts', nameAr: 'الهدايا', color: '#ec4899' },
-  { name: 'Supplies', nameAr: 'المستلزمات', color: '#14b8a6' },
-  { name: 'Other', nameAr: 'أخرى', color: '#78716c' },
+  { key: 'groceries', name: 'Groceries', nameAr: 'البقالة', color: '#22c55e' },
+  { key: 'transportation', name: 'Transportation', nameAr: 'المواصلات', color: '#0ea5e9' },
+  { key: 'car', name: 'Car', nameAr: 'السيارة', color: '#ef4444' },
+  { key: 'rent', name: 'Rent', nameAr: 'الإيجار', color: '#6366f1' },
+  { key: 'shopping', name: 'Shopping', nameAr: 'التسوق', color: '#f97316' },
+  { key: 'communications_internet', name: 'Communications & Internet', nameAr: 'الاتصالات والإنترنت', color: '#3b82f6' },
+  { key: 'health_insurance', name: 'Health & Insurance', nameAr: 'الصحة والتأمين', color: '#d946ef' },
+  { key: 'investments', name: 'Investments', nameAr: 'الاستثمارات', color: '#a855f7' },
+  { key: 'leisure', name: 'Leisure', nameAr: 'الترفيه', color: '#f59e0b' },
+  { key: 'gifts', name: 'Gifts', nameAr: 'الهدايا', color: '#ec4899' },
+  { key: 'supplies', name: 'Supplies', nameAr: 'المستلزمات', color: '#14b8a6' },
+  { key: 'other', name: 'Other', nameAr: 'أخرى', color: '#78716c' },
 ];
 
 export type PresetName = 'lawFirm' | 'personal' | 'general';
@@ -105,4 +108,68 @@ const PRESETS: Record<PresetName, readonly CategoryTemplate[]> = { lawFirm: LAW_
 export function presetFor(profile: { writerOfRecord: ProfileWriter; profileType: ProfileType | null }, locale: 'en' | 'ar'): { preset: PresetName; categories: ExpenseCategoryInput[] } {
   const preset: PresetName = profile.writerOfRecord === 'MALAFAT' ? 'lawFirm' : profile.profileType === 'PERSONAL' ? 'personal' : 'general';
   return { preset, categories: PRESETS[preset].map((t) => ({ name: locale === 'ar' ? t.nameAr : t.name, color: t.color })) };
+}
+
+/**
+ * MUT-464 D5: names profiles were seeded with before a list changed. They are recognised so those categories follow
+ * the viewer's language too, and never seeded again: the Malafat firm's legal-only list (replaced in ac9c6be6) and the
+ * personal "Projects" (MAL-1137). Changing a live template's wording means moving the old pair here under the same key.
+ */
+export const RETIRED_TEMPLATES: readonly CategoryTemplate[] = [
+  { key: 'legal_research_tools', name: 'Legal Research Tools', nameAr: 'أدوات البحث القانوني', color: '#3b82f6' },
+  { key: 'case_management_software', name: 'Case Management Software', nameAr: 'برنامج إدارة القضايا', color: '#06b6d4' },
+  { key: 'bar_association_fees', name: 'Bar Association Fees', nameAr: 'رسوم نقابة المحامين', color: '#a855f7' },
+  { key: 'continuing_legal_education', name: 'Continuing Legal Education', nameAr: 'التعليم القانوني المستمر', color: '#8b5cf6' },
+  { key: 'court_filing', name: 'Court Filing Fees', nameAr: 'رسوم تقديم المحكمة', color: '#f97316' },
+  { key: 'process_service', name: 'Process Service', nameAr: 'خدمة الإجراءات', color: '#14b8a6' },
+  { key: 'expert_witnesses', name: 'Expert Witnesses', nameAr: 'الشهود الخبراء', color: '#ec4899' },
+  { key: 'document_management', name: 'Document Management', nameAr: 'إدارة المستندات', color: '#10b981' },
+  { key: 'client_entertainment', name: 'Client Entertainment', nameAr: 'ضيافة العملاء', color: '#f59e0b' },
+  { key: 'travel_expenses', name: 'Travel Expenses', nameAr: 'مصاريف السفر', color: '#0ea5e9' },
+  { key: 'projects', name: 'Projects', nameAr: 'المشاريع', color: '#3b82f6' },
+];
+
+/** Live entries first, so a key shows its current wording; a retired wording only adds names that resolve to it. */
+const NAMES_BY_KEY = new Map<string, { en: string; ar: string }>();
+const KEY_BY_NAME_KEY = new Map<string, string>();
+const NAME_KEYS_BY_KEY = new Map<string, Set<string>>();
+for (const t of [...GENERAL_PRESET, ...LAW_FIRM_PRESET, ...PERSONAL_PRESET, ...RETIRED_TEMPLATES]) {
+  if (!NAMES_BY_KEY.has(t.key)) NAMES_BY_KEY.set(t.key, { en: t.name, ar: t.nameAr });
+  KEY_BY_NAME_KEY.set(categoryNameKey(t.name), t.key);
+  KEY_BY_NAME_KEY.set(categoryNameKey(t.nameAr), t.key);
+  NAME_KEYS_BY_KEY.set(t.key, new Set([...(NAME_KEYS_BY_KEY.get(t.key) ?? []), categoryNameKey(t.name), categoryNameKey(t.nameAr)]));
+}
+
+/**
+ * MUT-464: every `nameKey` a category that is this preset entry can have (both languages, retired wordings too). The
+ * stores refuse a second category with one of them, so "Rent" can't sit next to a seeded "الإيجار".
+ */
+export function presetNameKeys(key: string): string[] {
+  return [...(NAME_KEYS_BY_KEY.get(key) ?? [])];
+}
+
+/** MUT-464: the preset entry a stored category name is, in either language; null for a name a person typed. */
+export function presetKeyForName(name: string): string | null {
+  return KEY_BY_NAME_KEY.get(categoryNameKey(name)) ?? null;
+}
+
+/**
+ * MUT-464: categories as the viewer reads them. A seeded name shows in `lang`; a typed one as typed. When two rows
+ * are the same entry (an "Other" next to an "أخرى" from before the cross-language check), only the oldest follows the
+ * language and carries `presetKey`, so the list never shows one name twice. Order is kept.
+ */
+export function displayCategoryNames<T extends { id: string; name: string; createdAt: Date }>(rows: readonly T[], lang: UserLocale): Array<T & { presetKey: string | null }> {
+  const holders = new Map<string, T>();
+  for (const row of rows) {
+    const key = presetKeyForName(row.name);
+    if (key === null) continue;
+    const held = holders.get(key);
+    if (!held || row.createdAt < held.createdAt || (row.createdAt.getTime() === held.createdAt.getTime() && row.id < held.id)) holders.set(key, row);
+  }
+  return rows.map((row) => {
+    const key = presetKeyForName(row.name);
+    if (key === null || holders.get(key) !== row) return { ...row, presetKey: null };
+    const names = NAMES_BY_KEY.get(key)!;
+    return { ...row, name: lang === 'ar' ? names.ar : names.en, presetKey: key };
+  });
 }

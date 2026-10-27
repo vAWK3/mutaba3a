@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { OFFICE_A, OFFICE_B, customer, office } from '../../support/portal';
+import { switchLanguage } from '../../support/you';
 import { FakeApi, category, expense, payment, todayInJerusalem, type FakeApiSeed, type StubReportRecords } from '../../support/portalApi';
 
 /**
@@ -412,3 +413,24 @@ test('A profile the person can\'t read is named and left out; alone, it explains
     await expect(page.getByRole('heading', { name: "You can't see this profile's payments" })).toBeVisible();
   });
 });
+
+/** MUT-464: Reports names a seeded category in the portal's language too, and a switch asks for the names again. */
+test('Where it went names a seeded category in the portal’s language, and switching renames it (MUT-464)', { tag: '@portal.reports.categories-follow-language' }, async ({ page, step }) => {
+  const rent = category(3, 'Office Rent', { presetKey: 'office_rent', ar: 'إيجار المكتب' });
+  const api = world({ categories: [rent], reports: { [OFFICE_A]: { payments: [payment(1, { customerId: client.id, amount: '1500.00', receivedOn: on(0, 1) })], expenses: [expense(1, { amount: '400.00', categoryId: rent.id, occurredOn: on(0, 1) })] } } });
+  const whereItWent = page.locator('.hp-report-lists .hp-report-section').first();
+
+  await step('Open Reports in Arabic: Where it went names إيجار المكتب', async () => {
+    await openReports(page, api, 'ar');
+    await expect(whereItWent).toContainText('إيجار المكتب');
+    expect(api.last('GET', /^\/v1\/expense-categories$/)?.headers['accept-language']).toBe('ar');
+  });
+
+  await switchLanguage(page, step, 'EN', 'ltr');
+
+  await step('The names are asked for again in English: Where it went says Office Rent', async () => {
+    await expect(whereItWent).toContainText('Office Rent');
+    expect(api.last('GET', /^\/v1\/expense-categories$/)?.headers['accept-language']).toBe('en');
+  });
+});
+

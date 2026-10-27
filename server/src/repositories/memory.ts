@@ -5,6 +5,7 @@ import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
+import { presetKeyForName } from '../expenses/presets.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { isDueForPurge } from '../accounts/closure.js';
@@ -2255,7 +2256,7 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly expenseCategories: ExpenseCategoryRepository = {
     create: async (organizationId, input: ExpenseCategoryInput, at) => {
       if (!this.orgs.has(organizationId)) throw new ForeignKeyViolation('expense_categories.organizationId');
-      if (this.categoryNamed(organizationId, input.name)) throw new UniqueViolation('expense_categories.name');
+      if (this.categoryNamed(organizationId, input.name) || this.presetTwin(organizationId, input.name, null)) throw new UniqueViolation('expense_categories.name');
       const record: ExpenseCategoryRecord = { id: randomUUID(), organizationId, name: input.name, color: input.color, archivedAt: null, version: 1, createdAt: at, updatedAt: at };
       this.expCats.set(record.id, record);
       return { ...record };
@@ -2280,7 +2281,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (c.version !== expectedVersion) return { kind: 'stale', record: { ...c } };
       if (patch.name !== undefined) {
         const taken = this.categoryNamed(organizationId, patch.name);
-        if (taken && taken.id !== id) throw new UniqueViolation('expense_categories.name');
+        if ((taken && taken.id !== id) || this.presetTwin(organizationId, patch.name, c)) throw new UniqueViolation('expense_categories.name');
         c.name = patch.name;
       }
       if (patch.color !== undefined) c.color = patch.color;
@@ -3040,6 +3041,13 @@ export class MemoryLedgerStore implements LedgerStore {
       return links;
     },
   };
+
+  /** MUT-464: another category that is the same preset entry as `name`, in either language (Prisma's refusePresetTwin). */
+  private presetTwin(organizationId: string, name: string, renamed: ExpenseCategoryRecord | null): boolean {
+    const key = presetKeyForName(name);
+    if (key === null || (renamed && presetKeyForName(renamed.name) === key)) return false;
+    return [...this.expCats.values()].some((c) => c.organizationId === organizationId && c.id !== renamed?.id && presetKeyForName(c.name) === key);
+  }
 
   private categoryNamed(organizationId: string, name: string): ExpenseCategoryRecord | undefined {
     const key = categoryNameKey(name);

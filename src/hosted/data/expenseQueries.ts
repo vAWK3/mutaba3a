@@ -6,6 +6,8 @@ import type { ExpenseFilters } from './filters';
 import { invalidateGroups } from './expenseGroupQueries';
 import { localFiles } from './download';
 import { isLocalBlobUrl } from '../session/localBackendContract';
+import { useLanguage } from '../../lib/i18n/core';
+import type { Language } from '../../lib/i18n/types';
 
 /**
  * The portal's expense query and mutation hooks (MUT-44), in their own file
@@ -55,9 +57,18 @@ export function useExpense(profileId: string, expenseId: string) {
   });
 }
 
+/**
+ * MUT-464: a profile's categories in one portal language (the server names seeded ones in it), archived ones too
+ * when `withArchived`. Under `profileKey(profileId, 'expense-categories')`, so invalidating that refreshes every one.
+ */
+export function expenseCategoriesKey(profileId: string, language: Language, withArchived = false) {
+  return withArchived ? profileKey(profileId, 'expense-categories', 'with-archived', language) : profileKey(profileId, 'expense-categories', language);
+}
+
 export function useExpenseCategories(profileId: string) {
+  const { language } = useLanguage();
   return useQuery({
-    queryKey: profileKey(profileId, 'expense-categories'),
+    queryKey: expenseCategoriesKey(profileId, language),
     queryFn: () => api.expenseCategories(profileId),
     select: (data) => data.items,
     staleTime: STALE_MS,
