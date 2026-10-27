@@ -9,7 +9,9 @@
 #     stage "redirect");
 #   - from stage "live", gives it WEBAUTHN_RP_ID = the apex (MUT-115, ADR-190): the passkey
 #     relying party. Passkeys are bound to it for life, so it is never set before the apex
-#     serves the portal's apple-app-site-association (vite.config.ts netlifyRedirects).
+#     serves the portal's apple-app-site-association (vite.config.ts netlifyRedirects);
+#   - from stage "live", gives it WEBSITE_ORIGIN = https://<apex> (MUT-468): the Privacy link
+#     in every mail's footer.
 # While the domain is null (today) nothing here exists and the plan is unchanged.
 # config/hosts.ts derives the same values; both are tested against config/fixtures/.
 
@@ -36,6 +38,8 @@ locals {
     local.front_door_enabled ? { PORTAL_ORIGIN = local.front_door_portal_origin } : {},
     local.domain_stage == "redirect" ? { PORTAL_LEGACY_REDIRECT = "true" } : {},
     contains(["live", "redirect"], local.domain_stage) ? { WEBAUTHN_RP_ID = local.domain } : {},
+    # MUT-468: the website on the apex, for the Privacy link in every mail's footer.
+    contains(["live", "redirect"], local.domain_stage) ? { WEBSITE_ORIGIN = "https://${local.domain}" } : {},
   )
 
   # What users reach the portal on: the new host from stage live on, else the legacy one

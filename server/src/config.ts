@@ -87,6 +87,15 @@ const envSchema = z.object({
   /** The portal's public origin; non-GET session requests must come from it. Unset = compare with the request's own origin. */
   PORTAL_ORIGIN: z.string().url().optional(),
   /**
+   * MUT-468: the website's origin (https://<apex>, Terraform sets it from config/hosts.json at stage live), for the
+   * Privacy link in every mail's footer. Unset = mails carry no Privacy link. An https origin only: no path, no query.
+   */
+  WEBSITE_ORIGIN: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith('https://') && new URL(value).origin === value, 'must be an https origin with no path, e.g. https://example.com')
+    .optional(),
+  /**
    * MUT-115 (ADR-190, D2): the WebAuthn relying-party ID, the apex domain (Terraform sets it from config/hosts.json at
    * stages live/redirect). Unset = no passkeys: every passkey route answers 404. WEBAUTHN_ORIGINS (comma list)
    * replaces the derived origins (PORTAL_ORIGIN and https://<rp id>) for local development; each must be the RP ID or
@@ -353,6 +362,10 @@ function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number
   }
   if (config.MAILER === 'resend') {
     for (const name of RESEND_REQUIRED) if (config[name] === undefined) refuse(name, 'MAILER=resend needs it');
+  }
+  // MUT-468: the mail art is served by the portal; without its origin every production mail would go out without it.
+  if (config.NODE_ENV === 'production' && config.MAILER === 'resend' && !config.PORTAL_ORIGIN) {
+    refuse('PORTAL_ORIGIN', 'production mail needs it: the mail art is served from <PORTAL_ORIGIN>/mail/v1');
   }
   if (config.RESEND_WEBHOOK_SECRET && !config.MAIL_FROM_ADDRESS) refuse('MAIL_FROM_ADDRESS', 'the Resend webhook keeps only events sent from this address\'s domain, so it needs it');
   for (const name of ['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO'] as const) {
