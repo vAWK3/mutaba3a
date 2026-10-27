@@ -1,3 +1,4 @@
+import { presetKeyForName } from '../../../../server/src/expenses/presets.js';
 import { MemoryLedgerStore } from '../../../../server/src/repositories/memory.js';
 import { localBlobKey } from '../../session/localBackendContract.js';
 import { backedUpKeys, MemoryAttachmentStorage } from '../attachments.js';
@@ -143,11 +144,16 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
         break;
       case 'category': {
         const existing = await categoriesOf(profileId!);
-        const found = existing.get(op.name.toLocaleLowerCase());
+        // MUT-464: by name, then by preset entry — a backup's "إيجار المكتب" is the profile's seeded "Office Rent".
+        const presetKey = presetKeyForName(op.name);
+        const found = existing.get(op.name.toLocaleLowerCase()) ?? (presetKey ? existing.get(presetEntry(presetKey)) : undefined);
         if (found) result = { id: found };
         else {
           result = await created(await send('POST', '/v1/expense-categories', profileId, { name: op.name, ...(op.color ? { color: op.color } : {}) }, key));
-          if (result) existing.set(op.name.toLocaleLowerCase(), result.id);
+          if (result) {
+            existing.set(op.name.toLocaleLowerCase(), result.id);
+            if (presetKey) existing.set(presetEntry(presetKey), result.id);
+          }
         }
         break;
       }
@@ -199,8 +205,8 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
     if (!byName) {
       const response = await send('GET', '/v1/expense-categories', profileId);
       if (response.status >= 500) throw new CarryOverAborted(response.status, 'expense-categories');
-      const body = (await response.json().catch(() => ({ items: [] }))) as { items?: Array<{ id: string; name: string }> };
-      byName = new Map((body.items ?? []).map((c) => [c.name.toLocaleLowerCase(), c.id]));
+      const body = (await response.json().catch(() => ({ items: [] }))) as { items?: Array<{ id: string; name: string; presetKey?: string | null }> };
+      byName = new Map((body.items ?? []).flatMap((c) => [[c.name.toLocaleLowerCase(), c.id] as const, ...(c.presetKey ? [[presetEntry(c.presetKey), c.id] as const] : [])]));
       categoriesByProfile.set(profileId, byName);
     }
     return byName;
@@ -236,6 +242,11 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
 }
 
 /** The op's required links all arrived (else null); its optional ones are kept when they did and dropped when not. */
+/** A category map entry for a preset key; the prefix can't collide with a lower-cased name, which never holds one. */
+function presetEntry(presetKey: string): string {
+  return `\u0000preset:${presetKey}`;
+}
+
 function resolveLinks(op: CarryOp, ids: ReadonlyMap<string, string>): { links: Partial<Record<'category' | 'project' | 'customer', string>>; dropped: boolean } | null {
   const optional = OPTIONAL_LINKS[op.op] ?? [];
   const links: Partial<Record<'category' | 'project' | 'customer', string>> = {};
