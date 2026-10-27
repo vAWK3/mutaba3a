@@ -205,6 +205,36 @@ export async function ownedFirmRequest(label: string, password: string): Promise
   return { email, userId, profileId, profileName };
 }
 
+/**
+ * MUT-462: an operator-made firm with two members, one of whom has asked for firm features: the request whose owners the
+ * operator chooses. The product only lets an owner ask on a profile they own, so the request is marked in the QA
+ * database (as `expireSignupLinks` ages a link), the way MUT-300's pre-portal requests were recorded.
+ */
+export async function operatorFirmRequest(label: string): Promise<{ organizationId: string; name: string; requester: { id: string; email: string }; other: { id: string; email: string } }> {
+  const { origin, container, database } = liveState();
+  const name = `QA Operator Firm ${Date.now().toString(36)}`;
+  const made = await fetch(`${origin}/admin/v1/organizations`, { method: 'POST', headers: admin(), body: JSON.stringify({ name, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }) });
+  expect(made.status, `create firm ${await made.clone().text()}`).toBe(201);
+  const organizationId = ((await made.json()) as { id: string }).id;
+  const members: Array<{ id: string; email: string }> = [];
+  for (const who of ['requester', 'colleague']) {
+    const email = address(`${label}-${who}`);
+    const res = await fetch(`${origin}/admin/v1/users`, { method: 'POST', headers: admin(), body: JSON.stringify({ email, displayName: who === 'requester' ? 'Rana Saleh' : 'Omar Haddad', organizationId, locale: 'en' }) });
+    expect(res.status, `create member ${await res.clone().text()}`).toBe(201);
+    members.push({ id: ((await res.json()) as { user: { id: string } }).user.id, email });
+  }
+  const sql = `UPDATE organizations SET "firmRequestedAt" = now(), "firmRequestedByUserId" = '${members[0]!.id}' WHERE id = '${organizationId}'`;
+  execFileSync('docker', ['exec', container, 'psql', '-U', 'mutaba3a', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
+  return { organizationId, name, requester: members[0]!, other: members[1]! };
+}
+
+/** MUT-462: a member's role on a profile, as the admin token reads the organization. */
+export async function memberRole(organizationId: string, userId: string): Promise<string | undefined> {
+  const res = await fetch(`${liveState().origin}/admin/v1/organizations/${organizationId}`, { headers: admin() });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { members: Array<{ userId: string; role: string }> }).members.find((m) => m.userId === userId)?.role;
+}
+
 /** MUT-462: what the admin token reads of a profile (its firm state) and its audit trail, newest first. */
 export async function adminOrganization(organizationId: string): Promise<{ firm: { enabledAt: string | null; requestedAt: string | null }; ownerUserId: string | null }> {
   const res = await fetch(`${liveState().origin}/admin/v1/organizations/${organizationId}`, { headers: admin() });

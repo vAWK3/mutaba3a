@@ -7,8 +7,8 @@ tier: secondary
 # (support/passkeys.ts); waiting signups are made as /signup and /setup make them (support/selfService.ts pendingSignup).
 # MUT-461 adds Accounts: find an account by email and act on it (sign out everywhere, disable/enable, a reset link).
 # MUT-462 adds billing grants and feature flags on the account page, and the Firms tab (enable or decline a request).
-# Only a profile's owner can ask for firm features, so the live firm request is an owned Business profile's; the
-# owner picker for an operator-made firm is covered by OperatorFirmsPage.test.tsx.
+# Only a profile's owner can ask for firm features, so a live request is an owned Business profile's; an operator-made
+# firm's request (the one whose owners the operator chooses) is marked in the QA database (support/selfService.ts).
 paths:
   - src/hosted/pages/operator/**
   - src/hosted/operator/**
@@ -140,10 +140,11 @@ features:
     title: Grant a person billing coverage with a reason and an expiry, then revoke it
     tickets: [MUT-462]
     steps:
-      - Open their account and press Grant coverage
+      - On a 375 px phone, open their account and press Grant coverage
       - Choose Freelancer, give the reason "QA pilot comp", choose 30 days, and grant with the passkey
       - Revoke the grant and confirm
     expect:
+      - The drawer and the account page fit a 375 px phone with no sideways scroll
       - The drawer opens at ?grant=new and closes after granting, with the toast "Coverage granted to <email>"
       - The grant is listed as Freelancer · QA pilot comp, until a day 30 days out
       - The CLI's own list shows the grant, granted by operator:<the operator's id>
@@ -152,13 +153,13 @@ features:
     title: Turn Connect Claude on for a person, then off with a confirm
     tickets: [MUT-462]
     steps:
-      - Open their account; the Features group lists Connect Claude, off
+      - On a 375 px phone, open their account; the Features group lists Connect Claude, off
       - Turn it on (confirming with the passkey)
       - Turn it off and confirm
     expect:
       - Turning it on needs no confirm beyond the passkey, and the switch reads on
       - The CLI's holders of agent_access include the person
-      - Turning it off says they lose Claude access and asks first; after confirming the switch reads off and they are no longer a holder
+      - Turning it off says they lose Claude access and asks first, with no sideways scroll; after confirming the switch reads off and they are no longer a holder
   - id: firm-request-enable
     title: Enable firm features for a waiting request from the Firms tab
     tickets: [MUT-462]
@@ -182,3 +183,14 @@ features:
       - The page reads right to left with no sideways scroll, and the asker's address reads left to right
       - The confirm says the profile stays a regular profile and its owner can ask again
       - The request leaves the list; the profile has no firm features and no pending request, and the audit records firm.request_declined by the operator's id
+  - id: firm-request-owners
+    title: Enable firm features for an operator firm, choosing its owners
+    tickets: [MUT-462]
+    steps:
+      - A member of a firm we made has asked for firm features
+      - Press Enable on its row; tick the colleague too
+      - Enable with the passkey
+    expect:
+      - The members are listed with the one who asked already ticked, and the confirm names the owners as they are ticked
+      - The toast says firm features are on, and the row leaves the list
+      - Both ticked members are owners of the firm, and the audit records firm.enabled by the operator's id
