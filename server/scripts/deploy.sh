@@ -66,7 +66,7 @@ source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 source "${SERVER_DIR}/scripts/lib/db-checks.sh"
 # shellcheck source=lib/rollback.sh
 source "${SERVER_DIR}/scripts/lib/rollback.sh"
-# MUT-381 / MUT-360 / MUT-148 / MUT-359: the release guards with this release's own terraform arguments; run inside TF_DIR.
+# MUT-381 / MUT-360 / MUT-148 / MUT-359 / MUT-471: the release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
   (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \

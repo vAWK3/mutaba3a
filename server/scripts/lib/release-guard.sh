@@ -339,16 +339,18 @@ guard_min_build_release() {
       }).join(" "));
     });' "${MIN_BUILD_ENV_NAMES}")" || die "could not parse ${service}'s env; refusing to release on a guess"
 
-  local i=0 want have changes="" names="" unnamed=""
+  local i=0 want have from to changes="" names="" unnamed=""
   local -a plan_v live_v
   read -r -a plan_v <<<"${plan}"
   read -r -a live_v <<<"${live}"
   for name in ${MIN_BUILD_ENV_NAMES}; do
     want="${plan_v[i]}"; have="${live_v[i]:-?}"; i=$((i + 1))
     [[ "${have}" == "?" || ( "${name}" != "MIN_BUILD_CHECK_DISABLED" && ! "${have}" =~ ^([1-9][0-9]*|unset)$ ) ]] \
-      && die "could not read ${service}'s ${name} (not a whole number or plain value); refusing to release on a guess"
+      && die "could not read ${service}'s ${name} (not a build number of at least 1, or not a plain value); refusing to release on a guess"
     [[ "${want}" == "${have}" ]] && continue
-    changes+=$'\n'"  ${name}: production has ${have}, this checkout would set ${want} ($(tr '[:upper:]' '[:lower:]' <<<"${name}"))"
+    from="${have}"; [[ "${have}" == "unset" ]] && from="none"
+    to="set ${want}"; [[ "${want}" == "unset" ]] && to="remove it"
+    changes+=$'\n'"  ${name}: production has ${from}, this checkout would ${to} ($(tr '[:upper:]' '[:lower:]' <<<"${name}"))"
     names+="${names:+,}${name}"
     [[ "${allowed}" == *" ${name} "* ]] || unnamed+=" ${name}"
   done

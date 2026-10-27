@@ -570,7 +570,7 @@ function minBuildGuard(o: MinBuildOpts) {
   const live = o.live ?? {};
   const env = typeof live === 'string' ? [] : [
     { name: 'PORT', value: '8080' },
-    { name: 'DATABASE_URL', valueSource: { secretKeyRef: { secret: 'db', version: 'latest' } } },
+    { name: 'DATABASE_URL', valueFrom: { secretKeyRef: { name: 'db', key: 'latest' } } },
     ...Object.entries(live).map(([name, value]) => ({ name, value })),
     ...(o.liveExtra ?? []),
   ];
@@ -611,19 +611,20 @@ describe('guard_min_build_release (MUT-471, deploy.sh steps 0, 3 and 4)', { time
     ['drops the kill switch', { live: { IOS_MIN_BUILD: '9', MIN_BUILD_CHECK_DISABLED: 'true' }, plan: { IOS_MIN_BUILD: '9' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'true', 'unset'],
     ['turns the kill switch on', { live: {}, plan: { MIN_BUILD_CHECK_DISABLED: 'true' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'unset', 'true'],
   ] as const)('refuses a release that %s unless it is named, and names the variable', (_what, values, name, tfvar, from, to) => {
+    const change = `${name}: production has ${from === 'unset' ? 'none' : from}, this checkout would ${to === 'unset' ? 'remove it' : `set ${to}`}`;
     const r = minBuildGuard(values);
     expect(r.status).not.toBe(0);
-    expect(r.err).toContain(`${name}: production has ${from}, this checkout would set ${to} (${tfvar})`);
+    expect(r.err).toContain(`${change} (${tfvar})`);
     expect(r.err).toContain(`ALLOW_MIN_BUILD_CHANGE=${name}`);
     const named = minBuildGuard({ ...values, allow: name });
     expect(named.out).toMatch(/PASSED/);
-    expect(named.err).toContain(`${name}: production has ${from}, this checkout would set ${to}`);
+    expect(named.err).toContain(change);
   });
 
   it('counts a live MIN_BUILD_CHECK_DISABLED="false" as a value the release would remove', () => {
     const r = minBuildGuard({ live: { MIN_BUILD_CHECK_DISABLED: 'false' } });
     expect(r.status).not.toBe(0);
-    expect(r.err).toContain('MIN_BUILD_CHECK_DISABLED: production has false, this checkout would set unset');
+    expect(r.err).toContain('MIN_BUILD_CHECK_DISABLED: production has false, this checkout would remove it');
   });
 
   it('lists every change and prints the whole override when only some are named', () => {
@@ -670,7 +671,7 @@ describe('guard_min_build_release (MUT-471, deploy.sh steps 0, 3 and 4)', { time
     expect(minBuildGuard({ planWords: 'tonumber(null) unset unset unset unset' }).err).toMatch(/terraform console gave/);
     expect(minBuildGuard({ planWords: '8 unset unset unset false' }).err).toMatch(/terraform console gave/);
     expect(minBuildGuard({ live: { IOS_MIN_BUILD: 'eight' } }).err).toMatch(/could not read mutaba3a-api's IOS_MIN_BUILD/);
-    expect(minBuildGuard({ live: {}, liveExtra: [{ name: 'IOS_MIN_BUILD', valueSource: { secretKeyRef: { secret: 's' } } }] }).err)
+    expect(minBuildGuard({ live: {}, liveExtra: [{ name: 'IOS_MIN_BUILD', valueFrom: { secretKeyRef: { name: 's', key: '1' } } }] }).err)
       .toMatch(/could not read mutaba3a-api's IOS_MIN_BUILD/);
   });
 
@@ -685,8 +686,10 @@ describe('guard_min_build_release (MUT-471, deploy.sh steps 0, 3 and 4)', { time
 describe('deploy.sh wires the min-build guard (MUT-471)', () => {
   const deploy = readFileSync(DEPLOY, 'utf-8');
   it('runs guard_min_build_release before bootstrap, and guard_release() runs it too', () => {
-    expect(deploy.indexOf('guard_min_build_release "')).toBeGreaterThan(-1);
-    expect(deploy.indexOf('guard_min_build_release "')).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
+    // The step-0 call stands on its own line; the first textual match is inside guard_release(), which also precedes ensure_bootstrap.
+    const step0 = deploy.search(/^guard_min_build_release "/m);
+    expect(step0).toBeGreaterThan(-1);
+    expect(step0).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
     const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
     expect(wrapper).toMatch(/guard_min_build_release/);
   });
