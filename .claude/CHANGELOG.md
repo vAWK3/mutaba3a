@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-468: mails stay light in Apple Mail's dark mode
+
+**Why:** Basel's client check after api-v0.10.0: Apple Mail repainted the new mails dark around their opaque art (light squares on a dark band, lavender text). `color-scheme: light` is only a preference; `light only` opts out. ADR-214 amendment.
+
+### Fixed
+- `server/src/email/templates/layout.ts`: every mail declares `<meta name="color-scheme" content="light only">` and `<meta name="supported-color-schemes" content="light only">`, and `color-scheme:light only` inline on the body and the outer table. Apple Mail and iOS Mail show the light design in dark mode. Gmail's and Outlook's dark modes ignore opt-outs; MUT-484 fixes the art there.
+
+### Technical
+- `templates.test.ts`: every template, both languages, carries the three opt-outs, and the `<html lang dir>` tag the regression contract pins is unchanged.
+
 ## [Unreleased] - 2026-10-27 — MUT-488: summaries total a matter's other-currency Owed in its own currency (ADR-218)
 
 **Why:** found in MUT-478's qa-reconcile. The customer summary added every receivable of a matter to the block for the matter's currency, so a USD Owed on an ILS matter raised the ILS outstanding by its USD minor units (ADR-004). That also broke the statement's promise "closing balance = summary outstanding − unallocated", and Malafat's Money pages (MAL-1410) read both.
