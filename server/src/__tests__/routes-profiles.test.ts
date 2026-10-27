@@ -25,7 +25,7 @@ const admin = { 'x-admin-token': ADMIN_TOKEN };
 const COOKIE = '__Host-mut_session';
 const SAME_ORIGIN = { origin: 'http://localhost' };
 
-function harness() {
+function harness(options: { maxOwnedProfiles?: number } = {}) {
   const store = new MemoryLedgerStore();
   const clock = { now: new Date('2026-10-14T09:00:00Z') };
   const app = createApp({
@@ -37,6 +37,7 @@ function harness() {
     version: '0.1.0-test',
     now: () => clock.now,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: true, trustedProxyHops: 1 },
+    maxOwnedProfiles: options.maxOwnedProfiles,
   });
   return { app, store, clock };
 }
@@ -160,6 +161,17 @@ describe('POST /v1/profiles', () => {
     expect(refused.status).toBe(409);
     expect((await read(refused)).error).toMatchObject({ code: 'CONFLICT', details: { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES } });
     expect(await h.store.organizations.countOwnedBy(u.userId)).toBe(MAX_OWNED_PROFILES);
+  });
+
+  it('stops at the local QA override instead, and /v1/me publishes it (MUT-474)', async () => {
+    const h = harness({ maxOwnedProfiles: MAX_OWNED_PROFILES + 2 });
+    const u = await person(h);
+    for (let i = 1; i < MAX_OWNED_PROFILES + 2; i++) expect((await h.app.request('/v1/profiles', json(STUDIO, u.me(idem())))).status).toBe(201);
+    const refused = await h.app.request('/v1/profiles', json(STUDIO, u.me(idem())));
+    expect(refused.status).toBe(409);
+    expect((await read(refused)).error).toMatchObject({ details: { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES + 2 } });
+    const me = await read(await h.app.request('/v1/me', { headers: u.me() }));
+    expect(me.limits).toEqual({ ownedProfiles: MAX_OWNED_PROFILES + 2, maxOwnedProfiles: MAX_OWNED_PROFILES + 2 });
   });
 
   it('accepts a device session, so the phone can create one too (FC1)', async () => {

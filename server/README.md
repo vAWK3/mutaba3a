@@ -10,6 +10,8 @@ The desktop/PWA app in `../src` is unchanged and still works fully offline. This
 docker run -d --name mutaba3a-test-pg -p 54329:5432 \
   -e POSTGRES_PASSWORD=mutaba3a -e POSTGRES_USER=mutaba3a -e POSTGRES_DB=mutaba3a_test postgres:16-alpine
 cp .env.example .env            # DATABASE_URL points at the container
+# real secrets in place of the replace-with-… placeholders, which the server refuses (MUT-472)
+perl -pi -e 's/replace-with-\S+/my $s = qx(openssl rand -hex 32); chomp $s; $s/ge' .env
 npm install                     # .npmrc sets legacy-peer-deps (npm 10.9 arborist bug with zod 4 peers)
 npm run prisma:migrate:deploy
 npm run dev                     # http://localhost:8787

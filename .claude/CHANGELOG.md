@@ -44,6 +44,33 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-472: the API refuses the placeholder secrets from server/.env.example
+
+**Why:** the example's `replace-with-…` admin token and session pepper passed the 32-character minimum, so a copied example served `/admin/v1/*` with a token anyone can read in the repo. ADR-211.
+
+### Fixed
+- `server/src/config.ts`: `secret(name)` builds the schema of every 32-character secret (`MUTABA3A_ADMIN_TOKEN`, `SESSION_TOKEN_PEPPER`, `FRONT_DOOR_TOKEN`, `MUTABA3A_JOB_TOKEN`, `OAUTH_DERIVE_KEY`) and refuses a value starting with `replace-with-`, naming the variable.
+
+### Changed
+- `server/README.md` "Run locally": a one-liner puts real secrets in the copied `.env`. `server/.env.example` comments say the placeholders are refused (values unchanged).
+
+### Technical
+- Checked: the QA harnesses (`qa/support/*-live.mjs`), the server-ci smoke test, the server test fixtures and Terraform (`random_password`) use no placeholder.
+- Files: `server/src/config.ts`, `server/src/__tests__/config.test.ts`, `server/.env.example`, `server/README.md`, `.claude/designs/mut-472-placeholder-secrets.md`.
+
+## [Unreleased] - 2026-10-27 — MUT-474: a dev server can raise the owned-profile cap for local QA
+
+**Why:** 21 phone QA flows each make a throwaway profile, and the server has no delete. `disown-qa-profiles.sh` frees the QA account's slots once before each run, leaving 4, so a combined run of more of them failed at setup with 409 `PROFILE_LIMIT`.
+
+### Added
+- `server/src/config.ts`: `QA_MAX_OWNED_PROFILES` (6–1000), refused at boot in production and staging. Unset = the product limit, `MAX_OWNED_PROFILES` (6).
+- `server/src/routes/profiles.ts`: `ownedProfileCap(c)`, the cap this server applies. It reaches requests the way `BILLING_GATE` does (`index.ts` → `createApp` → `createApiShell` → the `maxOwnedProfiles` context variable).
+
+### Changed
+- POST /v1/profiles refuses at `ownedProfileCap(c)` (its 409 `details.limit` says which), and every `/v1/me` answer (`me.ts`, `sessions.ts`, `device-sessions.ts`) publishes it as `limits.maxOwnedProfiles`. Unchanged wherever the override is unset.
+- `server/.env.example`: documents the override.
+- Tests: `config.test.ts` (unset, accepted in development and test, never below 6, refused in production and staging); `routes-profiles.test.ts` (creates past 6 up to the override, then 409 with the override as the limit; `/v1/me` publishes it).
+
 ## [Unreleased] - 2026-10-27 — MUT-457: the phone minimum build can be set from Terraform
 
 **Why:** MUT-293's minimum-build gate read its floors from env vars that nothing in Terraform set, and a hand-set value was overwritten by the next apply. Its kill switch read `"false"` as on.

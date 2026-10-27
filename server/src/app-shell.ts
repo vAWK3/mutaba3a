@@ -17,6 +17,8 @@ export interface ApiShellDependencies {
   billingGate?: boolean;
   /** MUT-370 (D9): whether this server offers passkeys (WEBAUTHN_RP_ID set). Absent = off (the portal's local mode). */
   passkeys?: boolean;
+  /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES). Absent = the product limit. */
+  maxOwnedProfiles?: number | undefined;
 }
 
 /**
@@ -47,6 +49,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('now', now);
     c.set('billingGate', deps.billingGate ?? false);
     c.set('passkeys', deps.passkeys ?? false);
+    c.set('maxOwnedProfiles', deps.maxOwnedProfiles);
     // MUT-447 (review): a handled failure inside a partial answer is logged and reported like an unhandled one, so it
     // leaves a trace even where the reporter is a no-op (local mode, tests).
     c.set('reportError', (err: unknown) => {

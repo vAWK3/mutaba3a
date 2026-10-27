@@ -4019,6 +4019,14 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `qa/support/port-check.mjs` | probe | Not in a suite (QA tooling): a scratch probe showed it refuses when a server holds the port on `::`, `::1` or `127.0.0.1`, and passes when the port is free (review D1). |
 | Release-QA, `portal-selfservice` | 2 specs run | `@portal-selfservice.passkeys.add` and `.sign-in` pass (2026-10-27, d88a7a14, again at 0872e3d1 with the port check): the harness's API on 127.0.0.1 still serves the `http://localhost:8791` origin to Chromium. While up: `lsof` shows `127.0.0.1:8791`, `curl` 127.0.0.1 and localhost answer 200, the LAN address is refused, and the listening log says `"address":"127.0.0.1"`. No `portal-live` run (review D6). |
 
+## MUT-472 — placeholder secrets refused at boot (2026-10-27, ADR-211)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` | +8 | The `.env.example` placeholder is refused as each of the five secrets, with a `ConfigError` naming the variable; the admin token exactly as `.env.example` ships it (read from the file) is refused; the prefix matches in any case; a real secret with `replace-with-` later in it still boots. |
+
+Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports both shipped placeholders (admin token, pepper) and does not boot.
+
 ## MUT-471 — the min-build release guard (2026-10-27)
 
 | Test | Cases | What it proves |
