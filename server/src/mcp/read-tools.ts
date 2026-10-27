@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld } from '../agreements/compose.js';
 import { todayIn } from '../dates.js';
 import { parseExpenseAmount } from '../expenses/compose.js';
+import { displayCategoryNames } from '../expenses/presets.js';
 import { MATCH_DATE_WINDOW_DAYS, dateWindow, rankMatches, type MatchCandidate, type MatchProbe } from '../expenses/similarity.js';
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { SUPPORTED_CURRENCIES, formatMoney, type Currency } from '../money.js';
@@ -189,7 +190,9 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
       runTool(ctx, 'list_categories', CATEGORIES_OUTPUT, async () => {
         const organization = await agentProfile(ctx, profileId);
         // Never seeds the preset (GET /v1/expense-categories does): a read tool writes nothing.
-        const categories = await ctx.store.expenseCategories.list(organization.id, { includeArchived: includeArchived ?? false });
+        // MUT-464: seeded names in the person's language (an agent has no UI language); the whole list decides which row of a cross-language pair follows it.
+        const all = displayCategoryNames(await ctx.store.expenseCategories.list(organization.id, { includeArchived: true }), ctx.agent.user.locale);
+        const categories = includeArchived ? all : all.filter((c) => c.archivedAt === null);
         const result = pageOf(categories.map((c) => ({ id: c.id, name: c.name, archived: c.archivedAt !== null })), `list_categories:${organization.id}:${includeArchived ?? false}`, cursor, limit);
         return categories.length === 0 ? { ...result, hint: 'This profile has no categories yet. The person can open it in MTB3A once to get the default set; an expense can also be filed without one.' } : result;
       }),
