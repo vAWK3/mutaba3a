@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { webauthnConfigOf } from './auth/webauthn.js';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,11 @@ export const SENTRY_EU_DSN =/^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
+  /**
+   * MUT-463: the address to listen on; local QA servers set 127.0.0.1. Unset = Node's default, every interface (Cloud
+   * Run). IP addresses only: a name binds to its first resolved address, and localhost resolves to ::1 first on macOS.
+   */
+  HOST: z.string().refine((value) => isIP(value) !== 0, 'must be an IP address, such as 127.0.0.1').optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().url(),
   MUTABA3A_ADMIN_TOKEN: z.string().min(32, 'MUTABA3A_ADMIN_TOKEN must be at least 32 characters'),

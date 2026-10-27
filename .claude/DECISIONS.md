@@ -5564,3 +5564,25 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A one-time copy of the portal's `verdictBody` builder: single-currency, and it can't detect drift.
 - Phone-only fixtures, with parity left to one live QA flow (Basel chose D5 A).
+
+## ADR-210: The API Listens Where HOST Says, an IP Address; Unset Keeps Every Interface (MUT-463)
+
+**Status:** Accepted (2026-10-27, MUT-463). Plan and eng review (D1–D6): `.claude/designs/mut-463-api-host-binding.md`. Numbered 210 because MUT-459 and MUT-464 both claim 208 on their branches.
+
+**Context:** `serve()` was called with no hostname, so every copy of the API listened on every interface. Cloud Run needs that. The local QA copies (portal-live :8790, portal-selfservice :8791, Malafat's :8795) run with admin tokens committed to the repo, and `server/.env.example` ships a placeholder token long enough to pass validation, so while any of them ran, anyone on the same network could call `/admin/v1/*`.
+
+**Decision:**
+1. **`HOST` is optional and takes an IP address only** (`net.isIP`): `127.0.0.1`, `::1`, `0.0.0.0`, `::`. A name is refused at boot: Node binds a name to its first resolved address, and on macOS `localhost` resolves to `::1` first, which would break every client that dials `127.0.0.1`.
+2. **Unset passes no hostname.** Node then binds `::`, every interface over IPv4 and IPv6, as Cloud Run does today. Never default it to `0.0.0.0`, which drops IPv6.
+3. **One start path:** `server/src/listen.ts` `startServer` is the only caller of `serve`. `index.ts` and the socket test (`listen.test.ts`) both use it, so the test covers the production call.
+4. **Loopback by default where tokens are known:** the QA harnesses set `HOST=127.0.0.1` and keep their `localhost` origins (the passkey RP ID; browsers and Node fall back from `::1` to `127.0.0.1`). `server/.env.example` ships `HOST=127.0.0.1`; deleting it reopens the dev API to a phone on the LAN. Existing `.env` files are untouched.
+
+**Consequences:**
+- Production and the CI container smoke test are unchanged (neither sets `HOST`).
+- Malafat's harness follows in MAL-1407 (blocked by MUT-463). On a mini-crm checkout older than this, `HOST` is silently ignored, so MAL-1407 checks that the LAN address is refused.
+- A shell that exports `HOST` as a machine name stops every `loadConfig` caller with a message naming the variable.
+
+**Alternatives considered:**
+- Accepting any host name: `localhost` would bind `::1` only on macOS (P1).
+- `LISTEN_HOST`: clearer, but the ticket and MAL-1407 name `HOST` (review OV-5).
+- Leaving new dev setups on every interface (the plan's first D4; Basel chose review D4 A).

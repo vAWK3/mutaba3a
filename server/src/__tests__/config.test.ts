@@ -498,3 +498,22 @@ describe('loadConfig — attachment storage (MUT-396)', () => {
     expect(loadConfig({ ...base, ATTACHMENTS_DRIVER: 'gcs', ATTACHMENTS_BUCKET: 'my-bucket' }).ATTACHMENTS_DRIVER).toBe('gcs');
   });
 });
+
+describe('loadConfig — listen address (MUT-463)', () => {
+  it('leaves HOST unset by default, so the server keeps Node’s all-interface bind', () => {
+    expect(loadConfig(base).HOST).toBeUndefined();
+  });
+
+  it.each(['127.0.0.1', '::1', '0.0.0.0', '::'])('accepts the IP address %s', (host) => {
+    expect(loadConfig({ ...base, HOST: host }).HOST).toBe(host);
+  });
+
+  // A name binds to its first resolved address (localhost is ::1 first on macOS), so only IP literals are accepted.
+  it.each(['', 'localhost', 'my-mac.local', '256.1.1.1', '127.0.0.1:8787', '[::1]', ' 127.0.0.1'])(
+    'refuses HOST=%j at boot, naming the variable',
+    (host) => {
+      expect(() => loadConfig({ ...base, HOST: host })).toThrow(ConfigError);
+      expect(() => loadConfig({ ...base, HOST: host })).toThrow(/HOST: must be an IP address, such as 127\.0\.0\.1/);
+    },
+  );
+});
