@@ -187,6 +187,8 @@ async function main() {
       ...withoutAppAssociation(process.env),
       NODE_ENV: 'development',
       PORT: String(API_PORT),
+      // MUT-463: loopback only, so the committed admin token can't be used from the network.
+      HOST: '127.0.0.1',
       DATABASE_URL,
       MUTABA3A_ADMIN_TOKEN: ADMIN_TOKEN,
       API_KEY_ENVIRONMENT: 'test',
