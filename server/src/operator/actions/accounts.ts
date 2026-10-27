@@ -2,7 +2,8 @@ import { generateSetupToken, SETUP_LINK_POLICY, setupLinkOrigin, setupUrl } from
 import type { SessionSettings } from '../../auth/middleware.js';
 import { sessionDigest } from '../../auth/sessions.js';
 import { normalizeEmail } from '../../auth/users.js';
-import { serializeEntitlement, standingOfPerson } from '../../billing/coverage.js';
+import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../../billing/coverage.js';
+import type { Entitlement } from '../../billing/entitlement.js';
 import { ApiError } from '../../errors.js';
 import type { Logger } from '../../logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from '../../observability/reporter.js';
@@ -189,32 +190,25 @@ export function accountActions(options: AccountActionOptions) {
    */
   async function view(userId: string, at: Date) {
     const user = await mustGet(userId);
-    const [passkeys, features, activeSessionCount, agentGrants, { entitlements }, memberships] = await Promise.all([
+    const [passkeys, features, activeSessionCount, agentGrants, members] = await Promise.all([
       store.passkeys.listByUser(user.id),
       store.features.activeFor(user.id),
       store.sessions.countLiveForUser(user.id, at),
       store.oauth.listLiveGrants(user.id, at),
-      standingOfPerson(store, user.id, at),
-      store.memberships.listByUser(user.id),
+      memberProfilesForBilling(store, user.id),
     ]);
-    const organizations = await Promise.all(memberships.map((m) => store.organizations.getById(m.organizationId)));
-    const profiles = memberships.flatMap((membership, i) => {
-      const organization = organizations[i];
-      if (!organization) return [];
-      const entitlement = entitlements.get(organization.id);
-      return [
-        {
-          id: organization.id,
-          name: organization.name,
-          role: membership.role,
-          personal: organization.personalOwnerUserId === user.id,
-          owned: profileOwnerOf(organization) === user.id,
-          firmEnabledAt: organization.firmEnabledAt?.toISOString() ?? null,
-          firmRequestedAt: organization.firmRequestedAt?.toISOString() ?? null,
-          billing: entitlement ? serializeEntitlement(entitlement) : null,
-        },
-      ];
-    });
+    // One membership read for both the rows and their billing, so every row has its entitlement.
+    const entitlements = members.length > 0 ? await entitlementsFor(store, members, at) : new Map<string, Entitlement>();
+    const profiles = members.map(({ organization, membership }) => ({
+      id: organization.id,
+      name: organization.name,
+      role: membership.role,
+      personal: organization.personalOwnerUserId === user.id,
+      owned: profileOwnerOf(organization) === user.id,
+      firmEnabledAt: organization.firmEnabledAt?.toISOString() ?? null,
+      firmRequestedAt: organization.firmRequestedAt?.toISOString() ?? null,
+      billing: serializeEntitlement(entitlements.get(organization.id)!),
+    }));
     return {
       ...serializeUser(user),
       closing: user.closure !== null,

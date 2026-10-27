@@ -1219,8 +1219,8 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
       owned: z.boolean(),
       firmEnabledAt: z.string().datetime().nullable(),
       firmRequestedAt: z.string().datetime().nullable(),
-      /** As /v1/me reports it for this profile; null when it can't be resolved. */
-      billing: BillingEntitlementSchema.nullable(),
+      /** As /v1/me reports it for this profile. */
+      billing: BillingEntitlementSchema,
     }),
   ),
 }).openapi('OperatorAccount');

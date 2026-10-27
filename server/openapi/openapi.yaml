@@ -8468,7 +8468,6 @@ components:
             - profiles
     BillingEntitlement:
       type: object
-      nullable: true
       properties:
         state:
           type: string

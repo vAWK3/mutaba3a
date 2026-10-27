@@ -20046,7 +20046,7 @@ export interface components {
             tier: "FREELANCER" | "FIRM" | null;
             /** Format: date-time */
             until: string | null;
-        } | null;
+        };
         OperatorAccountStatusResponse: components["schemas"]["UserStatusResponse"] & {
             sessionsRevoked: number;
             agentGrantsRevoked: number;
