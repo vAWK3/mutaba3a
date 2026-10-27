@@ -160,8 +160,11 @@ const accessOf = (c: Call): MethodAccess | undefined => (STORE_ACCESS as Record<
 const isWrite = (a: MethodAccess | undefined) => typeof a === 'object' && 'write' in a;
 const writes = (calls: Call[]) => calls.filter((c) => isWrite(accessOf(c))).map((c) => `${c.repo}.${c.method}`);
 
+/** Reads that refuse a request without these query parameters (MUT-478: a statement is in one currency). */
+const REQUIRED_QUERY: Record<string, string> = { '/v1/customers/:customerId/statement': '?currency=ILS' };
+
 function send(h: Harness, op: Operation, headers: Record<string, string>, ids: Record<string, string> = {}) {
-  const path = op.path.replace(/:([A-Za-z]+)/g, (_m, name: string) => ids[name] ?? PLACEHOLDER);
+  const path = op.path.replace(/:([A-Za-z]+)/g, (_m, name: string) => ids[name] ?? PLACEHOLDER) + (REQUIRED_QUERY[op.path] ?? '');
   return h.app.request(path, {
     method: op.method,
     headers: { 'content-type': 'application/json', 'idempotency-key': `w-${++ik}`, 'if-match': '1', ...headers },
@@ -173,8 +176,9 @@ describe('every route sits inside the matrix', () => {
   it('reads a non-trivial inventory', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
-    // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254) and Reports' activity (MUT-175).
-    expect(SESSION_READS.length).toBe(37);
+    // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
+    // and the customer statement (MUT-478).
+    expect(SESSION_READS.length).toBe(38);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -312,6 +316,7 @@ describe('the escape hatch', () => {
     expect(callSites(/(?<!function )\blazyPostingOf\(/)).toEqual([
       'routes/agreements.ts',
       'routes/agreements.ts',
+      'routes/customers.ts',
       'routes/receivables.ts',
       'routes/records-export.ts',
       'routes/retainers.ts',
@@ -338,6 +343,7 @@ describe('lazy posting during a session read is a system act (ADR-037 decision 8
   const LAZY: Array<[route: string, path: (f: Awaited<ReturnType<typeof firm>>) => string, posts: { installment: number; charge: number }]> = [
     ['GET /v1/summaries/organization', () => '/v1/summaries/organization', { installment: 1, charge: 1 }],
     ['GET /v1/summaries/customers/{customerId}', (f) => `/v1/summaries/customers/${f.customer.id}`, { installment: 1, charge: 1 }],
+    ['GET /v1/customers/{customerId}/statement', (f) => `/v1/customers/${f.customer.id}/statement?currency=ILS`, { installment: 1, charge: 1 }],
     ['GET /v1/summaries/projects/{projectId}', (f) => `/v1/summaries/projects/${f.project.id}`, { installment: 1, charge: 1 }],
     ['GET /v1/receivables', () => '/v1/receivables', { installment: 1, charge: 1 }],
     ['GET /v1/agreements', () => '/v1/agreements', { installment: 1, charge: 1 }],
