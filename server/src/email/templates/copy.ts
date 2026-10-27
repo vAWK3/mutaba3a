@@ -190,19 +190,22 @@ const accountDeclined: Copy<'account-declined'> = {
 };
 
 const reviewDigest: Copy<'review-digest'> = {
-  en: ({ pending, command }) => ({
+  // MUT-460: the portal page when the server knows its origin; the command stays as the fallback.
+  en: ({ pending, command, reviewLink }) => ({
     subject: `MTB3A: ${pending} ${pending === 1 ? 'signup is' : 'signups are'} waiting for review`,
     intro: [
       [`Signups waiting for your review: ${pending}.`],
-      ['Review them with ', { ltr: command }, '.'],
+      [reviewLink ? 'Or review them with ' : 'Review them with ', { ltr: command }, '.'],
     ],
+    ...(reviewLink ? { action: { label: 'Review signups', href: reviewLink } } : {}),
   }),
-  ar: ({ pending, command }) => ({
+  ar: ({ pending, command, reviewLink }) => ({
     subject: `متابعة: طلبات تسجيل بانتظار المراجعة (${pending})`,
     intro: [
       [`طلبات التسجيل التي تنتظر مراجعتك: ${pending}.`],
-      ['راجعها بالأمر ', { ltr: command }, '.'],
+      [reviewLink ? 'أو راجعها بالأمر ' : 'راجعها بالأمر ', { ltr: command }, '.'],
     ],
+    ...(reviewLink ? { action: { label: 'مراجعة الطلبات', href: reviewLink } } : {}),
   }),
 };
 
