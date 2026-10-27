@@ -59,6 +59,13 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/operator/signup-reviews/:userId/resend': 'open',
   'POST /v1/operator/step-up/options': 'open',
   'POST /v1/operator/step-up': 'open',
+  // MUT-461: the accounts the operator acts on, the same rule.
+  'GET /v1/operator/accounts': 'open',
+  'GET /v1/operator/accounts/:userId': 'open',
+  'POST /v1/operator/accounts/:userId/disable': 'open',
+  'POST /v1/operator/accounts/:userId/enable': 'open',
+  'POST /v1/operator/accounts/:userId/sessions/revoke': 'open',
+  'POST /v1/operator/accounts/:userId/setup-link': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',

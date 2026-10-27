@@ -150,6 +150,8 @@ describe('STORE_ACCESS', () => {
       'passkeys.findByCredentialId',
       'passkeys.pruneChallenges',
       'passkeys.recordUse',
+      // MUT-461: the operator's account view counts a person's live sessions.
+      'sessions.countLiveForUser',
       'sessions.revokeAllForUser',
       // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
       'signupReviews.approve',
