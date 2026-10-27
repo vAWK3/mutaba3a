@@ -193,6 +193,15 @@ MUT-461 (accounts, server + portal):
 - `InPlaceConfirm.test.tsx` (+2): rich message, slot, primary, row look, label kept; `cancelWhileBusy={false}`.
 - Release-QA: `portal-selfservice.operator` `account-find`, `account-revoke-sessions`, `account-disable-enable`, `account-setup-link`.
 
+MUT-462 (billing grants, feature flags, firm requests, server + portal):
+- `server/src/__tests__/routes-operator-billing-firms.test.ts` (20): grant with reason and expiry, listed, `grantedBy operator:<id>`, the profile's billing becomes OPERATOR, audited with the operator; revoke kept with `revokedAt`, twice changes nothing; another person's grant 404; past expiry 422, unknown account 404 `ACCOUNT_NOT_FOUND`; flags on/off idempotent, audited, `availableFeatures`; unknown flag 422, pending signup 409; firm requests listed oldest first with `stepUpUntil`; detail with members; 404 `FIRM_REQUEST_NOT_FOUND` on read, enable, decline; enable an operator firm with owners (others BOOKKEEPER), 422 without owners, 409 `NOT_A_MEMBER`; owned profile enabled in place; decline audited; every write needs the step-up; non-operator 404 / signed out 401; `OWN_ACCOUNT` on grants and flags; a lapsed operator still acts; parity with `/admin` answers and audit rows for grants, flags, firm enable and decline.
+- The gate sweeps in `routes-operator.test.ts` and `route-security.test.ts` pick up the nine new routes; `billing-gate-routes` checks each is in `PERSON_LEVEL_GATE` ('open').
+- Regression proof: `billing-routes`, `user-features`, `routes-admin-firm` and `routes-profiles-firm` are unchanged and green.
+- `src/hosted/operator/__tests__/grants.test.ts` (6): a grant's state (active, ended, revoked); the expiry a day sends (end of the local day), none for empty, null for a day that doesn't exist; 30/90-day presets; only a day after today.
+- `OperatorAccountPage.test.tsx` (+10): Billing after Access and before Features and Profiles; grant rows with where each stands, Revoke only on an active one; the drawer at `?grant=new` sends tier, reason and expiry, toasts and lists it; reason and future-day validation, no end sends no expiry; stale "Grant with passkey" on one tap; revoke confirm, Cancel, revoke; own account inert, no drawer; a flag on at once; off confirms first; a 409 explained, the switch stays off; Arabic labels.
+- `OperatorFirmsPage.test.tsx` (10): list oldest first with asker, age and kind, "Firms · 2"; empty state; operator firm owners (requester ticked, disabled member inert with reason), body `ownerUserIds`; none ticked refused; owned profile keeps its owners, sends `[]`; stale "Enable with passkey"; a 404 leaves the list; decline confirm, Cancel focus, decline; Arabic RTL.
+- Release-QA: `portal-selfservice.operator` `billing-grant-revoke`, `feature-grant-revoke`, `firm-request-enable`, `firm-request-decline` (Arabic, 375 px).
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)

@@ -1,7 +1,26 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { address, chooseLanguage, grantOperator, liveSession, liveState, mailTo, operatorAccount, pendingSignup, redeemSetupLink, sessionWorks, signInThroughForm, signsIn, SIGNUP_PASSWORD } from '../../support/selfService';
+import {
+  address,
+  adminAudit,
+  adminGrants,
+  adminOrganization,
+  chooseLanguage,
+  featureHolders,
+  grantOperator,
+  liveSession,
+  liveState,
+  mailTo,
+  operatorAccount,
+  ownedFirmRequest,
+  pendingSignup,
+  redeemSetupLink,
+  sessionWorks,
+  signInThroughForm,
+  signsIn,
+  SIGNUP_PASSWORD,
+} from '../../support/selfService';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from '../../support/passkeys';
 import { openYou, youRow } from '../../support/you';
 
@@ -17,7 +36,7 @@ import { openYou, youRow } from '../../support/you';
 const PASSWORD = 'the operator long passphrase';
 const HOME = /\/p\/[0-9a-f-]{36}$/;
 
-async function operator(page: Page, language: 'en' | 'ar' = 'en'): Promise<{ email: string; authenticator: VirtualAuthenticator }> {
+async function operator(page: Page, language: 'en' | 'ar' = 'en'): Promise<{ id: string; email: string; authenticator: VirtualAuthenticator }> {
   const email = address('operator');
   const { id } = await operatorAccount(email, language, PASSWORD);
   const authenticator = await addVirtualAuthenticator(page);
@@ -29,7 +48,7 @@ async function operator(page: Page, language: 'en' | 'ar' = 'en'): Promise<{ ema
   await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await grantOperator(id);
-  return { email, authenticator };
+  return { id, email, authenticator };
 }
 
 const signupRow = (page: Page, email: string) => page.getByRole('listitem', { name: email });
@@ -338,5 +357,138 @@ test('Send a reset link with the password locked; it is shown once', { tag: '@po
     await openAccount(page, person.email);
     await expect(accessRow(page, /Send reset link/)).toBeVisible();
     await expect(page.getByLabel(/^Reset link for/)).toHaveCount(0);
+  });
+});
+
+// ---- MUT-462: billing grants, feature flags, firm requests -------------------------------------------------------
+
+/** A person to act on, with their id (for the CLI's own reads). */
+async function targetWithId(label: string): Promise<{ email: string; id: string }> {
+  const email = address(label);
+  const { id } = await operatorAccount(email, 'en', TARGET_PASSWORD);
+  return { email, id };
+}
+
+const dayIn = (days: number) => new Intl.DateTimeFormat('en-u-nu-latn', { dateStyle: 'medium' }).format(new Date(Date.now() + days * 86_400_000));
+const firmRow = (page: Page, name: string) => page.getByRole('list', { name: /^(Firm requests|طلبات المكاتب)$/ }).getByRole('listitem', { name });
+
+test('Grant a person billing coverage with a reason and an expiry, then revoke it', { tag: '@portal-selfservice.operator.billing-grant-revoke' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  const op = await operator(page);
+  const person = await targetWithId('grant');
+  const billing = page.getByRole('region', { name: 'Billing' });
+  await step('Open their account and press Grant coverage: the drawer opens in the address', async () => {
+    await openAccount(page, person.email);
+    await expect(billing.getByText('No grants.')).toBeVisible();
+    await billing.getByRole('button', { name: /Grant coverage/ }).click();
+    await expect(page).toHaveURL(/\?grant=new$/);
+    await expect(page.getByRole('dialog', { name: 'Grant coverage' })).toBeVisible();
+  });
+  await step('Choose Freelancer, give the reason "QA pilot comp", choose 30 days, and grant with the passkey', async () => {
+    const drawer = page.getByRole('dialog', { name: 'Grant coverage' });
+    await drawer.getByRole('radio', { name: /Freelancer/ }).check();
+    await drawer.getByLabel('Reason').fill('QA pilot comp');
+    await drawer.getByRole('button', { name: '30 days' }).click();
+    await drawer.getByRole('button', { name: 'Grant with passkey' }).click();
+    await expect.poll(() => toastText(page)).toContain(`Coverage granted to ${person.email}`);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page).not.toHaveURL(/grant=new/);
+  });
+  await step('The grant is listed, and the CLI’s list shows it granted by the operator', async () => {
+    await expect(billing.getByText('Freelancer · QA pilot comp')).toBeVisible();
+    await expect(billing.getByText(`Until ${dayIn(30)}`)).toBeVisible();
+    const [grant] = await adminGrants(person.id);
+    expect(grant).toMatchObject({ reason: 'QA pilot comp', tier: 'FREELANCER', grantedBy: `operator:${op.id}`, revokedAt: null });
+  });
+  await step('Revoke the grant and confirm: the row says Revoked, and the CLI’s list agrees', async () => {
+    await billing.getByRole('button', { name: 'Revoke' }).click();
+    await expect(page.getByRole('group')).toContainText(`${person.email} loses this Freelancer coverage.`);
+    await page.getByRole('group').getByRole('button', { name: 'Revoke' }).click();
+    await expect.poll(() => toastText(page)).toContain(`Coverage revoked for ${person.email}`);
+    await expect(billing.getByText(/^Revoked /)).toBeVisible();
+    await expect(billing.getByRole('button', { name: 'Revoke' })).toHaveCount(0);
+    expect((await adminGrants(person.id))[0]?.revokedAt).not.toBeNull();
+  });
+});
+
+test('Turn Connect Claude on for a person, then off with a confirm', { tag: '@portal-selfservice.operator.feature-grant-revoke' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  await operator(page);
+  const person = await targetWithId('flag');
+  const flag = () => page.getByRole('region', { name: 'Features' }).getByRole('switch', { name: /Connect Claude/ });
+  await step('Open their account: Features lists Connect Claude, off', async () => {
+    await openAccount(page, person.email);
+    await expect(flag()).toHaveAttribute('aria-checked', 'false');
+  });
+  await step('Turn it on, confirming with the passkey: it reads on, and the CLI lists them as a holder', async () => {
+    await flag().click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'true');
+    expect(await featureHolders()).toContain(person.id);
+  });
+  await step('Turn it off: it asks first, saying what they lose; confirm, and it reads off', async () => {
+    await flag().click();
+    await expect(page.getByRole('group')).toContainText(`${person.email} loses Claude access, and any Claude they connected is disconnected now.`);
+    expect(await featureHolders()).toContain(person.id);
+    await page.getByRole('button', { name: 'Turn off' }).click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'false');
+    expect(await featureHolders()).not.toContain(person.id);
+  });
+});
+
+test('Enable firm features for a waiting request from the Firms tab', { tag: '@portal-selfservice.operator.firm-request-enable' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  const op = await operator(page);
+  let request = { email: '', userId: '', profileId: '', profileName: '' };
+  await step('An owner asks for firm features on their Business profile', async () => {
+    request = await ownedFirmRequest('firm-owner', TARGET_PASSWORD);
+  });
+  await step('Open the Firms tab: it counts the request and lists who asked', async () => {
+    await page.goto('/operator/signups');
+    await page.getByRole('link', { name: /^Firms · \d+$/ }).click();
+    await expect(page).toHaveURL(/\/operator\/firms$/);
+    const row = firmRow(page, request.profileName);
+    await expect(row.getByText(request.email)).toHaveAttribute('dir', 'ltr');
+    await expect(row.getByText('Their own business profile')).toBeVisible();
+  });
+  await step('Press Enable: the owner stays its owner; enable with the passkey', async () => {
+    await firmRow(page, request.profileName).getByRole('button', { name: 'Enable' }).click();
+    await expect(page.getByRole('group')).toContainText(`${request.email} stay its owners`);
+    await page.getByRole('button', { name: 'Enable with passkey' }).click();
+    await expect.poll(() => toastText(page)).toContain(`Firm features on for ${request.profileName}`);
+    await expect(firmRow(page, request.profileName)).toHaveCount(0);
+  });
+  await step('The profile is a firm, its owner unchanged, audited with the operator', async () => {
+    const organization = await adminOrganization(request.profileId);
+    expect(organization.firm.enabledAt).not.toBeNull();
+    expect(organization.ownerUserId).toBe(request.userId);
+    expect((await adminAudit(request.profileId)).find((e) => e.action === 'firm.enabled')).toMatchObject({ actorType: 'ADMIN', actorId: op.id });
+  });
+});
+
+test('Decline a firm request, in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.firm-request-decline' }, async ({ page, step }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const op = await operator(page, 'ar');
+  let request = { email: '', userId: '', profileId: '', profileName: '' };
+  await step('An owner asks for firm features; open المكاتب', async () => {
+    request = await ownedFirmRequest('firm-decline', TARGET_PASSWORD);
+    await page.goto('/operator/signups');
+    await page.getByRole('link', { name: /^المكاتب/ }).click();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(firmRow(page, request.profileName).getByText(request.email)).toHaveAttribute('dir', 'ltr');
+    await expectNoHorizontalOverflow(page, 'the Firms tab at 375 px');
+  });
+  await step('Press رفض: the confirm says the profile stays regular and its owner can ask again', async () => {
+    await firmRow(page, request.profileName).getByRole('button', { name: 'رفض' }).click();
+    await expect(page.getByRole('group')).toContainText('يبقى');
+    await expect(page.getByRole('group')).toContainText('يمكن لمالكه أن يطلب من جديد');
+    await expectNoHorizontalOverflow(page, 'the decline confirm at 375 px');
+  });
+  await step('Confirm with the passkey: the request leaves; no firm features, nothing pending, audited with the operator', async () => {
+    await page.getByRole('button', { name: 'رفض بمفتاح المرور' }).click();
+    await expect.poll(() => toastText(page)).toContain('رُفض طلب');
+    await expect(firmRow(page, request.profileName)).toHaveCount(0);
+    const organization = await adminOrganization(request.profileId);
+    expect(organization.firm).toMatchObject({ enabledAt: null, requestedAt: null });
+    expect((await adminAudit(request.profileId)).find((e) => e.action === 'firm.request_declined')).toMatchObject({ actorType: 'ADMIN', actorId: op.id });
   });
 });

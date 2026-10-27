@@ -180,6 +180,57 @@ export async function liveSession(email: string, password: string): Promise<stri
   return cookie!;
 }
 
+/**
+ * MUT-462: a person who owns a Business profile and has asked for firm features on it, as the portal's profile page
+ * asks (MUT-300). Only a profile's owner can ask, so this is the request the live console sees. Returns the profile.
+ */
+export async function ownedFirmRequest(label: string, password: string): Promise<{ email: string; userId: string; profileId: string; profileName: string }> {
+  const { origin } = liveState();
+  const email = address(label);
+  const { id: userId } = await operatorAccount(email, 'en', password);
+  // Owned profiles write through the lapse gate (ADR-181): comp the person first, as a pilot would be.
+  await grantCoverage(userId);
+  const cookie = await liveSession(email, password);
+  const profileName = `QA Firm ${Date.now().toString(36)}`;
+  const headers = (key: string) => ({ 'content-type': 'application/json', origin, cookie, 'idempotency-key': `${key}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}` });
+  const made = await fetch(`${origin}/v1/profiles`, {
+    method: 'POST',
+    headers: headers('qa-profile'),
+    body: JSON.stringify({ name: profileName, type: 'BUSINESS', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }),
+  });
+  expect(made.status, `create profile ${await made.clone().text()}`).toBe(201);
+  const profileId = ((await made.json()) as { id: string }).id;
+  const asked = await fetch(`${origin}/v1/profiles/${profileId}/firm-request`, { method: 'POST', headers: headers('qa-firm'), body: '{}' });
+  expect(asked.ok, `firm request ${await asked.clone().text()}`).toBe(true);
+  return { email, userId, profileId, profileName };
+}
+
+/** MUT-462: what the admin token reads of a profile (its firm state) and its audit trail, newest first. */
+export async function adminOrganization(organizationId: string): Promise<{ firm: { enabledAt: string | null; requestedAt: string | null }; ownerUserId: string | null }> {
+  const res = await fetch(`${liveState().origin}/admin/v1/organizations/${organizationId}`, { headers: admin() });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { organization: { firm: { enabledAt: string | null; requestedAt: string | null }; ownerUserId: string | null } }).organization;
+}
+
+export async function adminAudit(organizationId: string): Promise<Array<{ action: string; actorType: string; actorId: string | null }>> {
+  const res = await fetch(`${liveState().origin}/admin/v1/organizations/${organizationId}/audit?limit=200`, { headers: admin() });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { events: Array<{ action: string; actorType: string; actorId: string | null }> }).events;
+}
+
+/** MUT-462: a person's grants, and whether a feature is on for them, as the admin token reads them (the CLI's view). */
+export async function adminGrants(userId: string): Promise<Array<{ id: string; reason: string; grantedBy: string; revokedAt: string | null; tier: string }>> {
+  const res = await fetch(`${liveState().origin}/admin/v1/billing/grants?userId=${userId}`, { headers: admin() });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { grants: Array<{ id: string; reason: string; grantedBy: string; revokedAt: string | null; tier: string }> }).grants;
+}
+
+export async function featureHolders(feature = 'agent_access'): Promise<string[]> {
+  const res = await fetch(`${liveState().origin}/admin/v1/features/${feature}`, { headers: admin() });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { holders: Array<{ userId: string }> }).holders.map((h) => h.userId);
+}
+
 /** MUT-461: whether a session from `liveSession` still works (a sign out everywhere or a disable ends it). */
 export async function sessionWorks(cookie: string): Promise<boolean> {
   return (await fetch(`${liveState().origin}/v1/me`, { headers: { cookie } })).ok;
