@@ -682,6 +682,8 @@ export class MemoryLedgerStore implements LedgerStore {
       s.stepUpAt = at;
       return true;
     },
+    countLiveForUser: async (userId, at) =>
+      [...this.sessionsById.values()].filter((s) => s.userId === userId && !s.revokedAt && s.idleExpiresAt > at && s.absoluteExpiresAt > at).length,
   };
 
   readonly features: FeaturesRepository = {

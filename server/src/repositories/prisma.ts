@@ -544,6 +544,8 @@ export class PrismaLedgerStore implements LedgerStore {
       (await this.prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } })).count,
     // MUT-459: conditional on the session still being live, so a revocation that commits first wins.
     markStepUp: async (id, at) => (await this.prisma.session.updateMany({ where: { id, revokedAt: null }, data: { stepUpAt: at } })).count === 1,
+    // MUT-461: the operator's account view; uses @@index([userId]).
+    countLiveForUser: (userId, at) => this.prisma.session.count({ where: { userId, revokedAt: null, idleExpiresAt: { gt: at }, absoluteExpiresAt: { gt: at } } }),
   };
 
   readonly features: FeaturesRepository = {
