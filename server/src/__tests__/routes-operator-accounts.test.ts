@@ -202,6 +202,21 @@ describe('MUT-461 account actions from the operator console', () => {
   });
 });
 
+describe('MUT-461 the lapse gate leaves the console open (ADR-212 D2)', () => {
+  it('an operator whose own trial lapsed still finds, views and acts on an account', async () => {
+    const h = harness({ billingGate: true });
+    const op = await operator(h);
+    const p = await person(h);
+    await h.store.billing.setTrialStart(op.id, new Date(h.clock.now.getTime() - 31 * 24 * 60 * 60_000));
+    expect((await read(await get(h, '/v1/inbox', op.token))).error.code).toBe('SUBSCRIPTION_LAPSED');
+    expect((await get(h, `/v1/operator/accounts?email=${encodeURIComponent(p.email)}`, op.token)).status).toBe(200);
+    expect((await get(h, accountsPath(p.id), op.token)).status).toBe(200);
+    for (const action of ['sessions/revoke', 'setup-link', 'disable', 'enable']) {
+      expect([action, (await post(h, accountsPath(p.id, action), op.token)).status]).toEqual([action, 200]);
+    }
+  });
+});
+
 describe('MUT-461 self-protection (E10)', () => {
   it('an operator cannot disable, sign out or reset their own account here (409 OWN_ACCOUNT), and nothing changes', async () => {
     const h = harness();
