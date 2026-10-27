@@ -13,7 +13,7 @@ import {
   useChangeMalafatSuggestions,
   usePortalMalafat,
 } from '../data/malafatSuggestions';
-import type { MalafatMoment } from '../../types';
+import type { MalafatMoment } from '../../lib/malafatSuggestions';
 import { RowLink, RowSwitch } from './YouRows';
 
 const TEXT: Record<MalafatMoment, string> = {

@@ -1,5 +1,3 @@
-Here’s a revised CLAUDE.md that keeps your “Project Intelligence & Engineering Standards” template, but injects the original mini-rm product/UX/architecture spec as the authoritative project layer (routes, AppShell, drawers-first UX rule, offline-first repo, schema, build order, perf guardrails, etc.) pulled from the attached file.  ￼
-
 # CLAUDE.md — Project Intelligence & Engineering Standards
 
 > **This file is the single source of truth for all AI-assisted development in this project.**
@@ -7,199 +5,34 @@ Here’s a revised CLAUDE.md that keeps your “Project Intelligence & Engineeri
 
 ---
 
-## 🧭 PROJECT-SPEC FIRST (MINI-RM) — AUTHORITATIVE IMPLEMENTATION TARGET
+## 🧭 WHAT THIS REPO IS (2026-10-27)
 
-This repository implements a **desktop-first mini resource manager** (mini-rm) that feels like a tool, not a website.
+MTB3A (Arabic **متابعة**; English is always "MTB3A", ADR-173) tracks who owes a freelancer or a small firm money, what came in and what went out, per currency. It runs on **iOS, Android and the web portal**. The desktop apps and the free local web app at `/app` are retired (MUT-445, ADR-203); device sync is retired (ADR-053). `.claude/SYSTEM_OVERVIEW.md` holds the detail; sections there that describe Dexie, the `/app` routes or the desktop app are history.
 
-### Non-negotiable UX rule
-- **No “create pages.” Everything is drawer-first** so the app feels like a cockpit, not CRUD.  [oai_citation:1‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+| Part | Where | Ships as |
+|---|---|---|
+| **Portal** (the web app) | `src/hosted/**`, `vite --mode hosted` | `app.mtb3a.com` |
+| **API** | `server/` (Hono, Prisma, Postgres, OpenAPI) | Cloud Run (`api-v*` tags) |
+| **Website** | `src/main.tsx`, `src/pages/landing/**`: the landing, `/privacy`, `/terms` | Netlify, `mtb3a.com` (`web-v*` tags) |
+| **Phone app** | the Flutter repo (`mutaba3a-flutter`), not here | App Store, Google Play |
 
-### Rendering + state boundaries (MVP)
-- **SPA/PWA** (server irrelevant for MVP)
-- **Local-first data** in IndexedDB now (Dexie), with a **Repo abstraction**
-- **UI state** (filters, drawers) stored in **URL + lightweight store**
-- **Derived totals** computed in Repo (preferred) or memoized selectors  [oai_citation:2‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+`src/lib/**` and `src/components/**` hold what the portal and the website share. The portal may not import server code (`src/hosted` ⊄ `server/src`, an ESLint guard), and the website build carries no portal code.
 
-### Suggested stack
-- React + Vite
-- TanStack Router (or React Router)
-- TanStack Query
-- Dexie (IndexedDB)
-- Later: swap Repo to SQLite in Tauri  [oai_citation:3‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+### The portal's two modes (ADR-097, ADR-100)
+- **Signed in:** every read and write goes to the API.
+- **Signed out:** the same portal runs on this device. The server's own Hono routes run in the browser over IndexedDB (`src/hosted/local/`, a lazy chunk). Records leave the device only as a file (Your data › Download and Restore). Nothing moves signed-out records into an account (MUT-290, won't do).
 
----
+### Non-negotiable rules
+- **Drawer-first:** no "create pages". Adding and editing happen in drawers over the page.
+- **Arabic first, right to left** (ADR-077): every surface opens in Arabic until the person chooses. All user-facing text goes through i18n keys; the portal is Arabic and English.
+- **Money keeps its currency** (ADR-004): store the original amount in minor units with its currency, total per currency by default, and when converting, show the base currency and the rate's source and date.
+- **Owed** is income not yet fully paid; overdue is owed past its due date. Paying keeps the income's own date; the payment carries its own.
+- **UI work** follows `DESIGN.md` (which component, colour role and type style each portal pattern uses).
 
-## 🗺️ ROUTES (MVP)
-
-- / → Overview
-- /projects → Projects index
-- /projects/:projectId → Project detail
-- /clients → Clients index
-- /clients/:clientId → Client detail
-- /transactions → Transactions ledger
-- /reports → Reports
-- /settings → Settings  [oai_citation:4‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🧱 APP SHELL (ALWAYS MOUNTED)
-
-### AppRoot providers
-- RepoProvider(repo)
-- QueryClientProvider
-- AppUIProvider (drawer state, toasts)
-- Router  [oai_citation:5‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### AppShell composition
-
-AppShell
-├─ SidebarNav
-├─ TopBar
-├─ MainViewport
-└─ GlobalOverlays
-├─ TransactionDrawerController
-├─ ProjectDrawerController
-└─ ClientDrawerController
-
-### SidebarNav
-- Fixed left navigation; Settings pinned at bottom
-- Active state + keyboard friendly
-- Collapsible sections later, not MVP  [oai_citation:7‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### TopBar
-- Sticky in content
-- Page title + breadcrumb only on detail pages
-- Primary CTA: **+ Add (menu)**  [oai_citation:8‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### GlobalOverlays URL mirroring (deep linkable)
-- Edit drawer: `?tx=<id>`
-- Create drawer: `?newTx=income|expense|receivable&clientId=&projectId=`  [oai_citation:9‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🧩 SHARED UI COMPONENTS (COCKPIT KIT)
-
-### Filters (reusable)
-- DateRangeControl (presets: This month, Last month, This year, Custom)
-- CurrencyTabs (USD, ILS, optional All Converted)
-- TypeSegment (All | Income | Receivable | Expense)
-- StatusSegment (All | Paid | Unpaid | Overdue)
-- SearchInput (client/project/note; debounce ~200ms)  [oai_citation:10‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-Perf rule:
-- Filters update a **single FiltersModel** object and push to URL (replaceState), not multiple setStates.  [oai_citation:11‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Tables
-- DataTable(columns, rows, rowKey, onRowClick)
-- CellAmount(amountMinor, currency)
-- CellStatus(status, dueDate, paidAt)
-- RowActionsMenu  [oai_citation:12‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-Perf rule:
-- Tables receive **already-shaped rows**, not raw transactions computed per cell.  [oai_citation:13‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Summary blocks
-- KpiRow
-- InlineStat
-- AttentionList  [oai_citation:14‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 📄 SCREEN SPECS (MVP BEHAVIOR)
-
-### Overview (/)
-- Top controls: DateRange (default This month), Currency tabs
-- KPI cards: Paid Income, Unpaid Receivables, Expenses, Net
-- Needs attention: overdue + due next 7 days
-- Recent activity (last 10)
-- Row click opens TransactionDrawer edit  [oai_citation:15‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Transactions ledger (/transactions) “truth table”
-- Filters: date, currency, type, status, search
-- Row click opens TransactionDrawer edit (`?tx=`)  [oai_citation:16‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Projects (/projects) + detail (/projects/:id)
-- Index columns: project, client, field, paid, unpaid, expenses, net, last activity
-- Detail: tabs (Summary, Transactions, Notes optional), +Add prefilled with project  [oai_citation:17‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Clients (/clients) + detail (/clients/:id)
-- Index columns: client, active projects, paid, unpaid, last payment, last activity
-- Detail: tabs (Summary, Projects, Receivables, Transactions)
-- Receivables focus: due, days overdue, mark paid  [oai_citation:18‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Reports (/reports)
-- Presets: month/year/by project/by client/expenses by category/unpaid aging
-- Export CSV (MVP)
-- Converted toggle only if FX configured  [oai_citation:19‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Settings (/settings)
-- Enabled currencies, default currency tab
-- FX settings (manual rates) for converted reports
-- Data export/import  [oai_citation:20‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🗃️ DATA MODEL (OFFLINE-FIRST, MULTI-CURRENCY)
-
-### Core entities
-- Client
-- Project
-- Transaction  [oai_citation:21‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Represent “unpaid income”
-- Do **not** invent a second object.
-- Receivable = Transaction with `kind=income` and `status=unpaid`.  [oai_citation:22‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Currency rules (non-negotiable)
-1. Always store original amount + currency
-2. Reports are per-currency by default
-3. “All Converted” is optional and must clearly show base currency + FX source/date  [oai_citation:23‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Minimal schema (SQLite-friendly; also maps to IndexedDB tables)
-(Keep the semantics exactly; storage engine can vary.)  [oai_citation:24‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
-### Receivable logic
-- receivable: `kind='income' && status='unpaid'`
-- overdue: receivable && due_date < today
-- mark paid:
-  - set status='paid'
-  - set paid_at = now
-  - keep occurred_at as earned/issued date  [oai_citation:25‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🧱 REPOSITORY API (STORAGE-AGNOSTIC CONTRACT)
-
-UI never touches SQL directly; UI uses Repo interface so we can swap Dexie → SQLite later.  [oai_citation:26‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🧾 FX “ALL (CONVERTED)” RULES (HONEST CONVERSIONS)
-
-- Enable only when base currency selected and rates exist
-- Pick one conversion convention and never mix
-- Rows may show original amount + converted amount + FX rate effective date
-- MVP shortcut: for “This month”, use latest rate that month unless per-day exists  [oai_citation:27‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🧱 BUILD ORDER (FASTEST PATH)
-
-1. Repo + schema + seed
-2. Transactions ledger + TransactionDrawer
-3. Projects index/detail
-4. Clients index/detail
-5. Overview (totals + attention)
-6. Reports presets (reuse query + group)  [oai_citation:28‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
-
----
-
-## 🚀 PERFORMANCE GUARDRAILS
-
-- Pre-shape rows in useMemo before passing to tables
-- Column defs stable via useMemo([])
-- Filter state stored as one object + URL sync to avoid rerender storms
-- Ledger scaling later: pagination or virtualization; default hard cap = This month  [oai_citation:29‡CLAUDE.md](sediment://file_00000000257c71f497b73d6e8f34d399)
+### Portal routes (`src/hosted/router.tsx`)
+- Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`.
+- Under a profile, `/p/$profileId`: `/` (overview), `/receivables`, `/payments`, `/clients`, `/clients/$customerId`, `/expenses` (with `/groups` and `/receipts`), `/conversions`, `/documents`, `/reports`.
+- Also `/reports` (the Glance across profiles, ADR-204), `/capture`, `/connect/approve`.
 
 ---
 
@@ -307,7 +140,7 @@ npm run test:run
 npm run build
 ```
 
-`test:run` is the whole Vitest suite once (unit and Dexie integration tests live side by side; `npm run test` is watch mode).
+`test:run` is the whole Vitest suite once (unit and the portal's local-mode integration tests, over fake IndexedDB, live side by side; `npm run test` is watch mode).
 Changes under `server/` also run what server CI runs: `npm --prefix server run typecheck`, `npm --prefix server run lint`, `npm --prefix server run openapi:check` and `npm --prefix server test`. CI additionally runs `test:db` against Postgres (see `.github/workflows/server-ci.yml`); TODOS #8 is a known audit-ordering flake there.
 
 No task is “done” until all pass.
@@ -491,7 +324,7 @@ Before starting ANY task:
 □ Check DECISIONS.md
 □ Check docs/roadmap/ROADMAP.md
 □ Check relevant docs/admin-panel specs
-□ Re-validate mini-rm Project-Spec First section in this CLAUDE.md
+□ Re-validate the "What this repo is" section at the top of this CLAUDE.md
 
 Before considering ANY task complete:
 

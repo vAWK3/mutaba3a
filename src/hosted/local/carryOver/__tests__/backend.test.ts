@@ -71,7 +71,7 @@ describe('the local backend and the carry-over', () => {
 
     globalThis.indexedDB = new IDBFactory();
     const { page: newAddress, countRecordsOnThisDevice } = await openPage();
-    const pending = await newAddress.prepareCarryOver('records-file', file, OPTIONS);
+    const pending = await newAddress.readRecordsFile(file, OPTIONS);
     expect(pending.carryOver?.counts).toMatchObject({ clients: 1, income: 1, payments: 1 });
     expect(pending.carryOver?.totals.ILS).toMatchObject({ paid: '30.00', outstanding: '70.00' });
     await pending.apply();
@@ -81,18 +81,18 @@ describe('the local backend and the carry-over', () => {
   it('says how many records this device already has, for the D3 warning', async () => {
     const { page } = await openPage();
     await (await page.readRecordsFile(backupFile(), OPTIONS)).apply();
-    const again = await page.prepareCarryOver('free-app-backup', backupFile(), OPTIONS);
+    const again = await page.readRecordsFile(backupFile(), OPTIONS);
     expect(again.deviceRecordCount).toBe(3);
   }, PAGE_LOAD_TIMEOUT_MS);
 
-  it('refuses a payload that is not the old app\'s backup', async () => {
+  it('refuses a file that is neither a records file nor the old app\'s backup', async () => {
     const { page } = await openPage();
-    await expect(page.prepareCarryOver('free-app-backup', new Blob(['not json']), OPTIONS)).rejects.toMatchObject({ reason: 'not-a-records-file' });
+    await expect(page.readRecordsFile(new Blob(['not json']), OPTIONS)).rejects.toMatchObject({ reason: 'not-a-records-file' });
   }, PAGE_LOAD_TIMEOUT_MS);
 
   it('refuses a backup from a newer free app as too new, not as a broken file', async () => {
     const { page } = await openPage();
     const newer = new Blob([JSON.stringify({ version: FREE_APP_BACKUP_MAX_VERSION + 1, timestamp: 'x', tables: { clients: [] } })]);
-    await expect(page.prepareCarryOver('free-app-backup', newer, OPTIONS)).rejects.toMatchObject({ reason: 'too-new' });
+    await expect(page.readRecordsFile(newer, OPTIONS)).rejects.toMatchObject({ reason: 'too-new' });
   }, PAGE_LOAD_TIMEOUT_MS);
 });

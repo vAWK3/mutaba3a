@@ -1,4 +1,4 @@
-import type { Currency } from '../../types';
+import type { Currency } from '../../lib/utils';
 
 /**
  * Static, illustrative data for the landing page's product mock-ups.

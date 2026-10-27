@@ -3,7 +3,12 @@ import { render, act } from '@testing-library/react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useClientProjectCascade } from '../useClientProjectCascade';
-import type { Project } from '../../../types';
+/** The fields the cascade reads from a project (it only needs an id; the client comes through `clientId`). */
+interface Project {
+  id: string;
+  name: string;
+  clientId?: string;
+}
 
 // Test helper: renders a component that uses the cascade hook and exposes form methods
 function createTestHarness(projectsData: Project[]) {
@@ -30,9 +35,6 @@ function createTestHarness(projectsData: Project[]) {
 const makeProject = (overrides: Partial<Project> = {}): Project => ({
   id: 'proj-1',
   name: 'Test Project',
-  profileId: 'profile-1',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
   ...overrides,
 });
 

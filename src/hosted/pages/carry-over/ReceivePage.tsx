@@ -61,8 +61,9 @@ export function ReceivePage() {
       }
       setPhase({ kind: 'checking', done: 0, total: 0 });
       try {
-        const pending = await (await localBackend()).prepareCarryOver(outcome.kind, outcome.payload, options());
-        setPhase({ kind: 'summary', pending, reply: outcome.reply, fromOldAddress: outcome.source === 'portal', confirming: false });
+        // The old portal's records file, read the way a chosen file is (MUT-291 §3.2).
+        const pending = await (await localBackend()).readRecordsFile(outcome.payload, options());
+        setPhase({ kind: 'summary', pending, reply: outcome.reply, fromOldAddress: true, confirming: false });
       } catch (error) {
         outcome.reply.failed();
         setPhase({ kind: 'file', reason: reasonFor(error) });
