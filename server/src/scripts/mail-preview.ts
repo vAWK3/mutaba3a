@@ -18,7 +18,8 @@ import type { UserLocale } from '../repositories/ports.js';
  *       Sends each mail, both languages, through Resend to one inbox (Gmail, Apple Mail, Outlook checks). Without
  *       --yes it only says how many mails it would send, from which address, to whom. Needs
  *       RESEND_API_KEY, MAIL_FROM_ADDRESS and PORTAL_ORIGIN (a portal that already serves /mail/v1); WEBSITE_ORIGIN
- *       optional. Bypasses the mailer's log and caps: it is an operator tool, one address, sample values only.
+ *       optional. scripts/mail-preview.sh fills them from Secret Manager and config/hosts.json when unset.
+ *       Bypasses the mailer's log and caps: it is an operator tool, one address, sample values only.
  */
 const LOCALES: readonly UserLocale[] = ['ar', 'en'];
 const SAMPLE_LINK = 'https://app.example.com/setup#sample-token';

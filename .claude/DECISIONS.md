@@ -5691,6 +5691,31 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A new `ACCOUNT_NOT_FOUND` error code. Rejected: a reason on `NOT_FOUND` says the same, and every client already handles 404.
 - Allowing a reset link on your own account without `lock`. Rejected: the console isn't where you manage your own account, and one rule is easier to trust.
 
+---
+
+## ADR-216: The Operator's Billing Grants, Feature Flags and Firm Requests: Three More Action Modules, Never Your Own Account (MUT-462)
+
+**Status:** Accepted (2026-10-27, MUT-462; epic MUT-458's last step). Plan §3 MUT-462 and design spec §3b (5A, 14A, 15A, 16A) in `.claude/designs/mut-458-operator-console.md`. Builds on ADR-212 (decision 4), ADR-213 and ADR-215.
+
+**Context:** billing grants (MUT-358), per-user flags (MUT-433) and firm requests (MUT-300) were CLI-only, written as closures in `admin-billing.ts`, `admin-users.ts` and `admin.ts` with the token as the actor (`actorId null`, `grantedBy 'admin'`).
+
+**Decision:**
+1. **Extracted, not rewritten.** `server/src/operator/actions/{billingGrants,features,firms}.ts` hold the actions; the admin routes and `/v1/operator` are adapters. The admin suites (`billing-routes`, `user-features`, `routes-admin-firm`) pass unchanged; parity tests compare the console's answers and audit rows with the CLI's.
+2. **The operator is the actor.** Grants record `grantedBy operator:<id>` and audit `actorId <id>`; flags the same; the firm repository already took an audit actor (`FirmAudit.actorId`), so `setFirm` / `declineFirmRequest` needed no port change, only a non-null actor.
+3. **The console's grants cover a person.** `POST /v1/operator/accounts/{userId}/billing-grants` grants the person's own profiles (the `userId` target), and the account page lists that person's grants, revoked ones included. A one-profile grant (`organizationId`) stays a CLI action; revoking from an account only reaches that account's grants (another's is 404).
+4. **Never your own account (E10, as ADR-215).** Granting yourself coverage or a flag answers 409 `OWN_ACCOUNT`; the rows show inert with the reason.
+5. **The flag list comes from the server.** The account view carries `availableFeatures` (`FEATURES`), so a new flag shows in the console with no portal change (by its code until it has words). Turning a flag on acts at once; turning one off confirms first.
+6. **Firm requests:** `GET /v1/operator/firm-requests` (as the admin list) and `GET …/{organizationId}` (the request plus the profile's members with role and status, for the owner picker: outside finding O7). Enable and decline act only on a pending request; otherwise 404 with `details.reason FIRM_REQUEST_NOT_FOUND`. An owned Business profile keeps its owners (MUT-300 D4); an operator firm's owners are chosen from its active members.
+
+**Consequences:**
+- Declining a firm request sends no mail (none exists): the owner sees the offer again on the profile. The design's "we tell the requester" became "its owner can ask again".
+- `admin.ts`'s firm decline now adds `details.reason FIRM_REQUEST_NOT_FOUND` to its 404 (additive).
+- Enable checks the request is pending and then switches, in two steps (TD-270).
+
+**Alternatives considered:**
+- Granting a profile (`organizationId`) from the console. Rejected for now: the account page is about a person, and profile-level grants are rare operator fixes.
+- A copy of `FEATURES` in the portal. Rejected: the server's list is the one list.
+
 ## ADR-218: A Project's Figures Are in Its Own Currency; a Matter's Other-Currency Owed Counts in Its Own Block (MUT-488)
 
 **Status:** Accepted (2026-10-27, MUT-488). Applies ADR-004.

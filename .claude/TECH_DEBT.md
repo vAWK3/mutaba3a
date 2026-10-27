@@ -24,6 +24,12 @@
 - **Why it's acceptable:** only an Owed can differ from its matter's currency, and the customer summary, the organization summary and the statement all show it in its own currency.
 - **Fix:** if people need it on the matter, add an additive `otherCurrencies: [{currency, outstanding, overdue, dueToday, notYetDue}]` to the project wire, and decide whether it moves the matter's status.
 
+### TD-270: Enabling a firm request checks it is pending, then switches, in two steps
+- **Where:** `server/src/operator/actions/firms.ts` `enableRequest` (MUT-462, ADR-216).
+- **What:** the console's Enable reads the organization (pending?) and then calls `setFirm`. A decline that lands between the two (the CLI, another tab) is followed by an enable anyway.
+- **Why it's small:** both are the operator's own actions, seconds apart, and the result is a legal state (firm on, audited). Fix by letting `setFirm` take a "only while requested" condition under its row lock.
+- **Added:** 2026-10-27.
+
 ### TD-269: The operator's account page can't say when an account was disabled
 **Status**: Open (MUT-461, 2026-10-27)
 - **What:** design 5A's banner reads "Disabled ‹date›", but no column records when an account was disabled (`users.status` only; `updatedAt` moves on any change). The banner says "This account is disabled" with no date.

@@ -71,10 +71,24 @@ export function RowLink({ label, sub, href }: { label: ReactNode; sub?: ReactNod
   );
 }
 
-export function RowSwitch({ label, on, onToggle }: { label: string; on: boolean; onToggle: () => void }) {
+/**
+ * A switch row. MUT-462 (15A): `sub` is the one-line description under the label; `busy` keeps the row in place while a
+ * change saves (aria-busy, no second tap); `inert` shows it as unavailable, with `sub` saying why.
+ */
+export function RowSwitch({ label, sub, on, onToggle, busy, inert }: { label: string; sub?: ReactNode; on: boolean; onToggle: () => void; busy?: boolean; inert?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={on} className="hp-you-row press" onClick={onToggle}>
-      <RowText label={label} />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-busy={busy || undefined}
+      aria-disabled={busy || inert || undefined}
+      className="hp-you-row press"
+      onClick={() => {
+        if (!busy && !inert) onToggle();
+      }}
+    >
+      <RowText label={label} sub={sub} />
       <span className="hp-you-switch" aria-hidden="true" />
     </button>
   );

@@ -44,6 +44,34 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — mail:preview --send finds its own settings
+
+- **What:** `npm --prefix server run mail:preview` now runs through `server/scripts/mail-preview.sh`, which fills any unset `RESEND_API_KEY` from Secret Manager (`mutaba3a-api-resend-api-key`, the same secret the live API mounts; project from `GCP_PROJECT_ID` or the tfvars, like `live-admin.sh`), `MAIL_FROM_ADDRESS` (`no-reply@<mailDomain>`), `PORTAL_ORIGIN` and `WEBSITE_ORIGIN` from `config/hosts.json`. Values already in the environment still win, and the key is fetched only with `--send`.
+- **Why:** the operator shouldn't have to paste a key or export settings to send the sample mails.
+- **Files:** `server/scripts/mail-preview.sh` (new), `server/package.json`, `server/src/scripts/mail-preview.ts` (comment).
+
+## [Unreleased] - 2026-10-27 — MUT-462: the operator grants billing, turns flags on and off, and decides firm requests (API 1.81.0-mut462, ADR-216)
+
+**Why:** billing grants, per-user flags and firm requests still needed the CLI. Epic MUT-458's last step: every routine operator task is now in the portal.
+
+### Added
+- **Server:** `GET|POST /v1/operator/accounts/{userId}/billing-grants` and `DELETE …/billing-grants/{grantId}` (the person's own profiles; `grantedBy operator:<id>`); `PUT|DELETE /v1/operator/accounts/{userId}/features/{feature}`; `GET /v1/operator/firm-requests`, `GET …/{organizationId}` (the request plus members with role and status), `POST …/{organizationId}/enable|decline` (404 `FIRM_REQUEST_NOT_FOUND` when nothing is pending). Every write needs the passkey step-up; grants and flags refuse your own account (409 `OWN_ACCOUNT`); the lapse gate leaves them open. The account view adds `availableFeatures`.
+- **Portal:** the account page's Billing group (grants with where each stands, Revoke in the row, "Grant coverage" opens a drawer at `?grant=new`: tier, reason, expiry with 30 / 90 days / no end) and Features group (one switch per flag; on acts at once, off confirms). A Firms tab (`/operator/firms`, "Firms · N"): requests oldest first, Enable with an owner picker for an operator firm (the requester ticked, disabled or waiting members inert) or the owners kept for an owned profile, Decline in the row. ar + en.
+- Release-QA: `portal-selfservice.operator` `billing-grant-revoke`, `feature-grant-revoke`, `firm-request-enable`, `firm-request-decline` (Arabic, 375 px).
+
+### Changed
+- `DELETE /admin/v1/organizations/{id}/firm-request`'s 404 adds `details.reason FIRM_REQUEST_NOT_FOUND` (additive).
+- You › Account's Operator row reads "Signups, accounts and firms".
+- `RowSwitch` takes `sub`, `busy` and `inert` (the flag rows).
+
+### Technical
+- `server/src/operator/actions/{billingGrants,features,firms}.ts`; `admin-billing.ts`, `admin-users.ts` (features) and `admin.ts` (firms) are adapters with the token as actor; their suites pass unchanged. Parity tests in `routes-operator-billing-firms.test.ts`.
+- `src/hosted/operator/grants.ts` (a grant's state, the expiry a chosen day sends, the presets) and `src/hosted/operator/text.ts` (`isolated`, shared by the operator pages).
+- TD-270 recorded (enable's pending check and switch are two steps).
+- Files: `server/src/{operator/actions/*,routes/operator.ts,routes/admin*.ts,schemas.ts,billing/gate.ts,app.ts}`, `server/openapi/openapi.yaml`, `src/hosted/{pages/operator/*,operator/*,components/YouRows.tsx,data/operatorQueries.ts,api/*,router.tsx,hosted.css,i18n/*}`, `qa/**/operator.*`, `qa/support/selfService.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-215)
 
 **Why:** seeing an account's state, disabling one, signing it out or sending a reset needed the CLI and the right command. Epic MUT-458's third step: the operator console gets an Accounts tab.

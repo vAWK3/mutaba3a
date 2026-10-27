@@ -1109,6 +1109,12 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-operator-lock small { color: var(--text-secondary); font-size: var(--text-label); }
 .hp-operator-profile { cursor: default; }
 .hp-operator-profile .hp-operator-chips { margin-block-start: 0; }
+/* MUT-462: a grant row (its Revoke wraps under the text on a phone), the expiry presets, and the firm owners (the hp-pick list). */
+.hp-operator-grant { cursor: default; flex-wrap: wrap; }
+.hp-operator-grant > .hp-link-button { min-height: 44px; }
+.hp-operator-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-2); }
+.hp-operator-owners { display: grid; gap: var(--space-1); flex: 1 1 100%; margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+.hp-operator-owners .hp-pick:has(input:disabled) { color: var(--text-secondary); cursor: default; }
 .hp-connect-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .hp-connect-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
 .hp-connect-steps code { overflow-wrap: anywhere; font-size: var(--text-label); }

@@ -31,7 +31,7 @@
     "provision:user": "tsx src/scripts/users.ts create",
     "grant:user": "tsx src/scripts/users.ts grant",
     "terms:report": "tsx src/scripts/users.ts terms",
-    "mail:preview": "tsx src/scripts/mail-preview.ts",
+    "mail:preview": "./scripts/mail-preview.sh",
     "email:check": "domain=\"${MAIL_DOMAIN:-$(npm --prefix .. run --silent hosts -- get mailDomain --env \"${MUTABA3A_ENVIRONMENT:-production}\")}\" && MAIL_DOMAIN=\"$domain\" tsx src/scripts/email-check.ts",
     "email-domains:update": "tsx src/scripts/email-domains-update.ts",
     "passkey-providers:update": "tsx src/scripts/passkey-providers-update.ts",

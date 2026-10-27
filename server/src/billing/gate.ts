@@ -66,6 +66,16 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/operator/accounts/:userId/enable': 'open',
   'POST /v1/operator/accounts/:userId/sessions/revoke': 'open',
   'POST /v1/operator/accounts/:userId/setup-link': 'open',
+  // MUT-462: grants, flags and firm requests, the same rule.
+  'GET /v1/operator/accounts/:userId/billing-grants': 'open',
+  'POST /v1/operator/accounts/:userId/billing-grants': 'open',
+  'DELETE /v1/operator/accounts/:userId/billing-grants/:grantId': 'open',
+  'PUT /v1/operator/accounts/:userId/features/:feature': 'open',
+  'DELETE /v1/operator/accounts/:userId/features/:feature': 'open',
+  'GET /v1/operator/firm-requests': 'open',
+  'GET /v1/operator/firm-requests/:organizationId': 'open',
+  'POST /v1/operator/firm-requests/:organizationId/enable': 'open',
+  'POST /v1/operator/firm-requests/:organizationId/decline': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',
