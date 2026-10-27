@@ -1968,7 +1968,7 @@
         "declineWithPasskey": "Decline with passkey",
         "ownersLabel": "Owners",
         "confirmEnable": "{name} gets firm features. Owners: {owners}. Everyone else becomes a bookkeeper.",
-        "confirmEnableOwned": "{name} gets firm features. {owners} stay its owners; everyone else becomes a bookkeeper.",
+        "confirmEnableOwned": "{name} gets firm features. Its owners stay as they are ({owners}); everyone else becomes a bookkeeper.",
         "confirmDecline": "{name} stays a regular profile. Its owner can ask again.",
         "enabled": "Firm features on for {name}",
         "declined": "Request for {name} declined",

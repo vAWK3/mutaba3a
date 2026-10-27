@@ -2072,7 +2072,7 @@
         "declineWithPasskey": "رفض بمفتاح المرور",
         "ownersLabel": "المالكون",
         "confirmEnable": "سيحصل {name} على ميزات المكتب. المالكون: {owners}. يصبح الباقون محاسبين.",
-        "confirmEnableOwned": "سيحصل {name} على ميزات المكتب. يبقى {owners} مالكيه، ويصبح الباقون محاسبين.",
+        "confirmEnableOwned": "سيحصل {name} على ميزات المكتب. يبقى مالكوه كما هم ({owners})، ويصبح الباقون محاسبين.",
         "confirmDecline": "يبقى {name} ملفًا عاديًا. يمكن لمالكه أن يطلب من جديد.",
         "enabled": "فُعّلت ميزات المكتب لـ {name}",
         "declined": "رُفض طلب {name}",

@@ -131,7 +131,7 @@ describe('enabling a request (AC1, AC2)', () => {
   it('an owned business profile keeps its owners: no picker, and none are sent', async () => {
     const { user, api } = portal();
     await user.click((await rowOf('Studio Saleh')).getByRole('button', { name: 'Enable' }));
-    expect(await screen.findByText(sentence('Studio Saleh gets firm features. rana@studio.example stay its owners; everyone else becomes a bookkeeper.'))).toBeInTheDocument();
+    expect(await screen.findByText(sentence('Studio Saleh gets firm features. Its owners stay as they are (rana@studio.example); everyone else becomes a bookkeeper.'))).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Owners' })).toBeNull();
     await user.click((await rowOf('Studio Saleh')).getByRole('button', { name: 'Enable' }));
     await toasted('Firm features on for Studio Saleh');

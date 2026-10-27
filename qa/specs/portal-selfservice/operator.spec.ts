@@ -222,6 +222,8 @@ async function openAccount(page: Page, email: string, language: 'en' | 'ar' = 'e
 const accessRow = (page: Page, label: string | RegExp) => page.getByRole('region', { name: /^(Access|الدخول)$/ }).getByRole('button', { name: label });
 /** The info toast: its text has the address isolated (FSI … PDI), so it is read with the isolates removed. */
 const toastText = (page: Page) => page.getByTestId('toast-live').evaluate((el) => (el.textContent ?? '').replace(/[⁨⁩]/g, ''));
+/** MUT-462: the open in-row confirm's text, read the same way (its address is isolated too). */
+const confirmText = (page: Page) => page.getByRole('group').first().evaluate((el) => (el.textContent ?? '').replace(/[⁨⁩]/g, ''));
 
 test('Find an account by its email, and say so when there is none', { tag: '@portal-selfservice.operator.account-find' }, async ({ page, step }) => {
   await chooseLanguage(page, 'en');
@@ -402,8 +404,8 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
   });
   await step('Revoke the grant and confirm: the row says Revoked, and the CLI’s list agrees', async () => {
     await billing.getByRole('button', { name: 'Revoke' }).click();
-    await expect(page.getByRole('group')).toContainText(`${person.email} loses this Freelancer coverage.`);
-    await page.getByRole('group').getByRole('button', { name: 'Revoke' }).click();
+    await expect.poll(() => confirmText(page)).toContain(`${person.email} loses this Freelancer coverage.`);
+    await page.getByRole('group').first().getByRole('button', { name: 'Revoke' }).click();
     await expect.poll(() => toastText(page)).toContain(`Coverage revoked for ${person.email}`);
     await expect(billing.getByText(/^Revoked /)).toBeVisible();
     await expect(billing.getByRole('button', { name: 'Revoke' })).toHaveCount(0);
@@ -427,7 +429,7 @@ test('Turn Connect Claude on for a person, then off with a confirm', { tag: '@po
   });
   await step('Turn it off: it asks first, saying what they lose; confirm, and it reads off', async () => {
     await flag().click();
-    await expect(page.getByRole('group')).toContainText(`${person.email} loses Claude access, and any Claude they connected is disconnected now.`);
+    await expect.poll(() => confirmText(page)).toContain(`${person.email} loses Claude access, and any Claude they connected is disconnected now.`);
     expect(await featureHolders()).toContain(person.id);
     await page.getByRole('button', { name: 'Turn off' }).click();
     await expect(flag()).toHaveAttribute('aria-checked', 'false');
@@ -452,7 +454,7 @@ test('Enable firm features for a waiting request from the Firms tab', { tag: '@p
   });
   await step('Press Enable: the owner stays its owner; enable with the passkey', async () => {
     await firmRow(page, request.profileName).getByRole('button', { name: 'Enable' }).click();
-    await expect(page.getByRole('group')).toContainText(`${request.email} stay its owners`);
+    await expect.poll(() => confirmText(page)).toContain(`Its owners stay as they are (${request.email})`);
     await page.getByRole('button', { name: 'Enable with passkey' }).click();
     await expect.poll(() => toastText(page)).toContain(`Firm features on for ${request.profileName}`);
     await expect(firmRow(page, request.profileName)).toHaveCount(0);
@@ -479,8 +481,8 @@ test('Decline a firm request, in Arabic on a 375 px phone', { tag: '@portal-self
   });
   await step('Press رفض: the confirm says the profile stays regular and its owner can ask again', async () => {
     await firmRow(page, request.profileName).getByRole('button', { name: 'رفض' }).click();
-    await expect(page.getByRole('group')).toContainText('يبقى');
-    await expect(page.getByRole('group')).toContainText('يمكن لمالكه أن يطلب من جديد');
+    await expect.poll(() => confirmText(page)).toContain('يبقى');
+    await expect.poll(() => confirmText(page)).toContain('يمكن لمالكه أن يطلب من جديد');
     await expectNoHorizontalOverflow(page, 'the decline confirm at 375 px');
   });
   await step('Confirm with the passkey: the request leaves; no firm features, nothing pending, audited with the operator', async () => {
