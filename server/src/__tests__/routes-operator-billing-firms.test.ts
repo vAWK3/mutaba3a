@@ -112,6 +112,10 @@ describe('MUT-462 billing grants on an account', () => {
     const past = await post(h, accountPath(p.id, 'billing-grants'), op.token, { ...GRANT, expiresAt: '2026-01-01T00:00:00.000Z' });
     expect(past.status).toBe(422);
     expect(await read(past)).toMatchObject({ error: { details: { field: 'expiresAt' } } });
+    // A past expiry is refused before anyone is looked up (422 before 404), on both surfaces, as the CLI always did.
+    const pastOnUnknown = { ...GRANT, expiresAt: '2026-01-01T00:00:00.000Z' };
+    expect((await post(h, accountPath(UNKNOWN, 'billing-grants'), op.token, pastOnUnknown)).status).toBe(422);
+    expect((await adminSend(h, 'POST', '/admin/v1/billing/grants', { userId: UNKNOWN, ...pastOnUnknown })).status).toBe(422);
     for (const res of [await post(h, accountPath(UNKNOWN, 'billing-grants'), op.token, GRANT), await get(h, accountPath(UNKNOWN, 'billing-grants'), op.token)]) {
       expect(res.status).toBe(404);
       expect(await read(res)).toMatchObject({ error: { code: 'NOT_FOUND', details: { reason: 'ACCOUNT_NOT_FOUND' } } });

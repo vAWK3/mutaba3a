@@ -7,7 +7,7 @@ import type { WebauthnConfig } from '../auth/webauthn.js';
 import { ApiError } from '../errors.js';
 import type { ErrorReporter } from '../observability/reporter.js';
 import { accountActions, type AccountStatusVerb } from '../operator/actions/accounts.js';
-import { billingGrantActions } from '../operator/actions/billingGrants.js';
+import { assertFutureExpiry, billingGrantActions } from '../operator/actions/billingGrants.js';
 import { featureActions } from '../operator/actions/features.js';
 import { firmActions } from '../operator/actions/firms.js';
 import { signupReviewActions, type SignupReviewActionOptions } from '../operator/actions/signupReviews.js';
@@ -394,8 +394,9 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     async (c) => {
       const userId = c.req.valid('param').userId;
       notOwn(c, userId);
-      const user = await accounts.mustGet(userId);
       const body = c.req.valid('json');
+      assertFutureExpiry(body.expiresAt, c.get('now')());
+      const user = await accounts.mustGet(userId);
       const grant = await grants.create({ target: { userId: user.id, organizationId: null }, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, contextOf(c));
       return c.json(serializeGrant(grant), 201);
     },

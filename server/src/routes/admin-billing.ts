@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
-import { billingGrantActions } from '../operator/actions/billingGrants.js';
+import { assertFutureExpiry, billingGrantActions } from '../operator/actions/billingGrants.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import { billingStatusOf, entitlementsFor, serializeEntitlement } from '../billing/coverage.js';
@@ -90,6 +90,7 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
     }),
     async (c) => {
       const body = c.req.valid('json');
+      assertFutureExpiry(body.expiresAt, c.get('now')());
       const target = body.organizationId !== undefined ? { userId: null, organizationId: body.organizationId } : { userId: await personId(body), organizationId: null };
       const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, ctxOf(c));
       return c.json(serializeGrant(grant), 201);

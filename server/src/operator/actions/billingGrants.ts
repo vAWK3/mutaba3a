@@ -28,6 +28,13 @@ export interface CreateGrantInput {
   expiresAt?: string | undefined;
 }
 
+/** An expiry must lie ahead; checked before anything is looked up, as the admin route always did (422 before 404). */
+export function assertFutureExpiry(expiresAt: string | undefined, at: Date): Date | null {
+  const date = expiresAt ? new Date(expiresAt) : null;
+  if (date && date <= at) throw new ApiError('VALIDATION_FAILED', 'expiresAt must be in the future', { field: 'expiresAt' });
+  return date;
+}
+
 export function grantNotFound(): ApiError {
   return new ApiError('NOT_FOUND', 'Grant not found');
 }
@@ -49,8 +56,7 @@ export function billingGrantActions({ store }: BillingGrantActionOptions) {
   }
 
   async function create(input: CreateGrantInput, ctx: ActionContext): Promise<EntitlementGrantRecord> {
-    const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
-    if (expiresAt && expiresAt <= ctx.at) throw new ApiError('VALIDATION_FAILED', 'expiresAt must be in the future', { field: 'expiresAt' });
+    const expiresAt = assertFutureExpiry(input.expiresAt, ctx.at);
     if (input.target.organizationId && !(await store.organizations.getById(input.target.organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
     const id = randomUUID();
     const metadata: JsonObject = { ...input.target, tier: input.tier, reason: input.reason, expiresAt: expiresAt?.toISOString() ?? null };
