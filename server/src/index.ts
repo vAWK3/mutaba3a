@@ -121,7 +121,7 @@ const reviewDigest = createReviewDigest({
   logger,
   now: () => new Date(),
   to: config.OPERATOR_ALERT_EMAIL ?? null,
-  reviewLink: config.PORTAL_ORIGIN ? new URL(REVIEW_PAGE_PATH, config.PORTAL_ORIGIN).toString() : null,
+  reviewLink: config.PORTAL_ORIGIN ? `${config.PORTAL_ORIGIN.replace(/\/+$/, '')}${REVIEW_PAGE_PATH}` : null,
 });
 /** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
 const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;

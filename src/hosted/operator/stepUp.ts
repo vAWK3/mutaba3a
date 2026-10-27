@@ -37,7 +37,7 @@ export async function stepUpWithPasskey(): Promise<{ kind: 'ok'; until: string }
     return { kind: 'ok', until: stepUpUntil };
   } catch (error) {
     if (!(error instanceof ApiError)) return { kind: 'failed' };
-    if (error.status === 403) return { kind: 'refused' };
+    if (error.code === 'PASSKEY_NOT_ACCEPTED') return { kind: 'refused' };
     if (apiErrorReason(error) === 'OPERATOR_NEEDS_PASSKEY') return { kind: 'noPasskey' };
     return { kind: 'failed' };
   }

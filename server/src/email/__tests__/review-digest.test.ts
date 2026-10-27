@@ -53,6 +53,9 @@ describe('review digest (MUT-367)', () => {
     expect(mail!.text).toContain('https://app.example.test/operator/signups');
     expect(mail!.html).toContain('href="https://app.example.test/operator/signups"');
     expect(mail!.text).toContain(REVIEW_COMMAND);
+    // The button first; the command is the fallback under it.
+    expect(mail!.html.indexOf('Review signups')).toBeLessThan(mail!.html.indexOf(REVIEW_COMMAND));
+    expect(mail!.text).toContain(`Or review them with ${REVIEW_COMMAND}.`);
   });
 
   it('MUT-460: with no portal origin the mail carries only the command, as before', async () => {

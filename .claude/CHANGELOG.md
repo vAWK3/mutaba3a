@@ -42,6 +42,8 @@
 - Server: the review digest carries a "Review signups" button to `<PORTAL_ORIGIN>/operator/signups` (`createReviewDigest` `reviewLink`, `REVIEW_PAGE_PATH`); the CLI line stays.
 - Release-QA: `qa/features/portal-selfservice/operator.yaml` + `qa/specs/portal-selfservice/operator.spec.ts` (`signups-approve`, `signups-decline`, `step-up-passkey`, `hidden-for-non-operator`); `qa/support/selfService.ts` `pendingSignup`, `grantOperator`, `signsIn`; the live env sets `OPERATOR_ALERT_EMAIL`.
 
+- Pre-merge review fixes (qa-reconcile): the digest's command line moved under the button; a 403 marks every row "with passkey" and Cancel drops the fallback; Cancel and Escape wait while a decision is in flight; a 404 on a decision re-reads `/v1/me` (a revoked operator leaves); "refused" only for `PASSKEY_NOT_ACCEPTED`; Send again only for a failed or capped send (`mailRetryable`); "Domain registered today"; `?next=/operator#…` is passkey-first. TD-267 (OperatorConfirm duplicates InPlaceConfirm, MUT-461) and TD-268 (iOS gesture window, check on an iPhone) recorded.
+
 ### Files
 - `server/src/email/{review-digest.ts,ports.ts,templates/copy.ts}`, `server/src/index.ts`
 - `src/hosted/{router.tsx,api/client.ts,session/features.ts,hosted.css,i18n/en.json,i18n/ar.json}`, `src/hosted/operator/**`, `src/hosted/pages/operator/**`, `src/hosted/data/{operatorQueries,signupReviews}.ts`, `src/hosted/pages/you/YouAccount.tsx`, `src/hosted/pages/auth/SignInPage.tsx`

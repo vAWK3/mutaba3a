@@ -331,6 +331,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
 }
 
 /** MUT-460 (2A): the operator console's paths. */
-function isOperatorPath(path: string): boolean {
-  return path === '/operator' || path.startsWith('/operator/') || path.startsWith('/operator?');
+function isOperatorPath(next: string): boolean {
+  const path = next.split(/[?#]/, 1)[0];
+  return path === '/operator' || path.startsWith('/operator/');
 }

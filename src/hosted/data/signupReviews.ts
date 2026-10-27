@@ -64,6 +64,11 @@ export function waitingOf(createdAt: string, now: Date): Waiting {
   return { count: Math.max(1, Math.floor(waited / MINUTE_MS)), unit: 'minute', overADay: false };
 }
 
+/** 9A: whether trying again could send it: a failed or capped send. Suppressed, refused or a server that sends no mail never will. */
+export function mailRetryable(mail: SignupReviewDecision['mail'] | undefined): boolean {
+  return mail === 'failed' || mail === 'capped';
+}
+
 /** 9A: whether the person's mail went out (a duplicate is the same mail, already sent). */
 export function mailWentOut(mail: SignupReviewDecision['mail']): boolean {
   return mail === 'sent' || mail === 'duplicate';

@@ -23,10 +23,8 @@ export function OperatorStepUpProvider({ children }: { children: ReactNode }) {
   return <StepUpContext.Provider value={{ until, note: setUntil }}>{children}</StepUpContext.Provider>;
 }
 
-function later(a: string | null, b: string | null): string | null {
-  if (!a || !b) return a ?? b;
-  return Date.parse(a) >= Date.parse(b) ? a : b;
-}
+/** The window as the server last answered on this page: lapsed after a 403. */
+const LAPSED = new Date(0).toISOString();
 
 export type RunFailure = Exclude<StepUpFailure, 'cancelled'>;
 
@@ -36,7 +34,8 @@ export function useOperatorRun(serverUntil: string | null) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<RunFailure | null>(null);
   // Read at render, as the billing row reads today: a window that lapses while the confirm is open meets the 403 path.
-  const fresh = isStepUpFresh(later(serverUntil, stepUp.until), new Date());
+  // What this page learned since the list was read (its own step-up, or a 403) is newer than the list's `stepUpUntil`.
+  const fresh = isStepUpFresh(stepUp.until ?? serverUntil, new Date());
 
   /** Runs `action`; resolves with its value, or null when it didn't run (the row already shows why). Other refusals throw. */
   const run = useCallback(
@@ -54,6 +53,8 @@ export function useOperatorRun(serverUntil: string | null) {
           setForcePasskey(false);
           return outcome.value;
         case 'needsPasskey':
+          // The server closed the window: every row now reads "with passkey", not just this one.
+          stepUp.note(LAPSED);
           setForcePasskey(true);
           return null;
         case 'stepUpFailed':
@@ -63,10 +64,14 @@ export function useOperatorRun(serverUntil: string | null) {
           throw outcome.error;
       }
     },
-    [forcePasskey, fresh, stepUp.note],
+    [forcePasskey, fresh, stepUp],
   );
 
-  const clear = useCallback(() => setFailure(null), []);
+  /** Cancel: no failure, and no "Confirm with passkey" left over from a 403 (the label follows freshness again). */
+  const clear = useCallback(() => {
+    setFailure(null);
+    setForcePasskey(false);
+  }, []);
   /** What the action button says: as is, "… with passkey" when stale, "Confirm with passkey" after a 403. */
   const label = forcePasskey ? 'confirm' : fresh ? 'plain' : 'passkey';
   return { run, busy, failure, setFailure, clear, label } as const;
@@ -119,7 +124,8 @@ export function OperatorConfirm({ text, labels, variant, run, error, onConfirm, 
   function onKeyDown(event: KeyboardEvent) {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    onCancel();
+    // A decision in flight finishes first: its answer belongs to this confirm.
+    if (!run.busy) onCancel();
   }
 
   const label = run.label === 'confirm' ? t('hosted.operator.stepUp.confirmWithPasskey') : run.label === 'passkey' ? labels.passkey : labels.plain;
@@ -129,7 +135,7 @@ export function OperatorConfirm({ text, labels, variant, run, error, onConfirm, 
       {run.failure && <StepUpFailureBanner failure={run.failure} />}
       {error}
       <div className="hp-passkey-actions">
-        <Button ref={cancelRef} type="button" variant="secondary" size="sm" onClick={onCancel}>
+        <Button ref={cancelRef} type="button" variant="secondary" size="sm" disabled={run.busy} onClick={onCancel}>
           {t('common.cancel')}
         </Button>
         <Button type="button" variant={variant} size="sm" isLoading={run.busy} keepLabelWhileLoading onClick={onConfirm}>

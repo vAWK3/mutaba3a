@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SignupReview } from '../../api/client';
-import { mailWentOut, reviewChips, waitingOf } from '../signupReviews';
+import { mailRetryable, mailWentOut, reviewChips, waitingOf } from '../signupReviews';
 
 /** MUT-460 (design 13A, 18A): what a waiting signup's row says about it. */
 const review = (overrides: Partial<SignupReview> = {}): SignupReview => ({
@@ -52,6 +52,14 @@ describe('waitingOf', () => {
   it('a day exactly is over a day; a clock behind the server is a minute', () => {
     expect(at('2026-10-28T09:00:00.000Z')).toEqual({ count: 1, unit: 'day', overADay: true });
     expect(at('2026-10-27T08:00:00.000Z')).toEqual({ count: 1, unit: 'minute', overADay: false });
+  });
+});
+
+describe('mailRetryable', () => {
+  it('only a failed or capped send is worth another try', () => {
+    expect(mailRetryable('failed')).toBe(true);
+    expect(mailRetryable('capped')).toBe(true);
+    for (const mail of ['suppressed', 'refused', 'disabled', 'sent', 'duplicate', undefined] as const) expect(mailRetryable(mail)).toBe(false);
   });
 });
 

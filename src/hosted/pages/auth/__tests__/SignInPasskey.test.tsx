@@ -65,7 +65,7 @@ describe('passkey sign-in (MUT-115)', () => {
   });
 
   it('MUT-460 (2A): on the way to the operator console the passkey comes first, as the primary button', async () => {
-    signInPage({}, `/sign-in?next=${encodeURIComponent('/operator/signups')}`);
+    signInPage({}, `/sign-in?next=${encodeURIComponent('/operator#signups')}`);
     await screen.findByLabelText('Email');
     const buttons = screen.getAllByRole('button', { name: /^Sign in/ });
     expect(buttons.map((b) => b.textContent)).toEqual(['Sign in with a passkey', 'Sign in']);
@@ -74,7 +74,7 @@ describe('passkey sign-in (MUT-115)', () => {
   });
 
   it('MUT-460: anywhere else (even a path that only starts with “operator”) the password stays first', async () => {
-    signInPage({}, `/sign-in?next=${encodeURIComponent('/operators-guide')}`);
+    signInPage({}, `/sign-in?next=${encodeURIComponent('/operators-guide#/operator/')}`);
     await screen.findByLabelText('Email');
     expect(screen.getAllByRole('button', { name: /^Sign in/ }).map((b) => b.textContent)).toEqual(['Sign in', 'Sign in with a passkey']);
   });

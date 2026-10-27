@@ -72,6 +72,10 @@ function portal({ account = operator(), reviews = [OLD, NEW], stepUpUntil = FRES
 
 const row = (email: string) => screen.getByRole('listitem', { name: email });
 
+async function openApprove(user: ReturnType<typeof portal>['user']) {
+  await user.click(await within(await screen.findByRole('listitem', { name: 'rana@gmail.com' })).findByRole('button', { name: 'Approve' }));
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   localStorage.clear();
@@ -86,9 +90,9 @@ afterEach(() => {
 });
 
 describe('who sees the console (AC5)', () => {
-  it('a non-operator gets the not-found answer, and the list is never asked for', async () => {
+  it('a non-operator gets the not-found answer (Home), and the list is never asked for', async () => {
     const { router, api } = portal({ account: me([profile()]) });
-    await waitFor(() => expect(locationOf(router)).not.toContain('/operator'));
+    await waitFor(() => expect(locationOf(router)).toMatch(/^\/p\/[0-9a-f-]{36}/));
     expect(api.count('GET /v1/operator/signup-reviews')).toBe(0);
   });
 
@@ -138,6 +142,11 @@ describe('the list (AC3, design 7A, 13A, 18A)', () => {
     expect(within(fresh).getByText('Domain 12 days old')).toHaveClass('badge-warning');
     expect(within(fresh).getByText('mystery-check')).toHaveAttribute('dir', 'ltr');
     expect(within(fresh).queryByText('Waiting 1 day+')).toBeNull();
+  });
+
+  it('a domain registered today says so, not "0 days old"', async () => {
+    portal({ reviews: [review({ classification: 'BUSINESS_UNVERIFIED', reasons: ['rdap-age-0d'] })] });
+    expect(await screen.findByText('Domain registered today')).toHaveClass('badge-warning');
   });
 
   it('says so when no one is waiting', async () => {
@@ -208,6 +217,24 @@ describe('approving and declining (AC1, AC2, AC3, design 8A, 11A)', () => {
     expect(screen.queryByText('Already decided')).toBeNull();
   });
 
+  it('a 404 on a decision re-reads /v1/me (a revoked operator leaves) and says the signup is gone', async () => {
+    const { user, api } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/approve`]: () => fail(404, 'NOT_FOUND') } });
+    await openApprove(user);
+    const before = api.count('GET /v1/me');
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve' }));
+    expect(await screen.findByText('Already decided')).toBeInTheDocument();
+    await waitFor(() => expect(api.count('GET /v1/me')).toBeGreaterThan(before));
+  });
+
+  it('Cancel waits while a decision is in flight', async () => {
+    const { user } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/approve`]: never } });
+    await openApprove(user);
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(within(row('rana@gmail.com')).getByRole('button', { name: 'Cancel' })).toBeDisabled());
+    await user.keyboard('{Escape}');
+    expect(screen.getByText("rana@gmail.com can sign in. We'll email them now.")).toBeInTheDocument();
+  });
+
   it('an account that has records now can’t be declined, and says so in the row', async () => {
     const { user } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/decline`]: () => fail(409, 'CONFLICT', { reason: 'NOT_EMPTY' }) } });
     await user.click(await within(await screen.findByRole('listitem', { name: 'rana@gmail.com' })).findByRole('button', { name: 'Decline' }));
@@ -238,6 +265,15 @@ describe('the mail didn’t send (AC3, design 9A)', () => {
     await waitFor(() => expect(screen.queryByText("Approved. The email didn't send.")).toBeNull());
   });
 
+  it('a server that sends no mail: the address to copy and no Send again, which could never go', async () => {
+    const { user } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/approve`]: () => ok({ review: { ...OLD, decision: 'APPROVED' }, mail: 'disabled' }) } });
+    await openApprove(user);
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve' }));
+    expect(await screen.findByText("Approved. The email didn't send.")).toBeInTheDocument();
+    expect(screen.getByText('Write to them yourself from your own email.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send again' })).toBeNull();
+  });
+
   it('a decline keeps the address to copy, with no Send again: the account is gone', async () => {
     const { user } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/decline`]: () => ok({ review: { ...OLD, userId: null, decision: 'DECLINED' }, mail: 'capped' }) } });
     await user.click(await within(await screen.findByRole('listitem', { name: 'rana@gmail.com' })).findByRole('button', { name: 'Decline' }));
@@ -249,9 +285,6 @@ describe('the mail didn’t send (AC3, design 9A)', () => {
 });
 
 describe('the passkey step-up (design 1A, 10A)', () => {
-  async function openApprove(user: ReturnType<typeof portal>['user']) {
-    await user.click(await within(await screen.findByRole('listitem', { name: 'rana@gmail.com' })).findByRole('button', { name: 'Approve' }));
-  }
 
   it('stale: the confirm reads “Approve with passkey”, and one tap steps up and then approves', async () => {
     const { user, api } = portal({ stepUpUntil: null });
@@ -263,14 +296,29 @@ describe('the passkey step-up (design 1A, 10A)', () => {
     expect(api.count('POST /v1/operator/step-up')).toBe(1);
   });
 
-  it('after a step-up, the next decision acts directly', async () => {
-    const { user, api } = portal({ stepUpUntil: null, extra: { 'GET /v1/operator/signup-reviews': () => ok({ data: [OLD, NEW], nextCursor: null, stepUpUntil: null }) } });
+  it('after a step-up, the next decision acts directly, with no second prompt', async () => {
+    const { user, api } = portal({ stepUpUntil: null });
     await openApprove(user);
     await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve with passkey' }));
     await screen.findByText('rana@gmail.com approved · email sent');
-    await user.click(within(row('sami@newco.example')).getByRole('button', { name: 'Approve' }));
-    expect(within(row('sami@newco.example')).getByRole('button', { name: 'Approve' })).toBeInTheDocument();
-    expect(api.count('POST /v1/operator/step-up')).toBe(1);
+    await user.click(within(await screen.findByRole('listitem', { name: 'sami@newco.example' })).getByRole('button', { name: 'Approve' }));
+    await user.click(within(row('sami@newco.example')).getByRole('button', { name: 'Approve', exact: true }));
+    expect(await screen.findByText('sami@newco.example approved · email sent')).toBeInTheDocument();
+    expect(api.count(`POST /v1/operator/signup-reviews/${USER_2}/approve`)).toBe(1);
+    expect(api.count('POST /v1/operator/step-up/options')).toBe(1);
+    expect(browser.startAuthentication).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a 403, every row asks for the passkey; Cancel drops the "Confirm with passkey" fallback', async () => {
+    const { user } = portal({ extra: { [`POST /v1/operator/signup-reviews/${USER_1}/approve`]: () => fail(403, 'RECENT_SIGN_IN_REQUIRED', { method: 'passkey', windowMinutes: 10 }) } });
+    await openApprove(user);
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve' }));
+    await within(row('rana@gmail.com')).findByRole('button', { name: 'Confirm with passkey' });
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Cancel' }));
+    await user.click(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve' }));
+    expect(within(row('rana@gmail.com')).getByRole('button', { name: 'Approve with passkey' })).toBeInTheDocument();
+    await user.click(within(row('sami@newco.example')).getByRole('button', { name: 'Decline' }));
+    expect(within(row('sami@newco.example')).getByRole('button', { name: 'Decline with passkey' })).toBeInTheDocument();
   });
 
   it('cancelling the passkey sheet goes back to the confirm with no message', async () => {

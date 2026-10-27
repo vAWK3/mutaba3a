@@ -10,7 +10,8 @@ import { AlertIcon, InfoIcon } from '../../components/Icons';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { useToast } from '../../components/Toast';
 import { dropSignup, useOperatorSignups } from '../../data/operatorQueries';
-import { mailWentOut, reviewChips, waitingOf, type ReviewChip } from '../../data/signupReviews';
+import { mailRetryable, mailWentOut, reviewChips, waitingOf, type ReviewChip } from '../../data/signupReviews';
+import { ME_KEY } from '../../session/me';
 import { OperatorConfirm, StepUpFailureBanner, useOperatorRun } from '../../operator/OperatorStepUp';
 
 /**
@@ -21,7 +22,7 @@ import { OperatorConfirm, StepUpFailureBanner, useOperatorRun } from '../../oper
  * decided first says so. Every write goes through the operator step-up (OperatorStepUp.tsx).
  */
 type Decision = 'approve' | 'decline';
-type Settled = { review: SignupReview; state: 'approvedMailFailed' | 'declinedMailFailed' | 'alreadyDecided' };
+type Settled = { review: SignupReview; state: 'approvedMailFailed' | 'declinedMailFailed' | 'alreadyDecided'; mail?: SignupReviewDecision['mail'] };
 
 const SKELETON_ROWS = 3;
 
@@ -42,13 +43,13 @@ export function OperatorSignupsPage({ headingRef }: { headingRef: RefObject<HTML
     });
   }
 
-  function settle(review: SignupReview, state: Settled['state']) {
-    setSettled((rows) => [...rows.filter((s) => s.review.id !== review.id), { review, state }]);
+  function settle(review: SignupReview, state: Settled['state'], mail?: SignupReviewDecision['mail']) {
+    setSettled((rows) => [...rows.filter((s) => s.review.id !== review.id), { review, state, ...(mail ? { mail } : {}) }]);
     dropSignup(queryClient, review.userId ?? '');
   }
 
   function onDecided(review: SignupReview, index: number, decision: Decision, mail: SignupReviewDecision['mail']) {
-    if (!mailWentOut(mail)) return settle(review, decision === 'approve' ? 'approvedMailFailed' : 'declinedMailFailed');
+    if (!mailWentOut(mail)) return settle(review, decision === 'approve' ? 'approvedMailFailed' : 'declinedMailFailed', mail);
     dropSignup(queryClient, review.userId ?? '');
     showToast(t(decision === 'approve' ? 'hosted.operator.signups.approved' : 'hosted.operator.signups.declined', { email: review.email ?? '' }), { tone: 'info' });
     focusRowAt(index);
@@ -84,6 +85,7 @@ export function OperatorSignupsPage({ headingRef }: { headingRef: RefObject<HTML
                 stepUpUntil={list.stepUpUntil}
                 onDecided={(decision, mail) => onDecided(review, index, decision, mail)}
                 onAlreadyDecided={() => settle(review, 'alreadyDecided')}
+                onGone={() => void queryClient.invalidateQueries({ queryKey: ME_KEY })}
               />
             ))}
           </ul>
@@ -98,11 +100,14 @@ function SignupRow({
   stepUpUntil,
   onDecided,
   onAlreadyDecided,
+  onGone,
 }: {
   review: SignupReview;
   stepUpUntil: string | null;
   onDecided: (decision: Decision, mail: SignupReviewDecision['mail']) => void;
   onAlreadyDecided: () => void;
+  /** A 404: the review is gone, or the operator gate refused (operator revoked). /v1/me decides which: a revoked operator leaves the page. */
+  onGone: () => void;
 }) {
   const t = useT();
   const run = useOperatorRun(stepUpUntil);
@@ -129,7 +134,10 @@ function SignupRow({
       if (result) onDecided(decision, result.mail);
     } catch (error) {
       const reason = error instanceof ApiError ? apiErrorReason(error) : undefined;
-      if (reason === 'ALREADY_DECIDED' || (error instanceof ApiError && error.status === 404)) onAlreadyDecided();
+      if (error instanceof ApiError && error.status === 404) {
+        onGone();
+        onAlreadyDecided();
+      } else if (reason === 'ALREADY_DECIDED') onAlreadyDecided();
       else if (reason === 'NOT_EMPTY') setNotEmpty(true);
       else run.setFailure('failed');
     }
@@ -220,7 +228,7 @@ function ChipBadge({ chip }: { chip: ReviewChip }) {
   }
   return (
     <Badge variant={chip.tone} size="sm">
-      {chip.kind === 'age' ? tp('hosted.operator.chips.youngDomain', chip.days) : t(`hosted.operator.chips.${chip.key}`)}
+      {chip.kind === 'age' ? (chip.days === 0 ? t('hosted.operator.chips.domainToday') : tp('hosted.operator.chips.youngDomain', chip.days)) : t(`hosted.operator.chips.${chip.key}`)}
     </Badge>
   );
 }
@@ -231,6 +239,8 @@ function SettledRow({ settled, stepUpUntil, onDone }: { settled: Settled; stepUp
   const showToast = useToast();
   const run = useOperatorRun(stepUpUntil);
   const { review, state } = settled;
+  // 9A: Send again only where another try can go out (a failed or capped send); otherwise the address is the way.
+  const [retryable, setRetryable] = useState(mailRetryable(settled.mail));
   const email = review.email ?? '';
   const rowRef = useRef<HTMLLIElement>(null);
   // It takes the decided row's place, so it takes its focus too.
@@ -241,7 +251,11 @@ function SettledRow({ settled, stepUpUntil, onDone }: { settled: Settled; stepUp
     try {
       const result = await run.run(() => api.decideSignupReview(review.userId!, 'resend'));
       if (!result) return;
-      if (!mailWentOut(result.mail)) return run.setFailure('failed');
+      if (!mailWentOut(result.mail)) {
+        if (mailRetryable(result.mail)) run.setFailure('failed');
+        else setRetryable(false);
+        return;
+      }
       showToast(t('hosted.operator.signups.resent', { email }), { tone: 'info' });
       onDone();
     } catch {
@@ -268,6 +282,7 @@ function SettledRow({ settled, stepUpUntil, onDone }: { settled: Settled; stepUp
             <AlertIcon />
             <span>{t(state === 'approvedMailFailed' ? 'hosted.operator.signups.mailFailedApproved' : 'hosted.operator.signups.mailFailedDeclined')}</span>
           </div>
+          {!retryable && <p className="hp-muted">{t('hosted.operator.signups.writeYourself')}</p>}
           <CopyField label={t('hosted.operator.signups.emailLabel')} value={email} />
         </>
       )}
@@ -276,7 +291,7 @@ function SettledRow({ settled, stepUpUntil, onDone }: { settled: Settled; stepUp
         <Button type="button" variant="secondary" size="sm" onClick={onDone}>
           {t('hosted.operator.signups.done')}
         </Button>
-        {state === 'approvedMailFailed' && (
+        {state === 'approvedMailFailed' && retryable && (
           <Button type="button" size="sm" isLoading={run.busy} keepLabelWhileLoading onClick={() => void sendAgain()}>
             {sendLabel}
           </Button>

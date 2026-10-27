@@ -1781,7 +1781,8 @@
         "resent": "Email sent to {email}",
         "done": "Done",
         "alreadyDecided": "Already decided",
-        "notEmpty": "This account has records now, so it can't be declined."
+        "notEmpty": "This account has records now, so it can't be declined.",
+        "writeYourself": "Write to them yourself from your own email."
       },
       "chips": {
         "webmail": "Webmail",
@@ -1801,7 +1802,8 @@
         "youngDomain": {
           "one": "Domain {count} day old",
           "other": "Domain {count} days old"
-        }
+        },
+        "domainToday": "Domain registered today"
       },
       "stepUp": {
         "confirmWithPasskey": "Confirm with passkey",

@@ -42,10 +42,14 @@ const signupRow = (page: Page, email: string) => page.getByRole('listitem', { na
 async function dismissNextPasskeySheet(page: Page) {
   await page.evaluate(() => {
     const real = navigator.credentials.get.bind(navigator.credentials);
-    navigator.credentials.get = () => {
-      navigator.credentials.get = real;
-      return Promise.reject(new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'));
-    };
+    const dismiss = Object.assign(
+      () => {
+        navigator.credentials.get = real;
+        return Promise.reject(new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'));
+      },
+      { dismissed: false },
+    );
+    navigator.credentials.get = dismiss;
   });
 }
 
@@ -139,9 +143,14 @@ test('A stale step-up asks for the passkey on the same tap; cancelling it change
     await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeVisible();
   });
   await step('Dismiss the passkey sheet: the confirm stays, with no message and nothing approved', async () => {
+    const posts: string[] = [];
+    page.on('request', (request) => void (request.method() === 'POST' && posts.push(new URL(request.url()).pathname)));
     await dismissNextPasskeySheet(page);
     await signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' }).click();
+    // The sheet was asked for (options fetched, the one-shot dismissal used up) and nothing else was sent.
+    await expect.poll(() => page.evaluate(() => (navigator.credentials.get as unknown as { dismissed?: boolean }).dismissed !== false)).toBe(true);
     await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeEnabled();
+    expect(posts).toEqual(['/v1/operator/step-up/options']);
     await expect(signupRow(page, waiting).getByRole('alert')).toHaveCount(0);
     expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(false);
   });
