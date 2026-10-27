@@ -163,6 +163,28 @@ function SignInForm({ next, reason }: SignInPageProps) {
   if (underReview) return <UnderReviewNotice onLeave={leaveReview} />;
 
   const pending = signIn.isPending || passkey.pending;
+  // MUT-460 (design 2A): an operator arriving from the digest signs in with the passkey first; it also opens their step-up.
+  const passkeyFirst = passkey.supported && isOperatorPath(safeNext(next));
+  const passkeyButton = passkey.supported && (
+    <button
+      type="button"
+      className={`btn ${passkeyFirst ? 'btn-primary' : 'btn-secondary'} btn-md hp-block`}
+      disabled={pending}
+      aria-busy={passkey.pending}
+      onClick={() => {
+        setBanner(null);
+        void passkey.start();
+      }}
+    >
+      {passkey.pending ? <span className="btn-spinner hp-inline-spinner" aria-hidden="true" /> : <PasskeyIcon />}
+      <span>{t('hosted.auth.passkey.button')}</span>
+    </button>
+  );
+  const passkeyDivider = (
+    <div className="hp-divider" role="separator">
+      <span>{t('hosted.auth.passkey.or')}</span>
+    </div>
+  );
   const offerUrl = hostedOfferHref();
   const termsLink = termsHref(language);
   const bannerId = `${ids}-banner`;
@@ -191,6 +213,13 @@ function SignInForm({ next, reason }: SignInPageProps) {
               {banner.kind === 'unreachable' && t('hosted.auth.unreachable')}
             </span>
           </div>
+        )}
+
+        {passkeyFirst && (
+          <>
+            {passkeyButton}
+            {passkeyDivider}
+          </>
         )}
 
         <div className="hp-field">
@@ -252,30 +281,16 @@ function SignInForm({ next, reason }: SignInPageProps) {
           )}
         </div>
 
-        <button type="submit" className="btn btn-primary btn-md hp-block" disabled={pending} aria-busy={signIn.isPending}>
+        <button type="submit" className={`btn ${passkeyFirst ? 'btn-secondary' : 'btn-primary'} btn-md hp-block`} disabled={pending} aria-busy={signIn.isPending}>
           {signIn.isPending && <span className="btn-spinner hp-inline-spinner" aria-hidden="true" />}
           <span>{t(signIn.isPending ? 'hosted.auth.submitting' : 'hosted.auth.submit')}</span>
         </button>
 
-        {/* MUT-115 (DR1): only where passkeys work on this host; the password stays the primary path */}
-        {passkey.supported && (
+        {/* MUT-115 (DR1): only where passkeys work on this host; the password stays the primary path, except for /operator */}
+        {passkey.supported && !passkeyFirst && (
           <>
-            <div className="hp-divider" role="separator">
-              <span>{t('hosted.auth.passkey.or')}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-md hp-block"
-              disabled={pending}
-              aria-busy={passkey.pending}
-              onClick={() => {
-                setBanner(null);
-                void passkey.start();
-              }}
-            >
-              {passkey.pending ? <span className="btn-spinner hp-inline-spinner" aria-hidden="true" /> : <PasskeyIcon />}
-              <span>{t('hosted.auth.passkey.button')}</span>
-            </button>
+            {passkeyDivider}
+            {passkeyButton}
           </>
         )}
       </form>
@@ -313,4 +328,9 @@ function SignInForm({ next, reason }: SignInPageProps) {
       </p>
     </AuthLayout>
   );
+}
+
+/** MUT-460 (2A): the operator console's paths. */
+function isOperatorPath(path: string): boolean {
+  return path === '/operator' || path.startsWith('/operator/') || path.startsWith('/operator?');
 }

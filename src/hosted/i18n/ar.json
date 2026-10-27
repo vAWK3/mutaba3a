@@ -1842,6 +1842,70 @@
       "paymentTitle": "الدفعة",
       "actions": "تصحيح هذا القيد",
       "cancelledPart": "أُلغي {amount}؛ وما زال {left} مستحقاً لأن القيد تغيّر أثناء الإلغاء."
+    },
+    "operator": {
+      "title": "المشغّل",
+      "rowSub": "طلبات تسجيل بانتظار المراجعة",
+      "failed": "لم يتم ذلك. حاول مرة أخرى.",
+      "tabs": {
+        "signups": "التسجيلات",
+        "signupsCount": "التسجيلات · {count}"
+      },
+      "signups": {
+        "listLabel": "طلبات تسجيل بانتظار المراجعة",
+        "signedUp": "سجّل {time}",
+        "longWait": "ينتظر يومًا أو أكثر",
+        "approve": "موافقة",
+        "decline": "رفض",
+        "approveWithPasskey": "موافقة بمفتاح المرور",
+        "declineWithPasskey": "رفض بمفتاح المرور",
+        "confirmApprove": "سيتمكّن {email} من تسجيل الدخول. سنراسله الآن.",
+        "confirmDecline": "سيُحذف حساب {email}. سنراسله، ويمكنه التسجيل من جديد.",
+        "approved": "تمت الموافقة على {email} · أُرسل البريد",
+        "declined": "رُفض {email} · أُرسل البريد",
+        "emptyTitle": "لا أحد ينتظر",
+        "emptyBody": "تصلك رسالة الملخّص حين يسجّل أحد.",
+        "mailFailedApproved": "تمت الموافقة. لم يُرسل البريد.",
+        "mailFailedDeclined": "تم الرفض. لم يُرسل البريد.",
+        "emailLabel": "بريده الإلكتروني",
+        "sendAgain": "أرسل مرة أخرى",
+        "sendAgainWithPasskey": "أرسل مرة أخرى بمفتاح المرور",
+        "resent": "أُرسل البريد إلى {email}",
+        "done": "تم",
+        "alreadyDecided": "تم البتّ فيه مسبقًا",
+        "notEmpty": "في هذا الحساب سجلات الآن، فلا يمكن رفضه."
+      },
+      "chips": {
+        "webmail": "بريد عام",
+        "relay": "مُرحِّل بريد",
+        "invalidDomain": "نطاق غير صالح",
+        "checkError": "تعذّر الفحص",
+        "noMx": "لا خادم بريد",
+        "noWeb": "لا موقع",
+        "timeout": "انتهت مهلة الفحص",
+        "dnsUnavailable": "DNS غير متاح",
+        "rdapNoDate": "لا تاريخ تسجيل",
+        "rdapNotFound": "غير موجود في السجل",
+        "rdapUnsupportedTld": "لم يُفحص السجل",
+        "rdapError": "خطأ في السجل",
+        "business": "نطاق عمل",
+        "unverified": "نطاق غير موثّق",
+        "youngDomain": {
+          "zero": "نطاق عمره أقل من يوم",
+          "one": "نطاق عمره يوم واحد",
+          "two": "نطاق عمره يومان",
+          "few": "نطاق عمره {count} أيام",
+          "many": "نطاق عمره {count} يومًا",
+          "other": "نطاق عمره {count} يوم"
+        }
+      },
+      "stepUp": {
+        "confirmWithPasskey": "تأكيد بمفتاح المرور",
+        "refused": "لم يُقبل مفتاح المرور. حاول مرة أخرى.",
+        "otherDevice": "يصلح مفتاح مرور على جهاز آخر أيضًا: اختر خيار رمز QR.",
+        "noPasskey": "إجراءات المشغّل تحتاج مفتاح مرور.",
+        "addPasskey": "أضف واحدًا من الحساب › مفاتيح المرور"
+      }
     }
   }
 }

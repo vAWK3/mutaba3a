@@ -64,6 +64,21 @@ describe('passkey sign-in (MUT-115)', () => {
     expect(screen.getByRole('separator')).toHaveTextContent('or');
   });
 
+  it('MUT-460 (2A): on the way to the operator console the passkey comes first, as the primary button', async () => {
+    signInPage({}, `/sign-in?next=${encodeURIComponent('/operator/signups')}`);
+    await screen.findByLabelText('Email');
+    const buttons = screen.getAllByRole('button', { name: /^Sign in/ });
+    expect(buttons.map((b) => b.textContent)).toEqual(['Sign in with a passkey', 'Sign in']);
+    expect(buttons[0]).toHaveClass('btn-primary');
+    expect(buttons[1]).toHaveClass('btn-secondary');
+  });
+
+  it('MUT-460: anywhere else (even a path that only starts with “operator”) the password stays first', async () => {
+    signInPage({}, `/sign-in?next=${encodeURIComponent('/operators-guide')}`);
+    await screen.findByLabelText('Email');
+    expect(screen.getAllByRole('button', { name: /^Sign in/ }).map((b) => b.textContent)).toEqual(['Sign in', 'Sign in with a passkey']);
+  });
+
   it('signs in through the same path as the password: remote mode, the account’s language, `next`', async () => {
     const { user, api, router } = signInPage({}, `/sign-in?next=${encodeURIComponent(`/p/${ORG_A}/expenses`)}`);
     await user.click(await screen.findByRole('button', { name: 'Sign in with a passkey' }));
