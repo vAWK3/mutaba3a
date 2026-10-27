@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { setupTokenOf } from './helpers/provision.js';
+import { provisionUser, setupTokenOf } from './helpers/provision.js';
 import { ADMIN, get, harness, json, minutes, operator, passwordSignIn, pendingSignup, person, post, read, SAME_ORIGIN, type Harness, type Loose } from './helpers/operator-harness.js';
 
 /**
@@ -199,6 +199,26 @@ describe('MUT-461 account actions from the operator console', () => {
       const res = await post(h, accountsPath(UNKNOWN, action), op.token);
       expect([action, res.status, (await read(res)).error.details?.reason]).toEqual([action, 404, 'ACCOUNT_NOT_FOUND']);
     }
+  });
+});
+
+describe('MUT-461 integration keys (/qa-reconcile D1)', () => {
+  it("an API key's /v1/audit never lists a person's sign-out everywhere; the profile's own audit does", async () => {
+    const h = harness();
+    const op = await operator(h);
+    const firm = await read(await h.app.request('/admin/v1/organizations', json({ name: 'Haddad Law', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, ADMIN)));
+    const apiKey = await read(await h.app.request(`/admin/v1/organizations/${firm.id}/api-keys`, json({ name: 'Malafat', scopes: ['audit:read'] }, ADMIN)));
+    const key = { authorization: `Bearer ${apiKey.secret}` };
+    const created = await provisionUser(h.app, { email: 'staff@haddad.example', displayName: 'Rami Staff', organizationId: firm.id, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const userId = created.user.id as string;
+    await passwordSignIn(h, 'staff@haddad.example', created.password as string);
+    expect((await post(h, accountsPath(userId, 'sessions/revoke'), op.token)).status).toBe(200);
+
+    const firmAudit = (await h.store.audit.list(firm.id, {}, { limit: 100, cursor: null })).items.map((e) => e.action);
+    expect(firmAudit).toContain('user.sessions_revoked');
+    const listed = await read(await h.app.request('/v1/audit?limit=200', { headers: key }));
+    expect(listed.items.filter((e: { action: string }) => e.action === 'user.sessions_revoked')).toEqual([]);
+    expect(await read(await h.app.request('/v1/audit?action=user.sessions_revoked', { headers: key }))).toMatchObject({ items: [] });
   });
 });
 

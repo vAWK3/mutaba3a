@@ -22,8 +22,10 @@ export const PAYMENT_REDATED = 'payment.redated';
 /** MUT-433 (review D3): a person's operator-granted features aren't financial history; the admin audit keeps them. */
 export const FEATURE_GRANTED = 'user.feature_granted';
 export const FEATURE_REVOKED = 'user.feature_revoked';
+/** MUT-461 (/qa-reconcile D1): an operator signing a person out everywhere is a security event about them, not the profile's. */
+export const SESSIONS_REVOKED = 'user.sessions_revoked';
 /** MUT-434: which agents a person connected is theirs, not the profile's financial history. */
-export const SESSION_ONLY_ACTIONS = [OWED_REDATED, PAYMENT_REDATED, FEATURE_GRANTED, FEATURE_REVOKED, AGENT_CONNECTED, AGENT_DISCONNECTED] as const;
+export const SESSION_ONLY_ACTIONS = [OWED_REDATED, PAYMENT_REDATED, FEATURE_GRANTED, FEATURE_REVOKED, AGENT_CONNECTED, AGENT_DISCONNECTED, SESSIONS_REVOKED] as const;
 
 /** /v1/audit — the organization's financial history for API keys (M6 brief §2). */
 export function auditRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
