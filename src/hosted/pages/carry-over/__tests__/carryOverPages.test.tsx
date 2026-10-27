@@ -12,6 +12,7 @@ import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
  * and its messages arrive as `message` events on this window.
  */
 
+/** The retired free web app's host (MUT-445): no build trusts it any more (TD-262). */
 const OLD_WEB = 'https://old-web.example';
 const OLD_PORTAL = 'https://old-portal.example';
 const NEW_PORTAL = 'https://app.example';
@@ -21,7 +22,6 @@ const backend = {
   onRemoteWrite: vi.fn(() => () => undefined),
   exportRecords: vi.fn(() => Promise.resolve(new Blob(['zip']))),
   readRecordsFile: vi.fn<(file: Blob, options?: unknown) => Promise<PendingRestore>>(),
-  prepareCarryOver: vi.fn<(kind: string, payload: Blob, options: unknown) => Promise<PendingRestore>>(),
   putBlob: vi.fn(),
   readBlob: vi.fn(),
 };
@@ -66,7 +66,7 @@ const payload = (kind: string, blob: Blob) => ({ type: 'mtb3a.carry-over.payload
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
-  (globalThis as { __CARRY_OVER__?: unknown }).__CARRY_OVER__ = { sources: { web: OLD_WEB, portal: OLD_PORTAL }, portalOrigin: NEW_PORTAL };
+  (globalThis as { __CARRY_OVER__?: unknown }).__CARRY_OVER__ = { sources: { portal: OLD_PORTAL }, portalOrigin: NEW_PORTAL };
   setMode('local');
   stubApi({});
 });
@@ -86,15 +86,15 @@ describe('the new address: /carry-over/receive', () => {
   }
 
   it('says ready to the old app only, checks what it sends, shows what came, and saves on Save', async () => {
-    backend.prepareCarryOver.mockResolvedValue(pending());
-    const { opener, user } = openFrom('web');
-    await waitFor(() => expect(opener.posted[0]).toEqual({ data: { type: 'mtb3a.carry-over.ready', v: 1 }, targetOrigin: OLD_WEB }));
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toEqual({ data: { type: 'mtb3a.carry-over.ready', v: 1 }, targetOrigin: OLD_PORTAL }));
 
     const blob = new Blob(['{"version":24,"tables":{}}']);
-    deliver(payload('free-app-backup', blob), OLD_WEB, opener);
+    deliver(payload('records-file', blob), OLD_PORTAL, opener);
 
-    expect(await screen.findByRole('heading', { name: 'Your records from the old app' })).toBeInTheDocument();
-    expect(backend.prepareCarryOver).toHaveBeenCalledWith('free-app-backup', blob, expect.objectContaining({ labels: { noClient: 'No client', defaultBusiness: 'My business' } }));
+    expect(await screen.findByRole('heading', { name: 'Your records from the old address' })).toBeInTheDocument();
+    expect(backend.readRecordsFile).toHaveBeenCalledWith(blob, expect.objectContaining({ labels: { noClient: 'No client', defaultBusiness: 'My business' } }));
     expect(screen.getByTestId('carry-over-counts')).toHaveTextContent('Clients3');
     expect(screen.getByTestId('carry-over-totals')).toHaveTextContent('Still owed');
     expect(screen.getByTestId('carry-over-not-carried')).toHaveTextContent('Records the rules refused (\u2066DATE_INVALID\u2069)');
@@ -102,7 +102,7 @@ describe('the new address: /carry-over/receive', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
-    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.done', v: 1, counts: SUMMARY.counts, totals: SUMMARY.totals } });
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.done', v: 1, counts: SUMMARY.counts, totals: SUMMARY.totals } });
   });
 
   it('opens in Arabic, right to left, for anyone who hasn\'t chosen a language (ADR-077)', async () => {
@@ -113,20 +113,30 @@ describe('the new address: /carry-over/receive', () => {
   });
 
   it('ignores a payload from anywhere but the old app\'s window', async () => {
-    const { opener } = openFrom('web');
+    const { opener } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), 'https://evil.example', opener);
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, fakeWindow());
+    deliver(payload('records-file', new Blob(['{}'])), 'https://evil.example', opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, fakeWindow());
     await act(async () => undefined);
-    expect(backend.prepareCarryOver).not.toHaveBeenCalled();
+    expect(backend.readRecordsFile).not.toHaveBeenCalled();
+  });
+
+  it('never answers the retired free web app: it goes straight to the file picker (MUT-445, TD-262)', async () => {
+    const { opener } = openFrom('web');
+    await waitFor(() => expect(screen.getByTestId('carry-over-receive')).toHaveAttribute('data-phase', 'file'));
+    expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument();
+    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    await act(async () => undefined);
+    expect(opener.posted).toEqual([]);
+    expect(backend.readRecordsFile).not.toHaveBeenCalled();
   });
 
   it('with records already here, warns, offers a download first, and replaces only on a second confirm (D3)', async () => {
     const apply = vi.fn(() => Promise.resolve());
-    backend.prepareCarryOver.mockResolvedValue(pending({ deviceRecordCount: 3, apply }));
-    const { opener, user } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending({ deviceRecordCount: 3, apply }));
+    const { opener, user } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
 
     expect(await screen.findByTestId('carry-over-existing')).toHaveTextContent('This device already has 3 records. Saving replaces them.');
     await user.click(screen.getByRole('button', { name: "Download what's here first" }));
@@ -147,10 +157,10 @@ describe('the new address: /carry-over/receive', () => {
 
   it('a download of what\'s here that fails keeps the checked summary, and says so', async () => {
     backend.exportRecords.mockRejectedValueOnce(new Error('quota'));
-    backend.prepareCarryOver.mockResolvedValue(pending({ deviceRecordCount: 3 }));
-    const { opener, user } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending({ deviceRecordCount: 3 }));
+    const { opener, user } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     await user.click(await screen.findByRole('button', { name: "Download what's here first" }));
     expect(await screen.findByTestId('carry-over-download-failed')).toHaveTextContent("The download didn't work.");
     expect(screen.getByRole('button', { name: 'Replace with the carried records' })).toBeInTheDocument();
@@ -159,21 +169,21 @@ describe('the new address: /carry-over/receive', () => {
 
   it('cancel after the replace question tells the old app, and changes nothing here', async () => {
     const apply = vi.fn(() => Promise.resolve());
-    backend.prepareCarryOver.mockResolvedValue(pending({ deviceRecordCount: 3, apply }));
-    const { opener, user } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending({ deviceRecordCount: 3, apply }));
+    const { opener, user } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     await user.click(await screen.findByRole('button', { name: 'Replace with the carried records' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
     expect(apply).not.toHaveBeenCalled();
   });
 
   it('a save that fails never tells the old app it is done; it tells it the carry-over failed', async () => {
-    backend.prepareCarryOver.mockResolvedValue(pending({ apply: vi.fn(() => Promise.reject(new Error('quota'))) }));
-    const { opener, user } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending({ apply: vi.fn(() => Promise.reject(new Error('quota'))) }));
+    const { opener, user } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
     expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'save-failed');
     const types = opener.posted.map((m) => (m.data as { type: string }).type);
@@ -182,10 +192,10 @@ describe('the new address: /carry-over/receive', () => {
   });
 
   it('stays on the summary when another tab of the new address changes the mode (the old tab landing there)', async () => {
-    backend.prepareCarryOver.mockResolvedValue(pending());
-    const { opener, router } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, router } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     expect(await screen.findByRole('button', { name: 'Save on this device' })).toBeInTheDocument();
     act(() => {
       const oldValue = localStorage.getItem(MODE_KEY);
@@ -199,34 +209,34 @@ describe('the new address: /carry-over/receive', () => {
 
   it('signed in, says the records go to this browser\'s signed-out space (E3)', async () => {
     setMode('remote');
-    backend.prepareCarryOver.mockResolvedValue(pending());
-    const { opener } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     expect(await screen.findByTestId('carry-over-signed-in')).toHaveTextContent('Sign out to see them.');
   });
 
   it('cancel tells the old app, and saves nothing', async () => {
     const apply = vi.fn(() => Promise.resolve());
-    backend.prepareCarryOver.mockResolvedValue(pending({ apply }));
-    const { opener, user } = openFrom('web');
+    backend.readRecordsFile.mockResolvedValue(pending({ apply }));
+    const { opener, user } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
-    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.declined', v: 1 } });
     expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'declined');
     expect(apply).not.toHaveBeenCalled();
   });
 
   it('records that don\'t add up are never offered: the page says nothing changed and offers the file (E4)', async () => {
-    backend.prepareCarryOver.mockRejectedValue(new LocalRecordsFileRefused('carry-over-failed'));
-    const { opener } = openFrom('web');
+    backend.readRecordsFile.mockRejectedValue(new LocalRecordsFileRefused('carry-over-failed'));
+    const { opener } = openFrom('portal');
     await waitFor(() => expect(opener.posted).toHaveLength(1));
-    deliver(payload('free-app-backup', new Blob(['{}'])), OLD_WEB, opener);
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
     expect(await screen.findByTestId('carry-over-file-reason')).toHaveAttribute('data-reason', 'failed');
     expect(screen.getByRole('button', { name: 'Choose file' })).toBeInTheDocument();
     // The old page hears at once, and offers its own file.
-    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_WEB, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
+    expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.failed', v: 1 } });
   });
 
   it('a chosen file from a newer app is refused as too new', async () => {

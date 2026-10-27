@@ -1,4 +1,4 @@
-import type { Currency } from '../../../../types';
+import type { Currency } from '../../../../lib/utils';
 import { useCountUp } from '../../useCountUp';
 import { useMockFormat } from './useMockFormat';
 

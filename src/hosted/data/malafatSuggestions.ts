@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type HostedProfile, type MalafatSuggestions, type MalafatSuggestionsChange, type Me } from '../api/client';
 import { ME_KEY, useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
-import type { MalafatMoment } from '../../types';
+import type { MalafatMoment } from '../../lib/malafatSuggestions';
 import { createdBy } from './profileRules';
 
 /**

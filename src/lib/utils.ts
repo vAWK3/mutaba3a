@@ -1,6 +1,8 @@
-import type { Currency } from '../types';
 import type { Language } from './i18n';
 import { formatLocalDate, todayLocalISO, daysUntilDue, paymentLocalDay } from './dates';
+
+/** The currencies an amount can be in (ADR-004; the server's SUPPORTED_CURRENCIES are separate). */
+export type Currency = 'USD' | 'ILS' | 'EUR' | 'JOD';
 
 /**
  * Get the locale string for Intl APIs based on language

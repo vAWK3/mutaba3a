@@ -47,10 +47,6 @@ export interface CarryOverSummary {
   jodEntries: number;
 }
 
-/** Which old page sent a carry-over: the free web app sends its own backup, the old portal address its records file. */
-/** The two payloads the carry-over hands over: the protocol's own kinds. */
-export type CarryOverPayloadKind = import('../../lib/carryOver/protocol').CarryOverKind;
-
 export interface CarryOverPrepareOptions {
   /** The names the carry-over has to make up, in the person's language. */
   labels: { noClient: string; defaultBusiness: string };
@@ -110,8 +106,6 @@ export interface LocalBackend {
    * With `carryOver`, the old web app's backup file is read too (MUT-291 E5); without it, that file is refused.
    */
   readRecordsFile(file: Blob, carryOver?: CarryOverPrepareOptions): Promise<PendingRestore>;
-  /** A carry-over message's payload (MUT-291 §3.2), read the way Restore reads a file; nothing changes until `apply()`. */
-  prepareCarryOver(kind: CarryOverPayloadKind, payload: Blob, options: CarryOverPrepareOptions): Promise<PendingRestore>;
   /** Stores a receipt's bytes for the `local-blob:` URL a receipt upload was signed with. Rejects any other URL, and when the browser refuses the space. */
   putBlob(url: string, file: Blob): Promise<void>;
   /** The bytes behind a `local-blob:` download URL; `null` when this device no longer has them. Rejects any other URL. */

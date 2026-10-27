@@ -35,7 +35,7 @@
 **Fix**: when a profile passes ~10k rows a year or the route's p95 (measured with posting on) passes 500 ms, push the monthly sums into SQL (GROUP BY month, currency) or cache per (profile, month). Profiles are read 3 at a time (`VERDICT_PROFILE_CONCURRENCY`), so one request holds at most ~3 pool connections; revisit the cap with the pool size.
 
 ### TD-263: `src/types/index.ts` still declares the retired local app's record types
-**Status**: Open
+**Status**: Resolved (2026-10-27, MUT-445 follow-ups: `Currency` moved to `src/lib/utils.ts`, `MalafatMoment` to `src/lib/malafatSuggestions.ts`, `ReceivableLike` became its own shape in `src/lib/dates.ts`; the unused mock factories in `src/test/utils.tsx` went with the file)
 **Ticket**: MUT-445
 **Added**: 2026-10-26
 **Priority**: Low
@@ -43,7 +43,7 @@
 **Fix**: move what the portal, the landing and `src/lib` still import into the modules that use them, and delete the rest.
 
 ### TD-262: The portal's carry-over receiver still accepts the retired free web app as a source
-**Status**: Open
+**Status**: Resolved (2026-10-27, MUT-445 follow-ups: no build accepts the old landing origin; `?from=web` goes to the file picker; a backup file saved from the free app still restores)
 **Ticket**: MUT-445 (ADR-203)
 **Added**: 2026-10-26
 **Priority**: Low
@@ -310,8 +310,8 @@
 **Ticket**: MUT-291 (security review), MUT-292
 **Added**: 2026-10-24
 **Priority**: Low while `mutaba3a.netlify.app` stays ours
-**Impact**: Every portal build at stage `live` or `redirect` accepts a carry-over from `mutaba3a.netlify.app` and the run.app host. If the Netlify site were deleted or renamed, anyone could claim the subdomain and post a crafted backup. The person would still see the summary and have to confirm.
-**Fix**: Keep the Netlify site name reserved for as long as any build trusts it (MUT-292's runbook). Give the sources a removal point: a stage after `redirect`, or a baked end date.
+**Impact**: Every portal build at stage `live` or `redirect` accepts a carry-over from the run.app host. (Since 2026-10-27, TD-262, no build trusts `mutaba3a.netlify.app`; builds before that, already in browsers' caches, still do.) If that host were released, anyone holding it could post a crafted records file. The person would still see the summary and have to confirm.
+**Fix**: Keep the run.app service name for as long as any build trusts it. Give the source a removal point: a stage after `redirect`, or a baked end date.
 
 ### TD-232: The old app and the receiver must ship in order
 **Status**: Open

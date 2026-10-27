@@ -1,9 +1,10 @@
 /**
- * The carry-over hand-off (MUT-291 §3.2, ADR-185): an old page opens
- * the new portal's /carry-over/receive in a popup and posts this browser's records
- * to it. Shared by both senders (the free app, src/pages/carryOver; the run.app
- * portal, src/hosted/pages/carry-over) and the receiver, so it lives in src/lib
- * and imports nothing: no storage, no portal code.
+ * The carry-over hand-off (MUT-291 §3.2, ADR-185): the old portal opens the
+ * new portal's /carry-over/receive in a popup and posts this browser's records
+ * file to it. Shared by the sender (the run.app portal, src/hosted/pages/carry-over)
+ * and the receiver, so it lives in src/lib and imports nothing: no storage, no
+ * portal code. The free web app was a second sender until MUT-445 retired it
+ * (TD-262); a backup saved from it still restores as a file.
  *
  * Origins are baked in at build time and never read from the URL; the URL's
  * `from` only says which baked origin to expect. Every message is checked for
@@ -11,11 +12,10 @@
  * receiver validates the payload and asks the person before it does.
  */
 
-export type CarryOverSource = 'web' | 'portal';
-export type CarryOverKind = 'free-app-backup' | 'records-file';
+export type CarryOverSource = 'portal';
 
-/** Which payload each old page may send: the free app its own backup, the old portal its records file. */
-export const KIND_FOR_SOURCE: Record<CarryOverSource, CarryOverKind> = { web: 'free-app-backup', portal: 'records-file' };
+/** The one payload the old portal sends: its records file. */
+const PAYLOAD_KIND = 'records-file';
 
 export const RECEIVE_PATH = '/carry-over/receive';
 /** The old page waits this long for the new address to say it is listening. */
@@ -24,7 +24,7 @@ export const SENDER_READY_TIMEOUT_MS = 10_000;
 export const RECEIVER_PAYLOAD_TIMEOUT_MS = 20_000;
 /** How often each side checks whether the other window was closed. */
 const CLOSED_POLL_MS = 500;
-/** Well above a free-app backup with receipts; a bigger message is refused before it is read. */
+/** Well above a records file with receipts; a bigger message is refused before it is read. */
 export const CARRY_OVER_MAX_BYTES = 200 * 1024 * 1024;
 
 const TYPE = { ready: 'mtb3a.carry-over.ready', payload: 'mtb3a.carry-over.payload', done: 'mtb3a.carry-over.done', declined: 'mtb3a.carry-over.declined', failed: 'mtb3a.carry-over.failed' } as const;
@@ -56,7 +56,7 @@ export function receiveUrl(portalOrigin: string, source: CarryOverSource): strin
 }
 
 function isSource(value: unknown): value is CarryOverSource {
-  return value === 'web' || value === 'portal';
+  return value === 'portal';
 }
 
 function messageOf(data: unknown, type: string): Record<string, unknown> | null {
@@ -113,7 +113,7 @@ export function startCarryOverSend(options: SendOptions): Promise<SendOutcome> {
         isReady = true;
         clearTimeout(readyTimer);
         reading.then(
-          (payload) => popup.postMessage({ type: TYPE.payload, v: VERSION, kind: KIND_FOR_SOURCE[source], payload }, portalOrigin),
+          (payload) => popup.postMessage({ type: TYPE.payload, v: VERSION, kind: PAYLOAD_KIND, payload }, portalOrigin),
           () => finish({ status: 'fallback', reason: 'read-failed' }),
         );
         return;
@@ -149,7 +149,7 @@ export interface CarryOverReply {
 }
 
 export type ReceiveOutcome =
-  | { status: 'payload'; source: CarryOverSource; kind: CarryOverKind; payload: Blob; reply: CarryOverReply }
+  | { status: 'payload'; payload: Blob; reply: CarryOverReply }
   | { status: 'file-only'; reason: 'no-opener' | 'unknown-source' | 'timeout' | 'opener-closed' | 'too-large' };
 
 export interface ReceiveOptions {
@@ -193,14 +193,14 @@ export function awaitCarryOverPayload(options: ReceiveOptions): Promise<ReceiveO
     const stopListening = listen((event) => {
       if (event.origin !== origin || event.source !== opener) return;
       const message = messageOf(event.data, TYPE.payload);
-      if (!message || message.kind !== KIND_FOR_SOURCE[source]) return;
+      if (!message || message.kind !== PAYLOAD_KIND) return;
       const payload = message.payload as Blob | undefined;
       if (!payload || typeof payload.size !== 'number') return;
       if (payload.size > CARRY_OVER_MAX_BYTES) {
         reply.failed();
         finish({ status: 'file-only', reason: 'too-large' });
       }
-      else finish({ status: 'payload', source, kind: KIND_FOR_SOURCE[source], payload, reply });
+      else finish({ status: 'payload', payload, reply });
     });
 
     opener.postMessage({ type: TYPE.ready, v: VERSION }, origin);

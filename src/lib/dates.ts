@@ -26,11 +26,12 @@
  * See MUT-17.
  */
 
-import type { Transaction } from '../types';
-
-/** The fields any overdue/due-soon check needs. Keeps these helpers usable with
- *  partial rows and display types, not just full Transaction records. */
-export type ReceivableLike = Pick<Transaction, 'kind' | 'status' | 'dueDate'>;
+/** The fields any overdue/due-soon check needs, from any row that has them (ADR-010: a receivable is unpaid income). */
+export interface ReceivableLike {
+  kind: 'income' | 'expense' | 'conversion';
+  status: 'paid' | 'unpaid';
+  dueDate?: string;
+}
 
 const MS_PER_DAY = 86_400_000;
 

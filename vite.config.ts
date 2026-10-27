@@ -256,7 +256,7 @@ export function portalUrl(override: string | undefined): string {
 
 /** What a build knows about the carry-over (MUT-291 §3.2): the old origins a receiver accepts, and where a sender sends. */
 export interface CarryOverBuild {
-  sources: { web?: string; portal?: string };
+  sources: { portal?: string };
   portalOrigin: string | null;
 }
 
@@ -277,8 +277,9 @@ function carryOverOrigin(value: unknown, release: boolean): string {
 
 /**
  * The carry-over's origins, baked into both the web and the portal build (MUT-291). From config/hosts.json:
- * off (no sources, no portal) until stage live, then the two legacy origins and the new portal. Origins are never
- * read from a URL at run time. MUTABA3A_CARRY_OVER (JSON `{ web?, portal?, portalOrigin }`) replaces them for QA,
+ * off (no sources, no portal) until stage live, then the old run.app portal and the new one. The old landing host is
+ * no source: the free web app it served is retired (MUT-445, TD-262). Origins are never read from a URL at run
+ * time. MUTABA3A_CARRY_OVER (JSON `{ portal?, portalOrigin }`) replaces them for QA,
  * whose origins are loopback ports; `off` turns it off (a QA run of the app's own features on a built preview).
  */
 export const CARRY_OVER_OFF: CarryOverBuild = { sources: {}, portalOrigin: null };
@@ -291,15 +292,15 @@ export function carryOverBuild(hosts: Pick<ResolvedHosts, "stage" | "legacy" | "
     try {
       parsed = JSON.parse(override) as Record<string, unknown>;
     } catch {
-      throw new Error("MUTABA3A_CARRY_OVER must be JSON: { web?, portal?, portalOrigin }");
+      throw new Error("MUTABA3A_CARRY_OVER must be JSON: { portal?, portalOrigin }");
     }
     return {
-      sources: { ...(parsed.web !== undefined ? { web: carryOverOrigin(parsed.web, release) } : {}), ...(parsed.portal !== undefined ? { portal: carryOverOrigin(parsed.portal, release) } : {}) },
+      sources: parsed.portal !== undefined ? { portal: carryOverOrigin(parsed.portal, release) } : {},
       portalOrigin: carryOverOrigin(parsed.portalOrigin, release),
     };
   }
   if (options.offByDefault || !hosts.legacy || (hosts.stage !== "live" && hosts.stage !== "redirect")) return CARRY_OVER_OFF;
-  return { sources: { web: hosts.legacy.landingOrigin, portal: hosts.legacy.portalOrigin }, portalOrigin: hosts.portalOrigin };
+  return { sources: { portal: hosts.legacy.portalOrigin }, portalOrigin: hosts.portalOrigin };
 }
 
 /** MUT-324: the landing's /terms, which the portal links to (versioned as /terms/<version>); a bad origin fails the build. */

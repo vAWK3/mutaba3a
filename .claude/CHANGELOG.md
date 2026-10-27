@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-445 follow-ups: the carry-over forgets the free app, src/types goes, CLAUDE.md says what the repo is
+
+**Why:** MUT-445 (ADR-203) retired the free web app but left its carry-over source in the portal (TD-262), its record types in `src/types/index.ts` (TD-263), and a CLAUDE.md that still described the old local app.
+
+### Changed
+- `src/lib/carryOver/protocol.ts`: the only source is the old portal, its only payload a records file. `?from=web` and a free-app message are never answered.
+- `vite.config.ts` `carryOverBuild`, `src/vite-env.d.ts`: sources are `{ portal? }`; the old landing host is never trusted, and `MUTABA3A_CARRY_OVER`'s `web` is ignored.
+- `src/hosted/pages/carry-over/ReceivePage.tsx`: reads the posted file with `readRecordsFile`, the same path as a chosen file.
+- `CLAUDE.md`: the old mini-rm spec (Dexie, the `/app` routes, the app shell, build order) is replaced by what the repo is now: the portal, the API, the website, the phone app, the portal's two modes, the rules that hold, and the portal's routes.
+
+### Removed
+- `prepareCarryOver` from the local backend and its contract (`CarryOverPayloadKind`).
+- `src/types/index.ts`. `Currency` moved to `src/lib/utils.ts`, `MalafatMoment` to `src/lib/malafatSuggestions.ts`, and `ReceivableLike` is its own shape in `src/lib/dates.ts`. The unused mock factories in `src/test/utils.tsx` went too.
+
+### Technical
+- TD-262 and TD-263 resolved; TD-231 narrowed to the run.app host. ADR-203 amended.
+
 ## [Unreleased] - 2026-10-27 — MUT-417 follow-ups: deletes confirm in place; shared and kept colours match the phone
 
 **Why:** writing DESIGN.md turned up two deletes still on `window.confirm` (TD-265), and two colours that mean something else on the phone. Basel chose the fixes on 2026-10-27.
