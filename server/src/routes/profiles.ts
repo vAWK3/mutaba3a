@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
@@ -28,6 +29,9 @@ import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResp
  * included (MUT-182, owner ruling). A product limit, not deploy configuration.
  */
 export const MAX_OWNED_PROFILES = 6;
+
+/** The cap this server applies: the product limit, or a dev server's QA_MAX_OWNED_PROFILES (MUT-474). */
+export const ownedProfileCap = (c: Context<AppEnv>): number => c.get('maxOwnedProfiles') ?? MAX_OWNED_PROFILES;
 
 /** These act on the person, like GET /v1/me: no X-Mutaba3a-Profile. The profile they change is in the path. */
 export const PROFILE_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
@@ -96,15 +100,16 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { user } = c.get('identity');
       const body = c.req.valid('json');
+      const cap = ownedProfileCap(c);
       const result = await store.organizations.createOwned(
         user.id,
         { name: body.name, slug: `p-${randomUUID()}`, defaultCurrency: body.defaultCurrency, timezone: body.timezone, profileType: body.type, at: c.get('now')() },
-        MAX_OWNED_PROFILES,
+        cap,
         // Written inside the create's transaction (qa-reconcile D3): no profile without its record, no duplicate on retry.
         { actorId: user.id, requestId: c.get('requestId') },
       );
       if (result.kind === 'limit') {
-        throw new ApiError('CONFLICT', `You already have ${result.count} profiles, the most one person can own`, { reason: 'PROFILE_LIMIT', limit: MAX_OWNED_PROFILES });
+        throw new ApiError('CONFLICT', `You already have ${result.count} profiles, the most one person can own`, { reason: 'PROFILE_LIMIT', limit: cap });
       }
       return c.json(await profileView(result.organization, user, result.membership), 201);
     },

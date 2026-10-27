@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../config.js';
 import { UNOWNED_DOMAINS } from '../email/ports.js';
@@ -59,6 +61,35 @@ describe('loadConfig — sessions (MUT-38)', () => {
 
   it('accepts a portal origin', () => {
     expect(loadConfig({ ...base, PORTAL_ORIGIN: 'https://portal.example.com' }).PORTAL_ORIGIN).toBe('https://portal.example.com');
+  });
+});
+
+describe('loadConfig — placeholder secrets (MUT-472, ADR-211)', () => {
+  const PLACEHOLDER = 'replace-with-32-plus-random-characters-from-secret-manager';
+
+  it.each(['MUTABA3A_ADMIN_TOKEN', 'SESSION_TOKEN_PEPPER', 'FRONT_DOOR_TOKEN', 'MUTABA3A_JOB_TOKEN', 'OAUTH_DERIVE_KEY'])(
+    'refuses the .env.example placeholder as %s, naming the variable',
+    (name) => {
+      const env = { ...base, PORTAL_ORIGIN: 'https://portal.example.com', [name]: PLACEHOLDER };
+      expect(() => loadConfig(env)).toThrow(ConfigError);
+      expect(() => loadConfig(env)).toThrow(`${name}: ${name} is the placeholder from server/.env.example`);
+    },
+  );
+
+  it('refuses the admin token exactly as server/.env.example ships it', () => {
+    const example = readFileSync(resolve(process.cwd(), '.env.example'), 'utf8');
+    const shipped = /^MUTABA3A_ADMIN_TOKEN=(.+)$/m.exec(example)?.[1];
+    expect(shipped).toBeDefined();
+    expect(() => loadConfig({ ...base, MUTABA3A_ADMIN_TOKEN: shipped })).toThrow(/MUTABA3A_ADMIN_TOKEN is the placeholder/);
+  });
+
+  it('matches the prefix in any case', () => {
+    expect(() => loadConfig({ ...base, SESSION_TOKEN_PEPPER: PLACEHOLDER.toUpperCase() })).toThrow(/SESSION_TOKEN_PEPPER is the placeholder/);
+  });
+
+  it('accepts a real secret, even one with the words later on', () => {
+    const token = `${'a'.repeat(32)}-replace-with-`;
+    expect(loadConfig({ ...base, MUTABA3A_ADMIN_TOKEN: token }).MUTABA3A_ADMIN_TOKEN).toBe(token);
   });
 });
 
@@ -233,6 +264,14 @@ describe('loadConfig — minimum app version (MUT-293)', () => {
 
   it('accepts the kill switch', () => {
     expect(loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: 'true' }).MIN_BUILD_CHECK_DISABLED).toBe(true);
+  });
+
+  it('reads MIN_BUILD_CHECK_DISABLED="false" as a working gate (MUT-457: z.coerce.boolean read it as off)', () => {
+    expect(loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: 'false' }).MIN_BUILD_CHECK_DISABLED).toBe(false);
+  });
+
+  it.each(['1', 'yes', 'TRUE', ''])('refuses MIN_BUILD_CHECK_DISABLED=%j', (value) => {
+    expect(() => loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: value })).toThrow(/MIN_BUILD_CHECK_DISABLED/);
   });
 
   it.each([
@@ -488,5 +527,43 @@ describe('loadConfig — attachment storage (MUT-396)', () => {
     expect(() => loadConfig({ ...base, ATTACHMENTS_DRIVER: 'local', ATTACHMENTS_BUCKET: 'my-bucket' })).toThrow(/ambiguous/);
     expect(() => loadConfig({ ...base, ATTACHMENTS_DRIVER: 'gcs' })).toThrow(/gcs needs ATTACHMENTS_BUCKET/);
     expect(loadConfig({ ...base, ATTACHMENTS_DRIVER: 'gcs', ATTACHMENTS_BUCKET: 'my-bucket' }).ATTACHMENTS_DRIVER).toBe('gcs');
+  });
+});
+
+describe('loadConfig — listen address (MUT-463)', () => {
+  it('leaves HOST unset by default, so the server keeps Node’s all-interface bind', () => {
+    expect(loadConfig(base).HOST).toBeUndefined();
+  });
+
+  it.each(['127.0.0.1', '::1', '0.0.0.0', '::'])('accepts the IP address %s', (host) => {
+    expect(loadConfig({ ...base, HOST: host }).HOST).toBe(host);
+  });
+
+  // A name binds to its first resolved address (localhost is ::1 first on macOS), so only IP literals are accepted.
+  it.each(['', 'localhost', 'my-mac.local', '256.1.1.1', '127.0.0.1:8787', '[::1]', ' 127.0.0.1'])(
+    'refuses HOST=%j at boot, naming the variable',
+    (host) => {
+      expect(() => loadConfig({ ...base, HOST: host })).toThrow(ConfigError);
+      expect(() => loadConfig({ ...base, HOST: host })).toThrow(/HOST: must be an IP address, such as 127\.0\.0\.1/);
+    },
+  );
+});
+
+describe('loadConfig — local QA profile cap (MUT-474)', () => {
+  it('leaves the cap override unset by default', () => {
+    expect(loadConfig(base).QA_MAX_OWNED_PROFILES).toBeUndefined();
+  });
+
+  it('accepts an override in development and test', () => {
+    expect(loadConfig({ ...base, QA_MAX_OWNED_PROFILES: '100' }).QA_MAX_OWNED_PROFILES).toBe(100);
+    expect(loadConfig({ ...base, NODE_ENV: 'test', QA_MAX_OWNED_PROFILES: '8' }).QA_MAX_OWNED_PROFILES).toBe(8);
+  });
+
+  it('refuses an override below the product limit', () => {
+    expect(() => loadConfig({ ...base, QA_MAX_OWNED_PROFILES: '3' })).toThrow(ConfigError);
+  });
+
+  it.each(['production', 'staging'])('refuses an override in %s', (env) => {
+    expect(() => loadConfig({ ...base, NODE_ENV: env, QA_MAX_OWNED_PROFILES: '100' })).toThrow(/QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only/);
   });
 });

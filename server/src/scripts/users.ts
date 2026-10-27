@@ -315,7 +315,7 @@ export function partnerNote(profileName: string): string[] {
   ];
 }
 
-/** MUT-459 (ADR-208): operators of the portal's console. Only the admin token grants it; the server checks the passkey. */
+/** MUT-459 (ADR-212): operators of the portal's console. Only the admin token grants it; the server checks the passkey. */
 const OPERATOR_HANDLERS: Record<Extract<Command, `operator-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
   'operator-grant': async ({ client, need, out }) => {
     const user = await client.userByEmail(need('email'));

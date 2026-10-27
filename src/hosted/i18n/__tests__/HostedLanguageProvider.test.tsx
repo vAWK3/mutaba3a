@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { useLanguage, useT } from '../../../lib/i18n/core';
+import { api } from '../../api/client';
 import { HostedLanguageProvider, PORTAL_ACCOUNT_LOCALE_KEY, PORTAL_LANGUAGE_KEY, useAdoptAccountLocale } from '../HostedLanguageProvider';
 
 /** mut-43-auth-states.md E4: a choice made in this browser wins; otherwise the account's locale applies. */
@@ -121,5 +122,28 @@ describe('HostedLanguageProvider with a linked language', () => {
     act(() => screen.getByText('switch').click());
     expect(screen.getByTestId('lang')).toHaveTextContent('ar');
     expect(localStorage.getItem(PORTAL_LANGUAGE_KEY)).toBe('ar');
+  });
+});
+
+/** MUT-464: every API call carries the portal language, so the server names seeded categories in it. */
+describe('HostedLanguageProvider and the API language', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('sends the language the portal shows, and follows a switch and an adopted account locale', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    vi.stubGlobal('fetch', fetchMock);
+    const sent = async () => {
+      await api.expenseCategories('p1');
+      const init = (fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit])[1];
+      return new Headers(init.headers).get('accept-language');
+    };
+    mount();
+    expect(await sent()).toBe('ar');
+    act(() => screen.getByText('adopt-en').click());
+    expect(await sent()).toBe('en');
+    act(() => screen.getByText('switch').click());
+    expect(await sent()).toBe('ar');
+    cleanup();
+    vi.unstubAllGlobals();
   });
 });

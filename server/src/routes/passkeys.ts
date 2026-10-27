@@ -87,7 +87,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
 
   /**
    * D4 / §11.1: a recent sign-in, else the current password (counted toward lockout like any wrong password).
-   * MUT-459 (review finding 2): an operator needs a passkey step-up instead (ADR-208 D7). Otherwise a password alone
+   * MUT-459 (review finding 2): an operator needs a passkey step-up instead (ADR-212 D7). Otherwise a password alone
    * could add a new passkey and then step up with it.
    */
   async function stepUp(c: Context<AppEnv>, user: UserRecord, session: SessionRecord, currentPassword: string | undefined): Promise<void> {

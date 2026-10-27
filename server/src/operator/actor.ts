@@ -1,5 +1,5 @@
 /**
- * MUT-459 (ADR-208): who did an operator action. The admin token (the CLI) carries no identity; the portal's operator
+ * MUT-459 (ADR-212): who did an operator action. The admin token (the CLI) carries no identity; the portal's operator
  * console is a signed-in operator. One action module serves both, and these two helpers are the only place the
  * difference shows: the audit row's actorId and the `decidedBy` / `grantedBy` label.
  */

@@ -1,4 +1,4 @@
--- MUT-459 (ADR-208): operators, their passkey step-up, and its challenge purpose.
+-- MUT-459 (ADR-212): operators, their passkey step-up, and its challenge purpose.
 -- The new enum value is only added here; nothing in this migration uses it, so one transaction is safe. The challenge
 -- CHECK that uses it is the next migration (20261027120100).
 ALTER TYPE "WebauthnChallengePurpose" ADD VALUE 'step_up';

@@ -150,6 +150,8 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
+  maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
   trialMail?: { refuseLoopbackLinks: boolean };
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
@@ -265,7 +267,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.78.0-mut459';
+export const API_VERSION = '1.79.0-mut459';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -276,7 +278,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn) });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -328,7 +330,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
-  // MUT-459 (ADR-208): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
+  // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
   app.use('/v1/operator/*', operatorGate());
   app.use('/admin/*', adminAuth(deps.adminToken));
   app.use('/jobs/*', jobAuth(deps.jobToken ?? null));
@@ -441,7 +443,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
-  // MUT-459 (ADR-208): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
+  // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
   app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
@@ -594,6 +596,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Changing a date (MUT-223): on a profile the person owns (their personal profile or one they created), PATCH /v1/income/{id} { occurredOn } moves their own Owed entry or Received entry, and PATCH /v1/payments/{id} { receivedOn } moves their own captured payment, a settle payment included (allocations untouched). Date only, If-Match on `version` (stale → 409 VERSION_MISMATCH). Received entries and payments go no later than the organization\'s today; an Owed entry may go up to ten years after it (MUT-392), keeping its dueDate unless the new date passes it (then EOM_15 of the new date). Nothing is refused once money is applied: an Owed dated ahead may be settled, or moved ahead after a settle, and counts from its first payment or credit. Anything else answers 404 — on a Malafat-fed profile PATCH /v1/income too, while PATCH /v1/payments answers 403 READ_ONLY_PROFILE there, before any lookup, as settle does. GET /v1/audit never lists these edits.',
         'Correcting money (MUT-453): on a profile the person owns (`/v1/me` `owned`, its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER) whose payments are read-write, POST /v1/payments/{id}/reverse { reason } reverses a payment a person recorded (origin CAPTURE, a settle payment included, whoever recorded it; not one Malafat applied to its own entries), undoing its allocations so the Owed it paid reopens, and POST /v1/receivables/{id}/credits { amount, reason, effectiveDate? } credits an Owed entry (origin ADJUSTMENT) up to what is left (more → 422 CREDIT_EXCEEDS_OUTSTANDING); crediting all of it cancels it. The same routes and codes Malafat\'s key uses, audited as USER. Malafat\'s own payments and installments answer 404 to a person; on a Malafat-fed profile both answer 403 READ_ONLY_PROFILE before any lookup. IncomeResponse adds `reversalReason` and `credited`.',
+        'Category names (MUT-464): GET, POST and PATCH /v1/expense-categories show a category the profile was seeded with in the request language — the first ar or en tag of Accept-Language, else the signed-in person\'s language (Content-Language says which; Vary: Accept-Language). A name a person typed shows as typed. Each category carries `presetKey`, the preset entry it is (`other` for the automatic Other) or null, worked out from the stored name. Adding or renaming to a seeded category\'s other-language name answers 409 CATEGORY_NAME_TAKEN.',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are MTB3A\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
       ].join('\n'),

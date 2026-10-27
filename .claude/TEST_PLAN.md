@@ -4001,3 +4001,41 @@ Review fixes (qa-reconcile, 2026-10-26):
 | `src/hosted/components/__tests__/ConversionDrawer.test.tsx` | 3 changed | The confirm names both legs (en and ar); Cancel and Escape send nothing and return focus to Delete. |
 | `src/hosted/pages/__tests__/afterSave.test.tsx`, `ConversionsList.test.tsx` | 3 changed | The deletes go through the in-place confirm. |
 | `qa/specs/portal/expenses.spec.ts`, `conversions.spec.ts` | 2 changed | Release-QA `@portal.expenses.delete`, `@portal.conversions.delete`: Cancel then Delete in place, and no browser prompt ever appears. |
+
+## MUT-464 — seeded category names follow the viewer's language (2026-10-27, ADR-208)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/expenses/__tests__/presets.test.ts` | +9 | One key per concept in every preset, one name never two keys, both languages and retired names resolve, retired names are never seeded, `presetNameKeys`; `displayCategoryNames` translates seeded names, keeps typed ones, and translates only the oldest of a cross-language pair. |
+| `server/src/__tests__/routes-expenses.test.ts` | +5, 1 changed | Accept-Language beats the account locale (by quality, unknown tags ignored), Content-Language and Vary; typed and renamed names show as typed; POST/PATCH answer in the request language; 409 for the other-language twin, while a seeded row may take its own other name. |
+| `server/src/repositories/__tests__/store-contract-expenses.ts` | +1 (memory + Postgres) | Both stores refuse a category that is an existing entry in the other language, even archived, and only within the profile. |
+| `server/src/__tests__/mcp-read-tools.test.ts` | +1 | `list_categories` names seeded categories in the account language. |
+| `server/src/vendors/__tests__/keys.test.ts` | +1 | The automatic Other is the preset key in either language. |
+| `src/hosted/api/__tests__/client.test.ts`, `i18n/__tests__/HostedLanguageProvider.test.tsx` | +2 | Every call carries the portal language once set, and it follows a switch and an adopted account locale. |
+| `src/hosted/data/__tests__/reportQueries.test.tsx` | +1 | `expenseCategoriesKey` differs by language and archived, and stays under the profile's category prefix. |
+| `src/hosted/local/carryOver/__tests__/replay.test.ts` | +1 | A backup category that is the seeded entry in the other language files its expense under the seeded one. |
+| `qa/specs/portal/expenses.spec.ts` | +2 | Release-QA `@portal.expenses.categories-follow-language`, `@portal.expenses.renamed-category-keeps-name`. |
+
+## MUT-457 — the phone minimum build from Terraform (2026-10-27)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/infrastructure/terraform/tests/min_build.tftest.hcl` (new; mocked Google + random) | 7 | Nothing set: none of the five env vars, today's gate unchanged. Set floors reach Cloud Run as exactly those strings. `min_build_check_disabled = true` sends `"true"`; `false` sends nothing. A recommended build below its floor, or without one, fails the plan; a 0 floor fails validation. |
+| `server/src/__tests__/config.test.ts` | +5 | `MIN_BUILD_CHECK_DISABLED="false"` keeps the gate on (it used to switch it off); `1`, `yes`, `TRUE` and empty refuse to boot. |
+
+## MUT-463 — the API listens where HOST says (2026-10-27, ADR-210)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` "listen address" | 12 | HOST unset by default; `127.0.0.1`, `::1`, `0.0.0.0`, `::` accepted; `''`, `localhost`, a machine name, `256.1.1.1`, `host:port`, `[::1]`, a leading space each refuse to boot, naming HOST. |
+| `server/src/__tests__/listen.test.ts` | 3 | Real sockets through `startServer` (the function `index.ts` uses), port 0. HOST=127.0.0.1: bound to 127.0.0.1, answers 200; a connect to the machine's LAN IPv4 is refused (skipped when there is none). HOST unset: bound exactly where a bare `net` server binds by default (`::` on dual-stack), so a default of `0.0.0.0` fails. Checked by mutation: both regressions turn the suite red. |
+| `qa/support/port-check.mjs` | probe | Not in a suite (QA tooling): a scratch probe showed it refuses when a server holds the port on `::`, `::1` or `127.0.0.1`, and passes when the port is free (review D1). |
+| Release-QA, `portal-selfservice` | 2 specs run | `@portal-selfservice.passkeys.add` and `.sign-in` pass (2026-10-27, d88a7a14, again at 0872e3d1 with the port check): the harness's API on 127.0.0.1 still serves the `http://localhost:8791` origin to Chromium. While up: `lsof` shows `127.0.0.1:8791`, `curl` 127.0.0.1 and localhost answer 200, the LAN address is refused, and the listening log says `"address":"127.0.0.1"`. No `portal-live` run (review D6). |
+
+## MUT-472 — placeholder secrets refused at boot (2026-10-27, ADR-211)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` | +8 | The `.env.example` placeholder is refused as each of the five secrets, with a `ConfigError` naming the variable; the admin token exactly as `.env.example` ships it (read from the file) is refused; the prefix matches in any case; a real secret with `replace-with-` later in it still boots. |
+
+Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports both shipped placeholders (admin token, pepper) and does not boot.

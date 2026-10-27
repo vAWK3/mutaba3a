@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuditEventInput, CreateUserInput, LedgerStore } from '../ports.js';
 
 /**
- * MUT-459 storage contract (ADR-208): the operator mark on a person, a session's passkey step-up, and the step-up
+ * MUT-459 storage contract (ADR-212): the operator mark on a person, a session's passkey step-up, and the step-up
  * challenge bound to one person. A change audits in its own transaction; a call that changes nothing writes no audit
  * row. A step-up never touches credentialsVerifiedAt (it guards the password-change revocation, MUT-238). Run against
  * the memory store and Postgres.

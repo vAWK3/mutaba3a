@@ -603,8 +603,9 @@ export function serializeExpenseReceipt(r: ExpenseReceiptRecord) {
   };
 }
 
-export function serializeExpenseCategory(c: ExpenseCategoryRecord) {
-  return { id: c.id, name: c.name, color: c.color, archived: c.archivedAt !== null, version: c.version, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
+/** MUT-464: `c` as `displayCategoryNames` gives it — the name in the viewer's language, and the preset entry it is. */
+export function serializeExpenseCategory(c: ExpenseCategoryRecord & { presetKey: string | null }) {
+  return { id: c.id, name: c.name, presetKey: c.presetKey, color: c.color, archived: c.archivedAt !== null, version: c.version, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() };
 }
 
 // ---- MUT-65: personal profile income capture --------------------------------

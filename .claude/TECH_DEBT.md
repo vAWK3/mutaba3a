@@ -20,7 +20,7 @@
 
 ### TD-266: An operator can't add or remove a passkey from the phone, or from a password-only portal session
 **Status**: Open (MUT-459, 2026-10-27; pre-merge review, Basel's choice: the portal now, the phone later)
-- **What:** for an operator, adding, renaming or removing a passkey needs a passkey step-up (ADR-208 D7, review findings 2 and A).
+- **What:** for an operator, adding, renaming or removing a passkey needs a passkey step-up (ADR-212 D7, review findings 2 and A).
   - **Portal:** says so ("confirm with one of your passkeys first") instead of asking for the password. It offers no one-tap step-up yet.
   - **Phone:** gets 403 `RECENT_SIGN_IN_REQUIRED {method:'passkey'}` and shows its password form. The phone can't step up, because `/v1/operator` refuses device sessions.
   - **Removing the last passkey:** answers 409 `OPERATOR_NEEDS_PASSKEY`, and the drawer shows only its generic "couldn't remove".

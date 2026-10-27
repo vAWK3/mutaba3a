@@ -45,6 +45,8 @@ const LOCAL_SERVER_ALLOWLIST = [
   'auth/middleware',
   'auth/sessions',
   'auth/store-guard',
+  // MUT-464: carry-over matches a backup category by its preset key; pure, and already in the chunk through repositories/memory
+  'expenses/presets',
   'fx-rates',
   'logger',
   // MUT-291: the carry-over formats amounts as the routes do (already in the chunk through them); pure, no I/O

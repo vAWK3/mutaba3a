@@ -8,7 +8,7 @@ import { signInLinkOf } from '../../routes/account-setup.js';
 import { auditActorIdOf, byLabelOf, type OperatorActor } from '../actor.js';
 
 /**
- * MUT-367 (ADR-178) and MUT-459 (ADR-208): the signup review queue's actions, shared by /admin/v1/signup-reviews (the
+ * MUT-367 (ADR-178) and MUT-459 (ADR-212): the signup review queue's actions, shared by /admin/v1/signup-reviews (the
  * admin token, `npm --prefix server run signups:review`) and /v1/operator/signup-reviews (a signed-in operator), so
  * both answer the same thing for the same decision. A decision commits first; the mail follows and never undoes it
  * (its outcome is in the answer). After a decline the review keeps no person, so the userId answers 404 from then on

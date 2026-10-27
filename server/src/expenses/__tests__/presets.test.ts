@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { categoryNameKey } from '../names.js';
-import { GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor } from '../presets.js';
+import { displayCategoryNames, GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor, presetKeyForName, presetNameKeys, RETIRED_TEMPLATES } from '../presets.js';
 
 /**
  * MUT-42 D2 checked these presets against the offline app's copy. MUT-445 (ADR-203) retired that app and its
@@ -52,5 +52,92 @@ describe('expense category presets', () => {
         expect(new Set(preset.map((c) => categoryNameKey(c[key]))).size).toBe(preset.length);
       }
     }
+  });
+});
+
+/**
+ * MUT-464: nothing stores which preset entry a category came from. The key is worked out from the stored name, in
+ * either language, so the list can show it in the viewer's language. Every string a profile was ever seeded with must
+ * keep resolving: an edited template string moves its old wording to RETIRED_TEMPLATES.
+ */
+describe('preset keys (MUT-464)', () => {
+  const LIVE = [...GENERAL_PRESET, ...LAW_FIRM_PRESET, ...PERSONAL_PRESET];
+
+  it('gives one concept one key in every preset, and one key one pair of names', () => {
+    const pairs = new Map<string, string>();
+    for (const t of [...LIVE, ...RETIRED_TEMPLATES]) {
+      expect(t.key).toMatch(/^[a-z][a-z0-9_]*$/);
+      const pair = `${t.name}|${t.nameAr}`;
+      if (!LIVE.includes(t) && LIVE.some((l) => l.key === t.key)) continue; // a retired wording of a live entry
+      expect(pairs.get(t.key) ?? pair).toBe(pair);
+      pairs.set(t.key, pair);
+    }
+    expect(GENERAL_PRESET.at(-1)!.key).toBe('other');
+    expect(PERSONAL_PRESET.at(-1)!.key).toBe('other');
+    expect(PERSONAL_PRESET.find((t) => t.name === 'Rent')!.key).not.toBe(GENERAL_PRESET.find((t) => t.name === 'Office Rent')!.key);
+  });
+
+  it('never lets one name mean two keys', () => {
+    const seen = new Map<string, string>();
+    for (const t of [...LIVE, ...RETIRED_TEMPLATES]) {
+      for (const name of [t.name, t.nameAr]) {
+        const k = categoryNameKey(name);
+        expect(seen.get(k) ?? t.key).toBe(t.key);
+        seen.set(k, t.key);
+      }
+    }
+  });
+
+  it('finds the key from either language, in any case and spacing', () => {
+    expect(presetKeyForName('Office Rent')).toBe('office_rent');
+    expect(presetKeyForName('  office rent ')).toBe('office_rent');
+    expect(presetKeyForName('إيجار المكتب')).toBe('office_rent');
+    expect(presetKeyForName('Other')).toBe('other');
+    expect(presetKeyForName('أخرى')).toBe('other');
+    expect(presetKeyForName('Coffee')).toBeNull();
+  });
+
+  it('lists every stored name key of an entry, both languages', () => {
+    expect(presetNameKeys('office_rent').sort()).toEqual(['office rent', 'إيجار المكتب'].sort());
+    expect(presetNameKeys('nope')).toEqual([]);
+  });
+
+  it('recognises the names Malafat firms and personal profiles were seeded with before the lists changed', () => {
+    for (const name of ['Legal Research Tools', 'Case Management Software', 'Bar Association Fees', 'Continuing Legal Education', 'Court Filing Fees', 'Process Service', 'Expert Witnesses', 'Document Management', 'Client Entertainment', 'Travel Expenses', 'Projects']) {
+      expect(presetKeyForName(name), name).not.toBeNull();
+    }
+    expect(presetKeyForName('المشاريع')).toBe(presetKeyForName('Projects'));
+    expect(presetKeyForName('رسوم نقابة المحامين')).toBe(presetKeyForName('Bar Association Fees'));
+  });
+
+  it('never seeds a retired name', () => {
+    const seeded = new Set(LIVE.map((t) => t.name));
+    for (const t of RETIRED_TEMPLATES) if (!LIVE.some((l) => l.key === t.key)) expect(seeded.has(t.name)).toBe(false);
+  });
+
+  const row = (id: string, name: string, minute: number) => ({ id, name, createdAt: new Date(Date.UTC(2026, 9, 27, 9, minute)) });
+
+  it('shows seeded names in the viewer language and typed names as typed', () => {
+    const rows = [row('a', 'إيجار المكتب', 0), row('b', 'أخرى', 1), row('c', 'Coffee', 2)];
+    expect(displayCategoryNames(rows, 'en')).toEqual([
+      { ...rows[0], name: 'Office Rent', presetKey: 'office_rent' },
+      { ...rows[1], name: 'Other', presetKey: 'other' },
+      { ...rows[2], name: 'Coffee', presetKey: null },
+    ]);
+    expect(displayCategoryNames(rows, 'ar').map((r) => r.name)).toEqual(['إيجار المكتب', 'أخرى', 'Coffee']);
+  });
+
+  it('shows a retired name in the viewer language too', () => {
+    expect(displayCategoryNames([row('a', 'المشاريع', 0)], 'en')[0]!.name).toBe('Projects');
+  });
+
+  it('translates only the oldest of two rows with the same key; the other keeps its own name', () => {
+    const rows = [row('late', 'Other', 5), row('early', 'أخرى', 1)];
+    const shown = displayCategoryNames(rows, 'en');
+    expect(shown.map((r) => [r.id, r.name, r.presetKey])).toEqual([
+      ['late', 'Other', null],
+      ['early', 'Other', 'other'],
+    ]);
+    expect(displayCategoryNames(rows, 'ar').map((r) => r.name)).toEqual(['Other', 'أخرى']);
   });
 });

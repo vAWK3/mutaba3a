@@ -30,7 +30,7 @@
 
 ## [Unreleased] - 2026-10-27 — MUT-459: operator accounts and the /v1/operator gate (server foundation of the operator console)
 
-**Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-208).
+**Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-212).
 
 ### Added
 - `users.operatorAt`, `sessions.stepUpAt` and the `step_up` WebAuthn challenge purpose (migration `20261027120000_mut459_operator`). Store methods `users.setOperator` and `sessions.markStepUp`, contract-tested on memory and Postgres.
@@ -54,10 +54,90 @@
 - `/admin/v1/signup-reviews` is now a thin adapter over `server/src/operator/actions/signupReviews.ts`, shared with the operator routes. Its answers are unchanged.
 
 ### Technical
-- API 1.78.0-mut459; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- API 1.79.0-mut459; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
 - The local-mode snapshot and records file go to format version 8: `people` gained `operatorAt`. Migration 7 → 8 (`src/hosted/local/migrations/index.ts`) sets it to null, since a device's person is never an operator. The fingerprint table and fixture were updated with it.
-- ADR-208; plan + reviews in `.claude/designs/mut-458-operator-console.md`.
+- ADR-212; plan + reviews in `.claude/designs/mut-458-operator-console.md`.
 - Inventories updated: `route-security.test.ts` (OPERATOR_OPERATIONS, cookie only), `store-guard.test.ts` (`users.setOperator` is operator-only), and the lapse-gate classification.
+## [Unreleased] - 2026-10-27 — MUT-472: the API refuses the placeholder secrets from server/.env.example
+
+**Why:** the example's `replace-with-…` admin token and session pepper passed the 32-character minimum, so a copied example served `/admin/v1/*` with a token anyone can read in the repo. ADR-211.
+
+### Fixed
+- `server/src/config.ts`: `secret(name)` builds the schema of every 32-character secret (`MUTABA3A_ADMIN_TOKEN`, `SESSION_TOKEN_PEPPER`, `FRONT_DOOR_TOKEN`, `MUTABA3A_JOB_TOKEN`, `OAUTH_DERIVE_KEY`) and refuses a value starting with `replace-with-`, naming the variable.
+
+### Changed
+- `server/README.md` "Run locally": a one-liner puts real secrets in the copied `.env`. `server/.env.example` comments say the placeholders are refused (values unchanged).
+
+### Technical
+- Checked: the QA harnesses (`qa/support/*-live.mjs`), the server-ci smoke test, the server test fixtures and Terraform (`random_password`) use no placeholder.
+- Files: `server/src/config.ts`, `server/src/__tests__/config.test.ts`, `server/.env.example`, `server/README.md`, `.claude/designs/mut-472-placeholder-secrets.md`.
+
+## [Unreleased] - 2026-10-27 — MUT-474: a dev server can raise the owned-profile cap for local QA
+
+**Why:** 21 phone QA flows each make a throwaway profile, and the server has no delete. `disown-qa-profiles.sh` frees the QA account's slots once before each run, leaving 4, so a combined run of more of them failed at setup with 409 `PROFILE_LIMIT`.
+
+### Added
+- `server/src/config.ts`: `QA_MAX_OWNED_PROFILES` (6–1000), refused at boot in production and staging. Unset = the product limit, `MAX_OWNED_PROFILES` (6).
+- `server/src/routes/profiles.ts`: `ownedProfileCap(c)`, the cap this server applies. It reaches requests the way `BILLING_GATE` does (`index.ts` → `createApp` → `createApiShell` → the `maxOwnedProfiles` context variable).
+
+### Changed
+- POST /v1/profiles refuses at `ownedProfileCap(c)` (its 409 `details.limit` says which), and every `/v1/me` answer (`me.ts`, `sessions.ts`, `device-sessions.ts`) publishes it as `limits.maxOwnedProfiles`. Unchanged wherever the override is unset.
+- `server/.env.example`: documents the override.
+- Tests: `config.test.ts` (unset, accepted in development and test, never below 6, refused in production and staging); `routes-profiles.test.ts` (creates past 6 up to the override, then 409 with the override as the limit; `/v1/me` publishes it).
+
+## [Unreleased] - 2026-10-27 — MUT-457: the phone minimum build can be set from Terraform
+
+**Why:** MUT-293's minimum-build gate read its floors from env vars that nothing in Terraform set, and a hand-set value was overwritten by the next apply. Its kill switch read `"false"` as on.
+
+### Added
+- `server/infrastructure/terraform`: optional `ios_min_build`, `android_min_build`, `ios_recommended_build`, `android_recommended_build` and `min_build_check_disabled`. Only those set reach Cloud Run (`local.min_build_env`); the kill switch goes out only as `"true"`. A precondition refuses a recommended build without that platform's floor (the server would ignore it) or below it. `tests/min_build.tftest.hcl` (7 runs, including "unset adds no env").
+
+### Changed
+- `server/DEPLOYMENT.md` "Raise the minimum app build" / "Undo a bad floor": the `production.tfvars` lines, shipped with a normal release so the release guards run; an incident undo applies only the kill switch from a clean checkout of the serving release after its plan shows nothing else; iOS builds before MUT-457 repeat 1–7 across versions, so the first iOS floor is `ios_min_build = 8` (the first build after MUT-457) and it makes every older iPhone update. `production.tfvars.example` lists the lines.
+
+### Fixed
+- `server/src/config.ts`: `MIN_BUILD_CHECK_DISABLED` accepts only `"true"` / `"false"` (was `z.coerce.boolean`, so `"false"` switched the gate off).
+
+### Technical
+- The phone side (every iOS release takes the highest build ever uploaded + 1) is in mutaba3a-flutter's `ios/fastlane/Fastfile`.
+
+## [Unreleased] - 2026-10-27 — MUT-464: seeded expense categories follow the viewer's language
+
+**Why:** a profile's preset categories stayed in the language of whoever first opened them, so a co-owner or member in the other language never saw their own. ADR-208.
+
+### Added
+- `presets.ts`: a `key` on every preset entry, `RETIRED_TEMPLATES`, `presetKeyForName`, `presetNameKeys`, `displayCategoryNames`.
+- `routes/shared.ts`: `requestLanguage` / `preferredLanguage` (Accept-Language, else the account locale).
+- `ExpenseCategory.presetKey` (derived). API 1.78.0-mut464.
+- Portal: `setRequestLanguage` in `api/client.ts` (set by `HostedLanguageProvider`), `expenseCategoriesKey`.
+- QA: `portal.expenses.categories-follow-language`, `portal.expenses.renamed-category-keeps-name`.
+
+### Changed
+- `/v1/expense-categories` (GET, POST, PATCH) and MCP `list_categories` name seeded categories in the viewer's language; stored names are unchanged.
+- Adding or renaming to a seeded category's other-language name answers 409 `CATEGORY_NAME_TAKEN` (both stores).
+- The automatic Other is found by preset key (`vendors/keys.ts`).
+- Both portal category queries carry the language in their keys, so a switch refetches.
+
+### Fixed
+- Carry-over files a backup category under the profile's seeded entry when it is the same one in the other language, instead of dropping it from its expenses.
+
+## [Unreleased] - 2026-10-27 — MUT-463: local QA APIs listen on 127.0.0.1 only (HOST)
+
+**Why:** every copy of the API listened on every interface. The local QA copies run with admin tokens committed to the repo, and `server/.env.example` ships a placeholder token that passes validation, so anyone on the same network could call their `/admin/v1/*` (found in the MAL-1400 review). ADR-210.
+
+### Added
+- `server/src/config.ts`: optional `HOST`, an IP address only; a name, an empty value or `host:port` refuses to boot, naming the variable.
+- `server/src/listen.ts`: `startServer`, the one caller of `serve`; passes `HOST` as the hostname or, unset, nothing (Node's `::` default, as Cloud Run needs).
+- `server/src/__tests__/listen.test.ts`: real-socket tests through `startServer`.
+- `qa/support/port-check.mjs`: both QA harnesses refuse to start when anything already answers on their port over `::1` or `127.0.0.1` (review D1). With the API on 127.0.0.1, a second server on `::` would otherwise start silently and answer `localhost` in its place.
+
+### Changed
+- `server/src/index.ts`: starts through `startServer`; the "listening" log carries the bound address.
+- `qa/support/selfservice-live.mjs`, `qa/support/billing-live.mjs`: the QA APIs start with `HOST=127.0.0.1`; origins unchanged.
+- `server/.env.example`: `HOST=127.0.0.1`, with how to remove it for phone-on-LAN testing. Existing `.env` files are untouched.
+
+### Technical
+- MAL-1407 (Malafat's :8795 harness) is blocked by this.
 
 ## [Unreleased] - 2026-10-27 — MUT-445 follow-ups: the carry-over forgets the free app, src/types goes, CLAUDE.md says what the repo is
 

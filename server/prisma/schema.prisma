@@ -308,7 +308,7 @@ model User {
   /// MUT-370: `{ notNowCount, hiddenUntil }`, the "Add a passkey" suggestion's state (server/src/auth/passkey-prompt.ts);
   /// NULL = never answered. Read and written through the passkeys port, never part of the person's record.
   passkeyPrompt      Json?
-  /// MUT-459 (ADR-208): when the CLI made this person an operator (the portal's operator console); NULL = not one.
+  /// MUT-459 (ADR-212): when the CLI made this person an operator (the portal's operator console); NULL = not one.
   operatorAt         DateTime?
   createdAt          DateTime
   updatedAt          DateTime
@@ -548,7 +548,7 @@ model Session {
   /// MUT-115 (A2/D6): the passkey that opened this session; removing the passkey revokes it.
   passkeyId             String?     @db.Uuid
   passkey               Passkey?    @relation(fields: [passkeyId], references: [id], onDelete: SetNull)
-  /// MUT-459 (ADR-208): the last operator passkey step-up on this session. Separate from credentialsVerifiedAt, which
+  /// MUT-459 (ADR-212): the last operator passkey step-up on this session. Separate from credentialsVerifiedAt, which
   /// guards the password-change revocation and a step-up must never move.
   stepUpAt              DateTime?
 

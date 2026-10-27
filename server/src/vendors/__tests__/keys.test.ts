@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { registrationKey, scoreVendorName, vendorNameKey } from '../keys.js';
+import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../keys.js';
 
 /** MUT-254: the keys a typed vendor is matched by (exact on save, V1) and the typeahead's scorer. */
 describe('vendorNameKey', () => {
@@ -76,5 +76,14 @@ describe('scoreVendorName', () => {
   it('works on Arabic and Hebrew keys', () => {
     expect(scoreVendorName(vendorNameKey('مخبز'), vendorNameKey('مخبز الأقصى'))).toBe(1);
     expect(scoreVendorName(vendorNameKey('דיל'), vendorNameKey('סופר דיל'))).toBe(0.8);
+  });
+});
+
+describe('isAutomaticOtherCategory (MUT-464: by preset key)', () => {
+  it('is the preset Other in either language, and nothing else', () => {
+    expect(isAutomaticOtherCategory('Other')).toBe(true);
+    expect(isAutomaticOtherCategory(' أخرى ')).toBe(true);
+    expect(isAutomaticOtherCategory('Others')).toBe(false);
+    expect(isAutomaticOtherCategory('Office Rent')).toBe(false);
   });
 });

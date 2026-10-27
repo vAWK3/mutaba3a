@@ -4,7 +4,7 @@ import type { AppEnv } from './middleware.js';
 import { assertOperatorStepUp } from './step-up.js';
 
 /**
- * MUT-459 (ADR-208): the gate on /v1/operator/*, mounted after the /v1 authenticate(), so a signed-out caller already
+ * MUT-459 (ADR-212): the gate on /v1/operator/*, mounted after the /v1 authenticate(), so a signed-out caller already
  * got its 401 there (the same answer every /v1 path gives, which says nothing about operators). Here:
  *
  *   - a signed-in person who isn't an operator gets 404, the same as a path that doesn't exist, and so does any

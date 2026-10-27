@@ -1232,7 +1232,7 @@ export interface UserRecord {
   trialPrompt: TrialPromptRecord | null;
   /** MUT-333 (ADR-188): set while the account is closing (30 days' grace, then the hard delete); null otherwise. */
   closure: AccountClosureRecord | null;
-  /** MUT-459 (ADR-208): when the CLI made this person an operator; null when they are not one. */
+  /** MUT-459 (ADR-212): when the CLI made this person an operator; null when they are not one. */
   operatorAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -1552,7 +1552,7 @@ export interface SessionRecord {
   userAgent: string | null;
   /** MUT-115 (A2/D6): the passkey that opened this session, else null; removing that passkey revokes it. */
   passkeyId: string | null;
-  /** MUT-459 (ADR-208): the last operator passkey step-up on this session; never moves credentialsVerifiedAt. */
+  /** MUT-459 (ADR-212): the last operator passkey step-up on this session; never moves credentialsVerifiedAt. */
   stepUpAt: Date | null;
 }
 

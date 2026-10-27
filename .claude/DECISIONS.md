@@ -5544,7 +5544,70 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A one-time copy of the portal's `verdictBody` builder: single-currency, and it can't detect drift.
 - Phone-only fixtures, with parity left to one live QA flow (Basel chose D5 A).
 
-## ADR-208: Operators Are Accounts With a Passkey, Behind One Gate on /v1/operator (MUT-459)
+## ADR-208: Seeded Category Names Follow the Viewer's Language, Worked Out From the Stored Name (MUT-464)
+
+**Status:** Accepted (2026-10-27, MUT-464). Plan and eng review: `.claude/designs/mut-464-category-names-follow-language.md` (D1–D10, Basel's answers D1, D4, D5).
+
+**Context:** a hosted profile's preset categories were written once, in the language of whoever first listed them. A co-owner or member in the other language saw that language for good. The portal's local mode runs the same routes on a `MemoryLedgerStore` in the browser, so a server-side backfill would never reach it.
+
+**Decision:**
+1. **Nothing is stored.** Every preset entry has a `key` (`presets.ts`); `presetKeyForName(name)` maps a stored name, in English or Arabic, back to it. `RETIRED_TEMPLATES` keeps the old legal-only list and the personal "Projects" resolving without seeding them. No column, no backfill, no snapshot migration.
+2. **The server names it.** `requestLanguage(c)` (`routes/shared.ts`): the first `ar`/`en` tag of `Accept-Language` by quality, else the account locale; it sets `Content-Language` and `Vary`. `displayCategoryNames` shows a seeded name in that language. When two rows are the same entry, only the oldest follows the language and carries `presetKey`; the other keeps its own name.
+3. **One entry per profile.** Both stores refuse a new or renamed category whose name is an entry another category already is (409 `CATEGORY_NAME_TAKEN`), under the same organization lock as the `nameKey` index.
+4. **Contract.** `ExpenseCategory.presetKey` (derived, nullable) and API 1.78.0-mut464. The portal sends its UI language on every call and keys both category queries on it. MCP `list_categories` uses the account locale. The records export keeps stored names. The automatic Other is `presetKey === 'other'`.
+
+**Consequences:**
+- Changing a template's wording means moving the old pair to `RETIRED_TEMPLATES` under the same key; `presets.test.ts` pins that every name maps to one key.
+- A person who types a preset name ("Rent") gets a category that follows the language. That is intended.
+- The phone shows `user.locale` names until its half ships (separate ticket).
+
+**Alternatives considered:**
+- A stored `presetKey` column with a backfill (the first plan): it misses local mode and needs a migration path for every store (Basel chose D4).
+- Translating in each client: two more copies of the strings, and the MCP tools would still need one.
+
+## ADR-210: The API Listens Where HOST Says, an IP Address; Unset Keeps Every Interface (MUT-463)
+
+**Status:** Accepted (2026-10-27, MUT-463). Plan and eng review (D1–D6): `.claude/designs/mut-463-api-host-binding.md`. Numbered 210 because MUT-459 and MUT-464 both claim 208 on their branches.
+
+**Context:** `serve()` was called with no hostname, so every copy of the API listened on every interface. Cloud Run needs that. The local QA copies (portal-live :8790, portal-selfservice :8791, Malafat's :8795) run with admin tokens committed to the repo, and `server/.env.example` ships a placeholder token long enough to pass validation, so while any of them ran, anyone on the same network could call `/admin/v1/*`.
+
+**Decision:**
+1. **`HOST` is optional and takes an IP address only** (`net.isIP`): `127.0.0.1`, `::1`, `0.0.0.0`, `::`. A name is refused at boot: Node binds a name to its first resolved address, and on macOS `localhost` resolves to `::1` first, which would break every client that dials `127.0.0.1`.
+2. **Unset passes no hostname.** Node then binds `::`, every interface over IPv4 and IPv6, as Cloud Run does today. Never default it to `0.0.0.0`, which drops IPv6.
+3. **One start path:** `server/src/listen.ts` `startServer` is the only caller of `serve`. `index.ts` and the socket test (`listen.test.ts`) both use it, so the test covers the production call.
+4. **Loopback by default where tokens are known:** the QA harnesses set `HOST=127.0.0.1` and keep their `localhost` origins (the passkey RP ID; browsers and Node fall back from `::1` to `127.0.0.1`). `server/.env.example` ships `HOST=127.0.0.1`; deleting it reopens the dev API to a phone on the LAN. Existing `.env` files are untouched.
+
+**Consequences:**
+- Production and the CI container smoke test are unchanged (neither sets `HOST`).
+- Malafat's harness follows in MAL-1407 (blocked by MUT-463). On a mini-crm checkout older than this, `HOST` is silently ignored, so MAL-1407 checks that the LAN address is refused.
+- A shell that exports `HOST` as a machine name stops every `loadConfig` caller with a message naming the variable.
+
+**Alternatives considered:**
+- Accepting any host name: `localhost` would bind `::1` only on macOS (P1).
+- `LISTEN_HOST`: clearer, but the ticket and MAL-1407 name `HOST` (review OV-5).
+- Leaving new dev setups on every interface (the plan's first D4; Basel chose review D4 A).
+
+## ADR-211: The API Refuses the Placeholder Secrets From server/.env.example (MUT-472)
+
+**Status:** Accepted (2026-10-27, MUT-472; found in the MUT-463 review, finding OV-2). Plan: `.claude/designs/mut-472-placeholder-secrets.md`. Basel chose the scope and the QA-token answer.
+
+**Context:** `server/.env.example` ships `replace-with-32-plus-…-from-secret-manager` for `MUTABA3A_ADMIN_TOKEN` and `SESSION_TOKEN_PEPPER` (and, commented out, `OAUTH_DERIVE_KEY`). Each is longer than the 32-character minimum, so a copied example booted. `/admin/v1/*` then answered to a token anyone can read in the repo, from the network too when the `.env` predates MUT-463's `HOST`.
+
+**Decision:**
+1. **Every 32-character secret goes through one schema helper,** `secret(name)` in `config.ts`: `MUTABA3A_ADMIN_TOKEN`, `SESSION_TOKEN_PEPPER`, `FRONT_DOOR_TOKEN`, `MUTABA3A_JOB_TOKEN`, `OAUTH_DERIVE_KEY`. It keeps the 32-character minimum and refuses a value starting with `replace-with-` (any case), naming the variable and how to make a real one.
+2. **Prefix, not exact strings:** the misspelled admin placeholder and any placeholder added later are covered without a list to keep in step.
+3. **The committed QA tokens are not refused**, whatever `HOST` is. Server config would have to list test fixtures; MUT-463 (ADR-210) pins the QA harnesses to 127.0.0.1; the CI smoke container has to bind every interface.
+
+**Consequences:**
+- A developer whose `.env` still holds a placeholder gets a boot error and must put real secrets in (`server/README.md` "Run locally" has the one-liner).
+- Production is unaffected: Terraform generates every one of these secrets with `random_password`.
+- A new secret added to the schema should use `secret(name)`.
+
+**Alternatives considered:**
+- Matching the exact `.env.example` strings: misses a fixed typo or a new placeholder.
+- Blank values in `.env.example`: a fresh clone then fails on a missing value instead of a placeholder, and the example no longer shows what goes there (left out of this ticket).
+- Refusing the QA tokens off loopback: decision 3.
+## ADR-212: Operators Are Accounts With a Passkey, Behind One Gate on /v1/operator (MUT-459)
 
 **Status:** Accepted (2026-10-27, MUT-459; epic MUT-458). The plan, eng review D1–D9 and design review 1A–19B are in `.claude/designs/mut-458-operator-console.md`.
 

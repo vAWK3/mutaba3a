@@ -12,7 +12,7 @@ import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
 import { ownsProfile } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
-import { MAX_OWNED_PROFILES } from './profiles.js';
+import { MAX_OWNED_PROFILES, ownedProfileCap } from './profiles.js';
 
 /** MUT-370 (D9): `buildMe`'s `passkeysAt`: the request's clock where this server offers passkeys, else null. */
 export const passkeysClockOf = (c: Context<AppEnv>): Date | null => (c.get('passkeys') ? c.get('now')() : null);
@@ -44,7 +44,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c)), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c)), 200),
   );
 
   return app;
@@ -58,7 +58,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
  * `passkeysAt` is the request's clock where this server offers passkeys (null elsewhere, the local mode included);
  * only then is the suggestion read (`user.passkeyPrompt`, else null).
  */
-export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false, passkeysAt: Date | null = null) {
+export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false, passkeysAt: Date | null = null, maxOwnedProfiles = MAX_OWNED_PROFILES) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
   // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
@@ -102,7 +102,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       ...(user.operatorAt ? { operator: true as const } : {}),
     },
     profiles,
-    limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },
+    limits: { ownedProfiles, maxOwnedProfiles },
     currencies: [...SUPPORTED_CURRENCIES],
     terms: termsNow,
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,

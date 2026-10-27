@@ -514,7 +514,7 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     );
   }
 
-  // ---- MUT-459 (ADR-208): operators, granted and revoked by the admin token alone -------------------------------
+  // ---- MUT-459 (ADR-212): operators, granted and revoked by the admin token alone -------------------------------
 
   app.openapi(
     createRoute({

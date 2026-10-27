@@ -190,7 +190,7 @@ const BANNER_KEYS: Record<Banner, string> = {
   renameFailed: 'hosted.account.passkeys.renameFailed',
   removeFailed: 'hosted.account.passkeys.removeFailed',
   unreachable: 'hosted.auth.unreachable',
-  // MUT-459: an operator confirms with an existing passkey, never the password (ADR-208).
+  // MUT-459: an operator confirms with an existing passkey, never the password (ADR-212).
   operatorPasskeyFirst: 'hosted.account.passkeys.operatorPasskeyFirst',
 };
 

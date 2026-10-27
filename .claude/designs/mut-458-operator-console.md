@@ -70,7 +70,7 @@ Revision 2 (2026-10-27) was rewritten after the eng review and the outside voice
 - The live-API app is `portal-selfservice`. It has admin-token helpers, the outbox, and a virtual authenticator (`qa/support/passkeys.ts`).
 
 ### Next numbers
-- ADR-208, TD-265, API `1.78.0-mut459` (now `1.77.0-mut453`).
+- ADR-212, TD-265, API `1.79.0-mut459` (now `1.77.0-mut453`).
 
 ## 2. Epic decisions (approved by Basel 2026-10-27; D-refs in the appendix)
 
@@ -164,7 +164,7 @@ Revision 2 (2026-10-27) was rewritten after the eng review and the outside voice
   - mount the router;
   - add the routes to the organization-independent set;
   - `PERSON_LEVEL_GATE` 'open';
-  - `API_VERSION='1.78.0-mut459'`, plus the 5 version asserts.
+  - `API_VERSION='1.79.0-mut459'`, plus the 5 version asserts.
 - `src/routes/me.ts`, `schemas.ts`: `user.operator?: true`.
 - `src/scripts/users.ts`: `operator-grant`, `operator-revoke`.
 - Regenerate `openapi/openapi.yaml` and `src/hosted/api/schema.d.ts`.
@@ -193,7 +193,7 @@ Revision 2 (2026-10-27) was rewritten after the eng review and the outside voice
 - `routes-signup-review.test.ts` stays **unchanged** as the regression proof.
 
 **Docs**
-- ADR-208 (operator identity, gate, passkey step-up), CHANGELOG, SYSTEM_OVERVIEW, TEST_PLAN.
+- ADR-212 (operator identity, gate, passkey step-up), CHANGELOG, SYSTEM_OVERVIEW, TEST_PLAN.
 - `docs/operations/before-release.md`: add a passkey to Basel's account, then `live-admin.sh operator-grant`.
 
 **QA**
@@ -476,7 +476,7 @@ Own account: Access rows protected by E10 render inert with the reason.
 - **Passkey step-up is new security code.** Tests pin each part: the challenge is user-bound, single-use and lives 5 minutes; the counter check is shared with sign-in; `credentialsVerifiedAt` is never touched.
 - **Extraction refactors touch production admin routes**, one router per ticket. The existing suites stay unchanged, as the gate.
 - **An operator who deletes their last passkey can't act until they add one.** This is intended; the step-up sheet says so.
-- **The OpenAPI spec lists the `/v1/operator` paths publicly**, as it already does `/admin/v1`. Accepted and noted in ADR-208.
+- **The OpenAPI spec lists the `/v1/operator` paths publicly**, as it already does `/admin/v1`. Accepted and noted in ADR-212.
 
 ## 6. Jira amendments to make (ticket text vs this plan)
 

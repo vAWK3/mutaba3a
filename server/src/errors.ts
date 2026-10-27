@@ -52,7 +52,7 @@ export const ERROR_CODES = {
    */
   RECENT_SIGN_IN_REQUIRED: 403,
   /**
-   * MUT-459 (ADR-208): an operator's passkey step-up didn't verify (another person's passkey, a sign-in or used or expired
+   * MUT-459 (ADR-212): an operator's passkey step-up didn't verify (another person's passkey, a sign-in or used or expired
    * challenge, a bad signature). Not 401: the session is still valid.
    */
   PASSKEY_NOT_ACCEPTED: 403,

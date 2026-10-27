@@ -18,7 +18,7 @@ const FORBIDDEN = /sign-?up|register|invite|forgot|reset/i;
  */
 const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups', '/oauth/register']);
 /**
- * The operator surface: /admin/ (the token) and, since MUT-459 (ADR-208), /v1/operator/ (a signed-in operator; 404 for
+ * The operator surface: /admin/ (the token) and, since MUT-459 (ADR-212), /v1/operator/ (a signed-in operator; 404 for
  * everyone else). Its signup-review routes decide on someone else's signup; they open no door to anyone.
  */
 const isOperatorSurface = (path: string) => path.startsWith('/admin/') || path.startsWith('/v1/operator/');

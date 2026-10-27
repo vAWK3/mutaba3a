@@ -5,7 +5,7 @@ import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/por
 import { CHALLENGE_TTL_MS, STEP_UP_WINDOW_MS, stepUpOptions, verifyAssertion, type WebauthnConfig } from './webauthn.js';
 
 /**
- * MUT-459 (ADR-208, D7): an operator's step-up is passkey-only. A write passes while `sessions.stepUpAt` is under 10
+ * MUT-459 (ADR-212, D7): an operator's step-up is passkey-only. A write passes while `sessions.stepUpAt` is under 10
  * minutes old. Only a passkey sets it: a passkey sign-in (the session is created stamped) or a passkey step-up here.
  * A password never does, a password sign-in included, and a password change's rotated session starts unstamped
  * (review finding 1: inferring the proof from `createdAt` let a password change reopen the window). The step-up never

@@ -14,7 +14,7 @@ import { provisionUser, setupTokenOf } from './helpers/provision.js';
 import { SoftAuthenticator } from './helpers/soft-authenticator.js';
 
 /**
- * MUT-459 (ADR-208): the operator console's server half, end to end through the real app, the real @simplewebauthn
+ * MUT-459 (ADR-212): the operator console's server half, end to end through the real app, the real @simplewebauthn
  * checks (soft authenticator) and the memory store: the operator mark (CLI only, needs a passkey), the /v1/operator
  * gate (404 for a signed-in non-operator, 401 signed out), the passkey-only step-up on every write, and the signup
  * review actions answering exactly what the admin routes answer, with the operator's identity in the audit.

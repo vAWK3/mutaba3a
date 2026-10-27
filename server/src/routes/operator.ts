@@ -18,7 +18,7 @@ import {
 import type { PasskeyRequestOptionsSchema } from '../schemas.js';
 
 /**
- * MUT-459 (ADR-208): the portal's operator console, signed in as an operator. Mounted behind the /v1 authenticate()
+ * MUT-459 (ADR-212): the portal's operator console, signed in as an operator. Mounted behind the /v1 authenticate()
  * and operatorGate (auth/operator-gate.ts): a non-operator gets 404, every write needs a fresh passkey step-up.
  *
  * The actions run on the unguarded store (`store` here is the base store, as the admin routes' raw access): the store

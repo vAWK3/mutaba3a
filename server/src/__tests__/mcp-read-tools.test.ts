@@ -124,6 +124,15 @@ describe('list_categories', () => {
     expect(all.items.find((c: Loose) => c.id === first.id)).toMatchObject({ archived: true });
   });
 
+  // MUT-464: an agent has no UI language, so a seeded name reads in the person's account language.
+  it('shows seeded categories in the person’s language and typed ones as typed', async () => {
+    const { h, p, bearer } = await setup();
+    const studio = await business(h, p);
+    await h.store.expenseCategories.seed(studio, [{ name: 'إيجار المكتب', color: null }, { name: 'قهوة', color: null }], new Date('2026-10-20T09:00:00Z'));
+    const out = await tool(h, bearer, 'list_categories', { profileId: studio });
+    expect(out.items.map((c: Loose) => c.name)).toEqual(['Office Rent', 'قهوة']);
+  });
+
   it('never seeds a profile’s categories (a read writes nothing) and says how to get them', async () => {
     const { h, p, bearer } = await setup();
     expect(await h.store.expenseCategories.list(p.personalId, { includeArchived: true })).toHaveLength(0);

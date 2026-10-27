@@ -112,7 +112,7 @@ const BILLING_OPERATIONS = ['GET /v1/billing', 'POST /v1/billing/checkout-sessio
 const AGENT_CONSENT_OPERATIONS = ['GET /v1/oauth/requests/{requestId}', 'POST /v1/oauth/requests/{requestId}/decision', 'GET /v1/oauth/grants', 'DELETE /v1/oauth/grants/{grantId}'];
 
 /**
- * MUT-459 (ADR-208): the operator console — the portal's cookie session only (no device session, no key); operatorGate
+ * MUT-459 (ADR-212): the operator console — the portal's cookie session only (no device session, no key); operatorGate
  * answers 404 to a signed-in non-operator.
  */
 const OPERATOR_OPERATIONS = [

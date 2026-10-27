@@ -4,6 +4,8 @@ import { api, ApiError, type ActivitySummary, type HostedProfile, type Organizat
 import { profileKey } from '../session/me';
 import { everyPage } from './queries';
 import type { Range } from './reports';
+import { expenseCategoriesKey } from './expenseQueries';
+import { useLanguage } from '../../lib/i18n/core';
 
 /**
  * Reports' reads (MUT-175, D1/D4). One activity request per profile in view,
@@ -121,9 +123,10 @@ type Clients = Awaited<ReturnType<typeof everyPage<{ id: string; name: string }>
  * fallback, never a reason to wait.
  */
 export function useNameDirectories(profiles: readonly HostedProfile[]): NameDirectories {
+  const { language } = useLanguage();
   const categories = useQueries({
     queries: profiles.map((profile) => ({
-      queryKey: profileKey(profile.id, 'expense-categories', 'with-archived'),
+      queryKey: expenseCategoriesKey(profile.id, language, true),
       queryFn: () => api.expenseCategories(profile.id, { includeArchived: 'true' }),
       staleTime: STALE_MS,
     })),

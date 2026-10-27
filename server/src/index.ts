@@ -1,6 +1,6 @@
-import { serve } from '@hono/node-server';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { loadConfig } from './config.js';
+import { startServer } from './listen.js';
 import { createLogger } from './logger.js';
 import { shutdownAndFlush } from './observability/reporter.js';
 import { apiRelease, createSentryReporter, serverPackageVersion } from './observability/sentry-node.js';
@@ -151,6 +151,7 @@ const app = createApp({
   receiptsLibrary: config.RECEIPTS_LIBRARY,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   billingGate: config.BILLING_GATE,
+  maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
   passwordHasher: createArgon2Hasher({
@@ -220,8 +221,9 @@ if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but
 if (!webauthn) logger.info('WEBAUTHN_RP_ID is not set; passkey routes answer 404');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 
-const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
-  logger.info({ port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
+// MUT-463: HOST (local QA sets 127.0.0.1) or, unset, every interface.
+const server = startServer(app.fetch, config, (info) => {
+  logger.info({ address: info.address, port: info.port, env: config.NODE_ENV, keyEnvironment: config.API_KEY_ENVIRONMENT }, 'mutaba3a-api listening');
 });
 // MUT-228: production runs one instance, so every deploy starts with an empty rate cache. Fill it now
 // rather than on the first phone's request; a failure is logged and the first request tries again.

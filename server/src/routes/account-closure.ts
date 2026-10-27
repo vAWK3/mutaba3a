@@ -72,7 +72,7 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       const { password } = c.req.valid('json');
       const now = c.get('now')();
       await verifyCurrentPassword(options, user, password, now, c.get('requestId'));
-      // MUT-459 (re-review cycle 3): an operator's account closes only after the CLI takes the mark off (ADR-208).
+      // MUT-459 (re-review cycle 3): an operator's account closes only after the CLI takes the mark off (ADR-212).
       // Otherwise a password alone could sign the operator out everywhere and lock the console for 30 days.
       if (user.operatorAt) throw new ApiError('CONFLICT', 'An operator account can’t be closed here: the operator mark is removed with the CLI first', { reason: 'OPERATOR_ACCOUNT' });
 

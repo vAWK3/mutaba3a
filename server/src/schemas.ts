@@ -871,8 +871,8 @@ export const MeSchema = z
        */
       features: z.array(z.string()),
       /**
-       * MUT-459 (ADR-208): present, and true, only for an operator of the portal's console; absent for everyone else,
-       * so no one else's /v1/me hints at it. Additive since 1.78.0-mut459.
+       * MUT-459 (ADR-212): present, and true, only for an operator of the portal's console; absent for everyone else,
+       * so no one else's /v1/me hints at it. Additive since 1.79.0-mut459.
        */
       operator: z.literal(true).optional(),
     }),
@@ -980,7 +980,7 @@ export const FeatureGrantResponseSchema = z
   })
   .openapi('FeatureGrantResponse');
 
-/** MUT-459 (ADR-208): the operator mark after a grant or revoke by the admin token. */
+/** MUT-459 (ADR-212): the operator mark after a grant or revoke by the admin token. */
 export const OperatorMarkResponseSchema = z
   .object({
     userId: z.string().uuid(),
@@ -3061,7 +3061,16 @@ export const ReceiptEditRatesSchema = z
   .openapi('ReceiptEditRates', { description: 'MUT-255: how often people change what the receipt reader suggested. Counts only, across every profile.' });
 
 export const ExpenseCategorySchema = z
-  .object({ id: uuid, name: z.string(), color: z.string().nullable(), archived: z.boolean(), version: z.number().int(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() })
+  .object({
+    id: uuid,
+    name: z.string().openapi({ description: 'MUT-464: a seeded category’s name in the request language (Accept-Language ar/en, else the account’s); a name a person typed, as typed.' }),
+    presetKey: z.string().nullable().openapi({ description: 'MUT-464: the preset entry this category is (`other` for the automatic Other), or null for one a person named. Worked out from the name, never stored.' }),
+    color: z.string().nullable(),
+    archived: z.boolean(),
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
   .openapi('ExpenseCategory');
 export const ExpenseCategoryListSchema = z.object({ items: z.array(ExpenseCategorySchema) }).openapi('ExpenseCategoryList');
 export const ListExpenseCategoriesQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).optional() });
