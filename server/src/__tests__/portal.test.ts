@@ -119,7 +119,24 @@ describe('portal serving — enabled', () => {
     await writeFile(join(distDir, 'index.html'), '<!doctype html><html><body>portal shell</body></html>');
     await writeFile(join(distDir, 'assets', 'app-abc123.js'), 'console.log("hosted portal");');
     await writeFile(join(distDir, 'favicon.svg'), '<svg></svg>');
+    await mkdir(join(distDir, 'mail', 'v1'), { recursive: true });
+    await writeFile(join(distDir, 'mail', 'v1', 'chip-lock-safety-2x.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     app = harness({ distDir });
+  });
+
+  it('MUT-468: serves mail art under /mail/* as a PNG with immutable caching, loadable from any mail client', async () => {
+    const res = await app.request('/mail/v1/chip-lock-safety-2x.png');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    // Webmail that fetches images directly would refuse a same-origin resource policy.
+    expect(res.headers.get('cross-origin-resource-policy') ?? '').not.toBe('same-origin');
+  });
+
+  it('MUT-468: a missing mail picture falls back to the SPA shell, never immutably cached', async () => {
+    const res = await app.request('/mail/v1/missing-2x.png');
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(res.headers.get('cache-control')).not.toContain('immutable');
   });
 
   afterAll(async () => {
