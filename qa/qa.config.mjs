@@ -76,6 +76,8 @@ export default {
         '!src/components/ui/{ErrorBoundary,Input}.*', '!src/hosted/**/__tests__/**', '!src/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
         '!src/hosted/pages/auth/{SignupPage,RecoverPage,EmailLinkForm,CheckEmailNotice,UnderReviewNotice,SignedOutOnly}.tsx', '!src/hosted/pages/auth/selfService.ts',
         '!src/hosted/components/turnstile/**', '!src/hosted/session/{selfServiceDoors,firstRun}.ts',
+        // MUT-468: the mail art is read through the live API's outbox: the portal-selfservice app's.
+        '!src/hosted/public/mail/**',
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
         '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts',
         // MUT-291: the carry-over's pages and mapping are the carry-over app's (they need the old app's origin too).
@@ -152,6 +154,10 @@ export default {
         'server/src/auth/turnstile.ts',
         'server/src/routes/admin-signup-reviews.ts',
         'server/src/email/domains/**',
+        // MUT-468: the mail frame and its art, opened from the outbox as a mail app would.
+        'server/src/email/templates/**',
+        'server/src/email/mailer.ts',
+        'src/hosted/public/mail/**',
         // MUT-115: passkeys need a real WebAuthn relying party, so their flows run here (Chromium's virtual authenticator).
         'src/hosted/passkeys/**',
         'src/hosted/components/PasskeysDrawer.tsx',
