@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from '../config.js';
 import { UNOWNED_DOMAINS } from '../email/ports.js';
@@ -59,6 +61,35 @@ describe('loadConfig — sessions (MUT-38)', () => {
 
   it('accepts a portal origin', () => {
     expect(loadConfig({ ...base, PORTAL_ORIGIN: 'https://portal.example.com' }).PORTAL_ORIGIN).toBe('https://portal.example.com');
+  });
+});
+
+describe('loadConfig — placeholder secrets (MUT-472, ADR-211)', () => {
+  const PLACEHOLDER = 'replace-with-32-plus-random-characters-from-secret-manager';
+
+  it.each(['MUTABA3A_ADMIN_TOKEN', 'SESSION_TOKEN_PEPPER', 'FRONT_DOOR_TOKEN', 'MUTABA3A_JOB_TOKEN', 'OAUTH_DERIVE_KEY'])(
+    'refuses the .env.example placeholder as %s, naming the variable',
+    (name) => {
+      const env = { ...base, PORTAL_ORIGIN: 'https://portal.example.com', [name]: PLACEHOLDER };
+      expect(() => loadConfig(env)).toThrow(ConfigError);
+      expect(() => loadConfig(env)).toThrow(`${name}: ${name} is the placeholder from server/.env.example`);
+    },
+  );
+
+  it('refuses the admin token exactly as server/.env.example ships it', () => {
+    const example = readFileSync(resolve(process.cwd(), '.env.example'), 'utf8');
+    const shipped = /^MUTABA3A_ADMIN_TOKEN=(.+)$/m.exec(example)?.[1];
+    expect(shipped).toBeDefined();
+    expect(() => loadConfig({ ...base, MUTABA3A_ADMIN_TOKEN: shipped })).toThrow(/MUTABA3A_ADMIN_TOKEN is the placeholder/);
+  });
+
+  it('matches the prefix in any case', () => {
+    expect(() => loadConfig({ ...base, SESSION_TOKEN_PEPPER: PLACEHOLDER.toUpperCase() })).toThrow(/SESSION_TOKEN_PEPPER is the placeholder/);
+  });
+
+  it('accepts a real secret, even one with the words later on', () => {
+    const token = `${'a'.repeat(32)}-replace-with-`;
+    expect(loadConfig({ ...base, MUTABA3A_ADMIN_TOKEN: token }).MUTABA3A_ADMIN_TOKEN).toBe(token);
   });
 });
 

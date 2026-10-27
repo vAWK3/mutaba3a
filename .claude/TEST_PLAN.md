@@ -4009,3 +4009,11 @@ Review fixes (qa-reconcile, 2026-10-26):
 |---|---|---|
 | `server/infrastructure/terraform/tests/min_build.tftest.hcl` (new; mocked Google + random) | 7 | Nothing set: none of the five env vars, today's gate unchanged. Set floors reach Cloud Run as exactly those strings. `min_build_check_disabled = true` sends `"true"`; `false` sends nothing. A recommended build below its floor, or without one, fails the plan; a 0 floor fails validation. |
 | `server/src/__tests__/config.test.ts` | +5 | `MIN_BUILD_CHECK_DISABLED="false"` keeps the gate on (it used to switch it off); `1`, `yes`, `TRUE` and empty refuse to boot. |
+
+## MUT-472 — placeholder secrets refused at boot (2026-10-27, ADR-211)
+
+| Test | Cases | What it proves |
+|---|---|---|
+| `server/src/__tests__/config.test.ts` | +8 | The `.env.example` placeholder is refused as each of the five secrets, with a `ConfigError` naming the variable; the admin token exactly as `.env.example` ships it (read from the file) is refused; the prefix matches in any case; a real secret with `replace-with-` later in it still boots. |
+
+Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports both shipped placeholders (admin token, pepper) and does not boot.
