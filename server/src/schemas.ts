@@ -1185,6 +1185,54 @@ export const OperatorSignupReviewListSchema = SignupReviewListSchema.extend({ st
 /** MUT-459 (D7): a passkey step-up keeps the operator's writes open until `stepUpUntil` (10 minutes). */
 export const OperatorStepUpSchema = z.object({ stepUpUntil: z.string().datetime() }).openapi('OperatorStepUp');
 
+/**
+ * MUT-461 (design 17A, 3A): the operator's account search, by exact normalised email (ADR-212 D5). No match is
+ * `account: null` with 200, never a 404 (the portal reads a 404 as a lost profile).
+ */
+export const OperatorAccountSearchSchema = z
+  .object({
+    account: z.object({ id: z.string().uuid(), email: z.string(), displayName: z.string(), status: UserStatusSchema }).nullable(),
+    stepUpUntil: z.string().datetime().nullable(),
+  })
+  .openapi('OperatorAccountSearch');
+
+/** MUT-461 (design 4A, 5A): one account as the operator sees it before acting. Never a credential or a link. */
+export const OperatorAccountSchema = UserSummarySchema.extend({
+  /** MUT-333: the account is closing (30 days' grace, then the hard delete). */
+  closing: z.boolean(),
+  operator: z.boolean(),
+  passkeyCount: z.number().int().min(0),
+  /** The per-user flags that are on (MUT-433). */
+  features: z.array(z.string()),
+  /** Sessions that still work, phone and portal: what sign out everywhere or a disable would end. */
+  activeSessionCount: z.number().int().min(0),
+  /** Connected agents (MUT-434) a disable or sign out everywhere would disconnect. */
+  agentGrantCount: z.number().int().min(0),
+  profiles: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      role: z.enum(['OWNER', 'BOOKKEEPER', 'SUBMITTER']),
+      /** Their built-in personal profile. */
+      personal: z.boolean(),
+      /** A profile they created (billing follows the creator, MUT-358); false on a firm they belong to or a co-owned one. */
+      owned: z.boolean(),
+      firmEnabledAt: z.string().datetime().nullable(),
+      firmRequestedAt: z.string().datetime().nullable(),
+      /** As /v1/me reports it for this profile; null when it can't be resolved. */
+      billing: BillingEntitlementSchema.nullable(),
+    }),
+  ),
+}).openapi('OperatorAccount');
+
+export const OperatorAccountViewSchema = z.object({ account: OperatorAccountSchema, stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorAccountView');
+
+/** MUT-461 (design 4A): the admin route's `{ user }`, plus what the disable ended, for the result's own counts. */
+export const OperatorAccountStatusResponseSchema = UserStatusResponseSchema.extend({
+  sessionsRevoked: z.number().int().min(0),
+  agentGrantsRevoked: z.number().int().min(0),
+}).openapi('OperatorAccountStatusResponse');
+
 export const SignupReviewDecisionSchema = z
   .object({
     review: SignupReviewSchema,

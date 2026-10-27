@@ -41,6 +41,7 @@ export type AccountAuditAction =
   | 'user.operator_granted'
   | 'user.operator_revoked'
   | 'user.agent_disconnected'
+  | 'user.sessions_revoked'
   | 'membership.granted'
   | 'membership.revoked';
 
@@ -145,6 +146,8 @@ export function accountActions(options: AccountActionOptions) {
     const user = await mustGet(userId);
     const revoked = await store.sessions.revokeAllForUser(user.id, 'operator', ctx.at);
     const agentGrantsRevoked = await revokeAgentGrants(ctx, user.id, 'operator');
+    // MUT-461: audited (the AC's "every action"), with what it ended; before, only the agents' disconnect was.
+    await audit(ctx, await memberOrganizations(user.id), user.id, 'user.sessions_revoked', { revoked, agentGrantsRevoked });
     return { revoked, agentGrantsRevoked };
   }
 
