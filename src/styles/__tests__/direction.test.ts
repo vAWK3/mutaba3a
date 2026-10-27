@@ -53,6 +53,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
   'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 3, auto: 1 }, // MUT-461: the search field, a match's and a miss's address; the match's name
   'src/hosted/pages/operator/OperatorAccountPage.tsx': { ltr: 1, auto: 2 }, // MUT-461: the account's address; its name and each profile's name
+  'src/hosted/pages/operator/OperatorBillingSection.tsx': { ltr: 1, auto: 2 }, // MUT-462: the drawer's address; a grant's reason and the reason field
+  'src/hosted/pages/operator/OperatorFirmsPage.tsx': { ltr: 2, auto: 2 }, // MUT-462: the asker's and each member's address; the profile's and a member's name
   'src/hosted/pages/operator/OperatorSignupsPage.tsx': { ltr: 4 }, // MUT-460: the signup's email (row and kept row), its domain, an unknown reason code
   'src/hosted/components/PasskeysDrawer.tsx': { ltr: 1, auto: 3 }, // the step-up password; passkey names in the list and the rename field (MUT-115 DR11)
   'src/hosted/components/CloseAccountDrawer.tsx': { ltr: 2 }, // the password, and the address being closed inside the sentence (MUT-333)

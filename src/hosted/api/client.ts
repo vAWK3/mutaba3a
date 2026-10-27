@@ -118,6 +118,13 @@ export type OperatorAccountView = Schemas['OperatorAccountView'];
 export type OperatorAccountStatusResponse = Schemas['OperatorAccountStatusResponse'];
 export type RevokeSessionsResponse = Schemas['RevokeSessionsResponse'];
 export type IssueSetupLinkResponse = Schemas['IssueSetupLinkResponse'];
+/** MUT-462: billing grants, feature flags and firm requests in the operator console. */
+export type EntitlementGrant = Schemas['EntitlementGrant'];
+export type OperatorBillingGrantList = Schemas['OperatorBillingGrantList'];
+export type OperatorCreateBillingGrantRequest = Schemas['OperatorCreateBillingGrantRequest'];
+export type OperatorFirmRequestList = Schemas['OperatorFirmRequestList'];
+export type OperatorFirmRequestDetail = Schemas['OperatorFirmRequestDetail'];
+export type FirmRequest = Schemas['FirmRequest'];
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
@@ -515,6 +522,24 @@ export const api = {
   /** MUT-461: a one-time setup link, in this answer only; `lock` stops the password and signs out now. */
   issueOperatorSetupLink: (userId: string, body: { lock: boolean; validHours: number }) =>
     request<IssueSetupLinkResponse>('POST', `/v1/operator/accounts/${encodeURIComponent(userId)}/setup-link`, { body }),
+  /** MUT-462: an account's billing grants, newest first, revoked ones included. */
+  operatorBillingGrants: (userId: string, signal?: AbortSignal) =>
+    request<OperatorBillingGrantList>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}/billing-grants`, { signal }),
+  /** MUT-462: cover the person's own profiles; 409 OWN_ACCOUNT on your own. */
+  createOperatorBillingGrant: (userId: string, body: OperatorCreateBillingGrantRequest) =>
+    request<EntitlementGrant>('POST', `/v1/operator/accounts/${encodeURIComponent(userId)}/billing-grants`, { body }),
+  revokeOperatorBillingGrant: (userId: string, grantId: string) =>
+    request<Schemas['RevokeEntitlementGrantResponse']>('DELETE', `/v1/operator/accounts/${encodeURIComponent(userId)}/billing-grants/${encodeURIComponent(grantId)}`),
+  /** MUT-462: a feature flag on or off for the person (idempotent). */
+  setOperatorFeature: (userId: string, feature: string, on: boolean) =>
+    request<Schemas['FeatureGrantResponse'] | Schemas['FeatureRevokeResponse']>(on ? 'PUT' : 'DELETE', `/v1/operator/accounts/${encodeURIComponent(userId)}/features/${encodeURIComponent(feature)}`),
+  /** MUT-462: pending firm requests, oldest first (one page of the most the server gives). */
+  operatorFirmRequests: (signal?: AbortSignal) => request<OperatorFirmRequestList>('GET', '/v1/operator/firm-requests', { query: { limit: OPERATOR_LIST_LIMIT }, signal }),
+  /** MUT-462: one request and its members, for the owner picker; 404 FIRM_REQUEST_NOT_FOUND once decided. */
+  operatorFirmRequest: (organizationId: string, signal?: AbortSignal) =>
+    request<OperatorFirmRequestDetail>('GET', `/v1/operator/firm-requests/${encodeURIComponent(organizationId)}`, { signal }),
+  decideOperatorFirmRequest: (organizationId: string, decision: { verb: 'enable'; ownerUserIds: string[] } | { verb: 'decline' }) =>
+    request<Schemas['OrganizationResponse']>('POST', `/v1/operator/firm-requests/${encodeURIComponent(organizationId)}/${decision.verb}`, decision.verb === 'enable' ? { body: { ownerUserIds: decision.ownerUserIds } } : {}),
   /** MUT-460: the operator's passkey step-up (MUT-459): options for the system sheet, then the assertion. */
   operatorStepUpOptions: () => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/operator/step-up/options'),
   operatorStepUp: (body: Schemas['PasskeySignInRequest']) => request<Schemas['OperatorStepUp']>('POST', '/v1/operator/step-up', { body }),

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import type { Me, OperatorAccount } from '../../../api/client';
+import type { EntitlementGrant, Me, OperatorAccount } from '../../../api/client';
 import { fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 import { operatorAccountKey } from '../../../data/operatorQueries';
@@ -45,6 +45,7 @@ const account = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => (
   features: [],
   activeSessionCount: 2,
   agentGrantCount: 1,
+  availableFeatures: ['agent_access'],
   profiles: [
     {
       id: '44444444-aaaa-4aaa-8aaa-444444444444',
@@ -60,13 +61,35 @@ const account = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => (
   ...overrides,
 });
 
+const NEW_GRANT = '55555555-aaaa-4aaa-8aaa-555555555555';
+const grantOf = (overrides: Partial<EntitlementGrant> = {}): EntitlementGrant => ({
+  id: '66666666-aaaa-4aaa-8aaa-666666666666',
+  userId: SARA,
+  organizationId: null,
+  tier: 'FREELANCER',
+  reason: 'Pilot comp',
+  expiresAt: '2026-11-26T21:59:59.999Z',
+  grantedBy: 'admin',
+  createdAt: '2026-10-20T09:00:00.000Z',
+  revokedAt: null,
+  ...overrides,
+});
+
 const plain = (text: string | null | undefined) => (text ?? '').replace(/[⁨⁩]/g, '');
 const sentence = (expected: string) => (_: string, element: Element | null) => element?.tagName === 'P' && plain(element.textContent) === expected;
 /** The info toast's live region says it (the toast text is one string with the address isolated). */
 const toasted = async (expected: string) => waitFor(() => expect(plain(screen.getByTestId('toast-live').textContent)).toContain(expected));
 
-function portal({ me: who = operator(), view = account(), stepUpUntil = FRESH as string | null, extra = {} as Record<string, Handler>, path = `/operator/accounts/${SARA}` } = {}) {
+function portal({
+  me: who = operator(),
+  view = account(),
+  stepUpUntil = FRESH as string | null,
+  grants = [] as EntitlementGrant[],
+  extra = {} as Record<string, Handler>,
+  path = `/operator/accounts/${SARA}`,
+} = {}) {
   let current = view;
+  let currentGrants = grants;
   const api = stubApi({
     'GET /v1/me': () => ok(who),
     'GET /v1/operator/signup-reviews': () => ok({ data: [], nextCursor: null, stepUpUntil }),
@@ -87,6 +110,31 @@ function portal({ me: who = operator(), view = account(), stepUpUntil = FRESH as
     },
     [`POST /v1/operator/accounts/${current.id}/setup-link`]: (request) =>
       ok({ user: { ...current }, lock: (request.body as { lock: boolean }).lock, setupLink: { url: LINK, expiresAt: '2026-10-28T12:00:00.000Z', purpose: 'RESET' } }),
+    // MUT-462: the account's grants and flags.
+    [`GET /v1/operator/accounts/${current.id}/billing-grants`]: () => ok({ grants: currentGrants, stepUpUntil }),
+    [`POST /v1/operator/accounts/${current.id}/billing-grants`]: (request) => {
+      const body = request.body as { tier: EntitlementGrant['tier']; reason: string; expiresAt?: string };
+      const created = grantOf({ id: NEW_GRANT, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt ?? null, grantedBy: `operator:${OPERATOR_ID}` });
+      currentGrants = [created, ...currentGrants];
+      return ok(created, 201);
+    },
+    ...Object.fromEntries(
+      grants.map((g) => [
+        `DELETE /v1/operator/accounts/${current.id}/billing-grants/${g.id}`,
+        () => {
+          currentGrants = currentGrants.map((x) => (x.id === g.id ? { ...x, revokedAt: NOW.toISOString() } : x));
+          return ok({ grant: currentGrants.find((x) => x.id === g.id), revoked: true });
+        },
+      ]),
+    ),
+    [`PUT /v1/operator/accounts/${current.id}/features/agent_access`]: () => {
+      current = { ...current, features: ['agent_access'] };
+      return ok({ feature: 'agent_access', grantedAt: NOW.toISOString(), granted: true });
+    },
+    [`DELETE /v1/operator/accounts/${current.id}/features/agent_access`]: () => {
+      current = { ...current, features: [] };
+      return ok({ feature: 'agent_access', revoked: true });
+    },
     'POST /v1/operator/step-up/options': () => ok(CHALLENGE),
     'POST /v1/operator/step-up': () => ok({ stepUpUntil: FRESH }),
     ...extra,
@@ -295,5 +343,143 @@ describe('the reset link (AC2, design 12A)', () => {
     await user.click(await screen.findByRole('link', { name: /sara@studio\.example/ }));
     expect(await (await access()).findByRole('button', { name: /Send reset link/ })).toBeInTheDocument();
     expect(screen.queryByLabelText('Reset link for sara@studio.example')).toBeNull();
+  });
+});
+
+const billing = async () => within(await screen.findByRole('region', { name: 'Billing' }));
+/** A grant row's label: the reason sits in its own <bdi>, so the label is matched whole. */
+const grantLabel = (text: string) => (_: string, element: Element | null) => Boolean(element?.classList.contains('hp-you-row-label')) && element?.textContent === text;
+const features = async () => within(await screen.findByRole('region', { name: 'Features' }));
+
+describe('billing grants (MUT-462, design 14A)', () => {
+  it('lists the grants after Access, each with where it stands; only an active one offers Revoke', async () => {
+    portal({
+      grants: [
+        grantOf(),
+        grantOf({ id: '77777777-aaaa-4aaa-8aaa-777777777777', reason: 'Old comp', revokedAt: '2026-10-21T09:00:00.000Z' }),
+        grantOf({ id: '88888888-aaaa-4aaa-8aaa-888888888888', tier: 'FIRM', reason: 'Trial firm', expiresAt: '2026-10-25T00:00:00.000Z' }),
+      ],
+    });
+    const rows = await billing();
+    expect(await rows.findByText(grantLabel('Freelancer · Pilot comp'))).toBeInTheDocument();
+    expect(rows.getByText('Until Nov 26, 2026')).toBeInTheDocument();
+    expect(rows.getByText('Revoked Oct 21, 2026')).toBeInTheDocument();
+    expect(rows.getByText('Ended Oct 25, 2026')).toBeInTheDocument();
+    expect(rows.getAllByRole('button', { name: 'Revoke' })).toHaveLength(1);
+    const regions = screen.getAllByRole('region').map((r) => r.getAttribute('aria-label'));
+    expect(regions.indexOf('Access')).toBeLessThan(regions.indexOf('Billing'));
+    expect(regions.indexOf('Billing')).toBeLessThan(regions.indexOf('Features'));
+    expect(regions.indexOf('Features')).toBeLessThan(regions.indexOf('Profiles'));
+  });
+
+  it('Grant coverage opens the drawer in the address; a grant with a reason and 90 days is sent, toasted, and listed', async () => {
+    const { user, api, router } = portal();
+    await user.click((await billing()).getByRole('button', { name: /Grant coverage/ }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/operator/accounts/${SARA}?grant=new`));
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    expect(drawer.getByRole('radio', { name: /Freelancer/ })).toBeChecked();
+    await user.click(drawer.getByRole('radio', { name: /Firm/ }));
+    await user.type(drawer.getByLabelText('Reason'), 'Pilot comp');
+    await user.click(drawer.getByRole('button', { name: '90 days' }));
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    await toasted('Coverage granted to sara@studio.example');
+    const sent = api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body as { tier: string; reason: string; expiresAt: string };
+    expect(sent).toMatchObject({ tier: 'FIRM', reason: 'Pilot comp' });
+    expect(new Date(sent.expiresAt).getDate()).toBe(new Date(NOW.getTime() + 90 * 86_400_000).getDate());
+    await waitFor(() => expect(locationOf(router)).toBe(`/operator/accounts/${SARA}`));
+    expect(await (await billing()).findByText(grantLabel('Firm · Pilot comp'))).toBeInTheDocument();
+    expect(api.count('POST /v1/operator/step-up/options')).toBe(0);
+  });
+
+  it('asks for a reason and a day after today before sending anything; No end date sends no expiry', async () => {
+    const { user, api } = portal({ path: `/operator/accounts/${SARA}?grant=new` });
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    expect(drawer.getByText("Say why you're granting it.")).toBeInTheDocument();
+    await user.type(drawer.getByLabelText('Reason'), 'Pilot comp');
+    await user.clear(drawer.getByLabelText('Ends'));
+    await user.type(drawer.getByLabelText('Ends'), '2026-10-01');
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    expect(drawer.getByText('Choose a day after today, or No end date.')).toBeInTheDocument();
+    expect(api.count(`POST /v1/operator/accounts/${SARA}/billing-grants`)).toBe(0);
+    await user.click(drawer.getByRole('button', { name: 'No end date' }));
+    expect(drawer.getByText('It lasts until you revoke it.')).toBeInTheDocument();
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    await toasted('Coverage granted to sara@studio.example');
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'FREELANCER', reason: 'Pilot comp' });
+  });
+
+  it('a stale step-up says "Grant with passkey" and runs the passkey sheet on the same tap', async () => {
+    const { user, api } = portal({ stepUpUntil: STALE, path: `/operator/accounts/${SARA}?grant=new` });
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    await user.type(drawer.getByLabelText('Reason'), 'Pilot comp');
+    await user.click(drawer.getByRole('button', { name: 'Grant with passkey' }));
+    await toasted('Coverage granted to sara@studio.example');
+    expect(browser.startAuthentication).toHaveBeenCalledTimes(1);
+    expect(api.count(`POST /v1/operator/accounts/${SARA}/billing-grants`)).toBe(1);
+  });
+
+  it('Revoke confirms in the row with what the person loses; Cancel puts it back; confirming revokes', async () => {
+    const { user, api } = portal({ grants: [grantOf()] });
+    const rows = await billing();
+    await user.click(await rows.findByRole('button', { name: 'Revoke' }));
+    expect(screen.getByText(sentence('sara@studio.example loses this Freelancer coverage. Their profiles go back to their own plan or trial.'))).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(rows.getByRole('button', { name: 'Revoke' }));
+    await user.click(within(screen.getByRole('group')).getByRole('button', { name: 'Revoke' }));
+    await toasted('Coverage revoked for sara@studio.example');
+    expect(api.count(`DELETE /v1/operator/accounts/${SARA}/billing-grants/${grantOf().id}`)).toBe(1);
+    expect(await rows.findByText('Revoked Oct 27, 2026')).toBeInTheDocument();
+  });
+
+  it('on the operator’s own account the grant row is inert with the reason and no drawer opens (E10)', async () => {
+    const { user, router } = portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}` });
+    const grant = (await billing()).getByRole('button', { name: /Grant coverage/ });
+    expect(grant).toHaveAttribute('aria-disabled', 'true');
+    expect(grant).toHaveTextContent('This is your account');
+    await user.click(grant);
+    expect(locationOf(router)).toBe(`/operator/accounts/${OPERATOR_ID}`);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('feature flags (MUT-462, design 15A)', () => {
+  it('one switch per flag the server has; turning one on acts at once', async () => {
+    const { user, api } = portal();
+    const flag = (await features()).getByRole('switch', { name: /Connect Claude/ });
+    expect(flag).toHaveAttribute('aria-checked', 'false');
+    expect(flag).toHaveTextContent('They can connect their own Claude to log receipts and statements');
+    await user.click(flag);
+    await waitFor(() => expect((within(screen.getByRole('region', { name: 'Features' })).getByRole('switch', { name: /Connect Claude/ }))).toHaveAttribute('aria-checked', 'true'));
+    expect(api.count(`PUT /v1/operator/accounts/${SARA}/features/agent_access`)).toBe(1);
+    expect(screen.queryByRole('group')).toBeNull();
+  });
+
+  it('turning one off confirms in the row first, saying what goes with it', async () => {
+    const { user, api } = portal({ view: account({ features: ['agent_access'] }) });
+    await user.click((await features()).getByRole('switch', { name: /Connect Claude/ }));
+    expect(screen.getByText(sentence('sara@studio.example loses Claude access, and any Claude they connected is disconnected now.'))).toBeInTheDocument();
+    expect(api.count(`DELETE /v1/operator/accounts/${SARA}/features/agent_access`)).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Turn off' }));
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Features' })).getByRole('switch', { name: /Connect Claude/ })).toHaveAttribute('aria-checked', 'false'));
+    expect(api.count(`DELETE /v1/operator/accounts/${SARA}/features/agent_access`)).toBe(1);
+  });
+
+  it('a refusal the server explains shows under the switch, which stays off', async () => {
+    const { user } = portal({
+      view: account({ status: 'PENDING_REVIEW' }),
+      extra: { [`PUT /v1/operator/accounts/${SARA}/features/agent_access`]: () => fail(409, 'CONFLICT', { reason: 'USER_PENDING_REVIEW' }) },
+    });
+    await user.click((await features()).getByRole('switch', { name: /Connect Claude/ }));
+    expect(await screen.findByText('This signup is waiting for review. Approve it first.')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Features' })).getByRole('switch', { name: /Connect Claude/ })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('reads in Arabic: الدفع and الميزات, with the flag named ربط Claude', async () => {
+    localStorage.clear();
+    portal({ me: operator('ar') });
+    expect(await screen.findByRole('region', { name: 'الدفع' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'الميزات' })).getByRole('switch', { name: /ربط Claude/ })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'الدفع' })).getByRole('button', { name: /منح تغطية/ })).toBeInTheDocument();
   });
 });

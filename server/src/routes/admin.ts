@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { generateApiKey, type ApiKeyEnvironment } from '../auth/api-key.js';
 import type { AppEnv } from '../auth/middleware.js';
 import { assertIsoDate } from '../agreements/compose.js';
@@ -8,8 +8,9 @@ import { ApiError, ownedProfileConflict } from '../errors.js';
 
 import { profileOwnerOf } from '../personal-profile.js';
 import { UniqueViolation } from '../repositories/memory.js';
-import { decodeCursor, encodeCursor, parseLimit } from '../pagination.js';
-import type { LedgerStore, Organization, SetFirmResult } from '../repositories/ports.js';
+import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
+import { firmActions } from '../operator/actions/firms.js';
+import type { LedgerStore } from '../repositories/ports.js';
 import {
   AuditListSchema,
   FirmRequestListSchema,
@@ -82,6 +83,10 @@ const ApiKeyIdParam = z.object({ apiKeyId: z.string().uuid().openapi({ param: { 
 
 export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
   const { store } = options;
+  // MUT-462 (ADR-212 D1): the firm switch and requests live in operator/actions/firms.ts, shared with /v1/operator.
+  const firms = firmActions({ store });
+  /** The admin token's request facts: no identity, so the audit rows keep actorId null. */
+  const ctxOf = (c: Context<AppEnv>): ActionContext => ({ actor: TOKEN_ACTOR, at: c.get('now')(), requestId: c.get('requestId'), requestUrl: c.req.url });
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -292,8 +297,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const input = body.firmEnabled ? { enabled: true as const, ownerUserIds: body.ownerUserIds ?? [] } : { enabled: false as const };
       // Audited inside the write's transaction, so a failed audit can't leave an unrecorded change.
-      const result = await store.organizations.setFirm(organizationId, input, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
-      return c.json({ organization: serializeAdminOrganization(firmUpdated(result)) }, 200);
+      return c.json({ organization: serializeAdminOrganization(await firms.setFirm(organizationId, input, ctxOf(c))) }, 200);
     },
   );
 
@@ -313,9 +317,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const result = await store.organizations.declineFirmRequest(c.req.valid('param').organizationId, c.get('now')(), { actorId: null, requestId: c.get('requestId') });
-      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No pending firm request for this organization');
-      return c.json({ organization: serializeAdminOrganization(result.organization) }, 200);
+      return c.json({ organization: serializeAdminOrganization(await firms.decline(c.req.valid('param').organizationId, ctxOf(c))) }, 200);
     },
   );
 
@@ -366,41 +368,11 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
       },
     }),
     async (c) => {
-      const query = c.req.valid('query');
-      const page = await store.organizations.listFirmRequests({ limit: parseLimit(query.limit), cursor: query.cursor ? decodeCursor(query.cursor) : null });
-      const data = await Promise.all(
-        page.items.map(async (o) => ({
-          organizationId: o.id,
-          name: o.name,
-          requestedAt: o.firmRequestedAt!.toISOString(),
-          requestedByUserId: o.firmRequestedByUserId!,
-          requestedByEmail: (await store.users.getById(o.firmRequestedByUserId!))?.email ?? null,
-          owned: profileOwnerOf(o) !== null,
-        })),
-      );
-      return c.json({ data, nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
+      return c.json(await firms.list(c.req.valid('query')), 200);
     },
   );
 
   return app;
-}
-
-/** The organization a firm-switch write left, or the refusal as the operator should read it. */
-function firmUpdated(result: SetFirmResult): Organization {
-  switch (result.kind) {
-    case 'updated':
-      return result.organization;
-    case 'not_found':
-      throw new ApiError('NOT_FOUND', 'Organization not found');
-    case 'personal_profile':
-      throw new ApiError('CONFLICT', 'A built-in personal profile never gets firm features', { reason: 'PERSONAL_PROFILE' });
-    case 'not_business':
-      throw new ApiError('CONFLICT', 'Firm features are for Business profiles; this one is typed Personal', { reason: 'NOT_BUSINESS' });
-    case 'owners_required':
-      throw new ApiError('VALIDATION_FAILED', 'Name at least one owner (ownerUserIds) when enabling firm features on an operator firm', { field: 'ownerUserIds' });
-    case 'not_a_member':
-      throw new ApiError('CONFLICT', 'Every owner must already be a member of the organization', { reason: 'NOT_A_MEMBER', userIds: result.userIds });
-  }
 }
 
 export function slugify(name: string): string {

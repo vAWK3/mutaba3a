@@ -1208,6 +1208,8 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
   activeSessionCount: z.number().int().min(0),
   /** Connected agents (MUT-434) a disable or sign out everywhere would disconnect. */
   agentGrantCount: z.number().int().min(0),
+  /** MUT-462 (15A): every flag there is (features.ts), so the console lists them without a copy of its own. */
+  availableFeatures: z.array(z.string()),
   profiles: z.array(
     z.object({
       id: z.string().uuid(),
@@ -1226,6 +1228,44 @@ export const OperatorAccountSchema = UserSummarySchema.extend({
 }).openapi('OperatorAccount');
 
 export const OperatorAccountViewSchema = z.object({ account: OperatorAccountSchema, stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorAccountView');
+
+/** MUT-462 (14A): an account's billing grants, newest first, revoked ones included, and when the step-up lapses. */
+export const OperatorBillingGrantListSchema = z
+  .object({ grants: z.array(EntitlementGrantSchema), stepUpUntil: z.string().datetime().nullable() })
+  .openapi('OperatorBillingGrantList');
+
+/** MUT-462 (14A): coverage for the person's own profiles; the account in the path is who it covers. */
+export const OperatorCreateBillingGrantRequestSchema = z
+  .object({ tier: BillingTierSchema, reason: z.string().trim().min(1).max(200), expiresAt: z.string().datetime().optional() })
+  .strict()
+  .openapi('OperatorCreateBillingGrantRequest');
+
+/** MUT-462 (16A): the pending firm requests, as /admin/v1/firm-requests lists them, and when the step-up lapses. */
+export const OperatorFirmRequestListSchema = FirmRequestListSchema.extend({ stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorFirmRequestList');
+
+/** MUT-462 (16A, outside finding O7): one pending request and the people the operator may name as owners. */
+export const OperatorFirmRequestDetailSchema = z
+  .object({
+    request: FirmRequestSchema,
+    members: z.array(
+      z.object({
+        userId: z.string().uuid(),
+        email: z.string(),
+        displayName: z.string(),
+        role: z.enum(['OWNER', 'BOOKKEEPER', 'SUBMITTER']),
+        /** A disabled or waiting member can't be named an owner who signs in: the console shows them inert. */
+        status: UserStatusSchema,
+      }),
+    ),
+    stepUpUntil: z.string().datetime().nullable(),
+  })
+  .openapi('OperatorFirmRequestDetail');
+
+/** MUT-462: enable firm features for a pending request. `ownerUserIds` names an operator firm's owners (an owned profile keeps its own). */
+export const OperatorEnableFirmRequestSchema = z
+  .object({ ownerUserIds: z.array(z.string().uuid()).max(50).optional() })
+  .strict()
+  .openapi('OperatorEnableFirmRequest');
 
 /** MUT-461 (design 4A): the admin route's `{ user }`, plus what the disable ended, for the result's own counts. */
 export const OperatorAccountStatusResponseSchema = UserStatusResponseSchema.extend({

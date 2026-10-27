@@ -1,6 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
+import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
+import { assertFutureExpiry, billingGrantActions } from '../operator/actions/billingGrants.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError } from '../errors.js';
 import { billingStatusOf, entitlementsFor, serializeEntitlement } from '../billing/coverage.js';
@@ -31,7 +33,6 @@ import { serializeBillingAccount, serializeGrant } from '../serializers.js';
  */
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 const adminErrors = { 401: errorResponse('Missing or invalid admin token') } as const;
-const GRANTED_BY = 'admin';
 
 const GrantIdParam = z.object({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
 
@@ -43,6 +44,10 @@ export interface AdminBillingOptions {
 
 export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
+  // MUT-462 (ADR-212 D1): grants live in operator/actions/billingGrants.ts, shared with /v1/operator/accounts.
+  const grants = billingGrantActions({ store });
+  /** The admin token's request facts: no identity, so the audit rows keep actorId null and grantedBy 'admin'. */
+  const ctxOf = (c: Context<AppEnv>): ActionContext => ({ actor: TOKEN_ACTOR, at: c.get('now')(), requestId: c.get('requestId'), requestUrl: c.req.url });
 
   /** A customer's tax IDs plus a Checkout tax number on its invoices (review D3), or null when Stripe can't be asked. */
   async function taxIdsOf(customer: string): Promise<number | null> {
@@ -85,21 +90,10 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
     }),
     async (c) => {
       const body = c.req.valid('json');
-      const now = c.get('now')();
-      const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
-      if (expiresAt && expiresAt <= now) throw new ApiError('VALIDATION_FAILED', 'expiresAt must be in the future', { field: 'expiresAt' });
+      assertFutureExpiry(body.expiresAt, c.get('now')());
       const target = body.organizationId !== undefined ? { userId: null, organizationId: body.organizationId } : { userId: await personId(body), organizationId: null };
-      if (target.organizationId && !(await store.organizations.getById(target.organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
-      const id = randomUUID();
-      const metadata: JsonObject = { ...target, tier: body.tier, reason: body.reason, expiresAt: expiresAt?.toISOString() ?? null };
-      const audit = await auditOn(target, grantAudit('billing.grant_created', id, metadata, c.get('requestId')));
-      try {
-        const grant = await store.billing.createGrant({ id, ...target, tier: body.tier, reason: body.reason, expiresAt, grantedBy: GRANTED_BY, at: now, audit });
-        return c.json(serializeGrant(grant), 201);
-      } catch (err) {
-        if (err instanceof ForeignKeyViolation) throw new ApiError('NOT_FOUND', 'User or organization not found');
-        throw err;
-      }
+      const grant = await grants.create({ target, tier: body.tier, reason: body.reason, expiresAt: body.expiresAt }, ctxOf(c));
+      return c.json(serializeGrant(grant), 201);
     },
   );
 
@@ -118,13 +112,7 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
       },
     }),
     async (c) => {
-      const { grantId } = c.req.valid('param');
-      const existing = await store.billing.getGrant(grantId);
-      if (!existing) throw new ApiError('NOT_FOUND', 'Grant not found');
-      const metadata: JsonObject = { userId: existing.userId, organizationId: existing.organizationId, tier: existing.tier, reason: existing.reason };
-      const audit = await auditOn(existing, grantAudit('billing.grant_revoked', grantId, metadata, c.get('requestId')));
-      const result = await store.billing.revokeGrant(grantId, c.get('now')(), audit);
-      if (!result) throw new ApiError('NOT_FOUND', 'Grant not found');
+      const result = await grants.revoke(c.req.valid('param').grantId, ctxOf(c));
       return c.json({ grant: serializeGrant(result.grant), revoked: result.revoked }, 200);
     },
   );
@@ -307,10 +295,6 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
   );
 
   return app;
-}
-
-function grantAudit(action: string, grantId: string, metadata: JsonObject, requestId: string): Omit<AuditEventInput, 'organizationId'> {
-  return { actorType: 'ADMIN', actorId: null, action, entityType: 'entitlement_grant', entityId: grantId, metadata, requestId };
 }
 
 function linkConflictMessage(reason: string): string {

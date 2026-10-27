@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.80.0-mut461
+  version: 1.81.0-mut462
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -8419,6 +8419,10 @@ components:
             agentGrantCount:
               type: integer
               minimum: 0
+            availableFeatures:
+              type: array
+              items:
+                type: string
             profiles:
               type: array
               items:
@@ -8465,6 +8469,7 @@ components:
             - features
             - activeSessionCount
             - agentGrantCount
+            - availableFeatures
             - profiles
     BillingEntitlement:
       type: object
@@ -8514,6 +8519,20 @@ components:
           required:
             - sessionsRevoked
             - agentGrantsRevoked
+    OperatorBillingGrantList:
+      type: object
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/EntitlementGrant"
+        stepUpUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - grants
+        - stepUpUntil
     EntitlementGrant:
       type: object
       properties:
@@ -8560,6 +8579,92 @@ components:
       enum:
         - FREELANCER
         - FIRM
+    OperatorCreateBillingGrantRequest:
+      type: object
+      properties:
+        tier:
+          $ref: "#/components/schemas/BillingTier"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - tier
+        - reason
+      additionalProperties: false
+    RevokeEntitlementGrantResponse:
+      type: object
+      properties:
+        grant:
+          $ref: "#/components/schemas/EntitlementGrant"
+        revoked:
+          type: boolean
+      required:
+        - grant
+        - revoked
+    OperatorFirmRequestList:
+      allOf:
+        - $ref: "#/components/schemas/FirmRequestList"
+        - type: object
+          properties:
+            stepUpUntil:
+              type: string
+              nullable: true
+              format: date-time
+          required:
+            - stepUpUntil
+    OperatorFirmRequestDetail:
+      type: object
+      properties:
+        request:
+          $ref: "#/components/schemas/FirmRequest"
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              email:
+                type: string
+              displayName:
+                type: string
+              role:
+                type: string
+                enum:
+                  - OWNER
+                  - BOOKKEEPER
+                  - SUBMITTER
+              status:
+                $ref: "#/components/schemas/UserStatus"
+            required:
+              - userId
+              - email
+              - displayName
+              - role
+              - status
+        stepUpUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - request
+        - members
+        - stepUpUntil
+    OperatorEnableFirmRequest:
+      type: object
+      properties:
+        ownerUserIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 50
+      additionalProperties: false
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -8586,16 +8691,6 @@ components:
         - tier
         - reason
       additionalProperties: false
-    RevokeEntitlementGrantResponse:
-      type: object
-      properties:
-        grant:
-          $ref: "#/components/schemas/EntitlementGrant"
-        revoked:
-          type: boolean
-      required:
-        - grant
-        - revoked
     EntitlementGrantList:
       type: object
       properties:
@@ -19923,6 +20018,453 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/billing-grants:
+    get:
+      tags:
+        - Operator
+      summary: An account’s billing grants, newest first, revoked ones included (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The grants, and when the step-up lapses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorBillingGrantList"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Operator
+      summary: Grant billing coverage to the person’s own profiles, with a reason and an optional expiry (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorCreateBillingGrantRequest"
+      responses:
+        "201":
+          description: Granted; grantedBy is operator:<your id>
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementGrant"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "Validation failed (an expiry in the past: details.field expiresAt)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/billing-grants/{grantId}:
+    delete:
+      tags:
+        - Operator
+      summary: Revoke one of the account’s grants (kept, with revokedAt set); revoking twice changes nothing (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: grantId
+          in: path
+      responses:
+        "200":
+          description: Revoked, or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeEntitlementGrantResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator, ACCOUNT_NOT_FOUND, or no such grant on this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/features/{feature}:
+    put:
+      tags:
+        - Operator
+      summary: Turn a feature on for the person (idempotent; a second grant keeps the first grantedAt) (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            maxLength: 64
+            example: agent_access
+          required: true
+          name: feature
+          in: path
+      responses:
+        "200":
+          description: The flag is on
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureGrantResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Unknown feature (VALIDATION_FAILED, details.field feature)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Operator
+      summary: Turn a feature off for the person (idempotent); agent access off disconnects every agent (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+        - schema:
+            type: string
+            maxLength: 64
+            example: agent_access
+          required: true
+          name: feature
+          in: path
+      responses:
+        "200":
+          description: The flag is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeatureRevokeResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Unknown feature (VALIDATION_FAILED, details.field feature)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/firm-requests:
+    get:
+      tags:
+        - Operator
+      summary: Pending requests for firm features, oldest first, as the admin list, plus when the step-up lapses (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: integer
+            nullable: true
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Pending requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFirmRequestList"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/firm-requests/{organizationId}:
+    get:
+      tags:
+        - Operator
+      summary: One pending request and the profile’s members, to name its owners (MUT-462)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      responses:
+        "200":
+          description: The request and its members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorFirmRequestDetail"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason FIRM_REQUEST_NOT_FOUND: nothing pending on this profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/firm-requests/{organizationId}/enable:
+    post:
+      tags:
+        - Operator
+      summary: "Turn firm features on for a pending request: the named owners become OWNER, everyone else BOOKKEEPER (MUT-462)"
+      description: "As PATCH /admin/v1/organizations/{id} with firmEnabled true: an owned Business profile is enabled in place and keeps its owners (`ownerUserIds` is not needed); an operator firm needs at least one, each already a member."
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorEnableFirmRequest"
+      responses:
+        "200":
+          description: Enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason FIRM_REQUEST_NOT_FOUND: nothing pending on this profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT with details.reason PERSONAL_PROFILE, NOT_BUSINESS or NOT_A_MEMBER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed, or an operator firm with no owner named (details.field ownerUserIds)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/firm-requests/{organizationId}/decline:
+    post:
+      tags:
+        - Operator
+      summary: "Decline a pending request for firm features: the profile stays as it was, and the owner may ask again (MUT-462)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      responses:
+        "200":
+          description: Declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason FIRM_REQUEST_NOT_FOUND: nothing pending on this profile"
           content:
             application/json:
               schema:
