@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-457: the phone minimum build can be set from Terraform
+
+**Why:** MUT-293's minimum-build gate read its floors from env vars that nothing in Terraform set, and a hand-set value was overwritten by the next apply. Its kill switch read `"false"` as on.
+
+### Added
+- `server/infrastructure/terraform`: optional `ios_min_build`, `android_min_build`, `ios_recommended_build`, `android_recommended_build` and `min_build_check_disabled`. Only those set reach Cloud Run (`local.min_build_env`); the kill switch goes out only as `"true"`. A precondition refuses a recommended build without that platform's floor (the server would ignore it) or below it. `tests/min_build.tftest.hcl` (7 runs, including "unset adds no env").
+
+### Changed
+- `server/DEPLOYMENT.md` "Raise the minimum app build" / "Undo a bad floor": the `production.tfvars` lines, shipped with a normal release so the release guards run; an incident undo applies only the kill switch from a clean checkout of the serving release after its plan shows nothing else; iOS builds before MUT-457 repeat 1–7 across versions, so the first iOS floor is `ios_min_build = 8` (the first build after MUT-457) and it makes every older iPhone update. `production.tfvars.example` lists the lines.
+
+### Fixed
+- `server/src/config.ts`: `MIN_BUILD_CHECK_DISABLED` accepts only `"true"` / `"false"` (was `z.coerce.boolean`, so `"false"` switched the gate off).
+
+### Technical
+- The phone side (every iOS release takes the highest build ever uploaded + 1) is in mutaba3a-flutter's `ios/fastlane/Fastfile`.
+
 ## [Unreleased] - 2026-10-27 — MUT-464: seeded expense categories follow the viewer's language
 
 **Why:** a profile's preset categories stayed in the language of whoever first opened them, so a co-owner or member in the other language never saw their own. ADR-208.

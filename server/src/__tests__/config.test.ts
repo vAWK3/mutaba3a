@@ -235,6 +235,14 @@ describe('loadConfig — minimum app version (MUT-293)', () => {
     expect(loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: 'true' }).MIN_BUILD_CHECK_DISABLED).toBe(true);
   });
 
+  it('reads MIN_BUILD_CHECK_DISABLED="false" as a working gate (MUT-457: z.coerce.boolean read it as off)', () => {
+    expect(loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: 'false' }).MIN_BUILD_CHECK_DISABLED).toBe(false);
+  });
+
+  it.each(['1', 'yes', 'TRUE', ''])('refuses MIN_BUILD_CHECK_DISABLED=%j', (value) => {
+    expect(() => loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: value })).toThrow(/MIN_BUILD_CHECK_DISABLED/);
+  });
+
   it.each([
     ['IOS_MIN_BUILD', '0'],
     ['IOS_MIN_BUILD', '-1'],

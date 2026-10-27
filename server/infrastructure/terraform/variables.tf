@@ -136,6 +136,52 @@ variable "billing_gate_enabled" {
   default     = true
 }
 
+variable "ios_min_build" {
+  description = "MUT-293 / MUT-457: the lowest iPhone build (CFBundleVersion, the X-App-Build header) still served; older builds are told to update. null (default) = iPhones are never gated. Builds before MUT-457 restart at 1 per version (1–7 repeat), so the first useful floor is 8, the first build after MUT-457, and it makes every older iPhone update: raise it only to a build already live in the App Store (DEPLOYMENT.md \"Raise the minimum app build\")."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.ios_min_build == null || try(var.ios_min_build >= 1 && floor(var.ios_min_build) == var.ios_min_build, false)
+    error_message = "ios_min_build must be a whole number of at least 1."
+  }
+}
+
+variable "android_min_build" {
+  description = "MUT-293 / MUT-457: the lowest Android versionCode still served. null (default) = Android is never gated. Raise it only to a versionCode already live on Play."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.android_min_build == null || try(var.android_min_build >= 1 && floor(var.android_min_build) == var.android_min_build, false)
+    error_message = "android_min_build must be a whole number of at least 1."
+  }
+}
+
+variable "ios_recommended_build" {
+  description = "MUT-293 / MUT-457: iPhone builds below this (but at or above ios_min_build) get a soft \"update available\" nudge. Needs ios_min_build, and must be at least it (the precondition on google_cloud_run_v2_service.api). null (default) = no nudge."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.ios_recommended_build == null || try(var.ios_recommended_build >= 1 && floor(var.ios_recommended_build) == var.ios_recommended_build, false)
+    error_message = "ios_recommended_build must be a whole number of at least 1."
+  }
+}
+
+variable "android_recommended_build" {
+  description = "MUT-293 / MUT-457: the Android nudge, as ios_recommended_build. Needs android_min_build, and must be at least it."
+  type        = number
+  default     = null
+  validation {
+    condition     = var.android_recommended_build == null || try(var.android_recommended_build >= 1 && floor(var.android_recommended_build) == var.android_recommended_build, false)
+    error_message = "android_recommended_build must be a whole number of at least 1."
+  }
+}
+
+variable "min_build_check_disabled" {
+  description = "MUT-293 / MUT-457: the kill switch. true sets MIN_BUILD_CHECK_DISABLED=true and the API serves every build, whatever the floors say. false (default) sends nothing: undo a bad floor by setting true, then delete the line once the floor is fixed."
+  type        = bool
+  default     = false
+}
+
 variable "sentry_state_bucket" {
   description = "MUT-148: the GCS bucket holding the Sentry stack's state. null (default) = <project_id>-terraform-state, the bucket both stacks use (DEPLOYMENT.md §1.3)."
   type        = string
