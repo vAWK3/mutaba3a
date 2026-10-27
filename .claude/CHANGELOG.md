@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — mail:preview --send finds its own settings
+
+- **What:** `npm --prefix server run mail:preview` now runs through `server/scripts/mail-preview.sh`, which fills any unset `RESEND_API_KEY` from Secret Manager (`mutaba3a-api-resend-api-key`, the same secret the live API mounts; project from `GCP_PROJECT_ID` or the tfvars, like `live-admin.sh`), `MAIL_FROM_ADDRESS` (`no-reply@<mailDomain>`), `PORTAL_ORIGIN` and `WEBSITE_ORIGIN` from `config/hosts.json`. Values already in the environment still win, and the key is fetched only with `--send`.
+- **Why:** the operator shouldn't have to paste a key or export settings to send the sample mails.
+- **Files:** `server/scripts/mail-preview.sh` (new), `server/package.json`, `server/src/scripts/mail-preview.ts` (comment).
+
 ## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-215)
 
 **Why:** seeing an account's state, disabling one, signing it out or sending a reset needed the CLI and the right command. Epic MUT-458's third step: the operator console gets an Accounts tab.
