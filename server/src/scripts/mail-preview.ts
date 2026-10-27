@@ -30,7 +30,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'account-under-review': {},
   'account-ready': { signInLink: SAMPLE_SIGN_IN },
   'account-declined': { supportAddress: 'help@example.com' },
-  'review-digest': { pending: 3, command: 'npm --prefix server run signups:review' },
+  'review-digest': { pending: 3, command: 'npm --prefix server run signups:review', reviewLink: 'https://app.example.com/operator/signups' },
   'trial-ending-soon': { daysLeft: 3, subscribeLink: 'https://app.example.com/?billing=true&step=subscribe' },
   'trial-ended': { subscribeLink: 'https://app.example.com/?billing=true&step=subscribe', exportLink: 'https://app.example.com/?yourData=true' },
   'trial-locking-soon': { daysLeft: 2, subscribeLink: 'https://app.example.com/?billing=true&step=subscribe', exportLink: 'https://app.example.com/?yourData=true' },
