@@ -18,14 +18,38 @@ interface Harness {
   store: MemoryLedgerStore;
   storage: MemoryAttachmentStorage;
   clock: { now: Date };
+  /** Repository calls the app made (MUT-482 AC4: a summary's reads must not grow with its customers). */
+  storeCalls: { count: number };
+}
+
+/** The store as the app sees it, counting every repository method call. */
+function counting(store: MemoryLedgerStore, calls: { count: number }): MemoryLedgerStore {
+  return new Proxy(store, {
+    get(target, repo) {
+      const value: unknown = Reflect.get(target, repo, target);
+      if (typeof value === 'function') return value.bind(target);
+      if (typeof value !== 'object' || value === null) return value;
+      return new Proxy(value, {
+        get(r, method) {
+          const fn: unknown = Reflect.get(r, method, r);
+          if (typeof fn !== 'function') return fn;
+          return (...args: unknown[]) => {
+            calls.count += 1;
+            return (fn as (...a: unknown[]) => unknown).apply(r, args);
+          };
+        },
+      });
+    },
+  });
 }
 
 function harness(opts: { attachments?: boolean } = {}): Harness {
   const store = new MemoryLedgerStore();
   const storage = new MemoryAttachmentStorage();
   const clock = { now: new Date('2026-10-20T10:00:00Z') };
-  const app = createApp({ store, logger: pino({ level: 'silent' }), rateLimiter: new SlidingWindowRateLimiter(100_000), adminToken: ADMIN_TOKEN, keyEnvironment: 'test', version: '0.6.0-test', now: () => clock.now, attachments: opts.attachments === false ? null : storage, attachmentUrlTtlSeconds: 600 });
-  return { app, store, storage, clock };
+  const storeCalls = { count: 0 };
+  const app = createApp({ store: counting(store, storeCalls), logger: pino({ level: 'silent' }), rateLimiter: new SlidingWindowRateLimiter(100_000), adminToken: ADMIN_TOKEN, keyEnvironment: 'test', version: '0.6.0-test', now: () => clock.now, attachments: opts.attachments === false ? null : storage, attachmentUrlTtlSeconds: 600 });
+  return { app, store, storage, clock, storeCalls };
 }
 
 const json = (body: unknown, headers: Record<string, string> = {}, method = 'POST') => ({ method, headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
@@ -137,6 +161,77 @@ describe('summaries', () => {
   });
 });
 
+describe('oldest overdue since (MUT-482)', () => {
+  const since = (row: Loose) => ({ oldestOverdueDueDate: row.oldestOverdueDueDate, daysOverdue: row.daysOverdue });
+  const orgRow = async (h: Harness, f: Firm, currency: string, customerId: string) =>
+    (await read(await h.app.request('/v1/summaries/organization', { headers: f.auth }))).currencies.find((c: Loose) => c.currency === currency).customers.find((c: Loose) => c.customerId === customerId);
+  const customerBlock = async (h: Harness, f: Firm, currency: string, customerId: string) =>
+    (await read(await h.app.request(`/v1/summaries/customers/${customerId}`, { headers: f.auth }))).currencies.find((c: Loose) => c.currency === currency);
+
+  it('reports the earliest overdue due date and its days on both summaries; paying it in full moves on; nothing overdue is null', async () => {
+    const h = harness();
+    h.clock.now = new Date('2026-10-27T10:00:00Z');
+    const f = await firm(h);
+    await fixedAgreement(h, f, f.project.id, [{ amount: '1000.00', dueDate: '2026-06-01' }, { amount: '500.00', dueDate: '2026-09-01' }, { amount: '200.00', dueDate: '2026-11-30' }]);
+    const recs = (await read(await h.app.request(`/v1/receivables?projectId=${f.project.id}`, { headers: f.auth }))).items as Loose[];
+    const june = recs.find((r) => r.dueDate === '2026-06-01');
+    const sept = recs.find((r) => r.dueDate === '2026-09-01');
+
+    // AC1: overdue since 1 Jun and 1 Sep reports 1 Jun, 148 days before asOf.
+    expect(since(await orgRow(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-06-01', daysOverdue: 148 });
+    expect(since(await customerBlock(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-06-01', daysOverdue: 148 });
+
+    // Part of June paid: it is still late, so the date stays.
+    await pay(h, f, f.customer.id, '400.00', [{ receivableId: june.id, amount: '400.00' }]);
+    expect(since(await orgRow(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-06-01', daysOverdue: 148 });
+
+    // AC2: June paid in full moves the date to 1 Sep.
+    await pay(h, f, f.customer.id, '600.00', [{ receivableId: june.id, amount: '600.00' }]);
+    expect(since(await orgRow(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-09-01', daysOverdue: 56 });
+    expect(since(await customerBlock(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-09-01', daysOverdue: 56 });
+
+    // AC3: nothing overdue (only the November one is left) reports null, and agrees with the overdue amount.
+    await pay(h, f, f.customer.id, '500.00', [{ receivableId: sept.id, amount: '500.00' }]);
+    const row = await orgRow(h, f, 'ILS', f.customer.id);
+    expect(row).toMatchObject({ overdue: '0.00', notYetDue: '200.00', status: 'UP_TO_DATE', oldestOverdueDueDate: null, daysOverdue: null });
+    expect(since(await customerBlock(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: null, daysOverdue: null });
+  });
+
+  it('is per currency: each block carries its own date', async () => {
+    const h = harness();
+    h.clock.now = new Date('2026-10-27T10:00:00Z');
+    const f = await firm(h);
+    await fixedAgreement(h, f, f.project.id, [{ amount: '1000.00', dueDate: '2026-06-01' }]);
+    const usdMatter = await read(await h.app.request('/v1/projects', json({ customerId: f.customer.id, name: 'Trademark', currency: 'USD' }, { ...f.auth, ...idem() })));
+    await fixedAgreement(h, f, usdMatter.id, [{ amount: '300.00', dueDate: '2026-10-20' }]);
+
+    expect(since(await orgRow(h, f, 'ILS', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-06-01', daysOverdue: 148 });
+    expect(since(await orgRow(h, f, 'USD', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-10-20', daysOverdue: 7 });
+    expect(since(await customerBlock(h, f, 'USD', f.customer.id))).toEqual({ oldestOverdueDueDate: '2026-10-20', daysOverdue: 7 });
+  });
+
+  it('AC4: the organization summary makes as many store calls for five overdue customers as for one', async () => {
+    const callsFor = async (customers: number) => {
+      const h = harness();
+      h.clock.now = new Date('2026-10-27T10:00:00Z');
+      const f = await firm(h);
+      await fixedAgreement(h, f, f.project.id, [{ amount: '100.00', dueDate: '2026-06-01' }]);
+      for (let i = 1; i < customers; i += 1) {
+        const c = await read(await h.app.request('/v1/customers', json({ name: `Client ${i}` }, { ...f.auth, ...idem() })));
+        const p = await read(await h.app.request('/v1/projects', json({ customerId: c.id, name: `Matter ${i}`, currency: 'ILS' }, { ...f.auth, ...idem() })));
+        await fixedAgreement(h, f, p.id, [{ amount: '100.00', dueDate: '2026-07-01' }]);
+      }
+      // Read once so due items are already posted, then count a second, steady-state read.
+      await h.app.request('/v1/summaries/organization', { headers: f.auth });
+      const before = h.storeCalls.count;
+      const summary = await read(await h.app.request('/v1/summaries/organization', { headers: f.auth }));
+      expect(summary.currencies[0].customers.filter((r: Loose) => typeof r.oldestOverdueDueDate === 'string')).toHaveLength(customers);
+      return h.storeCalls.count - before;
+    };
+    expect(await callsFor(5)).toBe(await callsFor(1));
+  });
+});
+
 describe('audit listing', () => {
   it('lists the organization’s events by entity with pagination; needs audit:read; other organizations see nothing', async () => {
     const h = harness();
@@ -245,8 +340,8 @@ describe('contract', () => {
   it('publishes the M6 paths, components and version', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.81.0-mut462');
-    expect(API_VERSION).toBe('1.81.0-mut462');
+    expect(doc.info.version).toBe('1.82.0-mut482');
+    expect(API_VERSION).toBe('1.82.0-mut482');
     for (const path of ['/v1/summaries/organization', '/v1/summaries/customers/{customerId}', '/v1/summaries/projects/{projectId}', '/v1/audit', '/v1/attachments/uploads', '/v1/attachments/{attachmentId}/complete', '/v1/attachments', '/v1/attachments/{attachmentId}/download', '/v1/attachments/{attachmentId}']) {
       expect(doc.paths[path], path).toBeDefined();
     }

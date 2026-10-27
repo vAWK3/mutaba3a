@@ -640,6 +640,23 @@ describe('read-surface agreement (AC 3): captured income shows up where its mone
     }
   });
 
+  it('MUT-482: a matter’s Owed in another currency dates its own currency block’s overdue, on both summaries', async () => {
+    const { h, p, u, create } = await setup();
+    const c = await customer(h, u, p.id);
+    const matter = await project(h, u, p.id, c.id);
+    await create({ ...BASE_OWED, customerId: c.id, projectId: matter.id, amount: '500.00', occurredOn: '2026-09-20', dueDate: '2026-10-05' });
+    await create({ ...BASE_OWED, customerId: c.id, projectId: matter.id, amount: '80.00', currency: 'USD', occurredOn: '2026-09-20', dueDate: '2026-10-01' });
+
+    const customerSummary = await read(await h.app.request(`/v1/summaries/customers/${c.id}`, { headers: u.as(p.id) }));
+    const orgSummary = await read(await h.app.request('/v1/summaries/organization', { headers: u.as(p.id) }));
+    for (const [currency, date, days] of [['ILS', '2026-10-05', 7], ['USD', '2026-10-01', 11]] as const) {
+      const block = customerSummary.currencies.find((x: Loose) => x.currency === currency);
+      const row = orgSummary.currencies.find((x: Loose) => x.currency === currency).customers.find((x: Loose) => x.customerId === c.id);
+      expect(block).toMatchObject({ oldestOverdueDueDate: date, daysOverdue: days });
+      expect(row).toMatchObject({ oldestOverdueDueDate: date, daysOverdue: days, overdue: block.overdue });
+    }
+  });
+
   it('two currencies captured on the same profile: each currency block is independent, never summed together', async () => {
     const { h, p, u, create } = await setup();
     const c = await customer(h, u, p.id);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgreementRecord, InstallmentRecord, PaymentRecord, ReceivableRecord } from '../../repositories/ports.js';
-import { bucketize, customerStatus, fixedStatus, lastPaymentOn, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
+import { bucketize, customerStatus, dayBucketOf, fixedStatus, lastPaymentOn, oldestOverdueDueDate, projectFigures, retainerStatus, unallocatedOf } from '../compute.js';
 
 const rec = (over: Partial<ReceivableRecord>): ReceivableRecord => ({ id: 'r', organizationId: 'o', customerId: 'c', projectId: 'p', agreementId: 'a', origin: 'INSTALLMENT', originId: null, currency: 'ILS', netMinor: 1000n, vatMinor: 0n, grossMinor: 1000n, paidMinor: 0n, creditedMinor: 0n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, dueDate: '2026-10-20', postingDate: '2026-10-01', postedAt: new Date(0), status: 'OPEN', title: null, createdByUserId: null, deletedAt: null, version: 1, createdAt: new Date(0), ...over });
 const pay = (over: Partial<PaymentRecord>): PaymentRecord => ({ id: 'p', organizationId: 'o', customerId: 'c', projectId: null, number: 'PAY-2026-0001', currency: 'ILS', amountMinor: 500n, allocatedMinor: 0n, receivedOn: '2026-10-05', method: 'BANK', reference: null, notes: null, status: 'POSTED', reversedAt: null, reversalReason: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0), ...over });
@@ -38,6 +38,46 @@ describe('buckets', () => {
     expect(unallocatedOf(payments)).toEqual({ amount: 300n, count: 1 });
     expect(lastPaymentOn(payments)).toBe('2026-10-09');
     expect(lastPaymentOn([])).toBeNull();
+  });
+});
+
+describe('oldest overdue due date (MUT-482)', () => {
+  const today = '2026-10-27';
+
+  it('places each receivable in one day bucket, or none when it adds nothing', () => {
+    expect(dayBucketOf(rec({ dueDate: '2026-10-26' }), today)).toBe('overdue');
+    expect(dayBucketOf(rec({ dueDate: today }), today)).toBe('dueToday');
+    expect(dayBucketOf(rec({ dueDate: '2026-10-28' }), today)).toBe('notYetDue');
+    expect(dayBucketOf(rec({ dueDate: '2026-10-26', status: 'SETTLED', paidMinor: 1000n }), today)).toBeNull();
+    expect(dayBucketOf(rec({ dueDate: '2026-10-26', paidMinor: 600n, creditedMinor: 400n }), today)).toBeNull();
+    // MUT-392: an Owed dated ahead is not owed, so not overdue, until its day.
+    expect(dayBucketOf(rec({ origin: 'ADJUSTMENT', postingDate: '2026-11-01', dueDate: '2026-10-26' }), today)).toBeNull();
+  });
+
+  it('is the earliest due date among the overdue ones; part paid keeps its date, paid or credited in full drops out', () => {
+    const june = rec({ id: 'jun', dueDate: '2026-06-01' });
+    const sept = rec({ id: 'sep', dueDate: '2026-09-01' });
+    expect(oldestOverdueDueDate([sept, june, rec({ id: 'later', dueDate: '2026-11-30' })], today)).toBe('2026-06-01');
+    expect(oldestOverdueDueDate([{ ...june, paidMinor: 400n }, sept], today)).toBe('2026-06-01');
+    expect(oldestOverdueDueDate([{ ...june, status: 'SETTLED', paidMinor: 1000n }, sept], today)).toBe('2026-09-01');
+    expect(oldestOverdueDueDate([{ ...june, creditedMinor: 1000n }, sept], today)).toBe('2026-09-01');
+    expect(oldestOverdueDueDate([rec({ dueDate: today }), rec({ id: 'n', dueDate: '2026-10-28' })], today)).toBeNull();
+    expect(oldestOverdueDueDate([], today)).toBeNull();
+  });
+
+  it('is null exactly when the overdue bucket is zero', () => {
+    const pool = [
+      rec({ id: 'a', dueDate: '2026-06-01' }),
+      rec({ id: 'b', dueDate: '2026-09-01', paidMinor: 1000n, status: 'SETTLED' }),
+      rec({ id: 'c', dueDate: today }),
+      rec({ id: 'd', dueDate: '2026-12-01' }),
+      rec({ id: 'e', origin: 'ADJUSTMENT', postingDate: '2026-11-01', dueDate: '2026-08-01' }),
+      rec({ id: 'f', dueDate: '2026-07-01', creditedMinor: 1000n }),
+    ];
+    for (let mask = 0; mask < 1 << pool.length; mask += 1) {
+      const subset = pool.filter((_, i) => mask & (1 << i));
+      expect(oldestOverdueDueDate(subset, today) === null).toBe(bucketize(subset, today).overdue === 0n);
+    }
   });
 });
 

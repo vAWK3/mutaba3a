@@ -7394,7 +7394,7 @@ export interface paths {
         };
         /**
          * Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer
-         * @description outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block.
+         * @description outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row's oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).
          */
         get: {
             parameters: {
@@ -7471,7 +7471,7 @@ export interface paths {
         };
         /**
          * One customer: buckets, unallocated and status per currency, with a summary per project
-         * @description Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency's block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392).
+         * @description Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency's block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392). A block's oldestOverdueDueDate and daysOverdue come from the same receivables as its `overdue` (MUT-482).
          */
         get: {
             parameters: {
@@ -19367,6 +19367,9 @@ export interface components {
             dueToday: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            oldestOverdueDueDate: string | null;
+            daysOverdue: number | null;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -19406,6 +19409,9 @@ export interface components {
             dueToday: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             notYetDue: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            oldestOverdueDueDate: string | null;
+            daysOverdue: number | null;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             status: components["schemas"]["CustomerSummaryStatus"];

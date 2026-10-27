@@ -72,6 +72,13 @@ export function bucketize(receivables: readonly ReceivableRecord[], today: IsoDa
   return b;
 }
 
+/** MUT-482: the earliest due date among the receivables `dayBucketOf` calls overdue, or null exactly when `bucketize` gives 0 overdue. */
+export function oldestOverdueDueDate(receivables: readonly ReceivableRecord[], today: IsoDate): IsoDate | null {
+  let oldest: IsoDate | null = null;
+  for (const r of receivables) if (dayBucketOf(r, today) === 'overdue' && (oldest === null || r.dueDate < oldest)) oldest = r.dueDate;
+  return oldest;
+}
+
 export function addBuckets(a: Buckets, b: Buckets): Buckets {
   return { outstanding: a.outstanding + b.outstanding, overdue: a.overdue + b.overdue, dueToday: a.dueToday + b.dueToday, notYetDue: a.notYetDue + b.notYetDue };
 }

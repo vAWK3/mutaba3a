@@ -2582,13 +2582,21 @@ export const ProjectSummaryStatusSchema = z.enum(['NONE', 'PENDING', 'OUTSTANDIN
 
 const bucketFields = { outstanding: AmountSchema, overdue: AmountSchema, dueToday: AmountSchema, notYetDue: AmountSchema };
 
+/** MUT-482: since when a customer has been late, beside its buckets. Both null exactly when `overdue` is 0. */
+const overdueSinceFields = {
+  /** The earliest due date among the receivables counted in `overdue`. */
+  oldestOverdueDueDate: IsoDateSchema.nullable(),
+  /** Whole days from oldestOverdueDueDate to the summary's asOf (at least 1). */
+  daysOverdue: z.number().int().positive().nullable(),
+};
+
 /** M8 (D17): a customer's open (PROPOSED) fee proposal as the overview lists it, in the block's currency. MUT-107: `amount` is the upfront for a contingency proposal; `contingency` echoes its terms. */
 export const CustomerSummaryProposalSchema = z
   .object({ proposalId: uuid, projectId: uuid, amount: AmountSchema, proposedOn: IsoDateSchema, contingency: ContingencyTermsSchema.nullable() })
   .openapi('CustomerSummaryProposal');
 
 export const CustomerSummaryRowSchema = z
-  .object({ customerId: uuid, ...bucketFields, unallocated: AmountSchema, lastPaymentOn: IsoDateSchema.nullable(), status: CustomerSummaryStatusSchema, proposals: z.array(CustomerSummaryProposalSchema) })
+  .object({ customerId: uuid, ...bucketFields, ...overdueSinceFields, unallocated: AmountSchema, lastPaymentOn: IsoDateSchema.nullable(), status: CustomerSummaryStatusSchema, proposals: z.array(CustomerSummaryProposalSchema) })
   .openapi('CustomerSummaryRow');
 
 export const CurrencySummarySchema = z
@@ -2721,7 +2729,7 @@ export const ProjectSummarySchema = z
   .openapi('ProjectSummary');
 
 export const CustomerCurrencySummarySchema = z
-  .object({ currency: CurrencySchema, ...bucketFields, unallocated: AmountSchema, status: CustomerSummaryStatusSchema, projects: z.array(ProjectSummarySchema) })
+  .object({ currency: CurrencySchema, ...bucketFields, ...overdueSinceFields, unallocated: AmountSchema, status: CustomerSummaryStatusSchema, projects: z.array(ProjectSummarySchema) })
   .openapi('CustomerCurrencySummary');
 
 export const CustomerSummarySchema = z
