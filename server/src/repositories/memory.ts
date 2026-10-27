@@ -196,8 +196,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 5 (MUT-418): `people` gained `trialPrompt`.
  * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
  * 7 (MUT-333): `people` gained `closure`.
+ * 8 (MUT-459): `people` gained `operatorAt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 7;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 8;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -533,6 +534,14 @@ export class MemoryLedgerStore implements LedgerStore {
       if (status === 'DISABLED') this.cancelOpenSetupLinks(id, at);
       return { ...u };
     },
+    setOperator: async ({ userId, operator, at, audit }) => {
+      const u = this.people.get(userId);
+      if (!u) return null;
+      if ((u.operatorAt !== null) === operator) return { user: { ...u }, changed: false };
+      Object.assign(u, { operatorAt: operator ? at : null, updatedAt: at });
+      for (const event of audit) await this.audit.append(event);
+      return { user: { ...u }, changed: true };
+    },
     recordFailedSignIn: async (id, at, lockUntil) => {
       const u = this.people.get(id);
       if (!u) return null;
@@ -594,6 +603,8 @@ export class MemoryLedgerStore implements LedgerStore {
       } else {
         // The kept session is verified as of the change, so the middleware's passwordChangedAt check lets it through.
         kept.credentialsVerifiedAt = input.at;
+        // MUT-459 (re-review C): a password change proves the password only, so the kept session loses its step-up.
+        kept.stepUpAt = null;
       }
       for (const event of input.audit) this.events.push({ id: randomUUID(), createdAt: input.at, ...event });
       // MUT-434 (D11): a password change disconnects every agent too.
@@ -647,6 +658,8 @@ export class MemoryLedgerStore implements LedgerStore {
         revokedReason: null,
         userAgent: input.userAgent,
         passkeyId: input.passkeyId ?? null,
+        // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
+        stepUpAt: input.passkeyId ? input.at : null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -663,6 +676,12 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...s };
     },
     revokeAllForUser: async (userId, reason, at) => this.revokeSessionsOf(userId, reason, at),
+    markStepUp: async (id, at) => {
+      const s = this.sessionsById.get(id);
+      if (!s || s.revokedAt) return false;
+      s.stepUpAt = at;
+      return true;
+    },
   };
 
   readonly features: FeaturesRepository = {
@@ -740,9 +759,11 @@ export class MemoryLedgerStore implements LedgerStore {
       p.name = name;
       return clonePasskey(p);
     },
-    remove: async ({ userId, id, exceptSessionId, at, audit }) => {
+    remove: async ({ userId, id, exceptSessionId, at, audit, keepOne }) => {
       const p = this.passkeyMap.get(id);
       if (!p || p.userId !== userId) return null;
+      // MUT-459: counted with no await before the delete, so two racing removals can't both pass.
+      if (keepOne && [...this.passkeyMap.values()].filter((k) => k.userId === userId).length <= 1) throw new StateConflict('passkey', 'LAST_PASSKEY');
       let revokedSessions = 0;
       for (const s of this.sessionsById.values()) {
         if (s.passkeyId !== id) continue;
@@ -762,7 +783,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     createChallenge: async (input) => {
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('webauthn_challenges.userId');
-      if ((input.purpose === 'creation') !== (input.userId !== null)) throw new Error('A creation challenge names its person; a sign-in challenge names no one');
+      if ((input.purpose === 'authentication') === (input.userId !== null)) throw new Error('A creation or step-up challenge names its person; a sign-in challenge names no one');
       const id = randomUUID();
       this.challenges.set(id, { challenge: input.challenge, purpose: input.purpose, userId: input.userId, expiresAt: input.expiresAt, consumedAt: null });
       return { id };
@@ -1015,6 +1036,7 @@ export class MemoryLedgerStore implements LedgerStore {
       malafatSuggestions: null,
       trialPrompt: null,
       closure: null,
+      operatorAt: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
@@ -3313,6 +3335,8 @@ function rotatedSession(kept: SessionRecord, rotation: { tokenDigest: string; id
     idleExpiresAt,
     revokedAt: null,
     revokedReason: null,
+    // MUT-459 (review): a password change proves the password only, so the rotated session starts with no step-up.
+    stepUpAt: null,
   };
 }
 

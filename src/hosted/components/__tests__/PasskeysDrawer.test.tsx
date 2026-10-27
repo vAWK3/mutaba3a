@@ -106,6 +106,16 @@ describe('Passkeys drawer (MUT-115)', () => {
     expect(calls(api.calls, 'POST', '/v1/passkeys')[0]?.body).toMatchObject({ currentPassword: 'correct-horse-battery-staple' });
   });
 
+  it('an operator asked for a passkey first is told so, never shown the password form (MUT-459)', async () => {
+    const { user } = portal(`/p/${ORG_A}?passkeys=true`, [], {
+      'POST /v1/passkeys/creation-options': () => fail(403, 'RECENT_SIGN_IN_REQUIRED', { method: 'passkey', windowMinutes: 10 }),
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
+    await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
+    expect(await within(dialog).findByText('As an operator, confirm with one of your passkeys first: sign in again with a passkey, then add the new one.')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+
   it('a wrong password is the change-password banner', async () => {
     const { user } = portal(`/p/${ORG_A}?passkeys=true`, [], {
       'POST /v1/passkeys/creation-options': (req) => ((req.body as { currentPassword?: string })?.currentPassword ? fail(403, 'CURRENT_PASSWORD_WRONG') : fail(403, 'RECENT_SIGN_IN_REQUIRED')),

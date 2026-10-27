@@ -31,7 +31,9 @@ export function localPersonOf(person: UserRecord): UserRecord {
     // MUT-418: the trial's card prompt is the hosted account's; a device has no trial.
     trialPrompt: null,
     // MUT-333: closing is the hosted account's; a device's records file never carries it.
-    closure: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    closure: null,
+    // MUT-459: operators are hosted accounts only.
+    operatorAt: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 

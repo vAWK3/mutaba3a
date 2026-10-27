@@ -870,6 +870,11 @@ export const MeSchema = z
        * client never rejects a name a newer server adds; empty for nearly everyone. Additive since 1.73.0-mut433.
        */
       features: z.array(z.string()),
+      /**
+       * MUT-459 (ADR-212): present, and true, only for an operator of the portal's console; absent for everyone else,
+       * so no one else's /v1/me hints at it. Additive since 1.79.0-mut459.
+       */
+      operator: z.literal(true).optional(),
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -974,6 +979,18 @@ export const FeatureGrantResponseSchema = z
     granted: z.boolean(),
   })
   .openapi('FeatureGrantResponse');
+
+/** MUT-459 (ADR-212): the operator mark after a grant or revoke by the admin token. */
+export const OperatorMarkResponseSchema = z
+  .object({
+    userId: z.string().uuid(),
+    operator: z.boolean(),
+    /** When the person became an operator; unchanged by a second grant, null once revoked. */
+    operatorAt: z.string().datetime().nullable(),
+    /** False when nothing changed (nothing audited). */
+    changed: z.boolean(),
+  })
+  .openapi('OperatorMarkResponse');
 
 export const FeatureRevokeResponseSchema = z
   .object({ feature: z.string(), /** False when it was already off. */ revoked: z.boolean() })
@@ -1158,6 +1175,15 @@ export const SignupReviewListQuerySchema = z.object({
 });
 
 export const SignupReviewListSchema = z.object({ data: z.array(SignupReviewSchema), nextCursor: z.string().nullable() }).openapi('SignupReviewList');
+
+/**
+ * MUT-459: the operator console's queue is the admin list plus when this session's passkey step-up lapses: until then
+ * a write acts at once; after it (or null: none yet, e.g. a password sign-in) the portal asks for the passkey first.
+ */
+export const OperatorSignupReviewListSchema = SignupReviewListSchema.extend({ stepUpUntil: z.string().datetime().nullable() }).openapi('OperatorSignupReviewList');
+
+/** MUT-459 (D7): a passkey step-up keeps the operator's writes open until `stepUpUntil` (10 minutes). */
+export const OperatorStepUpSchema = z.object({ stepUpUntil: z.string().datetime() }).openapi('OperatorStepUp');
 
 export const SignupReviewDecisionSchema = z
   .object({

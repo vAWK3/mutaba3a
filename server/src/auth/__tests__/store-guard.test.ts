@@ -161,6 +161,8 @@ describe('STORE_ACCESS', () => {
       'users.create',
       // MUT-324 T1: the operator's terms report.
       'users.listLatestTermsVersions',
+      // MUT-459: only the admin token marks an operator.
+      'users.setOperator',
       'users.setPassword',
       'users.setStatus',
     ]);

@@ -22,6 +22,8 @@ export type AddPasskeyOutcome =
   | { kind: 'added'; passkey: Passkey }
   | { kind: 'cancelled' }
   | { kind: 'stepUp' }
+  /** MUT-459: an operator confirms with an existing passkey first (the server's `details.method: 'passkey'`); never the password. */
+  | { kind: 'operatorPasskeyFirst' }
   | { kind: 'wrongPassword' }
   | { kind: 'limit' }
   | { kind: 'failed' }
@@ -38,7 +40,7 @@ export async function addPasskeyFlow(currentPassword?: string): Promise<AddPassk
     return { kind: 'added', passkey };
   } catch (error) {
     if (!(error instanceof ApiError)) return { kind: 'failed' };
-    if (error.code === 'RECENT_SIGN_IN_REQUIRED') return { kind: 'stepUp' };
+    if (error.code === 'RECENT_SIGN_IN_REQUIRED') return (error.details as { method?: string } | null)?.method === 'passkey' ? { kind: 'operatorPasskeyFirst' } : { kind: 'stepUp' };
     if (error.code === 'CURRENT_PASSWORD_WRONG') return { kind: 'wrongPassword' };
     if (error.code === 'PASSKEY_LIMIT') return { kind: 'limit' };
     if (error.code === 'NETWORK') return { kind: 'unreachable' };

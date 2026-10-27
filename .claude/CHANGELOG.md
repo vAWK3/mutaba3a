@@ -28,6 +28,36 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-459: operator accounts and the /v1/operator gate (server foundation of the operator console)
+
+**Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-212).
+
+### Added
+- `users.operatorAt`, `sessions.stepUpAt` and the `step_up` WebAuthn challenge purpose (migration `20261027120000_mut459_operator`). Store methods `users.setOperator` and `sessions.markStepUp`, contract-tested on memory and Postgres.
+- `PUT/DELETE /admin/v1/users/{userId}/operator` and `users.ts operator-grant|operator-revoke --email`. The admin token only; a grant needs an ACTIVE account with a passkey.
+- `/v1/operator/*`, behind `authenticate()` and `operatorGate` (404 for a signed-in non-operator, open under the lapse gate):
+  - `GET /v1/operator/signup-reviews`: the queue, with `stepUpUntil`.
+  - `POST /v1/operator/signup-reviews/{userId}/approve`, `/decline`, `/resend` (resend: "Send again" after a mail that didn't go).
+  - `POST /v1/operator/step-up/options` and `POST /v1/operator/step-up`: a passkey-only step-up, 10 minutes.
+- `/v1/me` `user.operator: true` for operators only. New error code `PASSKEY_NOT_ACCEPTED` (403). OpenAPI tag `Operator`.
+- Pre-merge review fixes (qa-reconcile, approved by Basel):
+  - The window reads only `sessions.stepUpAt`, stamped by a passkey sign-in or step-up. A password-change rotation no longer reopens it.
+  - Operators add a passkey only after a passkey step-up.
+  - `operatorGate` refuses device sessions with 404.
+  - "Send again" is audited, refuses an account that isn't active, and sends at most once a minute.
+  - Step-ups are audited, and a cloned passkey on a step-up is audited as at sign-in.
+  - Re-review: renaming or removing an operator's passkey needs a passkey step-up, and the last one can't be removed. Any password change clears `stepUpAt`. The portal's Passkeys drawer tells an operator to confirm with a passkey first (`hosted.account.passkeys.operatorPasskeyFirst`, en/ar; TD-266).
+  - Re-review cycle 3: the last-passkey check moved into `passkeys.remove` (`keepOne`, row-locked). Closing an operator's account answers 409 `OPERATOR_ACCOUNT`.
+  - Gap tests were added.
+
+### Changed
+- `/admin/v1/signup-reviews` is now a thin adapter over `server/src/operator/actions/signupReviews.ts`, shared with the operator routes. Its answers are unchanged.
+
+### Technical
+- API 1.79.0-mut459; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- The local-mode snapshot and records file go to format version 8: `people` gained `operatorAt`. Migration 7 → 8 (`src/hosted/local/migrations/index.ts`) sets it to null, since a device's person is never an operator. The fingerprint table and fixture were updated with it.
+- ADR-212; plan + reviews in `.claude/designs/mut-458-operator-console.md`.
+- Inventories updated: `route-security.test.ts` (OPERATOR_OPERATIONS, cookie only), `store-guard.test.ts` (`users.setOperator` is operator-only), and the lapse-gate classification.
 ## [Unreleased] - 2026-10-27 — MUT-472: the API refuses the placeholder secrets from server/.env.example
 
 **Why:** the example's `replace-with-…` admin token and session pepper passed the 32-character minimum, so a copied example served `/admin/v1/*` with a token anyone can read in the repo. ADR-211.

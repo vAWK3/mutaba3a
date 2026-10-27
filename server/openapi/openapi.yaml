@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.78.0-mut464
+  version: 1.79.0-mut459
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -94,6 +94,8 @@ tags:
     description: Resend's bounce and complaint webhook (MUT-359)
   - name: Admin
     description: "Operator provisioning: organizations, API keys, users and memberships"
+  - name: Operator
+    description: "The portal's operator console (MUT-459): a signed-in operator, a passkey step-up on every write; 404 for everyone else"
 components:
   securitySchemes:
     apiKey:
@@ -214,6 +216,10 @@ components:
               type: array
               items:
                 type: string
+            operator:
+              type: boolean
+              enum:
+                - true
           required:
             - id
             - email
@@ -568,6 +574,7 @@ components:
                 - ACCOUNT_CLOSING
                 - ACCOUNT_CLOSE_BLOCKED
                 - RECENT_SIGN_IN_REQUIRED
+                - PASSKEY_NOT_ACCEPTED
                 - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
                 - FEATURE_NOT_ENABLED
@@ -8154,6 +8161,25 @@ components:
           $ref: "#/components/schemas/UserSummary"
       required:
         - user
+    OperatorMarkResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        operator:
+          type: boolean
+        operatorAt:
+          type: string
+          nullable: true
+          format: date-time
+        changed:
+          type: boolean
+      required:
+        - userId
+        - operator
+        - operatorAt
+        - changed
     FeatureGrantResponse:
       type: object
       properties:
@@ -8312,6 +8338,25 @@ components:
       required:
         - review
         - mail
+    OperatorSignupReviewList:
+      allOf:
+        - $ref: "#/components/schemas/SignupReviewList"
+        - type: object
+          properties:
+            stepUpUntil:
+              type: string
+              nullable: true
+              format: date-time
+          required:
+            - stepUpUntil
+    OperatorStepUp:
+      type: object
+      properties:
+        stepUpUntil:
+          type: string
+          format: date-time
+      required:
+        - stepUpUntil
     EntitlementGrant:
       type: object
       properties:
@@ -9796,13 +9841,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, ACCOUNT_CLOSING, or (an operator) RECENT_SIGN_IN_REQUIRED {method:"passkey"}
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: NOT_FOUND — no such passkey of yours (or passkeys are not configured)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT reason OPERATOR_NEEDS_PASSKEY — an operator's last passkey
           content:
             application/json:
               schema:
@@ -9862,7 +9913,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them"
+          description: "ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them. CONFLICT reason OPERATOR_ACCOUNT: an operator (MUT-459)"
           content:
             application/json:
               schema:
@@ -18836,6 +18887,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/users/{userId}/operator:
+    put:
+      tags:
+        - Admin
+      summary: Make a person an operator of the portal's console (idempotent); audited on every profile they belong to
+      description: "Only the admin token grants it; the console itself never can. The person must be ACTIVE and hold a passkey: every operator write needs a passkey step-up (MUT-459 D7). A second grant changes nothing and keeps the first operatorAt."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The person is an operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorMarkResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason USER_PENDING_REVIEW, USER_DISABLED, or OPERATOR_NEEDS_PASSKEY (add a passkey first)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Admin
+      summary: Stop a person being an operator (idempotent); their next operator request is refused
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The person is not an operator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorMarkResponse"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/users/{userId}/features/{feature}:
     put:
       tags:
@@ -19123,6 +19246,283 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: "CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/signup-reviews:
+    get:
+      tags:
+        - Operator
+      summary: The signup review queue, oldest first, as the admin list, plus when this session’s passkey step-up lapses (MUT-459)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - pending
+              - decided
+            default: pending
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: integer
+            nullable: true
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorSignupReviewList"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/signup-reviews/{userId}/approve:
+    post:
+      tags:
+        - Operator
+      summary: "Approve a signup: the account opens, its 14-day trial starts now, and the person is mailed (MUT-459)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided (or mailed again); `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/signup-reviews/{userId}/decline:
+    post:
+      tags:
+        - Operator
+      summary: "Decline a signup: the empty account and its personal profile are deleted, and the person is mailed (MUT-459)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided (or mailed again); `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/signup-reviews/{userId}/resend:
+    post:
+      tags:
+        - Operator
+      summary: Mail an approved signup its “your account is ready” message again, after a send that didn’t go (MUT-459)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: Decided (or mailed again); `mail` says what became of the person’s mail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupReviewDecision"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/step-up/options:
+    post:
+      tags:
+        - Operator
+      summary: "Start an operator passkey step-up: the options for navigator.credentials.get(), offering only your passkeys (MUT-459)"
+      description: Single-use, 5 minutes, bound to you. Then POST /v1/operator/step-up.
+      security:
+        - session: []
+      responses:
+        "200":
+          description: A step-up challenge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeySignInChallenge"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OPERATOR_NEEDS_PASSKEY (no passkey left on the account)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/step-up:
+    post:
+      tags:
+        - Operator
+      summary: "Finish an operator passkey step-up: operator writes are open for 10 minutes (MUT-459)"
+      security:
+        - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeySignInRequest"
+      responses:
+        "200":
+          description: Stepped up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorStepUp"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PASSKEY_NOT_ACCEPTED (another person’s passkey, a sign-in or used or expired challenge, a bad signature), or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
           content:
             application/json:
               schema:

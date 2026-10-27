@@ -6,6 +6,7 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { passkeyNameFor } from '../auth/passkey-names.js';
 import { passkeyPromptView } from '../auth/passkey-prompt.js';
 import { requestClientIp, type SignInThrottle } from '../auth/sessions.js';
+import { assertOperatorStepUp } from '../auth/step-up.js';
 import type { PasswordHasher } from '../auth/users.js';
 import { CHALLENGE_TTL_MS, creationOptions, PASSKEY_LIMIT, signInOptions, STEP_UP_WINDOW_MS, verifyCreation, type WebauthnConfig } from '../auth/webauthn.js';
 import { ApiError } from '../errors.js';
@@ -84,14 +85,28 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
     return webauthn;
   };
 
-  /** D4 / §11.1: a recent sign-in, else the current password (counted toward lockout like any wrong password). */
+  /**
+   * D4 / §11.1: a recent sign-in, else the current password (counted toward lockout like any wrong password).
+   * MUT-459 (review finding 2): an operator needs a passkey step-up instead (ADR-212 D7). Otherwise a password alone
+   * could add a new passkey and then step up with it.
+   */
   async function stepUp(c: Context<AppEnv>, user: UserRecord, session: SessionRecord, currentPassword: string | undefined): Promise<void> {
     const now = c.get('now')();
+    if (user.operatorAt) return assertOperatorStepUp(session, now);
     if (now.getTime() - session.credentialsVerifiedAt.getTime() <= STEP_UP_WINDOW_MS) return;
     if (currentPassword === undefined) {
       throw new ApiError('RECENT_SIGN_IN_REQUIRED', 'Enter your password to add a passkey', { windowMinutes: STEP_UP_WINDOW_MS / 60_000 });
     }
     await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword, now, c.get('requestId'));
+  }
+
+  /**
+   * MUT-459 (re-review A): an operator's passkeys guard the console, so renaming or removing one needs the same passkey
+   * step-up as an operator action. A password alone must not be able to strip them (and lock the operator out).
+   */
+  function guardOperatorPasskeys(c: Context<AppEnv>): void {
+    const { user, session } = c.get('identity');
+    if (user.operatorAt) assertOperatorStepUp(session, c.get('now')());
   }
 
   app.openapi(
@@ -244,6 +259,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       configured();
       const { passkeyId } = c.req.valid('param');
       const { name } = c.req.valid('json');
+      guardOperatorPasskeys(c);
       const renamed = await store.passkeys.rename(c.get('identity').user.id, passkeyId, name);
       if (!renamed) throw new ApiError('NOT_FOUND', 'No such passkey');
       return c.json(passkeyJson(renamed), 200);
@@ -262,16 +278,27 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         204: { description: 'Removed' },
         401: errorResponse('No valid session'),
-        403: errorResponse('PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING'),
+        403: errorResponse('PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST, ACCOUNT_CLOSING, or (an operator) RECENT_SIGN_IN_REQUIRED {method:"passkey"}'),
         404: errorResponse('NOT_FOUND — no such passkey of yours (or passkeys are not configured)'),
+        409: errorResponse('CONFLICT reason OPERATOR_NEEDS_PASSKEY — an operator\'s last passkey'),
       },
     }),
     async (c) => {
       configured();
       const { user, session } = c.get('identity');
       const { passkeyId } = c.req.valid('param');
+      guardOperatorPasskeys(c);
       const audit = await passkeyAudit(store, c, user, 'user.passkey_removed', { passkeyId });
-      const removed = await store.passkeys.remove({ userId: user.id, id: passkeyId, exceptSessionId: session.id, at: c.get('now')(), audit });
+      let removed: Awaited<ReturnType<typeof store.passkeys.remove>>;
+      try {
+        // MUT-459 (re-review A): an operator keeps one passkey, or no operator action could ever be confirmed again.
+        removed = await store.passkeys.remove({ userId: user.id, id: passkeyId, exceptSessionId: session.id, at: c.get('now')(), audit, keepOne: Boolean(user.operatorAt) });
+      } catch (err) {
+        if (err instanceof StateConflict && err.reason === 'LAST_PASSKEY') {
+          throw new ApiError('CONFLICT', 'An operator keeps at least one passkey: add another first', { reason: 'OPERATOR_NEEDS_PASSKEY' });
+        }
+        throw err;
+      }
       if (!removed) throw new ApiError('NOT_FOUND', 'No such passkey');
       return c.body(null, 204);
     },

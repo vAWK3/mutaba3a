@@ -51,6 +51,14 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'DELETE /v1/passkeys/:passkeyId': 'open',
   // MUT-370: the person's answer to the passkey suggestion, identity like the trial prompt.
   'PATCH /v1/me/passkey-prompt': 'open',
+  // MUT-459 (D2): the operator console is the operator's role, not a paid feature: a lapse on their own account never
+  // locks them out of approving anyone else.
+  'GET /v1/operator/signup-reviews': 'open',
+  'POST /v1/operator/signup-reviews/:userId/approve': 'open',
+  'POST /v1/operator/signup-reviews/:userId/decline': 'open',
+  'POST /v1/operator/signup-reviews/:userId/resend': 'open',
+  'POST /v1/operator/step-up/options': 'open',
+  'POST /v1/operator/step-up': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',

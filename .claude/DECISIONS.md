@@ -5523,27 +5523,6 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Amendment (qa-reconcile, 2026-10-26, Basel):** decision 2 is **owner-only**. A session corrects money only on a profile the person owns (`ownsProfile`: its creator or a co-owner), checked before any lookup; anyone else, a firm's members and a disconnected Malafat firm's included, gets 403 `READ_ONLY_PROFILE {reason: NOT_OWNER}` (`notOwner()`, now shared from `personal-profile.ts` with the profile routes). `/v1/me` stays truthful without a new field: a person may correct exactly where `owned && access.payments === 'read-write'`, which is the portal's gate. Also from the review: a person's reversal is refused (404) when the capture paid anything but person-recorded entries, so it never reopens an installment Malafat's key applied it to; a person's credit `effectiveDate` follows `pastMoneyDate`; the new IncomeResponse fields are optional (pre-1.77.0 replays); the portal starts a new attempt after a 409 and Cancel reports a partial cancel. Override log: replaces decision 2's "anyone whose session holds `payments:write`"; reason: a firm's staff could otherwise reverse any capture through the API.
 
-## ADR-208: Seeded Category Names Follow the Viewer's Language, Worked Out From the Stored Name (MUT-464)
-
-**Status:** Accepted (2026-10-27, MUT-464). Plan and eng review: `.claude/designs/mut-464-category-names-follow-language.md` (D1–D10, Basel's answers D1, D4, D5).
-
-**Context:** a hosted profile's preset categories were written once, in the language of whoever first listed them. A co-owner or member in the other language saw that language for good. The portal's local mode runs the same routes on a `MemoryLedgerStore` in the browser, so a server-side backfill would never reach it.
-
-**Decision:**
-1. **Nothing is stored.** Every preset entry has a `key` (`presets.ts`); `presetKeyForName(name)` maps a stored name, in English or Arabic, back to it. `RETIRED_TEMPLATES` keeps the old legal-only list and the personal "Projects" resolving without seeding them. No column, no backfill, no snapshot migration.
-2. **The server names it.** `requestLanguage(c)` (`routes/shared.ts`): the first `ar`/`en` tag of `Accept-Language` by quality, else the account locale; it sets `Content-Language` and `Vary`. `displayCategoryNames` shows a seeded name in that language. When two rows are the same entry, only the oldest follows the language and carries `presetKey`; the other keeps its own name.
-3. **One entry per profile.** Both stores refuse a new or renamed category whose name is an entry another category already is (409 `CATEGORY_NAME_TAKEN`), under the same organization lock as the `nameKey` index.
-4. **Contract.** `ExpenseCategory.presetKey` (derived, nullable) and API 1.78.0-mut464. The portal sends its UI language on every call and keys both category queries on it. MCP `list_categories` uses the account locale. The records export keeps stored names. The automatic Other is `presetKey === 'other'`.
-
-**Consequences:**
-- Changing a template's wording means moving the old pair to `RETIRED_TEMPLATES` under the same key; `presets.test.ts` pins that every name maps to one key.
-- A person who types a preset name ("Rent") gets a category that follows the language. That is intended.
-- The phone shows `user.locale` names until its half ships (separate ticket).
-
-**Alternatives considered:**
-- A stored `presetKey` column with a backfill (the first plan): it misses local mode and needs a migration path for every store (Basel chose D4).
-- Translating in each client: two more copies of the strings, and the MCP tools would still need one.
-
 ## ADR-207: The Portal and the Phone Shape the Verdict From One Contract (MUT-449)
 
 **Status:** Accepted (2026-10-26, MUT-449; epic MUT-446). The phone-side plan, eng review D1–D5 and design review PD1–PD16 are in `~/.gstack/projects/vAWK3-mutaba3a/mut-449-phone-glance-plan.md` and in `mutaba3a-flutter` `.claude/designs/mut-449-reports-glance.md`.
@@ -5564,6 +5543,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A one-time copy of the portal's `verdictBody` builder: single-currency, and it can't detect drift.
 - Phone-only fixtures, with parity left to one live QA flow (Basel chose D5 A).
+
+## ADR-208: Seeded Category Names Follow the Viewer's Language, Worked Out From the Stored Name (MUT-464)
+
+**Status:** Accepted (2026-10-27, MUT-464). Plan and eng review: `.claude/designs/mut-464-category-names-follow-language.md` (D1–D10, Basel's answers D1, D4, D5).
+
+**Context:** a hosted profile's preset categories were written once, in the language of whoever first listed them. A co-owner or member in the other language saw that language for good. The portal's local mode runs the same routes on a `MemoryLedgerStore` in the browser, so a server-side backfill would never reach it.
+
+**Decision:**
+1. **Nothing is stored.** Every preset entry has a `key` (`presets.ts`); `presetKeyForName(name)` maps a stored name, in English or Arabic, back to it. `RETIRED_TEMPLATES` keeps the old legal-only list and the personal "Projects" resolving without seeding them. No column, no backfill, no snapshot migration.
+2. **The server names it.** `requestLanguage(c)` (`routes/shared.ts`): the first `ar`/`en` tag of `Accept-Language` by quality, else the account locale; it sets `Content-Language` and `Vary`. `displayCategoryNames` shows a seeded name in that language. When two rows are the same entry, only the oldest follows the language and carries `presetKey`; the other keeps its own name.
+3. **One entry per profile.** Both stores refuse a new or renamed category whose name is an entry another category already is (409 `CATEGORY_NAME_TAKEN`), under the same organization lock as the `nameKey` index.
+4. **Contract.** `ExpenseCategory.presetKey` (derived, nullable) and API 1.78.0-mut464. The portal sends its UI language on every call and keys both category queries on it. MCP `list_categories` uses the account locale. The records export keeps stored names. The automatic Other is `presetKey === 'other'`.
+
+**Consequences:**
+- Changing a template's wording means moving the old pair to `RETIRED_TEMPLATES` under the same key; `presets.test.ts` pins that every name maps to one key.
+- A person who types a preset name ("Rent") gets a category that follows the language. That is intended.
+- The phone shows `user.locale` names until its half ships (separate ticket).
+
+**Alternatives considered:**
+- A stored `presetKey` column with a backfill (the first plan): it misses local mode and needs a migration path for every store (Basel chose D4).
+- Translating in each client: two more copies of the strings, and the MCP tools would still need one.
 
 ## ADR-210: The API Listens Where HOST Says, an IP Address; Unset Keeps Every Interface (MUT-463)
 
@@ -5607,3 +5607,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Matching the exact `.env.example` strings: misses a fixed typo or a new placeholder.
 - Blank values in `.env.example`: a fresh clone then fails on a missing value instead of a placeholder, and the example no longer shows what goes there (left out of this ticket).
 - Refusing the QA tokens off loopback: decision 3.
+## ADR-212: Operators Are Accounts With a Passkey, Behind One Gate on /v1/operator (MUT-459)
+
+**Status:** Accepted (2026-10-27, MUT-459; epic MUT-458). The plan, eng review D1–D9 and design review 1A–19B are in `.claude/designs/mut-458-operator-console.md`.
+
+**Context:** every operator task ran through the admin token (`MUTABA3A_ADMIN_TOKEN`, Secret Manager) from a laptop with gcloud. The token carries no identity (MUT-367 D15: `decidedBy` is `admin-token`), so it can't back a portal page. Self-service signup is open, and signups wait until the operator is at a terminal.
+
+**Decision:**
+1. **An operator is an account with a mark.** The mark is `users.operatorAt`, not a feature flag: flags are product switches that MUT-462 lets operators change, so an operator flag would let one operator mint another. Only the admin token sets the mark: `PUT/DELETE /admin/v1/users/{id}/operator`, and `users.ts operator-grant|operator-revoke`. A grant refuses an account that is PENDING_REVIEW, DISABLED, or has no passkey (409 CONFLICT `OPERATOR_NEEDS_PASSKEY`). `/v1/me` names `user.operator: true` only for an operator; for everyone else the field is absent.
+2. **One gate on `/v1/operator/*`.** The routes sit behind the normal /v1 `authenticate()`, so a signed-out caller gets the usual 401 (which says nothing about operators) and the portal signs them in and brings them back. `operatorGate` (`auth/operator-gate.ts`) then answers 404 to a signed-in non-operator, the same as a path that doesn't exist. The routes are cookie-session only: `operatorGate` answers 404 to a device session too (authenticate() admits both as `session`), and no API key gets in. They are organization-independent and open under the lapse gate: a lapse on the operator's own account never locks the console (D2). The mark is read from the user row authenticate() already loaded, so a revoke takes effect on the next request.
+3. **Every operator write needs a passkey step-up within 10 minutes; a password never counts (D7).** A write passes only while `sessions.stepUpAt` is under 10 minutes old. Only a passkey sets it: a passkey sign-in creates its session already stamped, and a step-up here stamps it. A password-change rotation starts the new session unstamped (pre-merge review: inferring the proof from `createdAt` let a password change reopen the window). An operator adds, renames or removes a passkey only after a passkey step-up, never on a fresh password sign-in, and keeps at least one (409 `OPERATOR_NEEDS_PASSKEY`, counted inside the removal under the person's row lock so two removals can't race past it). An operator's account can't be closed from the portal (409 `OPERATOR_ACCOUNT`); the CLI removes the mark first. Pre-merge review: otherwise a password could add a passkey and step up with it, or strip every passkey and lock the operator out. Any password change clears `stepUpAt`. The portal's Passkeys drawer tells an operator to confirm with a passkey instead of asking for the password (TD-266). Otherwise it answers 403 `RECENT_SIGN_IN_REQUIRED {method:'passkey', windowMinutes}`. The step-up (`/v1/operator/step-up/options` → `/v1/operator/step-up`) uses a `step_up` challenge bound to the person, with `allowCredentials` set to their passkeys, and verifies through `verifyAssertion`. Any refusal is 403 `PASSKEY_NOT_ACCEPTED`, a cloned counter included. It stamps `stepUpAt`, conditional on the session still being live, and never `credentialsVerifiedAt`: that column guards the password-change revocation (MUT-237/238), and a step-up must not revive a session a lock or a password change just ended. Those two routes are the only writes exempt from the step-up. A step-up is audited (`user.operator_stepped_up`); a cloned authenticator caught there is audited as at sign-in (`user.passkey_counter_regressed`), and a refused one logs a warning.
+4. **One action module, two adapters.** `server/src/operator/actions/*.ts` holds each action, taking an `OperatorActor`: the token or `{operator, userId}`. `/admin/v1/*` passes the token; `/v1/operator/*` passes the signed-in operator. Results are therefore the CLI's by construction. Each ticket extracts only what its page uses (D9): MUT-459 does signup reviews, MUT-461 accounts, and MUT-462 billing, flags and firms.
+5. **The operator acts as themself, on the unguarded store.** Audit rows keep `actorType: 'ADMIN'` with `actorId` set to the operator's id (the token keeps `null`). `decidedBy` / `grantedBy` store `operator:<id>`; the token keeps `admin-token` / `admin`. The store guard refuses `operator` methods to every principal (ADR-037 decision 7). So the operator routes, like /admin, run on the base store, reached only through `operatorGate`. They are the one session surface allowed to.
+
+**Consequences:**
+- Getting started takes two steps: Basel adds a passkey to his account, then runs `live-admin.sh operator-grant <email>` (`docs/operations/before-release.md`). The CLI stays the fallback, unchanged.
+- An operator who deletes their last passkey can't act until they add one again. The step-up options answer 409 `OPERATOR_NEEDS_PASSKEY`.
+- The OpenAPI spec lists the `/v1/operator` paths, as it already lists `/admin/v1`. Their existence is no secret; their access is.
+- `GET /v1/operator/signup-reviews` returns `stepUpUntil`, so the portal can label the confirm "with passkey" before the tap. iOS Safari needs the passkey prompt to come straight from a tap, never from a 403 round trip (design 1A).
+
+**Alternatives considered:**
+- A `FEATURES` entry `operator` (no migration), rejected because flags are operator-grantable product switches.
+- `/operator/v1/*` with its own 404-for-everything mount (the ticket's first wording). Rejected because it needed an SPA exclusion, a dev-proxy entry, a 401→404 remap and its own CSRF reasoning, and it would hide an expired session as "not found" (outside review O3–O6).
+- A password step-up for operators without a passkey. Rejected because it leaves a fresh password sign-in enough to act, weaker than the token it replaces (outside review O1).

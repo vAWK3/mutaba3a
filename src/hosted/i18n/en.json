@@ -92,6 +92,7 @@
         "stepUp": "For your security, enter your password to add a passkey.",
         "added": "Passkey added",
         "addFailed": "Couldn’t add the passkey. Try again.",
+        "operatorPasskeyFirst": "As an operator, confirm with one of your passkeys first: sign in again with a passkey, then add the new one.",
         "limit": "You can have up to {limit} passkeys. Remove one to add another.",
         "emptyTitle": "No passkeys yet",
         "emptyBody": "A passkey lets you sign in with Face ID, Touch ID or your device’s screen lock instead of typing your password.",

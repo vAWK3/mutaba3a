@@ -2840,3 +2840,8 @@ Imported data is never written field by field into the live store. It is mapped 
 ## Pattern: a person-level read that answers partially (MUT-447)
 
 A read across a person's profiles (`GET /v1/summaries/verdict`, like `GET /v1/entries`) never fails as a whole because one profile does: it drops LOCKED profiles first (from `personEntitlements`), reads the rest with `Promise.allSettled`, and lists each left-out profile in `unavailable` with a code. A failure that isn't an `ApiError` is our bug: report it with `c.get('reportError')(err)` (set by `createApiShell`, the same reporter and tags as an unhandled error) so a partial answer is never silent in Sentry.
+
+## Pattern: one operator action, two doors (MUT-459)
+
+An operator action lives once in `server/src/operator/actions/<area>.ts`, taking an `ActionContext` with an `OperatorActor` (`server/src/operator/actor.ts`): `TOKEN_ACTOR` from `/admin/v1/*` (the CLI) or `{ kind: 'operator', userId }` from `/v1/operator/*` (the portal). The two route files are thin adapters, so the console's results are the CLI's by construction. `auditActorIdOf` and `byLabelOf` are the only places the doors differ: the token keeps `actorId: null` and its old labels (`admin-token`, `admin`); an operator writes its id and `operator:<id>`. Moving an existing admin handler into an action keeps that route's test file unchanged as the regression proof.
+

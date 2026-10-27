@@ -61,7 +61,7 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       responses: {
         200: { description: 'Closing', content: { 'application/json': { schema: CloseAccountResponseSchema } } },
         403: errorResponse('CURRENT_PASSWORD_WRONG (wrong password, or the account is locked), ACCOUNT_CLOSING, CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED'),
-        409: errorResponse('ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them'),
+        409: errorResponse('ACCOUNT_CLOSE_BLOCKED: a profile the person created has other members and no co-owner; details.profiles names them. CONFLICT reason OPERATOR_ACCOUNT: an operator (MUT-459)'),
         422: errorResponse('VALIDATION_FAILED'),
         502: errorResponse('STRIPE_UNAVAILABLE: Stripe could not be reached; nothing changed'),
         503: errorResponse('BILLING_NOT_CONFIGURED: the account has a Stripe customer and this server has no Stripe'),
@@ -72,6 +72,9 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       const { password } = c.req.valid('json');
       const now = c.get('now')();
       await verifyCurrentPassword(options, user, password, now, c.get('requestId'));
+      // MUT-459 (re-review cycle 3): an operator's account closes only after the CLI takes the mark off (ADR-212).
+      // Otherwise a password alone could sign the operator out everywhere and lock the console for 30 days.
+      if (user.operatorAt) throw new ApiError('CONFLICT', 'An operator account can’t be closed here: the operator mark is removed with the CLI first', { reason: 'OPERATOR_ACCOUNT' });
 
       // R18: a profile they created that others belong to, with no co-owner, would take those people's work with it.
       const blocked = await blockingProfilesOf(store, user.id);

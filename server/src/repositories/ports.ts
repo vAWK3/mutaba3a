@@ -1232,8 +1232,18 @@ export interface UserRecord {
   trialPrompt: TrialPromptRecord | null;
   /** MUT-333 (ADR-188): set while the account is closing (30 days' grace, then the hard delete); null otherwise. */
   closure: AccountClosureRecord | null;
+  /** MUT-459 (ADR-212): when the CLI made this person an operator; null when they are not one. */
+  operatorAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** MUT-459: mark or unmark an operator. `audit` is written in the same transaction, and only when the mark changes. */
+export interface SetOperatorInput {
+  userId: string;
+  operator: boolean;
+  at: Date;
+  audit: AuditEventInput[];
 }
 
 /** MUT-333 (D18): a closing account's state, on the user row. */
@@ -1323,6 +1333,8 @@ export interface UserRepository {
   /** Replaces the hash, stamps passwordChangedAt and clears failedSignIns / lockedUntil. */
   setPassword(id: string, passwordHash: string, at: Date): Promise<UserRecord | null>;
   setStatus(id: string, status: UserStatus, at: Date): Promise<UserRecord | null>;
+  /** MUT-459: `changed` is false when the person already was (or wasn't) one; null for an unknown person. */
+  setOperator(input: SetOperatorInput): Promise<{ user: UserRecord; changed: boolean } | null>;
   /** MUT-38: one more failed sign-in; `lockUntil` persists a lock when the throttle just imposed one. */
   recordFailedSignIn(id: string, at: Date, lockUntil: Date | null): Promise<UserRecord | null>;
   /** MUT-38: stamps lastSignInAt and clears failedSignIns / lockedUntil. */
@@ -1540,6 +1552,8 @@ export interface SessionRecord {
   userAgent: string | null;
   /** MUT-115 (A2/D6): the passkey that opened this session, else null; removing that passkey revokes it. */
   passkeyId: string | null;
+  /** MUT-459 (ADR-212): the last operator passkey step-up on this session; never moves credentialsVerifiedAt. */
+  stepUpAt: Date | null;
 }
 
 export interface CreateSessionInput {
@@ -1569,6 +1583,8 @@ export interface SessionRepository {
   revoke(id: string, reason: string, at: Date): Promise<SessionRecord | null>;
   /** Revokes the user's live sessions; returns how many. */
   revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
+  /** MUT-459: stamps stepUpAt on a live (unrevoked) session; false when there is none. */
+  markStepUp(id: string, at: Date): Promise<boolean>;
 }
 
 // ---- MUT-115: passkeys (ADR-190) ---------------------------------------------
@@ -1608,12 +1624,13 @@ export interface CreatePasskeyInput {
   audit: AuditEventInput[];
 }
 
-export type WebauthnChallengePurpose = 'creation' | 'authentication';
+/** MUT-459: `step_up` is an operator's step-up, bound to its person like `creation`. */
+export type WebauthnChallengePurpose = 'creation' | 'authentication' | 'step_up';
 
 export interface CreateWebauthnChallengeInput {
   challenge: string;
   purpose: WebauthnChallengePurpose;
-  /** Required for a creation challenge (the person who asked), null for a sign-in challenge. */
+  /** Required for a creation or step-up challenge (the person who asked), null for a sign-in challenge. */
   userId: string | null;
   at: Date;
   expiresAt: Date;
@@ -1626,6 +1643,11 @@ export interface RemovePasskeyInput {
   exceptSessionId: string;
   at: Date;
   audit: AuditEventInput[];
+  /**
+   * MUT-459: an operator keeps at least one passkey. Counted inside the removal, under the person's row lock, so two
+   * removals racing can't both pass: StateConflict('passkey', 'LAST_PASSKEY') and nothing is written.
+   */
+  keepOne?: boolean;
 }
 
 /**
@@ -1653,7 +1675,7 @@ export interface PasskeyRepository {
   createChallenge(input: CreateWebauthnChallengeInput): Promise<{ id: string }>;
   /**
    * Atomic (one conditional UPDATE): marks the challenge consumed and returns it only if it exists, has this purpose,
-   * is unconsumed, unexpired at `now`, and (for a creation) belongs to `userId`. Anything else: null, nothing written.
+   * is unconsumed, unexpired at `now`, and (for a creation or step-up) belongs to `userId`. Anything else: null, nothing written.
    */
   consumeChallenge(id: string, purpose: WebauthnChallengePurpose, userId: string | null, now: Date): Promise<{ challenge: string } | null>;
   /** Deletes challenges that expired before `before`; returns how many. */

@@ -163,6 +163,19 @@ Every money rule runs on both stores (memory and `test:db`).
 - Portal: `incomeAffordances.test.ts` (corrections), `incomeApiErrors.test.ts` (`mapCorrectionError`), `RedateDrawer.test.tsx` (reverse, reduce, cancel, over-the-limit refused before sending, server's new maximum, Back, history lines, Malafat).
 - Release-QA (web): `qa/features/portal/income.yaml` + `qa/specs/portal/income.spec.ts` — `reverse-payment`, `credit-owed`, `credit-over-outstanding`, `cancel-owed`, `correct-malafat-readonly`.
 
+## Operator console (epic MUT-458, added 2026-10-27)
+
+MUT-459 (server):
+- `server/src/__tests__/routes-operator.test.ts` covers the following, through the real app, soft-authenticator passkeys and the memory store:
+  - **Mark:** needs a passkey; refused for pending and unknown accounts; audited; revoking works on the next request.
+  - **Gate:** 404 for a signed-in non-operator and 401 when signed out, on every route; a lapsed operator is let in; cross-site requests get 403.
+  - **Passkey-only step-up:** a password sign-in never passes; the 10-minute window; a step-up never moves `credentialsVerifiedAt`; a stranger's passkey, a sign-in challenge or a reused challenge is refused.
+  - **Parity with `/admin`:** list, approve, decline (409 ALREADY_DECIDED) and resend; `decidedBy operator:<id>`; audit `actorId`.
+- `store-contract-operator.ts` (memory + Prisma): `setOperator` changes once and audits once; `markStepUp` only on a live session; the `step_up` challenge is bound to its person.
+- `users-cli.test.ts`: `operator-grant` / `operator-revoke`.
+- Regression proof: `routes-signup-review.test.ts` is unchanged and green.
+- QA (release-qa): no user-visible surface yet. MUT-460's `portal-selfservice/operator.yaml` specs cover it end to end.
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)

@@ -17,6 +17,11 @@ const FORBIDDEN = /sign-?up|register|invite|forgot|reset/i;
  * nobody in, and an agent can only act for a person who signs in and approves it on the consent page.
  */
 const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups', '/oauth/register']);
+/**
+ * The operator surface: /admin/ (the token) and, since MUT-459 (ADR-212), /v1/operator/ (a signed-in operator; 404 for
+ * everyone else). Its signup-review routes decide on someone else's signup; they open no door to anyone.
+ */
+const isOperatorSurface = (path: string) => path.startsWith('/admin/') || path.startsWith('/v1/operator/');
 
 function inventory() {
   const app = createApp({
@@ -34,7 +39,7 @@ describe('no self-registration route exists (MUT-37)', () => {
   it('the router has no signup, invite or reset path outside /admin/', () => {
     const paths = [...new Set(inventory().routes.map((r) => r.path))];
     expect(paths.length).toBeGreaterThan(50);
-    const offenders = paths.filter((p) => !p.startsWith('/admin/') && !REVIEWED_SELF_SERVICE_PATHS.has(p) && FORBIDDEN.test(p));
+    const offenders = paths.filter((p) => !isOperatorSurface(p) && !REVIEWED_SELF_SERVICE_PATHS.has(p) && FORBIDDEN.test(p));
     expect(offenders).toEqual([]);
   });
 
@@ -42,7 +47,7 @@ describe('no self-registration route exists (MUT-37)', () => {
     const doc = (await (await inventory().request('/openapi.json')).json()) as { paths: Record<string, unknown> };
     const paths = Object.keys(doc.paths);
     expect(paths.length).toBeGreaterThan(50);
-    const offenders = paths.filter((p) => !p.startsWith('/admin/') && !REVIEWED_SELF_SERVICE_PATHS.has(p) && FORBIDDEN.test(p));
+    const offenders = paths.filter((p) => !isOperatorSurface(p) && !REVIEWED_SELF_SERVICE_PATHS.has(p) && FORBIDDEN.test(p));
     expect(offenders).toEqual([]);
   });
 
