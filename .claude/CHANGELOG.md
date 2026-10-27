@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-215)
+
+**Why:** seeing an account's state, disabling one, signing it out or sending a reset needed the CLI and the right command. Epic MUT-458's third step: the operator console gets an Accounts tab.
+
+### Added
+- **Server:** `GET /v1/operator/accounts?email=` (exact, normalised; no match is 200 `{account:null}`), `GET /v1/operator/accounts/{userId}` (status, last sign-in, passkey count, flags, live devices, connected agents, each profile with role, firm state and billing; a missing account is 404 `NOT_FOUND` with `details.reason ACCOUNT_NOT_FOUND`), and `POST …/{userId}/disable|enable|sessions/revoke|setup-link`. Behind the operator gate and the passkey step-up; audited with the operator's id. The operator's own account answers 409 `OWN_ACCOUNT` to every action (E10).
+- `sessions.countLiveForUser` (memory + Prisma; operator-only in the store guard).
+- **Portal:** an Accounts tab (`/operator/accounts`, `?email=` in the URL) and the account page (`/operator/accounts/$userId`): header, a banner when an action is missing (disabled, waiting for review, closing), the Access group (sign out everywhere, disable/enable, send reset link) with what each would end, and the profiles with their billing. Every action confirms in its row through the operator step-up; the toast gives the counts. The reset link (24 h, "Lock the current password" on by default) lives in the page's state only. ar + en, RTL; addresses isolated left to right.
+- Release-QA: `portal-selfservice.operator` `account-find`, `account-revoke-sessions`, `account-disable-enable` (Arabic, 375 px), `account-setup-link`.
+
+### Changed
+- `POST /admin/v1/users/{id}/sessions/revoke` (and the operator's) now audits `user.sessions_revoked` `{revoked, agentGrantsRevoked}` on each profile; before, only the agents' disconnect was audited. It is one of `SESSION_ONLY_ACTIONS`, so API keys' `/v1/audit` (Malafat) never lists it.
+- A missing account on `/admin/v1/users/{id}*` adds `details.reason ACCOUNT_NOT_FOUND` (additive).
+- You › Account's Operator row reads "Signups and accounts".
+
+### Technical
+- `server/src/operator/actions/accounts.ts`: find by email, disable/enable, sign out everywhere, the setup link, the account view, `mintSetupLink` (shared with creating a user). `admin-users.ts` is an adapter with the token as actor; its suites pass unchanged. `ActionContext` moved to `operator/actor.ts`.
+- TD-267 resolved: `InPlaceConfirm` takes a ReactNode message, a slot, `variant`, `appearance="row"`, `keepLabelWhileLoading`, `cancelWhileBusy`; `OperatorConfirm` wraps it.
+- The operator route tests share `server/src/__tests__/helpers/operator-harness.ts`. The operator pages share one router wrapper. `src/hosted/operator/time.ts` (`agoText`, `instantText`, `dayText`, Western digits).
+- Files: `server/src/{operator/actions/accounts.ts,operator/actor.ts,routes/operator.ts,routes/admin-users.ts,schemas.ts,app.ts,auth/store-guard.ts,repositories/*}`, `src/hosted/{pages/operator/*,operator/*,components/InPlaceConfirm.tsx,data/operatorQueries.ts,api/client.ts,router.tsx,hosted.css,i18n/*}`, `qa/**/operator.*`, `qa/support/selfService.ts`.
+
+---
+
 ## [Unreleased] - 2026-10-27 — MUT-468: the mails get the new frame: a mood band, our art, a headline
 
 **Why:** epic MUT-466. Self-service signup made the transactional mails the first thing a customer sees; they were one plain card. ADR-214.

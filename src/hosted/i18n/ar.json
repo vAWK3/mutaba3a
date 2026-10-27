@@ -1845,11 +1845,12 @@
     },
     "operator": {
       "title": "المشغّل",
-      "rowSub": "طلبات تسجيل بانتظار المراجعة",
+      "rowSub": "التسجيلات والحسابات",
       "failed": "لم يتم ذلك. حاول مرة أخرى.",
       "tabs": {
         "signups": "التسجيلات",
-        "signupsCount": "التسجيلات · {count}"
+        "signupsCount": "التسجيلات · {count}",
+        "accounts": "الحسابات"
       },
       "signups": {
         "listLabel": "طلبات تسجيل بانتظار المراجعة",
@@ -1907,6 +1908,106 @@
         "otherDevice": "يصلح مفتاح مرور على جهاز آخر أيضًا: اختر خيار رمز QR.",
         "noPasskey": "إجراءات المشغّل تحتاج مفتاح مرور.",
         "addPasskey": "أضف واحدًا من الحساب › مفاتيح المرور"
+      },
+      "accounts": {
+        "searchLabel": "البريد الإلكتروني",
+        "search": "بحث",
+        "searchHint": "العنوان نفسه الذي سجّل به.",
+        "noMatch": "لا يوجد حساب بهذا العنوان",
+        "resultsLabel": "الحساب",
+        "status": {
+          "ACTIVE": "نشط",
+          "DISABLED": "معطّل",
+          "PENDING_REVIEW": "بانتظار المراجعة",
+          "closing": "قيد الإغلاق"
+        },
+        "operatorBadge": "مشغّل",
+        "lastSignIn": "آخر دخول {time}",
+        "neverSignedIn": "لم يسجّل الدخول قط",
+        "passkeyYes": "لديه مفتاح مرور",
+        "passkeyNo": "بلا مفتاح مرور",
+        "disabledBanner": "هذا الحساب معطّل: لا يمكنه تسجيل الدخول. فعّله ليعود.",
+        "pendingBanner": "هذا التسجيل بانتظار المراجعة.",
+        "pendingLink": "راجعه في التسجيلات",
+        "closingBanner": "هذا الحساب قيد الإغلاق: سيُحذف حين تنتهي أيامه الثلاثون.",
+        "access": "الدخول",
+        "devices": {
+          "zero": "لا أجهزة",
+          "one": "جهاز واحد",
+          "two": "جهازان",
+          "few": "{count} أجهزة",
+          "many": "{count} جهازًا",
+          "other": "{count} جهاز"
+        },
+        "agents": {
+          "zero": "لا تطبيقات متصلة",
+          "one": "تطبيق متصل واحد",
+          "two": "تطبيقان متصلان",
+          "few": "{count} تطبيقات متصلة",
+          "many": "{count} تطبيقًا متصلًا",
+          "other": "{count} تطبيق متصل"
+        },
+        "signOut": "تسجيل الخروج من كل مكان",
+        "signOutSub": "{devices} · كلمة المرور تبقى صالحة",
+        "disable": "تعطيل الحساب",
+        "disableSub": "يخرج من {devices}، ويفصل {agents}، ويمنع الدخول",
+        "enable": "تفعيل الحساب",
+        "enableSub": "يمكنه تسجيل الدخول من جديد",
+        "reset": "إرسال رابط إعادة التعيين",
+        "resetSub": "رابط لمرة واحدة لتعيين كلمة مرور جديدة، لمدة 24 ساعة",
+        "own": "هذا حسابك: غيّره من أنت › الحساب.",
+        "confirmSignOut": "سيخرج {email} من {devices}، ويُفصل {agents}. كلمة مروره تبقى صالحة.",
+        "confirmDisable": "سيخرج {email} من {devices}، ويُفصل {agents}، ولن يتمكّن من الدخول حتى تفعّل الحساب.",
+        "confirmEnable": "سيتمكّن {email} من تسجيل الدخول من جديد.",
+        "confirmReset": "سيُنشأ رابط إعادة تعيين لمرة واحدة لـ {email}. يتوقف أي رابط سابق.",
+        "lock": "إيقاف كلمة المرور الحالية",
+        "lockHint": "عند الاشتباه بالاستيلاء على الحساب: تتوقف كلمة المرور ويخرج من كل مكان الآن.",
+        "signOutAction": "تسجيل الخروج",
+        "signOutWithPasskey": "تسجيل الخروج بمفتاح المرور",
+        "disableAction": "تعطيل",
+        "disableWithPasskey": "تعطيل بمفتاح المرور",
+        "enableAction": "تفعيل",
+        "enableWithPasskey": "تفعيل بمفتاح المرور",
+        "resetAction": "إنشاء الرابط",
+        "resetWithPasskey": "إنشاء الرابط بمفتاح المرور",
+        "signedOut": "خرج {email} من {devices}",
+        "disabled": "عُطّل {email} · خرج من {devices}",
+        "enabled": "فُعّل {email}",
+        "linkLabel": "رابط إعادة التعيين لـ {email}",
+        "linkOnce": "يظهر مرة واحدة. مغادرة هذه الصفحة تُسقطه.",
+        "linkValid": "صالح حتى {time}.",
+        "linkLocked": "لم تعد كلمة مروره صالحة، وخرج من كل مكان.",
+        "share": "مشاركة",
+        "done": "تم",
+        "pendingRefused": "هذا التسجيل بانتظار المراجعة: وافق عليه أو ارفضه في التسجيلات.",
+        "disabledRefused": "هذا الحساب معطّل: فعّله قبل إرسال رابط إعادة التعيين.",
+        "ownRefused": "لا يمكنك فعل هذا بحسابك هنا.",
+        "notFoundTitle": "لا يوجد هذا الحساب",
+        "notFoundBody": "ربما حُذف، أو أن الرابط خاطئ.",
+        "profiles": "الملفات",
+        "role": {
+          "OWNER": "مالك",
+          "BOOKKEEPER": "محاسب",
+          "SUBMITTER": "مُدخل"
+        },
+        "personal": "شخصي",
+        "firm": "مكتب",
+        "firmRequested": "طلب ميزات المكتب",
+        "billingState": {
+          "ACTIVE": "نشط",
+          "GRACE": "فترة سماح",
+          "READ_ONLY": "للقراءة فقط",
+          "LOCKED": "مقفل"
+        },
+        "billingSource": {
+          "MALAFAT": "ملفات",
+          "OPERATOR": "منحة",
+          "STRIPE": "مدفوع",
+          "TRIAL": "تجربة",
+          "NONE": "بلا خطة"
+        },
+        "billingUntil": "حتى {date}",
+        "noProfiles": "لا ملفات."
       }
     }
   }

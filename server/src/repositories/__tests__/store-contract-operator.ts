@@ -83,6 +83,23 @@ export function describeLedgerStoreOperatorContract(name: string, makeStore: () 
       expect(await store.sessions.findByDigest(s.tokenDigest)).toMatchObject({ stepUpAt: null, revokedReason: 'password_changed' });
     });
 
+    it('MUT-461: counts a person\'s live sessions only (not revoked, not idle- or absolutely expired, not someone else\'s)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const other = await store.users.create(userInput());
+      expect(await store.sessions.countLiveForUser(user.id, at(2))).toBe(0);
+      await session(store, user.id);
+      await session(store, other.user.id);
+      const revoked = await session(store, user.id);
+      await store.sessions.revoke(revoked.id, 'operator', at(2));
+      await store.sessions.create({ userId: user.id, tokenDigest: `digest-${unique()}`, kind: 'device', at: at(1), idleExpiresAt: at(10), absoluteExpiresAt: at(59), userAgent: null });
+
+      expect(await store.sessions.countLiveForUser(user.id, at(5))).toBe(2);
+      // At minute 10 the device session's idle deadline has passed; at 59 every absolute one has.
+      expect(await store.sessions.countLiveForUser(user.id, at(10))).toBe(1);
+      expect(await store.sessions.countLiveForUser(user.id, at(59))).toBe(0);
+    });
+
     it('a step-up challenge is bound to its person: only that person, with that purpose, once', async () => {
       const store = await makeStore();
       const { user } = await store.users.create(userInput());

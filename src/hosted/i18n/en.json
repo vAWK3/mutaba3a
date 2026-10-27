@@ -1753,11 +1753,12 @@
     },
     "operator": {
       "title": "Operator",
-      "rowSub": "Signups waiting for review",
+      "rowSub": "Signups and accounts",
       "failed": "That didn't go through. Try again.",
       "tabs": {
         "signups": "Signups",
-        "signupsCount": "Signups · {count}"
+        "signupsCount": "Signups · {count}",
+        "accounts": "Accounts"
       },
       "signups": {
         "listLabel": "Signups waiting for review",
@@ -1811,6 +1812,98 @@
         "otherDevice": "A passkey on another device works too: choose the QR code option.",
         "noPasskey": "Operator actions need a passkey.",
         "addPasskey": "Add one in Account › Passkeys"
+      },
+      "accounts": {
+        "searchLabel": "Email address",
+        "search": "Search",
+        "searchHint": "The exact address they signed up with.",
+        "noMatch": "No account with this address",
+        "resultsLabel": "Account found",
+        "status": {
+          "ACTIVE": "Active",
+          "DISABLED": "Disabled",
+          "PENDING_REVIEW": "Waiting for review",
+          "closing": "Closing"
+        },
+        "operatorBadge": "Operator",
+        "lastSignIn": "Last signed in {time}",
+        "neverSignedIn": "Never signed in",
+        "passkeyYes": "Has a passkey",
+        "passkeyNo": "No passkey",
+        "disabledBanner": "This account is disabled: they can't sign in. Enable it to let them back in.",
+        "pendingBanner": "This signup is waiting for review.",
+        "pendingLink": "Review it in Signups",
+        "closingBanner": "This account is closing: it will be deleted when its 30 days are up.",
+        "access": "Access",
+        "devices": {
+          "one": "{count} device",
+          "other": "{count} devices"
+        },
+        "agents": {
+          "one": "{count} connected app",
+          "other": "{count} connected apps"
+        },
+        "signOut": "Sign out everywhere",
+        "signOutSub": "{devices} · the password still works",
+        "disable": "Disable account",
+        "disableSub": "Signs out {devices}, disconnects {agents}, blocks sign-in",
+        "enable": "Enable account",
+        "enableSub": "They can sign in again",
+        "reset": "Send reset link",
+        "resetSub": "A one-time link to set a new password, for 24 hours",
+        "own": "This is your account: change it from You › Account.",
+        "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected. Their password still works.",
+        "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and they can't sign in until you enable the account.",
+        "confirmEnable": "{email} can sign in again.",
+        "confirmReset": "Make a one-time reset link for {email}. Any earlier link stops working.",
+        "lock": "Lock the current password",
+        "lockHint": "For a suspected takeover: the password stops working and they're signed out everywhere now.",
+        "signOutAction": "Sign out",
+        "signOutWithPasskey": "Sign out with passkey",
+        "disableAction": "Disable",
+        "disableWithPasskey": "Disable with passkey",
+        "enableAction": "Enable",
+        "enableWithPasskey": "Enable with passkey",
+        "resetAction": "Make link",
+        "resetWithPasskey": "Make link with passkey",
+        "signedOut": "{email} signed out on {devices}",
+        "disabled": "{email} disabled · signed out on {devices}",
+        "enabled": "{email} enabled",
+        "linkLabel": "Reset link for {email}",
+        "linkOnce": "Shown once. Leaving this page discards it.",
+        "linkValid": "Works until {time}.",
+        "linkLocked": "Their password no longer works, and they were signed out everywhere.",
+        "share": "Share",
+        "done": "Done",
+        "pendingRefused": "This signup is waiting for review: approve or decline it in Signups.",
+        "disabledRefused": "This account is disabled: enable it before sending a reset link.",
+        "ownRefused": "You can't do this to your own account here.",
+        "notFoundTitle": "No such account",
+        "notFoundBody": "It may have been deleted, or the link is wrong.",
+        "profiles": "Profiles",
+        "role": {
+          "OWNER": "Owner",
+          "BOOKKEEPER": "Bookkeeper",
+          "SUBMITTER": "Submitter"
+        },
+        "personal": "Personal",
+        "firm": "Firm",
+        "firmRequested": "Firm requested",
+        "billingState": {
+          "ACTIVE": "Active",
+          "GRACE": "Grace period",
+          "READ_ONLY": "Read only",
+          "LOCKED": "Locked"
+        },
+        "billingSource": {
+          "MALAFAT": "Malafat",
+          "OPERATOR": "Granted",
+          "STRIPE": "Paid",
+          "TRIAL": "Trial",
+          "NONE": "No plan"
+        },
+        "billingUntil": "until {date}",
+        "noProfiles": "No profiles."
       }
     }
   }

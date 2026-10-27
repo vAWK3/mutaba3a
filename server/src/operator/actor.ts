@@ -16,3 +16,11 @@ export function auditActorIdOf(actor: OperatorActor): string | null {
 export function byLabelOf(actor: OperatorActor, tokenLabel: string): string {
   return actor.kind === 'operator' ? `operator:${actor.userId}` : tokenLabel;
 }
+
+/** The request facts every operator action needs: who, when, and the request it answers. */
+export interface ActionContext {
+  actor: OperatorActor;
+  at: Date;
+  requestId: string | null;
+  requestUrl: string;
+}

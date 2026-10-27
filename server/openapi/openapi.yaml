@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.79.0-mut459
+  version: 1.80.0-mut461
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -8357,6 +8357,163 @@ components:
           format: date-time
       required:
         - stepUpUntil
+    OperatorAccountSearch:
+      type: object
+      properties:
+        account:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            displayName:
+              type: string
+            status:
+              $ref: "#/components/schemas/UserStatus"
+          required:
+            - id
+            - email
+            - displayName
+            - status
+        stepUpUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - account
+        - stepUpUntil
+    OperatorAccountView:
+      type: object
+      properties:
+        account:
+          $ref: "#/components/schemas/OperatorAccount"
+        stepUpUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - account
+        - stepUpUntil
+    OperatorAccount:
+      allOf:
+        - $ref: "#/components/schemas/UserSummary"
+        - type: object
+          properties:
+            closing:
+              type: boolean
+            operator:
+              type: boolean
+            passkeyCount:
+              type: integer
+              minimum: 0
+            features:
+              type: array
+              items:
+                type: string
+            activeSessionCount:
+              type: integer
+              minimum: 0
+            agentGrantCount:
+              type: integer
+              minimum: 0
+            profiles:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  role:
+                    type: string
+                    enum:
+                      - OWNER
+                      - BOOKKEEPER
+                      - SUBMITTER
+                  personal:
+                    type: boolean
+                  owned:
+                    type: boolean
+                  firmEnabledAt:
+                    type: string
+                    nullable: true
+                    format: date-time
+                  firmRequestedAt:
+                    type: string
+                    nullable: true
+                    format: date-time
+                  billing:
+                    $ref: "#/components/schemas/BillingEntitlement"
+                required:
+                  - id
+                  - name
+                  - role
+                  - personal
+                  - owned
+                  - firmEnabledAt
+                  - firmRequestedAt
+                  - billing
+          required:
+            - closing
+            - operator
+            - passkeyCount
+            - features
+            - activeSessionCount
+            - agentGrantCount
+            - profiles
+    BillingEntitlement:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - ACTIVE
+            - GRACE
+            - READ_ONLY
+            - LOCKED
+        source:
+          type: string
+          enum:
+            - MALAFAT
+            - OPERATOR
+            - STRIPE
+            - TRIAL
+            - NONE
+        tier:
+          type: string
+          nullable: true
+          enum:
+            - FREELANCER
+            - FIRM
+            - null
+        until:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - state
+        - source
+        - tier
+        - until
+    OperatorAccountStatusResponse:
+      allOf:
+        - $ref: "#/components/schemas/UserStatusResponse"
+        - type: object
+          properties:
+            sessionsRevoked:
+              type: integer
+              minimum: 0
+            agentGrantsRevoked:
+              type: integer
+              minimum: 0
+          required:
+            - sessionsRevoked
+            - agentGrantsRevoked
     EntitlementGrant:
       type: object
       properties:
@@ -8626,40 +8783,6 @@ components:
         - subscriptions
         - profiles
         - countryCheck
-    BillingEntitlement:
-      type: object
-      properties:
-        state:
-          type: string
-          enum:
-            - ACTIVE
-            - GRACE
-            - READ_ONLY
-            - LOCKED
-        source:
-          type: string
-          enum:
-            - MALAFAT
-            - OPERATOR
-            - STRIPE
-            - TRIAL
-            - NONE
-        tier:
-          type: string
-          nullable: true
-          enum:
-            - FREELANCER
-            - FIRM
-            - null
-        until:
-          type: string
-          nullable: true
-          format: date-time
-      required:
-        - state
-        - source
-        - tier
-        - until
     BillingUncovered:
       type: object
       properties:
@@ -19517,6 +19640,283 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts:
+    get:
+      tags:
+        - Operator
+      summary: Find an account by its exact email, normalised (MUT-461). No match is 200 with account null
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 320
+          required: true
+          name: email
+          in: query
+      responses:
+        "200":
+          description: Zero or one account, and when the step-up lapses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorAccountSearch"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}:
+    get:
+      tags:
+        - Operator
+      summary: "One account as the operator sees it: status, last sign-in, passkeys, flags, devices, agents, profiles and billing (MUT-461)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The account, and when the step-up lapses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorAccountView"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/disable:
+    post:
+      tags:
+        - Operator
+      summary: "Disable an account (idempotent): every session and connected agent ends, and sign-in is refused (MUT-461)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The account, and what the disable ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorAccountStatusResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), USER_PENDING_REVIEW (a waiting signup: approve or decline it), or USER_DISABLED (a setup link for a disabled account)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/enable:
+    post:
+      tags:
+        - Operator
+      summary: Enable a disabled account again (idempotent) (MUT-461)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: The account, and what the disable ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorAccountStatusResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), USER_PENDING_REVIEW (a waiting signup: approve or decline it), or USER_DISABLED (a setup link for a disabled account)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/sessions/revoke:
+    post:
+      tags:
+        - Operator
+      summary: "Sign an account out everywhere: every session and connected agent ends; the password still works (MUT-461)"
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      responses:
+        "200":
+          description: How many sessions and agents ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeSessionsResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), USER_PENDING_REVIEW (a waiting signup: approve or decline it), or USER_DISABLED (a setup link for a disabled account)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/accounts/{userId}/setup-link:
+    post:
+      tags:
+        - Operator
+      summary: Issue a one-time setup link, returned once; any earlier open link is cancelled. With `lock` the password stops and every session ends now (MUT-461)
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: userId
+          in: path
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueSetupLinkRequest"
+      responses:
+        "200":
+          description: The link, shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueSetupLinkResponse"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), USER_PENDING_REVIEW (a waiting signup: approve or decline it), or USER_DISABLED (a setup link for a disabled account)"
           content:
             application/json:
               schema:

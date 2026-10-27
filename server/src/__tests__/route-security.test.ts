@@ -122,6 +122,13 @@ const OPERATOR_OPERATIONS = [
   'POST /v1/operator/signup-reviews/{userId}/resend',
   'POST /v1/operator/step-up/options',
   'POST /v1/operator/step-up',
+  // MUT-461: accounts.
+  'GET /v1/operator/accounts',
+  'GET /v1/operator/accounts/{userId}',
+  'POST /v1/operator/accounts/{userId}/disable',
+  'POST /v1/operator/accounts/{userId}/enable',
+  'POST /v1/operator/accounts/{userId}/sessions/revoke',
+  'POST /v1/operator/accounts/{userId}/setup-link',
 ];
 
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */

@@ -78,16 +78,20 @@ export async function operatorAccount(email: string, locale: 'en' | 'ar', passwo
   });
   expect(res.status, `create user ${await res.clone().text()}`).toBe(201);
   const created = (await res.json()) as { user: { id: string }; setupLink: { url: string } };
-  if (password) {
-    const token = new URL(created.setupLink.url).hash.slice(1);
-    const set = await fetch(`${origin}/v1/account-setup`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin },
-      body: JSON.stringify({ token, password, acceptedTermsVersion: CURRENT_TERMS.version }),
-    });
-    expect(set.ok, `set password ${set.status}`).toBe(true);
-  }
+  if (password) await redeemSetupLink(created.setupLink.url, password);
   return { id: created.user.id, setupUrl: created.setupLink.url };
+}
+
+/** Sets a password through a /setup#<token> link, as the setup page does. */
+export async function redeemSetupLink(url: string, password: string): Promise<void> {
+  const { origin } = liveState();
+  const token = new URL(url).hash.slice(1);
+  const set = await fetch(`${origin}/v1/account-setup`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin },
+    body: JSON.stringify({ token, password, acceptedTermsVersion: CURRENT_TERMS.version }),
+  });
+  expect(set.ok, `set password ${set.status}`).toBe(true);
 }
 
 /** MUT-433/434: the operator turns a per-user feature on (agent_access lets the person connect an agent). */
@@ -160,6 +164,25 @@ export async function signsIn(email: string, password: string): Promise<boolean>
     body: JSON.stringify({ email, password }),
   });
   return res.ok;
+}
+
+/** MUT-461: a portal session for `email`, as another of their devices holds one: its cookie, for `sessionWorks`. */
+export async function liveSession(email: string, password: string): Promise<string> {
+  const { origin } = liveState();
+  const res = await fetch(`${origin}/v1/sessions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': randomIp() },
+    body: JSON.stringify({ email, password }),
+  });
+  expect(res.status, `sign in ${email}`).toBe(201);
+  const cookie = /mut_session=[^;]+/.exec(res.headers.get('set-cookie') ?? '')?.[0];
+  expect(cookie, 'a session cookie').toBeTruthy();
+  return cookie!;
+}
+
+/** MUT-461: whether a session from `liveSession` still works (a sign out everywhere or a disable ends it). */
+export async function sessionWorks(cookie: string): Promise<boolean> {
+  return (await fetch(`${liveState().origin}/v1/me`, { headers: { cookie } })).ok;
 }
 
 /** Age every open SIGNUP link for `email` past its 24 h, in the QA database (D12): no waiting, no clock route. */

@@ -1585,6 +1585,8 @@ export interface SessionRepository {
   revokeAllForUser(userId: string, reason: string, at: Date): Promise<number>;
   /** MUT-459: stamps stepUpAt on a live (unrevoked) session; false when there is none. */
   markStepUp(id: string, at: Date): Promise<boolean>;
+  /** MUT-461: how many of the person's sessions still work at `at` (unrevoked, neither deadline passed), either kind. */
+  countLiveForUser(userId: string, at: Date): Promise<number>;
 }
 
 // ---- MUT-115: passkeys (ADR-190) ---------------------------------------------

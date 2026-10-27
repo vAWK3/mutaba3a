@@ -111,6 +111,13 @@ export type SignupReview = Schemas['SignupReview'];
 export type OperatorSignupReviewList = Schemas['OperatorSignupReviewList'];
 export type SignupReviewDecision = Schemas['SignupReviewDecision'];
 export type SignupReviewVerb = 'approve' | 'decline' | 'resend';
+/** MUT-461: the operator console's accounts (/v1/operator/accounts). */
+export type OperatorAccountSearch = Schemas['OperatorAccountSearch'];
+export type OperatorAccount = Schemas['OperatorAccount'];
+export type OperatorAccountView = Schemas['OperatorAccountView'];
+export type OperatorAccountStatusResponse = Schemas['OperatorAccountStatusResponse'];
+export type RevokeSessionsResponse = Schemas['RevokeSessionsResponse'];
+export type IssueSetupLinkResponse = Schemas['IssueSetupLinkResponse'];
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
@@ -496,6 +503,18 @@ export const api = {
   /** MUT-460: approve, decline, or mail an approved signup again. The server keys each mail; 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
   decideSignupReview: (userId: string, verb: SignupReviewVerb) =>
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
+  /** MUT-461: an account by its exact email; no match is `account: null` (never a 404). */
+  operatorAccountSearch: (email: string, signal?: AbortSignal) => request<OperatorAccountSearch>('GET', '/v1/operator/accounts', { query: { email }, signal }),
+  /** MUT-461: one account as the operator sees it; 404 details.reason ACCOUNT_NOT_FOUND when it's gone. */
+  operatorAccount: (userId: string, signal?: AbortSignal) => request<OperatorAccountView>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}`, { signal }),
+  /** MUT-461: disable or enable an account; the answer says what the disable ended. 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
+  setOperatorAccountStatus: (userId: string, verb: 'disable' | 'enable') =>
+    request<OperatorAccountStatusResponse>('POST', `/v1/operator/accounts/${encodeURIComponent(userId)}/${verb}`),
+  /** MUT-461: sign an account out everywhere (sessions and connected agents). */
+  revokeOperatorAccountSessions: (userId: string) => request<RevokeSessionsResponse>('POST', `/v1/operator/accounts/${encodeURIComponent(userId)}/sessions/revoke`),
+  /** MUT-461: a one-time setup link, in this answer only; `lock` stops the password and signs out now. */
+  issueOperatorSetupLink: (userId: string, body: { lock: boolean; validHours: number }) =>
+    request<IssueSetupLinkResponse>('POST', `/v1/operator/accounts/${encodeURIComponent(userId)}/setup-link`, { body }),
   /** MUT-460: the operator's passkey step-up (MUT-459): options for the system sheet, then the assertion. */
   operatorStepUpOptions: () => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/operator/step-up/options'),
   operatorStepUp: (body: Schemas['PasskeySignInRequest']) => request<Schemas['OperatorStepUp']>('POST', '/v1/operator/step-up', { body }),

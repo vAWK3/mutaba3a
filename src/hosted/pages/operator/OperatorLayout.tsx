@@ -6,13 +6,16 @@ import { OperatorStepUpProvider } from '../../operator/OperatorStepUp';
 
 /**
  * MUT-460 (ADR-213, design 6A): the operator console's frame, under `/operator`, in the shell with no profile (the You
- * island is the way out). A title and one tab per part, each with what waits in it. MUT-461/462 add Accounts and Firms.
+ * island is the way out). A title and one tab per part, each with what waits in it. MUT-461 adds Accounts; MUT-462 Firms.
  */
 export function OperatorLayout({ headingRef, children }: { headingRef: RefObject<HTMLHeadingElement | null>; children: ReactNode }) {
   const t = useT();
   const signups = useOperatorSignups();
   const waiting = signups.data?.data.length;
-  const tabs = [{ to: '/operator/signups', label: waiting ? t('hosted.operator.tabs.signupsCount', { count: waiting }) : t('hosted.operator.tabs.signups') }];
+  const tabs = [
+    { to: '/operator/signups', label: waiting ? t('hosted.operator.tabs.signupsCount', { count: waiting }) : t('hosted.operator.tabs.signups') },
+    { to: '/operator/accounts', label: t('hosted.operator.tabs.accounts') },
+  ];
   return (
     <OperatorStepUpProvider>
       <div className="hp-operator">

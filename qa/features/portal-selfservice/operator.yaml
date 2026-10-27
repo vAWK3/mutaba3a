@@ -1,10 +1,11 @@
 app: portal-selfservice
 area: operator
-title: Operator console (signup reviews)
+title: Operator console (signup reviews, accounts)
 tier: secondary
 # MUT-460 (ADR-213): the operator reviews waiting signups in the portal instead of the CLI, against the live dev API's
 # real operator gate and passkey step-up (MUT-459). Chromium's virtual authenticator answers the passkey sheet
 # (support/passkeys.ts); waiting signups are made as /signup and /setup make them (support/selfService.ts pendingSignup).
+# MUT-461 adds Accounts: find an account by email and act on it (sign out everywhere, disable/enable, a reset link).
 paths:
   - src/hosted/pages/operator/**
   - src/hosted/operator/**
@@ -70,3 +71,61 @@ features:
     expect:
       - You › Account has no Operator row
       - /operator/signups goes to Home, and the server refuses the list with 404
+  - id: account-find
+    title: Find an account by its email, and say so when there is none
+    tickets: [MUT-461]
+    paths:
+      - src/hosted/pages/operator/OperatorAccountsPage.tsx
+      - src/hosted/pages/operator/AccountStatusBadge.tsx
+      - src/hosted/pages/operator/OperatorLayout.tsx
+      - src/hosted/router.tsx
+    steps:
+      - Open the Accounts tab of the operator console
+      - Search for an address no account has
+      - Search for a person's address in capitals, then open the match
+    expect:
+      - The empty search says "No account with this address" with the address
+      - The match lists the person with an Active chip, and the address stays in the URL
+      - The account page shows the address, Active, the last sign-in and whether they have a passkey, the Access rows with how many devices each would end, and their personal profile with its billing
+  - id: account-revoke-sessions
+    title: Sign a person out everywhere; their password still works
+    tickets: [MUT-461]
+    paths:
+      - src/hosted/pages/operator/OperatorAccountPage.tsx
+      - src/hosted/components/InPlaceConfirm.tsx
+      - src/hosted/operator/time.ts
+      - server/src/operator/actions/accounts.ts
+    steps:
+      - The person is signed in on another device
+      - Open their account and press Sign out everywhere
+      - Confirm with the passkey
+    expect:
+      - The confirm says how many devices will be signed out and that the password still works
+      - The toast says the person was signed out on 1 device
+      - Their other device is signed out, and their password still signs in
+  - id: account-disable-enable
+    title: Disable an account and enable it again, in Arabic on a 375 px phone
+    tickets: [MUT-461]
+    steps:
+      - On a 375 px phone with no language chosen, open the portal
+      - Sign in (the account is Arabic); the person is signed in on another device
+      - Open their account from الحسابات, press تعطيل الحساب and confirm with the passkey
+      - Press تفعيل الحساب and confirm
+    expect:
+      - With no language chosen the portal opens in Arabic, right to left
+      - The page reads right to left with no sideways scroll, and the address reads left to right
+      - After disabling, the page says the account is disabled and offers only تفعيل الحساب; their device is signed out and their password no longer signs in
+      - After enabling, their password signs in again
+  - id: account-setup-link
+    title: Send a reset link with the password locked; it is shown once
+    tickets: [MUT-461]
+    steps:
+      - The person is signed in on another device
+      - Open their account and press Send reset link, keeping Lock the current password on
+      - Make the link with the passkey, then open it as the person and set a new password
+      - Leave the account and come back
+    expect:
+      - The link is shown once with "Shown once. Leaving this page discards it."
+      - The old password no longer works and their other device is signed out
+      - The link sets a new password that signs in
+      - Back on the account the link is gone; only Send reset link is offered

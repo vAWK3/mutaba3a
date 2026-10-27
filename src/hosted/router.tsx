@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useRef } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
@@ -41,6 +41,8 @@ import { useMe, useProfile } from './session/me';
 import { useIsOperator } from './session/features';
 import { OperatorLayout } from './pages/operator/OperatorLayout';
 import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
+import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
+import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -336,24 +338,53 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
    * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
    */
   const operatorRoute = createRoute({ getParentRoute: () => authedRoute, path: '/operator', component: () => <Navigate to="/operator/signups" replace /> });
+  /** Every operator page: signed out it asks for a sign-in (local mode never does, 2A); a non-operator goes Home. */
+  function OperatorPage({ children }: { children: (heading: RefObject<HTMLHeadingElement | null>) => ReactNode }) {
+    const operator = useIsOperator();
+    const local = useIsLocalMode();
+    const heading = useRef<HTMLHeadingElement>(null);
+    if (local) return <RedirectToSignIn />;
+    if (!operator) return <Navigate to="/" replace />;
+    return (
+      <HostedShell profile={null}>
+        <OperatorLayout headingRef={heading}>{children(heading)}</OperatorLayout>
+      </HostedShell>
+    );
+  }
+
   const operatorSignupsRoute = createRoute({
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/signups',
-    component: function OperatorSignups() {
-      const operator = useIsOperator();
-      const local = useIsLocalMode();
-      const heading = useRef<HTMLHeadingElement>(null);
-      // Signed out, the portal runs on this device and AuthGate never asks for a sign-in: the digest link must (2A).
-      if (local) return <RedirectToSignIn />;
-      if (!operator) return <Navigate to="/" replace />;
+    component: () => <OperatorPage>{(heading) => <OperatorSignupsPage headingRef={heading} />}</OperatorPage>,
+  });
+
+  /** MUT-461 (17A): find an account by email; the address stays in the URL. */
+  const operatorAccountsRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/accounts',
+    validateSearch: (search: Record<string, unknown>): { email?: string } => (typeof search.email === 'string' && search.email ? { email: search.email } : {}),
+    component: function OperatorAccounts() {
+      const { email = '' } = operatorAccountsRoute.useSearch();
+      const navigate = useNavigate();
       return (
-        <HostedShell profile={null}>
-          <OperatorLayout headingRef={heading}>
-            <OperatorSignupsPage headingRef={heading} />
-          </OperatorLayout>
-        </HostedShell>
+        <OperatorPage>
+          {/* The key starts the field over when Back changes the address. */}
+          {() => <OperatorAccountsPage key={email} email={email} onSearch={(next) => void navigate({ to: '/operator/accounts', search: { email: next } })} />}
+        </OperatorPage>
       );
+    },
+  });
+
+  /** MUT-461 (5A): one account and its actions. */
+  const operatorAccountRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/accounts/$userId',
+    component: function OperatorAccount() {
+      const { userId } = operatorAccountRoute.useParams();
+      return <OperatorPage>{() => <OperatorAccountPage key={userId} userId={userId} />}</OperatorPage>;
     },
   });
 
@@ -371,6 +402,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       glanceRoute,
       operatorRoute,
       operatorSignupsRoute,
+      operatorAccountsRoute,
+      operatorAccountRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

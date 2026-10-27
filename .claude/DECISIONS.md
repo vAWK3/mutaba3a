@@ -5668,3 +5668,25 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Art on the website (mtb3a.com/mail/v1), the intake's first answer. Rejected at eng review: separate release, separate outage.
 - Inline CID attachments: heavier mails, and some clients list them as attachments.
 - Golden HTML snapshots of all 28 mails: rewritten by every copy edit.
+
+## ADR-215: The Operator's Accounts: One Action Module, Never Your Own Account, the Reset Link Shown Once (MUT-461)
+
+**Status:** Accepted (2026-10-27, MUT-461; epic MUT-458). Plan §3 MUT-461 and design spec §3b (17A, 3A, 4A, 5A, 12A) in `.claude/designs/mut-458-operator-console.md`. Builds on ADR-212 (decision 4) and ADR-213.
+
+**Context:** the account actions (lookup, disable/enable, sign out everywhere, the setup link) lived as closures inside `admin-users.ts`, with the token hardcoded as the actor. The console needs them with the operator as the actor, plus an account view the CLI never had.
+
+**Decision:**
+1. **Extracted, not rewritten.** `server/src/operator/actions/accounts.ts` holds the actions; `/admin/v1/users` and `/v1/operator/accounts` are adapters (ADR-212 decision 4). The admin route tests pass unchanged; a parity test compares the two answers and audit trails row for row.
+2. **Never your own account (E10, widened).** The console refuses every account action on the operator's own account with 409 `OWN_ACCOUNT`, not only disable and sign out: a reset with lock would sign them out too, and their own password is You › Account's. The portal shows the rows inert with the reason. The CLI is unchanged.
+3. **Every action is audited.** Sign out everywhere now writes `user.sessions_revoked` `{revoked, agentGrantsRevoked}`, for the token too (the AC: "every action … audited with the operator's id"). Like `user.agent_disconnected`, it is a security event about the person, so it is one of `SESSION_ONLY_ACTIONS`: API keys' `/v1/audit` (Malafat) never lists it (/qa-reconcile D1, Basel). Disable answers the admin `{user}` plus `sessionsRevoked` / `agentGrantsRevoked`, so the result can say what it ended.
+4. **A missing account is `NOT_FOUND` with `details.reason ACCOUNT_NOT_FOUND`,** not a new error code: `QueryView`'s `notFound` slot shows "No such account", and its `/v1/me` refetch also covers a revoked operator (design 3A). Search never 404s: no match is 200 `{account:null}`.
+5. **The reset link is shown once, in the page's state.** It never enters a query, the URL or a toast, and leaving the page discards it (design 12A). The portal asks for 24 hours (the CLI's default stays 72) with "Lock the current password" on by default.
+6. **The account view counts what an action would end:** `activeSessionCount` (`sessions.countLiveForUser`: unrevoked, neither deadline passed, either kind) and `agentGrantCount` (live grants). Last sign-in is `users.lastSignInAt`, so no new column (the plan's `sessions.lastCreatedAt` wasn't needed).
+
+**Consequences:**
+- The design's "Disabled ‹date›" banner shows no date: no column records when an account was disabled (TD-269).
+- MUT-462 adds the Billing and Features groups to the same page, from the same action-module pattern.
+
+**Alternatives considered:**
+- A new `ACCOUNT_NOT_FOUND` error code. Rejected: a reason on `NOT_FOUND` says the same, and every client already handles 404.
+- Allowing a reset link on your own account without `lock`. Rejected: the console isn't where you manage your own account, and one rule is easier to trust.
