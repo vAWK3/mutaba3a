@@ -18,6 +18,7 @@ import {
   CreateUserResponseSchema,
   ErrorEnvelopeSchema,
   FeatureGrantResponseSchema,
+  OperatorMarkResponseSchema,
   FeatureHoldersSchema,
   FeatureRevokeResponseSchema,
   GrantMembershipRequestSchema,
@@ -95,6 +96,8 @@ type AuditAction =
   | 'user.enabled'
   | 'user.feature_granted'
   | 'user.feature_revoked'
+  | 'user.operator_granted'
+  | 'user.operator_revoked'
   | 'user.agent_disconnected'
   | 'membership.granted'
   | 'membership.revoked';
@@ -509,6 +512,63 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
         return c.json({ user: serializeUser(user) }, 200);
       },
     );
+  }
+
+  // ---- MUT-459 (ADR-208): operators, granted and revoked by the admin token alone -------------------------------
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/admin/v1/users/{userId}/operator',
+      tags: ['Admin'],
+      summary: 'Make a person an operator of the portal\'s console (idempotent); audited on every profile they belong to',
+      description:
+        'Only the admin token grants it; the console itself never can. The person must be ACTIVE and hold a passkey: every ' +
+        'operator write needs a passkey step-up (MUT-459 D7). A second grant changes nothing and keeps the first operatorAt.',
+      security: [{ adminToken: [] }],
+      request: { params: UserIdParam },
+      responses: {
+        200: { description: 'The person is an operator', content: { 'application/json': { schema: OperatorMarkResponseSchema } } },
+        404: unknownUser,
+        409: { description: 'CONFLICT: details.reason USER_PENDING_REVIEW, USER_DISABLED, or OPERATOR_NEEDS_PASSKEY (add a passkey first)', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const user = await mustGetUser(c.req.valid('param').userId);
+      if (user.status === 'PENDING_REVIEW') throw new ApiError('CONFLICT', 'This signup is waiting for review; approve it first', { reason: 'USER_PENDING_REVIEW' });
+      if (user.status === 'DISABLED') throw new ApiError('CONFLICT', 'This account is disabled; enable it first', { reason: 'USER_DISABLED' });
+      if ((await store.passkeys.listByUser(user.id)).length === 0) {
+        throw new ApiError('CONFLICT', 'An operator needs a passkey: every operator action asks for one. Add one in the portal first', { reason: 'OPERATOR_NEEDS_PASSKEY' });
+      }
+      return c.json(await setOperator(c, user, true), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/admin/v1/users/{userId}/operator',
+      tags: ['Admin'],
+      summary: 'Stop a person being an operator (idempotent); their next operator request is refused',
+      security: [{ adminToken: [] }],
+      request: { params: UserIdParam },
+      responses: {
+        200: { description: 'The person is not an operator', content: { 'application/json': { schema: OperatorMarkResponseSchema } } },
+        404: unknownUser,
+        ...adminErrors,
+      },
+    }),
+    async (c) => c.json(await setOperator(c, await mustGetUser(c.req.valid('param').userId), false), 200),
+  );
+
+  async function setOperator(c: Context<AppEnv>, user: UserRecord, operator: boolean) {
+    const action = operator ? 'user.operator_granted' : 'user.operator_revoked';
+    const organizationIds = await memberOrganizations(user.id);
+    if (organizationIds.length === 0) logger.info({ requestId: c.get('requestId'), userId: user.id, action }, 'account change on a user with no memberships; no organization to audit');
+    const result = await store.users.setOperator({ userId: user.id, operator, at: c.get('now')(), audit: auditEvents(c, organizationIds, user.id, action) });
+    if (!result) throw new ApiError('NOT_FOUND', 'User not found');
+    return { userId: user.id, operator: result.user.operatorAt !== null, operatorAt: result.user.operatorAt?.toISOString() ?? null, changed: result.changed };
   }
 
   // ---- MUT-433 (ADR-196): per-user feature flags --------------------------------------------------------------

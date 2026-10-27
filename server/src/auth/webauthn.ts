@@ -102,6 +102,19 @@ export async function signInOptions(config: WebauthnConfig): Promise<PublicKeyCr
   return generateAuthenticationOptions({ rpID: config.rpId, allowCredentials: [], userVerification: 'required', timeout: CEREMONY_TIMEOUT_MS });
 }
 
+/**
+ * MUT-459 (D7): an operator's step-up: the platform offers only this person's own passkeys (one Face ID, no account
+ * picker), and verifyAssertion still checks the user handle.
+ */
+export async function stepUpOptions(config: WebauthnConfig, passkeys: readonly Pick<PasskeyRecord, 'credentialId' | 'transports'>[]): Promise<PublicKeyCredentialRequestOptionsJSON> {
+  return generateAuthenticationOptions({
+    rpID: config.rpId,
+    allowCredentials: passkeys.map((p) => ({ id: p.credentialId, transports: p.transports as AuthenticatorTransportFuture[] })),
+    userVerification: 'required',
+    timeout: CEREMONY_TIMEOUT_MS,
+  });
+}
+
 export interface VerifiedCreation {
   credentialId: string;
   publicKey: Uint8Array;

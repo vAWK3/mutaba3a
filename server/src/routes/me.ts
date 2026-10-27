@@ -98,6 +98,8 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
       // MUT-433: read on every request, never cached, so an operator's revoke shows at once.
       features,
+      // MUT-459: only an operator's /v1/me names it; the console's link and pages hang off this.
+      ...(user.operatorAt ? { operator: true as const } : {}),
     },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles: MAX_OWNED_PROFILES },

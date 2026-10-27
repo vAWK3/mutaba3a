@@ -324,6 +324,10 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
   - **The screen:** every `POST /v1/signups` address is screened first (`server/src/email/domains/`). Disposable and no-mail addresses are refused (400 `EMAIL_NOT_ACCEPTED`). Webmail and relay addresses, and domains failing DNS/RDAP (MX, apex/www, registered ≥ 90 days), wait for the operator.
   - **The redeem:** a waiting signup opens as `PENDING_REVIEW` with no trial and a `signup_reviews` row. Signing in with its password answers 403 `ACCOUNT_UNDER_REVIEW`; recovery works.
   - **The operator:** `npm --prefix server run signups:review` (`/admin/v1/signup-reviews`) approves (ACTIVE, trial starts) or declines (the empty account is deleted). The operator gets an hourly-at-most digest at `OPERATOR_ALERT_EMAIL`.
+- Operator accounts (MUT-459, ADR-208; epic MUT-458): the portal's operator console, server half.
+  - **Who:** an account marked `users.operatorAt` by the admin token alone (`PUT/DELETE /admin/v1/users/{id}/operator`, `users.ts operator-grant|operator-revoke`); it must be ACTIVE and hold a passkey. `/v1/me` says `user.operator: true` only for them.
+  - **Where:** `/v1/operator/*`, behind `authenticate()` and `operatorGate` (`server/src/auth/operator-gate.ts`): 404 to a signed-in non-operator, 401 signed out, cookie only, open under the lapse gate. Today: the signup review queue (list, approve, decline, resend). MUT-461/462 add accounts, billing, flags and firms.
+  - **How:** every write needs a passkey sign-in or a passkey step-up (`/v1/operator/step-up/options` → `/step-up`, `sessions.stepUpAt`) within 10 minutes; a password never counts (`server/src/auth/step-up.ts`). Actions live in `server/src/operator/actions/`, shared with `/admin`, and record the operator as `actorId` / `operator:<id>`.
 - The portal's self-service pages (MUT-368, ADR-179):
   - `/signup` and `/recover`: an email and a Cloudflare Turnstile check, then one "Check your email" for every address.
   - Sign-in's "Forgot your password?" and "Create an account" show only where `GET /v1/self-service` says the server mails links.

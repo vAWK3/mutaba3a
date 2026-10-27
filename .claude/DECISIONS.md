@@ -5543,3 +5543,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A one-time copy of the portal's `verdictBody` builder: single-currency, and it can't detect drift.
 - Phone-only fixtures, with parity left to one live QA flow (Basel chose D5 A).
+
+## ADR-208: Operators Are Accounts With a Passkey, Behind One Gate on /v1/operator (MUT-459)
+
+**Status:** Accepted (2026-10-27, MUT-459; epic MUT-458). The plan, eng review D1–D9 and design review 1A–19B are in `.claude/designs/mut-458-operator-console.md`.
+
+**Context:** every operator task ran through the admin token (`MUTABA3A_ADMIN_TOKEN`, Secret Manager) from a laptop with gcloud. The token carries no identity (MUT-367 D15: `decidedBy` is `admin-token`), so it can't back a portal page. Self-service signup is open, and signups wait until the operator is at a terminal.
+
+**Decision:**
+1. **An operator is an account with a mark.** The mark is `users.operatorAt`, not a feature flag: flags are product switches that MUT-462 lets operators change, so an operator flag would let one operator mint another. Only the admin token sets the mark: `PUT/DELETE /admin/v1/users/{id}/operator`, and `users.ts operator-grant|operator-revoke`. A grant refuses an account that is PENDING_REVIEW, DISABLED, or has no passkey (409 CONFLICT `OPERATOR_NEEDS_PASSKEY`). `/v1/me` names `user.operator: true` only for an operator; for everyone else the field is absent.
+2. **One gate on `/v1/operator/*`.** The routes sit behind the normal /v1 `authenticate()`, so a signed-out caller gets the usual 401 (which says nothing about operators) and the portal signs them in and brings them back. `operatorGate` (`auth/operator-gate.ts`) then answers 404 to a signed-in non-operator, the same as a path that doesn't exist. The routes are cookie-session only (no device session, no API key), organization-independent, and open under the lapse gate: a lapse on the operator's own account never locks the console (D2). The mark is read from the user row authenticate() already loaded, so a revoke takes effect on the next request.
+3. **Every operator write needs a passkey step-up within 10 minutes; a password never counts (D7).** A write passes only while one of these is under 10 minutes old: the session was opened with a passkey (`passkeyId`, its `createdAt`), or the session's last step-up (`sessions.stepUpAt`). Otherwise it answers 403 `RECENT_SIGN_IN_REQUIRED {method:'passkey', windowMinutes}`. The step-up (`/v1/operator/step-up/options` → `/v1/operator/step-up`) uses a `step_up` challenge bound to the person, with `allowCredentials` set to their passkeys, and verifies through `verifyAssertion`. Any refusal is 403 `PASSKEY_NOT_ACCEPTED`, a cloned counter included. It stamps `stepUpAt`, conditional on the session still being live, and never `credentialsVerifiedAt`: that column guards the password-change revocation (MUT-237/238), and a step-up must not revive a session a lock or a password change just ended. Those two routes are the only writes exempt from the step-up.
+4. **One action module, two adapters.** `server/src/operator/actions/*.ts` holds each action, taking an `OperatorActor`: the token or `{operator, userId}`. `/admin/v1/*` passes the token; `/v1/operator/*` passes the signed-in operator. Results are therefore the CLI's by construction. Each ticket extracts only what its page uses (D9): MUT-459 does signup reviews, MUT-461 accounts, and MUT-462 billing, flags and firms.
+5. **The operator acts as themself, on the unguarded store.** Audit rows keep `actorType: 'ADMIN'` with `actorId` set to the operator's id (the token keeps `null`). `decidedBy` / `grantedBy` store `operator:<id>`; the token keeps `admin-token` / `admin`. The store guard refuses `operator` methods to every principal (ADR-037 decision 7). So the operator routes, like /admin, run on the base store, reached only through `operatorGate`. They are the one session surface allowed to.
+
+**Consequences:**
+- Getting started takes two steps: Basel adds a passkey to his account, then runs `live-admin.sh operator-grant <email>` (`docs/operations/before-release.md`). The CLI stays the fallback, unchanged.
+- An operator who deletes their last passkey can't act until they add one again. The step-up options answer 409 `OPERATOR_NEEDS_PASSKEY`.
+- The OpenAPI spec lists the `/v1/operator` paths, as it already lists `/admin/v1`. Their existence is no secret; their access is.
+- `GET /v1/operator/signup-reviews` returns `stepUpUntil`, so the portal can label the confirm "with passkey" before the tap. iOS Safari needs the passkey prompt to come straight from a tap, never from a 403 round trip (design 1A).
+
+**Alternatives considered:**
+- A `FEATURES` entry `operator` (no migration), rejected because flags are operator-grantable product switches.
+- `/operator/v1/*` with its own 404-for-everything mount (the ticket's first wording). Rejected because it needed an SPA exclusion, a dev-proxy entry, a 401→404 remap and its own CSRF reasoning, and it would hide an expired session as "not found" (outside review O3–O6).
+- A password step-up for operators without a passkey. Rejected because it leaves a fresh password sign-in enough to act, weaker than the token it replaces (outside review O1).

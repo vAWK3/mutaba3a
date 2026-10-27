@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — MUT-459: operator accounts and the /v1/operator gate (server foundation of the operator console)
+
+**Why:** every operator task needed the admin token and a laptop with gcloud, so self-service signups waited until Basel was at a terminal. Epic MUT-458 moves them to the portal. This is its server foundation (ADR-208).
+
+### Added
+- `users.operatorAt`, `sessions.stepUpAt` and the `step_up` WebAuthn challenge purpose (migration `20261027120000_mut459_operator`). Store methods `users.setOperator` and `sessions.markStepUp`, contract-tested on memory and Postgres.
+- `PUT/DELETE /admin/v1/users/{userId}/operator` and `users.ts operator-grant|operator-revoke --email`. The admin token only; a grant needs an ACTIVE account with a passkey.
+- `/v1/operator/*`, behind `authenticate()` and `operatorGate` (404 for a signed-in non-operator, open under the lapse gate):
+  - `GET /v1/operator/signup-reviews`: the queue, with `stepUpUntil`.
+  - `POST /v1/operator/signup-reviews/{userId}/approve`, `/decline`, `/resend` (resend: "Send again" after a mail that didn't go).
+  - `POST /v1/operator/step-up/options` and `POST /v1/operator/step-up`: a passkey-only step-up, 10 minutes.
+- `/v1/me` `user.operator: true` for operators only. New error code `PASSKEY_NOT_ACCEPTED` (403). OpenAPI tag `Operator`.
+
+### Changed
+- `/admin/v1/signup-reviews` is now a thin adapter over `server/src/operator/actions/signupReviews.ts`, shared with the operator routes. Its answers are unchanged.
+
+### Technical
+- API 1.78.0-mut459; `openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+- ADR-208; plan + reviews in `.claude/designs/mut-458-operator-console.md`.
+- Inventories updated: `route-security.test.ts` (OPERATOR_OPERATIONS, cookie only), `store-guard.test.ts` (`users.setOperator` is operator-only), and the lapse-gate classification.
+
 ## [Unreleased] - 2026-10-27 — MUT-445 follow-ups: the carry-over forgets the free app, src/types goes, CLAUDE.md says what the repo is
 
 **Why:** MUT-445 (ADR-203) retired the free web app but left its carry-over source in the portal (TD-262), its record types in `src/types/index.ts` (TD-263), and a CLAUDE.md that still described the old local app.

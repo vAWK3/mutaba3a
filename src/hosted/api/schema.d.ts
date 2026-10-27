@@ -14091,6 +14091,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/users/{userId}/operator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a person an operator of the portal's console (idempotent); audited on every profile they belong to
+         * @description Only the admin token grants it; the console itself never can. The person must be ACTIVE and hold a passkey: every operator write needs a passkey step-up (MUT-459 D7). A second grant changes nothing and keeps the first operatorAt.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The person is an operator */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMarkResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason USER_PENDING_REVIEW, USER_DISABLED, or OPERATOR_NEEDS_PASSKEY (add a passkey first) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Stop a person being an operator (idempotent); their next operator request is refused */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The person is not an operator */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMarkResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown user */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/users/{userId}/features/{feature}": {
         parameters: {
             query?: never;
@@ -14507,6 +14615,455 @@ export interface paths {
                 };
                 /** @description CONFLICT: details.reason ALREADY_DECIDED, or (decline) NOT_EMPTY when the account holds anything besides its empty personal profile */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/signup-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signup review queue, oldest first, as the admin list, plus when this session’s passkey step-up lapses (MUT-459) */
+        get: {
+            parameters: {
+                query?: {
+                    state?: "pending" | "decided";
+                    limit?: number | null;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reviews */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorSignupReviewList"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/signup-reviews/{userId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a signup: the account opens, its 14-day trial starts now, and the person is mailed (MUT-459) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided (or mailed again); `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/signup-reviews/{userId}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a signup: the empty account and its personal profile are deleted, and the person is mailed (MUT-459) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided (or mailed again); `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/signup-reviews/{userId}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mail an approved signup its “your account is ready” message again, after a send that didn’t go (MUT-459) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Decided (or mailed again); `mail` says what became of the person’s mail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SignupReviewDecision"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_DECIDED, NOT_EMPTY (decline), or NOT_APPROVED (resend) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/step-up/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an operator passkey step-up: the options for navigator.credentials.get(), offering only your passkeys (MUT-459)
+         * @description Single-use, 5 minutes, bound to you. Then POST /v1/operator/step-up.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A step-up challenge */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PasskeySignInChallenge"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason OPERATOR_NEEDS_PASSKEY (no passkey left on the account) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish an operator passkey step-up: operator writes are open for 10 minutes (MUT-459) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PasskeySignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Stepped up */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorStepUp"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PASSKEY_NOT_ACCEPTED (another person’s passkey, a sign-in or used or expired challenge, a bad signature), or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -15906,6 +16463,8 @@ export interface components {
                 status: components["schemas"]["UserStatus"];
                 closure: components["schemas"]["AccountClosure"];
                 features: string[];
+                /** @enum {boolean} */
+                operator?: true;
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -16023,7 +16582,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -18908,6 +19467,14 @@ export interface components {
         UserStatusResponse: {
             user: components["schemas"]["UserSummary"];
         };
+        OperatorMarkResponse: {
+            /** Format: uuid */
+            userId: string;
+            operator: boolean;
+            /** Format: date-time */
+            operatorAt: string | null;
+            changed: boolean;
+        };
         FeatureGrantResponse: {
             feature: string;
             /** Format: date-time */
@@ -18963,6 +19530,14 @@ export interface components {
             review: components["schemas"]["SignupReview"];
             /** @enum {string} */
             mail: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed";
+        };
+        OperatorSignupReviewList: components["schemas"]["SignupReviewList"] & {
+            /** Format: date-time */
+            stepUpUntil: string | null;
+        };
+        OperatorStepUp: {
+            /** Format: date-time */
+            stepUpUntil: string;
         };
         EntitlementGrant: {
             /** Format: uuid */

@@ -19,6 +19,7 @@ import { PROFILE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/profiles.js';
 import { FX_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/fx-rates.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/entries.js';
 import { SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/summaries.js';
+import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/operator.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
 import { provisionUser } from './helpers/provision.js';
@@ -332,6 +333,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);

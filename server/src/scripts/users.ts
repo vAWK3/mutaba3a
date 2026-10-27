@@ -54,7 +54,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -100,6 +100,8 @@ const USAGE = [
   '  feature-revoke --email <email> --feature <name>   (off at once: seen on their very next request)',
   '  feature-list   --feature <name>   (who holds it now, oldest grant first)',
   `          features: ${FEATURES.join(', ')} (server/src/features.ts)`,
+  '  operator-grant  --email <email>   (MUT-459: the portal\'s operator console; the person must be active and hold a passkey)',
+  '  operator-revoke --email <email>   (refused on their very next operator request)',
   'MUTABA3A_ADMIN_TOKEN is read from the environment.',
 ].join('\n');
 
@@ -312,6 +314,20 @@ export function partnerNote(profileName: string): string[] {
     `AR: ${profileName} أصبح مشتركًا. يملكه كلٌّ منكما بالكامل: الدخل والعملاء والدفعات والمصاريف والإعدادات. ويبقى ملفّ كلٍّ منكما الشخصي خاصًّا به.`,
   ];
 }
+
+/** MUT-459 (ADR-208): operators of the portal's console. Only the admin token grants it; the server checks the passkey. */
+const OPERATOR_HANDLERS: Record<Extract<Command, `operator-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
+  'operator-grant': async ({ client, need, out }) => {
+    const user = await client.userByEmail(need('email'));
+    const { changed } = await client.call<{ changed: boolean }>('PUT', `/admin/v1/users/${user.id}/operator`);
+    out(`${changed ? 'operator' : 'already an operator'}: ${user.id} (${user.email})`);
+  },
+  'operator-revoke': async ({ client, need, out }) => {
+    const user = await client.userByEmail(need('email'));
+    const { changed } = await client.call<{ changed: boolean }>('DELETE', `/admin/v1/users/${user.id}/operator`);
+    out(`${changed ? 'no longer an operator' : 'not an operator'}: ${user.id} (${user.email})`);
+  },
+};
 
 /** MUT-433 (ADR-196): per-user feature flags; the server checks the name (422 for an unknown one). */
 const FEATURE_HANDLERS: Record<Extract<Command, `feature-${string}`>, (ctx: HandlerContext) => Promise<void>> = {
@@ -532,6 +548,7 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   ...FIRM_HANDLERS,
   ...BILLING_HANDLERS,
   ...FEATURE_HANDLERS,
+  ...OPERATOR_HANDLERS,
   'signup-reviews': signupReviews,
 };
 

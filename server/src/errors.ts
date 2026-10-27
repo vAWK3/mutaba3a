@@ -51,6 +51,11 @@ export const ERROR_CODES = {
    * Not 401, for the same reason as CURRENT_PASSWORD_WRONG: the session is still valid.
    */
   RECENT_SIGN_IN_REQUIRED: 403,
+  /**
+   * MUT-459 (ADR-208): an operator's passkey step-up didn't verify (another person's passkey, a sign-in or used or expired
+   * challenge, a bad signature). Not 401: the session is still valid.
+   */
+  PASSKEY_NOT_ACCEPTED: 403,
   /** MUT-115 (D12): the person already holds the most passkeys allowed (10); remove one to add another. */
   PASSKEY_LIMIT: 409,
   /**

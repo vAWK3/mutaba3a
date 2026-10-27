@@ -350,6 +350,31 @@ describe('billing verbs (MUT-358)', () => {
     expect(await h.store.features.activeFor(user.id)).toEqual([]);
   });
 
+  it('operator-grant needs a passkey; grants once, revokes once (MUT-459)', async () => {
+    const h = harness();
+    const user = await person(h, 'basel@studio.ps');
+    expect(await h.run(['operator-grant', '--email', 'basel@studio.ps'])).toBe(1);
+    expect(h.err).toEqual([expect.stringMatching(/→ 409 CONFLICT: An operator needs a passkey/)]);
+    h.err.length = 0;
+    await h.store.passkeys.create({
+      userId: user.id, credentialId: 'cred-mut459', publicKey: new Uint8Array([1]), signCount: 0, transports: ['internal'], deviceType: 'multiDevice', backedUp: true,
+      aaguid: '00000000-0000-0000-0000-000000000000', name: 'iCloud Keychain', at: new Date(), limit: 10, audit: [],
+    });
+    expect(await h.run(['operator-grant', '--email', 'basel@studio.ps'])).toBe(0);
+    expect(h.out).toEqual([`operator: ${user.id} (basel@studio.ps)`]);
+    expect((await h.store.users.getById(user.id))!.operatorAt).not.toBeNull();
+    h.out.length = 0;
+    expect(await h.run(['operator-grant', '--email', 'basel@studio.ps'])).toBe(0);
+    expect(h.out).toEqual([`already an operator: ${user.id} (basel@studio.ps)`]);
+    h.out.length = 0;
+    expect(await h.run(['operator-revoke', '--email', 'basel@studio.ps'])).toBe(0);
+    expect(h.out).toEqual([`no longer an operator: ${user.id} (basel@studio.ps)`]);
+    h.out.length = 0;
+    expect(await h.run(['operator-revoke', '--email', 'basel@studio.ps'])).toBe(0);
+    expect(h.out).toEqual([`not an operator: ${user.id} (basel@studio.ps)`]);
+    expect((await h.store.users.getById(user.id))!.operatorAt).toBeNull();
+  });
+
   it('feature-list says so when nobody holds the flag (review D5)', async () => {
     const h = harness();
     expect(await h.run(['feature-list', '--feature', 'agent_access'])).toBe(0);
