@@ -107,11 +107,17 @@ describe('vite.config', () => {
       expect(carryOverBuild(hosts({ domain: 'placeholder.example', stage: 'proxy' }), undefined)).toEqual({ sources: {}, portalOrigin: null });
     });
 
-    it.each(['live', 'redirect'])('at stage %s, accepts the two legacy origins and sends to the new portal', (stage) => {
+    it.each(['live', 'redirect'])('at stage %s, accepts the old run.app portal and sends to the new portal', (stage) => {
       expect(carryOverBuild(hosts({ domain: 'placeholder.example', stage }), undefined)).toEqual({
-        sources: { web: 'https://old.netlify.example', portal: 'https://old-portal.run.example' },
+        sources: { portal: 'https://old-portal.run.example' },
         portalOrigin: 'https://app.placeholder.example',
       });
+    });
+
+    it('never accepts the old landing host: the free web app it served is retired (MUT-445, TD-262)', () => {
+      expect(carryOverBuild(hosts({ domain: 'placeholder.example', stage: 'live' }), undefined).sources).not.toHaveProperty('web');
+      const override = JSON.stringify({ web: 'http://127.0.0.1:5173', portalOrigin: 'http://127.0.0.1:5178' });
+      expect(carryOverBuild(hosts({}), override).sources).toEqual({});
     });
 
     it('is off in the dev server unless MUTABA3A_CARRY_OVER turns it on, and off whenever it says so', () => {
@@ -122,26 +128,26 @@ describe('vite.config', () => {
     });
 
     it('takes QA\'s loopback origins from MUTABA3A_CARRY_OVER', () => {
-      const override = JSON.stringify({ web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177', portalOrigin: 'http://127.0.0.1:5178' });
-      expect(carryOverBuild(hosts({}), override)).toEqual({ sources: { web: 'http://127.0.0.1:5173', portal: 'http://127.0.0.1:5177' }, portalOrigin: 'http://127.0.0.1:5178' });
+      const override = JSON.stringify({ portal: 'http://127.0.0.1:5177', portalOrigin: 'http://127.0.0.1:5178' });
+      expect(carryOverBuild(hosts({}), override)).toEqual({ sources: { portal: 'http://127.0.0.1:5177' }, portalOrigin: 'http://127.0.0.1:5178' });
     });
 
     it.each([
-      ['plain http off the loopback', { web: 'http://evil.example', portalOrigin: 'http://127.0.0.1:5178' }],
-      ['a path', { web: 'https://old.example/app', portalOrigin: 'https://app.example' }],
-      ['no portal origin', { web: 'https://old.example' }],
-      ['credentials before the host', { web: 'https://x@old.example', portalOrigin: 'https://app.example' }],
-      ['a query', { web: 'https://old.example?', portalOrigin: 'https://app.example' }],
-      ['an upper-case host', { web: 'https://Old.example', portalOrigin: 'https://app.example' }],
-      ['the default port spelled out', { web: 'https://old.example:443', portalOrigin: 'https://app.example' }],
+      ['plain http off the loopback', { portal: 'http://evil.example', portalOrigin: 'http://127.0.0.1:5178' }],
+      ['a path', { portal: 'https://old.example/app', portalOrigin: 'https://app.example' }],
+      ['no portal origin', { portal: 'https://old.example' }],
+      ['credentials before the host', { portal: 'https://x@old.example', portalOrigin: 'https://app.example' }],
+      ['a query', { portal: 'https://old.example?', portalOrigin: 'https://app.example' }],
+      ['an upper-case host', { portal: 'https://Old.example', portalOrigin: 'https://app.example' }],
+      ['the default port spelled out', { portal: 'https://old.example:443', portalOrigin: 'https://app.example' }],
     ])('refuses an override with %s', (_label, value) => {
       expect(() => carryOverBuild(hosts({}), JSON.stringify(value))).toThrow(/MUTABA3A_CARRY_OVER/);
     });
 
     it('a release build never trusts the loopback, even when the variable leaks into it', () => {
-      const override = JSON.stringify({ web: 'http://127.0.0.1:5183', portalOrigin: 'http://127.0.0.1:5188' });
+      const override = JSON.stringify({ portal: 'http://127.0.0.1:5183', portalOrigin: 'http://127.0.0.1:5188' });
       expect(() => carryOverBuild(hosts({}), override, { release: true })).toThrow(/MUTABA3A_CARRY_OVER/);
-      expect(carryOverBuild(hosts({}), JSON.stringify({ web: 'https://old.example', portalOrigin: 'https://app.example' }), { release: true }).portalOrigin).toBe('https://app.example');
+      expect(carryOverBuild(hosts({}), JSON.stringify({ portal: 'https://old.example', portalOrigin: 'https://app.example' }), { release: true }).portalOrigin).toBe('https://app.example');
     });
   });
 

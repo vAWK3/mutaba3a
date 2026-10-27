@@ -5440,6 +5440,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Release-QA's `web` app is the website; shared UI outside `src/hosted` that only the portal renders moved to the portal app's watch. The carry-over app runs the two portal origins only.
 - The portal's receiver still accepts the old landing origin as a carry-over source (`carryOverBuild`'s `web`), though nothing sends from it now (TD-262).
 - `src/types/index.ts` still declares the local app's record types that nothing reads (TD-263).
+- **Amended 2026-10-27 (MUT-445 follow-ups):** TD-262 and TD-263 are resolved. The receiver's only source is the old run.app portal: `CarryOverSource` is `'portal'`, its one payload is a records file, and `?from=web` goes straight to the file picker. `prepareCarryOver` is gone; the receiver reads the posted file with `readRecordsFile`, which still restores a backup saved from the free app. `src/types/index.ts` is deleted: `Currency` lives in `src/lib/utils.ts`, `MalafatMoment` in `src/lib/malafatSuggestions.ts`, `ReceivableLike` is its own shape in `src/lib/dates.ts`.
 
 **Alternatives considered:** keep `/app` until MUT-292's 90 days (Basel: no); keep `/app` as a carry-over-only bridge (Basel: no, delete it entirely).
 

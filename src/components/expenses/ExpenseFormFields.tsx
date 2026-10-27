@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Controller, useWatch, type Control, type FieldErrors } from 'react-hook-form';
 import { cn, currencyExponent } from '../../lib/utils';
 import { Select } from '../ui/Input';
-import type { Currency } from '../../types';
+import type { Currency } from '../../lib/utils';
 import type { ExpenseFormFieldsValues } from './expenseFormSchema';
 
 /**

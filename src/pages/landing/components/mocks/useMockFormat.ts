@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { getLocale, useLanguage } from '../../../../lib/i18n';
 import { formatAmount, formatDateShort } from '../../../../lib/utils';
-import type { Currency } from '../../../../types';
+import type { Currency } from '../../../../lib/utils';
 
 /** Money and date formatting for the mock-ups, in the visitor's language. */
 export function useMockFormat() {

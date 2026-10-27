@@ -1,4 +1,4 @@
-import type { Currency } from '../../types';
+import type { Currency } from '../../lib/utils';
 
 /**
  * The name of every currency the app supports, for the landing page's

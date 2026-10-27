@@ -5,7 +5,8 @@
  * network (ADR-024); the link itself is `malafatUrl` (src/content/malafatLinks.ts).
  */
 
-import type { MalafatMoment } from '../types';
+/** A contextual Malafat suggestion that can be retired (the Settings row itself can't). */
+export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
 
 /** The working business's live clients at which the Clients page suggests Malafat (C2). */
 export const MALAFAT_CLIENT_THRESHOLD = 10;

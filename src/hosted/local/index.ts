@@ -1,6 +1,6 @@
 import { CachedFxRates } from '../../../server/src/fx-rates.js';
 import { MemoryLedgerStore } from '../../../server/src/repositories/memory.js';
-import { LocalRecordsFileRefused, localBlobKey, type BootLocalBackend, type CarryOverPayloadKind, type CarryOverPrepareOptions, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
+import { LocalRecordsFileRefused, localBlobKey, type BootLocalBackend, type CarryOverPrepareOptions, type LocalBackend, type PendingRestore } from '../session/localBackendContract.js';
 import { LocalAttachmentStorage, liveStoredKeys, sweepBlobs } from './attachments.js';
 import { IndexedDbBlobStore, readBytes } from './blobStore.js';
 import { CarryOverCheckFailed, countsOf, prepareFromBackup, type PreparedCarryOver } from './carryOver/index.js';
@@ -144,13 +144,6 @@ async function boot(): Promise<LocalBackend> {
     };
   }
 
-  async function prepareCarryOver(kind: CarryOverPayloadKind, payload: Blob, options: CarryOverPrepareOptions): Promise<PendingRestore> {
-    if (kind === 'records-file') return readRecordsFile(payload, options);
-    const raw = await freeAppBackupIn(payload);
-    if (raw === null) throw new LocalRecordsFileRefused('not-a-records-file');
-    return pendingCarryOver(await prepareCarriedBackup(raw, options));
-  }
-
   return {
     fetch: fetchLocal,
     onRemoteWrite: (handler) => lock.onRemoteWrite(() => handler()),
@@ -165,7 +158,6 @@ async function boot(): Promise<LocalBackend> {
       return zipRecordsArchive(contents);
     },
     readRecordsFile,
-    prepareCarryOver,
     putBlob: async (url, file) => blobs.put(localBlobKey(url), file),
     readBlob: async (url) => blobs.get(localBlobKey(url)),
   };
