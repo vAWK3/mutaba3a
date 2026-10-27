@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-10-27 — mail:preview --send finds its own settings
+
+- **What:** `npm --prefix server run mail:preview` now runs through `server/scripts/mail-preview.sh`, which fills any unset `RESEND_API_KEY` from Secret Manager (`mutaba3a-api-resend-api-key`, the same secret the live API mounts; project from `GCP_PROJECT_ID` or the tfvars, like `live-admin.sh`), `MAIL_FROM_ADDRESS` (`no-reply@<mailDomain>`), `PORTAL_ORIGIN` and `WEBSITE_ORIGIN` from `config/hosts.json`. Values already in the environment still win, and the key is fetched only with `--send`.
+- **Why:** the operator shouldn't have to paste a key or export settings to send the sample mails.
+- **Files:** `server/scripts/mail-preview.sh` (new), `server/package.json`, `server/src/scripts/mail-preview.ts` (comment).
+
 ## [Unreleased] - 2026-10-27 — MUT-462: the operator grants billing, turns flags on and off, and decides firm requests (API 1.81.0-mut462, ADR-216)
 
 **Why:** billing grants, per-user flags and firm requests still needed the CLI. Epic MUT-458's last step: every routine operator task is now in the portal.
