@@ -469,6 +469,13 @@ test('Enable firm features for a waiting request from the Firms tab', { tag: '@p
 
 test('Decline a firm request, in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.firm-request-decline' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
+  // No chooseLanguage here: the browser has no stored language, so this proves the Arabic default (MUT-209, ADR-077).
+  await step('With no language chosen, the portal opens in Arabic, right to left', async () => {
+    await page.goto('/sign-in');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    expect(await page.evaluate(() => localStorage.getItem('mutaba3a-portal-language'))).toBeNull();
+  });
   const op = await operator(page, 'ar');
   let request = { email: '', userId: '', profileId: '', profileName: '' };
   await step('An owner asks for firm features; open المكاتب', async () => {

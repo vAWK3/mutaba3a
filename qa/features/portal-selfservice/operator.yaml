@@ -174,10 +174,11 @@ features:
     title: Decline a firm request, in Arabic on a 375 px phone
     tickets: [MUT-462]
     steps:
-      - On a 375 px phone, sign in as an operator whose language is Arabic
+      - On a 375 px phone with no language chosen, open the portal, then sign in as an operator (Arabic)
       - An owner asks for firm features; open المكاتب
       - Press رفض and confirm with the passkey
     expect:
+      - With no language chosen the portal opens in Arabic, right to left
       - The page reads right to left with no sideways scroll, and the asker's address reads left to right
       - The confirm says the profile stays a regular profile and its owner can ask again
       - The request leaves the list; the profile has no firm features and no pending request, and the audit records firm.request_declined by the operator's id
