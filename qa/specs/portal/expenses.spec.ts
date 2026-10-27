@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
 import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
+import { openYou } from '../../support/you';
 import { FakeApi, STORAGE, apiError, category, ceilingOf, daysAfter, expense, project, todayInJerusalem } from '../../support/portalApi';
 
 /**
@@ -440,3 +441,59 @@ test('The vendor field suggests saved vendors: a new one is kept as typed, and p
     expect(api.last('POST', /^\/v1\/expenses$/)?.body).toMatchObject({ amount: '30', vendor: 'Yellow Cab', categoryId: travel.id });
   });
 });
+
+/**
+ * MUT-464: a seeded category is named in the language the portal shows (the server reads Accept-Language), and a
+ * switch refetches the names; a category a person named keeps its name in both.
+ */
+const seededRent = category(3, 'Office Rent', { presetKey: 'office_rent', ar: 'إيجار المكتب' });
+const studioRent = category(4, 'Studio rent');
+const rentExpenses = () => [expense(1, { amount: '800.00', title: 'October rent', categoryId: seededRent.id }), expense(2, { amount: '300.00', title: 'Studio', categoryId: studioRent.id })];
+const rowOf = (page: Page, title: string) => page.getByRole('table').getByRole('row', { name: new RegExp(title) });
+const lastCategoriesLanguage = (api: FakeApi) => api.last('GET', /^\/v1\/expense-categories$/)?.headers['accept-language'];
+
+async function switchLanguage(page: Page, step: Step, label: 'EN' | 'عربي', dir: 'ltr' | 'rtl') {
+  await step(`Switch the portal to ${label === 'EN' ? 'English' : 'Arabic'} on You › App, then go back`, async () => {
+    await openYou(page, 'app');
+    await page.locator('.hp-lang').getByRole('button', { name: label }).click();
+    await expect(page.locator('html')).toHaveAttribute('dir', dir);
+    await page.goBack();
+    await page.goBack();
+  });
+}
+
+test('A seeded category is named in the portal’s language, and switching renames it (MUT-464)', { tag: '@portal.expenses.categories-follow-language' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [seededRent, studioRent], expenses: rentExpenses() });
+
+  await step('Open Expenses in Arabic: the rent row names its category إيجار المكتب', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`, 'ar');
+    await expect(rowOf(page, 'October rent')).toContainText('إيجار المكتب');
+    expect(lastCategoriesLanguage(api)).toBe('ar');
+  });
+
+  await switchLanguage(page, step, 'EN', 'ltr');
+
+  await step('The categories are asked for again in English: the row now says Office Rent', async () => {
+    await expect(rowOf(page, 'October rent')).toContainText('Office Rent');
+    expect(lastCategoriesLanguage(api)).toBe('en');
+  });
+});
+
+test('A category a person named keeps that name in both languages (MUT-464)', { tag: '@portal.expenses.renamed-category-keeps-name' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [seededRent, studioRent], expenses: rentExpenses() });
+
+  await step('Open Expenses in English: Studio rent and Office Rent', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`, 'en');
+    await expect(rowOf(page, 'Studio')).toContainText('Studio rent');
+    await expect(rowOf(page, 'October rent')).toContainText('Office Rent');
+  });
+
+  await switchLanguage(page, step, 'عربي', 'rtl');
+
+  await step('In Arabic the seeded one is إيجار المكتب; the named one is still Studio rent', async () => {
+    await expect(rowOf(page, 'October rent')).toContainText('إيجار المكتب');
+    await expect(rowOf(page, 'Studio')).toContainText('Studio rent');
+    expect(lastCategoriesLanguage(api)).toBe('ar');
+  });
+});
+
