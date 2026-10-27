@@ -9,7 +9,7 @@ import { SCOPES } from '../../../server/src/auth/scopes';
  * routes, then the firm's ledger and the statement with that key. No browser screen shows it.
  */
 
-type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Json = Record<string, any>;
 const minor = (amount: string) => Math.round(Number(amount) * 100);
 
 async function call(method: string, path: string, headers: Record<string, string>, body?: unknown): Promise<Json> {
