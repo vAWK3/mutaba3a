@@ -1,4 +1,14 @@
 {
+  "0.3.1": {
+    "en": [
+      "Expense category names now follow the language you use the portal in, in Arabic or English.",
+      "Deleting something asks you to confirm right where you are, and shared and kept items use the same colours as the phone app."
+    ],
+    "ar": [
+      "أسماء فئات المصاريف تتبع الآن لغة البوابة التي تستخدمها، بالعربية أو الإنجليزية.",
+      "عند حذف أي شيء يُطلب منك التأكيد في مكانك، والعناصر المشتركة والمحفوظة بالألوان نفسها التي في تطبيق الهاتف."
+    ]
+  },
   "0.3.0": {
     "en": [
       "The free web app at /app and the Mac and Windows apps have retired. MTB3A now runs on iPhone, Android and the web portal. If you saved a records file from the free app, you can restore it in the portal after you sign in.",
