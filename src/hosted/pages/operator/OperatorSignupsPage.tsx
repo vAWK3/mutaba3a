@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { getLocale, useLanguage, useT } from '../../../lib/i18n/core';
+import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { api, ApiError, apiErrorReason, type SignupReview, type SignupReviewDecision } from '../../api/client';
 import { CopyField } from '../../components/CopyField';
@@ -13,6 +13,7 @@ import { dropSignup, useOperatorSignups } from '../../data/operatorQueries';
 import { mailRetryable, mailWentOut, reviewChips, waitingOf, type ReviewChip } from '../../data/signupReviews';
 import { ME_KEY } from '../../session/me';
 import { OperatorConfirm, StepUpFailureBanner, useOperatorRun } from '../../operator/OperatorStepUp';
+import { agoText } from '../../operator/time';
 
 /**
  * MUT-460 (design 7A, 8A, 9A, 11A, 13A, 18A): the signups waiting for review, oldest first. Each row says who, how long
@@ -191,9 +192,9 @@ function SignupRow({
 function SignupSummary({ review }: { review: SignupReview }) {
   const t = useT();
   const { language } = useLanguage();
-  const waited = waitingOf(review.createdAt, new Date());
-  // Western digits in both languages, as the rest of the portal's figures.
-  const time = new Intl.RelativeTimeFormat(`${getLocale(language)}-u-nu-latn`, { numeric: 'always' }).format(-waited.count, waited.unit);
+  const now = new Date();
+  const waited = waitingOf(review.createdAt, now);
+  const time = agoText(review.createdAt, now, language);
   return (
     <span className="hp-passkey-text">
       <span className="hp-passkey-name hp-operator-email" dir="ltr">

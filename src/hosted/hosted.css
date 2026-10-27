@@ -1089,6 +1089,26 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-operator-chips { display: flex; flex-wrap: wrap; gap: var(--space-1-5); margin-block-start: var(--space-1-5); }
 .hp-operator-chips:empty { display: none; }
 .hp-operator-list .hp-banner, .hp-operator-list .hp-copy-field { flex: 1 1 100%; margin: 0; }
+/* MUT-461 (17A, 5A, 4A, 12A): accounts. The search field, then its button under it. */
+.hp-operator-search { display: grid; justify-items: start; gap: var(--space-2); margin-block-end: var(--space-4); }
+.hp-operator-search .form-group { justify-self: stretch; margin: 0; }
+.hp-operator-search > .btn { min-height: 44px; }
+.hp-operator-email { overflow-wrap: anywhere; }
+.hp-operator-account-link { display: flex; flex: 1 1 100%; align-items: center; gap: var(--space-3); min-height: 44px; color: inherit; text-decoration: none; }
+.hp-operator-account { display: grid; gap: var(--space-4); }
+.hp-operator-account-header h2 { margin: 0; font-family: var(--font-heading); font-size: var(--text-headline); }
+.hp-operator-account-header p { margin: var(--space-1-5) 0 0; }
+.hp-operator-account .hp-banner { margin: 0; }
+/* The Access rows sit in wrappers (a row turns into its confirm in place), so the box draws the dividers. */
+.hp-operator-account .hp-you-box > * + * { border-top: 1px solid var(--divider); }
+.hp-operator-confirm { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+.hp-operator-confirm:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-operator-confirm .hp-banner, .hp-operator-confirm .hp-copy-field, .hp-operator-confirm p { margin: 0; }
+.hp-operator-lock { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 44px; }
+.hp-operator-lock > span { display: grid; gap: var(--space-1); }
+.hp-operator-lock small { color: var(--text-secondary); font-size: var(--text-label); }
+.hp-operator-profile { cursor: default; }
+.hp-operator-profile .hp-operator-chips { margin-block-start: 0; }
 .hp-connect-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .hp-connect-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
 .hp-connect-steps code { overflow-wrap: anywhere; font-size: var(--text-label); }
