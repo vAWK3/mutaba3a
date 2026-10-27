@@ -24,7 +24,7 @@ Status: PLAN, waiting for Basel's approval. No code written.
 | `server/src/email/templates/copy.ts` | §4's copy for the 13 mails (en + ar). `review-digest` is unchanged apart from the new fields being empty. |
 | `server/src/email/templates/index.ts` | `renderMail(template, locale, vars, { to, artOrigin, websiteOrigin })`. |
 | `server/src/email/mailer.ts` | Passes `to`, `options.artOrigin` and `options.websiteOrigin` to `renderMail` (its only caller, line 85). |
-| `server/src/config.ts` + `index.ts` | `WEBSITE_ORIGIN: z.string().url()`, https origin only (no path). Production with `MAILER=resend` refuses to start without `PORTAL_ORIGIN` and `WEBSITE_ORIGIN` (fail fast, like `MAIL_FROM_ADDRESS`). Both wired into `createMailer`'s options as `artOrigin` and `websiteOrigin`. |
+| `server/src/config.ts` + `index.ts` | `WEBSITE_ORIGIN: z.string().url()`, https origin only (no path). Production with `MAILER=resend` refuses to start without `PORTAL_ORIGIN` (fail fast, like `MAIL_FROM_ADDRESS`). Built: `WEBSITE_ORIGIN` stays optional, as §7 requires (a release before `terraform apply` only drops the Privacy link). Both wired into `createMailer`'s options as `artOrigin` and `websiteOrigin`. |
 | `server/.env.example`, `server/README.md` | Documents it. |
 | `server/infrastructure/terraform/domain.tf` | `WEBSITE_ORIGIN = "https://${local.domain}"` from stage live, next to `WEBAUTHN_RP_ID`. |
 | `src/hosted/public/mail/v1/*.png` | `git mv` from `assets/email/` (34 files + the client chip). |

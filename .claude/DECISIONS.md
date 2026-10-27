@@ -5630,3 +5630,20 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A `FEATURES` entry `operator` (no migration), rejected because flags are operator-grantable product switches.
 - `/operator/v1/*` with its own 404-for-everything mount (the ticket's first wording). Rejected because it needed an SPA exclusion, a dev-proxy entry, a 401→404 remap and its own CSRF reasoning, and it would hide an expired session as "not found" (outside review O3–O6).
 - A password step-up for operators without a passkey. Rejected because it leaves a fresh password sign-in enough to act, weaker than the token it replaces (outside review O1).
+
+## ADR-213: Mails Carry Static Art Served by the Portal; the Mail Frame Is a Mood Band, a Chip and a Headline (MUT-468)
+
+**Status**: Accepted (2026-10-27, MUT-468, epic MUT-466; Basel's intake, plan and eng-review answers D1–D3, R1–R2).
+**Context**: Every transactional mail used one plain frame (ADR-174, the MUT-359 brief §3.3/§8.4: "no images, no pixels, nothing fetched"). Self-service signup made those mails the first thing a customer sees after the landing page; Basel asked for colour, our icons and illustrations. Claude Design produced the kit (MUT-467, frame 1b "full-bleed").
+**Decision**:
+1. **Override log (replaces the MUT-359 brief §8.4 "no images, nothing fetched", 2026-10-27).** A mail may show pictures, only static, versioned PNGs from `<PORTAL_ORIGIN>/mail/v1/`: the same URL for every recipient, no query string, no per-person part, so a picture can't act as a tracking pixel. `templates.test.ts` allows `<img>` only from that path and only files `look.ts` names; every picture has alt text and a size, and every mail still reads fully with images off. ADR-159 §5 (no amounts, currencies or money dates) is unchanged.
+2. **The art is served by the portal, not the website** (eng review D2). The files live in `src/hosted/public/mail/v1/` and ship in the API image with the code that points at them; `app.ts` caches hits under `/mail/` immutably like `/assets/`, and a miss still falls to the SPA shell, `no-store`. Reason: mtb3a.com answered 401 on every path on 2026-10-26, and a website release can lag the API's. `v1` is never rewritten; changed art goes in a new folder.
+3. **The frame**: each customer mail has a look (`server/src/email/templates/look.ts`: mood, header art, chip). The mood tints a band behind the wordmark and art; the card rises out of it with the chip and an `<h1>` headline; a hidden inbox preview line opens the body. The operator digest stays plain. Inline styles only, no `<style>` block (no phone-specific sizes).
+4. **Copy** (Basel D2 at planning): the kit's shape (headline, preview line, body, one button, note) with its sample facts corrected; subjects unchanged word for word. The passkey name and the deletion day sit in a details panel and in the text part.
+5. **Footer** (Basel D3): the password line, "sent to <recipient>", and a Privacy link from the new `WEBSITE_ORIGIN` (Terraform, stage live; optional). Production with `MAILER=resend` refuses to start without `PORTAL_ORIGIN`.
+6. **Contrast**: the secondary ink `#564E68` misses 7:1 on the mood tints (6.3–7.0), so it appears only on the white card and the canvas; tints carry ink-coloured text. `TEXT_PAIRS` and a test enforce it.
+**Consequences**: one release carries art and frame together; a portal outage takes the art down with the product it belongs to. Regression contract (eng review D3): the MUT-359 template rules stay unchanged; no golden snapshots. Client checks (Gmail, Apple Mail, Outlook) are by hand with `npm --prefix server run mail:preview -- --send`.
+**Alternatives considered:**
+- Art on the website (mtb3a.com/mail/v1), the intake's first answer. Rejected at eng review: separate release, separate outage.
+- Inline CID attachments: heavier mails, and some clients list them as attachments.
+- Golden HTML snapshots of all 28 mails: rewritten by every copy edit.

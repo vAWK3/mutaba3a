@@ -2302,6 +2302,7 @@ then flushes; `shutdownAndFlush` closes, disconnects, flushes (2 s), exits. `cre
 `createScriptReporter` / `apiRelease` in `sentry-node.ts` build the real one.
 
 ### Mailer / createMailer / renderMail / sendPasswordNotice — `server/src/email/` (MUT-359, ADR-174)
+MUT-468 (ADR-213): `renderMail(template, locale, vars, frame?)` — `frame = { to, artOrigin, websiteOrigin }` (the mailer passes it from `PORTAL_ORIGIN`/`WEBSITE_ORIGIN`); `templates/look.ts` exports `LOOK`, `artFor(look, locale)`, `ART_FILES`, `MOODS`, `isCustomerTemplate`; `layout.ts` exports `TEXT_PAIRS`, `SECONDARY_INK`. `npm --prefix server run mail:preview` renders every mail.
 The one way the server sends mail. `createMailer({ transport, store, logger, now, fromAddress, replyTo, limits })` →
 `mailer.send({ to, template, locale, vars, idempotencyKey })` → an outcome, never a throw for an expected case.
 Templates: add an id to `TEMPLATE_IDS`, its vars to `TemplateVars` (no money, no dates) and its en + ar copy to

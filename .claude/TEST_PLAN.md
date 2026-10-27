@@ -4048,3 +4048,11 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | same file, "deploy.sh wires the min-build guard" | 1 | Runs before `ensure_bootstrap` and inside `guard_release()` (steps 3, 4, rollback). |
 | Manual | 2 | The expression in the real module (scratch copy, TF 1.15.4): `"unset unset unset unset unset"` with nothing set, `"unset 12 unset 13 true"` with Android floors and the kill switch. The guard under macOS `/bin/bash` 3.2: refuses unnamed, passes named. |
 
+## MUT-468 — the mail frame (ADR-213)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/email/__tests__/templates.test.ts` | the MUT-359 rules unchanged (regression contract, eng review D3); with an art origin, exactly the header and chip pictures from `/mail/v1/` named in `look.ts`, each with alt and size; links only the passed-in ones, the art and Privacy in the mail's language; hidden preview line before one `<h1>`; recipient in the footer, escaped; 13 × 2 subjects word for word; < 100 KB; 7:1 for every text/background pair; details panel only for passkey and closing, also in the text part; Arabic `-rtl` art; plain digest |
+| Unit | `server/src/email/__tests__/look.test.ts` | every customer mail has a look, the digest none; every named PNG ships in `src/hosted/public/mail/v1`, PNG signature, < 40 KB; alt text in both languages |
+| Unit | `mailer.test.ts`, `config.test.ts`, `portal.test.ts`, Terraform `domain.tftest.hcl` | the mailer passes recipient and origins; `WEBSITE_ORIGIN` is an https origin only; production mail needs `PORTAL_ORIGIN`; `/mail/` hits immutable, misses fall to the SPA shell; Terraform sets `WEBSITE_ORIGIN` at stage live |
+| Browser | `qa/specs/portal-selfservice/mail.spec.ts` (`@portal-selfservice.mail.mail-frame`) | the Arabic signup mail from the live API's outbox: RTL, art loaded from the portal, immutable PNG, images off still reads, the button opens /setup |
+| Manual | `npm --prefix server run mail:preview -- --send <inbox>` | Gmail web and app, Apple Mail light and dark, Outlook web and desktop, images on and off |
