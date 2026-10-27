@@ -1882,6 +1882,21 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     listCredits: async (organizationId, receivableId) =>
       [...this.credits.values()].filter((c) => c.organizationId === organizationId && c.receivableId === receivableId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1)).map((c) => ({ ...c })),
+    statementSources: async (organizationId, customerId, currency) => {
+      const receivables = [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.customerId === customerId && r.currency === currency && !r.deletedAt);
+      const receivableIds = new Set(receivables.map((r) => r.id));
+      const payments = [...this.pays.values()].filter((p) => p.organizationId === organizationId && p.customerId === customerId && p.currency === currency);
+      const paymentIds = new Set(payments.map((p) => p.id));
+      const agreementIds = new Set([...this.agrs.values()].filter((a) => a.organizationId === organizationId && a.customerId === customerId && a.currency === currency).map((a) => a.id));
+      return {
+        receivables: receivables.map((r) => ({ ...r })),
+        credits: [...this.credits.values()].filter((c) => receivableIds.has(c.receivableId)).map((c) => ({ ...c })),
+        payments: payments.map((p) => ({ ...p })),
+        allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId)).map((a) => ({ ...a })),
+        installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
+        charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
+      };
+    },
     list: async (organizationId, filter: ReceivableFilter, page) =>
       paginate(
         [...this.recs.values()].filter(

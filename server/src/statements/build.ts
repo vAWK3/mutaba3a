@@ -1,3 +1,4 @@
+import type { ItemStatus } from '../agreements/status.js';
 import { daysBetween, todayIn, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { CAPTURE_UNDO_REASON, type AllocationRecord, type CreditRecord, type InstallmentRecord, type PaymentRecord, type ReceivableRecord, type RetainerChargeRecord } from '../repositories/ports.js';
@@ -64,11 +65,11 @@ interface LineBase {
   creditMinor: bigint;
   receivableId: string | null;
   paymentId: string | null;
-  /** CHARGE only. */
+  /** CHARGE, and the credited receivable on a CREDIT. */
   receivable: ReceivableRecord | null;
   origin: ChargeOrigin | null;
   outstandingMinor: bigint | null;
-  status: string | null;
+  status: ItemStatus | null;
   daysOverdue: number | null;
   /** CREDIT only. */
   credit: CreditRecord | null;
@@ -110,11 +111,12 @@ export function buildStatement(sources: StatementSources, view: StatementView, p
   }
   const totals = { debitMinor: 0n, creditMinor: 0n };
   let running = openingMinor;
-  const withBalance = inPeriod.map(({ atMs: _atMs, rank: _rank, ...line }, index) => {
-    totals.debitMinor += line.debitMinor;
-    totals.creditMinor += line.creditMinor;
-    running += line.debitMinor - line.creditMinor;
-    return { line: { ...line, runningMinor: running }, key: inPeriod[index]! };
+  const withBalance = inPeriod.map((key) => {
+    totals.debitMinor += key.debitMinor;
+    totals.creditMinor += key.creditMinor;
+    running += key.debitMinor - key.creditMinor;
+    const line: StatementLine = { ...key, runningMinor: running };
+    return { line, key };
   });
   const start = page.cursor ? withBalance.findIndex((x) => compareLines(x.key, page.cursor!) > 0) : 0;
   const from = start < 0 ? withBalance.length : start;
@@ -136,7 +138,7 @@ function ledgerLines(s: StatementSources, view: StatementView): SortedLine[] {
   const lines: SortedLine[] = counted.map((r) => chargeLine(r, s, view.asOf));
   for (const c of s.credits) {
     const r = byId.get(c.receivableId);
-    if (r) lines.push(line({ id: c.id, kind: 'CREDIT', date: c.effectiveDate, atMs: c.createdAt.getTime(), projectId: r.projectId, creditMinor: c.amountMinor, receivableId: r.id, credit: c, number: null }));
+    if (r) lines.push(line({ id: c.id, kind: 'CREDIT', date: c.effectiveDate, atMs: c.createdAt.getTime(), projectId: r.projectId, creditMinor: c.amountMinor, receivableId: r.id, receivable: r, credit: c, number: null }));
   }
   const shown = s.payments.filter((p) => p.status === 'POSTED' || (p.status === 'REVERSED' && p.reversalReason !== CAPTURE_UNDO_REASON));
   if (view.projectId === null) {

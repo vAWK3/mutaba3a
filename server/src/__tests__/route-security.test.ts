@@ -163,6 +163,8 @@ const SESSION_OPERATIONS = [
   'GET /v1/attachments/{attachmentId}/download',
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
+  // MUT-478: the statement is a read like the customer summary, so the portal (and its local mode) can show it later
+  'GET /v1/customers/{customerId}/statement',
   'GET /v1/fee-proposals',
   'GET /v1/fee-proposals/{proposalId}',
   'GET /v1/me',
