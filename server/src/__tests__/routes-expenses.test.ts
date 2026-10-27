@@ -686,6 +686,7 @@ describe('expense categories', () => {
 });
 
 describe('expense category names follow the viewer’s language (MUT-464)', () => {
+  // The test clock is fixed, so rows share createdAt and list order falls to random ids: find rows by key, never position.
   const names = async (h: Harness, headers: Record<string, string>) => {
     const res = await h.app.request('/v1/expense-categories', { headers });
     return { res, items: (await read(res)).items as Loose[] };
@@ -714,7 +715,7 @@ describe('expense category names follow the viewer’s language (MUT-464)', () =
 
   it('shows typed and renamed categories exactly as typed in both languages', async () => {
     const { h, b, p } = await setup({ locale: 'ar' });
-    const [rent] = (await names(h, p.as(b.org.id))).items;
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
     await h.app.request('/v1/expense-categories', json({ name: 'Coffee' }, { ...p.as(b.org.id), ...idem() }));
     const renamed = await read(await h.app.request(`/v1/expense-categories/${rent.id}`, json({ name: 'Studio rent' }, { ...p.as(b.org.id, { 'accept-language': 'ar' }), 'if-match': '1' }, 'PATCH')));
     expect(renamed).toMatchObject({ name: 'Studio rent', presetKey: null });
@@ -727,7 +728,7 @@ describe('expense category names follow the viewer’s language (MUT-464)', () =
 
   it('answers a create or change in the request language', async () => {
     const { h, b, p } = await setup({ locale: 'ar' });
-    const [rent] = (await names(h, p.as(b.org.id))).items;
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
     const recoloured = await read(await h.app.request(`/v1/expense-categories/${rent.id}`, json({ color: '#123abc' }, { ...p.as(b.org.id, { 'accept-language': 'en' }), 'if-match': '1' }, 'PATCH')));
     expect(recoloured).toMatchObject({ name: 'Office Rent', presetKey: 'office_rent', color: '#123abc' });
   });
@@ -742,7 +743,7 @@ describe('expense category names follow the viewer’s language (MUT-464)', () =
     const rename = await h.app.request(`/v1/expense-categories/${coffee.id}`, json({ name: 'Other' }, { ...p.as(b.org.id), 'if-match': '1' }, 'PATCH'));
     expect(rename.status).toBe(409);
     // A seeded category may take its own other-language name: it is still the same entry.
-    const [rent] = (await names(h, p.as(b.org.id))).items;
+    const rent = (await names(h, p.as(b.org.id))).items.find((c) => c.presetKey === 'office_rent');
     expect((await h.app.request(`/v1/expense-categories/${rent.id}`, json({ name: 'Office Rent' }, { ...p.as(b.org.id), 'if-match': '1' }, 'PATCH'))).status).toBe(200);
   });
 });
