@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-214)
+## [Unreleased] - 2026-10-27 — MUT-461: the operator finds an account and acts on it (API 1.80.0-mut461, ADR-215)
 
 **Why:** seeing an account's state, disabling one, signing it out or sending a reset needed the CLI and the right command. Epic MUT-458's third step: the operator console gets an Accounts tab.
 
@@ -39,7 +39,7 @@
 - Release-QA: `portal-selfservice.operator` `account-find`, `account-revoke-sessions`, `account-disable-enable` (Arabic, 375 px), `account-setup-link`.
 
 ### Changed
-- `POST /admin/v1/users/{id}/sessions/revoke` (and the operator's) now audits `user.sessions_revoked` `{revoked, agentGrantsRevoked}` on each profile; before, only the agents' disconnect was audited.
+- `POST /admin/v1/users/{id}/sessions/revoke` (and the operator's) now audits `user.sessions_revoked` `{revoked, agentGrantsRevoked}` on each profile; before, only the agents' disconnect was audited. It is one of `SESSION_ONLY_ACTIONS`, so API keys' `/v1/audit` (Malafat) never lists it.
 - A missing account on `/admin/v1/users/{id}*` adds `details.reason ACCOUNT_NOT_FOUND` (additive).
 - You › Account's Operator row reads "Signups and accounts".
 
@@ -50,6 +50,27 @@
 - Files: `server/src/{operator/actions/accounts.ts,operator/actor.ts,routes/operator.ts,routes/admin-users.ts,schemas.ts,app.ts,auth/store-guard.ts,repositories/*}`, `src/hosted/{pages/operator/*,operator/*,components/InPlaceConfirm.tsx,data/operatorQueries.ts,api/client.ts,router.tsx,hosted.css,i18n/*}`, `qa/**/operator.*`, `qa/support/selfService.ts`.
 
 ---
+
+## [Unreleased] - 2026-10-27 — MUT-468: the mails get the new frame: a mood band, our art, a headline
+
+**Why:** epic MUT-466. Self-service signup made the transactional mails the first thing a customer sees; they were one plain card. ADR-214.
+
+### Added
+- `server/src/email/templates/look.ts`: each customer mail's mood (hello, safety, trial, goodbye), header art and chip, with alt text in both languages; Arabic takes the `-rtl` file for art with a direction.
+- The mail art in `src/hosted/public/mail/v1/` (moved from `assets/email/`, plus the hello client chip for MUT-469), served by the API at `<PORTAL_ORIGIN>/mail/v1/` and cached immutably (`app.ts`).
+- `WEBSITE_ORIGIN` (config, `.env.example`, Terraform `domain.tf` from stage live) for the footer's Privacy link.
+- `npm --prefix server run mail:preview` (writes every mail to `server/.mail-preview/`; `--send <address>` sends them through Resend for client checks).
+- Release-QA `portal-selfservice.mail.mail-frame` (`qa/features/portal-selfservice/mail.yaml`, `qa/specs/portal-selfservice/mail.spec.ts`).
+
+### Changed
+- `layout.ts` draws frame 1b: the mood band with wordmark and art, the card with chip and `<h1>`, a hidden preview line, a details panel, the note under a rule, and a footer with the recipient and Privacy. `renderMail` takes a frame (`to`, `artOrigin`, `websiteOrigin`); the mailer passes it.
+- `copy.ts`: every customer mail gains a headline and preview line; bodies follow plan §4 (subjects unchanged). The passkey name and the deletion day move into a details panel and the text part.
+- Production with `MAILER=resend` refuses to start without `PORTAL_ORIGIN`.
+
+### Technical
+- Tests: `templates.test.ts` (regression contract kept; pictures, links, preview and headline, footer, subjects, size, contrast, details, escaping), `look.test.ts`, `mailer.test.ts`, `config.test.ts`, `portal.test.ts`, Terraform `domain.tftest.hcl`.
+- `qa.config.mjs`: the mail art and templates belong to the portal-selfservice app.
+- Plan and eng review: `.claude/designs/mut-468-mail-frame.md`.
 
 ## [Unreleased] - 2026-10-27 — MUT-467: the mail kit's art lands in assets/email/
 

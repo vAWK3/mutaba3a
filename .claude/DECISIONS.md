@@ -5652,7 +5652,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A step-up sheet opened from the 403 (the plan's first `OperatorStepUpSheet`). Rejected in design review (1A): the system prompt must come straight from a tap, and the label should say a passkey is coming.
 - A separate operator app or route tree outside `authedRoute`. Rejected: sign-in, `next`, the shell and the language already work here.
 
-## ADR-214: The Operator's Accounts: One Action Module, Never Your Own Account, the Reset Link Shown Once (MUT-461)
+## ADR-214: Mails Carry Static Art Served by the Portal; the Mail Frame Is a Mood Band, a Chip and a Headline (MUT-468)
+
+**Status**: Accepted (2026-10-27, MUT-468, epic MUT-466; Basel's intake, plan and eng-review answers D1–D3, R1–R2).
+**Context**: Every transactional mail used one plain frame (ADR-174, the MUT-359 brief §3.3/§8.4: "no images, no pixels, nothing fetched"). Self-service signup made those mails the first thing a customer sees after the landing page; Basel asked for colour, our icons and illustrations. Claude Design produced the kit (MUT-467, frame 1b "full-bleed").
+**Decision**:
+1. **Override log (replaces the MUT-359 brief §8.4 "no images, nothing fetched", 2026-10-27).** A mail may show pictures, only static, versioned PNGs from `<PORTAL_ORIGIN>/mail/v1/`: the same URL for every recipient, no query string, no per-person part, so a picture can't act as a tracking pixel. `templates.test.ts` allows `<img>` only from that path and only files `look.ts` names; every picture has alt text and a size, and every mail still reads fully with images off. ADR-159 §5 (no amounts, currencies or money dates) is unchanged.
+2. **The art is served by the portal, not the website** (eng review D2). The files live in `src/hosted/public/mail/v1/` and ship in the API image with the code that points at them; `app.ts` caches hits under `/mail/` immutably like `/assets/`, and a miss still falls to the SPA shell, `no-store`. Reason: mtb3a.com answered 401 on every path on 2026-10-26, and a website release can lag the API's. `v1` is never rewritten; changed art goes in a new folder.
+3. **The frame**: each customer mail has a look (`server/src/email/templates/look.ts`: mood, header art, chip). The mood tints a band behind the wordmark and art; the card rises out of it with the chip and an `<h1>` headline; a hidden inbox preview line opens the body. The operator digest stays plain. Inline styles only, no `<style>` block (no phone-specific sizes).
+4. **Copy** (Basel D2 at planning): the kit's shape (headline, preview line, body, one button, note) with its sample facts corrected; subjects unchanged word for word. The passkey name and the deletion day sit in a details panel and in the text part.
+5. **Footer** (Basel D3): the password line, "sent to <recipient>", and a Privacy link from the new `WEBSITE_ORIGIN` (Terraform, stage live; optional). Production with `MAILER=resend` refuses to start without `PORTAL_ORIGIN`.
+6. **Contrast**: the secondary ink `#564E68` misses 7:1 on the mood tints (6.3–7.0), so it appears only on the white card and the canvas; tints carry ink-coloured text. `TEXT_PAIRS` and a test enforce it.
+**Consequences**: one release carries art and frame together; a portal outage takes the art down with the product it belongs to. Regression contract (eng review D3): the MUT-359 template rules stay unchanged; no golden snapshots. Client checks (Gmail, Apple Mail, Outlook) are by hand with `npm --prefix server run mail:preview -- --send <inbox> --yes`; mail is live in production, so they run right after the release that ships the frame (before-release.md), with a server rollback if a client renders it broken. Known: the opaque art shows as pale squares in Gmail and Outlook dark mode.
+**Alternatives considered:**
+- Art on the website (mtb3a.com/mail/v1), the intake's first answer. Rejected at eng review: separate release, separate outage.
+- Inline CID attachments: heavier mails, and some clients list them as attachments.
+- Golden HTML snapshots of all 28 mails: rewritten by every copy edit.
+
+## ADR-215: The Operator's Accounts: One Action Module, Never Your Own Account, the Reset Link Shown Once (MUT-461)
 
 **Status:** Accepted (2026-10-27, MUT-461; epic MUT-458). Plan §3 MUT-461 and design spec §3b (17A, 3A, 4A, 5A, 12A) in `.claude/designs/mut-458-operator-console.md`. Builds on ADR-212 (decision 4) and ADR-213.
 
@@ -5661,7 +5678,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Decision:**
 1. **Extracted, not rewritten.** `server/src/operator/actions/accounts.ts` holds the actions; `/admin/v1/users` and `/v1/operator/accounts` are adapters (ADR-212 decision 4). The admin route tests pass unchanged; a parity test compares the two answers and audit trails row for row.
 2. **Never your own account (E10, widened).** The console refuses every account action on the operator's own account with 409 `OWN_ACCOUNT`, not only disable and sign out: a reset with lock would sign them out too, and their own password is You › Account's. The portal shows the rows inert with the reason. The CLI is unchanged.
-3. **Every action is audited.** Sign out everywhere now writes `user.sessions_revoked` `{revoked, agentGrantsRevoked}`, for the token too (the AC: "every action … audited with the operator's id"). Disable answers the admin `{user}` plus `sessionsRevoked` / `agentGrantsRevoked`, so the result can say what it ended.
+3. **Every action is audited.** Sign out everywhere now writes `user.sessions_revoked` `{revoked, agentGrantsRevoked}`, for the token too (the AC: "every action … audited with the operator's id"). Like `user.agent_disconnected`, it is a security event about the person, so it is one of `SESSION_ONLY_ACTIONS`: API keys' `/v1/audit` (Malafat) never lists it (/qa-reconcile D1, Basel). Disable answers the admin `{user}` plus `sessionsRevoked` / `agentGrantsRevoked`, so the result can say what it ended.
 4. **A missing account is `NOT_FOUND` with `details.reason ACCOUNT_NOT_FOUND`,** not a new error code: `QueryView`'s `notFound` slot shows "No such account", and its `/v1/me` refetch also covers a revoked operator (design 3A). Search never 404s: no match is 200 `{account:null}`.
 5. **The reset link is shown once, in the page's state.** It never enters a query, the URL or a toast, and leaving the page discards it (design 12A). The portal asks for 24 hours (the CLI's default stays 72) with "Lock the current password" on by default.
 6. **The account view counts what an action would end:** `activeSessionCount` (`sessions.countLiveForUser`: unrevoked, neither deadline passed, either kind) and `agentGrantCount` (live grants). Last sign-in is `users.lastSignInAt`, so no new column (the plan's `sessions.lastCreatedAt` wasn't needed).

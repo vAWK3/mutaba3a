@@ -646,7 +646,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
 
     // Any real file in the build (hashed assets, favicon, manifest, …); a miss
     // falls through to the SPA-shell handler below via Hono's own next().
-    // Immutable caching applies only to an actual hit under /assets/* —
+    // Immutable caching applies only to an actual hit under /assets/* or
+    // /mail/v<N>/* (MUT-468: mail art, versioned by folder and never rewritten) —
     // onFound fires only when serveStatic found and is serving the file, so a
     // stale/nonexistent hashed filename (after a deploy rotates them) still
     // falls through to the SPA shell with the default no-store header,
@@ -654,18 +655,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     app.use('*', async (c, next) => {
       if (isPortalExcludedPath(c.req.path)) return next();
       if (isSourceMap(c.req.path)) return c.notFound();
-      let foundUnderAssets = false;
+      let foundImmutable = false;
       const result = await serveStatic({
         root: distDir,
         onFound: (_path, c) => {
-          if (c.req.path.startsWith('/assets/')) foundUnderAssets = true;
+          if (c.req.path.startsWith('/assets/') || /^\/mail\/v\d+\//.test(c.req.path)) foundImmutable = true;
         },
       })(c, next);
       // c.header() cannot reach this response: serveStatic already built it
       // with c.body() before onFound ran, which bakes in a header snapshot
       // decoupled from the context's own headers. Mutate the Response's own
       // Headers object directly instead.
-      if (foundUnderAssets && result instanceof Response) {
+      if (foundImmutable && result instanceof Response) {
         result.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
       }
       return result;

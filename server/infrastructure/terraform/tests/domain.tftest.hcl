@@ -31,7 +31,7 @@ run "no_domain_changes_nothing" {
   }
 
   assert {
-    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["PORTAL_ORIGIN", "FRONT_DOOR_TOKEN", "PORTAL_LEGACY_REDIRECT", "WEBAUTHN_RP_ID"], e.name)]) == 0
+    condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if contains(["PORTAL_ORIGIN", "FRONT_DOOR_TOKEN", "PORTAL_LEGACY_REDIRECT", "WEBAUTHN_RP_ID", "WEBSITE_ORIGIN"], e.name)]) == 0
     error_message = "With no domain, Cloud Run gets no front-door env: today's plan must not change."
   }
 
@@ -85,6 +85,11 @@ run "a_live_domain_gives_cloud_run_the_front_door" {
   assert {
     condition     = one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "WEBAUTHN_RP_ID"]) == "placeholder.example"
     error_message = "MUT-115: from stage live the passkey relying party is the apex, so the portal subdomain and the iOS app share passkeys."
+  }
+
+  assert {
+    condition     = one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "WEBSITE_ORIGIN"]) == "https://placeholder.example"
+    error_message = "MUT-468: from stage live the mails' Privacy link points at the website on the apex."
   }
 
   assert {

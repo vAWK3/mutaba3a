@@ -455,6 +455,26 @@ describe('loadConfig — mail (MUT-359)', () => {
     expect(() => loadConfig({ ...base, ...resend, MAIL_SECURITY_RESERVE: '90' })).toThrow('MAIL_SECURITY_RESERVE');
     expect(() => loadConfig({ ...base, MAIL_FROM_ADDRESS: 'MTB3A <no-reply@mail.example.test>' })).toThrow('MAIL_FROM_ADDRESS');
   });
+
+  it('MUT-468: WEBSITE_ORIGIN (the Privacy link in every mail) is an https origin and nothing more', () => {
+    expect(loadConfig({ ...base, WEBSITE_ORIGIN: 'https://site.example.test' }).WEBSITE_ORIGIN).toBe('https://site.example.test');
+    expect(loadConfig(base).WEBSITE_ORIGIN).toBeUndefined();
+    for (const bad of ['http://site.example.test', 'https://site.example.test/', 'https://site.example.test/privacy', 'https://site.example.test?x=1', 'site.example.test', 'https://']) {
+      expect(() => loadConfig({ ...base, WEBSITE_ORIGIN: bad }), bad).toThrow('WEBSITE_ORIGIN');
+    }
+  });
+
+  it('MUT-468: production mail needs PORTAL_ORIGIN, where the mail art is served; WEBSITE_ORIGIN stays optional', () => {
+    const production = { ...base, NODE_ENV: 'production', ...resend, TURNSTILE_SECRET: '0x4AAAAAAAmut468livesecretforconfigtests' };
+    expect(() => loadConfig(production)).toThrow('PORTAL_ORIGIN');
+    expect(loadConfig({ ...production, PORTAL_ORIGIN: 'https://app.example.test' }).WEBSITE_ORIGIN).toBeUndefined();
+    // The art origin must be an https origin there, or every mail would point at broken or mixed-content pictures.
+    for (const bad of ['http://app.example.test', 'HTTPS://APP.EXAMPLE.TEST', 'https://app.example.test/portal']) {
+      expect(() => loadConfig({ ...production, PORTAL_ORIGIN: bad }), bad).toThrow('PORTAL_ORIGIN');
+    }
+    // Outside production a mail without art is fine (development, QA, tests render the images-off layout).
+    expect(loadConfig({ ...base, ...resend }).PORTAL_ORIGIN).toBeUndefined();
+  });
 });
 
 describe('loadConfig — signup and recovery (MUT-366)', () => {
@@ -484,7 +504,8 @@ describe('loadConfig — signup and recovery (MUT-366)', () => {
   });
 
   it('production needs a real Turnstile secret once mail or signup is on, and never a test one', () => {
-    const production = { ...base, NODE_ENV: 'production' };
+    // MUT-468: production mail also needs PORTAL_ORIGIN (the mail art's origin).
+    const production = { ...base, NODE_ENV: 'production', PORTAL_ORIGIN: 'https://app.example.test' };
     expect(loadConfig(production).TURNSTILE_SECRET).toBeUndefined();
     expect(() => loadConfig({ ...production, ...resend })).toThrow('TURNSTILE_SECRET');
     expect(loadConfig({ ...production, ...resend, TURNSTILE_SECRET: LIVE_TURNSTILE }).TURNSTILE_SECRET).toBe(LIVE_TURNSTILE);
