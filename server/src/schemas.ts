@@ -3035,7 +3035,16 @@ export const ReceiptEditRatesSchema = z
   .openapi('ReceiptEditRates', { description: 'MUT-255: how often people change what the receipt reader suggested. Counts only, across every profile.' });
 
 export const ExpenseCategorySchema = z
-  .object({ id: uuid, name: z.string(), color: z.string().nullable(), archived: z.boolean(), version: z.number().int(), createdAt: z.string().datetime(), updatedAt: z.string().datetime() })
+  .object({
+    id: uuid,
+    name: z.string().openapi({ description: 'MUT-464: a seeded category’s name in the request language (Accept-Language ar/en, else the account’s); a name a person typed, as typed.' }),
+    presetKey: z.string().nullable().openapi({ description: 'MUT-464: the preset entry this category is (`other` for the automatic Other), or null for one a person named. Worked out from the name, never stored.' }),
+    color: z.string().nullable(),
+    archived: z.boolean(),
+    version: z.number().int(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
   .openapi('ExpenseCategory');
 export const ExpenseCategoryListSchema = z.object({ items: z.array(ExpenseCategorySchema) }).openapi('ExpenseCategoryList');
 export const ListExpenseCategoriesQuerySchema = z.object({ includeArchived: z.enum(['true', 'false']).optional() });

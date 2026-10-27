@@ -4,6 +4,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import type { KeyScope } from '../auth/scopes.js';
 import { parseScopes } from '../auth/scopes.js';
 import { categoryNameKey } from '../expenses/names.js';
+import { presetKeyForName, presetNameKeys } from '../expenses/presets.js';
 import { isAutomaticOtherCategory, registrationKey, vendorNameKey } from '../vendors/keys.js';
 import { bestVendorSuggestions, RECENT_VENDORS_SCORED } from './memory.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
@@ -1958,6 +1959,7 @@ export class PrismaLedgerStore implements LedgerStore {
           this.prisma.$transaction(async (tx) => {
             // qa-reconcile D5: waits out a type change, so a new category can't land between its delete and its reseed.
             await lockOrganization(tx, organizationId);
+            await refusePresetTwin(tx, organizationId, input.name, null);
             return tx.expenseCategory.create({ data: { organizationId, name: input.name, nameKey: categoryNameKey(input.name), color: input.color, createdAt: at, updatedAt: at } });
           }),
         ),
@@ -1989,6 +1991,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if (!current) return { kind: 'not_found' };
           const data: Prisma.ExpenseCategoryUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
           if (patch.name !== undefined) {
+            await refusePresetTwin(tx, organizationId, patch.name, id);
             data.name = patch.name;
             data.nameKey = categoryNameKey(patch.name);
           }
@@ -2808,6 +2811,17 @@ export class PrismaLedgerStore implements LedgerStore {
  * it queues the writers that must not interleave (seed, type change, category create/rename) on each other, but not
  * the many inserts whose foreign key only needs the row to exist (expenses, audit rows, idempotency keys).
  */
+/**
+ * MUT-464: a category name that is a preset entry (in either language) may not join a profile that already has that
+ * entry under another name — the same rule as the unique `nameKey`, across languages. Runs under the organization lock.
+ */
+async function refusePresetTwin(tx: Prisma.TransactionClient, organizationId: string, name: string, exceptId: string | null): Promise<void> {
+  const key = presetKeyForName(name);
+  if (key === null) return;
+  const twin = await tx.expenseCategory.findFirst({ where: { organizationId, nameKey: { in: presetNameKeys(key) }, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } });
+  if (twin) throw new UniqueViolation('expense_categories.name');
+}
+
 async function lockOrganization(tx: Tx, organizationId: string): Promise<void> {
   await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR NO KEY UPDATE`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { categoryNameKey } from '../names.js';
-import { displayCategoryNames, GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor, presetKeyForName, RETIRED_TEMPLATES } from '../presets.js';
+import { displayCategoryNames, GENERAL_PRESET, LAW_FIRM_PRESET, PERSONAL_PRESET, presetFor, presetKeyForName, presetNameKeys, RETIRED_TEMPLATES } from '../presets.js';
 
 /**
  * MUT-42 D2 checked these presets against the offline app's copy. MUT-445 (ADR-203) retired that app and its
@@ -95,6 +95,11 @@ describe('preset keys (MUT-464)', () => {
     expect(presetKeyForName('Other')).toBe('other');
     expect(presetKeyForName('أخرى')).toBe('other');
     expect(presetKeyForName('Coffee')).toBeNull();
+  });
+
+  it('lists every stored name key of an entry, both languages', () => {
+    expect(presetNameKeys('office_rent').sort()).toEqual(['office rent', 'إيجار المكتب'].sort());
+    expect(presetNameKeys('nope')).toEqual([]);
   });
 
   it('recognises the names Malafat firms and personal profiles were seeded with before the lists changed', () => {

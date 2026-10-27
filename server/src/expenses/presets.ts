@@ -132,10 +132,20 @@ export const RETIRED_TEMPLATES: readonly CategoryTemplate[] = [
 /** Live entries first, so a key shows its current wording; a retired wording only adds names that resolve to it. */
 const NAMES_BY_KEY = new Map<string, { en: string; ar: string }>();
 const KEY_BY_NAME_KEY = new Map<string, string>();
+const NAME_KEYS_BY_KEY = new Map<string, Set<string>>();
 for (const t of [...GENERAL_PRESET, ...LAW_FIRM_PRESET, ...PERSONAL_PRESET, ...RETIRED_TEMPLATES]) {
   if (!NAMES_BY_KEY.has(t.key)) NAMES_BY_KEY.set(t.key, { en: t.name, ar: t.nameAr });
   KEY_BY_NAME_KEY.set(categoryNameKey(t.name), t.key);
   KEY_BY_NAME_KEY.set(categoryNameKey(t.nameAr), t.key);
+  NAME_KEYS_BY_KEY.set(t.key, new Set([...(NAME_KEYS_BY_KEY.get(t.key) ?? []), categoryNameKey(t.name), categoryNameKey(t.nameAr)]));
+}
+
+/**
+ * MUT-464: every `nameKey` a category that is this preset entry can have (both languages, retired wordings too). The
+ * stores refuse a second category with one of them, so "Rent" can't sit next to a seeded "الإيجار".
+ */
+export function presetNameKeys(key: string): string[] {
+  return [...(NAME_KEYS_BY_KEY.get(key) ?? [])];
 }
 
 /** MUT-464: the preset entry a stored category name is, in either language; null for a name a person typed. */

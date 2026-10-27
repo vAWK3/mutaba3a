@@ -183,6 +183,22 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(await store.expenseCategories.getById(w.b.id, rent.id)).toBeNull();
     });
 
+    // MUT-464: a seeded category shows in either language, so its other-language name is taken too.
+    it('refuses a category that is an existing preset entry in the other language, even archived', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const rent = await store.expenseCategories.create(w.a.id, { name: 'إيجار المكتب', color: null }, at(0));
+      const coffee = await store.expenseCategories.create(w.a.id, { name: 'Coffee', color: null }, at(1));
+      await expect(store.expenseCategories.create(w.a.id, { name: 'Office Rent', color: null }, at(2))).rejects.toBeInstanceOf(UniqueViolation);
+      await expect(store.expenseCategories.update(w.a.id, coffee.id, 1, { name: ' office rent' }, at(2))).rejects.toBeInstanceOf(UniqueViolation);
+      // The seeded row itself may switch to its other-language name; another profile is unaffected.
+      expect(await store.expenseCategories.update(w.a.id, rent.id, 1, { name: 'Office Rent' }, at(3))).toMatchObject({ kind: 'updated' });
+      await store.expenseCategories.create(w.b.id, { name: 'إيجار المكتب', color: null }, at(3));
+      await store.expenseCategories.update(w.a.id, rent.id, 2, { archived: true }, at(4));
+      await expect(store.expenseCategories.create(w.a.id, { name: 'إيجار المكتب', color: null }, at(5))).rejects.toBeInstanceOf(UniqueViolation);
+      expect((await store.expenseCategories.list(w.a.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Office Rent', 'Coffee']);
+    });
+
     it('seeds a preset only into an organization with no categories, once, even when two seeds race', async () => {
       const store = await makeStore();
       const w = await world(store);
