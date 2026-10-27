@@ -46,19 +46,37 @@ export function countsOn(r: Pick<ReceivableRecord, 'origin' | 'postingDate' | 'p
   return r.origin !== 'ADJUSTMENT' || r.postingDate <= today || r.paidMinor > 0n || r.creditedMinor > 0n;
 }
 
-/** Day buckets over OPEN receivables (settled ones carry nothing) that count today (`countsOn`). */
+export type DayBucket = 'overdue' | 'dueToday' | 'notYetDue';
+
+/**
+ * The one rule for which day bucket a receivable's outstanding falls in today, or null when it adds nothing: not OPEN
+ * (settled ones carry nothing), not counting yet (`countsOn`), or nothing left outstanding. Every figure that depends
+ * on "overdue" reads this, so the amounts and the dates never disagree (MUT-482).
+ */
+export function dayBucketOf(r: ReceivableRecord, today: IsoDate): DayBucket | null {
+  if (r.status !== 'OPEN' || !countsOn(r, today) || outstandingOf(r) <= 0n) return null;
+  if (r.dueDate < today) return 'overdue';
+  return r.dueDate === today ? 'dueToday' : 'notYetDue';
+}
+
+/** Day buckets over the receivables `dayBucketOf` places. */
 export function bucketize(receivables: readonly ReceivableRecord[], today: IsoDate): Buckets {
   const b = emptyBuckets();
   for (const r of receivables) {
-    if (r.status !== 'OPEN' || !countsOn(r, today)) continue;
+    const bucket = dayBucketOf(r, today);
+    if (bucket === null) continue;
     const o = outstandingOf(r);
-    if (o <= 0n) continue;
     b.outstanding += o;
-    if (r.dueDate < today) b.overdue += o;
-    else if (r.dueDate === today) b.dueToday += o;
-    else b.notYetDue += o;
+    b[bucket] += o;
   }
   return b;
+}
+
+/** MUT-482: the earliest due date among the receivables `dayBucketOf` calls overdue, or null exactly when `bucketize` gives 0 overdue. */
+export function oldestOverdueDueDate(receivables: readonly ReceivableRecord[], today: IsoDate): IsoDate | null {
+  let oldest: IsoDate | null = null;
+  for (const r of receivables) if (dayBucketOf(r, today) === 'overdue' && (oldest === null || r.dueDate < oldest)) oldest = r.dueDate;
+  return oldest;
 }
 
 export function addBuckets(a: Buckets, b: Buckets): Buckets {

@@ -7,7 +7,7 @@ import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import type { VerdictUnavailableCode } from '../schemas.js';
 import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
-import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf, type IsoDate } from '../dates.js';
+import { addDays, addMonths, compareIsoDates, daysBetween, endOfMonth, monthOf, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
@@ -16,7 +16,7 @@ import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, VerdictQuerySchema, VerdictSchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
 import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
-import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
+import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, oldestOverdueDueDate, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
 /** MUT-175: Reports reads a hosted profile's expenses too, so like /v1/summaries/expenses it is session-only. */
@@ -38,7 +38,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       path: '/v1/summaries/organization',
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
-      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block.',
+      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row\'s oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
@@ -67,13 +67,14 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
         const byCustomer = new Set([...recs.map((r) => r.customerId), ...pays.map((p) => p.customerId), ...props.map((p) => p.customerId)].filter((id): id is string => id !== null));
         const fmt = (m: bigint) => formatMoney({ minor: m, currency: currency as Currency });
         const rows = [...byCustomer].sort().map((customerId) => {
-          const b = bucketize(recs.filter((r) => r.customerId === customerId), today);
+          const ownRecs = recs.filter((r) => r.customerId === customerId);
+          const b = bucketize(ownRecs, today);
           const own = pays.filter((p) => p.customerId === customerId);
           const u = unallocatedOf(own);
           const ownProposals = props
             .filter((p) => p.customerId === customerId)
             .map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn, contingency: p.commissionRateBasisPoints === null ? null : { commissionRateBasisPoints: p.commissionRateBasisPoints, upfrontTreatment: p.upfrontTreatment } }));
-          return { customerId, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b), proposals: ownProposals };
+          return { customerId, ...bucketsWire(b, fmt), ...overdueSinceWire(oldestOverdueDueDate(ownRecs, today), today), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b), proposals: ownProposals };
         });
         const total = bucketize(recs, today);
         const u = unallocatedOf(pays);
@@ -96,7 +97,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       path: '/v1/summaries/customers/{customerId}',
       tags: ['Summaries'],
       summary: 'One customer: buckets, unallocated and status per currency, with a summary per project',
-      description: 'Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency\'s block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392).',
+      description: 'Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency\'s block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392). A block\'s oldestOverdueDueDate and daysOverdue come from the same receivables as its `overdue` (MUT-482).',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: CustomerIdParamSchema },
@@ -133,7 +134,10 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
           bucketize(outsideRows.filter((r) => r.currency === currency), today),
         );
         const u = unallocatedOf(payments.filter((p) => p.currency === currency));
-        return { currency: currency as Currency, ...bucketsWire(b, fmt), unallocated: fmt(u.amount), status: customerStatus(b), projects: own.map((p) => projectWire(p, figures.get(p.id)!)) };
+        // MUT-482: the block's buckets come from its matters' receivables in this currency plus outsideRows in it,
+        // which together are every receivable of the customer in this currency, so the date reads them directly.
+        const oldest = oldestOverdueDueDate(receivables.filter((r) => r.currency === currency), today);
+        return { currency: currency as Currency, ...bucketsWire(b, fmt), ...overdueSinceWire(oldest, today), unallocated: fmt(u.amount), status: customerStatus(b), projects: own.map((p) => projectWire(p, figures.get(p.id)!)) };
       });
       return c.json({ customerId, asOf: today, lastPaymentOn: lastPaymentOn(payments), currencies: blocks }, 200);
     },
@@ -314,6 +318,11 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
 
 function bucketsWire(b: Buckets, fmt: (m: bigint) => string) {
   return { outstanding: fmt(b.outstanding), overdue: fmt(b.overdue), dueToday: fmt(b.dueToday), notYetDue: fmt(b.notYetDue) };
+}
+
+/** MUT-482: since when a customer has been late, and for how many days on `today` (the summary's asOf). */
+function overdueSinceWire(oldest: IsoDate | null, today: IsoDate) {
+  return { oldestOverdueDueDate: oldest, daysOverdue: oldest === null ? null : daysBetween(oldest, today) };
 }
 
 /** A project's figures plus its current fee proposal (M7). */

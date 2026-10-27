@@ -5733,3 +5733,20 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - One block per currency on the project summary. Rejected for now: it changes the shape Malafat and the phone read, for a case only an Owed can create. TD-273 records how to add it without a break.
 - Refusing an Owed whose currency differs from its matter's. Rejected: a person may agree a fee in another currency on the same matter, and money keeps the currency it was agreed in.
 
+## ADR-219: A Customer's Overdue-Since Date Reads the Same Rule as the Overdue Bucket (MUT-482)
+
+**Status:** Accepted (2026-10-27, MUT-482; Basel's eng-review answers D1–D3). Applies ADR-033 (one definition per figure) and ADR-004.
+
+**Context:** Malafat's Money overview sorts its chase list by how long each client has been late. Malafat may not derive dates or money from receivables (Malafat ADR-150), so the summaries must say it.
+
+**Decision:**
+1. **`oldestOverdueDueDate` and `daysOverdue`** on each customer row of the organization summary and each currency block of the customer summary: the earliest due date among the receivables counted in that `overdue`, and the whole days from it to `asOf`. Both null exactly when `overdue` is 0. MUT-470's `oldestOverdueOn` name is not used (closed as a duplicate).
+2. **One rule:** `dayBucketOf(receivable, today)` in `summaries/compute.ts` decides which day bucket a receivable falls in, or none; `bucketize` and `oldestOverdueDueDate` both read it, so the date and the amount can't disagree.
+3. **No new reads:** both are computed over the lists each summary already loads.
+4. A part-paid overdue receivable keeps its date (it is still late); paid or credited in full, it no longer counts.
+
+**Consequences:** the organization-level currency block and project rows carry no date yet; each can be added the same way as an additive field.
+
+**Alternatives considered:**
+- A separate loop beside `bucketize`, checked by a property test. Rejected (D2): the rule would be written twice.
+- A date field inside `Buckets`. Rejected: an amount struct shared by every project figure and test, for a value only two rows need.

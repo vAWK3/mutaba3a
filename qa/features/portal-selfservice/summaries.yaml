@@ -1,0 +1,25 @@
+app: portal-selfservice
+area: summaries
+title: The money summaries Malafat reads with an API key
+tier: secondary
+# MUT-482: Malafat's Money overview (MAL-1366) reads the organization summary once and puts the client who has been
+# late longest first. The figures are the server's (Malafat ADR-150), so the flow runs on the live dev API
+# (support/selfservice-live.mjs) as Malafat does: an API key and fetch, no portal screen.
+paths:
+  - server/src/summaries/compute.ts
+  - server/src/routes/summaries.ts
+features:
+  - id: overdue-since
+    title: A client's oldest overdue due date and its days, moving on when that receivable is paid in full
+    tier: secondary
+    paths:
+      - server/src/summaries/compute.ts
+      - server/src/routes/summaries.ts
+    steps:
+      - Create a firm with an API key, and a client owed 1000 ILS due 148 days ago and 500 ILS due 56 days ago
+      - Read the organization summary
+      - Pay the older one in full
+      - Read the organization summary and the client's summary again
+    expect:
+      - The client's row says overdue since the date 148 days ago, 148 days
+      - After the payment, both summaries say overdue since the date 56 days ago, 56 days
