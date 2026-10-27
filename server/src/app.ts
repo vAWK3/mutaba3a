@@ -647,7 +647,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // Any real file in the build (hashed assets, favicon, manifest, …); a miss
     // falls through to the SPA-shell handler below via Hono's own next().
     // Immutable caching applies only to an actual hit under /assets/* or
-    // /mail/* (MUT-468: mail art, versioned by folder and never rewritten) —
+    // /mail/v<N>/* (MUT-468: mail art, versioned by folder and never rewritten) —
     // onFound fires only when serveStatic found and is serving the file, so a
     // stale/nonexistent hashed filename (after a deploy rotates them) still
     // falls through to the SPA shell with the default no-store header,
@@ -659,7 +659,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       const result = await serveStatic({
         root: distDir,
         onFound: (_path, c) => {
-          if (c.req.path.startsWith('/assets/') || c.req.path.startsWith('/mail/')) foundImmutable = true;
+          if (c.req.path.startsWith('/assets/') || /^\/mail\/v\d+\//.test(c.req.path)) foundImmutable = true;
         },
       })(c, next);
       // c.header() cannot reach this response: serveStatic already built it

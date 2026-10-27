@@ -207,7 +207,7 @@ const accountReady: Copy<'account-ready'> = {
 const accountDeclined: Copy<'account-declined'> = {
   en: ({ supportAddress }) => ({
     subject: 'About your MTB3A account request',
-    preheader: 'About your account request.',
+    preheader: 'We removed the request and kept no data.',
     headline: "We couldn't approve your account",
     intro: [
       ["We couldn't approve your account request, so we removed it. No data was kept."],
@@ -216,7 +216,7 @@ const accountDeclined: Copy<'account-declined'> = {
   }),
   ar: ({ supportAddress }) => ({
     subject: 'بخصوص طلب حسابك في متابعة',
-    preheader: 'بخصوص طلب حسابك.',
+    preheader: 'أزلنا الطلب ولم نحتفظ بأي بيانات.',
     headline: 'لم نتمكن من الموافقة على حسابك',
     intro: [
       ['لم نتمكن من الموافقة على طلب حسابك، فأزلناه. لم نحتفظ بأي بيانات.'],

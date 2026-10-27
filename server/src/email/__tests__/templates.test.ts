@@ -355,3 +355,42 @@ describe('MUT-468 frame', () => {
     expect(panel).not.toContain(SECONDARY_INK);
   });
 });
+
+/** MUT-468 review fixes (specialist T1/T4, adversarial 3/4). */
+describe('MUT-468 frame: review fixes', () => {
+  /** The words a reader sees in the HTML: tags, comments and entities removed. */
+  const visibleText = (html: string) => html.replace(/<!--[\s\S]*?-->/g, ' ').replace(/<[^>]*>/g, ' ').replace(/&#?[a-z0-9]+;/gi, ' ');
+
+  it.each(CUSTOMER_IDS)('%s: no amount, currency or date in the HTML-only text either (preview line, footer, alt text)', (id) => {
+    const allowed = NUMERIC_VARS[id] ?? [];
+    for (const locale of LOCALES) {
+      const html = renderMail(id, locale, SAMPLE[id] as never, FRAME).html;
+      let rest = visibleText(html).split('MTB3A').join('');
+      for (const link of [...LINKS_OF(SAMPLE[id]), ...ART_URLS, `${WEBSITE}/privacy?lang=${locale}`]) rest = rest.split(link).join('');
+      for (const n of allowed) rest = rest.split(n).join('');
+      expect(rest).not.toMatch(CURRENCY);
+      expect(rest).not.toMatch(/[\d٠-٩۰-۹]/u);
+      // Alt text is read aloud and shown with images off; it is attribute text, so check it on its own.
+      for (const img of tagsOf(html, 'img')) expect(attrOf(img, 'alt')).not.toMatch(/[\d٠-٩۰-۹]/u);
+    }
+  });
+
+  it('keeps only the origin of an art or website origin given with a path or query, and refuses a non-http one', () => {
+    const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { to: RECIPIENT, artOrigin: `${ART_ORIGIN}/x?a="b`, websiteOrigin: `${WEBSITE}/some/page` }).html;
+    expect(html).toContain(`src="${ART_ORIGIN}/mail/v1/`);
+    expect(html).not.toContain('?a=');
+    expect(html).toContain(`href="${WEBSITE}/privacy?lang=en"`);
+    expect(() => renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { artOrigin: 'javascript:alert(1)' })).toThrow(/link/i);
+  });
+
+  it('isolates a details value so a Latin name reads correctly inside an Arabic mail', () => {
+    const html = renderMail('passkey-added', 'ar', { passkeyName: 'YubiKey 5C (USB)', signInLink: 'https://portal.example.test/' }, FRAME).html;
+    expect(html).toContain('<bdi>YubiKey 5C (USB)</bdi>');
+  });
+
+  it('holds the card at its width in Outlook desktop, which ignores max-width', () => {
+    const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], FRAME).html;
+    expect(html).toContain('<!--[if mso]><table role="presentation" width="560" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->');
+    expect(html.match(/<!--\[if mso\]>/g)?.length).toBe(html.match(/<!\[endif\]-->/g)?.length);
+  });
+});

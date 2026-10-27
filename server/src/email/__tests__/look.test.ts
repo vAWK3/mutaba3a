@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { TEMPLATE_IDS } from '../ports.js';
@@ -20,7 +20,13 @@ describe('mail looks (MUT-468)', () => {
     expect('review-digest' in LOOK).toBe(false);
   });
 
-  it.each(ART_FILES)('ship %s as a PNG under 40 KB', (file) => {
+  it('ship every file a look names', () => {
+    const shipped = new Set(readdirSync(ART_DIR));
+    for (const file of ART_FILES) expect(shipped.has(file), file).toBe(true);
+  });
+
+  // Every file in the folder, the art MUT-469 reserves included: all are served and cached for a year.
+  it.each(readdirSync(ART_DIR))('ship %s as a PNG under 40 KB', (file) => {
     const path = ART_DIR + file;
     const bytes = readFileSync(path);
     expect([...bytes.subarray(0, PNG_SIGNATURE.length)]).toEqual(PNG_SIGNATURE);

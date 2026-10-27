@@ -25,10 +25,14 @@ const FONTS: Record<UserLocale, string> = {
   ar: "-apple-system, 'Segoe UI', Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', Arial, sans-serif",
   en: "-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
 };
-/** Shown at half their @2x size. */
+/** The header art is drawn at a fixed 150 px (plan D6: no media queries), from its 320 px file. */
 const HEADER_PX = 150;
+/** The chip at half its 80 px @2x file. */
 const CHIP_PX = 40;
 const CARD_MAX_PX = 560;
+/** Outlook desktop ignores max-width; these conditional comments hold the card at CARD_MAX_PX there. */
+const MSO_OPEN = `<!--[if mso]><table role="presentation" width="${CARD_MAX_PX}" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->`;
+const MSO_CLOSE = '<!--[if mso]></td></tr></table><![endif]-->';
 
 /** Every text colour the frame puts on a background, for the contrast test. */
 export const TEXT_PAIRS: ReadonlyArray<{ fg: string; bg: string; where: string }> = [
@@ -59,8 +63,11 @@ export interface MailBody {
   headline?: string;
   /** Paragraphs before the button. */
   intro: Inline[][];
-  /** MUT-468: label/value rows in a tinted panel (the passkey's name, the deletion day), also in the text part. */
-  details?: { label: string; value: Inline }[];
+  /**
+   * MUT-468: label/value rows in a tinted panel (the passkey's name, the deletion day), also in the text part. Values
+   * are plain text, isolated in a `<bdi>` so a name in either script reads right inside the other (no links on a tint).
+   */
+  details?: { label: string; value: string }[];
   action?: { label: string; href: string };
   /** A second, quieter link under the button. */
   secondary?: { label: string; href: string };
@@ -149,6 +156,7 @@ function top(locale: UserLocale, body: MailBody, look: Look | undefined, artOrig
   const artUrl = (file: string) => `${artOrigin}${MAIL_ART_PATH}${file}`;
   return [
     `<tr><td align="center" bgcolor="${band}" style="background:${band};padding:32px 16px 0;">`,
+    MSO_OPEN,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:${CARD_MAX_PX}px;">`,
     `<tr><td align="center" style="padding-bottom:16px;">${wordmark(locale)}</td></tr>`,
     ...(art ? [`<tr><td align="center" style="padding-bottom:8px;">${img(artUrl(art.header.file), art.header.alt, HEADER_PX, '0 auto')}</td></tr>`] : []),
@@ -160,7 +168,9 @@ function top(locale: UserLocale, body: MailBody, look: Look | undefined, artOrig
           '</td></tr>',
         ]
       : []),
-    '</table></td></tr>',
+    '</table>',
+    MSO_CLOSE,
+    '</td></tr>',
   ].join('\n');
 }
 
@@ -170,7 +180,7 @@ function details(rows: NonNullable<MailBody['details']>, look: Look | undefined,
     `<td valign="top" style="padding:8px 16px;font-size:14px;line-height:1.5;font-weight:${weight};color:${INK};text-align:${align};">${content}</td>`;
   return [
     `<table data-details role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${panel}" style="background:${panel};border-radius:12px;margin:4px 0 24px;">`,
-    ...rows.map((row) => `<tr>${cell(escapeHtml(row.label), 700)}${cell(inlineHtml(row.value), 400)}</tr>`),
+    ...rows.map((row) => `<tr>${cell(escapeHtml(row.label), 700)}${cell(`<bdi>${escapeHtml(row.value)}</bdi>`, 400)}</tr>`),
     '</table>',
   ].join('');
 }
@@ -208,6 +218,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="${dir}" style="background:${CANVAS};font-family:${FONTS[locale]};color:${INK};">`,
     top(locale, body, look, artOrigin),
     `<tr><td align="center" style="padding:0 16px 32px;">`,
+    MSO_OPEN,
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:${CARD_MAX_PX}px;">`,
     `<tr><td dir="${dir}" bgcolor="${SURFACE}" style="background:${SURFACE};border:1px solid ${LINE};${cardTop};font-size:16px;line-height:1.6;color:${INK};text-align:${align};">`,
     ...body.intro.map((p) => paragraphHtml(p)),
@@ -227,6 +238,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     '</td></tr>',
     footer(locale, frame),
     '</table>',
+    MSO_CLOSE,
     '</td></tr>',
     '</table>',
     '</body></html>',
@@ -237,7 +249,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     '',
     ...(body.headline ? [body.headline, ''] : []),
     ...body.intro.map((p) => p.map(inlineText).join('')).flatMap((p) => [p, '']),
-    ...(body.details && body.details.length > 0 ? [...body.details.map((row) => `${row.label}: ${inlineText(row.value)}`), ''] : []),
+    ...(body.details && body.details.length > 0 ? [...body.details.map((row) => `${row.label}: ${row.value}`), ''] : []),
     ...(action ? [`${action.label}:`, action.href, ''] : []),
     ...(secondary ? [`${secondary.label}:`, secondary.href, ''] : []),
     ...(body.outro ?? []).map((p) => p.map(inlineText).join('')).flatMap((p) => [p, '']),

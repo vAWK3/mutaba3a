@@ -459,7 +459,7 @@ describe('loadConfig — mail (MUT-359)', () => {
   it('MUT-468: WEBSITE_ORIGIN (the Privacy link in every mail) is an https origin and nothing more', () => {
     expect(loadConfig({ ...base, WEBSITE_ORIGIN: 'https://site.example.test' }).WEBSITE_ORIGIN).toBe('https://site.example.test');
     expect(loadConfig(base).WEBSITE_ORIGIN).toBeUndefined();
-    for (const bad of ['http://site.example.test', 'https://site.example.test/', 'https://site.example.test/privacy', 'https://site.example.test?x=1', 'site.example.test']) {
+    for (const bad of ['http://site.example.test', 'https://site.example.test/', 'https://site.example.test/privacy', 'https://site.example.test?x=1', 'site.example.test', 'https://']) {
       expect(() => loadConfig({ ...base, WEBSITE_ORIGIN: bad }), bad).toThrow('WEBSITE_ORIGIN');
     }
   });
@@ -468,6 +468,10 @@ describe('loadConfig — mail (MUT-359)', () => {
     const production = { ...base, NODE_ENV: 'production', ...resend, TURNSTILE_SECRET: '0x4AAAAAAAmut468livesecretforconfigtests' };
     expect(() => loadConfig(production)).toThrow('PORTAL_ORIGIN');
     expect(loadConfig({ ...production, PORTAL_ORIGIN: 'https://app.example.test' }).WEBSITE_ORIGIN).toBeUndefined();
+    // The art origin must be an https origin there, or every mail would point at broken or mixed-content pictures.
+    for (const bad of ['http://app.example.test', 'HTTPS://APP.EXAMPLE.TEST', 'https://app.example.test/portal']) {
+      expect(() => loadConfig({ ...production, PORTAL_ORIGIN: bad }), bad).toThrow('PORTAL_ORIGIN');
+    }
     // Outside production a mail without art is fine (development, QA, tests render the images-off layout).
     expect(loadConfig({ ...base, ...resend }).PORTAL_ORIGIN).toBeUndefined();
   });

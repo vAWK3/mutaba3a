@@ -108,7 +108,10 @@ export function artFor(look: Look, locale: UserLocale): { header: Picture; chip:
   };
 }
 
-/** Every file a mail can point at, both directions (look.test.ts checks each ships). */
+/**
+ * Every file a mail can point at, both directions (look.test.ts checks each ships). The folder also holds art reserved
+ * for MUT-469's welcome mail (onboarding header; attach, insights, receipt and client chips), served but not yet named.
+ */
 export const ART_FILES: readonly string[] = [
   ...new Set(
     Object.values(LOOK).flatMap((look) => [

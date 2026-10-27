@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isPlainAddress, isUnownedDomain, TEMPLATE_IDS, type MailTemplateId, type TemplateVars } from '../email/ports.js';
 import { BRAND_NAME, renderMail } from '../email/templates/index.js';
+import { MAIL_ART_PATH } from '../email/templates/look.js';
 import { createResendTransport } from '../email/transports/resend.js';
 import type { UserLocale } from '../repositories/ports.js';
 
@@ -13,8 +14,9 @@ import type { UserLocale } from '../repositories/ports.js';
  *   npm --prefix server run mail:preview
  *       Writes server/.mail-preview/: <id>.<locale>.html (pictures on, loaded from src/hosted/public/mail/v1 by
  *       relative path), <id>.<locale>.no-images.html, and index.html listing them. Open index.html in a browser.
- *   npm --prefix server run mail:preview -- --send <address>
- *       Sends each mail, both languages, through Resend to one inbox (Gmail, Apple Mail, Outlook checks). Needs
+ *   npm --prefix server run mail:preview -- --send <address> --yes
+ *       Sends each mail, both languages, through Resend to one inbox (Gmail, Apple Mail, Outlook checks). Without
+ *       --yes it only says how many mails it would send, from which address, to whom. Needs
  *       RESEND_API_KEY, MAIL_FROM_ADDRESS and PORTAL_ORIGIN (a portal that already serves /mail/v1); WEBSITE_ORIGIN
  *       optional. Bypasses the mailer's log and caps: it is an operator tool, one address, sample values only.
  */
@@ -43,7 +45,7 @@ const PLACEHOLDER_ORIGIN = 'https://art.invalid';
 const RESEND_PAUSE_MS = 600;
 
 const serverDir = fileURLToPath(new URL('../../', import.meta.url));
-const artDir = join(serverDir, '..', 'src', 'hosted', 'public', 'mail', 'v1');
+const artDir = join(serverDir, '..', 'src', 'hosted', 'public', ...MAIL_ART_PATH.split('/').filter(Boolean));
 
 function writePreviews(outDir: string, websiteOrigin: string | undefined): string[] {
   mkdirSync(outDir, { recursive: true });
@@ -55,7 +57,7 @@ function writePreviews(outDir: string, websiteOrigin: string | undefined): strin
       const withArt = renderMail(id, locale, vars, { to: SAMPLE_RECIPIENT, artOrigin: PLACEHOLDER_ORIGIN, websiteOrigin });
       const noArt = renderMail(id, locale, vars, { to: SAMPLE_RECIPIENT, websiteOrigin });
       const name = `${id}.${locale}`;
-      writeFileSync(join(outDir, `${name}.html`), withArt.html.split(`${PLACEHOLDER_ORIGIN}/mail/v1/`).join(artPath));
+      writeFileSync(join(outDir, `${name}.html`), withArt.html.split(`${PLACEHOLDER_ORIGIN}${MAIL_ART_PATH}`).join(artPath));
       writeFileSync(join(outDir, `${name}.no-images.html`), noArt.html);
       writeFileSync(join(outDir, `${name}.txt`), `Subject: ${withArt.subject}\n\n${withArt.text}\n`);
       files.push(name);
@@ -66,7 +68,7 @@ function writePreviews(outDir: string, websiteOrigin: string | undefined): strin
   return files;
 }
 
-async function sendAll(to: string): Promise<number> {
+async function sendAll(to: string, confirmed: boolean): Promise<number> {
   const { RESEND_API_KEY, MAIL_FROM_ADDRESS, PORTAL_ORIGIN, WEBSITE_ORIGIN } = process.env;
   if (!RESEND_API_KEY || !MAIL_FROM_ADDRESS || !PORTAL_ORIGIN) {
     console.error('[mail:preview] --send needs RESEND_API_KEY, MAIL_FROM_ADDRESS and PORTAL_ORIGIN');
@@ -74,6 +76,11 @@ async function sendAll(to: string): Promise<number> {
   }
   if (!isPlainAddress(to) || isUnownedDomain(to)) {
     console.error(`[mail:preview] refusing to send to ${JSON.stringify(to)}`);
+    return 1;
+  }
+  const count = TEMPLATE_IDS.length * LOCALES.length;
+  if (!confirmed) {
+    console.log(`[mail:preview] would send ${count} sample mails from ${MAIL_FROM_ADDRESS} to ${to}, outside the mailer's caps and log. Add --yes to send.`);
     return 1;
   }
   const transport = createResendTransport({ apiKey: RESEND_API_KEY });
@@ -92,7 +99,7 @@ async function sendAll(to: string): Promise<number> {
 
 async function main(argv: string[]): Promise<number> {
   const send = argv.indexOf('--send');
-  if (send >= 0) return sendAll(argv[send + 1] ?? '');
+  if (send >= 0) return sendAll(argv[send + 1] ?? '', argv.includes('--yes'));
   const outDir = join(serverDir, '.mail-preview');
   const files = writePreviews(outDir, process.env.WEBSITE_ORIGIN);
   console.log(`[mail:preview] ${files.length} mails written to ${join(outDir, 'index.html')}`);

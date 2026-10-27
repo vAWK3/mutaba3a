@@ -50,14 +50,19 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
   });
 
   await step('Turn images off and open it again: the headline, the button and the copyable link are all there', async () => {
-    await page.route('**/mail/v1/**', (route) => route.abort());
-    await page.setContent(mail.html, { waitUntil: 'load' });
-    await expect(page.getByRole('heading', { level: 1, name: HEADLINE })).toBeVisible();
-    await expect(page.getByRole('link', { name: BUTTON })).toHaveAttribute('href', setupLink);
-    await expect(page.getByText(setupLink)).toBeVisible();
+    // A fresh page with pictures blocked before it loads, so no cached copy can stand in (review T2).
+    const imagesOff = await page.context().newPage();
+    await imagesOff.route('**/mail/v1/**', (route) => route.abort());
+    await imagesOff.setContent(mail.html, { waitUntil: 'load' });
+    expect(await imagesOff.getByRole('img', { name: 'ظرف داخل دائرة' }).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(0);
+    await expect(imagesOff.getByRole('heading', { level: 1, name: HEADLINE })).toBeVisible();
+    await expect(imagesOff.getByRole('link', { name: BUTTON })).toHaveAttribute('href', setupLink);
+    await expect(imagesOff.getByText(setupLink)).toBeVisible();
+    await imagesOff.close();
   });
 
   await step('Press the mail\'s button: /setup, "Finish creating your account"', async () => {
+    await page.setContent(mail.html, { waitUntil: 'load' });
     await page.getByRole('link', { name: BUTTON }).click();
     // The portal strips the token from the address bar on arrival (MUT-236), so the URL ends at /setup.
     await expect(page).toHaveURL(/\/setup$/);

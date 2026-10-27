@@ -107,7 +107,7 @@ QA scenario "the signup mail is on brand": sign up on the portal (Arabic), open 
 
 ## 7. Release (before-release.md)
 
-One `api-v*` release carries the art and the frame together (R1). Its `terraform apply` (run by deploy.sh) adds `WEBSITE_ORIGIN`; until then mails go out without the Privacy link, nothing else changes. After the release, check one file: `curl -sI https://app.mtb3a.com/mail/v1/mail-header-hello-spot-email-2x.png` returns 200, `image/png` and the immutable `Cache-Control`, not the SPA's HTML.
+One `api-v*` release carries the art and the frame together (R1). Mail is live in production (since 2026-10-25), so customers get the new frame from that release on: the client checks in §6 run right after it. Its `terraform apply` (run by deploy.sh) adds `WEBSITE_ORIGIN`; until then mails go out without the Privacy link, nothing else changes. After the release, check one file: `curl -sI https://app.mtb3a.com/mail/v1/mail-header-hello-spot-email-2x.png` returns 200, `image/png` and the immutable `Cache-Control`, not the SPA's HTML.
 
 ## 8. Definition of done
 

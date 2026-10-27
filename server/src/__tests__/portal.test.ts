@@ -121,6 +121,7 @@ describe('portal serving — enabled', () => {
     await writeFile(join(distDir, 'favicon.svg'), '<svg></svg>');
     await mkdir(join(distDir, 'mail', 'v1'), { recursive: true });
     await writeFile(join(distDir, 'mail', 'v1', 'chip-lock-safety-2x.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await writeFile(join(distDir, 'mail', 'loose.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     app = harness({ distDir });
   });
 
@@ -131,6 +132,12 @@ describe('portal serving — enabled', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     // Webmail that fetches images directly would refuse a same-origin resource policy.
     expect(res.headers.get('cross-origin-resource-policy') ?? '').not.toBe('same-origin');
+  });
+
+  it('MUT-468: only versioned mail art is immutable: a file directly under /mail/ is served but never cached for a year', async () => {
+    const res = await app.request('/mail/loose.png');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control') ?? '').not.toContain('immutable');
   });
 
   it('MUT-468: a missing mail picture falls back to the SPA shell, never immutably cached', async () => {

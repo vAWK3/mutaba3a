@@ -93,7 +93,7 @@ const envSchema = z.object({
   WEBSITE_ORIGIN: z
     .string()
     .url()
-    .refine((value) => value.startsWith('https://') && new URL(value).origin === value, 'must be an https origin with no path, e.g. https://example.com')
+    .refine(isHttpsOrigin, 'must be an https origin with no path, e.g. https://example.com')
     .optional(),
   /**
    * MUT-115 (ADR-190, D2): the WebAuthn relying-party ID, the apex domain (Terraform sets it from config/hosts.json at
@@ -352,6 +352,15 @@ function attachmentsConfig(config: z.infer<typeof envSchema>): { ATTACHMENTS_DIR
 }
 
 /** MUT-359: the mail refusals (ticket, D7, D14, D18, D20) and the caps' defaults. */
+/** MUT-468: `https://host[:port]` exactly, lower-case as the URL parser writes it; anything else (or unparsable) is false. */
+function isHttpsOrigin(value: string): boolean {
+  try {
+    return value.startsWith('https://') && new URL(value).origin === value;
+  } catch {
+    return false;
+  }
+}
+
 function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number; MAIL_SECURITY_RESERVE: number } {
   const refuse = (name: string, why: string): never => {
     throw new ConfigError(`Invalid configuration:\n  ${name}: ${why}`);
@@ -363,9 +372,10 @@ function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number
   if (config.MAILER === 'resend') {
     for (const name of RESEND_REQUIRED) if (config[name] === undefined) refuse(name, 'MAILER=resend needs it');
   }
-  // MUT-468: the mail art is served by the portal; without its origin every production mail would go out without it.
-  if (config.NODE_ENV === 'production' && config.MAILER === 'resend' && !config.PORTAL_ORIGIN) {
-    refuse('PORTAL_ORIGIN', 'production mail needs it: the mail art is served from <PORTAL_ORIGIN>/mail/v1');
+  // MUT-468: the mail art is served by the portal; without its origin every production mail would go out without it,
+  // and anything but an https origin would point every mail at broken or mixed-content pictures.
+  if (config.NODE_ENV === 'production' && config.MAILER === 'resend' && !(config.PORTAL_ORIGIN && isHttpsOrigin(config.PORTAL_ORIGIN))) {
+    refuse('PORTAL_ORIGIN', 'production mail needs an https origin with no path: the mail art is served from <PORTAL_ORIGIN>/mail/v1');
   }
   if (config.RESEND_WEBHOOK_SECRET && !config.MAIL_FROM_ADDRESS) refuse('MAIL_FROM_ADDRESS', 'the Resend webhook keeps only events sent from this address\'s domain, so it needs it');
   for (const name of ['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO'] as const) {
