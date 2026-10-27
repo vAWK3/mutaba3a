@@ -59,7 +59,8 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
 
   await step('Press the mail\'s button: /setup, "Finish creating your account"', async () => {
     await page.getByRole('link', { name: BUTTON }).click();
-    await expect(page).toHaveURL(/\/setup#/);
+    // The portal strips the token from the address bar on arrival (MUT-236), so the URL ends at /setup.
+    await expect(page).toHaveURL(/\/setup$/);
     await expect(page.getByRole('heading', { level: 1, name: 'أكمل إنشاء حسابك' })).toBeVisible();
   });
 });
