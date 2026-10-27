@@ -40,7 +40,8 @@ run "floors_reach_the_env" {
 
   variables {
     android_min_build         = 12
-    ios_min_build             = 2
+    ios_min_build             = 8
+    ios_recommended_build     = 8
     android_recommended_build = 13
   }
 
@@ -49,11 +50,12 @@ run "floors_reach_the_env" {
       for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.name => e.value
       if contains(["IOS_MIN_BUILD", "ANDROID_MIN_BUILD", "IOS_RECOMMENDED_BUILD", "ANDROID_RECOMMENDED_BUILD", "MIN_BUILD_CHECK_DISABLED"], e.name)
       } == {
-      IOS_MIN_BUILD             = "2"
+      IOS_MIN_BUILD             = "8"
       ANDROID_MIN_BUILD         = "12"
+      IOS_RECOMMENDED_BUILD     = "8"
       ANDROID_RECOMMENDED_BUILD = "13"
     }
-    error_message = "Exactly the floors that are set reach Cloud Run, as whole-number strings config.ts reads."
+    error_message = "Exactly the floors that are set reach Cloud Run, as whole-number strings config.ts reads; a recommended build equal to its floor is allowed."
   }
 }
 

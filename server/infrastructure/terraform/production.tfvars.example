@@ -48,7 +48,7 @@ log_level           = "info"
 
 # Phone minimum build (MUT-293, MUT-457; DEPLOYMENT.md "Raise the minimum app build"). Unset = no phone is told to
 # update. Only raise a floor to a build already live in that store; iOS builds before MUT-457 repeat 1–7, so the
-# first iOS floor is 8. Apply with `-var image_tag=<serving sha>`, not deploy.sh. Undo: min_build_check_disabled = true.
+# first iOS floor is 8. Ships with a normal release. Undo: min_build_check_disabled = true (DEPLOYMENT.md).
 # android_min_build         = 12
 # android_recommended_build = 13
 # ios_min_build             = 8
