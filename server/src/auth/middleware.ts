@@ -74,6 +74,8 @@ export type AppEnv = {
     billingGate: boolean;
     /** MUT-370 (D9): whether this server offers passkeys (app-shell.ts, from WEBAUTHN_RP_ID); /v1/me's suggestion reads it. */
     passkeys: boolean;
+    /** MUT-474: a dev server's owned-profile cap (app-shell.ts, from QA_MAX_OWNED_PROFILES); unset = the product limit. */
+    maxOwnedProfiles: number | undefined;
     /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
     personEntitlements: ReadonlyMap<string, Entitlement>;
     /** MUT-447: report an error a route handled itself (a partial answer), as the shell reports an unhandled one (ADR-091). */

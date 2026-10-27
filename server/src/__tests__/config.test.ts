@@ -517,3 +517,22 @@ describe('loadConfig — listen address (MUT-463)', () => {
     },
   );
 });
+
+describe('loadConfig — local QA profile cap (MUT-474)', () => {
+  it('leaves the cap override unset by default', () => {
+    expect(loadConfig(base).QA_MAX_OWNED_PROFILES).toBeUndefined();
+  });
+
+  it('accepts an override in development and test', () => {
+    expect(loadConfig({ ...base, QA_MAX_OWNED_PROFILES: '100' }).QA_MAX_OWNED_PROFILES).toBe(100);
+    expect(loadConfig({ ...base, NODE_ENV: 'test', QA_MAX_OWNED_PROFILES: '8' }).QA_MAX_OWNED_PROFILES).toBe(8);
+  });
+
+  it('refuses an override below the product limit', () => {
+    expect(() => loadConfig({ ...base, QA_MAX_OWNED_PROFILES: '3' })).toThrow(ConfigError);
+  });
+
+  it.each(['production', 'staging'])('refuses an override in %s', (env) => {
+    expect(() => loadConfig({ ...base, NODE_ENV: env, QA_MAX_OWNED_PROFILES: '100' })).toThrow(/QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only/);
+  });
+});

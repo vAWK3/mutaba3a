@@ -41,6 +41,7 @@ import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
 import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { buildMe, passkeysClockOf } from './me.js';
+import { ownedProfileCap } from './profiles.js';
 import { signInLinkOf } from './account-setup.js';
 import type { Mailer } from '../email/ports.js';
 import { sendPasswordNotice } from '../email/password-notice.js';
@@ -127,7 +128,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c)), 201);
     },
   );
 
@@ -170,7 +171,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c)), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c)), 201);
     },
   );
 

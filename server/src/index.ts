@@ -151,6 +151,7 @@ const app = createApp({
   receiptsLibrary: config.RECEIPTS_LIBRARY,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   billingGate: config.BILLING_GATE,
+  maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
   passwordHasher: createArgon2Hasher({
