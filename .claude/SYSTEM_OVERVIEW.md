@@ -128,6 +128,7 @@ ESLint enforces it (MUT-47, ADR-071).
 3. **"All Converted" is optional** and must show FX source/date
 
 ### Receivable Logic
+- **Hosted API (MUT-478, ADR-217):** every receivable carries a `CHG-YYYY-NNNN` number, and `GET /v1/customers/{id}/statement` is the customer's ledger card (charges, credits, payments, reversals, running balance), computed per request from the rows.
 - **Receivable** = Transaction with `kind='income'` AND `status='unpaid'`
 - **Overdue** = Receivable AND `dueDate < today`
 - **Mark Paid / Record Payment are the same flow (ADR-038)**: both open

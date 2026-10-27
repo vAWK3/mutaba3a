@@ -30,6 +30,18 @@
 - **Why it's small:** both are the operator's own actions, seconds apart, and the result is a legal state (firm on, audited). Fix by letting `setFirm` take a "only while requested" condition under its row lock.
 - **Added:** 2026-10-27.
 
+### TD-272: A database trigger numbers receivables the previous API revision inserts
+**Status**: Open (MUT-478, 2026-10-27; ADR-217)
+- **What:** migration `20261027160000_mut478_receivable_numbers` adds `receivables_assign_number`, a BEFORE INSERT trigger that numbers a receivable inserted without a number from `receivable_counters`. It exists only so the revision still serving during the roll (which knows nothing of numbers) can keep inserting under the new NOT NULL. The new revision always sends a number, so the trigger stands down.
+- **Why it's acceptable:** both paths take the same counter row under its lock, so numbers stay gap-free and unique; the migration test proves an old-shape insert gets the next number.
+- **Fix:** once the release that ships MUT-478 has fully rolled, a migration drops the trigger and its function (`DROP TRIGGER receivables_assign_number ON receivables; DROP FUNCTION receivables_assign_number();`).
+
+### TD-271: The customer statement recomputes the whole ledger on every page
+**Status**: Open (MUT-478, 2026-10-27; ADR-217)
+- **What:** `GET /v1/customers/{id}/statement` reads all of a customer's rows in one currency and orders them in memory on every request, so each page costs the whole ledger.
+- **Why it's acceptable:** the customer summary already loads the same rows; 1,000 lines is a few queries and well under a second. A law firm's client rarely passes a few hundred lines.
+- **Fix:** when one customer passes ~20k lines, compute the running balance with SQL window functions on Postgres (keep the JavaScript builder for local mode), or cache the period's opening balance per (customer, currency, from).
+
 ### TD-269: The operator's account page can't say when an account was disabled
 **Status**: Open (MUT-461, 2026-10-27)
 - **What:** design 5A's banner reads "Disabled ‹date›", but no column records when an account was disabled (`users.status` only; `updatedAt` moves on any change). The banner says "This account is disabled" with no date.

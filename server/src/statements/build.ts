@@ -6,7 +6,7 @@ import { receivableStatus } from '../serializers.js';
 import { countsOn, outstandingOf } from '../summaries/compute.js';
 
 /**
- * A customer statement (MUT-478, ADR-216): the ledger card a partner
+ * A customer statement (MUT-478, ADR-217): the ledger card a partner
  * reconciles against the accountant's books. Computed, never stored: one pure
  * pass over the customer's rows in one currency orders every charge, credit,
  * payment and reversal, folds what lies before `from` into the opening

@@ -2852,3 +2852,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: classify a receivable once (MUT-482)
 **Where**: `server/src/summaries/compute.ts` `dayBucketOf(r, today)`.
 **Rule**: anything that depends on whether a receivable is overdue, due today or not yet due (an amount, a date, a count, a status) reads `dayBucketOf`, never its own `dueDate < today` check. It already applies OPEN, `countsOn` (MUT-392) and "something outstanding".
+
+## Pattern: a ledger is computed, never stored: one pure builder over the source rows (MUT-478)
+**Where**: `server/src/statements/build.ts` (`buildStatement`), fed by `receivables.statementSources`.
+**Rule**: a figure that runs across rows (a running balance, an opening balance) is computed from the rows that justify it, in one pure pass with no store and no clock, and paged after the whole period is computed. Never page first and carry a balance in the cursor: the opening balance and totals would then depend on the page. The store method returns everything in a fixed number of queries; the route only composes. A new line kind is a new branch in the builder and a new row in its table tests.
