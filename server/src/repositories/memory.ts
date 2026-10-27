@@ -2281,7 +2281,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (c.version !== expectedVersion) return { kind: 'stale', record: { ...c } };
       if (patch.name !== undefined) {
         const taken = this.categoryNamed(organizationId, patch.name);
-        if ((taken && taken.id !== id) || this.presetTwin(organizationId, patch.name, id)) throw new UniqueViolation('expense_categories.name');
+        if ((taken && taken.id !== id) || this.presetTwin(organizationId, patch.name, c)) throw new UniqueViolation('expense_categories.name');
         c.name = patch.name;
       }
       if (patch.color !== undefined) c.color = patch.color;
@@ -3043,9 +3043,10 @@ export class MemoryLedgerStore implements LedgerStore {
   };
 
   /** MUT-464: another category that is the same preset entry as `name`, in either language (Prisma's refusePresetTwin). */
-  private presetTwin(organizationId: string, name: string, exceptId: string | null): boolean {
+  private presetTwin(organizationId: string, name: string, renamed: ExpenseCategoryRecord | null): boolean {
     const key = presetKeyForName(name);
-    return key !== null && [...this.expCats.values()].some((c) => c.organizationId === organizationId && c.id !== exceptId && presetKeyForName(c.name) === key);
+    if (key === null || (renamed && presetKeyForName(renamed.name) === key)) return false;
+    return [...this.expCats.values()].some((c) => c.organizationId === organizationId && c.id !== renamed?.id && presetKeyForName(c.name) === key);
   }
 
   private categoryNamed(organizationId: string, name: string): ExpenseCategoryRecord | undefined {

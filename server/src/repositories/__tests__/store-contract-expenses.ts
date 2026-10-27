@@ -199,6 +199,20 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect((await store.expenseCategories.list(w.a.id, { includeArchived: true })).map((c) => c.name)).toEqual(['Office Rent', 'Coffee']);
     });
 
+    // MUT-464 review: a pair from before the check ("Other" beside "أخرى") stays editable; only a NEW twin is refused.
+    it('lets a row that already is a preset entry keep or recase its name beside an older twin', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      // The pair predates the check; seeding writes rows without it, so it stands in for that history.
+      await store.expenseCategories.seed(w.a.id, [{ name: 'أخرى', color: null }, { name: 'Other', color: null }], at(0));
+      const late = (await store.expenseCategories.list(w.a.id, { includeArchived: true })).find((c) => c.name === 'Other')!;
+      expect(await store.expenseCategories.update(w.a.id, late.id, 1, { name: 'Other', color: '#123abc' }, at(2))).toMatchObject({ kind: 'updated' });
+      expect(await store.expenseCategories.update(w.a.id, late.id, 2, { name: 'other' }, at(3))).toMatchObject({ kind: 'updated' });
+      // Still no new twin: a typed category can't become Other.
+      const coffee = await store.expenseCategories.create(w.a.id, { name: 'Coffee', color: null }, at(4));
+      await expect(store.expenseCategories.update(w.a.id, coffee.id, 1, { name: 'Other' }, at(5))).rejects.toBeInstanceOf(UniqueViolation);
+    });
+
     it('seeds a preset only into an organization with no categories, once, even when two seeds race', async () => {
       const store = await makeStore();
       const w = await world(store);

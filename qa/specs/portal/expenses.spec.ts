@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
 import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
-import { openYou } from '../../support/you';
+import { switchLanguage } from '../../support/you';
 import { FakeApi, STORAGE, apiError, category, ceilingOf, daysAfter, expense, project, todayInJerusalem } from '../../support/portalApi';
 
 /**
@@ -451,16 +451,6 @@ const studioRent = category(4, 'Studio rent');
 const rentExpenses = () => [expense(1, { amount: '800.00', title: 'October rent', categoryId: seededRent.id }), expense(2, { amount: '300.00', title: 'Studio', categoryId: studioRent.id })];
 const rowOf = (page: Page, title: string) => page.getByRole('table').getByRole('row', { name: new RegExp(title) });
 const lastCategoriesLanguage = (api: FakeApi) => api.last('GET', /^\/v1\/expense-categories$/)?.headers['accept-language'];
-
-async function switchLanguage(page: Page, step: Step, label: 'EN' | 'عربي', dir: 'ltr' | 'rtl') {
-  await step(`Switch the portal to ${label === 'EN' ? 'English' : 'Arabic'} on You › App, then go back`, async () => {
-    await openYou(page, 'app');
-    await page.locator('.hp-lang').getByRole('button', { name: label }).click();
-    await expect(page.locator('html')).toHaveAttribute('dir', dir);
-    await page.goBack();
-    await page.goBack();
-  });
-}
 
 test('A seeded category is named in the portal’s language, and switching renames it (MUT-464)', { tag: '@portal.expenses.categories-follow-language' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [seededRent, studioRent], expenses: rentExpenses() });

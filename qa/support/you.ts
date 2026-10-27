@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import type { Step } from './qa';
 
 /**
  * MUT-425: the profile switcher and the account menu became the You page; MUT-426's You island opens it on Profiles,
@@ -21,3 +22,15 @@ export async function openYou(page: Page, part: YouPart = 'account'): Promise<vo
 
 /** A row on the You page by its title: rows also carry a second line, so the name starts with the title. */
 export const youRow = (page: Page, title: string) => page.getByRole('button', { name: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
+
+/** MUT-464: switch the portal language on You › App, then go back to the page it was on (the island and the tab are two history entries). */
+export async function switchLanguage(page: Page, step: Step, label: 'EN' | 'عربي', dir: 'ltr' | 'rtl') {
+  await step(`Switch the portal to ${label === 'EN' ? 'English' : 'Arabic'} on You › App, then go back`, async () => {
+    await openYou(page, 'app');
+    await page.locator('.hp-lang').getByRole('button', { name: label }).click();
+    await expect(page.locator('html')).toHaveAttribute('dir', dir);
+    await page.goBack();
+    await page.goBack();
+  });
+}
+

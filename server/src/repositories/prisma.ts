@@ -1991,7 +1991,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if (!current) return { kind: 'not_found' };
           const data: Prisma.ExpenseCategoryUpdateManyMutationInput = { version: { increment: 1 }, updatedAt: at };
           if (patch.name !== undefined) {
-            await refusePresetTwin(tx, organizationId, patch.name, id);
+            await refusePresetTwin(tx, organizationId, patch.name, current);
             data.name = patch.name;
             data.nameKey = categoryNameKey(patch.name);
           }
@@ -2814,11 +2814,13 @@ export class PrismaLedgerStore implements LedgerStore {
 /**
  * MUT-464: a category name that is a preset entry (in either language) may not join a profile that already has that
  * entry under another name — the same rule as the unique `nameKey`, across languages. Runs under the organization lock.
+ * `renamed` is the row being renamed, null for a new one.
  */
-async function refusePresetTwin(tx: Prisma.TransactionClient, organizationId: string, name: string, exceptId: string | null): Promise<void> {
+async function refusePresetTwin(tx: Prisma.TransactionClient, organizationId: string, name: string, renamed: { id: string; name: string } | null): Promise<void> {
   const key = presetKeyForName(name);
-  if (key === null) return;
-  const twin = await tx.expenseCategory.findFirst({ where: { organizationId, nameKey: { in: presetNameKeys(key) }, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } });
+  // A row that already is this entry keeps it (a pair from before the check stays editable); only a new twin is refused.
+  if (key === null || (renamed && presetKeyForName(renamed.name) === key)) return;
+  const twin = await tx.expenseCategory.findFirst({ where: { organizationId, nameKey: { in: presetNameKeys(key) }, ...(renamed ? { id: { not: renamed.id } } : {}) }, select: { id: true } });
   if (twin) throw new UniqueViolation('expense_categories.name');
 }
 
