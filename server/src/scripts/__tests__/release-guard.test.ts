@@ -26,6 +26,8 @@ afterEach(() => {
 type Opts = {
   stage?: string; // what `terraform console` evaluates var.cmek_stage to
   ingress?: string; // ... and var.api_ingress
+  consoleAnswer?: string; // raw console answer instead of "<stage> <ingress>"
+  consoleFails?: boolean;
   serving?: string | null; // terraform output cloud_sql_instance_name; null = no such output
   outputError?: boolean;
   outputEmpty?: boolean;
@@ -56,7 +58,11 @@ function guard(o: Opts) {
       'case "$1" in',
       `  output) ${output} ;;`,
       `  state) ${o.keyInState ? "printf 'google_kms_crypto_key.data[0]\\ngoogle_sql_database_instance.postgres\\n'" : "printf 'google_sql_database_instance.postgres\\n'"} ;;`,
-      `  console) cat >/dev/null; printf '"%s"\\n"%s"\\n' '${o.stage ?? 'off'}' '${o.ingress ?? 'INGRESS_TRAFFIC_ALL'}' ;;`,
+      // Like Terraform 1.15's console (MUT-475): several lines on stdin answer only the last one.
+      '  console)',
+      '    last=""; while IFS= read -r line || [[ -n "$line" ]]; do [[ -n "$line" ]] && last="$line"; done',
+      `    echo "console> $last" >> "${log}"`,
+      `    ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `if [[ "$last" == *var.cmek_stage*var.api_ingress* ]]; then printf '"%s"\\n' '${o.consoleAnswer ?? `${o.stage ?? 'off'} ${o.ingress ?? 'INGRESS_TRAFFIC_ALL'}`}'; else echo '"something else"'; fi`} ;;`,
       'esac',
       'exit 0',
     ].join('\n') + '\n',
@@ -105,6 +111,22 @@ describe('guard_cmek_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 },
     const r = guard({ stage: 'prepared', serving: 'mutaba3a-pg' });
     expect(r.calls).toMatch(/terraform console -var-file=production.tfvars -var image_tag=abc/);
     expect(r.calls).not.toContain('console -input');
+  });
+
+  it('reads cmek_stage and api_ingress with one expression: the console answers only the last line (MUT-475)', () => {
+    const r = guard({ stage: 'prepared', ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY', serving: 'mutaba3a-pg', keyInState: true, live: 'internal' });
+    expect(r.status).toBe(0);
+    expect(r.calls.match(/^console> /gm)).toHaveLength(1);
+    expect(r.calls).toMatch(/console> .*var\.cmek_stage.*var\.api_ingress/);
+  });
+
+  it('refuses rather than guess when terraform console fails or gives anything but a stage and an ingress', () => {
+    expect(guard({ consoleFails: true, serving: 'mutaba3a-pg' }).err).toMatch(/could not evaluate cmek_stage and api_ingress/);
+    for (const answer of ['INGRESS_TRAFFIC_ALL', 'something else', 'off', 'tonumber(null) INGRESS_TRAFFIC_ALL', 'off INGRESS_TRAFFIC_ALL extra', 'active INGRESS_TRAFFIC_NONE']) {
+      const r = guard({ consoleAnswer: answer, serving: 'mutaba3a-pg' });
+      expect(r.status, answer).not.toBe(0);
+      expect(r.err, answer).toMatch(/terraform console gave '.*' for cmek_stage and api_ingress/);
+    }
   });
 
   it('refuses a release that would switch to mutaba3a-pg2 (off → active, or tfvars edited before the switch)', () => {

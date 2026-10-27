@@ -7,3 +7,8 @@ import { useMe } from './me';
 export function useHasFeature(feature: 'agent_access'): boolean {
   return useMe().user.features.includes(feature);
 }
+
+/** MUT-460: whether the signed-in person is an operator (MUT-459): /v1/me names it only for them. The server's gate decides. */
+export function useIsOperator(): boolean {
+  return useMe().user.operator === true;
+}

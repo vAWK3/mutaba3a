@@ -44,12 +44,15 @@ guard_cmek_release() {
   local suffix="$1" service="$2" region="$3" project="$4"; shift 4
   guard_var_args "$@"
 
+  # One expression: Terraform 1.15's console answers only the last of several lines (MUT-475).
   local values stage ingress
-  values="$(printf 'var.cmek_stage\nvar.api_ingress\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+  # shellcheck disable=SC2016 # ${var.…} is Terraform interpolation, not bash
+  values="$(printf '"${var.cmek_stage} ${var.api_ingress}"\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
     || die "could not evaluate cmek_stage and api_ingress with terraform console (above); refusing to release on a guess"
-  stage="$(sed -n '1s/"//gp' <<<"${values}")"
-  ingress="$(sed -n '2s/"//gp' <<<"${values}")"
-  [[ -n "${stage}" && -n "${ingress}" ]] || die "terraform console gave no cmek_stage/api_ingress; refusing to release on a guess"
+  values="$(sed -n '1{s/"//g;p;}' <<<"${values}")"
+  [[ "${values}" =~ ^(off|prepared|active)\ (INGRESS_TRAFFIC_ALL|INGRESS_TRAFFIC_INTERNAL_ONLY)$ ]] \
+    || die "terraform console gave '${values}' for cmek_stage and api_ingress; refusing to release on a guess"
+  read -r stage ingress <<<"${values}"
 
   local err serving rc=0
   err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"

@@ -2302,7 +2302,7 @@ then flushes; `shutdownAndFlush` closes, disconnects, flushes (2 s), exits. `cre
 `createScriptReporter` / `apiRelease` in `sentry-node.ts` build the real one.
 
 ### Mailer / createMailer / renderMail / sendPasswordNotice — `server/src/email/` (MUT-359, ADR-174)
-MUT-468 (ADR-213): `renderMail(template, locale, vars, frame?)` — `frame = { to, artOrigin, websiteOrigin }` (the mailer passes it from `PORTAL_ORIGIN`/`WEBSITE_ORIGIN`); `templates/look.ts` exports `LOOK`, `artFor(look, locale)`, `ART_FILES`, `MOODS`, `isCustomerTemplate`; `layout.ts` exports `TEXT_PAIRS`, `SECONDARY_INK`. `npm --prefix server run mail:preview` renders every mail.
+MUT-468 (ADR-214): `renderMail(template, locale, vars, frame?)` — `frame = { to, artOrigin, websiteOrigin }` (the mailer passes it from `PORTAL_ORIGIN`/`WEBSITE_ORIGIN`); `templates/look.ts` exports `LOOK`, `artFor(look, locale)`, `ART_FILES`, `MOODS`, `isCustomerTemplate`; `layout.ts` exports `TEXT_PAIRS`, `SECONDARY_INK`. `npm --prefix server run mail:preview` renders every mail.
 The one way the server sends mail. `createMailer({ transport, store, logger, now, fromAddress, replyTo, limits })` →
 `mailer.send({ to, template, locale, vars, idempotencyKey })` → an outcome, never a throw for an expected case.
 Templates: add an id to `TEMPLATE_IDS`, its vars to `TemplateVars` (no money, no dates) and its en + ar copy to
@@ -2406,3 +2406,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `OAuthRepository` (`store.oauth`, memory + Prisma); `authenticateAgent` (`server/src/auth/agent-auth.ts`); `agentStoreGuard`; `createMcpServer` (`server/src/mcp/server.ts`, MUT-435/436's seam for tools); routes `oauth.ts`, `oauth-consent.ts`, `oauth-cleanup.ts`, `mcp.ts`.
 - `ErrorReporter.captureMessage` (`server/src/observability/reporter.ts`) for security events.
 - Portal: `CopyField` (`src/hosted/components/CopyField.tsx`: read-only LTR value + Copy, polite status), `ConnectClaudeDrawer`, `ConsentPage` + `consentSearch.ts` (`parseConsentSearch`, `consentNavigation` seam), `useHasFeature` (`src/hosted/session/features.ts`), `OAUTH_GRANTS_KEY`. CSS `hp-copy-*`, `hp-connect-*`, `hp-consent-*`.
+
+### Operator console — MUT-460 (ADR-213)
+- `src/hosted/operator/stepUp.ts`: `isStepUpFresh(until, now)` (30 s margin), `stepUpWithPasskey()` (`ok` / `cancelled` / `refused` / `noPasskey` / `failed`), `runOperatorAction(action, { withPasskey, onSteppedUp })` (`done` / `needsPasskey` after a 403 / `stepUpFailed` / `error`). No UI; MUT-461/462 reuse it.
+- `src/hosted/operator/OperatorStepUp.tsx`: `OperatorStepUpProvider` (remembers a step-up made on the page), `useOperatorRun(serverUntil)` (`run`, `busy`, `failure`, `label`: plain / passkey / confirm), `OperatorConfirm` (the in-row confirm: Cancel focused, Escape cancels, failures in the row), `StepUpFailureBanner`.
+- `src/hosted/pages/operator/OperatorLayout.tsx` (title + `SectionTabs` with counts; the step-up provider), `OperatorSignupsPage.tsx`.
+- `src/hosted/data/signupReviews.ts`: `reviewChips` (signup-screen reason codes → ar/en chip keys and tones; unknown → raw), `waitingOf`, `mailWentOut`. `src/hosted/data/operatorQueries.ts`: `OPERATOR_SIGNUPS_KEY`, `useOperatorSignups`, `dropSignup`.
+- `useIsOperator` (`src/hosted/session/features.ts`). CSS `hp-operator*` (rows reuse `hp-passkey-*`).
+- Server: `createReviewDigest({ reviewLink })`, `REVIEW_PAGE_PATH`.
+- QA: `pendingSignup`, `grantOperator`, `signsIn` (`qa/support/selfService.ts`); `liveState().operatorDigest`.
+

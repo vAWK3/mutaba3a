@@ -106,6 +106,11 @@ export type BillingOverview = Schemas['BillingOverview'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
 export type BillingEntitlement = Schemas['BillingEntitlement'];
+/** MUT-460: the operator console's signup reviews (MUT-459's /v1/operator). */
+export type SignupReview = Schemas['SignupReview'];
+export type OperatorSignupReviewList = Schemas['OperatorSignupReviewList'];
+export type SignupReviewDecision = Schemas['SignupReviewDecision'];
+export type SignupReviewVerb = 'approve' | 'decline' | 'resend';
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
@@ -261,6 +266,8 @@ interface RequestOptions {
 const SIGN_IN_PATH = '/v1/sessions';
 /** MUT-115: passkey sign-in; like the password sign-in, its 401 is a refused credential, never an ended session. */
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
+/** MUT-460: the server's largest page (server/src/pagination.ts MAX_LIMIT). */
+const OPERATOR_LIST_LIMIT = 200;
 const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
 const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
@@ -480,6 +487,18 @@ export const api = {
   removePasskey: (id: string) => request<void>('DELETE', `/v1/passkeys/${encodeURIComponent(id)}`),
   /** MUT-370: Not now on the passkey suggestion (hidden 30 days; the third retires it). */
   changePasskeyPrompt: (action: PasskeyPromptAction) => request<PasskeyPrompt>('PATCH', '/v1/me/passkey-prompt', { body: { action } }),
+  /**
+   * MUT-460: the operator's waiting signups, oldest first, and when this session's passkey step-up lapses. One page of
+   * the most the server gives (200): the queue is reviewed daily, never that long.
+   */
+  operatorSignupReviews: (signal?: AbortSignal) =>
+    request<OperatorSignupReviewList>('GET', '/v1/operator/signup-reviews', { query: { state: 'pending', limit: OPERATOR_LIST_LIMIT }, signal }),
+  /** MUT-460: approve, decline, or mail an approved signup again. The server keys each mail; 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */
+  decideSignupReview: (userId: string, verb: SignupReviewVerb) =>
+    request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
+  /** MUT-460: the operator's passkey step-up (MUT-459): options for the system sheet, then the assertion. */
+  operatorStepUpOptions: () => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/operator/step-up/options'),
+  operatorStepUp: (body: Schemas['PasskeySignInRequest']) => request<Schemas['OperatorStepUp']>('POST', '/v1/operator/step-up', { body }),
   /** MUT-434: the agent asking to connect, for the consent page (404 once answered or expired). */
   oauthRequest: (requestId: string, signal?: AbortSignal) => request<Schemas['OAuthAuthorizationRequest']>('GET', `/v1/oauth/requests/${encodeURIComponent(requestId)}`, { signal }),
   /** MUT-434: allow or deny; either way the answer is where to send the browser (409 when already answered). */

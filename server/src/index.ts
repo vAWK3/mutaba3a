@@ -32,7 +32,7 @@ import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.
 import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/dns-checker.js';
 import { createFixtureDomainChecker } from './email/domains/fixture-checker.js';
 import { createRdapClient } from './email/domains/rdap.js';
-import { createReviewDigest, msUntilNextSweep } from './email/review-digest.js';
+import { createReviewDigest, msUntilNextSweep, REVIEW_PAGE_PATH } from './email/review-digest.js';
 import { webauthnConfigOf } from './auth/webauthn.js';
 
 const config = loadConfig();
@@ -117,7 +117,15 @@ const selfService = {
   }),
 };
 // MUT-367 (D13, D27): the operator digest, nudged by each pending signup and swept a few minutes past each UTC hour.
-const reviewDigest = createReviewDigest({ store, mailer, logger, now: () => new Date(), to: config.OPERATOR_ALERT_EMAIL ?? null });
+// MUT-460: it links to the portal's signups page when the server knows the portal's origin.
+const reviewDigest = createReviewDigest({
+  store,
+  mailer,
+  logger,
+  now: () => new Date(),
+  to: config.OPERATOR_ALERT_EMAIL ?? null,
+  reviewLink: config.PORTAL_ORIGIN ? `${config.PORTAL_ORIGIN.replace(/\/+$/, '')}${REVIEW_PAGE_PATH}` : null,
+});
 /** D9: unredeemed SIGNUP links are deleted a week after they expire; checked hourly, like the mail log. */
 const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 * 3_600_000;
 

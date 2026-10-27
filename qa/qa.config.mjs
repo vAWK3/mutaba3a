@@ -87,7 +87,9 @@ export default {
         // MUT-370: the passkey suggestion is the portal-selfservice app's too.
         '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts',
         // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
-        '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts'],
+        '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts',
+        // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
+        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -188,6 +190,16 @@ export default {
         'src/hosted/components/CopyField.tsx',
         'src/hosted/session/features.ts',
         'src/hosted/data/oauthQueries.ts',
+        // MUT-460: the operator console (MUT-459's gate and passkey step-up) and the digest that links to it.
+        'src/hosted/pages/operator/**',
+        'src/hosted/operator/**',
+        'src/hosted/data/operatorQueries.ts',
+        'src/hosted/data/signupReviews.ts',
+        'server/src/operator/**',
+        'server/src/routes/operator.ts',
+        'server/src/auth/operator-gate.ts',
+        'server/src/auth/step-up.ts',
+        'server/src/email/review-digest.ts',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
       ],

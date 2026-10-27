@@ -27,12 +27,12 @@ async function pending(store: LedgerStore, at: Date) {
   });
 }
 
-function harness(to: string | null = OPERATOR) {
+function harness(to: string | null = OPERATOR, reviewLink: string | null = null) {
   let clock = new Date('2026-10-24T09:10:00Z');
   const store = new MemoryLedgerStore();
   const outbox = new MemoryMailTransport(() => clock);
   const mailer = createMailer({ transport: outbox, store, logger, now: () => clock, fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
-  const digest = createReviewDigest({ store, mailer, logger, now: () => clock, to });
+  const digest = createReviewDigest({ store, mailer, logger, now: () => clock, to, reviewLink });
   return {
     store,
     outbox,
@@ -45,6 +45,26 @@ function harness(to: string | null = OPERATOR) {
 }
 
 describe('review digest (MUT-367)', () => {
+  it('MUT-460: links to the portal\'s operator signups page when the server knows its portal, keeping the command', async () => {
+    const h = harness(OPERATOR, 'https://app.example.test/operator/signups');
+    await pending(h.store, h.at());
+    await h.digest.announce();
+    const [mail] = h.outbox.list({ to: OPERATOR });
+    expect(mail!.text).toContain('https://app.example.test/operator/signups');
+    expect(mail!.html).toContain('href="https://app.example.test/operator/signups"');
+    expect(mail!.text).toContain(REVIEW_COMMAND);
+    // The button first; the command is the fallback under it.
+    expect(mail!.html.indexOf('Review signups')).toBeLessThan(mail!.html.indexOf(REVIEW_COMMAND));
+    expect(mail!.text).toContain(`Or review them with ${REVIEW_COMMAND}.`);
+  });
+
+  it('MUT-460: with no portal origin the mail carries only the command, as before', async () => {
+    const h = harness();
+    await pending(h.store, h.at());
+    await h.digest.announce();
+    expect(h.outbox.list({ to: OPERATOR })[0]!.text).not.toContain('/operator/signups');
+  });
+
   it('sends nothing while nothing waits', async () => {
     const h = harness();
     expect(await h.digest.announce()).toBe('idle');

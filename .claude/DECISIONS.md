@@ -5631,7 +5631,28 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - `/operator/v1/*` with its own 404-for-everything mount (the ticket's first wording). Rejected because it needed an SPA exclusion, a dev-proxy entry, a 401→404 remap and its own CSRF reasoning, and it would hide an expired session as "not found" (outside review O3–O6).
 - A password step-up for operators without a passkey. Rejected because it leaves a fresh password sign-in enough to act, weaker than the token it replaces (outside review O1).
 
-## ADR-213: Mails Carry Static Art Served by the Portal; the Mail Frame Is a Mood Band, a Chip and a Headline (MUT-468)
+## ADR-213: The Operator Console Lives in the Portal, With the Step-Up on the Same Tap (MUT-460)
+
+**Status:** Accepted (2026-10-27, MUT-460; epic MUT-458). Plan §3 MUT-460 and design spec §3b in `.claude/designs/mut-458-operator-console.md`. Builds on ADR-212.
+
+**Context:** MUT-459 gave operators an identity and `/v1/operator/*`, but signups were still reviewed from the CLI. The digest mail named a command, so a signup waited until Basel was at a terminal.
+
+**Decision:**
+1. **Inside the portal, outside any profile.** `/operator` (redirects to `/operator/signups`) is an authenticated route rendered in `HostedShell profile={null}`: the You island is the way out, and You › Account › "Operator" (`RowNavLink`, operators only) is the way in. A non-operator gets what every unknown path gets (a redirect home) and the server's gate refuses them regardless. Signed out, the portal runs on the device (local mode) and AuthGate never asks for a sign-in, so the route sends a signed-out visitor to `/sign-in?next=/operator/signups` itself (AuthGate's `RedirectToSignIn`, now exported): the digest link works from a browser that isn't signed in. `OperatorLayout` is a title plus `SectionTabs` with counts; MUT-461/462 add Accounts and Firms tabs.
+2. **The step-up runs on the tap that says it will.** The list GET's `stepUpUntil` decides the confirm's label at render: fresh (more than 30 s left) acts directly; stale reads "Approve with passkey" and the same tap runs options → the system sheet → `/v1/operator/step-up` → the action (`src/hosted/operator/stepUp.ts`). A 403 on a direct action never starts the sheet by itself (iOS Safari needs a user gesture): the confirm offers "Confirm with passkey" instead. A cancelled sheet changes nothing and says nothing; a refused passkey, no passkey on the account (link to Passkeys) or a failure says so in the row. A step-up made on the page is remembered by `OperatorStepUpProvider`, so the next action acts directly before the list is read again. `useOperatorRun` / `OperatorConfirm` are what MUT-461/462 reuse.
+3. **Decisions read like the CLI's, in the row.** Rows reuse the passkey row recipe; chips map every signup-screen reason code to ar/en words (unknown codes shown raw, `dir=ltr`). A decision whose mail didn't go stays as a warning with a `CopyField` (and Send again, after an approval); 409 ALREADY_DECIDED (or a 404) says "Already decided" and re-reads the list; 409 NOT_EMPTY says the account has records.
+4. **The digest links to the page.** With `PORTAL_ORIGIN` set, `review-digest` carries a "Review signups" button to `<PORTAL_ORIGIN>/operator/signups`; the CLI line stays as the fallback. Sign-in with `?next=/operator…` makes the passkey the primary button, so the digest flow is one passkey prompt (a passkey sign-in opens the step-up window, ADR-212).
+
+**Consequences:**
+- The CLI stays, unchanged. The digest names both.
+- The list reads one page of 200 (the server's maximum). A queue that long is not expected; paging can come with MUT-461's accounts list if it ever is.
+- Release-QA: `portal-selfservice/operator.yaml` (four features) on the live API with Chromium's virtual authenticator; the operator paths moved from the stubbed `portal` app's watch to `portal-selfservice`'s.
+
+**Alternatives considered:**
+- A step-up sheet opened from the 403 (the plan's first `OperatorStepUpSheet`). Rejected in design review (1A): the system prompt must come straight from a tap, and the label should say a passkey is coming.
+- A separate operator app or route tree outside `authedRoute`. Rejected: sign-in, `next`, the shell and the language already work here.
+
+## ADR-214: Mails Carry Static Art Served by the Portal; the Mail Frame Is a Mood Band, a Chip and a Headline (MUT-468)
 
 **Status**: Accepted (2026-10-27, MUT-468, epic MUT-466; Basel's intake, plan and eng-review answers D1–D3, R1–R2).
 **Context**: Every transactional mail used one plain frame (ADR-174, the MUT-359 brief §3.3/§8.4: "no images, no pixels, nothing fetched"). Self-service signup made those mails the first thing a customer sees after the landing page; Basel asked for colour, our icons and illustrations. Claude Design produced the kit (MUT-467, frame 1b "full-bleed").
