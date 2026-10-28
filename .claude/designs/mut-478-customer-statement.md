@@ -105,7 +105,7 @@ Verify: `npm --prefix server run typecheck && npm --prefix server run lint && np
 No Mutaba3a UI. Add `qa/features/portal/malafat-money-api.yaml` (area `malafat-money-api`) mapping `server/src/statements/**` and the route. Feature `statement` covers: seed a customer with charges, a credit, a payment and a reversal, call the statement with the QA API key, and expect the lines and balances. The spec is `qa/specs/portal/malafat-money-api.spec.ts`, using Playwright `request` against the QA API with the seed's integration key. If the QA seed has no integration key fixture, adding one is build step 1. Malafat's own `web.money.client-ledger` (MAL-1425) covers the screen.
 
 ## Knowledge
-- ADR-216 (or next free): receivable numbers `CHG-YYYY-NNNN` and the statement as a computed read (D1, D3, D4, D6).
+- ADR-217 (ADR-216 went to MUT-462): receivable numbers `CHG-YYYY-NNNN` and the statement as a computed read (D1, D3, D4, D6).
 - PATTERNS: "a ledger is computed, never stored: one pure builder over the source rows".
 - TD row: in-memory statement past ~20k lines.
 - CHANGELOG, TEST_PLAN, and SYSTEM_OVERVIEW (API surface).

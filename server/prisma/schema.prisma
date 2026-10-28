@@ -957,11 +957,14 @@ model Receivable {
   createdByUserId    String?             @db.Uuid
   /// Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt.
   deletedAt          DateTime?
+  /// MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of postingDate (receivable_counters).
+  number             String
   version            Int                 @default(1)
   createdAt          DateTime            @default(now())
   allocations        PaymentAllocation[]
   credits            ReceivableCredit[]
 
+  @@unique([organizationId, number])
   @@index([organizationId, customerId])
   @@index([organizationId, projectId])
   @@index([organizationId, dueDate])
@@ -1089,6 +1092,16 @@ model PaymentCounter {
 
   @@id([organizationId, year])
   @@map("payment_counters")
+}
+
+/// MUT-478: next receivable sequence per organization and year of postingDate; the row lock serialises numbering.
+model ReceivableCounter {
+  organizationId String @db.Uuid
+  year           Int
+  next           Int
+
+  @@id([organizationId, year])
+  @@map("receivable_counters")
 }
 
 enum AttachmentKind {

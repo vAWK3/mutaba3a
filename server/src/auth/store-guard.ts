@@ -198,6 +198,7 @@ export const STORE_ACCESS: StoreAccess = {
     getByIds: 'read',
     list: 'read',
     listEligible: 'read',
+    statementSources: 'read',
     countOutstandingByProject: 'read',
     credit: { write: 'payments' },
     listCredits: 'read',

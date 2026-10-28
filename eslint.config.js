@@ -51,6 +51,8 @@ const LOCAL_SERVER_ALLOWLIST = [
   'logger',
   // MUT-291: the carry-over formats amounts as the routes do (already in the chunk through them); pure, no I/O
   'money',
+  // MUT-478: the local migration numbers a device's receivables the way the server's migration does; pure, and already in the chunk through repositories/memory
+  'payments/numbering',
   'personal-profile',
   'rate-limit',
   // MUT-325: the records file's text and the device person's address, shared with the hosted export

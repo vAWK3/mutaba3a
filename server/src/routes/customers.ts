@@ -1,6 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import { actorOf, keyAuth, requireScope, type AppEnv } from '../auth/middleware.js';
-import { validationError } from '../agreements/compose.js';
+import { actorOf, keyAuth, lazyPostingOf, requireScope, type AppEnv } from '../auth/middleware.js';
+import { todayFor, validationError } from '../agreements/compose.js';
+import { postDueItems } from '../agreements/posting.js';
+import { buildStatement, decodeStatementCursor } from '../statements/build.js';
+import { serializeStatement } from '../statements/serialize.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -11,6 +14,8 @@ import {
   CustomerIdParamSchema,
   CustomerPageSchema,
   CustomerSchema,
+  CustomerStatementQuerySchema,
+  CustomerStatementSchema,
   IfMatchHeaderSchema,
   ListCustomersQuerySchema,
   UpdateCustomerRequestSchema,
@@ -219,6 +224,41 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         requestId: c.get('requestId'),
       });
       return c.json(serializeCustomer(archived, refs.get(archived.id)), 200);
+    },
+  );
+
+  // ---- MUT-478: the customer statement (ledger card) ----
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/customers/{customerId}/statement',
+      tags: ['Customers'],
+      summary: 'The customer statement: dated charges, credits, payments and reversals with a running balance, in one currency',
+      description:
+        'Oldest first. Charges are debits; credits, payments are credits; a reversed payment shows its PAYMENT line and a PAYMENT_REVERSAL debit. Amounts are gross. With no projectId and no period, closingBalance equals the customer summary\'s outstanding − unallocated for the currency. Lines before `from` fold into openingBalance; openingBalance, totals and closingBalance are the whole period\'s and the same on every page, and runningBalance carries across pages. A project statement shows payments as their allocations to that project; unallocated money appears only on the whole-customer statement. Dated installments and retainer charges whose date has arrived are posted first.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      middleware: [requireScope('payments:read')] as const,
+      request: { params: CustomerIdParamSchema, query: CustomerStatementQuerySchema },
+      responses: { 200: { description: 'One page of the statement', content: { 'application/json': { schema: CustomerStatementSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = c.get('auth');
+      const q = c.req.valid('query');
+      const now = c.get('now')();
+      const asOf = todayFor(organization, now);
+      if (q.from && q.to && q.from > q.to) throw validationError('PERIOD_INVALID', 'from must not be after to', { field: 'from' });
+      const customer = await mustGet(store, organization.id, c.req.valid('param').customerId);
+      if (q.projectId) {
+        const project = await store.projects.getById(organization.id, q.projectId);
+        if (!project || project.customerId !== customer.id) throw validationError('PROJECT_NOT_FOUND', "projectId does not name one of this customer's projects", { field: 'projectId' });
+      }
+      const cursor = q.cursor ? decodeStatementCursor(q.cursor) : null;
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, asOf, now, posting.actor);
+      const sources = await store.receivables.statementSources(organization.id, customer.id, q.currency);
+      const view = { asOf, timezone: organization.timezone, from: q.from ?? null, to: q.to ?? null, projectId: q.projectId ?? null };
+      const page = buildStatement(sources, view, { limit: q.limit, cursor });
+      return c.json(serializeStatement({ customerId: customer.id, currency: q.currency, view, page }), 200);
     },
   );
 

@@ -1817,6 +1817,8 @@ export const VALIDATION_REASONS = [
   // MUT-115: the passkey registration didn't verify (challenge used, expired or not the caller's; origin, RP ID or user
   // verification wrong).
   'PASSKEY_NOT_VERIFIED',
+  // MUT-478: a statement whose `from` is after its `to`.
+  'PERIOD_INVALID',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -2147,9 +2149,11 @@ export const ReceivableSchema = z
     title: z.string().nullable(),
     /** MUT-373: who captured an Owed entry; only they may re-date it (PATCH /v1/income/{id}). Null for other origins. */
     capturedByUserId: uuid.nullable().openapi({ description: 'Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person\'s account is gone.' }),
+    number: z.string().openapi({ description: 'CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478.', example: 'CHG-2026-0042' }),
     version: z.number().int(),
   })
   .openapi('Receivable');
+
 
 export const ReceivablePageSchema = z.object({ items: z.array(ReceivableSchema), nextCursor: z.string().nullable() }).openapi('ReceivablePage');
 
@@ -2307,6 +2311,92 @@ export const ReconcileResponseSchema = z
 // ---- Milestone 4: payments, allocations, reversals, credits, operations ----
 
 export const PaymentMethodSchema = z.enum(['CASH', 'BANK']).openapi('PaymentMethod');
+
+// ---- MUT-478: the customer statement (ledger card) ----
+
+export const CustomerStatementQuerySchema = z.object({
+  currency: CurrencySchema.openapi({ description: 'Required: a statement is in one currency.' }),
+  projectId: uuid.optional().openapi({ description: "Narrows to one of the customer's projects: its charges and credits, and payments as their allocations there." }),
+  from: IsoDateSchema.optional().openapi({ description: 'Lines before this date fold into openingBalance.' }),
+  to: IsoDateSchema.optional().openapi({ description: 'Lines after this date are left out. Omitted: every line, including ones dated after asOf.' }),
+  limit: z.coerce.number().int().min(1).max(500).default(200).openapi({ description: 'Lines per page, 1–500.' }),
+  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+});
+
+const StatementLineBase = {
+  /** The source row's id (receivable, credit, payment, or allocation on a project statement); a reversal adds ":reversal". */
+  id: z.string(),
+  date: IsoDateSchema,
+  /** CHG- number on a charge, PAY- number on a payment and its reversal, null on a credit. */
+  number: z.string().nullable(),
+  /** Null for money not tied to one project. */
+  projectId: uuid.nullable(),
+  debit: AmountSchema,
+  credit: AmountSchema,
+  runningBalance: AmountSchema,
+};
+
+export const StatementChargeOriginSchema = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('INSTALLMENT'), agreementId: uuid, position: z.number().int(), of: z.number().int() }),
+    z.object({ type: z.literal('RETAINER_CHARGE'), agreementId: uuid, serviceMonth: IsoMonthSchema }),
+    z.object({ type: z.literal('CONTINGENCY_FEE'), agreementId: uuid }),
+    z.object({ type: z.literal('ADJUSTMENT'), title: z.string().nullable() }),
+  ])
+  .openapi('StatementChargeOrigin');
+
+export const StatementLineSchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      ...StatementLineBase,
+      kind: z.literal('CHARGE'),
+      receivableId: uuid,
+      origin: StatementChargeOriginSchema,
+      dueDate: IsoDateSchema,
+      net: AmountSchema,
+      vat: AmountSchema,
+      gross: AmountSchema,
+      outstanding: AmountSchema,
+      status: ItemStatusSchema,
+      /** Days past dueDate as of asOf while overdue; null otherwise. */
+      daysOverdue: z.number().int().nullable(),
+    }),
+    z.object({ ...StatementLineBase, kind: z.literal('CREDIT'), receivableId: uuid, receivableNumber: z.string(), reason: z.string() }),
+    z.object({
+      ...StatementLineBase,
+      kind: z.literal('PAYMENT'),
+      paymentId: uuid,
+      method: PaymentMethodSchema,
+      reference: z.string().nullable(),
+      /** Whole-customer statement: what is still to apply (0 once reversed); null on a project statement. */
+      unallocated: AmountSchema.nullable(),
+      /** Project statement: the allocation shown; null on the whole-customer statement. */
+      allocated: AmountSchema.nullable(),
+    }),
+    z.object({ ...StatementLineBase, kind: z.literal('PAYMENT_REVERSAL'), paymentId: uuid, reason: z.string().nullable() }),
+  ])
+  .openapi('StatementLine');
+
+export const CustomerStatementSchema = z
+  .object({
+    customerId: uuid,
+    currency: CurrencySchema,
+    projectId: uuid.nullable(),
+    from: IsoDateSchema.nullable(),
+    to: IsoDateSchema.nullable(),
+    /** Today in the organization timezone: what daysOverdue and a dated-ahead Owed are counted against. */
+    asOf: IsoDateSchema,
+    /** The balance before the period's first line (the same on every page). */
+    openingBalance: AmountSchema,
+    /** The whole period's, the same on every page. */
+    totals: z.object({ debit: AmountSchema, credit: AmountSchema }),
+    /** openingBalance + debits − credits for the period. With no project and no period: the customer summary's outstanding − unallocated. */
+    closingBalance: AmountSchema,
+    /** Oldest first; runningBalance carries across pages. */
+    lines: z.array(StatementLineSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .openapi('CustomerStatement');
 export const PaymentStatusSchema = z.enum(['POSTED', 'REVERSED']).openapi('PaymentStatus');
 /** Where a write came from (MUT-65). Audit metadata for most writes; persisted on an inbox entry (MUT-66) and on a captured payment (MUT-61). */
 export const CaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share']).openapi('CaptureSource');

@@ -36,6 +36,8 @@ export const PURGE_PROFILE_TABLES = [
   'expense_groups',
   'entitlement_grants',
   'payment_counters',
+  // MUT-478
+  'receivable_counters',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */

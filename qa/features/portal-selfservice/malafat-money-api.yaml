@@ -1,0 +1,27 @@
+app: portal-selfservice
+area: malafat-money-api
+title: The money API Malafat's Money pages read
+tier: secondary
+# MUT-478 (ADR-217): reads and writes Malafat's integration key makes, against the live dev API
+# (support/selfservice-live.mjs). No MTB3A screen shows them; Malafat's own release-QA covers its pages
+# (web.money.client-ledger, MAL-1425). The spec plays Malafat with fetch.
+paths:
+  - server/src/statements/**
+  - server/src/payments/numbering.ts
+features:
+  - id: statement
+    title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
+    tier: secondary
+    paths:
+      - server/src/statements/build.ts
+      - server/src/statements/serialize.ts
+      - server/src/routes/customers.ts
+    steps:
+      - Malafat sets up a firm with a client, a project and a two-stage fee agreed in March
+      - Malafat credits part of the second stage, records a payment on the first, and records then reverses another
+      - Malafat reads the client's statement in ILS, then from May only
+    expect:
+      - The charges carry CHG numbers, and the lines run oldest first with debit, credit and a running balance
+      - The reversed payment shows its payment line and its reversal line
+      - The closing balance equals the client summary's outstanding minus unallocated
+      - From May, the earlier lines fold into the opening balance and the totals still add up

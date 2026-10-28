@@ -760,6 +760,8 @@ export interface ReceivableRecord {
   createdByUserId: string | null;
   /** Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt. Null for every receivable this ticket does not create. */
   deletedAt: Date | null;
+  /** MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of `postingDate`, assigned when it posts (`receivable_counters`). */
+  number: string;
   version: number;
   createdAt: Date;
 }
@@ -963,6 +965,17 @@ export interface CreateAdjustmentReceivableInput {
   requestId: string | null;
 }
 
+/** MUT-478: what `receivables.statementSources` returns; `statements/build.ts` reads it. */
+export interface StatementSourceRows {
+  receivables: ReceivableRecord[];
+  credits: CreditRecord[];
+  payments: PaymentRecord[];
+  allocations: AllocationRecord[];
+  /** Every installment of the customer's agreements in the currency (for "installment N of M"). */
+  installments: InstallmentRecord[];
+  charges: RetainerChargeRecord[];
+}
+
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
   /** In the order of `ids`; unknown or foreign ids are skipped. */
@@ -983,6 +996,12 @@ export interface ReceivableRepository {
   /** Appends a credit and moves credited_minor / status atomically; throws InsufficientCapacity if it exceeds the outstanding (M4). */
   credit(organizationId: string, receivableId: string, input: CreditInput, at: Date): Promise<{ receivable: ReceivableRecord; credit: CreditRecord } | null>;
   listCredits(organizationId: string, receivableId: string): Promise<CreditRecord[]>;
+  /**
+   * MUT-478: everything a customer statement reads for one currency, in a fixed number of queries (never one per
+   * row): the customer's live receivables, their credits, its payments of any status with every allocation they made,
+   * and the installments and retainer charges that name a charge's origin.
+   */
+  statementSources(organizationId: string, customerId: string, currency: string): Promise<StatementSourceRows>;
   /** MUT-65: "Owed", written directly as origin ADJUSTMENT, agreementId null. */
   createAdjustment(input: CreateAdjustmentReceivableInput, at: Date): Promise<ReceivableRecord>;
   /**

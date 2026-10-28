@@ -154,6 +154,7 @@ import type {
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
+import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -1436,6 +1437,7 @@ export class PrismaLedgerStore implements LedgerStore {
           const receivable = await tx.receivable.create({
             data: {
               organizationId,
+              number: await nextReceivableNumberTx(tx, organizationId, input.postingDate),
               customerId: agreement.customerId,
               projectId: agreement.projectId,
               agreementId: agreement.id,
@@ -1602,6 +1604,7 @@ export class PrismaLedgerStore implements LedgerStore {
           const receivable = await tx.receivable.create({
             data: {
               organizationId: input.organizationId,
+              number: await nextReceivableNumberTx(tx, input.organizationId, input.chargeDate),
               customerId: input.customerId,
               projectId: input.projectId,
               agreementId: input.agreementId,
@@ -1685,6 +1688,24 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     listCredits: (organizationId, receivableId) => this.prisma.receivableCredit.findMany({ where: { organizationId, receivableId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    // MUT-478: six queries, each filtered through its parent's (organizationId, customerId) index; never one per row. One
+    // REPEATABLE READ snapshot, so a payment and the charge it pays, committed together between two reads, never land on
+    // one page without the other.
+    statementSources: async (organizationId, customerId, currency) => {
+      const agreement = { organizationId, customerId, currency };
+      const [receivables, credits, payments, allocations, installments, charges] = await this.prisma.$transaction(
+        [
+          this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
+          this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
+          this.prisma.payment.findMany({ where: { organizationId, customerId, currency } }),
+          this.prisma.paymentAllocation.findMany({ where: { organizationId, payment: { customerId, currency } } }),
+          this.prisma.installment.findMany({ where: { organizationId, agreement } }),
+          this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
+        ],
+        { isolationLevel: 'RepeatableRead' },
+      );
+      return { receivables, credits, payments, allocations, installments, charges };
+    },
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
         where: {
@@ -3241,6 +3262,21 @@ async function settleReceivable(tx: Tx, receivableId: string, data: Prisma.Recei
  * retry; MUT-66 composes this directly inside its own transaction alongside
  * other writes (e.g. deleting an inbox row), so "file" is atomic.
  */
+/**
+ * MUT-478: the next CHG-YYYY-NNNN for a receivable posting on `postingDate`, inside the posting transaction. The
+ * counter row's lock serialises concurrent posts in one organization-year, and a rolled-back post takes its
+ * increment with it, so numbers stay gap-free (as payment numbers do below).
+ */
+async function nextReceivableNumberTx(tx: Tx, organizationId: string, postingDate: string): Promise<string> {
+  const year = ledgerYear(postingDate);
+  const counter = await tx.receivableCounter.upsert({
+    where: { organizationId_year: { organizationId, year } },
+    create: { organizationId, year, next: 1 },
+    update: { next: { increment: 1 } },
+  });
+  return receivableNumber(year, counter.next);
+}
+
 async function createPaymentTx(tx: Tx, input: CreatePaymentInput, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
   if (input.customerId) {
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
@@ -3279,6 +3315,7 @@ async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput
   return tx.receivable.create({
     data: {
       organizationId: input.organizationId,
+      number: await nextReceivableNumberTx(tx, input.organizationId, input.postingDate),
       customerId: input.customerId,
       projectId: input.projectId,
       agreementId: null,
