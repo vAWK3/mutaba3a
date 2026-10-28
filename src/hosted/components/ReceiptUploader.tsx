@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useLanguage } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
-import { useAddReceipt, useDeleteReceipt } from '../data/expenseQueries';
+import { useAddReceipt, useDeleteReceipt } from '../data/receiptQueries';
 import { useToast } from './Toast';
 import { downloadNavigator } from '../data/download';
 import { api, type ExpenseReceipt } from '../api/client';
