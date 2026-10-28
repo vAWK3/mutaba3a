@@ -1725,6 +1725,8 @@ export const CONFLICT_REASONS = [
   'BILLING_ACCOUNT_NEEDS_HELP',
   // MUT-115: this credential is already registered (to anyone).
   'PASSKEY_EXISTS',
+  // MUT-480: the manual trigger on a line a reduction (or an outcome correction) voided; the agreement is still active.
+  'INSTALLMENT_VOIDED',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1820,6 +1822,11 @@ export const VALIDATION_REASONS = [
   'PASSKEY_NOT_VERIFIED',
   // MUT-478: a statement whose `from` is after its `to`.
   'PERIOD_INVALID',
+  // MUT-480: lowering a fee by more than is unbilled and outstanding; lowering the whole fee with nothing billed; a
+  // reason code OTHER without a note.
+  'REDUCTION_EXCEEDS_OPEN',
+  'USE_CANCEL',
+  'REASON_REQUIRED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
