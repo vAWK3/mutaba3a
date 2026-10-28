@@ -521,6 +521,7 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 .hp-receipt-chip-to_review { background: var(--m-lavender); color: var(--m-lavender-ink); }
 .hp-receipt-chip-filed { background: var(--m-mint); color: var(--m-mint-ink); }
 .hp-receipt-card-uploading { opacity: 0.8; }
+.hp-receipt-reading { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-label); }
 
 .hp-receipt-back { display: inline-flex; align-items: center; gap: var(--space-1); margin-block-end: var(--space-2); font-size: var(--text-label); }
 [dir="rtl"] .hp-receipt-back-arrow, [dir="rtl"] .hp-receipt-next-arrow { display: inline-block; transform: scaleX(-1); }
