@@ -394,3 +394,22 @@ describe('MUT-468 frame: review fixes', () => {
     expect(html.match(/<!--\[if mso\]>/g)?.length).toBe(html.match(/<!\[endif\]-->/g)?.length);
   });
 });
+
+/**
+ * MUT-468 dark-mode fix (Basel's Apple Mail check, 2026-10-27): `color-scheme: light` alone is a preference, and Apple
+ * Mail still repainted the mail dark around the opaque art. Every mail opts out with `light only`, in both metas and
+ * inline on the body and the outer table; the `<html lang dir>` tag stays exactly as the contract above pins it.
+ */
+describe('MUT-468 frame: light only, in every client that honours it', () => {
+  it.each(TEMPLATE_IDS)('%s opts out of dark-mode repainting', (id) => {
+    for (const locale of LOCALES) {
+      const html = renderMail(id, locale, SAMPLE[id] as never, FRAME).html;
+      expect(html).toContain('<meta name="color-scheme" content="light only">');
+      expect(html).toContain('<meta name="supported-color-schemes" content="light only">');
+      expect(html).not.toContain('<meta name="color-scheme" content="light">');
+      expect(tagsOf(html, 'body')[0]).toContain('color-scheme:light only');
+      expect(tagsOf(html, 'table')[0]).toContain('color-scheme:light only');
+      expect(html).toContain(`<html lang="${locale}" dir="${locale === 'ar' ? 'rtl' : 'ltr'}">`);
+    }
+  });
+});

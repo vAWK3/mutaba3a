@@ -209,13 +209,15 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
   const html = [
     '<!doctype html>',
     `<html lang="${locale}" dir="${dir}">`,
-    '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light">',
+    // MUT-468: `light only`, not `light`: Apple Mail treats a bare `light` as a preference and still repaints the mail
+    // dark around the opaque art. Gmail's and Outlook's dark modes ignore any opt-out (MUT-484 handles those).
+    '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only">',
     `<title>${escapeHtml(body.subject)}</title></head>`,
-    `<body style="margin:0;padding:0;background:${CANVAS};">`,
+    `<body style="margin:0;padding:0;background:${CANVAS};color-scheme:light only;">`,
     ...(body.preheader
       ? [`<div data-preheader style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:${CANVAS};opacity:0;">${escapeHtml(body.preheader)}${'&#847;&zwnj;&nbsp;'.repeat(40)}</div>`]
       : []),
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="${dir}" style="background:${CANVAS};font-family:${FONTS[locale]};color:${INK};">`,
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" dir="${dir}" style="background:${CANVAS};color-scheme:light only;font-family:${FONTS[locale]};color:${INK};">`,
     top(locale, body, look, artOrigin),
     `<tr><td align="center" style="padding:0 16px 32px;">`,
     MSO_OPEN,
