@@ -452,4 +452,22 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       });
     });
   });
+
+  describe(`${name} LedgerStore receipts: server reading state (MUT-441)`, () => {
+    it('keeps how a receipt was captured; absent means a photo, and nothing is being read yet', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const scanned = await store.expenseReceipts.create(w.upload({ captureHint: 'SCANNED' }), at(1));
+      expect(scanned.captureHint).toBe('SCANNED');
+      expect((await store.expenseReceipts.getById(w.a.id, scanned.id))?.captureHint).toBe('SCANNED');
+      const photo = await w.ready({}, 2);
+      // Memory (local mode) leaves the server-only fields off a record (MUT-436's pattern); both read the same.
+      expect(photo.captureHint ?? 'PHOTO').toBe('PHOTO');
+      expect(photo.readStatus ?? 'NONE').toBe('NONE');
+      expect(photo.readAttempts ?? 0).toBe(0);
+      expect(photo.readLeaseUntil ?? null).toBeNull();
+      expect(photo.readRequestedAt ?? null).toBeNull();
+      expect(photo.readFailReason ?? null).toBeNull();
+    });
+  });
 }

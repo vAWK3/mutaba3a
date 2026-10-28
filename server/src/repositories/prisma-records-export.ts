@@ -21,6 +21,7 @@ import type {
   ProfileExportField,
   ProfileExportRecords,
   ProjectRecord,
+  ReceiptReadState,
   ReceivableRecord,
   RecordsExportRepository,
   RetainerChargeRecord,
@@ -91,7 +92,8 @@ const EXPENSE = cols<Omit<ExpenseRecord, 'captureSource'>>()({
   vendorId: true,
 });
 const EXPENSE_CATEGORY = cols<ExpenseCategoryRecord>()({ id: true, organizationId: true, name: true, color: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
-const EXPENSE_RECEIPT = cols<ExpenseReceiptRecord>()({
+// MUT-441: the server's reading state and capture hint stay on the server too; the local records format is unchanged.
+const EXPENSE_RECEIPT = cols<Omit<ExpenseReceiptRecord, keyof ReceiptReadState>>()({
   id: true, organizationId: true, expenseId: true, filename: true, mimeType: true, sizeBytes: true, status: true, storageKey: true, uploadedByUserId: true,
   requestId: true, createdAt: true, completedAt: true, deletedAt: true,
   // MUT-255: the receipts library — To-review receipts (no expense) export too, with what was read and approved.

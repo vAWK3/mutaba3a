@@ -461,3 +461,23 @@ describe('access and configuration', () => {
     expect(await read(await h.app.request('/v1/receipts/counts', { headers: as() }))).toEqual({ toReview: 0, filed: 1 });
   });
 });
+
+describe('MUT-441: how a receipt was captured, and whether the server is reading it', () => {
+  it("keeps capture 'scanned' as the receipt's capture hint; absent is a photo; reading is null until the server reads", async () => {
+    const { h, org, as } = await setup();
+    const scanned = await read(await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'scanned' }, { ...as(), ...idem() })));
+    expect(scanned.receipt).toMatchObject({ reading: null });
+    expect((await h.store.expenseReceipts.getById(org.id, scanned.receipt.id))?.captureHint).toBe('SCANNED');
+    const photo = await upload(h, as());
+    expect(photo).toMatchObject({ reading: null });
+    expect((await h.store.expenseReceipts.getById(org.id, photo.id))?.captureHint ?? 'PHOTO').toBe('PHOTO');
+    const listed = await read(await h.app.request('/v1/receipts', { headers: as() }));
+    expect(listed.items[0]).toMatchObject({ reading: null });
+  });
+
+  it("takes 'photo' and refuses any other capture value", async () => {
+    const { h, as } = await setup();
+    expect((await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'photo' }, { ...as(), ...idem() }))).status).toBe(201);
+    expect((await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'fax' }, { ...as(), ...idem() }))).status).toBe(422);
+  });
+});

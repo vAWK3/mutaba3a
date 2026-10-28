@@ -19806,6 +19806,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             completedAt: string | null;
+            reading: components["schemas"]["ReceiptReading"];
         };
         /**
          * @description MUT-255: TO_REVIEW waits in the receipts library; FILED is on an expense.
@@ -19880,6 +19881,11 @@ export interface components {
             /** Format: uuid */
             categoryId: string | null;
         } | null;
+        /**
+         * @description MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.83.0-mut441.
+         * @enum {string|null}
+         */
+        ReceiptReading: "pending" | "done" | "failed" | null;
         CreateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. */
             occurredOn: string;
@@ -20313,7 +20319,13 @@ export interface components {
             mimeType: components["schemas"]["AttachmentMimeType"];
             sizeBytes: number;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
+            capture?: components["schemas"]["ReceiptCapture"];
         };
+        /**
+         * @description MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.83.0-mut441.
+         * @enum {string}
+         */
+        ReceiptCapture: "scanned" | "photo";
         ReceiptPage: {
             items: components["schemas"]["ReceiptListItem"][];
             nextCursor: string | null;

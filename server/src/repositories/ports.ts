@@ -2930,8 +2930,28 @@ export interface ApprovedReceiptFields {
   categoryId: string | null;
 }
 
+/** MUT-441: where the server's reading of a receipt stands (schema.prisma `ReceiptReadStatus`). */
+export type ReceiptReadStatus = 'NONE' | 'PENDING' | 'DONE' | 'FAILED' | 'SKIPPED';
+/** MUT-441: SCANNED came through the phone's Scan (already cleaned); PHOTO is anything else. */
+export type ReceiptCaptureHint = 'SCANNED' | 'PHOTO';
+
+/**
+ * MUT-441: the server's reading state. Server-only, like an expense's `captureSource` (MUT-436): optional on the
+ * record because local-mode records never carry it (the local records format is unchanged); absent reads as NONE,
+ * 0, null and PHOTO.
+ */
+export interface ReceiptReadState {
+  readStatus?: ReceiptReadStatus;
+  readAttempts?: number;
+  readLeaseUntil?: Date | null;
+  readRequestedAt?: Date | null;
+  /** A code only (`unreadable`, `timeout`, `exhausted`), never receipt text. */
+  readFailReason?: string | null;
+  captureHint?: ReceiptCaptureHint;
+}
+
 /** A receipt file behind the M6 signed-URL pipeline, in its own table so Malafat's attachment routes can never reach it (MUT-42 D1). */
-export interface ExpenseReceiptRecord {
+export interface ExpenseReceiptRecord extends ReceiptReadState {
   id: string;
   organizationId: string;
   /** MUT-255: null while the receipt waits in the library as To review. */
@@ -2968,6 +2988,8 @@ export interface CreateExpenseReceiptInput {
   suggested?: ReceiptSuggestion | null;
   uploadedByUserId: string;
   requestId: string | null;
+  /** MUT-441: absent = PHOTO. */
+  captureHint?: ReceiptCaptureHint;
 }
 
 export interface ReceiptLibraryFilter {

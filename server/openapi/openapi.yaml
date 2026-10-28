@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.82.0-mut482
+  version: 1.83.0-mut441
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -6126,6 +6126,8 @@ components:
           type: string
           nullable: true
           format: date-time
+        reading:
+          $ref: "#/components/schemas/ReceiptReading"
       required:
         - id
         - expenseId
@@ -6142,6 +6144,7 @@ components:
         - uploadedByUserId
         - createdAt
         - completedAt
+        - reading
     ReceiptFilingStatus:
       type: string
       enum:
@@ -6380,6 +6383,15 @@ components:
         - vendor
         - categoryId
       description: What approval wrote into the expense, in minor units like the suggestion
+    ReceiptReading:
+      type: string
+      nullable: true
+      enum:
+        - pending
+        - done
+        - failed
+        - null
+      description: "MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.83.0-mut441."
     CreateExpenseRequest:
       type: object
       properties:
@@ -7473,11 +7485,19 @@ components:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
             - description: What the device already read, when it read before uploading
+        capture:
+          $ref: "#/components/schemas/ReceiptCapture"
       required:
         - filename
         - mimeType
         - sizeBytes
       additionalProperties: false
+    ReceiptCapture:
+      type: string
+      enum:
+        - scanned
+        - photo
+      description: "MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.83.0-mut441."
     ReceiptPage:
       type: object
       properties:

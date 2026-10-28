@@ -2425,6 +2425,8 @@ export class MemoryLedgerStore implements LedgerStore {
         createdAt: at,
         completedAt: null,
         deletedAt: null,
+        // MUT-441: server-only, so only when sent: a local-mode record keeps the local records format (MUT-436's pattern).
+        ...(input.captureHint ? { captureHint: input.captureHint } : {}),
       };
       this.expReceipts.set(record.id, record);
       return { ...record };

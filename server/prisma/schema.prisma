@@ -1314,6 +1314,25 @@ enum ReceiptFilingStatus {
   FILED
 }
 
+/// MUT-441: where the server's reading of a receipt stands. NONE: not asked (the flag was off, or it predates reading).
+/// PENDING: queued or being read (a live `readLeaseUntil` means a reader holds it). DONE: read, and what it found was
+/// merged into `suggested` (fill-absent). FAILED: given up (`readFailReason`). SKIPPED: nothing to read for (filed,
+/// deleted, no uploader, or every field already present).
+enum ReceiptReadStatus {
+  NONE
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+/// MUT-441: how the image was taken. SCANNED: the phone's Scan already cropped, straightened and cleaned it, so the
+/// reader only normalises it. PHOTO: anything else (gallery, share, portal upload), which gets the full preprocessing.
+enum ReceiptCaptureHint {
+  SCANNED
+  PHOTO
+}
+
 /// A receipt file in the attachments bucket under org/{organizationId}/expense-receipts/{id}. Kept apart from `attachments`, which Malafat reads.
 /// MUT-255: a receipt belongs to its profile; its expense is optional (a To-review receipt has none yet).
 model ExpenseReceipt {
@@ -1349,6 +1368,17 @@ model ExpenseReceipt {
   createdAt        DateTime
   completedAt      DateTime?
   deletedAt        DateTime?
+  /// MUT-441: the server's reading of the receipt. The partial index on (readStatus, readLeaseUntil) WHERE PENDING,
+  /// which the read sweep scans, is raw SQL in the migration (Prisma can't express a partial index).
+  readStatus       ReceiptReadStatus   @default(NONE)
+  readAttempts     Int                 @default(0)
+  /// A reader's claim: no other reader takes the receipt before this passes.
+  readLeaseUntil   DateTime?
+  /// When reading was first asked for; the give-up clock (FAILED 30 minutes after it).
+  readRequestedAt  DateTime?
+  /// A code only (`unreadable`, `timeout`, `exhausted`), never receipt text.
+  readFailReason   String?             @db.VarChar(40)
+  captureHint      ReceiptCaptureHint  @default(PHOTO)
 
   /// The receipts of one expense.
   @@index([organizationId, expenseId, createdAt])

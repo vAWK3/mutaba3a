@@ -2139,6 +2139,7 @@ export class PrismaLedgerStore implements LedgerStore {
               requestId: input.requestId,
               filingStatus: input.expenseId ? 'FILED' : 'TO_REVIEW',
               suggested: input.suggested ? (input.suggested as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+              ...(input.captureHint ? { captureHint: input.captureHint } : {}),
               storageKey: '',
               status: 'PENDING_UPLOAD',
               createdAt: at,

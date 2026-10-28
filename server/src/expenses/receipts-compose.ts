@@ -4,7 +4,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptSuggestion } from '../repositories/ports.js';
+import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion } from '../repositories/ports.js';
 import { MAX_RECEIPTS_PER_EXPENSE, tooManyReceipts } from './compose.js';
 
 /**
@@ -136,11 +136,15 @@ export async function completeExpenseReceipt(deps: ReceiptDeps, actor: ReceiptAc
   return result.receipt;
 }
 
+/** MUT-441: how the image was taken, as a client says it (`capture`) and as it is stored (`captureHint`). */
+export type ReceiptCapture = 'scanned' | 'photo';
+const CAPTURE_HINT: Record<ReceiptCapture, ReceiptCaptureHint> = { scanned: 'SCANNED', photo: 'PHOTO' };
+
 /** MUT-255: a To-review receipt with no expense, behind the per-person start budget and the profile's pending cap. Either refusal is a 429, so an idempotency key stays free. */
 export async function startLibraryReceipt(
   deps: ReceiptDeps & { uploadLimiter: RateLimiter },
   actor: ReceiptActor,
-  file: ReceiptFile & { suggested?: ReceiptSuggestion | null | undefined },
+  file: ReceiptFile & { suggested?: ReceiptSuggestion | null | undefined; capture?: ReceiptCapture | undefined },
 ): Promise<{ receipt: ExpenseReceiptRecord; upload: SignedReceiptUpload }> {
   requireStorage(deps);
   assertFile(file);
@@ -148,7 +152,18 @@ export async function startLibraryReceipt(
   const { organization, now } = actor;
   const receipt = await createKeyed(
     deps,
-    { organizationId: organization.id, expenseId: null, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes, receivedOn: todayFor(organization, now), suggested: file.suggested ?? null, uploadedByUserId: actor.userId, requestId: actor.requestId },
+    {
+      organizationId: organization.id,
+      expenseId: null,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      receivedOn: todayFor(organization, now),
+      suggested: file.suggested ?? null,
+      uploadedByUserId: actor.userId,
+      requestId: actor.requestId,
+      ...(file.capture ? { captureHint: CAPTURE_HINT[file.capture] } : {}),
+    },
     now,
   );
   return { receipt, upload: await signReceiptUpload(deps, receipt, now) };
