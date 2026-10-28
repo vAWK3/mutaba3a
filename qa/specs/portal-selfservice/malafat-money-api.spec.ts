@@ -243,4 +243,17 @@ test('Malafat proposes a 30/70 split and a retainer, previews each approval and 
     expect(approved.charges.map((c: Json) => c.serviceMonth)).toEqual(preview.chargesDueNow.map((c: Json) => c.serviceMonth));
     expect(approved.charges.length).toBeGreaterThan(0);
   });
+
+  await step('Malafat approves with a preview taken before the fee changed, then approves a proposal already approved', async () => {
+    const refusal = async (path: string, body: Json) => {
+      const res = await fetch(`${liveState().origin}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': `qa-479-${randomUUID()}`, ...key }, body: JSON.stringify(body) });
+      return { status: res.status, reason: ((await res.json()) as Json).error?.details?.reason };
+    };
+    const staleId = (await call('POST', '/v1/fee-proposals', key, { projectId: await project('Appeal'), draft: split })).id as string;
+    const preview = await call('POST', `/v1/fee-proposals/${staleId}/approve/preview`, key, { agreement: split });
+    const edited = { ...split, amount: '12000.00' };
+    expect(await refusal(`/v1/fee-proposals/${staleId}/approve`, { agreement: edited, previewToken: preview.previewToken })).toEqual({ status: 409, reason: 'PREVIEW_STALE' });
+    expect((await call('GET', `/v1/fee-proposals/${staleId}`, key)).status).toBe('PROPOSED');
+    expect(await refusal(`/v1/fee-proposals/${splitId}/approve`, { agreement: split, previewToken: preview.previewToken })).toEqual({ status: 409, reason: 'PROPOSAL_NOT_OPEN' });
+  });
 });

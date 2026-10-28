@@ -82,8 +82,10 @@ features:
       - Malafat previews the approval, then approves with the preview's token
       - Malafat proposes a monthly retainer on another matter and reads the organization summary
       - Malafat previews the retainer's approval and approves it
+      - Malafat approves with a preview taken before the fee changed, then approves a proposal already approved
     expect:
       - The proposal reads back with its draft and is APPROVED, linked to the agreement it made
       - The agreement has the two stages, the first posted and the second (MANUAL) still pending
       - The retainer starts on the proposed month, and the charges the preview said were due now have posted
       - The summary's proposed total leaves the retainer's monthly amount out, while the client's row lists it as RECURRING
+      - The stale approval is 409 PREVIEW_STALE and the proposal stays PROPOSED; approving the approved one is 409 PROPOSAL_NOT_OPEN
