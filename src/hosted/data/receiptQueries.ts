@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { ApiError, api, type ApproveReceiptRequest, type ExpenseReceipt, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
+import { useMutation, useQuery, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query';
+import { ApiError, api, type ApproveReceiptRequest, type ExpenseDetail, type ExpenseReceipt, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
 import { profileKey } from '../session/me';
 import { useCursorList } from './queries';
-import { invalidateExpenses, putToSignedUrl } from './expenseQueries';
+import { expenseKey, invalidateExpenses } from './expenseQueries';
+import { uploadExpenseReceipt, uploadLibraryReceipt } from './receiptUpload';
 import type { ReceiptStatusFilter } from './filters';
-import type { ReceiptMimeType } from './receiptFileRules';
 
 /**
  * The receipts library in the portal (MUT-260 over MUT-255's /v1/receipts): the gallery's pages, the counts that
@@ -65,13 +65,59 @@ export function useReceiptsAvailability(profileId: string): { availability: Rece
   return { availability: 'checking', toReview: null };
 }
 
+/** MUT-441 §4: while the server reads a receipt, its page re-reads it this often, for at most this long. */
+export const READING_POLL_MS = 3_000;
+export const READING_POLL_MAX_MS = 120_000;
+
+type ReceiptQuery = Query<ExpenseReceipt, Error, ExpenseReceipt, readonly unknown[]>;
+
+/** When each receipt query was first seen `pending`, on the wall clock, so the two minutes survive a remount. */
+const pendingSince = new WeakMap<ReceiptQuery, number>();
+
+/**
+ * Whether the two minutes since the query was first seen pending are up. Wall time, not `dataUpdatedAt`: a refetch
+ * that fails leaves `dataUpdatedAt` where it was, which would never reach the limit (MUT-441 review).
+ */
+function readingTimedOut(query: ReceiptQuery): boolean {
+  const since = pendingSince.get(query);
+  return since !== undefined && Date.now() - since >= READING_POLL_MAX_MS;
+}
+
+function readingPoll(query: ReceiptQuery): number | false {
+  if (query.state.data?.reading !== 'pending') {
+    pendingSince.delete(query);
+    return false;
+  }
+  if (!pendingSince.has(query)) pendingSince.set(query, Date.now());
+  // A refetch that failed (a 404, or retries used up) stops the polling; the form stays usable as it is.
+  if (query.state.status === 'error') return false;
+  return readingTimedOut(query) ? false : READING_POLL_MS;
+}
+
+/**
+ * One receipt. MUT-441: polls while the server reads it (`reading: 'pending'`) and stops two minutes after first
+ * seeing that, or once a refetch fails; `readingShown` is false after that too, so the page just shows the form. When
+ * the reading ends, the gallery's lists refresh (their cards say "Reading…"). Local mode and unread receipts answer
+ * null: no polling.
+ */
 export function useReceipt(profileId: string, receiptId: string) {
-  return useQuery({
-    queryKey: receiptKey(profileId, receiptId),
-    queryFn: () => api.getReceipt(profileId, receiptId),
+  const queryClient = useQueryClient();
+  const key = receiptKey(profileId, receiptId);
+  const query = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      const before = queryClient.getQueryData<ExpenseReceipt>(key)?.reading;
+      const receipt = await api.getReceipt(profileId, receiptId);
+      if (before === 'pending' && receipt.reading !== 'pending') void queryClient.invalidateQueries({ queryKey: receiptsKey(profileId, 'list') });
+      return receipt;
+    },
     staleTime: RECEIPT_STALE_MS,
     retry: (failures, error) => !(error instanceof ApiError && error.status === 404) && failures < 2,
+    refetchInterval: readingPoll,
   });
+  const cached = queryClient.getQueryCache().find<ExpenseReceipt>({ queryKey: key, exact: true }) as ReceiptQuery | undefined;
+  const readingShown = query.data?.reading === 'pending' && !query.isError && !(cached && readingTimedOut(cached));
+  return { ...query, readingShown };
 }
 
 /** A3: the receipt as the gallery last listed it (with its linked expense), from any loaded page. */
@@ -106,30 +152,34 @@ export function invalidateReceipts(queryClient: QueryClient, profileId: string) 
 }
 
 /**
- * One library upload (D9): start (an Idempotency-Key per file attempt), PUT the bytes to the signed URL, complete.
- * A4: when the PUT or complete fails, the PENDING row is deleted (best effort) so it doesn't hold the pending cap.
+ * A receipt onto an existing expense (MUT-44), from the expense drawer. MUT-491: the upload deletes its PENDING row
+ * when it fails (R1), and the Receipts tab's lists and counts refresh with the expense, since a filed receipt shows
+ * under Filed and All there (R2).
  */
-export async function uploadLibraryReceipt(profileId: string, file: File, idempotencyKey: string): Promise<ExpenseReceipt> {
-  const { receipt, upload } = await api.startLibraryUpload(
-    profileId,
-    { filename: file.name, mimeType: file.type as ReceiptMimeType, sizeBytes: file.size },
-    idempotencyKey,
-  );
-  const cleanUp = () => api.deleteLibraryReceipt(profileId, receipt.id).catch(() => undefined);
-  try {
-    await putToSignedUrl(upload.url, upload.headers, file);
-  } catch (error) {
-    await cleanUp();
-    throw error;
-  }
-  try {
-    return await api.completeLibraryReceipt(profileId, receipt.id);
-  } catch (error) {
-    // Only when the server said it didn't complete (a 4xx): a lost answer or a 5xx may have completed it, and
-    // deleting would throw away a receipt that is in (the pending row, if any, ages out of the 24-hour cap).
-    if (error instanceof ApiError && error.status >= 400 && error.status < 500) await cleanUp();
-    throw error;
-  }
+export function useAddReceipt(profileId: string, expenseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => uploadExpenseReceipt(profileId, expenseId, file),
+    // Listed at once, so the drawer's "Uploading…" row hands over to the READY one without a gap before the refetch.
+    onSuccess: (receipt) =>
+      queryClient.setQueryData<ExpenseDetail>(expenseKey(profileId, expenseId), (expense) =>
+        expense ? { ...expense, receipts: [...expense.receipts.filter((r) => r.id !== receipt.id), receipt] } : expense,
+      ),
+    onSettled: () => refreshExpenseReceipts(queryClient, profileId, expenseId),
+  });
+}
+
+export function useDeleteReceipt(profileId: string, expenseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (receiptId: string) => api.deleteReceipt(profileId, expenseId, receiptId),
+    onSuccess: () => refreshExpenseReceipts(queryClient, profileId, expenseId),
+  });
+}
+
+function refreshExpenseReceipts(queryClient: QueryClient, profileId: string, expenseId: string) {
+  void queryClient.invalidateQueries({ queryKey: expenseKey(profileId, expenseId) });
+  invalidateReceipts(queryClient, profileId);
 }
 
 export interface PendingUpload {

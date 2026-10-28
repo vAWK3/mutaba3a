@@ -205,6 +205,8 @@ describe('GET /v1/customers/{id}/statement (MUT-478)', () => {
   });
 
   it('AC9: the contract version is bumped for Malafat to re-vendor', () => {
-    expect(API_VERSION).toBe('1.83.0-mut478');
+    // 1.83.0-mut478 or later (MUT-441 took 1.84.0).
+    const [major, minor] = API_VERSION.split('.').map(Number);
+    expect(major === 1 && (minor ?? 0) >= 83).toBe(true);
   });
 });

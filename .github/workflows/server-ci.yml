@@ -96,6 +96,34 @@ jobs:
           done
           echo "service never answered /health"; docker logs api; exit 1
 
+  receipt-ocr:
+    # MUT-441 (F7): the OCR sidecar's tests and licence check run inside its image with no network at all (AC4),
+    # then the service image boots and answers /healthz once its models are loaded.
+    name: receipt-ocr tests (no network), licences, /healthz
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server/ocr
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the test image
+        run: docker build --target test -t receipt-ocr-test:ci .
+      - name: pytest and the licence check, with --network none
+        run: docker run --rm --network none --read-only --tmpfs /tmp receipt-ocr-test:ci
+      - name: Build the service image
+        run: docker build -t receipt-ocr:ci .
+      - name: Boot it (read-only filesystem, no network) and probe /healthz from inside
+        run: |
+          docker run -d --name ocr --network none --read-only --tmpfs /tmp receipt-ocr:ci
+          for i in $(seq 1 60); do
+            if docker exec ocr python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz').status == 200 else 1)" 2>/dev/null; then
+              echo ready; exit 0
+            fi
+            sleep 2
+          done
+          echo "receipt-ocr never answered /healthz"; docker logs ocr; exit 1
+
   terraform:
     name: Terraform format and validate (${{ matrix.module }})
     runs-on: ubuntu-latest

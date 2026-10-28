@@ -8,7 +8,7 @@ import { ApiError } from '../errors.js';
 import type { ErrorReporter } from '../observability/reporter.js';
 import { accountActions, type AccountStatusVerb } from '../operator/actions/accounts.js';
 import { assertFutureExpiry, billingGrantActions } from '../operator/actions/billingGrants.js';
-import { featureActions } from '../operator/actions/features.js';
+import { featureActions, type FeatureActionOptions } from '../operator/actions/features.js';
 import { firmActions } from '../operator/actions/firms.js';
 import { signupReviewActions, type SignupReviewActionOptions } from '../operator/actions/signupReviews.js';
 import {
@@ -74,6 +74,8 @@ export interface OperatorRouteOptions extends SignupReviewActionOptions {
   settings: Pick<SessionSettings, 'portalOrigin' | 'pepper'>;
   /** MUT-434 (D14): forced agent disconnects are noted here. Absent = nowhere. */
   reporter?: ErrorReporter;
+  /** MUT-441 (R5): told after a feature is granted (receipt_reading queues the person's unread receipts). */
+  onGranted?: FeatureActionOptions['onGranted'];
 }
 
 /** Every operator route is the person's own, on no profile (no X-Mutaba3a-Profile); the lapse gate leaves them open. */
@@ -120,7 +122,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
   const accountOptions = { store, logger, sessions: settings, ...(options.reporter ? { reporter: options.reporter } : {}) };
   const accounts = accountActions(accountOptions);
   const grants = billingGrantActions({ store });
-  const features = featureActions(accountOptions);
+  const features = featureActions({ ...accountOptions, ...(options.onGranted ? { onGranted: options.onGranted } : {}) });
   const firms = firmActions({ store });
   const app = new OpenAPIHono<AppEnv>();
 

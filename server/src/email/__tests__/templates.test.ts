@@ -3,7 +3,7 @@ import { TEMPLATE_IDS, type MailTemplateId, type TemplateVars } from '../ports.j
 import { renderMail } from '../templates/index.js';
 import { mailDay } from '../templates/copy.js';
 import { SECONDARY_INK, TEXT_PAIRS } from '../templates/layout.js';
-import { ART_FILES, type CustomerTemplateId } from '../templates/look.js';
+import { ART_FILES, MAIL_ART_PATH, type CustomerTemplateId } from '../templates/look.js';
 
 /**
  * MUT-359 A1 (ADR-159 §5, brief §8.4): every mail exists in English and Arabic, Arabic is RTL, nothing but the
@@ -192,7 +192,7 @@ const WEBSITE = 'https://site.example.test';
 const RECIPIENT = 'person@example.test';
 const FRAME = { to: RECIPIENT, artOrigin: ART_ORIGIN, websiteOrigin: WEBSITE };
 const CUSTOMER_IDS = TEMPLATE_IDS.filter((id): id is CustomerTemplateId => id !== 'review-digest');
-const ART_URLS = ART_FILES.map((file) => `${ART_ORIGIN}/mail/v1/${file}`);
+const ART_URLS = ART_FILES.map((file) => `${ART_ORIGIN}${MAIL_ART_PATH}${file}`);
 const LOCALES = ['en', 'ar'] as const;
 /** Today's subjects (captured before the rewrite); the frame must not change a word. */
 const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
@@ -230,7 +230,7 @@ describe.each(CUSTOMER_IDS)('MUT-468 frame: %s', (id) => {
   const vars = SAMPLE[id];
   const mails = LOCALES.map((locale) => ({ locale, mail: renderMail(id, locale, vars as never, FRAME) }));
 
-  it("loads pictures only from the portal's /mail/v1/, each one named in look.ts, with alt text and a size", () => {
+  it("loads pictures only from the portal's served art folder, each one named in look.ts, with alt text and a size", () => {
     for (const { mail } of mails) {
       const imgs = tagsOf(mail.html, 'img');
       expect(imgs).toHaveLength(2); // the header art and the chip
@@ -290,13 +290,13 @@ describe('MUT-468 frame', () => {
 
   it('faces directional art right to left in Arabic, and never in English', () => {
     for (const [id, file] of [['account-ready', 'mail-header-hello-milestone-firm'], ['account-closing', 'mail-header-goodbye-destructive-confirmation']] as const) {
-      expect(renderMail(id, 'ar', SAMPLE[id] as never, FRAME).html).toContain(`/mail/v1/${file}-rtl-2x.png`);
+      expect(renderMail(id, 'ar', SAMPLE[id] as never, FRAME).html).toContain(`${MAIL_ART_PATH}${file}-rtl-2x.png`);
       const en = renderMail(id, 'en', SAMPLE[id] as never, FRAME).html;
-      expect(en).toContain(`/mail/v1/${file}-2x.png`);
+      expect(en).toContain(`${MAIL_ART_PATH}${file}-2x.png`);
       expect(en).not.toContain('-rtl-');
     }
     // Art without a direction has one file for both languages.
-    expect(renderMail('finish-signup', 'ar', SAMPLE['finish-signup'], FRAME).html).toContain('/mail/v1/mail-header-hello-spot-email-2x.png');
+    expect(renderMail('finish-signup', 'ar', SAMPLE['finish-signup'], FRAME).html).toContain(`${MAIL_ART_PATH}mail-header-hello-spot-email-2x.png`);
   });
 
   it('keeps the operator digest plain: no pictures, no headline', () => {
@@ -317,7 +317,7 @@ describe('MUT-468 frame', () => {
 
   it('uses only the origin of an art origin given with a trailing slash', () => {
     const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { ...FRAME, artOrigin: `${ART_ORIGIN}/` }).html;
-    expect(html).toContain(`src="${ART_ORIGIN}/mail/v1/`);
+    expect(html).toContain(`src="${ART_ORIGIN}${MAIL_ART_PATH}`);
   });
 
   it('escapes a hostile recipient and passkey name in the footer and the details panel', () => {
@@ -377,7 +377,7 @@ describe('MUT-468 frame: review fixes', () => {
 
   it('keeps only the origin of an art or website origin given with a path or query, and refuses a non-http one', () => {
     const html = renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { to: RECIPIENT, artOrigin: `${ART_ORIGIN}/x?a="b`, websiteOrigin: `${WEBSITE}/some/page` }).html;
-    expect(html).toContain(`src="${ART_ORIGIN}/mail/v1/`);
+    expect(html).toContain(`src="${ART_ORIGIN}${MAIL_ART_PATH}`);
     expect(html).not.toContain('?a=');
     expect(html).toContain(`href="${WEBSITE}/privacy?lang=en"`);
     expect(() => renderMail('finish-signup', 'en', SAMPLE['finish-signup'], { artOrigin: 'javascript:alert(1)' })).toThrow(/link/i);

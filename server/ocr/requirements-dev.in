@@ -1,0 +1,6 @@
+# Tests and the licence check (not in the image's runtime layer):
+#   uv pip compile requirements-dev.in --universal --python-version 3.12 --generate-hashes -o requirements-dev.txt
+-c requirements.txt
+pytest==9.2.0
+httpx==0.28.1
+pip-licenses==5.5.5

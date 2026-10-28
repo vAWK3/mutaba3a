@@ -74,6 +74,12 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { RECEIPT_UPLOAD_POLICY, receiptRoutes } from './routes/receipts.js';
+import { receiptReadingRoutes } from './routes/receipt-reading.js';
+import { RECEIPT_READ_JOB_PATH } from './receipts/reading/cloud-tasks.js';
+import { InlineDispatcher, type ReadDispatcher } from './receipts/reading/dispatcher.js';
+import type { ReadJobVerifier } from './receipts/reading/oidc.js';
+import { createReceiptReader } from './receipts/reading/reader.js';
+import type { OcrClient } from './receipts/ocr-client.js';
 import { retainerRoutes } from './routes/retainers.js';
 import { vatRoutes } from './routes/vat.js';
 import { healthRoutes } from './routes/health.js';
@@ -185,6 +191,14 @@ export interface AppDependencies {
    * `fetchMetadata` and the limiters are injected by tests; production uses the guarded CIMD fetch and OAUTH_POLICY.
    */
   oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter; agentPersonLimiter?: RateLimiter } | null;
+  /**
+   * MUT-441 (SERVER_OCR): the server reads receipts, on the OCR service through `ocr`, scheduled by `dispatcher`
+   * (Cloud Tasks; an InlineDispatcher is bound to the reader here). Needs `attachments`. Null or absent = no receipt is
+   * read, and the read job answers `off`.
+   */
+  receiptReading?: { ocr: OcrClient; dispatcher: ReadDispatcher } | null;
+  /** MUT-441 (R8): checks the read job's Google OIDC token. Null or absent = POST /jobs/v1/receipts/read answers 503. */
+  receiptReadVerifier?: ReadJobVerifier | null;
 }
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
@@ -267,7 +281,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.83.0-mut478';
+export const API_VERSION = '1.84.0-mut441';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -333,7 +347,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
   app.use('/v1/operator/*', operatorGate());
   app.use('/admin/*', adminAuth(deps.adminToken));
-  app.use('/jobs/*', jobAuth(deps.jobToken ?? null));
+  // MUT-441 (R8): the receipt read job takes only Google's OIDC tokens (its own middleware), never the shared token.
+  const sharedJobAuth = jobAuth(deps.jobToken ?? null);
+  app.use('/jobs/*', (c, next) => (c.req.path === RECEIPT_READ_JOB_PATH ? next() : sharedJobAuth(c, next)));
 
   // MUT-61: register CaptureSource as itself before any route references it. The generator otherwise takes the first
   // use it meets as the component; Payment's nullable response field made the shared component nullable, and every
@@ -423,6 +439,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
+  // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).
+  const receiptReader =
+    deps.receiptReading && deps.attachments
+      ? createReceiptReader({ store: deps.store, storage: deps.attachments, ocr: deps.receiptReading.ocr, dispatcher: deps.receiptReading.dispatcher, logger: deps.logger, now })
+      : null;
+  if (receiptReader && deps.receiptReading?.dispatcher instanceof InlineDispatcher) deps.receiptReading.dispatcher.bind((id) => receiptReader.readOne(id));
+  app.route('/', receiptReadingRoutes({ reader: receiptReader, verifier: deps.receiptReadVerifier ?? null }));
+  // R5: granting receipt_reading queues the person's To-review receipts that were never read.
+  const onGranted = receiptReader
+    ? async (userId: string, feature: string) => {
+        if (feature === 'receipt_reading') await receiptReader.backlog(userId);
+      }
+    : undefined;
   // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
   const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
@@ -434,18 +463,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         storage: deps.attachments ?? null,
         urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
         uploadLimiter: receiptUploadLimiter,
+        reading: receiptReader,
       }),
     );
   }
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter, ...(onGranted ? { onGranted } : {}) }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe
@@ -511,7 +541,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
   app.route('/', oauthCleanupRoutes(deps.store));
   app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
-    tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter } }));
+    tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter, reading: receiptReader } }));
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',
@@ -537,6 +567,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     in: 'header',
     name: 'X-Job-Token',
     description: 'The nightly Cloud Scheduler job (MUTABA3A_JOB_TOKEN, MUT-360). Opens /jobs/* only.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'googleOidc', {
+    type: 'http',
+    scheme: 'bearer',
+    bearerFormat: 'JWT',
+    description: 'MUT-441 (R8): a Google-signed OIDC token for the receipt-read queue\'s or the sweep Scheduler\'s service account (READ_INVOKER_SA, SWEEP_INVOKER_SA), audience READ_OIDC_AUDIENCE. Opens POST /jobs/v1/receipts/read only.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'adminToken', {
     type: 'apiKey',

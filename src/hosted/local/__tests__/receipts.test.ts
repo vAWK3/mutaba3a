@@ -76,7 +76,10 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     await page.putBlob(upload.url, new Blob([PDF], { type: 'application/pdf' }));
     const completed = await call(page, profileId, 'POST', `/v1/expenses/${expenseId}/receipts/${receipt.id}/complete`);
     expect(completed.status).toBe(200);
-    expect(((await completed.json()) as { status: string }).status).toBe('READY');
+    const body = (await completed.json()) as { status: string; reading: unknown };
+    expect(body.status).toBe('READY');
+    // MUT-441: no server reader signed out, so the portal never waits on one.
+    expect(body.reading).toBeNull();
 
     const reloaded = await openPage();
     const download = await call(reloaded, profileId, 'GET', `/v1/expenses/${expenseId}/receipts/${receipt.id}/download`);
@@ -84,6 +87,19 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     const { url, filename } = (await download.json()) as { url: string; filename: string };
     expect(filename).toBe('Ink receipt.pdf');
     expect(await (await reloaded.readBlob(url))?.text()).toBe(PDF);
+  });
+
+  it('deletes a PENDING receipt whose file never reached this device (MUT-491: an upload that failed cleans up)', async () => {
+    const page = await openPage();
+    const profileId = await profileOf(page);
+    const expenseId = await anExpense(page, profileId);
+    const { receipt } = await startReceipt(page, profileId, expenseId);
+
+    const response = await call(page, profileId, 'DELETE', `/v1/expenses/${expenseId}/receipts/${receipt.id}`);
+
+    expect(response.status).toBe(204);
+    const detail = (await (await call(page, profileId, 'GET', `/v1/expenses/${expenseId}`)).json()) as { receipts: unknown[] };
+    expect(detail.receipts).toEqual([]);
   });
 
   it('refuses to complete before the file is on this device (422 UPLOAD_INCOMPLETE)', async () => {

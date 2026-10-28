@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
 import type { ExpenseReceipt, ReceiptListItem } from '../../api/client';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
@@ -18,7 +18,10 @@ beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 function receipt(id: string, over: Partial<ReceiptListItem> = {}): ReceiptListItem {
   return {
@@ -37,6 +40,7 @@ function receipt(id: string, over: Partial<ReceiptListItem> = {}): ReceiptListIt
     uploadedByUserId: null,
     createdAt: '2026-10-24T09:00:00Z',
     completedAt: '2026-10-24T09:00:01Z',
+    reading: null,
     expense: null,
     ...over,
   };
@@ -327,5 +331,176 @@ describe('the review page (AC3, D7, D8)', () => {
   it('a receipt that is not there says so', async () => {
     portal(`${BASE}/${R2}`, { receipts: [receipt(R1)] });
     expect(await screen.findByText("This receipt isn't here")).toBeInTheDocument();
+  });
+});
+
+describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
+  const READING = 'Reading the receipt…';
+  const ONE = `GET /v1/receipts/${R1}`;
+  const tick = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+
+  /** The receipt as the server returns it, switchable mid-test. */
+  function reading(initial: ReceiptListItem, routes: Record<string, Handler> = {}) {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const state = { current: initial };
+    const rendered = portal(`${BASE}/${R1}`, { receipts: [initial], routes: { [ONE]: () => ok(plain(state.current)), ...routes } });
+    return { ...rendered, state };
+  }
+
+  it('shows Reading… and polls while pending; the suggestion fills the untouched fields, with hints only on those', async () => {
+    const { api, user, state } = reading(receipt(R1, { reading: 'pending' }));
+    expect(await screen.findByText(READING)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Vendor'), 'Corner shop');
+    await tick(3000);
+    expect(api.count(ONE)).toBe(2);
+    expect(screen.getByText(READING)).toBeInTheDocument();
+
+    state.current = receipt(R1, { reading: 'done', suggested });
+    await tick(3000);
+    await waitFor(() => expect(screen.getByLabelText(/Amount/)).toHaveValue('84.20'));
+    expect(screen.queryByText(READING)).toBeNull();
+    expect(screen.getByLabelText(/Currency/)).toHaveValue('ILS');
+    expect(screen.getByLabelText(/^Date/)).toHaveValue('2026-10-24');
+    // Typed by the person: kept, and no hint
+    expect(screen.getByLabelText('Vendor')).toHaveValue('Corner shop');
+    expect(document.querySelector('[data-hint-for="vendor"]')).toBeNull();
+    expect(document.querySelector('[data-hint-for="amount"]')).toHaveTextContent('From the receipt');
+    expect(document.querySelector('[data-hint-for="date"]')).toHaveTextContent('From the receipt');
+    // Done: no more polling
+    const fetched = api.count(ONE);
+    await tick(10_000);
+    expect(api.count(ONE)).toBe(fetched);
+  });
+
+  it('a field typed then cleared is not refilled', async () => {
+    const { user, state } = reading(receipt(R1, { reading: 'pending' }));
+    await screen.findByText(READING);
+    const vendor = screen.getByLabelText('Vendor');
+    await user.type(vendor, 'Shu');
+    await user.clear(vendor);
+    const amount = screen.getByLabelText(/Amount/);
+    await user.type(amount, '1');
+    await user.clear(amount);
+
+    state.current = receipt(R1, { reading: 'done', suggested });
+    await tick(3000);
+    await waitFor(() => expect(screen.getByLabelText(/^Date/)).toHaveValue('2026-10-24'));
+    expect(screen.getByLabelText('Vendor')).toHaveValue('');
+    expect(screen.getByLabelText(/Amount/)).toHaveValue('');
+    expect(document.querySelector('[data-hint-for="vendor"]')).toBeNull();
+    expect(document.querySelector('[data-hint-for="amount"]')).toBeNull();
+  });
+
+  it('a suggestion that lands while Approve is in flight changes nothing; what was sent is what the person saw', async () => {
+    let release: (response: Response) => void = () => undefined;
+    let sent: unknown = null;
+    const { user, state, router } = reading(receipt(R1, { reading: 'pending' }), {
+      [`POST /v1/receipts/${R1}/approve`]: ({ body }) => {
+        sent = body;
+        return new Promise<Response>((resolve) => {
+          release = resolve;
+        });
+      },
+    });
+    await screen.findByText(READING);
+    await user.type(screen.getByLabelText(/Amount/), '10');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(sent).not.toBeNull());
+
+    state.current = receipt(R1, { reading: 'done', suggested });
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(READING)).toBeNull());
+    expect(screen.getByLabelText(/Amount/)).toHaveValue('10');
+    expect(screen.getByLabelText('Vendor')).toHaveValue('');
+    expect(screen.getByLabelText(/Currency/)).toHaveValue('USD');
+    expect(document.querySelector('[data-hint-for="date"]')).toBeNull();
+    expect(sent).toMatchObject({ amount: '10', currency: 'USD', categoryId: GROCERIES });
+    expect(sent).not.toHaveProperty('vendor');
+    expect(sent).not.toHaveProperty('suggested');
+
+    release(ok({ expense: { id: E1 }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201));
+    await waitFor(() => expect(locationOf(router)).toBe(BASE));
+  });
+
+  it('a suggestion that landed during an Approve that then failed fills the untouched fields once it ends (MUT-441 review)', async () => {
+    let release: (response: Response) => void = () => undefined;
+    const { user, state } = reading(receipt(R1, { reading: 'pending' }), {
+      [`POST /v1/receipts/${R1}/approve`]: () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    });
+    await screen.findByText(READING);
+    await user.type(screen.getByLabelText(/Amount/), '10');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Filing…' })).toBeInTheDocument());
+
+    state.current = receipt(R1, { reading: 'done', suggested });
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(READING)).toBeNull());
+    expect(screen.getByLabelText('Vendor')).toHaveValue('');
+
+    release(fail(500, 'INTERNAL'));
+    await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('Shufersal'));
+    expect(screen.getByLabelText(/^Date/)).toHaveValue('2026-10-24');
+    // Typed by the person before Approve: kept.
+    expect(screen.getByLabelText(/Amount/)).toHaveValue('10');
+  });
+
+  it('failed shows nothing special and does not poll; the form works as today', async () => {
+    const { api, user } = reading(receipt(R1, { reading: 'failed' }));
+    const amount = await screen.findByLabelText(/Amount/);
+    expect(screen.queryByText(READING)).toBeNull();
+    await user.type(amount, '12.50');
+    expect(amount).toHaveValue('12.50');
+    await tick(10_000);
+    expect(api.count(ONE)).toBe(1);
+  });
+
+  it('stops polling two minutes after it first saw pending, and the Reading row goes', async () => {
+    const { api } = reading(receipt(R1, { reading: 'pending' }));
+    await screen.findByText(READING);
+    await tick(60_000);
+    expect(api.count(ONE)).toBeGreaterThan(10);
+    await tick(63_000);
+    const fetched = api.count(ONE);
+    expect(fetched).toBeLessThanOrEqual(42);
+    await tick(30_000);
+    expect(api.count(ONE)).toBe(fetched);
+    expect(screen.queryByText(READING)).toBeNull();
+    expect(screen.getByLabelText(/Amount/)).toBeEnabled();
+  });
+
+  it.each([
+    ['refetches that keep failing (500)', () => fail(500, 'INTERNAL')],
+    ['a 404 (the receipt is gone)', () => fail(404, 'NOT_FOUND')],
+  ])('stops polling on %s, and the Reading row goes (MUT-441 review)', async (_label, failure) => {
+    const state = { failing: false };
+    const { api } = reading(receipt(R1, { reading: 'pending' }), { [ONE]: () => (state.failing ? failure() : ok(plain(receipt(R1, { reading: 'pending' })))) });
+    await screen.findByText(READING);
+    state.failing = true;
+    await tick(20_000);
+    const fetched = api.count(ONE);
+    await tick(60_000);
+    expect(api.count(ONE)).toBe(fetched);
+    expect(screen.queryByText(READING)).toBeNull();
+  });
+
+  it('null, as local mode and an unread receipt answer, never shows Reading… and never polls', async () => {
+    const { api } = reading(receipt(R1, { reading: null }));
+    await screen.findByLabelText(/Amount/);
+    expect(screen.queryByText(READING)).toBeNull();
+    await tick(10_000);
+    expect(api.count(ONE)).toBe(1);
+  });
+
+  it('the gallery marks a receipt being read', async () => {
+    portal(BASE, { receipts: [receipt(R1, { reading: 'pending' }), receipt(R2, { reading: 'failed' })] });
+    await screen.findByRole('list', { name: 'Receipts' });
+    expect(await screen.findByText('Reading…')).toBeInTheDocument();
+    expect(document.querySelector(`[data-receipt-id="${R1}"]`)).toHaveTextContent('Reading…');
+    expect(document.querySelector(`[data-receipt-id="${R2}"]`)).not.toHaveTextContent('Reading…');
   });
 });

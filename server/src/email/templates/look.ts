@@ -4,7 +4,7 @@ import type { MailTemplateId } from '../ports.js';
 /**
  * MUT-468: each customer mail's look, from the approved Claude Design mail kit (frame 1b, MUT-467): a mood (the tint
  * of the band and panels), a header picture and an icon chip. The pictures are PNG @2x in
- * src/hosted/public/mail/v1, served by the API at <PORTAL_ORIGIN>/mail/v1 (eng review D2). `v1` is never rewritten:
+ * src/hosted/public/mail/v<N>, served by the API at <PORTAL_ORIGIN>/mail/v<N> (eng review D2). A served folder is never rewritten:
  * changed art goes in a new folder, because sent mails keep pointing at the old one. The operator digest has no look.
  */
 export type CustomerTemplateId = Exclude<MailTemplateId, 'review-digest'>;
@@ -89,7 +89,8 @@ export function isCustomerTemplate(template: MailTemplateId): template is Custom
 }
 
 /** Where the pictures are served, under the art origin. */
-export const MAIL_ART_PATH = '/mail/v1/';
+/** MUT-484: v2 is the kit re-exported with transparent backgrounds and its halo (ADR-214 amendment); v1 stays for sent mails. */
+export const MAIL_ART_PATH = '/mail/v2/';
 
 const headerFile = (mood: Mood, header: Header, rtl: boolean) => `mail-header-${mood}-${header}${rtl ? '-rtl' : ''}-2x.png`;
 const chipFile = (mood: Mood, chip: Chip) => `chip-${chip}-${mood}-2x.png`;

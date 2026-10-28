@@ -4100,6 +4100,13 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | `routes-m2..m8` version pins | 6 | AC5: API_VERSION and the OpenAPI `info.version` are 1.82.0-mut482. |
 | `qa/specs/portal-selfservice/summaries.spec.ts` `@portal-selfservice.summaries.overdue-since` | 1 | On the live dev API with an API key: 148 days, then 56 after the older one is paid, on both summaries. |
 
+## MUT-484 — transparent mail art (v2)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/email/__tests__/look.test.ts` | every served PNG is 8-bit RGBA non-interlaced, under 40 KB, alpha 0 at its corners (and mid-edges for headers); the PNG reader sees v1's opaque corner as 255 (control); every v1 file matches its pinned SHA-256 and v1 holds exactly those files |
+| Browser | `qa/specs/portal-selfservice/mail.spec.ts` | the signup and account-ready mails load their art from `/mail/v2/` on the QA portal |
+| Manual | `server/scripts/mail-preview.sh --send <inbox> --yes`, after the release | Gmail, Outlook (Mac, web) and Apple Mail, dark and light: no pale squares; halo and pastel chip circles as designed |
+
 ## MUT-478 — the customer statement and receivable numbers (ADR-217)
 | Level | Where | What it proves |
 |---|---|---|
@@ -4110,3 +4117,36 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Postgres | `server/src/repositories/__tests__/migration-mut478.test.ts` | backfill per organization and posting year in (postingDate, postedAt, id) order with counters resuming; the previous revision's insert (no number) is numbered by the trigger; a sent number is kept; a duplicate is refused; the result matches `schema.prisma` |
 | Postgres + memory | `server/src/repositories/__tests__/store-contract-mut478.ts` | numbers at all three posting sites (installment, retainer charge, Owed), a repeated post keeps its number, another organization counts from 1; `statementSources` returns one customer's rows in one currency with reversed payments and every allocation |
 | Browser/API | `qa/specs/portal-selfservice/malafat-money-api.spec.ts` (`@portal-selfservice.malafat-money-api.statement`) | the statement over HTTP with an integration key: lines, numbers, balances |
+
+## MUT-441 — our own server reads receipts (ADR-220)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/receipts/extract/__tests__/extract.test.ts` (+ `fixtures.ts`) | table-driven from the MUT-253 fixture manifest plus hand cases: Arabic-Indic and Persian digits, RTL totals, Arabic decimal comma, a lost decimal point never filled, subtotal vs total, the arithmetic cross-check, the JOD three-decimal rule (and a single three-decimal amount not guessed), ח.פ check digit, under-threshold fields omitted (AC2) |
+| Unit | `server/src/receipts/extract/__tests__/merge.test.ts` | fill-absent: a present field is never changed (AC3); an all-present suggestion is SKIPPED; `readerVersion` only when the server supplied a field |
+| Unit | `server/src/receipts/__tests__/ocr-client.test.ts` | the sidecar contract, terminal vs retryable codes, ID token only on https, a malformed and a truncated body leave as `OcrReadError` with no text for the logger or `report()` (AC5) |
+| Unit | `server/src/receipts/__tests__/dispatchers.test.ts` | Cloud Tasks: one named task per attempt with an OIDC token and no `X-Job-Token`, ALREADY_EXISTS is success; inline: after the response, once per attempt while queued, failures swallowed, `QA_READ_DELAY_MS` waits before the read |
+| Unit | `server/src/__tests__/config.test.ts` "the server reads receipts (MUT-441)" | `SERVER_OCR` only "true", needs `OCR_URL` (https or local http); production/staging need `READ_QUEUE` + `API_ORIGIN` + `READ_INVOKER_SA`; the audience defaults to `API_ORIGIN`; `QA_READ_DELAY_MS` 0–60000, refused in production and staging |
+| Route | `server/src/__tests__/routes-receipt-reading.test.ts` | `complete` sets PENDING in its own UPDATE and reads inline only with the flag, the grant and no full suggestion; null uploader and all-present → SKIPPED; a failed enqueue still answers 200 PENDING and the sweep asks again; OIDC only (missing, wrong audience, unknown email and `X-Job-Token` refused); a retry during a live lease is a no-op 200; deleted → SKIPPED; approved or filed during the read → writes nothing (F8); a person's edit during the read is kept (AC3); vendor from a saved registration no.; unreadable → FAILED, no retry; timeout → 503, 3 attempts or 30 min → FAILED; the sweep re-asks by attempt-named task and never reads; no sidecar or store text in logs or Sentry (AC5); granting `receipt_reading` queues the person's To-review receipts once, nothing with the flag off (R5) |
+| Route | `server/src/__tests__/routes-receipts.test.ts`, `user-features.test.ts`, `auth/__tests__/store-guard.test.ts` | approve, file and PATCH …/suggestion keep the server's fields and add only absent ones (R7); `capture` scanned/photo and `reading` null until read; `receipt_reading` is a feature; the read-job store methods stay off the guarded store |
+| Store | `server/src/repositories/__tests__/store-contract-receipt-reading.ts` (memory + Prisma) | claim, finish, sweep and backlog on both stores, the partial index's query shape |
+| Wire | `server/src/receipts/__tests__/reading-wire.test.ts`; `routes-m2..m8` version pins | `reading` per state, `capture` hint; API 1.84.0-mut441 |
+| Python | `server/ocr/tests/` (pytest) | golden reads of 5 fixtures; 40 MP bomb PNG and 300-page PDF refused as `unreadable`; the 30 s deadline; no network (socket blocked; CI also runs under `--network none`, AC4); no receipt text in logs (AC5); bidi and PDF text-layer reordering |
+| Licences | `server/ocr/check_licenses.py` (CI) | every package and model listed with a commercial-safe licence; exactly the two accepted LGPL-2.1 components (AC7) |
+| Terraform | `server/infrastructure/terraform/tests/receipt_ocr.tftest.hcl`; `server/src/scripts/__tests__/receipt-ocr-egress.test.ts`, `receipt-ocr-release.test.ts`, `rollback.test.ts` | off by default creates nothing; invoker only the API's SA; the OCR SA has no roles; egress locked (ALL_TRAFFIC, no NAT, deny-all); the release builds and the rollback pins `receipt-ocr:<sha>` |
+| Portal | `src/hosted/pages/__tests__/Receipts.test.tsx`, `src/hosted/local/__tests__/receipts.test.ts` | polls while pending and stops at 2 minutes; "Reading the receipt…"; untouched fields fill, typed and typed-then-cleared ones stay, nothing fills while Approve is in flight; failed shows nothing; local mode never polls (AC8) |
+| Landing | `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` "reading receipts" (en, ar) | the draft AC9 copy |
+| Benchmark | `server/ocr/bench/run.py` (manual) | AC1 per language on the synthetic set, AC6 warm p95 and cold start; `.claude/designs/mut-441-bench.md` |
+| Browser | `qa/specs/portal-selfservice/receipts.spec.ts` `@portal-selfservice.receipts.server-reading` | on the live dev API with the real sidecar: upload a photo, the card says "Reading…", the review page says "Reading the receipt…", then 52.470 JOD and 2026-06-25 fill in, marked from the receipt |
+
+## MUT-491 — receipts on a new expense (ADR-221)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `src/hosted/data/__tests__/receiptUpload.test.ts` | an expense upload starts on the expense, PUTs without cookies and completes; a failed PUT deletes the PENDING row; a refused complete deletes it (a failed delete keeps the original error); a lost complete keeps it; a refused start sends nothing else |
+| Unit | `src/hosted/data/__tests__/receiptHooks.test.tsx` | `useAddReceipt` refreshes the expense and the Receipts tab's lists and counts, after a failure too |
+| Component | `src/hosted/components/__tests__/ReceiptPickButton.test.tsx` | several files per pick; a refused file shows the existing message and the good ones stay; Remove; an 11th file is not queued and is named; a refused file plus one over the cap names both in one toast |
+| Component | `src/hosted/components/__tests__/ReceiptUploader.test.tsx` | incoming files upload one at a time and settle once; a failed one stays with Upload again and Remove (no toast) and its PENDING row is deleted; a lost complete shows READY once listed; edit mode takes several files |
+| Component | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` | no receipts: as before; with receipts: one POST, the flip, uploads to the new id, close when all landed; a second Save in flight sends no second POST; a failure keeps the edit drawer open; unmounting mid-upload closes nothing later (fails without the mounted guard); no receipts without `onCreated` |
+| Page | `src/hosted/pages/__tests__/ExpensesList.test.tsx` | the real drawer and router: a failed PUT leaves `?expense=e1`, the other receipt READY, one POST |
+| Local mode | `src/hosted/local/__tests__/receipts.test.ts` | signed out, a PENDING receipt whose file never arrived deletes (204) and the expense lists none |
+| Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt`) | a text file refused; PDF + JPEG, JPEG removed, Save: one POST, one start/PUT/complete, the drawer closes, reopening lists the PDF; a failed PUT leaves the new expense open at `?expense=` and Upload again lands it; 11 picked: 10 listed, the 11th named, Add receipt off, Cancel sends nothing |
+| Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt-arabic`) | in Arabic: right to left, الإيصالات / إضافة إيصال, the Arabic refusal toast, a Latin filename in its own `<bdi>` with إزالة and تُضاف عند الحفظ. |

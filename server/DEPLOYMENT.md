@@ -1435,6 +1435,8 @@ every `deploy.sh` run. The service reports its tag on `GET /health`
 
 Mail DNS: on 2026-10-25 the frontdoor stack adopted Resend Forge's records for `notify.mtb3a.com`. It imported the DKIM TXT and the `send.`/`rsend.` CNAMEs that Resend's Cloudflare integration created, and destroyed SES's MX + TXT on `send.`. `email:check -- --api` passes. The api v0.8.0 release (`8acc5022`) went out the same day.
 
+Self-service go-live, 2026-10-25 (api v0.7.1, web v0.2.2): Stripe live on the MTB3A account (revision `00026`; prices, Customer Portal and webhook per §6e), the lapse gate on (`00027`, after `billing:uncovered` listed nobody), mail on through Resend from `notify.mtb3a.com` with the Turnstile widget (MUT-359, MUT-366, MUT-368), the disposable-domain list refreshed and the review digest address set (MUT-367), and `self_signup_enabled = true` (Basel's call, ahead of the phone build). The same day: `accounts:purge` and `billing:trial-mail` dry runs, the CORS check from the landing, the apex `apple-app-site-association` and Apple's CDN copy, and the portal passkey smoke. On 2026-10-28 Basel checked recovery end to end on app.mtb3a.com (reset mail, password-changed mail, sign-in), one business-email signup to the trial step, and a cross-device passkey sign-in on an iPhone. Still open: the minimum phone build (MUT-361 in `docs/operations/before-release.md`) and a first real-card subscription.
+
 Malafat's side:
 
 - **Production:** `malafat-tenant-app` runs `web@2.2.4` (`8cd8fea19`, rolled

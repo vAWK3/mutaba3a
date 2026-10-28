@@ -170,6 +170,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           onDeleted={afterDelete}
           canAddClient={canAddClient(profile, writable)}
           readOnly={!writable}
+          onCreated={(id) => setFilters({ ...filters, expense: id, newExpense: undefined })}
         />
       )}
     </>

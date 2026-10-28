@@ -269,7 +269,7 @@ describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already ex
     expect((await read(await h.app.request('/admin/v1/receipts/edit-rates?from=2026-10-22&to=2026-10-23', { headers: admin }))).approved).toBe(0);
   });
 
-  it('replaces the stored suggestion with one read at review time', async () => {
+  it('fills the stored suggestion with one read at review time (absent fields only, MUT-441 R7)', async () => {
     const { h, as } = await setup();
     const expense = await typed(h, as());
     const receipt = await upload(h, as());
@@ -317,7 +317,7 @@ describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already ex
 });
 
 describe('PATCH /v1/receipts/{id}/suggestion', () => {
-  it('replaces a To-review suggestion with If-Match; a stale version is 409, a filed receipt is 409 RECEIPT_ALREADY_FILED', async () => {
+  it('sets a To-review suggestion with If-Match (fill-absent, MUT-441 R7); a stale version is 409, a filed receipt is 409 RECEIPT_ALREADY_FILED', async () => {
     const { h, as } = await setup();
     const receipt = await upload(h, as());
     const patch = (version: number) => h.app.request(`/v1/receipts/${receipt.id}/suggestion`, json(SUGGESTION, { ...as(), 'if-match': String(version) }, 'PATCH'));
@@ -459,5 +459,79 @@ describe('access and configuration', () => {
     expect((await h.app.request(`/v1/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(404);
     expect((await h.app.request(`/v1/expenses/${expense.id}/receipts/${started.receipt.id}/complete`, { method: 'POST', headers: as() })).status).toBe(200);
     expect(await read(await h.app.request('/v1/receipts/counts', { headers: as() }))).toEqual({ toReview: 0, filed: 1 });
+  });
+});
+
+describe('MUT-441: how a receipt was captured, and whether the server is reading it', () => {
+  it("keeps capture 'scanned' as the receipt's capture hint; absent is a photo; reading is null until the server reads", async () => {
+    const { h, org, as } = await setup();
+    const scanned = await read(await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'scanned' }, { ...as(), ...idem() })));
+    expect(scanned.receipt).toMatchObject({ reading: null });
+    expect((await h.store.expenseReceipts.getById(org.id, scanned.receipt.id))?.captureHint).toBe('SCANNED');
+    const photo = await upload(h, as());
+    expect(photo).toMatchObject({ reading: null });
+    expect((await h.store.expenseReceipts.getById(org.id, photo.id))?.captureHint ?? 'PHOTO').toBe('PHOTO');
+    const listed = await read(await h.app.request('/v1/receipts', { headers: as() }));
+    expect(listed.items[0]).toMatchObject({ reading: null });
+  });
+
+  it("takes 'photo' and refuses any other capture value", async () => {
+    const { h, as } = await setup();
+    expect((await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'photo' }, { ...as(), ...idem() }))).status).toBe(201);
+    expect((await h.app.request('/v1/receipts/uploads', json({ ...FILE, capture: 'fax' }, { ...as(), ...idem() }))).status).toBe(422);
+  });
+});
+
+describe('MUT-441 R7: a client suggestion fills only what the server has not read', () => {
+  const serverRead = {
+    readerVersion: 'server-ocr-test-1',
+    date: { value: '2026-10-21', source: 'ocr', confidence: 0.9 },
+    totalMinor: { value: '1500', source: 'ocr', confidence: 0.88 },
+  };
+  const phoneRead = {
+    readerVersion: 'phone-2.0',
+    totalMinor: { value: '9900', source: 'ocr', confidence: 0.99 },
+    currency: { value: 'ILS', source: 'qr', confidence: 1 },
+    vendorName: { value: 'Cafe', source: 'vendor', confidence: 0.95 },
+  };
+  // The server's total has no currency (two decimals assumed), so the phone's money group, ILS included, is not taken
+  // (MUT-441 review: currency and amounts merge as one group); the vendor still fills.
+  const merged = { ...serverRead, readerVersion: 'phone-2.0', vendorName: phoneRead.vendorName };
+
+  it("approve: the server's fields survive the phone's suggestion; absent ones are added", async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: serverRead });
+    const res = await h.app.request(`/v1/receipts/${receipt.id}/approve`, json({ ...approveBody, suggested: phoneRead }, { ...as(), ...idem() }));
+    expect(res.status).toBe(201);
+    expect((await read(res)).receipt.suggested).toEqual(merged);
+  });
+
+  it('approve: a server read in JOD takes the phone VAT only when the phone read the same currency', async () => {
+    const { h, as } = await setup();
+    const jodRead = { readerVersion: 'server-ocr-test-1', currency: { value: 'JOD', source: 'ocr', confidence: 0.9 }, totalMinor: { value: '15000', source: 'ocr', confidence: 0.9 } };
+    const vat = { value: '2000', source: 'ocr', confidence: 0.9 };
+    const other = await upload(h, as(), { ...FILE, suggested: jodRead });
+    const otherRes = await h.app.request(`/v1/receipts/${other.id}/approve`, json({ ...approveBody, suggested: { readerVersion: 'phone-2.0', currency: { value: 'ILS', source: 'qr', confidence: 1 }, vatMinor: vat } }, { ...as(), ...idem() }));
+    expect((await read(otherRes)).receipt.suggested).toEqual(jodRead);
+    const same = await upload(h, as(), { ...FILE, suggested: jodRead });
+    const sameRes = await h.app.request(`/v1/receipts/${same.id}/approve`, json({ ...approveBody, suggested: { readerVersion: 'phone-2.0', currency: { value: 'JOD', source: 'qr', confidence: 1 }, vatMinor: vat } }, { ...as(), ...idem() }));
+    expect((await read(sameRes)).receipt.suggested).toEqual({ ...jodRead, readerVersion: 'phone-2.0', vatMinor: vat });
+  });
+
+  it('file onto an expense: the same', async () => {
+    const { h, as } = await setup();
+    const expense = await read(await h.app.request('/v1/expenses', json(approveBody, { ...as(), ...idem() })));
+    const receipt = await upload(h, as(), { ...FILE, suggested: serverRead });
+    const res = await h.app.request(`/v1/receipts/${receipt.id}/file`, json({ expenseId: expense.id, suggested: phoneRead }, { ...as(), ...idem() }));
+    expect(res.status).toBe(200);
+    expect((await read(res)).receipt.suggested).toEqual(merged);
+  });
+
+  it('PATCH …/suggestion: the same', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: serverRead });
+    const res = await h.app.request(`/v1/receipts/${receipt.id}/suggestion`, json(phoneRead, { ...as(), 'if-match': String(receipt.version) }, 'PATCH'));
+    expect(res.status).toBe(200);
+    expect((await read(res)).suggested).toEqual(merged);
   });
 });
