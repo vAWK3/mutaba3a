@@ -34,7 +34,7 @@
 
 ### Added
 - `draft` on `POST /v1/fee-proposals` (FIXED with any schedule, CONTINGENCY, RETAINER), composed on proposedOn and stored; `FeeProposal.draft` and `agreementType` on every read; 422 `DRAFT_CONFLICT`.
-- `POST /v1/fee-proposals/{id}/approve/preview`; `approve` takes `{ agreement, previewToken }` (409 `PREVIEW_STALE`, `PROPOSAL_NOT_OPEN`; 422 `PREVIEW_TOKEN_REQUIRED`, `DRAFT_CONFLICT`) and returns a retainer's `charges`. The legacy form on a retainer proposal is 422 `DRAFT_REQUIRED`.
+- `POST /v1/fee-proposals/{id}/approve/preview`; `approve` takes `{ agreement, previewToken }` (409 `PREVIEW_STALE`, `PROPOSAL_NOT_OPEN`; 422 `PREVIEW_TOKEN_REQUIRED`, `DRAFT_CONFLICT`) and returns a retainer's `charges`. The approve body keeps the proposal's kind and pricing basis (422 `AGREEMENT_TYPE_MISMATCH`, `PRICING_BASIS_MISMATCH`). The legacy form on a proposal with a draft is 422 `DRAFT_REQUIRED`, and with a previewToken `DRAFT_CONFLICT`.
 - `agreementType` on the organization summary's proposal rows and the project summary's proposal block.
 - `proposals/draft.ts`; `retainers/create.ts` (extracted from `routes/retainers.ts`). Audit `fee_proposal.approved` gains `agreementType` and `draftChanged`; `retainer.created` gains `feeProposalId`.
 - Release-QA `portal-selfservice.malafat-money-api.proposal-any-schedule`.

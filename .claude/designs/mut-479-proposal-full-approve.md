@@ -126,3 +126,11 @@ The ticket says "posts its first due installment in one transaction (ADR-027)". 
 - **R8. New refusals at create when a draft is given:** composing on `proposedOn` can answer `VAT_RATE_MISSING` (backdated) and `CUSTOMER_ARCHIVED`; documented in the route description.
 - **R9. D3 readers:** `agreementType` also on the project summary's proposal block (`summaries.ts:302`, `serializeFeeProposalSummary` `serializers.ts:511`, `FeeProposalSummarySchema` `schemas.ts:2838`) and `CustomerSummaryProposalSchema` (`:2779`); the `proposed` docs (`schemas.ts:2789`, `summaries.ts:40`) say retainers are excluded. Verdict, MCP and `projects.ts` don't read the amount.
 - **R10. Local mode and the rest:** snapshot 12 (doc line `memory.ts:207`, a 11 → 12 step setting `agreementType` from the contingency columns and `draft: null`); fingerprint `props.draft: 'null|object'`, `agreementType: 'string'`; `everyRecord` gets one proposal with a draft; `prisma-records-export.ts:83` selects both (only `hosted-export-parity` catches an omission); create writes `agreementType` explicitly; `npm run hosted:types`; the fee-proposal text in the `app.ts` description (`:613`, `:647`); the pinned version literals.
+
+## Pre-landing review 2026-10-28 (built; independent read-only review of `git diff main...HEAD`)
+- No critical findings. Retainer extraction, token, stores, migration and local mode confirmed.
+- **Fixed (M1):** approving as another kind or pricing basis left the proposal row saying the old one. Now 422 `AGREEMENT_TYPE_MISMATCH` / `PRICING_BASIS_MISMATCH` at preview and approve (D5 edits stay within the kind).
+- **Fixed (M2):** the legacy approve silently replaced a stored FIXED/CONTINGENCY draft's schedule. Now `DRAFT_REQUIRED` for any proposal with a draft (extends R1).
+- **Fixed (L4):** a `previewToken` with the legacy form is `DRAFT_CONFLICT`.
+- **Already covered (L3):** the rolling-deploy window (old revision approving a retainer proposal) is in `docs/operations/before-release.md`: Malafat ships MAL-1426 only after the roll.
+

@@ -1835,6 +1835,9 @@ export const VALIDATION_REASONS = [
   // legacy approve on a retainer proposal (only its draft can make a retainer).
   'DRAFT_CONFLICT',
   'DRAFT_REQUIRED',
+  // MUT-479 (review): approving as another agreement type or pricing basis than proposed.
+  'AGREEMENT_TYPE_MISMATCH',
+  'PRICING_BASIS_MISMATCH',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -2910,7 +2913,7 @@ export const ApproveFeeProposalRequestSchema = z
     note: proposalNote.optional(),
     /** MUT-107: overrides the proposed contingency terms for the created agreement; only valid when the proposal itself is a contingency one (422 NOT_CONTINGENCY otherwise). */
     contingency: ContingencyTermsSchema.optional(),
-    /** MUT-479 (D4, D5): the agreement made, in full, instead of amount, schedule and contingency (422 DRAFT_CONFLICT when mixed). Prefilled from the proposal's draft and editable. */
+    /** MUT-479 (D4, D5): the agreement made, in full, instead of amount, schedule and contingency (422 DRAFT_CONFLICT when mixed). Prefilled from the proposal's draft and editable, keeping its kind and pricingBasis (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH). */
     agreement: AgreementDraftSchema.optional(),
     /** MUT-479: from POST /v1/fee-proposals/{id}/approve/preview with the same approvedOn and agreement; required with `agreement` (422 PREVIEW_TOKEN_REQUIRED). */
     previewToken: z.string().length(64).optional(),

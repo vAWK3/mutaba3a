@@ -176,7 +176,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Fee proposals'],
       summary: 'Preview approving with a full agreement: what it makes, and the previewToken approve needs',
       description:
-        'MUT-479 (D4). The agreement is composed on the proposal\'s project, dated approvedOn (default today), as POST /v1/agreements/preview (FIXED, CONTINGENCY) or POST /v1/retainers/preview (RETAINER) would compose it, and answers in the same shape with `kind`. The previewToken covers the proposal and its version, the resolved approvedOn, the agreement and the VAT rate, so any change before approve is 409 PREVIEW_STALE there. 409 PROPOSAL_NOT_OPEN unless the proposal is PROPOSED.',
+        'MUT-479 (D4). The agreement is composed on the proposal\'s project, dated approvedOn (default today), as POST /v1/agreements/preview (FIXED, CONTINGENCY) or POST /v1/retainers/preview (RETAINER) would compose it, and answers in the same shape with `kind`. Its kind and pricingBasis must be the proposal\'s (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH). The previewToken covers the proposal and its version, the resolved approvedOn, the agreement and the VAT rate, so any change before approve is 409 PREVIEW_STALE there. 409 PROPOSAL_NOT_OPEN unless the proposal is PROPOSED.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:read')] as const,
       request: { params: FeeProposalIdParamSchema, body: jsonBody(ApproveFeeProposalPreviewRequestSchema) },
@@ -189,6 +189,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const current = await mustGet(store, organization.id, c.req.valid('param').proposalId);
       if (!allowedFrom('approve').includes(current.status)) throw proposalNotOpen(current.status, 'approve');
       const approvedOn = approvalDate(body.approvedOn, today);
+      assertSameKind(current, body.agreement);
       const composed = await composeDraft(store, organization, body.agreement, current.projectId, approvedOn, today);
       const previewToken = approveToken(organization.id, current, approvedOn, body.agreement, composed);
       return c.json(composed.kind === 'RETAINER' ? { ...composed.preview.wire, kind: 'RETAINER' as const, previewToken } : { ...composed.preview.wire, kind: composed.preview.type, previewToken }, 200);
@@ -202,7 +203,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Fee proposals'],
       summary: 'Approve: the client accepted the fee; creates the agreement and posts its first installment',
       description:
-        'PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) in one transaction with the status change. Two forms. (1) MUT-479: `agreement`, the full agreement (prefilled from the proposal\'s draft and editable), with the previewToken from approve/preview (422 PREVIEW_TOKEN_REQUIRED without one; 409 PREVIEW_STALE when anything changed): FIXED or CONTINGENCY with any schedule, or RETAINER, whose charges due by today post at once and come back in `charges`; agreedAmount is the fixed total, the contingency upfront or the monthly amount. Mixing it with amount, schedule or contingency is 422 DRAFT_CONFLICT. (2) amount and schedule: FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them); refused on a retainer proposal with 422 DRAFT_REQUIRED. schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. Neither form is 422 AMOUNT_REQUIRED. 409 PROPOSAL_NOT_OPEN from any other state.',
+        'PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) in one transaction with the status change. Two forms. (1) MUT-479: `agreement`, the full agreement (prefilled from the proposal\'s draft and editable), with the previewToken from approve/preview (422 PREVIEW_TOKEN_REQUIRED without one; 409 PREVIEW_STALE when anything changed): FIXED or CONTINGENCY with any schedule, or RETAINER, whose charges due by today post at once and come back in `charges`; agreedAmount is the fixed total, the contingency upfront or the monthly amount. Its kind and pricingBasis must be the proposal\'s (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH; withdraw and re-propose to change them). Mixing it with amount, schedule or contingency is 422 DRAFT_CONFLICT. (2) amount and schedule: FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them); refused with 422 DRAFT_REQUIRED on a proposal that carries a draft (a retainer proposal always does), and with DRAFT_CONFLICT when a previewToken is sent. schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. Neither form is 422 AMOUNT_REQUIRED. 409 PROPOSAL_NOT_OPEN from any other state.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'fee-proposals.approve')] as const,
       request: { params: FeeProposalIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ApproveFeeProposalRequestSchema) },
@@ -228,6 +229,7 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let auditExtra: JsonObject;
       if (body.agreement) {
         if (body.amount !== undefined || body.schedule || body.contingency) throw draftConflict('agreement', 'amount, schedule or contingency');
+        assertSameKind(current, body.agreement);
         if (!body.previewToken) throw validationError('PREVIEW_TOKEN_REQUIRED', 'Approving with an agreement needs the previewToken from POST /v1/fee-proposals/{id}/approve/preview', { field: 'previewToken' });
         const composed = await composeDraft(store, organization, body.agreement, current.projectId, approvedOn, today);
         if (!verifyPreviewToken(body.previewToken, approveTokenParts(organization.id, current, approvedOn, body.agreement, composed.rateBasisPoints))) {
@@ -240,8 +242,10 @@ export function feeProposalRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             : (await createAgreementFromPreview(store, organization, actor, composed.body, composed.preview, today, now, { approveProposal: input }).catch(raced)).agreement.id;
         auditExtra = { agreementType: agreementTypeOf(body.agreement), draftChanged: draftChanged(current.draft, body.agreement), schedule: null, ...(body.agreement.kind === 'CONTINGENCY' ? { contingency: body.agreement.contingency } : {}) };
       } else {
+        if (body.previewToken) throw draftConflict('previewToken', 'amount and schedule (a previewToken goes with agreement)');
         if (body.amount === undefined) throw validationError('AMOUNT_REQUIRED', 'amount (with schedule), or agreement, is required', { field: 'amount' });
-        if (current.agreementType === 'RECURRING') throw validationError('DRAFT_REQUIRED', 'A retainer proposal is approved with the full agreement; send agreement and previewToken', { field: 'agreement' });
+        // R1, and the review: amount and schedule can't express a retainer, nor the schedule a stored draft proposed.
+        if (current.agreementType === 'RECURRING' || current.draft !== null) throw validationError('DRAFT_REQUIRED', 'This proposal carries a draft agreement; approve it with agreement and previewToken', { field: 'agreement' });
         const legacy = legacyApproveBody(body as LegacyApproveBody, current, approvedOn, today);
         const preview = await composePreview(store, organization, legacy.previewBody, today);
         const created = await createAgreementFromPreview(store, organization, actor, legacy.previewBody, preview, today, now, { approveProposal: approval(legacy.agreedAmountMinor) }).catch(raced);
@@ -400,6 +404,20 @@ function approvalDate(approvedOn: string | undefined, today: string): string {
 
 function approveToken(organizationId: string, proposal: FeeProposalRecord, approvedOn: string, agreement: AgreementDraft, composed: ComposedDraft): string {
   return previewToken(approveTokenParts(organizationId, proposal, approvedOn, agreement, composed.rateBasisPoints));
+}
+
+/**
+ * The approval may edit the agreement (D5), but not turn it into another kind or pricing basis than proposed: the
+ * proposal's agreementType, pricingBasis and contingency terms stay what was proposed, and its agreedAmount is read in
+ * that basis (as the legacy form refuses NOT_CONTINGENCY). Withdraw and re-propose instead.
+ */
+function assertSameKind(current: FeeProposalRecord, agreement: AgreementDraft): void {
+  if (agreementTypeOf(agreement) !== current.agreementType) {
+    throw validationError('AGREEMENT_TYPE_MISMATCH', `The proposal is ${current.agreementType}; withdraw it and propose a ${agreementTypeOf(agreement)} agreement instead`, { field: 'agreement.kind', agreementType: current.agreementType });
+  }
+  if (agreement.pricingBasis !== current.pricingBasis) {
+    throw validationError('PRICING_BASIS_MISMATCH', `The proposal is priced ${current.pricingBasis}`, { field: 'agreement.pricingBasis', pricingBasis: current.pricingBasis });
+  }
 }
 
 function draftConflict(field: string, others: string): ApiError {

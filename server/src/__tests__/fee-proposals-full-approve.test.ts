@@ -68,6 +68,10 @@ async function approved(h: H, f: F, id: string, body: Record<string, unknown>) {
   expect(res.status).toBe(200);
   return read(res);
 }
+async function newMatterProposal(h: H, f: F) {
+  const project = await read(await h.app.request('/v1/projects', json({ customerId: f.customer.id, name: `Matter ${++seq}`, currency: 'ILS' }, { ...f.auth, ...idem() })));
+  return read(await propose(h, f, { amount: '10000.00', pricingBasis: 'VAT_EXCLUSIVE' }, project));
+}
 const audit = async (h: H, f: F, entityType: string, entityId: string) => (await read(await h.app.request(`/v1/audit?entityType=${entityType}&entityId=${entityId}`, { headers: f.auth }))).items as Loose[];
 
 describe('AC1: a 30/70 split with a MANUAL second stage', () => {
@@ -274,6 +278,34 @@ describe('approving with the full body', () => {
       expect(await reason(await approve(h, f, p.id, { agreement: SPLIT, previewToken: token, ...extra }))).toBe('DRAFT_CONFLICT');
     }
     expect(await reason(await approve(h, f, p.id, { note: 'no amount, no agreement' }))).toBe('AMOUNT_REQUIRED');
+  });
+
+  it('refuses another kind or pricing basis than proposed, at preview and at approve (review)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const legacy = await read(await propose(h, f, { amount: '10000.00', pricingBasis: 'VAT_EXCLUSIVE' }));
+    const token = '0'.repeat(64);
+    for (const [agreement, why] of [
+      [RETAINER, 'AGREEMENT_TYPE_MISMATCH'],
+      [CONTINGENCY, 'AGREEMENT_TYPE_MISMATCH'],
+      [{ ...SPLIT, pricingBasis: 'VAT_INCLUSIVE' }, 'PRICING_BASIS_MISMATCH'],
+    ] as const) {
+      const pre = await previewApprove(h, f, legacy.id, { agreement });
+      expect(pre.status).toBe(422);
+      expect(await reason(pre)).toBe(why);
+      expect(await reason(await approve(h, f, legacy.id, { agreement, previewToken: token }))).toBe(why);
+    }
+    expect((await read(await h.app.request(`/v1/fee-proposals/${legacy.id}`, { headers: f.auth }))).status).toBe('PROPOSED');
+  });
+
+  it('the legacy form refuses any proposal with a draft (DRAFT_REQUIRED), and refuses a previewToken (DRAFT_CONFLICT) (review)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const p = await proposed(h, f, SPLIT);
+    const legacyApprove = { amount: '10000.00', schedule: { kind: 'INSTALLMENTS', count: 2, firstDueOn: '2026-10-31' } };
+    expect(await reason(await approve(h, f, p.id, legacyApprove))).toBe('DRAFT_REQUIRED');
+    const plain = await newMatterProposal(h, f);
+    expect(await reason(await approve(h, f, plain.id, { ...legacyApprove, previewToken: '0'.repeat(64) }))).toBe('DRAFT_CONFLICT');
   });
 
   it('replays an approval with the same idempotency key: the same answer, one agreement', async () => {
