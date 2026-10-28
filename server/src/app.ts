@@ -281,7 +281,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.86.0-mut481';
+export const API_VERSION = '1.87.0-mut479';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -610,7 +610,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         '',
         'Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page\'s nextCursor.',
         '',
-        'Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer\'s open proposals and their per-currency total (proposed).',
+        'Fee proposals (M7, lifecycle revised in M8) hold the negotiation before an agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. A proposal may carry the full draft agreement — FIXED with any schedule, CONTINGENCY, or a RETAINER — which approve/preview and approve take in full with a preview token (MUT-479); a retainer proposal\'s monthly amount stays out of the organization summary\'s proposed total. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer\'s open proposals and their per-currency total (proposed).',
         '',
         'Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.',
         '',
@@ -644,7 +644,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       { name: 'Projects', description: 'Single-currency containers for agreements, receivables and payments' },
       { name: 'Import', description: 'Batch linking of an external system\'s customers and projects' },
       { name: 'VAT', description: 'The firm\'s effective-dated standard rate' },
-      { name: 'Fee proposals', description: 'The negotiation before a fixed-fee agreement: proposed, then approved (which creates the agreement) or withdrawn' },
+      { name: 'Fee proposals', description: 'The negotiation before an agreement (fixed, contingency or retainer): proposed, then approved (which creates the agreement) or withdrawn' },
       { name: 'Agreements', description: 'Fixed-fee agreements, installments, supplements' },
       { name: 'Installments', description: 'Manual triggers' },
       { name: 'Retainers', description: 'Recurring agreements and their monthly charges' },

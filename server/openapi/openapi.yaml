@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.86.0-mut481
+  version: 1.87.0-mut479
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -17,7 +17,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -26,7 +26,7 @@ info:
 
     Lists paginate with ?limit= (1–200, default 50) and an opaque ?cursor= from the previous page's nextCursor.
 
-    Fee proposals (M7, lifecycle revised in M8) hold the negotiation before a fixed-fee agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
+    Fee proposals (M7, lifecycle revised in M8) hold the negotiation before an agreement: PROPOSED → APPROVED (POST /v1/fee-proposals/{id}/approve creates the agreement, dated approvedOn, in the same transaction; the first installment posts at once, later ones on their dates) or WITHDRAWN. A proposal may carry the full draft agreement — FIXED with any schedule, CONTINGENCY, or a RETAINER — which approve/preview and approve take in full with a preview token (MUT-479); a retainer proposal's monthly amount stays out of the organization summary's proposed total. One open proposal per project; archiving a project is refused while one is open. Project summaries carry the current proposal; the organization summary carries each customer's open proposals and their per-currency total (proposed).
 
     Users (MUT-37) are operator-provisioned through /admin/v1/users*: no signup, invite or self-service password reset exists in any environment. A user reaches organizations through memberships.
 
@@ -65,7 +65,7 @@ tags:
   - name: VAT
     description: The firm's effective-dated standard rate
   - name: Fee proposals
-    description: "The negotiation before a fixed-fee agreement: proposed, then approved (which creates the agreement) or withdrawn"
+    description: "The negotiation before an agreement (fixed, contingency or retainer): proposed, then approved (which creates the agreement) or withdrawn"
   - name: Agreements
     description: Fixed-fee agreements, installments, supplements
   - name: Installments
@@ -1789,6 +1789,10 @@ components:
           format: uuid
         contingency:
           $ref: "#/components/schemas/ContingencyTerms"
+        agreementType:
+          $ref: "#/components/schemas/AgreementType"
+        draft:
+          $ref: "#/components/schemas/StoredAgreementDraft"
         version:
           type: integer
         createdAt:
@@ -1814,6 +1818,8 @@ components:
         - withdrawnReason
         - agreementId
         - contingency
+        - agreementType
+        - draft
         - version
         - createdAt
         - updatedAt
@@ -1845,6 +1851,30 @@ components:
       enum:
         - SEPARATE
         - CREDITED
+    AgreementType:
+      type: string
+      enum:
+        - FIXED
+        - RECURRING
+        - CONTINGENCY
+    StoredAgreementDraft:
+      type: object
+      nullable: true
+      properties:
+        schemaVersion:
+          type: integer
+        kind:
+          type: string
+          enum:
+            - FIXED
+            - CONTINGENCY
+            - RETAINER
+      required:
+        - schemaVersion
+        - kind
+      additionalProperties:
+        nullable: true
+      description: An AgreementDraft as proposed, plus schemaVersion. Pre-fill for the approval; it is never re-composed after the proposal is made.
     CreateFeeProposalRequest:
       type: object
       properties:
@@ -1866,10 +1896,187 @@ components:
           maxLength: 2000
         contingency:
           $ref: "#/components/schemas/ContingencyTerms"
+        draft:
+          $ref: "#/components/schemas/AgreementDraft"
       required:
         - projectId
+    AgreementDraft:
+      oneOf:
+        - $ref: "#/components/schemas/FixedAgreementDraft"
+        - $ref: "#/components/schemas/ContingencyAgreementDraft"
+        - $ref: "#/components/schemas/RetainerAgreementDraft"
+      discriminator:
+        propertyName: kind
+        mapping:
+          FIXED: "#/components/schemas/FixedAgreementDraft"
+          CONTINGENCY: "#/components/schemas/ContingencyAgreementDraft"
+          RETAINER: "#/components/schemas/RetainerAgreementDraft"
+    FixedAgreementDraft:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        description:
+          type: string
+          maxLength: 500
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          maxItems: 60
+        kind:
+          type: string
+          enum:
+            - FIXED
+      required:
         - amount
         - pricingBasis
+        - installments
+        - kind
+      additionalProperties: false
+    VatTreatment:
+      type: string
+      enum:
+        - STANDARD_RATED
+        - ZERO_RATED
+        - EXEMPT
+        - OUT_OF_SCOPE
+    PaymentTerms:
+      type: string
+      enum:
+        - IMMEDIATE
+        - EOM
+        - EOM_15
+        - EOM_30
+        - EOM_45
+        - EOM_60
+      default: EOM
+    InstallmentSpec:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        percentBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        trigger:
+          $ref: "#/components/schemas/InstallmentTrigger"
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - label
+        - trigger
+    InstallmentTrigger:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/TriggerType"
+        date:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+      required:
+        - type
+    TriggerType:
+      type: string
+      enum:
+        - IMMEDIATE
+        - DATE
+        - MANUAL
+    ContingencyAgreementDraft:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        description:
+          type: string
+          maxLength: 500
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          maxItems: 60
+        contingency:
+          $ref: "#/components/schemas/ContingencyTerms"
+        kind:
+          type: string
+          enum:
+            - CONTINGENCY
+      required:
+        - amount
+        - pricingBasis
+        - installments
+        - contingency
+        - kind
+      additionalProperties: false
+    RetainerAgreementDraft:
+      type: object
+      properties:
+        monthlyAmount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        startMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        billingDay:
+          type: integer
+          minimum: 1
+          maximum: 28
+          default: 1
+        paymentTerms:
+          $ref: "#/components/schemas/PaymentTerms"
+        endMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        description:
+          type: string
+          maxLength: 500
+        kind:
+          type: string
+          enum:
+            - RETAINER
+      required:
+        - monthlyAmount
+        - pricingBasis
+        - startMonth
+        - kind
+      additionalProperties: false
     FeeProposalPage:
       type: object
       properties:
@@ -1883,6 +2090,234 @@ components:
       required:
         - items
         - nextCursor
+    ApproveFeeProposalPreviewResponse:
+      anyOf:
+        - $ref: "#/components/schemas/ApproveFeeProposalAgreementPreview"
+        - $ref: "#/components/schemas/ApproveFeeProposalRetainerPreview"
+    ApproveFeeProposalAgreementPreview:
+      allOf:
+        - $ref: "#/components/schemas/AgreementPreviewResponse"
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - FIXED
+                - CONTINGENCY
+          required:
+            - kind
+    ItemStatus:
+      type: string
+      enum:
+        - PENDING
+        - DUE
+        - OVERDUE
+        - PARTIALLY_PAID
+        - PAID
+        - VOID
+    AgreementPreviewResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - FIXED
+            - CONTINGENCY
+        contingency:
+          $ref: "#/components/schemas/ContingencyTerms"
+        totals:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        installments:
+          type: array
+          items:
+            type: object
+            properties:
+              position:
+                type: integer
+              label:
+                type: string
+              amount:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              net:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              vat:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              gross:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              vatTreatment:
+                $ref: "#/components/schemas/VatTreatment"
+              rateBasisPoints:
+                type: integer
+              trigger:
+                $ref: "#/components/schemas/InstallmentTrigger"
+              paymentTerms:
+                allOf:
+                  - $ref: "#/components/schemas/PaymentTerms"
+                  - nullable: true
+              dueDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              status:
+                $ref: "#/components/schemas/ItemStatus"
+              isCommission:
+                type: boolean
+            required:
+              - position
+              - label
+              - amount
+              - net
+              - vat
+              - gross
+              - vatTreatment
+              - rateBasisPoints
+              - trigger
+              - paymentTerms
+              - dueDate
+              - status
+              - isCommission
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - type
+        - contingency
+        - totals
+        - vatRateBasisPoints
+        - vatTreatment
+        - currency
+        - installments
+        - previewToken
+    ApproveFeeProposalRetainerPreview:
+      allOf:
+        - $ref: "#/components/schemas/RetainerPreviewResponse"
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - RETAINER
+          required:
+            - kind
+    RetainerPreviewResponse:
+      type: object
+      properties:
+        monthly:
+          type: object
+          properties:
+            amount:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          required:
+            - amount
+            - net
+            - vat
+            - gross
+        vatRateBasisPoints:
+          type: integer
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        chargesDueNow:
+          type: array
+          items:
+            type: object
+            properties:
+              serviceMonth:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+                description: Calendar month, YYYY-MM
+              chargeDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              dueDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+            required:
+              - serviceMonth
+              - chargeDate
+              - dueDate
+        nextChargeDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - monthly
+        - vatRateBasisPoints
+        - vatTreatment
+        - currency
+        - chargesDueNow
+        - nextChargeDate
+        - previewToken
+    ApproveFeeProposalPreviewRequest:
+      type: object
+      properties:
+        approvedOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        agreement:
+          $ref: "#/components/schemas/AgreementDraft"
+      required:
+        - agreement
     ApproveFeeProposalResponse:
       type: object
       properties:
@@ -1890,9 +2325,14 @@ components:
           $ref: "#/components/schemas/FeeProposal"
         agreement:
           $ref: "#/components/schemas/AgreementDetail"
+        charges:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetainerCharge"
       required:
         - proposal
         - agreement
+        - charges
     AgreementDetail:
       type: object
       properties:
@@ -2051,28 +2491,6 @@ components:
         - version
         - createdAt
         - updatedAt
-    AgreementType:
-      type: string
-      enum:
-        - FIXED
-        - RECURRING
-        - CONTINGENCY
-    VatTreatment:
-      type: string
-      enum:
-        - STANDARD_RATED
-        - ZERO_RATED
-        - EXEMPT
-        - OUT_OF_SCOPE
-    PaymentTerms:
-      type: string
-      enum:
-        - IMMEDIATE
-        - EOM
-        - EOM_15
-        - EOM_30
-        - EOM_45
-        - EOM_60
     AgreementContingency:
       type: object
       nullable: true
@@ -2184,32 +2602,6 @@ components:
         - receivableId
         - isCommission
         - version
-    InstallmentTrigger:
-      type: object
-      properties:
-        type:
-          $ref: "#/components/schemas/TriggerType"
-        date:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-      required:
-        - type
-    TriggerType:
-      type: string
-      enum:
-        - IMMEDIATE
-        - DATE
-        - MANUAL
-    ItemStatus:
-      type: string
-      enum:
-        - PENDING
-        - DUE
-        - OVERDUE
-        - PARTIALLY_PAID
-        - PAID
-        - VOID
     Supplement:
       type: object
       properties:
@@ -2273,6 +2665,69 @@ components:
         - CLIENT_DISPUTE
         - OTHER
         - null
+    RetainerCharge:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        serviceMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: Calendar month, YYYY-MM
+        chargeDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+        receivableId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/ItemStatus"
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - version
+        - serviceMonth
+        - chargeDate
+        - amount
+        - net
+        - vat
+        - gross
+        - vatTreatment
+        - rateBasisPoints
+        - receivableId
+        - status
+        - dueDate
+        - postedAt
     ApproveFeeProposalRequest:
       type: object
       properties:
@@ -2291,8 +2746,12 @@ components:
           maxLength: 2000
         contingency:
           $ref: "#/components/schemas/ContingencyTerms"
-      required:
-        - amount
+        agreement:
+          $ref: "#/components/schemas/AgreementDraft"
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
     ApproveSchedule:
       oneOf:
         - type: object
@@ -2332,116 +2791,6 @@ components:
         reason:
           type: string
           maxLength: 2000
-    AgreementPreviewResponse:
-      type: object
-      properties:
-        type:
-          type: string
-          enum:
-            - FIXED
-            - CONTINGENCY
-        contingency:
-          $ref: "#/components/schemas/ContingencyTerms"
-        totals:
-          type: object
-          properties:
-            amount:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            net:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            vat:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            gross:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-          required:
-            - amount
-            - net
-            - vat
-            - gross
-        vatRateBasisPoints:
-          type: integer
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        currency:
-          $ref: "#/components/schemas/Currency"
-        installments:
-          type: array
-          items:
-            type: object
-            properties:
-              position:
-                type: integer
-              label:
-                type: string
-              amount:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-              net:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-              vat:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-              gross:
-                type: string
-                pattern: ^-?\d+(\.\d+)?$
-                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-              vatTreatment:
-                $ref: "#/components/schemas/VatTreatment"
-              rateBasisPoints:
-                type: integer
-              trigger:
-                $ref: "#/components/schemas/InstallmentTrigger"
-              paymentTerms:
-                allOf:
-                  - $ref: "#/components/schemas/PaymentTerms"
-                  - nullable: true
-              dueDate:
-                type: string
-                pattern: ^\d{4}-\d{2}-\d{2}$
-                description: Calendar date in the organization timezone, YYYY-MM-DD
-              status:
-                $ref: "#/components/schemas/ItemStatus"
-              isCommission:
-                type: boolean
-            required:
-              - position
-              - label
-              - amount
-              - net
-              - vat
-              - gross
-              - vatTreatment
-              - rateBasisPoints
-              - trigger
-              - paymentTerms
-              - dueDate
-              - status
-              - isCommission
-        previewToken:
-          type: string
-          minLength: 64
-          maxLength: 64
-      required:
-        - type
-        - contingency
-        - totals
-        - vatRateBasisPoints
-        - vatTreatment
-        - currency
-        - installments
-        - previewToken
     AgreementPreviewRequest:
       type: object
       properties:
@@ -2480,34 +2829,6 @@ components:
         - pricingBasis
         - agreementDate
         - installments
-    InstallmentSpec:
-      type: object
-      properties:
-        label:
-          type: string
-          minLength: 1
-          maxLength: 80
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        percentBasisPoints:
-          type: integer
-          minimum: 0
-          maximum: 10000
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        trigger:
-          $ref: "#/components/schemas/InstallmentTrigger"
-        paymentTerms:
-          $ref: "#/components/schemas/PaymentTerms"
-        dueDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-      required:
-        - label
-        - trigger
     AgreementCreateRequest:
       allOf:
         - $ref: "#/components/schemas/AgreementPreviewRequest"
@@ -3220,77 +3541,6 @@ components:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
           description: Calendar date in the organization timezone, YYYY-MM-DD
-    RetainerPreviewResponse:
-      type: object
-      properties:
-        monthly:
-          type: object
-          properties:
-            amount:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            net:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            vat:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-            gross:
-              type: string
-              pattern: ^-?\d+(\.\d+)?$
-              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-          required:
-            - amount
-            - net
-            - vat
-            - gross
-        vatRateBasisPoints:
-          type: integer
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        currency:
-          $ref: "#/components/schemas/Currency"
-        chargesDueNow:
-          type: array
-          items:
-            type: object
-            properties:
-              serviceMonth:
-                type: string
-                pattern: ^\d{4}-\d{2}$
-                description: Calendar month, YYYY-MM
-              chargeDate:
-                type: string
-                pattern: ^\d{4}-\d{2}-\d{2}$
-                description: Calendar date in the organization timezone, YYYY-MM-DD
-              dueDate:
-                type: string
-                pattern: ^\d{4}-\d{2}-\d{2}$
-                description: Calendar date in the organization timezone, YYYY-MM-DD
-            required:
-              - serviceMonth
-              - chargeDate
-              - dueDate
-        nextChargeDate:
-          type: string
-          nullable: true
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        previewToken:
-          type: string
-          minLength: 64
-          maxLength: 64
-      required:
-        - monthly
-        - vatRateBasisPoints
-        - vatTreatment
-        - currency
-        - chargesDueNow
-        - nextChargeDate
-        - previewToken
     RetainerPreviewRequest:
       type: object
       properties:
@@ -3408,69 +3658,6 @@ components:
         - paymentTerms
         - endMonth
         - reason
-    RetainerCharge:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        version:
-          type: integer
-        serviceMonth:
-          type: string
-          pattern: ^\d{4}-\d{2}$
-          description: Calendar month, YYYY-MM
-        chargeDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        net:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        vat:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        gross:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        rateBasisPoints:
-          type: integer
-        receivableId:
-          type: string
-          format: uuid
-        status:
-          $ref: "#/components/schemas/ItemStatus"
-        dueDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        postedAt:
-          type: string
-          format: date-time
-      required:
-        - id
-        - version
-        - serviceMonth
-        - chargeDate
-        - amount
-        - net
-        - vat
-        - gross
-        - vatTreatment
-        - rateBasisPoints
-        - receivableId
-        - status
-        - dueDate
-        - postedAt
     RetainerCreateRequest:
       allOf:
         - $ref: "#/components/schemas/RetainerPreviewRequest"
@@ -5695,12 +5882,15 @@ components:
           description: Calendar date in the organization timezone, YYYY-MM-DD
         contingency:
           $ref: "#/components/schemas/ContingencyTerms"
+        agreementType:
+          $ref: "#/components/schemas/AgreementType"
       required:
         - proposalId
         - projectId
         - amount
         - proposedOn
         - contingency
+        - agreementType
     CustomerSummary:
       type: object
       properties:
@@ -5906,6 +6096,8 @@ components:
           format: uuid
         contingency:
           $ref: "#/components/schemas/ContingencyTerms"
+        agreementType:
+          $ref: "#/components/schemas/AgreementType"
       required:
         - id
         - status
@@ -5915,6 +6107,7 @@ components:
         - proposedOn
         - agreementId
         - contingency
+        - agreementType
     ProjectContingency:
       type: object
       nullable: true
@@ -11469,7 +11662,7 @@ paths:
       tags:
         - Fee proposals
       summary: Propose a fee on a project
-      description: "The currency is the project's. One proposal may be open (PROPOSED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal."
+      description: "The currency is the project's. One proposal may be open (PROPOSED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal. Either amount and pricingBasis (with optional contingency terms), or a full `draft` agreement (MUT-479): FIXED with any schedule, CONTINGENCY, or RETAINER; both forms are 422 DRAFT_CONFLICT, neither is 422 AMOUNT_REQUIRED. A draft is composed on proposedOn as POST /v1/agreements or /v1/retainers would compose it, so its refusals apply now (e.g. 422 PERCENTS_DO_NOT_SUM, VAT_RATE_MISSING for a backdated proposal before any rate, CUSTOMER_ARCHIVED); proposedAmount is then the fixed total, the contingency upfront or the retainer's monthly amount."
       security:
         - apiKey: []
       parameters:
@@ -11662,12 +11855,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/fee-proposals/{proposalId}/approve/preview:
+    post:
+      tags:
+        - Fee proposals
+      summary: "Preview approving with a full agreement: what it makes, and the previewToken approve needs"
+      description: MUT-479 (D4). The agreement is composed on the proposal's project, dated approvedOn (default today), as POST /v1/agreements/preview (FIXED, CONTINGENCY) or POST /v1/retainers/preview (RETAINER) would compose it, and answers in the same shape with `kind`. The previewToken covers the proposal and its version, the resolved approvedOn, the agreement and the VAT rate, so any change before approve is 409 PREVIEW_STALE there. 409 PROPOSAL_NOT_OPEN unless the proposal is PROPOSED.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: proposalId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveFeeProposalPreviewRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApproveFeeProposalPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/fee-proposals/{proposalId}/approve:
     post:
       tags:
         - Fee proposals
       summary: "Approve: the client accepted the fee; creates the agreement and posts its first installment"
-      description: PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change — FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them). schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
+      description: "PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) in one transaction with the status change. Two forms. (1) MUT-479: `agreement`, the full agreement (prefilled from the proposal's draft and editable), with the previewToken from approve/preview (422 PREVIEW_TOKEN_REQUIRED without one; 409 PREVIEW_STALE when anything changed): FIXED or CONTINGENCY with any schedule, or RETAINER, whose charges due by today post at once and come back in `charges`; agreedAmount is the fixed total, the contingency upfront or the monthly amount. Mixing it with amount, schedule or contingency is 422 DRAFT_CONFLICT. (2) amount and schedule: FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them); refused on a retainer proposal with 422 DRAFT_REQUIRED. schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. Neither form is 422 AMOUNT_REQUIRED. 409 PROPOSAL_NOT_OPEN from any other state."
       security:
         - apiKey: []
       parameters:
@@ -11694,7 +11951,7 @@ paths:
               $ref: "#/components/schemas/ApproveFeeProposalRequest"
       responses:
         "200":
-          description: Approved; the agreement and its installments
+          description: "Approved; the agreement and its installments (a retainer: its charges)"
           content:
             application/json:
               schema:
@@ -15520,7 +15777,7 @@ paths:
       tags:
         - Summaries
       summary: Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer
-      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row's oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).
+      description: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8) except retainer (RECURRING) ones, whose monthly amount is left out of the sum (MUT-479); every open proposal also appears on its customer's row and in counts.openProposals. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row's oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).
       security:
         - apiKey: []
         - session: []

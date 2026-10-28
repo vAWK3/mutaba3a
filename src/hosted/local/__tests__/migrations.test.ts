@@ -192,8 +192,30 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(11);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()].map((p) => ({ ...p, receiptNumber: null })));
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('11 → 12 (MUT-479): proposals gain a null draft, and the agreement type their terms say; the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'sami@studio.ps', displayName: 'Sami', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-sami', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const customer = await store.customers.create({ organizationId: org.id, name: 'Haddad', email: null, phone: null, notes: null }, AT);
+    const propose = async (name: string, terms: { commissionRateBasisPoints?: number; upfrontTreatment?: 'SEPARATE' }) => {
+      const project = await store.projects.create({ organizationId: org.id, customerId: customer.id, name, currency: 'ILS' }, AT);
+      return store.feeProposals.create({ organizationId: org.id, projectId: project.id, customerId: customer.id, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 100n, proposedOn: '2026-10-01', note: null, requestId: null, agreementType: 'FIXED', draft: null, ...terms }, AT);
+    };
+    const fixed = await propose('Logo', {});
+    const contingent = await propose('Claim', { commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' });
+    const { maps } = store.snapshot();
+    const props = new Map([...maps.props].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'draft' && field !== 'agreementType'))]));
+    const before: StoredSnapshot = { formatVersion: 11, stateVersion: 4, savedAt: AT, maps: { ...maps, props } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(12);
+    expect(after.maps.props.get(fixed.id)).toEqual({ ...maps.props.get(fixed.id), agreementType: 'FIXED', draft: null });
+    expect(after.maps.props.get(contingent.id)).toEqual({ ...maps.props.get(contingent.id), agreementType: 'CONTINGENCY', draft: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

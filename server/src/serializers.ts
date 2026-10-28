@@ -502,6 +502,9 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
     withdrawnReason: p.withdrawnReason,
     agreementId: p.agreementId,
     contingency: proposalContingency(p),
+    agreementType: p.agreementType,
+    // MUT-479 (R3): stored as written, never re-parsed; typed as the wire's tolerant StoredAgreementDraft.
+    draft: p.draft as { schemaVersion: number; kind: 'FIXED' | 'CONTINGENCY' | 'RETAINER'; [key: string]: unknown } | null,
     version: p.version,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -510,7 +513,7 @@ export function serializeFeeProposal(p: FeeProposalRecord) {
 
 export function serializeFeeProposalSummary(p: FeeProposalRecord | null) {
   if (!p) return null;
-  return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId, contingency: proposalContingency(p) };
+  return { id: p.id, status: p.status, pricingBasis: p.pricingBasis, proposedAmount: amt(p.proposedAmountMinor, p.currency), agreedAmount: p.agreedAmountMinor === null ? null : amt(p.agreedAmountMinor, p.currency), proposedOn: p.proposedOn, agreementId: p.agreementId, contingency: proposalContingency(p), agreementType: p.agreementType };
 }
 
 /** MUT-161: both legs formatted in their own currency — never converted. */
