@@ -1,6 +1,6 @@
 # MUT-443: correct a recorded payment in one atomic call
 
-**Status:** APPROVED 2026-10-28. Basel chose D1 B (reversalReasonCode column), and the R10 defaults: reference and notes carry, an archived client is refused, a no-op is refused. D2–D9 as recommended, with the review's changes (R1–R12).
+**Status:** BUILT 2026-10-28 on `feature/mut-443-correct-payment` (ADR-225, TD-284/285; not merged, not pushed). APPROVED 2026-10-28. Basel chose D1 B (reversalReasonCode column), and the R10 defaults: reference and notes carry, an archived client is refused, a no-op is refused. D2–D9 as recommended, with the review's changes (R1–R12).
 **Ticket:** MUT-443 (parent MUT-25). Blocks MAL-1367 "Correct a recorded payment in one step".
 **Numbers:** API `1.88.0-mut443`, ADR-225, TD-284 onward, store snapshot 13 (only with D1 B), migration after `20261028200000`.
 **Builds on:** MUT-480 (`CREDIT_REASON_CODES`, ADR-222), MUT-481 (`carriedReceiptNumber`, ADR-223), M4 allocation preview (brief decision 2), ADR-086 (correction date floor).

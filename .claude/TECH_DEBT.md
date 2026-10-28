@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-284: The plain reverse route still takes a free-text reason only
+**Status**: Accepted (MUT-443, 2026-10-28; ADR-225 D8)
+- **What:** `POST /v1/payments/{id}/reverse` stores `reversalReason` text and never a `reversalReasonCode`; only a correction (`POST /v1/payments/{id}/correct`) sets the code. A statement's PAYMENT_REVERSAL line from a plain reversal has `reasonCode: null`.
+- **Why it's acceptable:** the ticket scopes the code to the correction; a plain reversal (a bounced cheque) has no list of reasons agreed with Malafat yet.
+- **Fix:** take an optional `reasonCode` on reverse too, stored the same way, when Malafat asks for it.
+
+### TD-285: A correction's stale state can answer 422 before it answers 409
+**Status**: Accepted (MUT-443, 2026-10-28; ADR-225)
+- **What:** `correct` recomposes the plan before checking the token, as `POST /v1/payments` does. When what moved since the preview makes the allocations invalid (another payment took the receivable), the answer is the allocation's 422 (e.g. `ALLOCATION_EXCEEDS_OUTSTANDING`) rather than 409 `PREVIEW_STALE`.
+- **Why it's acceptable:** both mean "preview again", the 422 names the receivable, and it matches the create and allocate routes.
+- **Fix:** if Malafat needs one answer, check the token against a pool read before validation and answer 409 first, in all three routes together.
+
 ### TD-283: A legacy-revision contingency proposal reads FIXED after a rolling deploy
 **Status**: Accepted (MUT-479, 2026-10-28; ADR-224)
 - **What:** `fee_proposals.agreementType` defaults to FIXED. A contingency proposal an old revision creates while MUT-479's revision rolls out gets FIXED, because the backfill ran before it.

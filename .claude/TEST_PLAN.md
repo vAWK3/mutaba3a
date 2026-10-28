@@ -4182,3 +4182,15 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Migration | by hand on `mutaba3a_test_mut479` | backfill CONTINGENCY where terms are set; the CHECK refuses RECURRING with terms |
 | Local mode | `migrations.test.ts` (11 → 12), `format-fingerprint.test.ts` (everyRecord: a retainer proposal with a draft) | |
 | Release-QA | `@portal-selfservice.malafat-money-api.proposal-any-schedule` | 30/70 proposal, preview, approve; retainer proposal left out of `proposed`, then approved with the previewed charges |
+
+## MUT-443 — correct a recorded payment in one call (ADR-225)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/payments/__tests__/allocate.test.ts` | `releaseAllocations` reopens a settled receivable, lowers a partly paid one, sums two rows on one receivable, leaves others (and a credited one) alone; `resultingBalances` with `released`: before = now, after = after, a released-only row shows, an unchanged allocation nets to no row (R2) |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut443.ts` (memory + Prisma) | one write linked by `replacesPaymentId`, reversal at `at`, replacement at `at` + 1 ms (R8); a capacity failure writes nothing (version, allocations, receivable, no number used); REVERSED → StateConflict PAYMENT_NOT_POSTED, another version → PREVIEW_STALE, another organization → null; two racing corrections make one replacement; re-pay the same amount; re-pay a receivable another payment settled since; a correction and a create on overlapping receivables both succeed (R1) |
+| Route | `server/src/__tests__/payments-correct.test.ts` | preview's reversal and balances (R2), released-only row, reason outside the token (R5), allocations-or-strategy (R6); AC1 linked both ways and a store failure leaves the original untouched; AC2 replay; AC3 a credit or a receipt number set since; AC4 with `replacedByPaymentId` (and null after a plain reversal); R3 a stored 409; R4 both StateConflicts; AC5; AC6 unallocated stays, over-allocation names the receivable; AC7 version and paths; re-pay after another payment; strategy (D7); receipt number, reference and notes carried/cleared/replaced (R10); RECEIPT_NUMBER_INVALID; D3 floor; D4 capture; R10 archived and no-op; audit rows (D5, R9); the statement order and reason code (R8); session 403; another firm 404 |
+| Export | `store-records-export-parity.test.ts` (a corrected payment, Postgres = memory), `prisma-records-export-columns.test.ts` | `reversalReasonCode` exported |
+| Local mode | `migrations.test.ts` (12 → 13), `format-fingerprint.test.ts` (everyRecord: a corrected Malafat payment) | |
+| Release-QA | `@portal-selfservice.malafat-money-api.payment-correct` | record with receipt 3001, preview to 600, confirm, replay, the four refusals, the statement |
+
