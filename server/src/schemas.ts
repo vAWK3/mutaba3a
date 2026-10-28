@@ -3129,7 +3129,7 @@ export const ReceiptDownloadQuerySchema = z.object({
 export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
 
 export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
-  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)' }),
 })
   .strict()
   .openapi('ApproveReceiptRequest');
@@ -3140,7 +3140,7 @@ export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, r
 export const FileReceiptRequestSchema = z
   .object({
     expenseId: z.string().uuid(),
-    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)' }),
   })
   .strict()
   .openapi('FileReceiptRequest');

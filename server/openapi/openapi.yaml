@@ -7618,7 +7618,7 @@ components:
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
-            - description: What the reader suggested, when it read at review time; replaces the stored one
+            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)
       required:
         - occurredOn
         - amount
@@ -7644,7 +7644,7 @@ components:
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
-            - description: What the reader suggested, when it read at review time; replaces the stored one
+            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)
       required:
         - expenseId
       additionalProperties: false
@@ -18166,8 +18166,8 @@ paths:
     patch:
       tags:
         - Receipts
-      summary: Replace what the device's reader suggested (optimistic, If-Match)
-      description: "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Unknown fields in the suggestion are dropped, not refused."
+      summary: Add to what was read off the receipt (optimistic, If-Match)
+      description: "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused."
       security:
         - session: []
         - deviceSession: []
@@ -18193,7 +18193,7 @@ paths:
               $ref: "#/components/schemas/ReceiptSuggestion"
       responses:
         "200":
-          description: Replaced
+          description: Updated
           content:
             application/json:
               schema:

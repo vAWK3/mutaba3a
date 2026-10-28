@@ -12596,8 +12596,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Replace what the device's reader suggested (optimistic, If-Match)
-         * @description To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Unknown fields in the suggestion are dropped, not refused.
+         * Add to what was read off the receipt (optimistic, If-Match)
+         * @description To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.
          */
         patch: {
             parameters: {
@@ -12617,7 +12617,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Replaced */
+                /** @description Updated */
                 200: {
                     headers: {
                         [name: string]: unknown;

@@ -15,6 +15,7 @@ import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS } 
 import { GRACE_MS, isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } from '../accounts/purge-plan.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
+import { fillAbsent } from '../receipts/extract/merge.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
@@ -2208,7 +2209,8 @@ export class PrismaLedgerStore implements LedgerStore {
       if (existing.filingStatus === 'FILED') return { kind: 'filed' };
       const { count } = await this.prisma.expenseReceipt.updateMany({
         where: { id, organizationId, deletedAt: null, filingStatus: 'TO_REVIEW', version: expectedVersion },
-        data: { suggested: suggested as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
+        // Fill-absent over what the guarded version read (MUT-441 R7): a stale version updates nothing.
+        data: { suggested: fillAbsent(toExpenseReceipt(existing).suggested, suggested).merged as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
       });
       const record = await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } });
       if (!record) return { kind: 'not_found' };
@@ -2227,7 +2229,7 @@ export class PrismaLedgerStore implements LedgerStore {
           approved: params.approved as unknown as Prisma.InputJsonValue,
           approvedAt: at,
           approvedByUserId: params.userId,
-          ...(params.suggested ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
+          ...(params.suggested ? { suggested: await suggestionFilledUnderLock(tx, params.receiptId, params.suggested) } : {}),
         });
         return { kind: 'filed' as const, expense, receipt };
       }),
@@ -2247,7 +2249,7 @@ export class PrismaLedgerStore implements LedgerStore {
         const keepsReading = params.suggested !== undefined && (await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId }, select: { approved: true } })).approved !== null;
         const receipt = await markReceiptFiled(tx, params.organizationId, params.receiptId, {
           expenseId: params.expenseId,
-          ...(params.suggested && !keepsReading ? { suggested: params.suggested as unknown as Prisma.InputJsonValue } : {}),
+          ...(params.suggested && !keepsReading ? { suggested: await suggestionFilledUnderLock(tx, params.receiptId, params.suggested) } : {}),
         });
         const expense = await tx.expense.findUniqueOrThrow({ where: { id: params.expenseId } });
         return { kind: 'filed' as const, expense, receipt };
@@ -3033,6 +3035,12 @@ async function lockToReviewReceipt(tx: Tx, organizationId: string, receiptId: st
   if (locked.filingStatus === 'FILED') return { kind: 'already_filed' };
   if (locked.status !== 'READY') return { kind: 'not_ready' };
   return null;
+}
+
+/** MUT-441 R7: the stored suggestion with `incoming` filling only its absent fields, read under `lockToReviewReceipt`'s lock. */
+async function suggestionFilledUnderLock(tx: Tx, receiptId: string, incoming: ReceiptSuggestion): Promise<Prisma.InputJsonValue> {
+  const { suggested } = await tx.expenseReceipt.findUniqueOrThrow({ where: { id: receiptId }, select: { suggested: true } });
+  return fillAbsent(suggested as unknown as ReceiptSuggestion | null, incoming).merged as unknown as Prisma.InputJsonValue;
 }
 
 /** MUT-255/389: the last step, under `lockToReviewReceipt`'s lock: FILED on `expenseId`, with whatever else `data` sets. */

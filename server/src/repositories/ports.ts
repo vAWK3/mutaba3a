@@ -3079,14 +3079,15 @@ export interface ExpenseReceiptRepository {
   /** MUT-255: live PENDING_UPLOAD receipts created at or after `since` (the per-profile upload cap). */
   countPendingSince(organizationId: string, since: Date): Promise<number>;
   /**
-   * MUT-255: replace a To-review receipt's suggestion, optimistically. `not_found` also covers a filed receipt's
-   * id being absent; a FILED receipt answers `filed`.
+   * MUT-255: set a To-review receipt's suggestion, optimistically. Since MUT-441 (R7) it fills only the fields the
+   * stored one lacks (`fillAbsent`). `not_found` also covers a filed receipt's id being absent; a FILED receipt
+   * answers `filed`.
    */
   setSuggested(organizationId: string, id: string, expectedVersion: number, suggested: ReceiptSuggestion): Promise<UpdateResult<ExpenseReceiptRecord> | { kind: 'filed' }>;
   /**
    * MUT-255 approve, one transaction: lock the receipt; refuse unless it is READY, live and To review; create the
    * expense; then move the receipt to FILED with what was approved (and the request's suggestion, when it carries
-   * one). If that last update matches no row the transaction throws, so no expense is left behind. MUT-307's
+   * one, filling only the stored one's absent fields: MUT-441 R7). If that last update matches no row the transaction throws, so no expense is left behind. MUT-307's
    * approval and MUT-312's closed-month check plug in between the lock and the insert.
    */
   fileAsExpense(params: { organizationId: string; receiptId: string; userId: string; expense: CreateExpenseInput; approved: ApprovedReceiptFields; suggested?: ReceiptSuggestion }, at: Date): Promise<FileReceiptResult>;
@@ -3094,7 +3095,8 @@ export interface ExpenseReceiptRepository {
    * MUT-389, one transaction: the same receipt lock and refusals as `fileAsExpense`; then lock the expense (live, on
    * this profile) and refuse it once it holds `maxReceipts` READY receipts; then move the receipt to FILED on it. No
    * expense field changes and nothing is approved: `approved` keeps whatever an earlier approval left. A sent
-   * suggestion replaces the stored one, except on a receipt that keeps an earlier approval: that pair stays as approved.
+   * suggestion fills the stored one's absent fields (MUT-441 R7), except on a receipt that keeps an earlier approval:
+   * that pair stays as approved.
    */
   fileOntoExpense(params: { organizationId: string; receiptId: string; expenseId: string; maxReceipts: number; suggested?: ReceiptSuggestion }): Promise<FileOntoExpenseResult>;
   /**

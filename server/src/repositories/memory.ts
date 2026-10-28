@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
+import { fillAbsent } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
@@ -2507,7 +2508,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!r || r.organizationId !== organizationId || r.deletedAt) return { kind: 'not_found' };
       if (r.filingStatus === 'FILED') return { kind: 'filed' };
       if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
-      r.suggested = suggested;
+      r.suggested = fillAbsent(r.suggested, suggested).merged;
       r.version += 1;
       return { kind: 'updated', record: { ...r } };
     },
@@ -2522,7 +2523,7 @@ export class MemoryLedgerStore implements LedgerStore {
       r.approved = params.approved;
       r.approvedAt = at;
       r.approvedByUserId = params.userId;
-      if (params.suggested) r.suggested = params.suggested;
+      if (params.suggested) r.suggested = fillAbsent(r.suggested, params.suggested).merged;
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },
@@ -2536,7 +2537,7 @@ export class MemoryLedgerStore implements LedgerStore {
       r.expenseId = expense.id;
       r.filingStatus = 'FILED';
       // An earlier approval keeps the reading it was made against (the edit-rate pair).
-      if (params.suggested && !r.approved) r.suggested = params.suggested;
+      if (params.suggested && !r.approved) r.suggested = fillAbsent(r.suggested, params.suggested).merged;
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
     },

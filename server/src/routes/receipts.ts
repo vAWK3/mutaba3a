@@ -249,12 +249,13 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       method: 'patch',
       path: '/v1/receipts/{receiptId}/suggestion',
       tags: ['Receipts'],
-      summary: "Replace what the device's reader suggested (optimistic, If-Match)",
-      description: 'To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Unknown fields in the suggestion are dropped, not refused.',
+      summary: "Add to what was read off the receipt (optimistic, If-Match)",
+      description:
+        "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.",
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ReceiptIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(ReceiptSuggestionSchema) },
-      responses: { 200: { description: 'Replaced', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+      responses: { 200: { description: 'Updated', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
       storage();
