@@ -5776,3 +5776,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A stored ledger table maintained on every write. Rejected: a second source of truth for money that every writer would have to keep in step.
 - SQL window functions for the running balance. Rejected for now: local mode runs the memory store, so the JavaScript pass is needed anyway; it is the TD-271 upgrade path.
 - One sequence with no year (CHG-000123). Rejected by Basel: unlike PAY- numbers.
+
+## ADR-221: A New Expense's Receipts Upload in Its Edit Drawer After Save (MUT-491)
+
+**Status:** Accepted (2026-10-28, MUT-491; epic MUT-252). Plan and eng review: `.claude/designs/mut-491-receipt-on-create.md`. ADR-220 is reserved by MUT-441.
+
+**Context:** the portal's expense receipt routes need an expense, so the new-expense drawer offered no receipts. The first plan uploaded inside the create drawer after the POST and toasted failures. The review found a double-create window (the attempt key resets when the create resolves, before uploads start), late `onClose`/`markSaved` after the drawer was gone, edits lost during the upload, and the failure toast stacked on the Saved notice.
+
+**Decision:**
+1. **Files wait in the browser** (`QueuedReceipts`) until Save; nothing is sent before the expense exists, so Cancel leaves nothing behind. No To-review detour (D1).
+2. **After the create, the drawer becomes the new expense's edit drawer** (Basel, D5): the expense is seeded in the cache, `onCreated(id)` moves the list to `?expense=<id>`, and the same drawer instance's `ReceiptUploader` uploads the files as `incoming`. All landed and the form not dirty: close with Saved. Any failed: stay open with the failure inline on that file (Upload again, Remove), never a toast.
+3. **Save is one guarded step** from the click until the create settles (a ref, not just the disabled button). Saved is marked when the drawer closes, never while it is open, and nothing closes or flashes after it unmounts.
+4. **One upload function** (`uploadReceiptFile`, D3) for the library and the drawer: delete the PENDING row after a failed PUT, or after a complete refused with a 4xx; keep it after a 5xx or a lost answer. Its own module, since receiptQueries.ts imports expenseQueries.ts.
+5. **A drawer attach refreshes the Receipts tab** (D4), and a failed one too.
+6. **`ReceiptPickButton` + `QueuedReceipts`, not a two-mode uploader** (D6): the uploader's hooks need an expense id.
+
+**Consequences:** a new expense with receipts briefly shows its edit drawer before closing. The edit drawer's picker takes several files too. A failed row whose name is now READY under a new receipt shows READY.
+
+**Alternatives considered:**
+- Upload inside the create drawer with a mounted guard, a saving lock, a read-only form and a deferred Saved mark. Rejected (D5): more states to guard than the flip removes.
+- Upload as To-review receipts first, then file them. Rejected: orphans on Cancel, and the library is off in local mode and behind `RECEIPTS_LIBRARY`.
+- One `ReceiptUploader` with live and queued modes. Rejected (D6): its hooks would run with an empty expense id.

@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -653,5 +653,168 @@ describe('ExpenseDrawer delete confirm (DESIGN.md › Destructive confirm, MUT-4
     await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus());
     expect(onClose).not.toHaveBeenCalled();
     expect(deletes).toEqual([]);
+  });
+});
+
+describe('ExpenseDrawer receipts on a new expense (MUT-491)', () => {
+  const EXPENSE = { id: 'e1', amount: '12.50', currency: 'USD', occurredOn: '2026-10-28', title: null, vendor: null, categoryId: 'cat-1', customerId: null, projectId: null, notes: null, version: 1, captureSource: 'portal' };
+  const READY = (name: string, id: string) => ({ id, expenseId: 'e1', filename: name, mimeType: 'application/pdf', sizeBytes: 4, status: 'READY', uploadedByUserId: 'u1', createdAt: '', completedAt: '' });
+  const pdf = (name: string) => new File(['%PDF'], name, { type: 'application/pdf' });
+
+  /** The list's part (ExpensesList): onCreated moves the drawer to ?expense=<id>, the same instance in edit mode. */
+  function Flip({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+    const [expenseId, setExpenseId] = useState<string | undefined>(undefined);
+    return (
+      <ExpenseDrawer
+        profileId="org-1"
+        mode={expenseId ? 'edit' : 'create'}
+        expenseId={expenseId}
+        onClose={onClose}
+        onCreated={(id) => {
+          onCreated(id);
+          setExpenseId(id);
+        }}
+      />
+    );
+  }
+
+  function renderFlip() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const onClose = vi.fn();
+    const onCreated = vi.fn();
+    const utils = render(
+      <QueryClientProvider client={queryClient}>
+        <HostedLanguageProvider>
+          <ToastProvider>
+            <Flip onClose={onClose} onCreated={onCreated} />
+          </ToastProvider>
+        </HostedLanguageProvider>
+      </QueryClientProvider>,
+    );
+    return { ...utils, onClose, onCreated };
+  }
+
+  /** Routes for a create and its receipts; `putStatus` per filename (200 unless named). */
+  function receiptRoutes({ putStatus = {}, holdCreate, holdPut }: { putStatus?: Record<string, number>; holdCreate?: Promise<void>; holdPut?: Promise<void> } = {}) {
+    const landed: ReturnType<typeof READY>[] = [];
+    const calls: string[] = [];
+    let n = 0;
+    const pending = new Map<string, string>();
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = String(input);
+      const method = (init.method ?? 'GET').toUpperCase();
+      if (url.startsWith('https://bucket.test/')) {
+        const id = url.slice('https://bucket.test/'.length);
+        calls.push(`PUT ${pending.get(id)}`);
+        if (holdPut) await holdPut;
+        return new Response(null, { status: putStatus[pending.get(id) ?? ''] ?? 200 });
+      }
+      const path = new URL(url, 'http://portal.test').pathname;
+      calls.push(`${method} ${path}`);
+      if (method === 'GET' && path === '/v1/expense-categories') return ok(EMPTY_CATEGORIES);
+      if (method === 'GET' && (path === '/v1/customers' || path === '/v1/projects' || path === '/v1/vendors')) return ok(EMPTY_DIRECTORY);
+      if (method === 'POST' && path === '/v1/expenses') {
+        if (holdCreate) await holdCreate;
+        return ok(EXPENSE, 201);
+      }
+      if (method === 'GET' && path === '/v1/expenses/e1') return ok({ ...EXPENSE, receipts: landed });
+      if (method === 'POST' && path === '/v1/expenses/e1/receipts') {
+        const id = `r${++n}`;
+        const filename = JSON.parse(String(init.body)).filename as string;
+        pending.set(id, filename);
+        return ok({ receipt: { ...READY(filename, id), status: 'PENDING_UPLOAD' }, upload: { url: `https://bucket.test/${id}`, method: 'PUT', headers: {}, expiresAt: '' } }, 201);
+      }
+      const complete = path.match(/^\/v1\/expenses\/e1\/receipts\/(r\d+)\/complete$/);
+      if (method === 'POST' && complete) {
+        const done = READY(pending.get(complete[1]!)!, complete[1]!);
+        landed.push(done);
+        return ok(done);
+      }
+      if (method === 'DELETE' && path.startsWith('/v1/expenses/e1/receipts/')) return new Response(null, { status: 204 });
+      return fail(404, 'NOT_FOUND');
+    });
+    return { calls };
+  }
+
+  async function fillAndQueue(user: ReturnType<typeof userEvent.setup>, files: File[]) {
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files } });
+  }
+
+  it('a new expense without receipts saves as before', async () => {
+    const user = userEvent.setup();
+    const { calls } = receiptRoutes();
+    const { onClose, onCreated } = renderFlip();
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(calls.filter((c) => c === 'POST /v1/expenses')).toHaveLength(1);
+  });
+
+  it('creates once, opens the new expense, uploads each receipt to it, and closes when all landed', async () => {
+    const user = userEvent.setup();
+    const { calls } = receiptRoutes();
+    const { onClose, onCreated } = renderFlip();
+    await fillAndQueue(user, [pdf('taxi.pdf'), pdf('hotel.pdf')]);
+    expect(screen.getByText('taxi.pdf')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('e1'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(calls.filter((c) => c === 'POST /v1/expenses')).toHaveLength(1);
+    expect(calls.filter((c) => c.startsWith('PUT '))).toEqual(['PUT taxi.pdf', 'PUT hotel.pdf']);
+    expect(calls.filter((c) => /\/complete$/.test(c))).toHaveLength(2);
+  });
+
+  it('a second Save while the create is in flight sends no second POST', async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const { calls } = receiptRoutes({ holdCreate: new Promise<void>((resolve) => (release = resolve)) });
+    renderFlip();
+    await fillAndQueue(user, [pdf('taxi.pdf')]);
+    const form = document.getElementById('hosted-expense-form') as HTMLFormElement;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    release();
+    await waitFor(() => expect(calls.filter((c) => /\/complete$/.test(c))).toHaveLength(1));
+    expect(calls.filter((c) => c === 'POST /v1/expenses')).toHaveLength(1);
+  });
+
+  it('a failed receipt keeps the drawer open on the new expense, the failure on that file, the others in', async () => {
+    const user = userEvent.setup();
+    receiptRoutes({ putStatus: { 'hotel.pdf': 403 } });
+    const { onClose } = renderFlip();
+    await fillAndQueue(user, [pdf('taxi.pdf'), pdf('hotel.pdf')]);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText("Couldn't upload the receipt. Try again.")).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Edit expense' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Upload again' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closing while receipts upload lets them finish without closing or flashing anything later', async () => {
+    const user = userEvent.setup();
+    let release!: () => void;
+    const { calls } = receiptRoutes({ holdPut: new Promise<void>((resolve) => (release = resolve)) });
+    const { onClose, unmount } = renderFlip();
+    await fillAndQueue(user, [pdf('taxi.pdf')]);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls).toContain('PUT taxi.pdf'));
+    unmount();
+    release();
+    await waitFor(() => expect(calls.filter((c) => /\/complete$/.test(c))).toHaveLength(1));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('offers no receipts on a new expense when the caller cannot open it afterwards', async () => {
+    renderDrawer();
+    await screen.findByPlaceholderText('0.00');
+    expect(screen.queryByRole('button', { name: 'Add receipt' })).not.toBeInTheDocument();
   });
 });
