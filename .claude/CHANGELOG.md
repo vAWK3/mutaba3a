@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
+
+**Why:** Gmail, Outlook.com and Outlook for Mac darken a mail's colours in dark mode but not its images, and ignore the `light only` opt-out; v1's opaque art showed as pale squares (Basel's Outlook screenshots). ADR-214 amendment; brief `.claude/designs/mut-484-transparent-mail-art.md`.
+
+### Added
+- `src/hosted/public/mail/v2/`: the 35 art files from Claude Design export 5, transparent, 8-bit RGBA non-interlaced. Headers keep the kit's halo (a pale sticker edge in dark mode, Basel's call); chips keep their round tile with transparent corners.
+
+### Changed
+- `server/src/email/templates/look.ts`: `MAIL_ART_PATH` is `/mail/v2/`. v1 stays for sent mails.
+- Tests and QA follow `MAIL_ART_PATH` (`templates.test.ts`, `mailer.test.ts`, `qa/specs/portal-selfservice/mail.spec.ts`, `mail.yaml`).
+
+### Technical
+- `look.test.ts` reads every served PNG (`__tests__/png.ts`): format, alpha 0 at corners (and mid-edges for headers), a v1 alpha-255 control, every v1 file pinned by SHA-256 (`mail-art-v1.sha256.json`).
+
 ## [Unreleased] - 2026-10-27 — MUT-468: mails stay light in Apple Mail's dark mode
 
 **Why:** Basel's client check after api-v0.10.0: Apple Mail repainted the new mails dark around their opaque art (light squares on a dark band, lavender text). `color-scheme: light` is only a preference; `light only` opts out. ADR-214 amendment.

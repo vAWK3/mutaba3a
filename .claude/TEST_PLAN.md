@@ -4099,3 +4099,11 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | `server/src/__tests__/income-routes.test.ts` "MUT-482: a matter’s Owed in another currency…" | 1 | A USD Owed on an ILS matter dates the USD block (11 days) and the ILS Owed the ILS block (7), and the org rows agree with the customer blocks. |
 | `routes-m2..m8` version pins | 6 | AC5: API_VERSION and the OpenAPI `info.version` are 1.82.0-mut482. |
 | `qa/specs/portal-selfservice/summaries.spec.ts` `@portal-selfservice.summaries.overdue-since` | 1 | On the live dev API with an API key: 148 days, then 56 after the older one is paid, on both summaries. |
+
+## MUT-484 — transparent mail art (v2)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/email/__tests__/look.test.ts` | every served PNG is 8-bit RGBA non-interlaced, under 40 KB, alpha 0 at its corners (and mid-edges for headers); the PNG reader sees v1's opaque corner as 255 (control); every v1 file matches its pinned SHA-256 and v1 holds exactly those files |
+| Browser | `qa/specs/portal-selfservice/mail.spec.ts` | the signup and account-ready mails load their art from `/mail/v2/` on the QA portal |
+| Manual | `server/scripts/mail-preview.sh --send <inbox> --yes`, after the release | Gmail, Outlook (Mac, web) and Apple Mail, dark and light: no pale squares; halo and pastel chip circles as designed |
+

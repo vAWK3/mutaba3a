@@ -58,7 +58,7 @@ export interface MailerOptions {
   fromAddress: string;
   replyTo: string | null;
   limits: MailLimits;
-  /** MUT-468: PORTAL_ORIGIN, where the mail art is served (`/mail/v1/`). Unset = mails without pictures. */
+  /** MUT-468: PORTAL_ORIGIN, where the mail art is served (`MAIL_ART_PATH`). Unset = mails without pictures. */
   artOrigin?: string;
   /** MUT-468: WEBSITE_ORIGIN, for the footer's Privacy link. Unset = no Privacy link. */
   websiteOrigin?: string;
