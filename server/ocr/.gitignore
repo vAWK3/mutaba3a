@@ -3,3 +3,5 @@
 models/
 __pycache__/
 .pytest_cache/
+# MUT-441 benchmark outputs (synthetic receipt text; aggregates go to .claude/designs/mut-441-bench.md).
+bench/out/
