@@ -334,6 +334,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     status: receivableStatus(r, today),
     title: r.title,
     capturedByUserId: r.origin === 'ADJUSTMENT' ? r.createdByUserId : null,
+    number: r.number,
     version: r.version,
   };
 }

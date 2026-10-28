@@ -5752,3 +5752,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A separate loop beside `bucketize`, checked by a property test. Rejected (D2): the rule would be written twice.
 - A date field inside `Buckets`. Rejected: an amount struct shared by every project figure and test, for a value only two rows need.
+
+## ADR-217: The Customer Statement Is Computed per Request, and Receivables Are Numbered CHG-YYYY-NNNN (MUT-478)
+
+**Status:** Accepted (2026-10-27, MUT-478; epic MUT-25). Plan: `.claude/designs/mut-478-customer-statement.md`. Unblocks Malafat's client ledger card (MAL-1425).
+
+**Context:** Malafat's client money page becomes a ledger card (כרטסת): dated debit and credit lines with a running balance. Malafat may not add up a balance itself (Malafat ADR-150), and receivables had no reference a partner could reconcile by.
+
+**Decision:**
+1. **Receivable numbers are CHG-YYYY-NNNN** (Basel, D1), gap-free per organization and year of `postingDate`, from a `receivable_counters` row taken inside the posting transaction, exactly as payments' PAY- numbers (`payments/numbering.ts` holds both). Every receivable is numbered, an Owed included. The migration backfills existing rows in (postingDate, postedAt, id) order, and a BEFORE INSERT trigger numbers whatever the previous revision inserts during the roll, so the NOT NULL never refuses the old image (PATTERNS: never a constraint the previous image can't satisfy; dropped later, TD-272); the portal's local mode numbers a device's receivables the same way (snapshot format 8 → 9) and the hosted export carries the counters.
+2. **The statement is computed, never stored.** `receivables.statementSources` reads the customer's rows in one currency (six queries on Prisma, none per row); the pure `statements/build.ts` orders them, folds what lies before `from` into the opening balance, cuts after `to`, runs the balance and slices a page. Computing the whole period on every request is what keeps `openingBalance`, `totals` and `closingBalance` identical on every page and the running balance continuous (D3, D4).
+3. **Which lines count:** a charge counts when the summary counts it (`countsOn`), so with no project and no period the closing balance equals the customer summary's outstanding − unallocated (AC1). Credits are their own lines; a reversed payment shows its PAYMENT line and a PAYMENT_REVERSAL dated by the reversal's day in the organization timezone. A capture the person undid (`capture_undo`) is left out entirely (D2). Nothing else is netted away.
+4. **Order:** (date, created, kind rank, id), stable on every call; a payment before its own reversal on the same day. Charges are dated by `postingDate`, credits by `effectiveDate`, payments by `receivedOn`.
+5. **A project statement** shows the project's charges and credits and payments as their allocations there, dated by the payment's `receivedOn`. Unallocated money appears only on the whole-customer statement (D8).
+6. **The route** is `GET /v1/customers/{customerId}/statement`, scope `payments:read`, open to API keys, sessions and device sessions like the other reads, so local mode serves it too (D9). Contract 1.83.0-mut478.
+
+**Consequences:**
+- A MUT-444 correction reposts on the original posting dates, so its reposted charge sorts before the credit dated today. The balance moves by exactly the difference (AC3), but the lines read "charge, …, credit", not "credit then repost" as the ticket's wording suggests.
+- Past ~20k lines for one customer the per-request pass gets slow (TD-271).
+- PAYMENT lines carry the PAY- number; the receipt number arrives with MUT-481.
+
+**Alternatives considered:**
+- A stored ledger table maintained on every write. Rejected: a second source of truth for money that every writer would have to keep in step.
+- SQL window functions for the running balance. Rejected for now: local mode runs the memory store, so the JavaScript pass is needed anyway; it is the TD-271 upgrade path.
+- One sequence with no year (CHG-000123). Rejected by Basel: unlike PAY- numbers.

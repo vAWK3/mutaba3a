@@ -125,7 +125,8 @@ if (!url) {
       const postgres = await exported(prisma);
 
       for (const field of [...FIELDS, 'inbox']) expect(postgres.out[field]!.rows, field).toEqual(memory.out[field]!.rows);
-      expect(postgres.out.counters!.keys).toEqual([`${postgres.org}:2025`, `${postgres.org}:2026`]);
+      // Payment counters, then the receivable counters (MUT-478).
+      expect(postgres.out.counters!.keys).toEqual([`${postgres.org}:2025`, `${postgres.org}:2026`, `${postgres.org}:CHG:2026`]);
       expect(postgres.out.groupMarks!.rows).toHaveLength(6);
       expect(postgres.out.custs!.rows).toHaveLength(1);
       expect(postgres.out.vendors!.rows).toHaveLength(2);
