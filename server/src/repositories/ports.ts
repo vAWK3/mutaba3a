@@ -1097,6 +1097,8 @@ export interface PaymentRecord {
   status: PaymentStatus;
   reversedAt: Date | null;
   reversalReason: string | null;
+  /** MUT-443 (ADR-225): why a correction reversed it (CREDIT_REASON_CODES); null on any other reversal and while POSTED. */
+  reversalReasonCode: string | null;
   replacesPaymentId: string | null;
   requestId: string | null;
   /** Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor. */
@@ -1225,6 +1227,18 @@ export interface PaymentFilter {
   receiptNumber?: string;
 }
 
+/** MUT-443: what `payments.correct` writes: the original's reversal and its replacement, as one. */
+export interface CorrectPaymentInput {
+  /** The original's version as previewed; another version is StateConflict PREVIEW_STALE. */
+  expectedVersion: number;
+  /** Stored as `reversalReason` (the note, or the code when there is none). */
+  reason: string;
+  /** Stored as `reversalReasonCode` (CREDIT_REASON_CODES). */
+  reasonCode: string;
+  /** The new payment; the store sets `replacesPaymentId` to the original. */
+  replacement: Omit<CreatePaymentInput, 'replacesPaymentId'>;
+}
+
 export interface PaymentRepository {
   /**
    * Payment + allocations + receivable sums/status + number, one transaction.
@@ -1240,6 +1254,14 @@ export interface PaymentRepository {
   allocate(organizationId: string, paymentId: string, allocations: AllocationInput[], at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
   /** Undoes every allocation, zeroes allocated_minor, marks REVERSED. `changed` is false when it already was. */
   reverse(organizationId: string, paymentId: string, reason: string, at: Date): Promise<{ payment: PaymentRecord; changed: boolean } | null>;
+  /**
+   * MUT-443 (ADR-225): reverses a POSTED payment and records its replacement in one transaction, or writes nothing.
+   * The replacement may re-pay what the original paid (its capacity counts what the reversal releases). It is stamped
+   * `at` + 1 ms, so its statement line sorts after the reversal's. Throws StateConflict('payment', 'PAYMENT_NOT_POSTED')
+   * when the original is REVERSED, StateConflict('payment', 'PREVIEW_STALE') when it is at another version, and
+   * InsufficientCapacity / LockConflict as `create` does. Null when no such payment.
+   */
+  correct(organizationId: string, paymentId: string, input: CorrectPaymentInput, at: Date): Promise<{ reversed: PaymentRecord; payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
   /**

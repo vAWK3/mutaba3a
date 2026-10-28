@@ -206,8 +206,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 10 (MUT-480): `credits` gained `reasonCode`; `supps` gained `reasonCode`, `appliedGrossMinor` and `creditedMinor`.
  * 11 (MUT-481): `pays` gained `receiptNumber`.
  * 12 (MUT-479): `props` gained `agreementType` and `draft`.
+ * 13 (MUT-443): `pays` gained `reversalReasonCode`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 12;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 13;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -1996,22 +1997,10 @@ export class MemoryLedgerStore implements LedgerStore {
 
   readonly payments: PaymentRepository = {
     create: async (input: CreatePaymentInput, at) => {
-      if (input.customerId) {
-        const customer = this.custs.get(input.customerId);
-        if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('payments.customerId');
-      }
-      if (input.projectId && !this.projs.has(input.projectId)) throw new ForeignKeyViolation('payments.projectId');
       // All-or-nothing: check every receivable before touching any.
+      this.assertPaymentRefs(input);
       this.assertCapacity(input.organizationId, input.allocations);
-      const year = Number(input.receivedOn.slice(0, 4));
-      const counterKey = `${input.organizationId}:${year}`;
-      const seq = (this.counters.get(counterKey) ?? 0) + 1;
-      this.counters.set(counterKey, seq);
-      const { allocations: requested, ...rest } = input;
-      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
-      this.pays.set(payment.id, payment);
-      const allocations = this.applyAllocations(payment, requested, at);
-      return { payment: { ...payment }, allocations };
+      return this.insertPayment(input, at);
     },
     getById: async (organizationId, id) => {
       const p = this.pays.get(id);
@@ -2058,20 +2047,22 @@ export class MemoryLedgerStore implements LedgerStore {
       const payment = this.pays.get(paymentId);
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status === 'REVERSED') return { payment: { ...payment }, changed: false };
-      for (const a of this.allocs.values()) {
-        if (a.paymentId !== paymentId) continue;
-        const r = this.recs.get(a.receivableId);
-        if (!r) continue;
-        r.paidMinor -= a.amountMinor;
-        settle(r);
-      }
-      payment.allocatedMinor = 0n;
-      payment.status = 'REVERSED';
-      payment.reversedAt = at;
-      payment.reversalReason = reason;
-      payment.version += 1;
-      payment.updatedAt = at;
+      this.reverseNow(payment, reason, null, at);
       return { payment: { ...payment }, changed: true };
+    },
+    // MUT-443 (R7): synchronous from the first check to the last write, so nothing interleaves (as Postgres's one
+    // transaction). Every check runs before anything is touched; the replacement's capacity counts what the reversal releases.
+    correct: async (organizationId, paymentId, { expectedVersion, reason, reasonCode, replacement }, at) => {
+      const payment = this.pays.get(paymentId);
+      if (!payment || payment.organizationId !== organizationId) return null;
+      if (payment.status !== 'POSTED') throw new StateConflict('payment', 'PAYMENT_NOT_POSTED');
+      if (payment.version !== expectedVersion) throw new StateConflict('payment', 'PREVIEW_STALE');
+      const input: CreatePaymentInput = { ...replacement, replacesPaymentId: paymentId };
+      this.assertPaymentRefs(input);
+      this.assertCapacity(organizationId, input.allocations, this.releasedBy(paymentId));
+      this.reverseNow(payment, reason, reasonCode, at);
+      const created = this.insertPayment(input, new Date(at.getTime() + 1));
+      return { reversed: { ...payment }, ...created };
     },
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
@@ -2114,12 +2105,59 @@ export class MemoryLedgerStore implements LedgerStore {
     return false;
   }
 
-  private assertCapacity(organizationId: string, requested: readonly AllocationInput[]): void {
+  /**
+   * Every receivable can absorb its allocation. MUT-443: `released` is what a correction's reversal gives back per
+   * receivable first, so a receivable the original settled is OPEN again for its replacement.
+   */
+  private assertCapacity(organizationId: string, requested: readonly AllocationInput[], released: ReadonlyMap<string, bigint> = new Map()): void {
     for (const a of requested) {
       const r = this.recs.get(a.receivableId);
       if (!r || r.organizationId !== organizationId) throw new ForeignKeyViolation('payment_allocations.receivableId');
-      if (r.status !== 'OPEN' || a.amountMinor <= 0n || a.amountMinor > outstanding(r)) throw new InsufficientCapacity(a.receivableId);
+      const available = outstanding(r) + (released.get(r.id) ?? 0n);
+      const open = released.has(r.id) ? available > 0n : r.status === 'OPEN';
+      if (!open || a.amountMinor <= 0n || a.amountMinor > available) throw new InsufficientCapacity(a.receivableId);
     }
+  }
+
+  /** The customer and project a new payment names belong to this store (the foreign keys Postgres checks). */
+  private assertPaymentRefs(input: CreatePaymentInput): void {
+    if (input.customerId) {
+      const customer = this.custs.get(input.customerId);
+      if (!customer || customer.organizationId !== input.organizationId) throw new ForeignKeyViolation('payments.customerId');
+    }
+    if (input.projectId && !this.projs.has(input.projectId)) throw new ForeignKeyViolation('payments.projectId');
+  }
+
+  /** Numbers, stores and allocates a payment whose checks have passed. */
+  private insertPayment(input: CreatePaymentInput, at: Date): { payment: PaymentRecord; allocations: AllocationRecord[] } {
+    const year = Number(input.receivedOn.slice(0, 4));
+    const counterKey = `${input.organizationId}:${year}`;
+    const seq = (this.counters.get(counterKey) ?? 0) + 1;
+    this.counters.set(counterKey, seq);
+    const { allocations: requested, ...rest } = input;
+    const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, version: 1, createdAt: at, updatedAt: at };
+    this.pays.set(payment.id, payment);
+    const allocations = this.applyAllocations(payment, requested, at);
+    return { payment: { ...payment }, allocations };
+  }
+
+  /** What reversing this payment gives back, per receivable. */
+  private releasedBy(paymentId: string): Map<string, bigint> {
+    const released = new Map<string, bigint>();
+    for (const a of this.allocs.values()) if (a.paymentId === paymentId) released.set(a.receivableId, (released.get(a.receivableId) ?? 0n) + a.amountMinor);
+    return released;
+  }
+
+  /** Undoes every allocation of a POSTED payment and marks it REVERSED (the reverse and correct writes). */
+  private reverseNow(payment: PaymentRecord, reason: string, reasonCode: string | null, at: Date): void {
+    for (const a of this.allocs.values()) {
+      if (a.paymentId !== payment.id) continue;
+      const r = this.recs.get(a.receivableId);
+      if (!r) continue;
+      r.paidMinor -= a.amountMinor;
+      settle(r);
+    }
+    Object.assign(payment, { allocatedMinor: 0n, status: 'REVERSED', reversedAt: at, reversalReason: reason, reversalReasonCode: reasonCode, version: payment.version + 1, updatedAt: at });
   }
 
   private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): AllocationRecord[] {

@@ -112,7 +112,7 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   );
 
   // pays.receiptNumber: a payment Malafat recorded with its legal receipt's number (MUT-481; person-made ones never carry one)
-  await store.payments.create(
+  const receipted = await store.payments.create(
     {
       organizationId: org, customerId: customer.id, projectId: null, currency: 'ILS', amountMinor: 1_000n, receivedOn: '2026-10-04', method: 'BANK',
       reference: 'TR-77', receiptNumber: '2041', notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null,
@@ -120,6 +120,11 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
     },
     LATER,
   );
+  // pays.reversalReasonCode: Malafat corrected it in one step (MUT-443), so the original carries the reason's code
+  await store.payments.correct(org, receipted.payment.id, {
+    expectedVersion: receipted.payment.version, reason: 'ENTERED_BY_MISTAKE', reasonCode: 'ENTERED_BY_MISTAKE',
+    replacement: { organizationId: org, customerId: customer.id, projectId: null, currency: 'ILS', amountMinor: 900n, receivedOn: '2026-10-04', method: 'BANK', reference: 'TR-77', receiptNumber: '2041', notes: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] },
+  }, LATER);
 
   // credits: a credit note on what is left
   await store.receivables.credit(org, posted.receivable.id, { amountMinor: 5_000n, netMinor: 5_000n, vatMinor: 0n, reason: 'Discount', effectiveDate: '2026-10-04', requestId: null }, LATER);

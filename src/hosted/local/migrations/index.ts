@@ -205,6 +205,15 @@ function addProposalDrafts(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-443, 12 → 13: payments gain `reversalReasonCode`, which only a Malafat correction sets. Nothing on a device was
+ * corrected that way (as the SQL column, every existing payment has none): null.
+ */
+function addReversalReasonCode(snapshot: StoredSnapshot): StoredSnapshot {
+  const pays = snapshot.maps.pays as Map<string, Omit<PaymentRecord, 'reversalReasonCode'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, pays: new Map([...pays].map(([id, p]) => [id, { ...p, reversalReasonCode: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -222,6 +231,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 9, to: 10, migrate: addReductionFields },
   { from: 10, to: 11, migrate: addReceiptNumber },
   { from: 11, to: 12, migrate: addProposalDrafts },
+  { from: 12, to: 13, migrate: addReversalReasonCode },
 ];
 
 /**

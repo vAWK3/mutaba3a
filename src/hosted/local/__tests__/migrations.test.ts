@@ -213,9 +213,29 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(12);
+    // 12 → 13 runs next and touches only payments.
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect(after.maps.props.get(fixed.id)).toEqual({ ...maps.props.get(fixed.id), agreementType: 'FIXED', draft: null });
     expect(after.maps.props.get(contingent.id)).toEqual({ ...maps.props.get(contingent.id), agreementType: 'CONTINGENCY', draft: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('12 → 13 (MUT-443): payments gain a null reversalReasonCode, a reversed one included, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { user, personalOrganization: org } = await store.users.create({ email: 'rami@studio.ps', displayName: 'Rami', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rami', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const capture = () => store.payments.capture({ organizationId: org.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 500n, receivedOn: '2026-10-01', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: null }, AT);
+    await capture();
+    const undone = await capture();
+    await store.payments.undoCapture(org.id, undone.payment.id, user.id, AT);
+    const { maps } = store.snapshot();
+    const pays = new Map([...maps.pays].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'reversalReasonCode'))]));
+    const before: StoredSnapshot = { formatVersion: 12, stateVersion: 4, savedAt: AT, maps: { ...maps, pays } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(13);
+    expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()].map((p) => ({ ...p, reversalReasonCode: null })));
+    expect(after.maps.pays.get(undone.payment.id)).toMatchObject({ status: 'REVERSED', reversalReasonCode: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

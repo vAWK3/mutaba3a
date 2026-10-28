@@ -1858,17 +1858,37 @@ export class PrismaLedgerStore implements LedgerStore {
       const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
-        const { count } = await tx.payment.updateMany({ where: { id: paymentId, status: 'POSTED' }, data: { status: 'REVERSED', reversedAt: at, reversalReason: reason, allocatedMinor: 0n, version: { increment: 1 }, updatedAt: at } });
-        if (count !== 1) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
+        if (!(await markReversedTx(tx, paymentId, null, reason, null, at))) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
         const allocations = await tx.paymentAllocation.findMany({ where: { paymentId } });
         await lockReceivablesInIdOrder(tx, allocations.map((a) => a.receivableId));
-        for (const a of allocations) {
-          await settleReceivable(tx, a.receivableId, { paidMinor: { decrement: a.amountMinor } });
-        }
+        await releaseAllocationsTx(tx, allocations);
         return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: true };
       }).catch((err: unknown) => {
         throw asLockConflict(err);
       });
+    },
+    // MUT-443 (R1): one transaction in the order a plain create locks (the year counter, then receivables in id order),
+    // after the original's own row: so a correction and a create can't deadlock. Any throw rolls back both halves.
+    correct: async (organizationId, paymentId, { expectedVersion, reason, reasonCode, replacement }, at) => {
+      const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, select: { id: true } });
+      if (!exists) return null;
+      const input: CreatePaymentInput = { ...replacement, replacesPaymentId: paymentId };
+      return this.paymentWrite(() =>
+        this.prisma.$transaction(async (tx) => {
+          if (!(await markReversedTx(tx, paymentId, expectedVersion, reason, reasonCode, at))) {
+            const current = await tx.payment.findUniqueOrThrow({ where: { id: paymentId }, select: { status: true } });
+            throw new StateConflict('payment', current.status === 'POSTED' ? 'PREVIEW_STALE' : 'PAYMENT_NOT_POSTED');
+          }
+          await assertPaymentRefsTx(tx, input);
+          const number = await nextPaymentNumberTx(tx, input.organizationId, input.receivedOn);
+          const released = await tx.paymentAllocation.findMany({ where: { paymentId } });
+          await lockReceivablesInIdOrder(tx, [...released.map((a) => a.receivableId), ...input.allocations.map((a) => a.receivableId)]);
+          await releaseAllocationsTx(tx, released);
+          // R8: a millisecond after the reversal, so the replacement's statement line sorts after it on the same day.
+          const created = await insertPaymentTx(tx, input, number, new Date(at.getTime() + 1));
+          return { reversed: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), ...created };
+        }),
+      );
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
     capture: (input, at) =>
@@ -3414,6 +3434,12 @@ async function nextReceivableNumberTx(tx: Tx, organizationId: string, postingDat
 }
 
 async function createPaymentTx(tx: Tx, input: CreatePaymentInput, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+  await assertPaymentRefsTx(tx, input);
+  return insertPaymentTx(tx, input, await nextPaymentNumberTx(tx, input.organizationId, input.receivedOn), at);
+}
+
+/** The customer and project a new payment names belong to its organization. */
+async function assertPaymentRefsTx(tx: Tx, input: CreatePaymentInput): Promise<void> {
   if (input.customerId) {
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, organizationId: input.organizationId }, select: { id: true } });
     if (!customer) throw new ForeignKeyViolation('payments.customerId');
@@ -3422,18 +3448,47 @@ async function createPaymentTx(tx: Tx, input: CreatePaymentInput, at: Date): Pro
     const project = await tx.project.findFirst({ where: { id: input.projectId, organizationId: input.organizationId }, select: { id: true } });
     if (!project) throw new ForeignKeyViolation('payments.projectId');
   }
-  const { allocations: requested, ...rest } = input;
-  const year = Number(input.receivedOn.slice(0, 4));
+}
+
+/**
+ * The next PAY-YYYY-NNNN for a payment received on `receivedOn`. The counter row's lock serialises payments in one
+ * organization-year, and a rolled-back write takes its increment with it, so numbers stay gap-free. MUT-443 (R1): split
+ * out so `correct` takes it before the receivable locks, in the order `create` does.
+ */
+async function nextPaymentNumberTx(tx: Tx, organizationId: string, receivedOn: string): Promise<string> {
+  const year = Number(receivedOn.slice(0, 4));
   const counter = await tx.paymentCounter.upsert({
-    where: { organizationId_year: { organizationId: input.organizationId, year } },
-    create: { organizationId: input.organizationId, year, next: 1 },
+    where: { organizationId_year: { organizationId, year } },
+    create: { organizationId, year, next: 1 },
     update: { next: { increment: 1 } },
   });
-  const number = `PAY-${year}-${String(counter.next).padStart(4, '0')}`;
+  return `PAY-${year}-${String(counter.next).padStart(4, '0')}`;
+}
+
+/** Inserts a numbered payment and its allocations (capacity checked under row locks). */
+async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+  const { allocations: requested, ...rest } = input;
   const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
   const allocations = await applyAllocations(tx, payment, requested, at);
   const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
   return { payment: fresh, allocations };
+}
+
+/**
+ * The reversal's conditional write (reverse and correct): POSTED → REVERSED, allocated zeroed. `expectedVersion` also
+ * pins the version (a correction's preview); null for a plain reverse. False when the WHERE missed.
+ */
+async function markReversedTx(tx: Tx, paymentId: string, expectedVersion: number | null, reason: string, reasonCode: string | null, at: Date): Promise<boolean> {
+  const { count } = await tx.payment.updateMany({
+    where: { id: paymentId, status: 'POSTED', ...(expectedVersion === null ? {} : { version: expectedVersion }) },
+    data: { status: 'REVERSED', reversedAt: at, reversalReason: reason, reversalReasonCode: reasonCode, allocatedMinor: 0n, version: { increment: 1 }, updatedAt: at },
+  });
+  return count === 1;
+}
+
+/** Gives back what a reversed payment's allocations paid. The caller already holds the receivables' locks. */
+async function releaseAllocationsTx(tx: Tx, allocations: readonly AllocationRecord[]): Promise<void> {
+  for (const a of allocations) await settleReceivable(tx, a.receivableId, { paidMinor: { decrement: a.amountMinor } });
 }
 
 /**

@@ -75,7 +75,7 @@ const RETAINER_VERSION = cols<RetainerVersionRecord>()({
 });
 const PAYMENT = cols<PaymentRecord>()({
   id: true, organizationId: true, customerId: true, projectId: true, number: true, currency: true, amountMinor: true, allocatedMinor: true, receivedOn: true,
-  method: true, reference: true, receiptNumber: true, notes: true, origin: true, status: true, replacesPaymentId: true, reversedAt: true, reversalReason: true, captureSource: true,
+  method: true, reference: true, receiptNumber: true, notes: true, origin: true, status: true, replacesPaymentId: true, reversedAt: true, reversalReason: true, reversalReasonCode: true, captureSource: true,
   createdByUserId: true, requestId: true, version: true, createdAt: true, updatedAt: true,
 });
 const ALLOCATION = cols<AllocationRecord>()({ id: true, organizationId: true, paymentId: true, receivableId: true, amountMinor: true, createdAt: true });

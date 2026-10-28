@@ -217,6 +217,8 @@ export const STORE_ACCESS: StoreAccess = {
     listAllocationsFor: 'read',
     allocate: { write: 'payments' },
     reverse: { write: 'payments' },
+    // MUT-443: a reversal and its replacement in one write; the same domain as each half.
+    correct: { write: 'payments' },
     findReplacedBy: 'read',
     // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
     capture: { write: 'capture' },

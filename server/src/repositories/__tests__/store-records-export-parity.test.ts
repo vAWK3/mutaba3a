@@ -54,6 +54,10 @@ async function seed(store: LedgerStore) {
   for (const receivedOn of ['2025-12-30', '2026-10-03']) {
     await store.payments.create({ organizationId: org, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 1_000n, receivedOn, method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: user.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: posted.receivable.id, amountMinor: 1_000n }] }, LATER);
   }
+  // MUT-443: a payment corrected in one step, so the original carries reversalReasonCode.
+  const keyed = { organizationId: org, customerId: customer.id, projectId: null, currency: 'ILS', receivedOn: '2026-10-04', method: 'BANK' as const, reference: 'TR-9', receiptNumber: '3001', notes: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION' as const, captureSource: null, allocations: [] };
+  const corrected = await store.payments.create({ ...keyed, amountMinor: 2_000n, replacesPaymentId: null }, LATER);
+  await store.payments.correct(org, corrected.payment.id, { expectedVersion: corrected.payment.version, reason: 'Typo in the amount', reasonCode: 'OTHER', replacement: { ...keyed, amountMinor: 1_500n } }, LATER);
   await store.receivables.credit(org, posted.receivable.id, { amountMinor: 5_000n, netMinor: 5_000n, vatMinor: 0n, reason: 'Discount', effectiveDate: '2026-10-04', requestId: null }, LATER);
   await store.receivables.createAdjustment({ organizationId: org, customerId: customer.id, projectId: null, currency: 'JOD', netMinor: 1_234_567_890n, vatMinor: 0n, grossMinor: 1_234_567_890n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Owed', dueDate: '2026-10-20', postingDate: '2026-10-01', postedAt: AT, createdByUserId: user.id, requestId: null }, AT);
   const second = await store.projects.create({ organizationId: org, customerId: customer.id, name: 'Logo', currency: 'ILS' }, AT);
@@ -129,6 +133,7 @@ if (!url) {
       expect(postgres.out.counters!.keys).toEqual([`${postgres.org}:2025`, `${postgres.org}:2026`, `${postgres.org}:CHG:2026`]);
       expect(postgres.out.groupMarks!.rows).toHaveLength(6);
       expect(postgres.out.custs!.rows).toHaveLength(1);
+      expect(postgres.out.pays!.rows.filter((row) => row.includes('"reversalReasonCode":"OTHER"'))).toHaveLength(1);
       expect(postgres.out.vendors!.rows).toHaveLength(2);
       expect(postgres.out.vendorNames!.rows).toHaveLength(3);
     });
