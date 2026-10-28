@@ -158,3 +158,27 @@ def test_ac7_denied_licences_fail(licence):
 def test_ac7_an_unknown_licence_fails_until_reviewed():
     assert "unrecognised" in (check_licenses.verdict("Proprietary") or "")
     assert check_licenses.verdict("Apache-2.0") is None and check_licenses.verdict("MIT-CMU") is None
+
+
+@pytest.mark.parametrize("package", ["opencv-python-headless", "shapely"])
+@pytest.mark.parametrize("licence", ["LGPL-2.1-only", "LGPL-2.1-or-later", "GNU Lesser General Public License v2.1"])
+def test_ac7_accepted_bundled_lgpl_2_1_passes_for_its_two_packages(package, licence):
+    assert check_licenses.verdict(licence, package) is None
+
+
+@pytest.mark.parametrize("package", [None, "numpy", "pillow", "rapidocr", "opencv-python", "shapely-extra"])
+def test_ac7_lgpl_2_1_still_fails_for_any_other_package(package):
+    assert check_licenses.verdict("LGPL-2.1-only", package) is not None
+
+
+@pytest.mark.parametrize(
+    "licence", ["LGPL-3.0-or-later", "GNU General Public License v2 (GPLv2)", "AGPL-3.0-only", "CreativeML OpenRAIL-M", "CC-BY-NC-4.0", "LGPL-2.1-only | GPL-3.0"]
+)
+@pytest.mark.parametrize("package", ["opencv-python-headless", "shapely"])
+def test_ac7_the_accepted_packages_still_fail_on_any_other_copyleft(package, licence):
+    assert check_licenses.verdict(licence, package) is not None
+
+
+def test_ac7_the_accepted_list_is_exactly_the_two_bundled_libraries():
+    assert set(check_licenses.ACCEPTED_LGPL) == {"opencv-python-headless", "shapely"}
+    assert {p for p, _, _ in check_licenses.BUNDLED} == set(check_licenses.ACCEPTED_LGPL)

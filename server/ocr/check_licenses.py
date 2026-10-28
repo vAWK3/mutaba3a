@@ -16,8 +16,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-#: Copyleft that would reach our code, use-restricted model licences, and non-commercial terms. LGPL is denied too:
-#: nothing here needs it (python-bidi was replaced by app/text.py), so keeping it out keeps the question closed.
+#: Copyleft that would reach our code, use-restricted model licences, and non-commercial terms. LGPL is denied too,
+#: except for the two bundled libraries in ACCEPTED_LGPL (python-bidi, LGPL-3.0, was replaced by app/text.py).
 DENY = re.compile(
     r"\bA?GPL|\bLGPL|GNU (Affero |Lesser |Library )?General Public|OpenRAIL|\bRAIL\b|non-?commercial|\bCC-BY-NC|"
     r"\bSSPL|Server Side Public|\bBUSL|Business Source|Commons Clause",
@@ -29,6 +29,23 @@ ALLOW = re.compile(
     r"\bISC\b|Zlib|CC0|HPND|Unlicense",
     re.IGNORECASE,
 )
+
+#: LGPL-2.1 libraries Basel accepted on 2026-10-28, by the package that bundles them: unmodified, dynamically linked,
+#: server-side use only (the image isn't distributed). Only these packages, and only LGPL-2.1, pass; any other LGPL,
+#: GPL, AGPL, OpenRAIL or non-commercial term still fails. (package, bundled library)
+ACCEPTED_LGPL = {
+    "opencv-python-headless": "FFmpeg (inside the Linux wheel)",
+    "shapely": "GEOS",
+}
+LGPL_2_1 = re.compile(
+    r"\bLGPL-?2\.1(-only|-or-later|\+)?|GNU Lesser General Public License,? v(ersion )?2\.1( or later)?", re.IGNORECASE
+)
+
+#: Libraries bundled inside a wheel, which its declared licence doesn't show. (package, library, licence)
+BUNDLED = [
+    ("opencv-python-headless", "FFmpeg", "LGPL-2.1-or-later"),
+    ("shapely", "GEOS", "LGPL-2.1-only"),
+]
 
 #: Not Python packages: what the image holds besides them. (name, licence, source)
 MODELS = [
@@ -62,8 +79,12 @@ def licence_text(dist: metadata.Distribution) -> str:
     return " | ".join(p for p in parts if p)
 
 
-def verdict(text: str) -> str | None:
-    """None when the licence is acceptable, else why not."""
+def verdict(text: str, package: str | None = None) -> str | None:
+    """None when the licence is acceptable, else why not. `package` names the Python package the licence belongs to
+    (or that bundles it): only a package in ACCEPTED_LGPL may carry LGPL-2.1, and nothing else."""
+    if package in ACCEPTED_LGPL and LGPL_2_1.search(text):
+        rest = LGPL_2_1.sub("", text).strip(" |,;()")
+        return verdict(rest, None) if rest else None
     if DENY.search(text):
         return f"denied licence: {text}"
     if not ALLOW.search(text):
@@ -79,9 +100,13 @@ def check(requirements: Path = HERE / "requirements.txt") -> list[str]:
         except metadata.PackageNotFoundError:
             problems.append(f"{name}: pinned but not installed")
             continue
-        why = verdict(licence_text(dist))
+        why = verdict(licence_text(dist), name)
         if why:
             problems.append(f"{name} {dist.version}: {why}")
+    for package, library, licence in BUNDLED:
+        why = verdict(licence, package)
+        if why:
+            problems.append(f"{library} (bundled in {package}): {why}")
     for name, licence, _ in MODELS:
         why = verdict(licence)
         if why:
@@ -95,7 +120,8 @@ def main() -> int:
         print(f"FAIL {p}")
     if problems:
         return 1
-    print(f"ok: {len(pinned_names(HERE / 'requirements.txt'))} packages and {len(MODELS)} models/system packages")
+    print(f"ok: {len(pinned_names(HERE / 'requirements.txt'))} packages and {len(BUNDLED)} accepted bundled LGPL-2.1 libraries and "
+          f"{len(MODELS)} models/system packages")
     return 0
 
 

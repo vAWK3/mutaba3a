@@ -1,8 +1,9 @@
 # receipt-ocr: licences (MUT-441, AC7)
 
 Everything in the receipt-ocr image, with its licence. All of it allows commercial use; none of it is AGPL, GPL,
-LGPL, OpenRAIL or non-commercial. `python check_licenses.py` checks the same list from the installed metadata and fails
-on a denied or unrecognised licence; the image's test target runs it in CI.
+OpenRAIL or non-commercial, and the only LGPL in it is the two bundled LGPL-2.1 libraries Basel accepted (below).
+`python check_licenses.py` checks the same list from the installed metadata and fails on a denied or unrecognised
+licence; the image's test target runs it in CI.
 
 Not shipped on purpose: **python-bidi** (LGPL-3.0), which RapidOCR uses to reorder its Arabic output. `app/text.py`
 implements that reorder (UAX #9 for one line) and is tested against python-bidi's output, which was generated once
@@ -72,14 +73,17 @@ Notes:
   We use them unmodified, as dependencies of `requests` and `rapidocr`.
 - **pypdfium2** bundles PDFium (BSD-3-Clause and Apache-2.0) and PDFium's own dependencies (FreeType under its FTL
   option, libjpeg-turbo, zlib, lcms2, OpenJPEG, ICU: all permissive).
-- **Bundled native libraries under LGPL-2.1, flagged for Basel.** Two wheels carry an unmodified, dynamically linked
-  LGPL library inside them: **opencv-python-headless** (Linux wheel: FFmpeg; also libvpx and bzip2, which are
-  permissive) and **shapely** (GEOS; a RapidOCR dependency used to expand text boxes). LGPL allows commercial use of
-  an unmodified library linked this way; the obligations are to keep its notice (the wheels' own licence files are in
-  the image) and to let someone swap the library, which a Python wheel already allows. The licence check reads each
-  package's declared licence (Apache-2.0, BSD-3-Clause), so it doesn't see these; they are listed here instead. If
-  even this is unwanted: OpenCV's few calls (`app/preprocess.py`, and RapidOCR's own) would move to Pillow and NumPy,
-  and shapely would need a RapidOCR patch.
+- **Bundled native libraries under LGPL-2.1, accepted by Basel on 2026-10-28.** Two wheels carry an LGPL-2.1
+  library inside them: **opencv-python-headless** (Linux wheel: FFmpeg; also libvpx and bzip2, which are permissive)
+  and **shapely** (GEOS; a RapidOCR dependency used to expand text boxes). Basel accepted both on these terms: used
+  unmodified, dynamically linked, and server-side only (the image runs on our Cloud Run and isn't distributed). LGPL
+  allows commercial use of an unmodified library linked this way; the obligations are to keep its notice (the wheels'
+  own licence files are in the image) and to let someone swap the library, which a Python wheel already allows.
+  `check_licenses.py` lists both in `BUNDLED` and lets LGPL-2.1 pass for exactly these two package names
+  (`ACCEPTED_LGPL`); any other package with LGPL, or these two with any other copyleft or restricted term, still
+  fails. Changing either library, linking it statically, or shipping the image to anyone else reopens the question.
+  The way out, if ever needed: OpenCV's few calls (`app/preprocess.py`, and RapidOCR's own) would move to Pillow and
+  NumPy, and shapely would need a RapidOCR patch.
 
 ## Dev and test only (`requirements-dev.txt`, not in the service image)
 
