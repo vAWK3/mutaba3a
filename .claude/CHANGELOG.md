@@ -34,7 +34,7 @@
 
 ### Added
 - **OCR sidecar** `server/ocr/` (Python 3.12, FastAPI `POST /v1/read`): RapidOCR (PP-OCRv5, ONNX) beside Tesseract 5 (ara/heb/eng, fast), PDF text layer by pypdfium2 (Arabic visual-order words put back), 40 MP / 2-page / 30 s decode caps, one read at a time, counts and timings only in logs; pytest (golden reads, caps, no network, no text in logs), licence list and check (AC7; Basel accepted LGPL-2.1 FFmpeg and GEOS), `run_local.sh` (no Docker), `bench/run.py`.
-- **API:** the extractor `server/src/receipts/extract/**` (amount with keyword and arithmetic checks, dates incl. Arabic-Indic digits and month names, currency incl. the JOD three-decimal rule, VAT, ח.פ/ע.מ check digit, phone, email, vendor; under 0.6 stays empty), the fill-absent merge, `HttpOcrClient` (`OcrReadError` codes, ID tokens to Cloud Run), the `ReadDispatcher` port (Cloud Tasks / inline), `ReceiptReader` (claim with a 90 s lease, deleted/FILED/null uploader → SKIPPED, 3 attempts or 30 min → FAILED), `POST /jobs/v1/receipts/read` (`{receiptId}` reads, no body sweeps; Google OIDC only), and the backlog queued when `receipt_reading` is granted (R5).
+- **API:** the extractor `server/src/receipts/extract/**` (amount with keyword and arithmetic checks, dates incl. Arabic-Indic digits and month names, currency incl. the JOD three-decimal rule, VAT, ח.פ/ע.מ check digit, phone, email, vendor; under 0.6 stays empty), the fill-absent merge, `HttpOcrClient` (`OcrReadError` codes, ID tokens to Cloud Run), the `ReadDispatcher` port (Cloud Tasks / inline), `ReceiptReader` (claim with a 90 s lease, deleted/FILED/null uploader → SKIPPED, 3 attempts or 30 min from the first claim → FAILED), `POST /jobs/v1/receipts/read` (`{receiptId}` reads, no body sweeps; Google OIDC only), and the backlog queued when `receipt_reading` is granted (R5).
 - Wire: receipts carry `reading: pending | done | failed | null`; `POST /v1/receipts/uploads` takes an optional `capture: scanned | photo`. OpenAPI and `hosted:types` regenerated.
 - **Portal:** the review page shows "Reading the receipt…" (ar/en), polls every 3 s for up to 2 minutes, and fills only fields the person hasn't changed (never while Approve is in flight); a gallery card says "Reading…".
 - **Infra** (`receipt_ocr.tf`, all behind `server_ocr_enabled = false`): Cloud Run `receipt-ocr`, queue `receipt-reads`, sweep job, three service accounts, the egress lock (own VPC, no NAT, deny-all egress), tftest; `deploy.sh` builds `receipt-ocr:<sha>` and rollback pins it; a `receipt-ocr` CI job.
@@ -46,9 +46,17 @@
 - Privacy policy (ar, en), **approved by Basel on 2026-10-28** (AC9; move "Last updated" when it ships): uploaded receipts may be read automatically on our own servers; no outside AI or OCR company and no language model sees them; the read text isn't kept.
 
 ### Technical
-- Migration `20261028090000_mut441_receipt_reading`: `expense_receipts.readStatus` (NONE | PENDING | DONE | FAILED | SKIPPED), `readAttempts`, `readLeaseUntil`, `readRequestedAt`, `readFailReason` (a code only), `captureHint` (SCANNED | PHOTO), all with defaults; a partial index for the sweep. Additive; the local records format is unchanged (the fields are optional on records).
+- Migration `20261028090000_mut441_receipt_reading`: `expense_receipts.readStatus` (NONE | PENDING | DONE | FAILED | SKIPPED), `readAttempts`, `readLeaseUntil`, `readRequestedAt`, `readFirstClaimedAt`, `readFailReason` (a code only), `captureHint` (SCANNED | PHOTO), all with defaults; a partial index for the sweep. Additive; the local records format is unchanged (the fields are optional on records).
 - Dependencies: `@google-cloud/tasks`, `google-auth-library` (server).
-- Debt: TD-275..278.
+- Debt: TD-275..280.
+
+### Fixed (pre-landing review)
+- **Money merges as one group:** `fillAbsent` takes `{currency, totalMinor, vatMinor, vatRateBasisPoints}` together (whole when none is stored, absent members only under the same currency, else nothing), so a currency is never attached to amounts read in another one (a two-decimal total under JOD).
+- **Give-up clock from the first claim:** new column `readFirstClaimedAt` (in the MUT-441 migration, never applied); the 30 minutes run from it and only after a claim, so a backlog that waits longer for a reader is still read.
+- **Portal polling:** stops when the receipt query is in error (a 404, or retries used up), and the 2 minutes run on the wall clock from when pending was first seen.
+- **Late fill after a failed Approve:** the review page subscribes to `isSubmitting`, so a suggestion that landed during an Approve that failed fills the untouched fields.
+- **OCR sidecar:** a read never waits on a worker restart past its own deadline; with no ready child it answers `timeout` at once and one background restart replaces it.
+- `docs/operations/before-release.md`: switch reading off (or pause `receipt-read-sweep`) before rolling back to a pre-MUT-441 API.
 
 ## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
 

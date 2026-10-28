@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-280: The read-pending partial index is built non-concurrently
+**Status**: Open (MUT-441, 2026-10-28; ADR-220)
+- **What:** migration `20261028090000_mut441_receipt_reading` creates `expense_receipts_read_pending_idx` with a plain `CREATE INDEX`, which locks `expense_receipts` against writes while it builds.
+- **Why it's acceptable:** the table is small today, so the build takes moments; Prisma runs each migration in a transaction, where `CONCURRENTLY` isn't allowed.
+- **Fix:** if `expense_receipts` grows large before this migration is applied in production, move the index into its own migration that runs `CREATE INDEX CONCURRENTLY` outside a transaction.
+
+### TD-279: A cold read can spend an attempt on the client's 35 s timeout
+**Status**: Accepted (MUT-441, 2026-10-28; ADR-220)
+- **What:** with `ocr_min_instances = 0`, the first read after scale-to-zero waits for `receipt-ocr` to start and load its models; if that plus the read passes the API client's 35 s timeout, the read answers `timeout` and uses one of its 3 attempts.
+- **Why it's acceptable:** a cold start is estimated at 12–18 s with `startup_cpu_boost` (TD-278), well inside the timeout; the next attempt finds the instance warm, and the person can always type the fields.
+- **Fix:** set `ocr_min_instances = 1` (about $50–70 a month), or don't count a timeout against the attempts when the sidecar was cold.
+
 ### TD-278: Server receipt reading's speed and cold start are unmeasured on Cloud Run
 **Status**: Open (MUT-441, 2026-10-28; ADR-220)
 - **What:** AC6's warm p95 (about 1.1–1.35 s) and the cold start (1.5 s to ready) were measured on a shared Mac, not on `receipt-ocr`'s 4 vCPU / 4 GiB Cloud Run instances. The plan's cold-start estimate (12–18 s with `startup_cpu_boost`) and the cost per 1,000 reads (`.claude/designs/mut-441-bench.md`) are estimates until then.
