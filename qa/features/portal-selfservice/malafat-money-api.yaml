@@ -13,6 +13,8 @@ paths:
   - server/src/payments/receipt-number.ts
   - server/src/proposals/draft.ts
   - server/src/retainers/create.ts
+  - server/src/payments/correct.ts
+  - server/src/payments/allocation-error.ts
 features:
   - id: statement
     title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
@@ -89,3 +91,27 @@ features:
       - The retainer starts on the proposed month, and the charges the preview said were due now have posted
       - The summary's proposed total leaves the retainer's monthly amount out, while the client's row lists it as RECURRING
       - The stale approval is 409 PREVIEW_STALE and the proposal stays PROPOSED; approving the approved one is 409 PROPOSAL_NOT_OPEN
+  - id: payment-correct
+    title: Malafat corrects a recorded payment in one call, from a preview, and a replay never corrects twice
+    tier: secondary
+    # MUT-443 (ADR-225): POST /v1/payments/{id}/correct and its preview. Malafat's "Correct a recorded payment" is MAL-1367.
+    paths:
+      - server/src/payments/correct.ts
+      - server/src/payments/allocation-error.ts
+      - server/src/payments/allocate.ts
+      - server/src/payments/preview-token.ts
+      - server/src/routes/payments.ts
+      - server/src/statements/serialize.ts
+    steps:
+      - Malafat records a ₪1,000 payment with receipt 3001 against a ₪1,000 charge, which settles it
+      - Malafat previews correcting it to ₪600 on a later date, reason ENTERED_BY_MISTAKE
+      - Malafat confirms the correction
+      - Malafat sends the same request again with the same key
+      - Malafat tries again with an old preview, on the reversed original, with OTHER and no note, and with more than is outstanding
+      - Malafat reads the client's statement
+    expect:
+      - The preview releases ₪1,000, allocates ₪600, and the charge goes from ₪0 to ₪400 outstanding
+      - The original reads REVERSED with the reason, and the replacement is POSTED with receipt 3001, ₪600 allocated, and replacesPaymentId
+      - The replay answers the same, and there is still exactly one replacement
+      - The refusals are 409 PREVIEW_STALE, 409 PAYMENT_NOT_POSTED, 422 REASON_REQUIRED, and 422 ALLOCATION_EXCEEDS_OUTSTANDING naming the charge
+      - The statement shows the payment line, its reversal line with the reason, and the new payment line, and the balance is ₪400

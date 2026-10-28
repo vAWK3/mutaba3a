@@ -257,3 +257,98 @@ test('Malafat proposes a 30/70 split and a retainer, previews each approval and 
     expect(await refusal(`/v1/fee-proposals/${splitId}/approve`, { agreement: split, previewToken: preview.previewToken })).toEqual({ status: 409, reason: 'PROPOSAL_NOT_OPEN' });
   });
 });
+
+/** MUT-443: correcting a recorded payment in one call (MAL-1367), against the same live dev API. */
+test('Malafat corrects a recorded payment in one call, from a preview, and a replay never corrects twice', { tag: '@portal-selfservice.malafat-money-api.payment-correct' }, async ({ step }) => {
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let customerId = '';
+  let chargeId = '';
+  let originalId = '';
+  /** A request whose answer is checked by the caller (a refusal, or a replay), under the Idempotency-Key given. */
+  const send = async (path: string, body: Json, idempotencyKey = `qa-443-${randomUUID()}`) => {
+    const res = await fetch(`${liveState().origin}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey, ...key }, body: JSON.stringify(body) });
+    const json = (await res.json()) as Json;
+    return { status: res.status, replayed: res.headers.get('idempotent-replayed'), body: json, reason: json.error?.details?.reason as string | undefined };
+  };
+
+  await step('Malafat records a ₪1,000 payment with receipt 3001 against a ₪1,000 charge, which settles it', async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const apiKey = await call('POST', `/admin/v1/organizations/${org.id}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    await call('PUT', '/v1/settings/vat', key, { rateBasisPoints: 1800, effectiveFrom: '2025-01-01' });
+    customerId = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    const projectId = (await call('POST', '/v1/projects', key, { customerId, name: 'Lawsuit', currency: 'ILS' })).id;
+    const body = { projectId, amount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', vatTreatment: 'EXEMPT', agreementDate: '2026-10-01', paymentTerms: 'EOM', installments: [{ label: 'Signing', amount: '1000.00', trigger: { type: 'IMMEDIATE' } }] };
+    const agreement = await call('POST', '/v1/agreements', key, { ...body, previewToken: (await call('POST', '/v1/agreements/preview', key, body)).previewToken });
+    chargeId = agreement.installments[0].receivableId;
+    const allocations = [{ receivableId: chargeId, amount: '1000.00' }];
+    const preview = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount: '1000.00', allocations });
+    const original = await call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount: '1000.00', receivedOn: '2026-10-20', method: 'BANK', receiptNumber: '3001', allocations, previewToken: preview.previewToken });
+    originalId = original.id;
+    expect(original).toMatchObject({ status: 'POSTED', receiptNumber: '3001', allocated: '1000.00' });
+    expect((await call('GET', `/v1/receivables/${chargeId}`, key)).outstanding).toBe('0.00');
+  });
+
+  const correction = { amount: '600.00', receivedOn: '2026-10-27', method: 'BANK', allocations: [] as Json[] };
+  let request: Json = {};
+  await step('Malafat previews correcting it to ₪600 on a later date, reason ENTERED_BY_MISTAKE', async () => {
+    correction.allocations = [{ receivableId: chargeId, amount: '600.00' }];
+    const preview = await call('POST', `/v1/payments/${originalId}/correct/preview`, key, { ...correction, reasonCode: 'ENTERED_BY_MISTAKE' });
+    expect(preview.reversal).toMatchObject({ paymentId: originalId, amount: '1000.00', receiptNumber: '3001', released: [{ receivableId: chargeId, amount: '1000.00' }] });
+    expect(preview).toMatchObject({ amount: '600.00', allocated: '600.00', unallocated: '0.00', receiptNumber: '3001' });
+    expect(preview.balances.receivables).toEqual([expect.objectContaining({ receivableId: chargeId, outstandingBefore: '0.00', outstandingAfter: '400.00' })]);
+    request = { ...correction, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: preview.previewToken };
+  });
+
+  const replayKey = `qa-443-${randomUUID()}`;
+  let first: Json = {};
+  await step('Malafat confirms the correction', async () => {
+    const done = await send(`/v1/payments/${originalId}/correct`, request, replayKey);
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    first = done.body;
+    expect(first.reversed).toMatchObject({ id: originalId, status: 'REVERSED', reversalReason: 'ENTERED_BY_MISTAKE', reversalReasonCode: 'ENTERED_BY_MISTAKE', replacedByPaymentId: first.payment.id });
+    expect(first.payment).toMatchObject({ status: 'POSTED', receiptNumber: '3001', amount: '600.00', allocated: '600.00', receivedOn: '2026-10-27', replacesPaymentId: originalId });
+  });
+
+  await step('Malafat sends the same request again with the same key', async () => {
+    const again = await send(`/v1/payments/${originalId}/correct`, request, replayKey);
+    expect(again.status).toBe(200);
+    expect(again.replayed).toBe('true');
+    expect(again.body).toEqual(first);
+    const payments = await call('GET', `/v1/payments?customerId=${customerId}`, key);
+    expect(payments.items.filter((p: Json) => p.replacesPaymentId === originalId)).toHaveLength(1);
+  });
+
+  await step('Malafat tries again with an old preview, on the reversed original, with OTHER and no note, and with more than is outstanding', async () => {
+    const replacementId = first.payment.id as string;
+    const changed = { ...correction, amount: '650.00', allocations: [{ receivableId: chargeId, amount: '650.00' }] };
+    const old = await call('POST', `/v1/payments/${replacementId}/correct/preview`, key, changed);
+    // The replacement moves on (its receipt number is set) after the preview was taken.
+    const set = await fetch(`${liveState().origin}/v1/payments/${replacementId}/receipt-number`, { method: 'PUT', headers: { 'content-type': 'application/json', 'if-match': String(first.payment.version), ...key }, body: JSON.stringify({ receiptNumber: '3001/1' }) });
+    expect(set.status).toBe(200);
+    const stale = await send(`/v1/payments/${replacementId}/correct`, { ...changed, reasonCode: 'GOODWILL', previewToken: old.previewToken });
+    expect([stale.status, stale.reason]).toEqual([409, 'PREVIEW_STALE']);
+
+    const reversed = await send(`/v1/payments/${originalId}/correct`, request);
+    expect([reversed.status, reversed.reason]).toEqual([409, 'PAYMENT_NOT_POSTED']);
+    expect(reversed.body.error.details.replacedByPaymentId).toBe(replacementId);
+
+    const fresh = await call('POST', `/v1/payments/${replacementId}/correct/preview`, key, changed);
+    const noNote = await send(`/v1/payments/${replacementId}/correct`, { ...changed, reasonCode: 'OTHER', previewToken: fresh.previewToken });
+    expect([noNote.status, noNote.reason]).toEqual([422, 'REASON_REQUIRED']);
+
+    const tooMuch = await send(`/v1/payments/${replacementId}/correct/preview`, { ...correction, amount: '1500.00', allocations: [{ receivableId: chargeId, amount: '1500.00' }] });
+    expect([tooMuch.status, tooMuch.reason]).toEqual([422, 'ALLOCATION_EXCEEDS_OUTSTANDING']);
+    expect(tooMuch.body.error.details.receivableId).toBe(chargeId);
+  });
+
+  await step("Malafat reads the client's statement", async () => {
+    const statement = await call('GET', `/v1/customers/${customerId}/statement?currency=ILS`, key);
+    const lines = statement.lines.filter((l: Json) => l.kind !== 'CHARGE');
+    // By date: the original (Oct 20), the corrected payment (Oct 27), then the reversal, dated the day it was made (ADR-225).
+    expect(lines.map((l: Json) => [l.kind, l.paymentId])).toEqual([['PAYMENT', originalId], ['PAYMENT', first.payment.id], ['PAYMENT_REVERSAL', originalId]]);
+    expect(lines[2]).toMatchObject({ reason: 'ENTERED_BY_MISTAKE', reasonCode: 'ENTERED_BY_MISTAKE', receiptNumber: '3001' });
+    expect(statement.closingBalance).toBe('400.00');
+  });
+});
