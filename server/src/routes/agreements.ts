@@ -11,12 +11,13 @@ import {
 } from '../agreements/compose.js';
 import { agreementDetail, composePreview, createAgreementFromPreview, paidMap } from '../agreements/create.js';
 import { postDueItems } from '../agreements/posting.js';
+import { assertReducible, composeReduction, reductionView, reductionWrite } from '../agreements/reduce-compose.js';
 import { planSupplement } from '../agreements/supplement.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
-import { formatMoney } from '../money.js';
-import { verifyPreviewToken } from '../preview-token.js';
-import type { AgreementRecord, CreateInstallmentInput, LedgerStore } from '../repositories/ports.js';
+import { formatMoney, type Currency } from '../money.js';
+import { previewToken, verifyPreviewToken } from '../preview-token.js';
+import type { AgreementRecord, CreateInstallmentInput, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   AgreementCreateRequestSchema,
   AgreementDetailSchema,
@@ -26,10 +27,14 @@ import {
   AgreementPreviewResponseSchema,
   CancelAgreementRequestSchema,
   ListAgreementsQuerySchema,
+  ReducePreviewRequestSchema,
+  ReducePreviewResponseSchema,
+  ReduceRequestSchema,
+  ReduceResponseSchema,
   SupplementRequestSchema,
   SupplementResponseSchema,
 } from '../schemas.js';
-import { serializeAgreement, serializeInstallment, serializeSupplement } from '../serializers.js';
+import { serializeAgreement, serializeCredit, serializeInstallment, serializeSupplement } from '../serializers.js';
 import { computeVat } from '../vat.js';
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
 
@@ -244,6 +249,85 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
+  // ---- MUT-480: lower the fee ----
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/agreements/{agreementId}/reduce/preview',
+      tags: ['Agreements'],
+      summary: 'Preview lowering a fixed fee: unbilled installments first, then credits',
+      description:
+        'Give `by` (the gross to take off) or `to` (the new effective total = live installments’ gross − credits on their receivables). Due installments are billed first, as on any read. The plan voids unbilled installments latest first and lowers at most one partly; anything beyond the unbilled amount is credited on this agreement’s open receivables, latest posting first. On a VAT-exclusive agreement a gross that can’t be hit exactly is reported in `roundedBy` (applied = requested − roundedBy). 422 NOT_FIXED (retainers, contingency), AMOUNT_INVALID, REDUCTION_EXCEEDS_OPEN {unbilled, outstanding, maximum}, USE_CANCEL (nothing billed and the whole fee); 409 AGREEMENT_CANCELLED. The token covers the amount and the ledger (agreement, installment and receivable versions), not the reason.',
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('agreements:read')] as const,
+      request: { params: AgreementIdParamSchema, body: jsonBody(ReducePreviewRequestSchema) },
+      responses: { 200: { description: 'The plan', content: { 'application/json': { schema: ReducePreviewResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = keyAuth(c);
+      const body = c.req.valid('json');
+      const agreement = await reducibleAfterPosting(c, organization, c.req.valid('param').agreementId, c.get('now')());
+      const composed = await composeReduction(store, organization.id, agreement, body);
+      return c.json(reductionView(composed, agreement.currency as Currency, previewToken(composed.tokenParts)), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/agreements/{agreementId}/reduce',
+      tags: ['Agreements'],
+      summary: 'Lower a fixed fee in one atomic write',
+      description:
+        'The previewed plan, written at once: installments lowered or voided, credits on the open receivables (reasonCode on each), the totals, and a REDUCTION supplement row. reasonCode is required; OTHER needs a note (422 REASON_REQUIRED). Anything that moved since the preview (a payment, a credit, a posting, another change) is 409 PREVIEW_STALE with nothing written. Its credits sit under agreements:write, like the contingency correction’s. Audits agreement.reduced and one receivable.credited (source REDUCTION) per credit.',
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('agreements:write'), idempotent(store, 'agreements.reduce')] as const,
+      request: { params: AgreementIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ReduceRequestSchema) },
+      responses: { 200: { description: 'Lowered', content: { 'application/json': { schema: ReduceResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization, apiKey } = keyAuth(c);
+      const body = c.req.valid('json');
+      const now = c.get('now')();
+      const today = todayFor(organization, now);
+      const requestId = c.get('requestId');
+      const agreement = await reducibleAfterPosting(c, organization, c.req.valid('param').agreementId, now);
+      const note = body.note?.trim() || null;
+      if (body.reasonCode === 'OTHER' && !note) throw validationError('REASON_REQUIRED', 'Say why in a note when the reason is OTHER', { field: 'note' });
+      const composed = await composeReduction(store, organization.id, agreement, body);
+      if (!verifyPreviewToken(body.previewToken, composed.tokenParts)) throw staleReduction();
+      const result = await store.agreements.reduce(organization.id, agreement.id, reductionWrite(composed, agreement, { reasonCode: body.reasonCode, note }, today, requestId), now);
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');
+      if (result.kind === 'stale') throw staleReduction();
+
+      const currency = agreement.currency as Currency;
+      const money = (minor: bigint) => formatMoney({ minor, currency });
+      const actor = { organizationId: organization.id, actorType: 'API_KEY' as const, actorId: apiKey.id, requestId };
+      for (const credit of result.record.credits) {
+        const receivable = await store.receivables.getById(organization.id, credit.receivableId);
+        await store.audit.append({ ...actor, action: 'receivable.credited', entityType: 'receivable', entityId: credit.receivableId, metadata: { creditId: credit.id, amount: money(credit.amountMinor), reason: credit.reason, reasonCode: body.reasonCode, source: 'REDUCTION', agreementId: agreement.id, settled: receivable?.status === 'SETTLED' } });
+      }
+      const view = reductionView(composed, currency, body.previewToken);
+      await store.audit.append({
+        ...actor,
+        action: 'agreement.reduced',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        metadata: { supplementId: result.record.supplement.id, reasonCode: body.reasonCode, note, requested: view.requested, applied: view.applied, roundedBy: view.roundedBy, voided: composed.plan.voids.length, lowered: composed.plan.changes.length, credits: result.record.credits.length, before: { effectiveTotal: view.effectiveTotal.before, outstanding: view.outstanding.before }, after: { effectiveTotal: view.effectiveTotal.after, outstanding: view.outstanding.after } },
+      });
+      const detail = await agreementDetail(store, organization, result.record.agreement, today);
+      return c.json({ ...detail, supplement: serializeSupplement(result.record.supplement, agreement.currency), credits: result.record.credits.map((x) => serializeCredit(x, agreement.currency)) }, 200);
+    },
+  );
+
+  /** R1: due items are billed before anything is planned (as `GET /v1/agreements/{id}` does), so "unbilled" is what it says. */
+  async function reducibleAfterPosting(c: Parameters<typeof lazyPostingOf>[0], organization: Organization, agreementId: string, now: Date): Promise<AgreementRecord> {
+    assertReducible(await mustGet(store, organization.id, agreementId));
+    const posting = lazyPostingOf(c, store);
+    await postDueItems(posting.store, organization, todayFor(organization, now), now, posting.actor);
+    return mustGet(store, organization.id, agreementId);
+  }
+
   // ---- cancel ----
   app.openapi(
     createRoute({
@@ -284,4 +368,8 @@ export async function mustGet(store: LedgerStore, organizationId: string, id: st
   const agreement = await store.agreements.getById(organizationId, id);
   if (!agreement) throw new ApiError('NOT_FOUND', 'No such agreement');
   return agreement;
+}
+
+function staleReduction(): ApiError {
+  return new ApiError('CONFLICT', 'previewToken does not match the amount and the ledger as it stands; preview again', { reason: 'PREVIEW_STALE' });
 }

@@ -2014,8 +2014,61 @@ export const AgreementSchema = z
   .openapi('Agreement');
 
 export const AgreementDetailSchema = z
-  .object({ agreement: AgreementSchema, installments: z.array(InstallmentSchema), supplements: z.array(SupplementSchema) })
+  .object({
+    agreement: AgreementSchema,
+    installments: z.array(InstallmentSchema),
+    supplements: z.array(SupplementSchema),
+    /** MUT-480 (O2): what was credited on the live installments' receivables, gross; null for a retainer. */
+    credited: AmountSchema.nullable(),
+    /** MUT-480 (O2): the fee as it stands, = the live installments' gross − `credited`; what `reduce`'s `to` measures. Null for a retainer. */
+    effectiveTotal: AmountSchema.nullable(),
+  })
   .openapi('AgreementDetail');
+
+// ---- MUT-480: lowering a fixed fee ------------------------------------------
+
+const reduceAmount = {
+  /** The gross to take off (positive). Exactly one of `by` and `to`. */
+  by: AmountSchema.optional(),
+  /** The new effective total, gross (below the current one). Exactly one of `by` and `to`. */
+  to: AmountSchema.optional(),
+};
+
+export const ReducePreviewRequestSchema = z
+  .object({ ...reduceAmount, reasonCode: CreditReasonCodeSchema.optional(), note: z.string().max(500).optional() })
+  .openapi('ReducePreviewRequest');
+
+export const ReduceRequestSchema = z
+  .object({
+    ...reduceAmount,
+    reasonCode: CreditReasonCodeSchema,
+    /** Required when reasonCode is OTHER (422 REASON_REQUIRED); stored as the credits' reason text. */
+    note: z.string().max(500).optional(),
+    previewToken: z.string().length(64),
+  })
+  .openapi('ReduceRequest');
+
+const ReduceFiguresSchema = z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema });
+const BeforeAfterSchema = z.object({ before: AmountSchema, after: AmountSchema });
+
+export const ReducePreviewResponseSchema = z
+  .object({
+    /** The installments that change, latest first; `after` null = voided. */
+    installments: z.array(z.object({ id: uuid, position: z.number().int(), label: z.string(), before: ReduceFiguresSchema, after: ReduceFiguresSchema.nullable() })),
+    /** Credits on this agreement's open receivables, latest posting first. */
+    credits: z.array(z.object({ receivableId: uuid, receivableNumber: z.string(), amount: AmountSchema, net: AmountSchema, vat: AmountSchema })),
+    requested: AmountSchema,
+    /** What lands; below `requested` only on a VAT-exclusive agreement whose gross can't be hit exactly (by `roundedBy`, under one net minor unit). */
+    applied: AmountSchema,
+    roundedBy: AmountSchema,
+    /** This agreement's open receivables. */
+    outstanding: BeforeAfterSchema,
+    effectiveTotal: BeforeAfterSchema,
+    previewToken: z.string().length(64),
+  })
+  .openapi('ReducePreviewResponse');
+
+export const ReduceResponseSchema = AgreementDetailSchema.extend({ supplement: SupplementSchema, credits: z.array(z.lazy(() => CreditSchema)) }).openapi('ReduceResponse');
 
 export const AgreementPreviewResponseSchema = z
   .object({

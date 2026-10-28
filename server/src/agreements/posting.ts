@@ -35,7 +35,8 @@ export async function postDueItems(store: LedgerStore, organization: Organizatio
     const agreement = await store.agreements.getById(organization.id, installment.agreementId);
     if (!agreement) continue;
     const postingDate = postingDateFor(installment, agreement.agreementDate, today);
-    const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate: installmentDueDate(installment, agreement, postingDate), at: now });
+    // MUT-480 (E1): claim on the version listed; a line changed since is skipped now and billed on the next read.
+    const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate: installmentDueDate(installment, agreement, postingDate), at: now, expectedVersion: installment.version });
     if (result?.created) {
       installmentsPosted += 1;
       await audit(store, organization.id, actor, 'installment.posted', 'installment', installment.id, { agreementId: agreement.id, receivableId: result.receivable.id, trigger: installment.triggerType });
