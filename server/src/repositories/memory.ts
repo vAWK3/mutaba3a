@@ -203,8 +203,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 7 (MUT-333): `people` gained `closure`.
  * 8 (MUT-459): `people` gained `operatorAt`.
  * 9 (MUT-478): `recs` gained `number`; `counters` gained `${organizationId}:CHG:${year}` keys.
+ * 10 (MUT-480): `credits` gained `reasonCode`; `supps` gained `reasonCode`, `appliedGrossMinor` and `creditedMinor`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 9;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 10;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
