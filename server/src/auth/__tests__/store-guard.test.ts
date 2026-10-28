@@ -65,8 +65,10 @@ describe('STORE_ACCESS', () => {
 
   it('puts every expense repository method in the expenses domain, reads included (MUT-42)', () => {
     const expenseRepos = ['expenses', 'expenseCategories', 'expenseReceipts'];
-    // MUT-255: the operator's cross-profile edit-rate figure is the one exception, kept to /admin.
-    const methods = entries.filter(([repo, method]) => expenseRepos.includes(repo) && `${repo}.${method}` !== 'expenseReceipts.editRates');
+    // MUT-255: the operator's cross-profile edit-rate figure is an exception, kept to /admin; so are MUT-441's read-job
+    // methods, which only /jobs and the operator's grant reach, on the unguarded store.
+    const crossProfile = new Set(['expenseReceipts.editRates', 'expenseReceipts.claimRead', 'expenseReceipts.releaseRead', 'expenseReceipts.finishRead', 'expenseReceipts.listPendingForSweep', 'expenseReceipts.markBacklogPending']);
+    const methods = entries.filter(([repo, method]) => expenseRepos.includes(repo) && !crossProfile.has(`${repo}.${method}`));
     expect(new Set(methods.map(([repo]) => repo))).toEqual(new Set(expenseRepos));
     for (const [repo, method, access] of methods) {
       expect(typeof access === 'object' && ('read' in access ? access.read : access.write), `${repo}.${method}`).toBe('expenses');
@@ -118,8 +120,14 @@ describe('STORE_ACCESS', () => {
       'email.isSuppressed',
       'email.pruneDeliveries',
       'email.suppress',
+      // MUT-441: the read job, its sweep and the grant backlog, across every profile.
+      'expenseReceipts.claimRead',
       // MUT-255: the receipt-scanning success measure, across every profile (counts only).
       'expenseReceipts.editRates',
+      'expenseReceipts.finishRead',
+      'expenseReceipts.listPendingForSweep',
+      'expenseReceipts.markBacklogPending',
+      'expenseReceipts.releaseRead',
       // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
       'features.grant',
       'features.holders',

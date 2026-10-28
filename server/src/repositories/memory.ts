@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
-import { fillAbsent } from '../receipts/extract/merge.js';
+import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
@@ -115,6 +115,7 @@ import type {
   ExpenseFilter,
   ExpenseReceiptRecord,
   ExpenseReceiptRepository,
+  ReceiptReadStatus,
   ExpenseRecord,
   VendorRecord,
   VendorNameRecord,
@@ -2395,6 +2396,11 @@ export class MemoryLedgerStore implements LedgerStore {
         limit,
       );
     },
+    findByRegistration: async (organizationId, registrationNo) => {
+      const regKey = registrationKey(registrationNo);
+      const v = regKey ? [...this.vendorMap.values()].find((x) => x.organizationId === organizationId && registrationKey(x.registrationNo) === regKey) : undefined;
+      return v ? { ...v } : null;
+    },
   };
 
   private addVendorName(v: VendorRecord, name: string, nameKey: string, at: Date): void {
@@ -2447,14 +2453,61 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && r.status === 'READY' && !r.deletedAt)
         .sort(compareByCreatedAtThenId)
         .map((r) => ({ ...r })),
-    complete: async (organizationId, id, at) => {
+    complete: async (organizationId, id, at, read) => {
       const r = this.expReceipts.get(id);
       if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'READY') {
         r.status = 'READY';
         r.completedAt = at;
+        // MUT-441 (R10 #5): with the flip, never on its own.
+        if (read) Object.assign(r, { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) });
       }
       return { ...r };
+    },
+    claimRead: async (id, now, leaseMs) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.readStatus !== 'PENDING') return { kind: 'none' };
+      if (r.readLeaseUntil && r.readLeaseUntil >= now) return { kind: 'busy' };
+      r.readLeaseUntil = new Date(now.getTime() + leaseMs);
+      r.readAttempts = (r.readAttempts ?? 0) + 1;
+      return { kind: 'claimed', record: { ...r } };
+    },
+    releaseRead: async (id) => {
+      const r = this.expReceipts.get(id);
+      if (r && r.readStatus === 'PENDING') r.readLeaseUntil = null;
+    },
+    finishRead: async (id, expectedVersion, outcome) => {
+      const r = this.expReceipts.get(id);
+      if (!r) return { kind: 'not_found' };
+      if (r.readStatus !== 'PENDING') return { kind: 'not_pending' };
+      const end = (status: ReceiptReadStatus, failReason: string | null) => Object.assign(r, { readStatus: status, readLeaseUntil: null, readFailReason: failReason });
+      if (r.deletedAt || r.filingStatus === 'FILED') {
+        end('SKIPPED', null);
+        return { kind: 'skipped' };
+      }
+      if (outcome.status === 'DONE' && outcome.suggested) {
+        if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
+        r.suggested = outcome.suggested;
+        r.version += 1;
+      }
+      end(outcome.status, outcome.status === 'FAILED' ? outcome.failReason : null);
+      return { kind: 'saved', record: { ...r } };
+    },
+    listPendingForSweep: async (now, limit) =>
+      [...this.expReceipts.values()]
+        .filter((r) => r.readStatus === 'PENDING' && (!r.readLeaseUntil || r.readLeaseUntil < now))
+        .sort((a, b) => (a.readRequestedAt?.getTime() ?? 0) - (b.readRequestedAt?.getTime() ?? 0) || a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((r) => ({ ...r })),
+    markBacklogPending: async (scope, now) => {
+      const moved: string[] = [];
+      for (const r of this.expReceipts.values()) {
+        if (r.uploadedByUserId !== scope.userId || (scope.organizationId && r.organizationId !== scope.organizationId)) continue;
+        if (r.status !== 'READY' || r.filingStatus !== 'TO_REVIEW' || r.deletedAt || (r.readStatus ?? 'NONE') !== 'NONE' || isCompleteSuggestion(r.suggested)) continue;
+        Object.assign(r, { readStatus: 'PENDING', readRequestedAt: now, readLeaseUntil: null });
+        moved.push(r.id);
+      }
+      return moved.sort();
     },
     softDelete: async (organizationId, id, at) => {
       const r = this.expReceipts.get(id);

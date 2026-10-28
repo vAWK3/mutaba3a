@@ -24,3 +24,8 @@ export function fillAbsent(stored: ReceiptSuggestion | null, incoming: ReceiptSu
   if (added.length > 0) merged.readerVersion = incoming.readerVersion;
   return { merged: merged as unknown as ReceiptSuggestion, added };
 }
+
+/** MUT-441: a suggestion that already carries every field leaves the server nothing to read for. */
+export function isCompleteSuggestion(suggestion: ReceiptSuggestion | null | undefined): boolean {
+  return Boolean(suggestion) && SUGGESTION_FIELDS.every((field) => suggestion![field] !== undefined);
+}

@@ -264,6 +264,8 @@ export const STORE_ACCESS: StoreAccess = {
     touch: { write: 'expenses' },
     getById: { read: 'expenses' },
     search: { read: 'expenses' },
+    // MUT-441: the read job fills a receipt's vendor by registration no. (it runs unguarded; a session may read it too).
+    findByRegistration: { read: 'expenses' },
   },
   expenseReceipts: {
     create: { write: 'expenses' },
@@ -286,6 +288,13 @@ export const STORE_ACCESS: StoreAccess = {
     completeOnExpense: { write: 'expenses' },
     // The operator's edit-rate figure (/admin only): across every profile, counts only.
     editRates: 'operator',
+    // MUT-441: the server's read job and its sweep, across every profile, run only from /jobs and the operator's
+    // feature grant, on the unguarded store; no principal reaches them through a guard.
+    claimRead: 'operator',
+    releaseRead: 'operator',
+    finishRead: 'operator',
+    listPendingForSweep: 'operator',
+    markBacklogPending: 'operator',
   },
   /**
    * MUT-66. Capturing is the person's own business, on no profile — hence

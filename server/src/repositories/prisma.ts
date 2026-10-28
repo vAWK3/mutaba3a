@@ -15,7 +15,7 @@ import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS } 
 import { GRACE_MS, isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } from '../accounts/purge-plan.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
-import { fillAbsent } from '../receipts/extract/merge.js';
+import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
@@ -2122,6 +2122,12 @@ export class PrismaLedgerStore implements LedgerStore {
       }
       return bestVendorSuggestions(names, (id) => vendors.get(id), queryKey, limit);
     },
+    findByRegistration: async (organizationId, registrationNo) => {
+      const regKey = registrationKey(registrationNo);
+      if (!regKey) return null;
+      const row = await this.prisma.vendor.findUnique({ where: { organizationId_registrationKey: { organizationId, registrationKey: regKey } } });
+      return row ? toVendor(row) : null;
+    },
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
@@ -2155,9 +2161,69 @@ export class PrismaLedgerStore implements LedgerStore {
     getById: async (organizationId, id) => toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } })),
     listByExpense: async (organizationId, expenseId) =>
       (await this.prisma.expenseReceipt.findMany({ where: { organizationId, expenseId, status: 'READY', deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExpenseReceipt),
-    complete: async (organizationId, id, at) => {
-      await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at } });
+    complete: async (organizationId, id, at, read) => {
+      // MUT-441 (R10 #5): the reading state rides the same UPDATE as the flip, so a READY receipt is never left unasked.
+      const reading = read ? { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) } : {};
+      await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at, ...reading } });
       return toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } }));
+    },
+    claimRead: async (id, now, leaseMs) => {
+      // One conditional UPDATE: Postgres re-checks the WHERE on the locked row, so two claimers can't both win.
+      const { count } = await this.prisma.expenseReceipt.updateMany({
+        where: { id, readStatus: 'PENDING', OR: [{ readLeaseUntil: null }, { readLeaseUntil: { lt: now } }] },
+        data: { readLeaseUntil: new Date(now.getTime() + leaseMs), readAttempts: { increment: 1 } },
+      });
+      const row = await this.prisma.expenseReceipt.findUnique({ where: { id } });
+      if (count === 1 && row) return { kind: 'claimed', record: toExpenseReceipt(row) };
+      return row?.readStatus === 'PENDING' ? { kind: 'busy' } : { kind: 'none' };
+    },
+    releaseRead: async (id) => {
+      await this.prisma.expenseReceipt.updateMany({ where: { id, readStatus: 'PENDING' }, data: { readLeaseUntil: null } });
+    },
+    finishRead: async (id, expectedVersion, outcome) => {
+      const end = (status: 'DONE' | 'FAILED' | 'SKIPPED', failReason: string | null) => ({ readStatus: status, readLeaseUntil: null, readFailReason: failReason });
+      const live = { id, readStatus: 'PENDING' as const, deletedAt: null, filingStatus: 'TO_REVIEW' as const };
+      const failReason = outcome.status === 'FAILED' ? outcome.failReason : null;
+      const { count } =
+        outcome.status === 'DONE' && outcome.suggested
+          ? await this.prisma.expenseReceipt.updateMany({
+              where: { ...live, version: expectedVersion },
+              data: { ...end('DONE', null), suggested: outcome.suggested as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
+            })
+          : await this.prisma.expenseReceipt.updateMany({ where: live, data: end(outcome.status, failReason) });
+      const row = await this.prisma.expenseReceipt.findUnique({ where: { id } });
+      if (!row) return { kind: 'not_found' };
+      if (count === 1) return { kind: 'saved', record: toExpenseReceipt(row) };
+      if (row.readStatus !== 'PENDING') return { kind: 'not_pending' };
+      if (row.deletedAt || row.filingStatus === 'FILED') {
+        // F8: filed or deleted while it was read: SKIPPED, and the reading is dropped.
+        const skipped = await this.prisma.expenseReceipt.updateMany({ where: { id, readStatus: 'PENDING' }, data: end('SKIPPED', null) });
+        return skipped.count === 1 ? { kind: 'skipped' } : { kind: 'not_pending' };
+      }
+      return { kind: 'stale', record: toExpenseReceipt(row) };
+    },
+    listPendingForSweep: async (now, limit) =>
+      (
+        await this.prisma.expenseReceipt.findMany({
+          where: { readStatus: 'PENDING', OR: [{ readLeaseUntil: null }, { readLeaseUntil: { lt: now } }] },
+          orderBy: [{ readRequestedAt: 'asc' }, { id: 'asc' }],
+          take: limit,
+        })
+      ).map(toExpenseReceipt),
+    markBacklogPending: async (scope, now) => {
+      const candidates = await this.prisma.expenseReceipt.findMany({
+        where: { uploadedByUserId: scope.userId, ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
+        select: { id: true, suggested: true },
+      });
+      const ids = candidates.filter((r) => !isCompleteSuggestion(r.suggested as unknown as ReceiptSuggestion | null)).map((r) => r.id);
+      if (ids.length === 0) return [];
+      // Guarded again in the UPDATE: a receipt filed or already asked for in between is left alone.
+      await this.prisma.expenseReceipt.updateMany({
+        where: { id: { in: ids }, status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
+        data: { readStatus: 'PENDING', readRequestedAt: now, readLeaseUntil: null },
+      });
+      const moved = await this.prisma.expenseReceipt.findMany({ where: { id: { in: ids }, readStatus: 'PENDING', readRequestedAt: now }, select: { id: true }, orderBy: { id: 'asc' } });
+      return moved.map((r) => r.id);
     },
     softDelete: async (organizationId, id, at) => {
       await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
