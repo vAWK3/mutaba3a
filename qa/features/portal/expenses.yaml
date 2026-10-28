@@ -43,6 +43,26 @@ features:
       - POST /v1/expenses gets the JOD expense with an Idempotency-Key
       - The row shows its category, client and amount, and "Saved" is announced
       - The category filter sends categoryId and says "Nothing matches these filters." until cleared
+  - id: create-with-receipt
+    title: Record an expense with receipts; they upload once it is saved, and one that fails stays on the new expense to try again (MUT-491)
+    tier: secondary
+    tickets: [MUT-491]
+    paths:
+      - src/hosted/components/ReceiptPickButton.tsx
+      - src/hosted/components/ReceiptUploader.tsx
+      - src/hosted/data/receiptUpload.ts
+      - src/hosted/data/receiptQueries.ts
+    steps:
+      - Open Expenses and choose Record expense
+      - Add a text file as a receipt, then a PDF and a JPEG
+      - Remove the JPEG and save
+      - Record another expense with a receipt whose upload fails, then upload it again
+    expect:
+      - The text file is refused with "Receipts must be a PDF, JPEG or PNG file." and nothing is sent
+      - The picked files are listed with Remove and "They're added when you save."
+      - POST /v1/expenses is sent once, then the PDF is started on the new expense, PUT to the bucket and completed; the drawer closes and the row is Saved
+      - Reopening the expense lists the PDF under Receipts
+      - A failed upload leaves the drawer open on the new expense at ?expense=<id> with "Couldn't upload the receipt. Try again." on that file; Upload again lands it
   - id: edit-receipts
     title: Edit an expense; attach a receipt (start, PUT to the signed bucket, complete), download and remove it, and save a change with If-Match
     tier: secondary

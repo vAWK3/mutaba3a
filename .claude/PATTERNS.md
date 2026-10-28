@@ -2856,3 +2856,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: a ledger is computed, never stored: one pure builder over the source rows (MUT-478)
 **Where**: `server/src/statements/build.ts` (`buildStatement`), fed by `receivables.statementSources`.
 **Rule**: a figure that runs across rows (a running balance, an opening balance) is computed from the rows that justify it, in one pure pass with no store and no clock, and paged after the whole period is computed. Never page first and carry a balance in the cursor: the opening balance and totals would then depend on the page. The store method returns everything in a fixed number of queries; the route only composes. A new line kind is a new branch in the builder and a new row in its table tests.
+
+## Pattern: a create that needs follow-up writes hands off to its edit drawer (MUT-491)
+**Where**: `src/hosted/components/ExpenseDrawer.tsx` (`onCreated`, `handOff`), `ReceiptUploader` `incoming`.
+**Rule**: when saving a new record needs more writes against its id (receipts, attachments), don't run them from the create drawer. Create once, seed the record in the cache, let the list move to `?<record>=<id>`, and let the edit drawer's own component do the follow-up writes with its usual per-item state. The drawer closes itself only when every write landed and the form is untouched, checks it is still mounted first, and marks Saved on close.

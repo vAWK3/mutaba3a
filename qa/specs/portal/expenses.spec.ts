@@ -487,3 +487,76 @@ test('A category a person named keeps that name in both languages (MUT-464)', { 
   });
 });
 
+
+test('Record an expense with receipts: they upload once it is saved, and a failed one stays to upload again', { tag: '@portal.expenses.create-with-receipt' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_, travel] });
+  const create = page.getByRole('dialog', { name: 'Record expense' });
+  const edit = page.getByRole('dialog', { name: 'Edit expense' });
+  const pdf = (name: string) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 receipt') });
+
+  await step('Open Expenses and choose Record expense', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(create).toBeVisible();
+    await expect(create.getByRole('button', { name: 'Add receipt' })).toBeVisible();
+  });
+
+  await step('A text file is refused before anything is sent', async () => {
+    await create.locator('input[type="file"]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a receipt') });
+    await expect(page.getByRole('alert')).toContainText('Receipts must be a PDF, JPEG or PNG file.');
+    expect(api.calls('POST', /\/receipts$/)).toHaveLength(0);
+  });
+
+  await step('Add a PDF and a JPEG, then remove the JPEG', async () => {
+    await create.locator('input[type="file"]').setInputFiles([pdf('taxi-receipt.pdf'), { name: 'photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('jpeg') }]);
+    await expect(create.getByText('taxi-receipt.pdf')).toBeVisible();
+    await expect(create.getByText("They're added when you save.")).toBeVisible();
+    await create.getByRole('listitem').filter({ hasText: 'photo.jpg' }).getByRole('button', { name: 'Remove' }).click();
+    await expect(create.getByText('photo.jpg')).toHaveCount(0);
+  });
+
+  await step('Save: the expense is created once, then the PDF uploads to it and the drawer closes', async () => {
+    await create.getByLabel('Amount').fill('45.00');
+    await create.getByLabel('Category').selectOption({ label: 'Travel' });
+    await create.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(api.calls('POST', /^\/v1\/expenses$/)).toHaveLength(1);
+    expect(api.last('POST', /\/receipts$/)?.body).toEqual({ filename: 'taxi-receipt.pdf', mimeType: 'application/pdf', sizeBytes: 16 });
+    expect(api.storage.some((r) => r.method === 'PUT' && r.url.startsWith(`${STORAGE}/upload/`))).toBe(true);
+    expect(api.calls('POST', /\/complete$/)).toHaveLength(1);
+  });
+
+  await step('Reopen it: the PDF is under Receipts', async () => {
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /45\.00/ }).click();
+    await expect(edit.getByRole('listitem').filter({ hasText: 'taxi-receipt.pdf' }).getByRole('button', { name: 'Download' })).toBeVisible();
+    await edit.getByRole('button', { name: 'Cancel' }).click();
+    await expect(edit).toHaveCount(0);
+  });
+
+  await step('Record another with a receipt whose upload fails: it stays open on the new expense', async () => {
+    // The bucket refuses the next PUT once (page routes win over the API's context route), then serves as usual.
+    let refused = false;
+    await page.route(`${STORAGE}/upload/**`, (route) => {
+      if (!refused && route.request().method() === 'PUT') {
+        refused = true;
+        return route.fulfill({ status: 403, headers: { 'Access-Control-Allow-Origin': '*' }, body: '' });
+      }
+      return route.fallback();
+    });
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await create.locator('input[type="file"]').setInputFiles(pdf('hotel.pdf'));
+    await create.getByLabel('Amount').fill('300.00');
+    await create.getByLabel('Category').selectOption({ label: 'Travel' });
+    await create.getByRole('button', { name: 'Save' }).click();
+    await expect(edit).toBeVisible();
+    await expect(edit.getByText("Couldn't upload the receipt. Try again.")).toBeVisible();
+    await expect(page).toHaveURL(/[?&]expense=/);
+    expect(api.calls('POST', /^\/v1\/expenses$/)).toHaveLength(2);
+  });
+
+  await step('Upload again lands it', async () => {
+    await edit.getByRole('button', { name: 'Upload again' }).click();
+    await expect(edit.getByRole('listitem').filter({ hasText: 'hotel.pdf' }).getByRole('button', { name: 'Download' })).toBeVisible();
+    await expect(edit.getByText("Couldn't upload the receipt. Try again.")).toHaveCount(0);
+  });
+});
