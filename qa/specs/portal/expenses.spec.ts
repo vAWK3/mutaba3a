@@ -558,5 +558,50 @@ test('Record an expense with receipts: they upload once it is saved, and a faile
     await edit.getByRole('button', { name: 'Upload again' }).click();
     await expect(edit.getByRole('listitem').filter({ hasText: 'hotel.pdf' }).getByRole('button', { name: 'Download' })).toBeVisible();
     await expect(edit.getByText("Couldn't upload the receipt. Try again.")).toHaveCount(0);
+    await edit.getByRole('button', { name: 'Cancel' }).click();
+    await expect(edit).toHaveCount(0);
+  });
+
+  await step('Pick 11 receipts: the 11th is named and not added, and Add receipt turns off', async () => {
+    const receiptsBefore = api.calls('POST', /\/receipts$/).length;
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await create.locator('input[type="file"]').setInputFiles(Array.from({ length: 11 }, (_, i) => pdf(`r${i + 1}.pdf`)));
+    // The name is isolated (FSI…PDI) inside the sentence, so it is matched on its own.
+    await expect(page.getByRole('alert')).toContainText('An expense holds at most 10 receipts. Not added:');
+    await expect(page.getByRole('alert')).toContainText('r11.pdf');
+    await expect(create.getByRole('listitem')).toHaveCount(10);
+    await expect(create.getByText('r11.pdf')).toHaveCount(0);
+    await expect(create.getByRole('button', { name: 'Add receipt' })).toBeDisabled();
+    await create.getByRole('button', { name: 'Cancel' }).click();
+    await expect(create).toHaveCount(0);
+    expect(api.calls('POST', /\/receipts$/)).toHaveLength(receiptsBefore);
+  });
+});
+
+test('In Arabic the new-expense drawer offers إضافة إيصال, right to left, with a picked file kept in its own order', { tag: '@portal.expenses.create-with-receipt-arabic' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, categories: [office_, travel] });
+  const create = page.getByRole('dialog', { name: 'تسجيل مصروف' });
+
+  await step('Open Expenses in Arabic and choose تسجيل مصروف', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`, 'ar');
+    await page.getByRole('button', { name: 'تسجيل مصروف' }).first().click();
+    await expect(create).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    await expect(create.getByText('الإيصالات', { exact: true })).toBeVisible();
+    await expect(create.getByRole('button', { name: 'إضافة إيصال' })).toBeVisible();
+  });
+
+  await step('A text file is refused in Arabic', async () => {
+    await create.locator('input[type="file"]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a receipt') });
+    await expect(page.getByRole('alert')).toContainText('يجب أن يكون الإيصال بصيغة PDF أو JPEG أو PNG.');
+  });
+
+  await step('Pick taxi-receipt.pdf: it is listed with إزالة and تُضاف عند الحفظ.', async () => {
+    await create.locator('input[type="file"]').setInputFiles({ name: 'taxi-receipt.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 receipt') });
+    const row = create.getByRole('listitem').filter({ hasText: 'taxi-receipt.pdf' });
+    await expect(row.locator('bdi')).toHaveText('taxi-receipt.pdf');
+    await expect(row.getByRole('button', { name: 'إزالة' })).toBeVisible();
+    await expect(create.getByText('تُضاف عند الحفظ.')).toBeVisible();
+    expect(api.calls('POST', /\/receipts$/)).toHaveLength(0);
   });
 });

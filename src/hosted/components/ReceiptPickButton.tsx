@@ -19,7 +19,7 @@ export interface ReceiptPickButtonProps {
 /**
  * Add receipt (MUT-491 R4): the file picker the expense drawer uses before and after the expense exists. Every file
  * meets the server's rules first (MUT-260 A5); the first problem is shown, never one toast per file (the toast is a
- * single slot), and the files that pass go on. Names in a sentence are isolated (FSI…PDI), so a Latin filename keeps
+ * single slot), and the files that pass go on. A pick that also runs past the cap says that in the same toast. Names in a sentence are isolated (FSI…PDI), so a Latin filename keeps
  * its order inside Arabic (as CloseAccountDrawer).
  */
 export function ReceiptPickButton({ room, onPick, disabled = false, busy = false }: ReceiptPickButtonProps) {
@@ -32,12 +32,14 @@ export function ReceiptPickButton({ room, onPick, disabled = false, busy = false
     const good = picked.filter((file) => checkReceiptFile(file) === null);
     const kept = good.slice(0, Math.max(room, 0));
     const left = good.slice(kept.length);
+    // Both reasons in the one toast, so a refused file and one over the cap are each accounted for.
+    const messages: string[] = [];
+    if (problem) messages.push(t(`hosted.expenses.drawer.receipts.${problem}`));
     if (left.length > 0) {
       const names = new Intl.ListFormat(getLocale(language), { type: 'conjunction' }).format(left.map((f) => `⁨${f.name}⁩`));
-      showToast(t('hosted.expenses.drawer.receipts.queuedAtCap', { names }));
-    } else if (problem) {
-      showToast(t(`hosted.expenses.drawer.receipts.${problem}`));
+      messages.push(t('hosted.expenses.drawer.receipts.queuedAtCap', { names }));
     }
+    if (messages.length > 0) showToast(messages.join(' '));
     if (kept.length > 0) onPick(kept);
   };
 

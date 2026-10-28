@@ -72,4 +72,14 @@ describe('QueuedReceipts (MUT-491): receipts picked before the expense exists', 
     expect(screen.getByRole('alert')).toHaveTextContent('eleventh.pdf');
     expect(screen.getByRole('button', { name: 'Add receipt' })).toBeDisabled();
   });
+
+  it('a pick with a refused file and one over the cap says both, in the one toast', () => {
+    const nine = Array.from({ length: 9 }, (_, i) => pdf(`r${i + 1}.pdf`));
+    const { input, onChange } = renderQueue(nine);
+    fireEvent.change(input, { target: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' }), pdf('tenth.pdf'), pdf('eleventh.pdf')] } });
+    expect(onChange).toHaveBeenLastCalledWith([...nine, expect.objectContaining({ name: 'tenth.pdf' })]);
+    expect(screen.getByRole('alert')).toHaveTextContent('Receipts must be a PDF, JPEG or PNG file.');
+    expect(screen.getByRole('alert')).toHaveTextContent('An expense holds at most 10 receipts. Not added:');
+    expect(screen.getByRole('alert')).toHaveTextContent('eleventh.pdf');
+  });
 });

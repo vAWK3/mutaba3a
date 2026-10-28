@@ -57,12 +57,27 @@ features:
       - Add a text file as a receipt, then a PDF and a JPEG
       - Remove the JPEG and save
       - Record another expense with a receipt whose upload fails, then upload it again
+      - Record a third expense, pick 11 receipts, then cancel
     expect:
       - The text file is refused with "Receipts must be a PDF, JPEG or PNG file." and nothing is sent
       - The picked files are listed with Remove and "They're added when you save."
       - POST /v1/expenses is sent once, then the PDF is started on the new expense, PUT to the bucket and completed; the drawer closes and the row is Saved
       - Reopening the expense lists the PDF under Receipts
       - A failed upload leaves the drawer open on the new expense at ?expense=<id> with "Couldn't upload the receipt. Try again." on that file; Upload again lands it
+      - Of 11 picked, 10 are listed, "An expense holds at most 10 receipts. Not added: r11.pdf." is shown and Add receipt is disabled; Cancel sends no receipt
+  - id: create-with-receipt-arabic
+    title: In Arabic the new-expense drawer's receipts read right to left, with Arabic copy and a Latin filename kept in its own order (MUT-491)
+    tier: secondary
+    tickets: [MUT-491]
+    paths:
+      - src/hosted/components/ReceiptPickButton.tsx
+    steps:
+      - Open Expenses in Arabic and choose تسجيل مصروف
+      - Add a text file as a receipt, then taxi-receipt.pdf
+    expect:
+      - The page is right to left and the drawer shows الإيصالات with إضافة إيصال
+      - The text file is refused with "يجب أن يكون الإيصال بصيغة PDF أو JPEG أو PNG."
+      - taxi-receipt.pdf is listed in its own <bdi> with إزالة and "تُضاف عند الحفظ.", and nothing is sent
   - id: edit-receipts
     title: Edit an expense; attach a receipt (start, PUT to the signed bucket, complete), download and remove it, and save a change with If-Match
     tier: secondary
