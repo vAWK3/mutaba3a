@@ -145,6 +145,18 @@ export function describeLedgerStoreMut443Contract(name: string, makeStore: () =>
       expect(replacements.map((p) => p.replacesPaymentId)).toEqual([original.id]);
     });
 
+    it('a replacement dated in another year takes that year\'s next number; the original keeps its own (review 4)', async () => {
+      const store = await makeStore();
+      const { o, receivables: [charge], payment, correction } = await firm(store, [100_000n]);
+      const { payment: original } = await store.payments.create(payment(100_000n, [{ receivableId: charge!.id, amountMinor: 100_000n }], { receivedOn: '2025-12-30' }), at(10));
+      expect(original.number).toBe('PAY-2025-0001');
+      const result = (await store.payments.correct(o.id, original.id, correction(original.version, 100_000n, [{ receivableId: charge!.id, amountMinor: 100_000n }], { receivedOn: '2026-01-02' }), at(20)))!;
+      expect(result.payment.number).toBe('PAY-2026-0001');
+      expect(result.reversed.number).toBe('PAY-2025-0001');
+      const { payment: next } = await store.payments.create(payment(1_000n, [], { receivedOn: '2025-12-31' }), at(30));
+      expect(next.number).toBe('PAY-2025-0002');
+    });
+
     it('the replacement may re-pay what the original paid, the same amount included', async () => {
       const store = await makeStore();
       const { o, receivables: [charge], payment, correction, receivable } = await firm(store, [100_000n]);

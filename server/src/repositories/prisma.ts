@@ -1887,8 +1887,12 @@ export class PrismaLedgerStore implements LedgerStore {
           // R8: a millisecond after the reversal, so the replacement's statement line sorts after it on the same day.
           const created = await insertPaymentTx(tx, input, number, new Date(at.getTime() + 1));
           return { reversed: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), ...created };
-        }),
-      );
+        }, CORRECT_TX_OPTIONS),
+      ).catch((err: unknown) => {
+        // Review 1: both halves' locks and writes, and a racing correction's wait on the original's row, can outlast
+        // the default 5 s; past the longer limit it rolled back whole, so the caller previews again (409), not a 500.
+        throw isTransactionTimeout(err) ? new LockConflict() : err;
+      });
     },
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
     capture: (input, at) =>
@@ -3193,6 +3197,9 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 const RECEIPT_LOCK_TIMEOUT = '8s';
 const RECEIPT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
 
+/** MUT-443 (review 1): a correction does a reversal's and a payment's writes in one transaction. */
+const CORRECT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
+
 /**
  * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
  * waits here and then reads FILED; null when it may be filed (live, READY, To review, on this profile).
@@ -3360,6 +3367,11 @@ async function receivablesMoved(tx: Tx, organizationId: string, seen: ReadonlyAr
 /** A lock conflict becomes the store's LockConflict (MUT-130), so the routes answer 409, not 500; anything else passes through. */
 function asLockConflict(err: unknown): unknown {
   return isLockConflict(err) ? new LockConflict() : err;
+}
+
+/** MUT-443 (review 1): Prisma closed an interactive transaction that ran past its time limit; it rolled back whole. */
+export function isTransactionTimeout(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2028';
 }
 
 /** Postgres aborted the transaction to break a deadlock or a serialization conflict (40P01 / 40001): safe to retry. */

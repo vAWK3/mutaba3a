@@ -553,6 +553,8 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // R5: checked before composing, so a missing reason is never a generic schema failure.
       const note = body.note?.trim() || null;
       if (!body.reasonCode || (body.reasonCode === 'OTHER' && !note)) throw validationError('REASON_REQUIRED', 'Say why: a reasonCode, and a note when it is OTHER', { field: body.reasonCode ? 'note' : 'reasonCode' });
+      // Review 2: the statement and activity read this reason as a person's own undo and hide the payment.
+      if (note === CAPTURE_UNDO_REASON) throw validationError('REASON_RESERVED', `"${CAPTURE_UNDO_REASON}" is reserved for a person undoing their own capture`, { field: 'note' });
       const reasonCode = body.reasonCode;
       const { organization, now, today, payment, composed } = await correction(c, body);
       if (!verifyPreviewToken(body.previewToken, composed.tokenParts)) throw stale('previewToken does not match this correction and the current balances; preview again');

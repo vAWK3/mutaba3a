@@ -24,6 +24,12 @@
 - **Why it's acceptable:** the ticket scopes the code to the correction; a plain reversal (a bounced cheque) has no list of reasons agreed with Malafat yet.
 - **Fix:** take an optional `reasonCode` on reverse too, stored the same way, when Malafat asks for it.
 
+### TD-286: A reversed payment can be replaced twice through the two-call path
+**Status**: Accepted (MUT-443 pre-landing review, 2026-10-28; existed before MUT-443)
+- **What:** after a correction (or a reverse plus a record), `POST /v1/payments` with `replacesPaymentId` naming the same reversed original is still accepted; it only loses the ADR-086 floor exemption. Two POSTED payments then replace one, and `findReplacedBy` / `replacedByPaymentId` / the 409 `PAYMENT_NOT_POSTED` recovery details name one of them arbitrarily.
+- **Why it's acceptable:** the create route allows it deliberately today ("the one correction, not a standing licence"), e.g. one wrong payment split into two right ones; Malafat's one-step correction never sends it.
+- **Fix:** if a split is not wanted, refuse 422 when `findReplacedBy` already returns a payment, or make `replacedBy` a list.
+
 ### TD-285: A correction's stale state can answer 422 before it answers 409
 **Status**: Accepted (MUT-443, 2026-10-28; ADR-225)
 - **What:** `correct` recomposes the plan before checking the token, as `POST /v1/payments` does. When what moved since the preview makes the allocations invalid (another payment took the receivable), the answer is the allocation's 422 (e.g. `ALLOCATION_EXCEEDS_OUTSTANDING`) rather than 409 `PREVIEW_STALE`.

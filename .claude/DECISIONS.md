@@ -5920,6 +5920,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 9. **Dates on the statement (R8).** The reversal is dated the correction day (its `reversedAt` in the organization's timezone), as a plain reversal is. The replacement is stamped one millisecond later, so on the same day its line sorts after the reversal's.
 10. **Audit (D5, R9):** `payment.corrected` on the original (replacement id and number, reason code and note, amount/date/method from → to, receipt number and whether it carried, allocations released and made, unallocated); `payment.recorded` on the replacement with `replacesPaymentId`; `receivable.settled` only for a receivable whose status changes. No separate `payment.reversed`.
 
+11. **Pre-landing review fixes:** the Prisma correction runs with a 15 s transaction limit (5 s to start), and one that still outlasts it (P2028, rolled back whole) is 409 `PREVIEW_STALE`, not a 500. A `note` equal to the reserved `capture_undo` is 422 `REASON_RESERVED`, since the statement and activity read that reason as a person's own undo and hide the payment. A second replacement through `POST /v1/payments` with `replacesPaymentId` is still accepted, as before this ticket (TD-286).
+
 **Consequences:** migration `20261028210000_mut443_payment_reversal_reason_code` (additive); local snapshot format 13; API 1.88.0-mut443. Prisma's `createPaymentTx` and `reverse` are now built from small transaction helpers that `correct` composes. No session route (D9).
 
 **Alternatives considered:**

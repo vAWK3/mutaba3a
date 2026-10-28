@@ -3,7 +3,7 @@ import pino from 'pino';
 import { API_VERSION, createApp } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
-import { MemoryLedgerStore } from '../repositories/memory.js';
+import { LockConflict, MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -291,6 +291,29 @@ describe('POST /v1/payments/{id}/correct', () => {
     expect((await getPayment(h, f, original.id)).status).toBe('POSTED');
     const { res } = await correct(h, f, original.id, toSix(charge), { reasonCode: 'OTHER', note: ' Client paid by card, not transfer ' });
     expect((await read(res)).reversed).toMatchObject({ reversalReason: 'Client paid by card, not transfer', reversalReasonCode: 'OTHER' });
+  });
+
+  it('a note may not be the reason reserved for a person undoing their own capture: 422 REASON_RESERVED (review 2)', async () => {
+    const h = harness();
+    const { f, charge, original } = await settledCharge(h);
+    const p = await read(await preview(h, f, original.id, toSix(charge)));
+    const res = await correctWith(h, f, original.id, { ...toSix(charge), reasonCode: 'OTHER', note: ' capture_undo ', previewToken: p.previewToken });
+    expect(res.status).toBe(422);
+    expect(await reason(res)).toBe('REASON_RESERVED');
+    expect((await getPayment(h, f, original.id)).status).toBe('POSTED');
+  });
+
+  it('a receivable locked by another write at the same moment is 409 PREVIEW_STALE, and nothing is written (review 4)', async () => {
+    const h = harness();
+    const { f, charge, original } = await settledCharge(h);
+    const p = await read(await preview(h, f, original.id, toSix(charge)));
+    h.store.payments.correct = async () => {
+      throw new LockConflict();
+    };
+    const res = await correctWith(h, f, original.id, { ...toSix(charge), reasonCode: 'ENTERED_BY_MISTAKE', previewToken: p.previewToken });
+    expect(res.status).toBe(409);
+    expect(await reason(res)).toBe('PREVIEW_STALE');
+    expect(await getPayment(h, f, original.id)).toMatchObject({ status: 'POSTED', version: original.version });
   });
 
   it('AC6: money not allocated stays on the corrected payment as credit', async () => {
