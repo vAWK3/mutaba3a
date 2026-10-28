@@ -68,7 +68,7 @@ const RECEIVABLE = cols<ReceivableRecord>()({
   vatMinor: true, grossMinor: true, paidMinor: true, creditedMinor: true, vatTreatment: true, vatRateBasisPoints: true, title: true, dueDate: true,
   postingDate: true, postedAt: true, status: true, createdByUserId: true, deletedAt: true, number: true, version: true, createdAt: true,
 });
-const SUPPLEMENT = cols<SupplementRecord>()({ id: true, organizationId: true, agreementId: true, amountMinor: true, resultingAmountMinor: true, distribution: true, effectiveDate: true, description: true, requestId: true, createdAt: true });
+const SUPPLEMENT = cols<SupplementRecord>()({ id: true, organizationId: true, agreementId: true, amountMinor: true, resultingAmountMinor: true, distribution: true, effectiveDate: true, description: true, reasonCode: true, appliedGrossMinor: true, creditedMinor: true, requestId: true, createdAt: true });
 const RETAINER_VERSION = cols<RetainerVersionRecord>()({
   id: true, organizationId: true, agreementId: true, version: true, effectiveMonth: true, endMonth: true, monthlyAmountMinor: true, netMinor: true, vatMinor: true,
   grossMinor: true, pricingBasis: true, vatTreatment: true, rateBasisPoints: true, billingDay: true, paymentTerms: true, reason: true, requestId: true, createdAt: true,
@@ -79,7 +79,7 @@ const PAYMENT = cols<PaymentRecord>()({
   createdByUserId: true, requestId: true, version: true, createdAt: true, updatedAt: true,
 });
 const ALLOCATION = cols<AllocationRecord>()({ id: true, organizationId: true, paymentId: true, receivableId: true, amountMinor: true, createdAt: true });
-const CREDIT = cols<CreditRecord>()({ id: true, organizationId: true, receivableId: true, amountMinor: true, netMinor: true, vatMinor: true, effectiveDate: true, reason: true, requestId: true, createdAt: true });
+const CREDIT = cols<CreditRecord>()({ id: true, organizationId: true, receivableId: true, amountMinor: true, netMinor: true, vatMinor: true, effectiveDate: true, reason: true, reasonCode: true, requestId: true, createdAt: true });
 const FEE_PROPOSAL = cols<FeeProposalRecord>()({
   id: true, organizationId: true, projectId: true, customerId: true, currency: true, status: true, pricingBasis: true, proposedAmountMinor: true, agreedAmountMinor: true,
   proposedOn: true, note: true, clientApprovedOn: true, clientApprovalNote: true, commissionRateBasisPoints: true, upfrontTreatment: true, agreementId: true,

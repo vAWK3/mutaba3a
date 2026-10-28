@@ -10,6 +10,7 @@ import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
+import type { CreditReasonCode } from './payments/credit.js';
 import type {
   BillingAccountRecord,
   EntitlementGrantRecord,
@@ -304,6 +305,9 @@ export function serializeSupplement(s: SupplementRecord, currency: string) {
     effectiveDate: s.effectiveDate,
     distribution: s.distribution,
     resultingAmount: amt(s.resultingAmountMinor, currency),
+    reasonCode: s.reasonCode as CreditReasonCode | null,
+    appliedGross: s.appliedGrossMinor === null ? null : amt(s.appliedGrossMinor, currency),
+    credited: amt(s.creditedMinor, currency),
     createdAt: s.createdAt.toISOString(),
   };
 }
@@ -416,7 +420,7 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
 }
 
 export function serializeCredit(c: CreditRecord, currency: string) {
-  return { id: c.id, receivableId: c.receivableId, amount: amt(c.amountMinor, currency), net: amt(c.netMinor, currency), vat: amt(c.vatMinor, currency), reason: c.reason, effectiveDate: c.effectiveDate, createdAt: c.createdAt.toISOString() };
+  return { id: c.id, receivableId: c.receivableId, amount: amt(c.amountMinor, currency), net: amt(c.netMinor, currency), vat: amt(c.vatMinor, currency), reason: c.reason, reasonCode: c.reasonCode as CreditReasonCode | null, effectiveDate: c.effectiveDate, createdAt: c.createdAt.toISOString() };
 }
 
 export function serializeOperation(r: IdempotencyRecord) {

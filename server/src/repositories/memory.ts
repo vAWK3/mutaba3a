@@ -48,6 +48,8 @@ import type {
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
+  ReduceAgreementInput,
+  SupplementInput,
   CreateAgreementInput,
   CreateChargeInput,
   InstallmentRecord,
@@ -1705,6 +1707,8 @@ export class MemoryLedgerStore implements LedgerStore {
         return { installment: { ...i }, receivable: { ...existing }, created: false };
       }
       if (i.voidedAt) return null;
+      // MUT-480 (E1): a line that changed since the caller read it never posts at the old amount; it posts on the next read.
+      if (input.expectedVersion !== undefined && i.version !== input.expectedVersion) return null;
       const a = this.agrs.get(i.agreementId);
       if (!a) return null;
       const receivable = this.newReceivable({ organizationId, customerId: a.customerId, projectId: a.projectId, agreementId: a.id, origin: 'INSTALLMENT', originId: i.id, currency: a.currency, netMinor: i.netMinor, vatMinor: i.vatMinor, grossMinor: i.grossMinor, vatTreatment: i.vatTreatment, vatRateBasisPoints: i.rateBasisPoints, dueDate: input.dueDate, postingDate: input.postingDate, postedAt: input.at });
@@ -1732,9 +1736,34 @@ export class MemoryLedgerStore implements LedgerStore {
         this.insts.set(record.id, record);
       }
       Object.assign(a, { ...input.totals, version: a.version + 1, updatedAt: at });
-      const supplement: SupplementRecord = { id: randomUUID(), organizationId, agreementId, ...input.supplement, resultingAmountMinor: input.totals.amountMinor, createdAt: at };
+      const supplement = supplementRow(organizationId, agreementId, input.supplement, input.totals.amountMinor, at);
       this.supps.set(supplement.id, supplement);
       return { kind: 'updated', record: { agreement: { ...a }, supplement: { ...supplement }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
+    },
+    reduce: async (organizationId, agreementId, input: ReduceAgreementInput, at) => {
+      const a = this.agrs.get(agreementId);
+      if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
+      const unbilledAt = (id: string, version: number) => {
+        const i = this.insts.get(id);
+        return !!i && i.agreementId === agreementId && !i.receivableId && !i.voidedAt && i.version === version;
+      };
+      // Nothing is written before every check passes, so `stale` leaves the ledger exactly as it was.
+      const moved = a.version !== input.expectedVersion || a.status !== 'ACTIVE' || this.receivablesMoved(organizationId, input.receivables) || ![...input.installmentUpdates, ...input.voids].every((u) => unbilledAt(u.id, u.expectedVersion));
+      if (moved || input.credits.some((c) => { const r = this.recs.get(c.receivableId); return !r || r.status !== 'OPEN' || c.amountMinor > outstanding(r); })) return { kind: 'stale' };
+      for (const u of input.installmentUpdates) Object.assign(this.insts.get(u.id)!, { amountMinor: u.amountMinor, netMinor: u.netMinor, vatMinor: u.vatMinor, grossMinor: u.grossMinor, version: u.expectedVersion + 1 });
+      for (const v of input.voids) Object.assign(this.insts.get(v.id)!, { voidedAt: at, version: v.expectedVersion + 1 });
+      const credits = input.credits.map((c) => {
+        const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: c.receivableId, amountMinor: c.amountMinor, netMinor: c.netMinor, vatMinor: c.vatMinor, ...input.credit, createdAt: at };
+        this.credits.set(credit.id, credit);
+        const r = this.recs.get(c.receivableId)!;
+        r.creditedMinor += c.amountMinor;
+        settle(r);
+        return { ...credit };
+      });
+      Object.assign(a, { ...input.totals, version: a.version + 1, updatedAt: at });
+      const supplement = supplementRow(organizationId, agreementId, input.supplement, input.totals.amountMinor, at);
+      this.supps.set(supplement.id, supplement);
+      return { kind: 'updated', record: { agreement: { ...a }, supplement: { ...supplement }, installments: await this.agreements.listInstallments(organizationId, agreementId), credits } };
     },
     listSupplements: async (organizationId, agreementId) =>
       [...this.supps.values()].filter((x) => x.organizationId === organizationId && x.agreementId === agreementId).sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime()).map((x) => ({ ...x })),
@@ -1798,7 +1827,7 @@ export class MemoryLedgerStore implements LedgerStore {
     recordOutcome: async (organizationId, agreementId, input: OutcomeWriteInput, at) => {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
-      if (a.version !== input.expectedVersion || a.outcome !== null || this.upfrontMoved(organizationId, input.upfrontReceivables)) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
+      if (a.version !== input.expectedVersion || a.outcome !== null || this.receivablesMoved(organizationId, input.upfrontReceivables)) return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
       this.writeOutcome(a, input, at);
       return { kind: 'updated', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId) } };
     },
@@ -1807,7 +1836,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
       const replaced = input.replaceInstallmentId ? this.insts.get(input.replaceInstallmentId) : undefined;
       const replacedGone = input.replaceInstallmentId !== null && (!replaced || replaced.agreementId !== agreementId || !replaced.isCommission || replaced.voidedAt !== null || replaced.receivableId !== input.replaceReceivableId);
-      if (a.version !== input.expectedVersion || a.outcome === null || replacedGone || this.upfrontMoved(organizationId, input.upfrontReceivables)) {
+      if (a.version !== input.expectedVersion || a.outcome === null || replacedGone || this.receivablesMoved(organizationId, input.upfrontReceivables)) {
         return { kind: 'stale', record: { agreement: { ...a }, installments: await this.agreements.listInstallments(organizationId, agreementId), credit: null } };
       }
       const receivable = replaced?.receivableId ? this.recs.get(replaced.receivableId) : undefined;
@@ -1815,7 +1844,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (receivable && (receivable.paidMinor > 0n || receivable.creditedMinor > 0n)) return { kind: 'has_payments', receivableId: receivable.id };
       let credit: CreditRecord | null = null;
       if (receivable) {
-        credit = { id: randomUUID(), organizationId, receivableId: receivable.id, amountMinor: receivable.grossMinor, netMinor: receivable.netMinor, vatMinor: receivable.vatMinor, ...input.credit, createdAt: at };
+        credit = { id: randomUUID(), organizationId, receivableId: receivable.id, amountMinor: receivable.grossMinor, netMinor: receivable.netMinor, vatMinor: receivable.vatMinor, reasonCode: null, ...input.credit, createdAt: at };
         this.credits.set(credit.id, credit);
         receivable.creditedMinor += receivable.grossMinor;
         settle(receivable);
@@ -1826,8 +1855,8 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
-  /** True when any receivable the counted upfront was read from is gone or has moved since (MUT-100 review D2). */
-  private upfrontMoved(organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): boolean {
+  /** True when any receivable a write was planned from is gone or has moved since (MUT-100 review D2; MUT-480 R3). */
+  private receivablesMoved(organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): boolean {
     return seen.some((s) => {
       const r = this.recs.get(s.id);
       return !r || r.organizationId !== organizationId || r.version !== s.version;
@@ -1876,7 +1905,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.recs.get(receivableId);
       if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'OPEN' || input.amountMinor > outstanding(r)) throw new InsufficientCapacity(receivableId);
-      const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, createdAt: at };
+      const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, reasonCode: input.reasonCode ?? null, createdAt: at };
       this.credits.set(credit.id, credit);
       r.creditedMinor += input.amountMinor;
       settle(r);
@@ -3468,6 +3497,11 @@ function outstanding(r: ReceivableRecord): bigint {
 }
 
 /** Status and version follow the sums: SETTLED iff nothing is outstanding. */
+/** A supplement row with the MUT-480 columns defaulted, as Postgres does for rows that don't set them. */
+function supplementRow(organizationId: string, agreementId: string, input: SupplementInput, resultingAmountMinor: bigint, at: Date): SupplementRecord {
+  return { id: randomUUID(), organizationId, agreementId, ...input, reasonCode: input.reasonCode ?? null, appliedGrossMinor: input.appliedGrossMinor ?? null, creditedMinor: input.creditedMinor ?? 0n, resultingAmountMinor, createdAt: at };
+}
+
 function settle(r: ReceivableRecord): void {
   r.status = outstanding(r) <= 0n ? 'SETTLED' : 'OPEN';
   r.version += 1;

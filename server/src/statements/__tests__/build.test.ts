@@ -44,7 +44,7 @@ function receivable(o: Partial<ReceivableRecord> & { gross: bigint; postingDate:
 
 function credit(r: ReceivableRecord, amount: bigint, effectiveDate: string, reason = 'Discount'): CreditRecord {
   r.creditedMinor += amount;
-  return { id: uuid(), organizationId: ORG, receivableId: r.id, amountMinor: amount, netMinor: amount, vatMinor: 0n, reason, effectiveDate, requestId: null, createdAt: at(effectiveDate) };
+  return { id: uuid(), organizationId: ORG, receivableId: r.id, amountMinor: amount, netMinor: amount, vatMinor: 0n, reason, reasonCode: null, effectiveDate, requestId: null, createdAt: at(effectiveDate) };
 }
 
 function payment(amount: bigint, receivedOn: string, o: Partial<PaymentRecord> = {}): PaymentRecord {
