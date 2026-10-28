@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.87.0-mut479
+  version: 1.88.0-mut443
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -15,9 +15,9 @@ info:
 
     Minimum app version (MUT-293): a phone client sends `X-App-Platform: ios|android` and `X-App-Build: <int>` on every request. Below the configured floor for that platform, every endpoint except sign-in (`POST /v1/sessions`, `POST /v1/device-sessions`) and `/health` answers 426 APP_UPDATE_REQUIRED with `details: { platform, minimumBuild }`. Between the floor and the configured recommended build, the request still succeeds but carries `X-Update-Available: true` and `X-Recommended-Build: <int>`. A request with no `X-App-Platform` header (the portal, or any build older than this contract version) is untouched — this is scoped to the phone API only, not enforced against it.
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED, PAYMENT_NOT_POSTED.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH, PAYMENT_NOT_CORRECTABLE, NOTHING_TO_CORRECT (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -4294,6 +4294,8 @@ components:
         reversalReason:
           type: string
           nullable: true
+        reversalReasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
         credited:
           type: string
           nullable: true
@@ -4983,6 +4985,8 @@ components:
             reason:
               type: string
               nullable: true
+            reasonCode:
+              $ref: "#/components/schemas/CreditReasonCode"
           required:
             - id
             - date
@@ -4995,6 +4999,7 @@ components:
             - paymentId
             - receiptNumber
             - reason
+            - reasonCode
     StatementChargeOrigin:
       oneOf:
         - type: object
@@ -5290,6 +5295,10 @@ components:
         reversalReason:
           type: string
           nullable: true
+        reversalReasonCode:
+          allOf:
+            - $ref: "#/components/schemas/CreditReasonCode"
+            - description: "MUT-443: why POST /v1/payments/{id}/correct reversed it (reversalReason then holds the note, or the code when there was none); null for a plain reverse and while POSTED."
         replacesPaymentId:
           type: string
           nullable: true
@@ -5331,6 +5340,7 @@ components:
         - status
         - reversedAt
         - reversalReason
+        - reversalReasonCode
         - replacesPaymentId
         - replacedByPaymentId
         - allocations
@@ -5724,6 +5734,150 @@ components:
           maxLength: 500
       required:
         - reason
+    CorrectPaymentPreviewResponse:
+      allOf:
+        - $ref: "#/components/schemas/AllocationPreviewResponse"
+        - type: object
+          properties:
+            reversal:
+              type: object
+              properties:
+                paymentId:
+                  type: string
+                  format: uuid
+                number:
+                  type: string
+                amount:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                receivedOn:
+                  type: string
+                  pattern: ^\d{4}-\d{2}-\d{2}$
+                  description: Calendar date in the organization timezone, YYYY-MM-DD
+                receiptNumber:
+                  type: string
+                  nullable: true
+                released:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AllocationRequest"
+              required:
+                - paymentId
+                - number
+                - amount
+                - receivedOn
+                - receiptNumber
+                - released
+            receiptNumber:
+              type: string
+              nullable: true
+          required:
+            - reversal
+            - receiptNumber
+    CorrectPaymentPreviewRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        receivedOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The correction may keep the original's receivedOn, or a later one, below the floor (ADR-225)."
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        reference:
+          type: string
+          nullable: true
+          maxLength: 120
+          description: The bank or transfer reference. Left out, the corrected payment keeps the original's; null clears it; a value replaces it.
+        notes:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Free notes. Left out, the corrected payment keeps the original's; null clears it; a value replaces it.
+        receiptNumber:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: "MUT-481: the legal receipt's number; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Left out, the corrected payment keeps the original's; null clears it; a value replaces it."
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationRequest"
+          maxItems: 200
+        strategy:
+          $ref: "#/components/schemas/AllocationStrategy"
+        reasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        note:
+          type: string
+          maxLength: 500
+      required:
+        - amount
+        - receivedOn
+        - method
+    CorrectPaymentResponse:
+      type: object
+      properties:
+        reversed:
+          $ref: "#/components/schemas/Payment"
+        payment:
+          $ref: "#/components/schemas/Payment"
+      required:
+        - reversed
+        - payment
+    CorrectPaymentRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        receivedOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The correction may keep the original's receivedOn, or a later one, below the floor (ADR-225)."
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        reference:
+          type: string
+          nullable: true
+          maxLength: 120
+          description: The bank or transfer reference. Left out, the corrected payment keeps the original's; null clears it; a value replaces it.
+        notes:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Free notes. Left out, the corrected payment keeps the original's; null clears it; a value replaces it.
+        receiptNumber:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: "MUT-481: the legal receipt's number; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Left out, the corrected payment keeps the original's; null clears it; a value replaces it."
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AllocationRequest"
+          maxItems: 200
+        strategy:
+          $ref: "#/components/schemas/AllocationStrategy"
+        reasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        note:
+          type: string
+          maxLength: 500
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - amount
+        - receivedOn
+        - method
+        - previewToken
     OrganizationSummary:
       type: object
       properties:
@@ -15736,6 +15890,143 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Payment"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/payments/{paymentId}/correct/preview:
+    post:
+      tags:
+        - Payments
+      summary: "Preview correcting a recorded payment: its reversal, the new allocations and the balances after"
+      description: Writes nothing. The allocation preview's fields, plus `reversal` (what the original's reversal releases) and the receiptNumber the corrected payment will carry. `balances` run from the ledger now to the ledger after the correction; `eligible` lists the receivables as they would read once the original is reversed. reasonCode and note are optional here and not part of the token. The token covers the original and its version, the body, and the version of every receivable involved, so anything that moves in between is 409 PREVIEW_STALE at correct. The customer and currency are the original’s. reference, notes and receiptNumber left out keep the original’s; null clears them. Send allocations (`[]` leaves the amount unallocated) or a strategy (explicit allocations win); they may re-pay what the original paid, since its allocations are released first. Only a POSTED payment this key recorded (a person’s capture is 422 PAYMENT_NOT_CORRECTABLE; a reversed one is 409 PAYMENT_NOT_POSTED, the state reverse calls ALREADY_REVERSED and the allocation preview answers as a 422, with details.reversedAt and details.replacedByPaymentId). receivedOn may keep the original’s date or a later one below the ten-year floor (ADR-225). A correction that changes nothing is 422 NOTHING_TO_CORRECT; an archived customer is 422 CUSTOMER_ARCHIVED.
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: paymentId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectPaymentPreviewRequest"
+      responses:
+        "200":
+          description: Preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectPaymentPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/payments/{paymentId}/correct:
+    post:
+      tags:
+        - Payments
+      summary: "Correct a recorded payment in one call: the original reversed and the corrected payment recorded, together"
+      description: "One transaction: the original is REVERSED (reversalReason the note, or the code; reversalReasonCode the code) and the corrected payment is recorded with replacesPaymentId, a new number and its allocations; or nothing is written. reasonCode is required, and OTHER needs a note (422 REASON_REQUIRED). The previewToken must match (409 PREVIEW_STALE otherwise, also when the original or a receivable changed while writing). A replay with the same Idempotency-Key returns the stored answer, a refusal included, so after a 409 send a new key. Answers both payments. Audits payment.corrected on the original, payment.recorded on the new one, and receivable.settled for each receivable it settles. The customer and currency are the original’s. reference, notes and receiptNumber left out keep the original’s; null clears them. Send allocations (`[]` leaves the amount unallocated) or a strategy (explicit allocations win); they may re-pay what the original paid, since its allocations are released first. Only a POSTED payment this key recorded (a person’s capture is 422 PAYMENT_NOT_CORRECTABLE; a reversed one is 409 PAYMENT_NOT_POSTED, the state reverse calls ALREADY_REVERSED and the allocation preview answers as a 422, with details.reversedAt and details.replacedByPaymentId). receivedOn may keep the original’s date or a later one below the ten-year floor (ADR-225). A correction that changes nothing is 422 NOTHING_TO_CORRECT; an archived customer is 422 CUSTOMER_ARCHIVED."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: paymentId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectPaymentRequest"
+      responses:
+        "200":
+          description: Corrected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectPaymentResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

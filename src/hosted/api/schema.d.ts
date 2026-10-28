@@ -7888,6 +7888,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/payments/{paymentId}/correct/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview correcting a recorded payment: its reversal, the new allocations and the balances after
+         * @description Writes nothing. The allocation preview's fields, plus `reversal` (what the original's reversal releases) and the receiptNumber the corrected payment will carry. `balances` run from the ledger now to the ledger after the correction; `eligible` lists the receivables as they would read once the original is reversed. reasonCode and note are optional here and not part of the token. The token covers the original and its version, the body, and the version of every receivable involved, so anything that moves in between is 409 PREVIEW_STALE at correct. The customer and currency are the original’s. reference, notes and receiptNumber left out keep the original’s; null clears them. Send allocations (`[]` leaves the amount unallocated) or a strategy (explicit allocations win); they may re-pay what the original paid, since its allocations are released first. Only a POSTED payment this key recorded (a person’s capture is 422 PAYMENT_NOT_CORRECTABLE; a reversed one is 409 PAYMENT_NOT_POSTED, the state reverse calls ALREADY_REVERSED and the allocation preview answers as a 422, with details.reversedAt and details.replacedByPaymentId). receivedOn may keep the original’s date or a later one below the ten-year floor (ADR-225). A correction that changes nothing is 422 NOTHING_TO_CORRECT; an archived customer is 422 CUSTOMER_ARCHIVED.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectPaymentPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description Preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CorrectPaymentPreviewResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/{paymentId}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a recorded payment in one call: the original reversed and the corrected payment recorded, together
+         * @description One transaction: the original is REVERSED (reversalReason the note, or the code; reversalReasonCode the code) and the corrected payment is recorded with replacesPaymentId, a new number and its allocations; or nothing is written. reasonCode is required, and OTHER needs a note (422 REASON_REQUIRED). The previewToken must match (409 PREVIEW_STALE otherwise, also when the original or a receivable changed while writing). A replay with the same Idempotency-Key returns the stored answer, a refusal included, so after a 409 send a new key. Answers both payments. Audits payment.corrected on the original, payment.recorded on the new one, and receivable.settled for each receivable it settles. The customer and currency are the original’s. reference, notes and receiptNumber left out keep the original’s; null clears them. Send allocations (`[]` leaves the amount unallocated) or a strategy (explicit allocations win); they may re-pay what the original paid, since its allocations are released first. Only a POSTED payment this key recorded (a person’s capture is 422 PAYMENT_NOT_CORRECTABLE; a reversed one is 409 PAYMENT_NOT_POSTED, the state reverse calls ALREADY_REVERSED and the allocation preview answers as a 422, with details.reversedAt and details.replacedByPaymentId). receivedOn may keep the original’s date or a later one below the ten-year floor (ADR-225). A correction that changes nothing is 422 NOTHING_TO_CORRECT; an archived customer is 422 CUSTOMER_ARCHIVED.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectPaymentRequest"];
+                };
+            };
+            responses: {
+                /** @description Corrected */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CorrectPaymentResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/summaries/organization": {
         parameters: {
             query?: never;
@@ -19682,6 +19883,7 @@ export interface components {
             status: components["schemas"]["IncomeStatus"];
             version: number;
             reversalReason?: string | null;
+            reversalReasonCode?: components["schemas"]["CreditReasonCode"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             credited?: string | null;
         };
@@ -19948,6 +20150,7 @@ export interface components {
             paymentId: string;
             receiptNumber: string | null;
             reason: string | null;
+            reasonCode: components["schemas"]["CreditReasonCode"];
         };
         StatementChargeOrigin: {
             /** @enum {string} */
@@ -20069,6 +20272,7 @@ export interface components {
             /** Format: date-time */
             reversedAt: string | null;
             reversalReason: string | null;
+            reversalReasonCode: components["schemas"]["CreditReasonCode"] & unknown;
             /** Format: uuid */
             replacesPaymentId: string | null;
             /** Format: uuid */
@@ -20228,6 +20432,59 @@ export interface components {
         };
         ReversePaymentRequest: {
             reason: string;
+        };
+        CorrectPaymentPreviewResponse: components["schemas"]["AllocationPreviewResponse"] & {
+            reversal: {
+                /** Format: uuid */
+                paymentId: string;
+                number: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+                receiptNumber: string | null;
+                released: components["schemas"]["AllocationRequest"][];
+            };
+            receiptNumber: string | null;
+        };
+        CorrectPaymentPreviewRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The correction may keep the original's receivedOn, or a later one, below the floor (ADR-225). */
+            receivedOn: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description The bank or transfer reference. Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            reference?: string | null;
+            /** @description Free notes. Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            notes?: string | null;
+            /** @description MUT-481: the legal receipt's number; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            receiptNumber?: string | null;
+            allocations?: components["schemas"]["AllocationRequest"][];
+            strategy?: components["schemas"]["AllocationStrategy"];
+            reasonCode?: components["schemas"]["CreditReasonCode"];
+            note?: string;
+        };
+        CorrectPaymentResponse: {
+            reversed: components["schemas"]["Payment"];
+            payment: components["schemas"]["Payment"];
+        };
+        CorrectPaymentRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. The correction may keep the original's receivedOn, or a later one, below the floor (ADR-225). */
+            receivedOn: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description The bank or transfer reference. Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            reference?: string | null;
+            /** @description Free notes. Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            notes?: string | null;
+            /** @description MUT-481: the legal receipt's number; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Left out, the corrected payment keeps the original's; null clears it; a value replaces it. */
+            receiptNumber?: string | null;
+            allocations?: components["schemas"]["AllocationRequest"][];
+            strategy?: components["schemas"]["AllocationStrategy"];
+            reasonCode?: components["schemas"]["CreditReasonCode"];
+            note?: string;
+            previewToken: string;
         };
         OrganizationSummary: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
