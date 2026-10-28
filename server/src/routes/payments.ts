@@ -358,7 +358,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Payments'],
       summary: 'Set or clear the legal receipt number of a recorded payment (optimistic, If-Match)',
       description:
-        'For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.',
+        'For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments the key recorded only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead; one a person recorded is 422 RECEIPT_NUMBER_NOT_ALLOWED). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('payments:write'), ifMatch()] as const,
       request: { params: PaymentIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(SetReceiptNumberRequestSchema) },
@@ -371,11 +371,14 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const now = c.get('now')();
       const receiptNumber = receiptNumberOf(c.req.valid('json').receiptNumber);
       const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
+      // D6: a payment a person recorded never carries one, and its own re-date (If-Match) must keep its version.
+      if (payment.origin !== 'INTEGRATION') throw validationError('RECEIPT_NUMBER_NOT_ALLOWED', 'Only payments recorded through the API key carry a receipt number', { field: 'receiptNumber' });
       if (payment.status === 'REVERSED') throw alreadyReversed(payment);
+      const today = todayFor(organization, now);
+      // Before the version check: a retry after a lost response carries the version it first read (review 1).
+      if (payment.receiptNumber === receiptNumber) return c.json(await viewOf(organization.id, payment, today), 200);
       const expected = c.get('expectedVersion');
       if (payment.version !== expected) throw versionMismatch(payment.version);
-      const today = todayFor(organization, now);
-      if (payment.receiptNumber === receiptNumber) return c.json(await viewOf(organization.id, payment, today), 200);
       const result = await store.payments.setReceiptNumber(organization.id, payment.id, expected, receiptNumber, now);
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such payment');
       if (result.kind === 'stale') throw result.record.status === 'REVERSED' ? alreadyReversed(result.record) : versionMismatch(result.record.version);

@@ -1822,8 +1822,10 @@ export const VALIDATION_REASONS = [
   'PASSKEY_NOT_VERIFIED',
   // MUT-478: a statement whose `from` is after its `to`.
   'PERIOD_INVALID',
-  // MUT-481: a receipt number that is blank, longer than 64 characters or holds control characters.
+  // MUT-481: a receipt number that is blank, longer than 64 characters or holds control characters; or one set on a
+  // payment a person recorded.
   'RECEIPT_NUMBER_INVALID',
+  'RECEIPT_NUMBER_NOT_ALLOWED',
   // MUT-480: lowering a fee by more than is unbilled and outstanding; lowering the whole fee with nothing billed; a
   // reason code OTHER without a note.
   'REDUCTION_EXCEEDS_OPEN',

@@ -25,11 +25,11 @@ export function describeLedgerStoreMut481Contract(name: string, makeStore: () =>
       await pay('20410', 2);
       await pay(null, 3);
       expect((await store.payments.getById(o.id, a.payment.id))!.receiptNumber).toBe('2041');
-      const page = await store.payments.list(o.id, { receiptNumber: '2041' }, { limit: 50 });
+      const page = await store.payments.list(o.id, { receiptNumber: '2041' }, { limit: 50, cursor: null });
       expect(page.items.map((p) => p.id)).toEqual([a.payment.id]);
       const other = await firm(store);
       await other.pay('2041', 4);
-      expect((await store.payments.list(o.id, { receiptNumber: '2041' }, { limit: 50 })).items).toHaveLength(1);
+      expect((await store.payments.list(o.id, { receiptNumber: '2041' }, { limit: 50, cursor: null })).items).toHaveLength(1);
     });
 
     it('setReceiptNumber writes on the version read and bumps it; another version is stale with the record', async () => {

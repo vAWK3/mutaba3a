@@ -17,8 +17,15 @@ describe('normalizeReceiptNumber (D3)', () => {
     expect(normalizeReceiptNumber('9'.repeat(RECEIPT_NUMBER_MAX + 1))).toEqual({ ok: false });
   });
 
-  it('refuses empty, whitespace-only and control characters', () => {
-    for (const bad of ['', '   ', '\t', '20\n41', '20\u000041', 'A\u007fB']) expect(normalizeReceiptNumber(bad)).toEqual({ ok: false });
+  it('refuses empty, whitespace-only and control characters inside the number', () => {
+    for (const bad of ['', '   ', '\t', '20\n41', '20\u000041', 'A\u007fB', '\u200b']) expect(normalizeReceiptNumber(bad)).toEqual({ ok: false });
+  });
+
+  it('trims surrounding tabs and newlines, and drops invisible zero-width and direction marks (review 4)', () => {
+    expect(normalizeReceiptNumber('\t2041\n')).toEqual({ ok: true, value: '2041' });
+    expect(normalizeReceiptNumber('20\u200b41')).toEqual({ ok: true, value: '2041' });
+    expect(normalizeReceiptNumber('\u200fקבלה 2041\u200e')).toEqual({ ok: true, value: 'קבלה 2041' });
+    expect(normalizeReceiptNumber('\ufeff2041')).toEqual({ ok: true, value: '2041' });
   });
 });
 

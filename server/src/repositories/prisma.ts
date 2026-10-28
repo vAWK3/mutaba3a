@@ -1900,13 +1900,15 @@ export class PrismaLedgerStore implements LedgerStore {
         const record = await tx.payment.findFirst({ where: owned });
         return record ? { kind: 'stale', record } : { kind: 'not_found' };
       }),
-    setReceiptNumber: async (organizationId, paymentId, expectedVersion, receiptNumber, at) => {
-      const { count } = await this.prisma.payment.updateMany({ where: { id: paymentId, organizationId, status: 'POSTED', version: expectedVersion }, data: { receiptNumber, version: { increment: 1 }, updatedAt: at } });
-      // A miss re-reads without the status filter, so a reversed payment is told apart from a stale version (review R3).
-      const record = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
-      if (!record) return { kind: 'not_found' };
-      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
-    },
+    // One transaction, so the record returned (and audited) is the one this write produced (MUT-481 review 3).
+    setReceiptNumber: (organizationId, paymentId, expectedVersion, receiptNumber, at) =>
+      this.prisma.$transaction(async (tx): Promise<UpdateResult<PaymentRecord>> => {
+        const { count } = await tx.payment.updateMany({ where: { id: paymentId, organizationId, status: 'POSTED', version: expectedVersion }, data: { receiptNumber, version: { increment: 1 }, updatedAt: at } });
+        // A miss re-reads without the status filter, so a reversed payment is told apart from a stale version (review R3).
+        const record = await tx.payment.findFirst({ where: { id: paymentId, organizationId } });
+        if (!record) return { kind: 'not_found' };
+        return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+      }),
   };
 
   /** MUT-61: allocationStateOf (payments/allocation-state.ts) as a where clause, POSTED payments only. */

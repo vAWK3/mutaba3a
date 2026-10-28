@@ -91,6 +91,11 @@ describe('receiptNumber on reads (AC2)', () => {
     const f = await firm(h);
     const { payment } = await h.store.payments.capture({ organizationId: f.org.id, customerId: f.customer.id, projectId: null, currency: 'ILS', amountMinor: 500n, receivedOn: '2026-10-27', method: 'CASH', notes: null, requestId: null, createdByUserId: (await h.store.users.create({ email: `p-${Date.now()}@studio.ps`, displayName: 'Nour', passwordHash: null, locale: 'en', personal: { name: 'Personal', slug: `p-${Date.now()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: h.clock.now })).user.id, captureSource: null }, h.clock.now);
     expect(await read(await h.app.request(`/v1/payments/${payment.id}`, { headers: f.auth }))).toMatchObject({ receiptNumber: null });
+    // Nor can the key set one on it later (review 2): the phone's own re-date keeps its version.
+    const res = await setNumber(h, f, payment.id, payment.version, '2041');
+    expect(res.status).toBe(422);
+    expect(await reason(res)).toBe('RECEIPT_NUMBER_NOT_ALLOWED');
+    expect((await h.store.payments.getById(f.org.id, payment.id))!.version).toBe(payment.version);
   });
 });
 
@@ -120,6 +125,10 @@ describe('PUT /v1/payments/{id}/receipt-number (D5)', () => {
     const again = await setNumber(h, f, p.id, after.version, '2041');
     expect(again.status).toBe(200);
     expect((await read(again)).version).toBe(after.version);
+    // The response was lost: the retry carries the version it first read, and still succeeds (review 1).
+    const retry = await setNumber(h, f, p.id, p.version, '2041');
+    expect(retry.status).toBe(200);
+    expect((await read(retry)).version).toBe(after.version);
     expect((await auditOf(h, f, p.id)).filter((e: Loose) => e.action === 'payment.receipt_number_set').map((e: Loose) => e.metadata)).toEqual([{ from: null, to: '2041', version: p.version + 1 }]);
     expect(await read(await setNumber(h, f, p.id, after.version, null))).toMatchObject({ receiptNumber: null });
   });

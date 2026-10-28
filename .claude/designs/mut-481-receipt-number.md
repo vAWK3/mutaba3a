@@ -97,3 +97,9 @@ Covers AC1–AC4. Out: issuing or numbering receipts; the receipt PDF (MAL-1422 
 - **R9. `statements/build.ts` needs no change** (lines carry the whole payment); only `serialize.ts` and the line schemas.
 - **R10.** `serializePayment` lists fields by hand: add it there; settle's response then shows `receiptNumber: null` (a D6 test).
 - **Found in passing (MUT-480):** its new reasons were never added to the published lists (`REDUCTION_EXCEEDS_OPEN`, `USE_CANCEL`, `REASON_REQUIRED` to `VALIDATION_REASONS`, `INSTALLMENT_VOIDED` to `CONFLICT_REASONS`). Fixed in this branch as its own commit.
+
+## Pre-landing review 2026-10-28 (fixed before merge)
+1. The PUT's same-value check now runs before the version check, so a retry after a lost response (old If-Match) answers 200 (it answered 409); test added.
+2. The PUT refuses payments a person recorded (422 `RECEIPT_NUMBER_NOT_ALLOWED`), as D6 says, and so never bumps a capture's version under its owner's re-date. Reversible if Malafat later needs numbers on captures it allocated.
+3. Prisma `setReceiptNumber` writes and reads back in one transaction.
+4. Invisible marks are dropped before trimming; control characters are checked on the trimmed value.

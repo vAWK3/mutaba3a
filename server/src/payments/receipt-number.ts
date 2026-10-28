@@ -8,11 +8,17 @@ export const RECEIPT_NUMBER_MAX = 64;
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
-/** D3: trimmed, 1–64 characters, no control characters; null means none. */
+/** Invisible marks a copy from an invoicing app can carry: zero-width characters, direction marks and isolates, BOM. */
+const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g;
+
+/**
+ * D3: invisible marks dropped (so an exact `?receiptNumber=` search still matches), then trimmed; 1–64 characters with
+ * no control characters left inside; null means none.
+ */
 export function normalizeReceiptNumber(raw: string | null): { ok: true; value: string | null } | { ok: false } {
   if (raw === null) return { ok: true, value: null };
-  const value = raw.trim();
-  if (value.length === 0 || value.length > RECEIPT_NUMBER_MAX || CONTROL.test(raw)) return { ok: false };
+  const value = raw.replace(INVISIBLE, '').trim();
+  if (value.length === 0 || value.length > RECEIPT_NUMBER_MAX || CONTROL.test(value)) return { ok: false };
   return { ok: true, value };
 }
 

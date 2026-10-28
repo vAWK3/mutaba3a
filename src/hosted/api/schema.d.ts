@@ -7496,7 +7496,7 @@ export interface paths {
         get?: never;
         /**
          * Set or clear the legal receipt number of a recorded payment (optimistic, If-Match)
-         * @description For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.
+         * @description For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments the key recorded only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead; one a person recorded is 422 RECEIPT_NUMBER_NOT_ALLOWED). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.
          */
         put: {
             parameters: {
