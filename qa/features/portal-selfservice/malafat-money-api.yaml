@@ -10,6 +10,7 @@ paths:
   - server/src/payments/numbering.ts
   - server/src/agreements/reduce.ts
   - server/src/agreements/reduce-compose.ts
+  - server/src/payments/receipt-number.ts
 features:
   - id: statement
     title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
@@ -45,3 +46,23 @@ features:
       - "The preview voids both unbilled stages and credits ₪640 on the billed one; what is outstanding goes from ₪680 to ₪40"
       - The agreement shows the effective total ₪540, the credited ₪640 and a REDUCTION row with its reason
       - The statement shows the credit line with the reason code, and the balance dropped by exactly the credit
+  - id: receipt-number
+    title: Malafat keeps the legal receipt's number on a payment, through a correction, and sets one later
+    tier: secondary
+    # MUT-481 (ADR-223): receiptNumber on POST /v1/payments, ?receiptNumber=, the statement lines, and
+    # PUT /v1/payments/{id}/receipt-number. Malafat's receipt field is MAL-1420; its payment sheet MAL-1422.
+    paths:
+      - server/src/payments/receipt-number.ts
+      - server/src/routes/payments.ts
+      - server/src/statements/serialize.ts
+    steps:
+      - Malafat records a client's payment with receipt 2041
+      - Malafat finds it by its receipt number
+      - Malafat corrects it (reverses it and records the replacement without a number)
+      - Malafat records another payment without a number and sets 2050 once the receipt is issued
+      - Malafat reads the client's statement
+    expect:
+      - Searching for 2041 finds exactly that payment
+      - The replacement still carries receipt 2041
+      - The later payment carries receipt 2050 after it is set
+      - The statement shows the receipt number on the payment line and on its reversal line
