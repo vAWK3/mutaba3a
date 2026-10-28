@@ -2,11 +2,17 @@
   "0.3.1": {
     "en": [
       "Expense category names now follow the language you use the portal in, in Arabic or English.",
-      "Deleting something asks you to confirm right where you are, and shared and kept items use the same colours as the phone app."
+      "Deleting something asks you to confirm right where you are, and shared and kept items use the same colours as the phone app.",
+      "You can attach receipts while you add an expense in the portal; they upload as soon as you save.",
+      "A client's totals keep an amount owed in another currency in that currency, instead of adding it to the project's currency.",
+      "Our emails look right in dark mode in Gmail and Outlook."
     ],
     "ar": [
       "أسماء فئات المصاريف تتبع الآن لغة البوابة التي تستخدمها، بالعربية أو الإنجليزية.",
-      "عند حذف أي شيء يُطلب منك التأكيد في مكانك، والعناصر المشتركة والمحفوظة بالألوان نفسها التي في تطبيق الهاتف."
+      "عند حذف أي شيء يُطلب منك التأكيد في مكانك، والعناصر المشتركة والمحفوظة بالألوان نفسها التي في تطبيق الهاتف.",
+      "يمكنك إرفاق الإيصالات أثناء إضافة مصروف في البوابة، وتُرفع فور الحفظ.",
+      "تُحتسب المبالغ المستحقة بعملة أخرى في مجاميع العميل ضمن عملتها، بدل إضافتها إلى عملة المشروع.",
+      "تظهر رسائلنا بالبريد الإلكتروني بشكل سليم في الوضع الداكن في Gmail وOutlook."
     ]
   },
   "0.3.0": {
