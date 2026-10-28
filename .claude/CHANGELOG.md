@@ -46,7 +46,10 @@
 
 ### Technical
 - No server or OpenAPI change.
-- Release-QA: `portal.expenses.create-with-receipt`.
+- Release-QA: `portal.expenses.create-with-receipt` (now also picks 11 and cancels) and `portal.expenses.create-with-receipt-arabic` (the drawer in Arabic, right to left), added after qa-reconcile found the 11th-file and Arabic criteria proven by unit tests only.
+
+### Fixed (qa-reconcile)
+- `ReceiptPickButton`: a pick holding both a refused file and one past the cap now says both in the one toast; it named only the cap.
 
 ## [Unreleased] - 2026-10-28 — Self-service go-live housekeeping
 
