@@ -67,7 +67,7 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   return app;
 }
 
-/** MUT-480 (O4): a line a reduction voided; the agreement itself is still active. */
+/** MUT-480 (O4): a line voided on a still-active agreement (a fee lowered, or a contingency outcome corrected). */
 function installmentVoided(): ApiError {
-  return new ApiError('CONFLICT', 'This installment was voided (the fee was lowered); nothing is left to bill on it', { reason: 'INSTALLMENT_VOIDED' });
+  return new ApiError('CONFLICT', 'This installment was voided; nothing is left to bill on it', { reason: 'INSTALLMENT_VOIDED' });
 }
