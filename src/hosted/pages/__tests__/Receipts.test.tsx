@@ -423,6 +423,32 @@ describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(BASE));
   });
 
+  it('a suggestion that landed during an Approve that then failed fills the untouched fields once it ends (MUT-441 review)', async () => {
+    let release: (response: Response) => void = () => undefined;
+    const { user, state } = reading(receipt(R1, { reading: 'pending' }), {
+      [`POST /v1/receipts/${R1}/approve`]: () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    });
+    await screen.findByText(READING);
+    await user.type(screen.getByLabelText(/Amount/), '10');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Filing…' })).toBeInTheDocument());
+
+    state.current = receipt(R1, { reading: 'done', suggested });
+    await tick(3000);
+    await waitFor(() => expect(screen.queryByText(READING)).toBeNull());
+    expect(screen.getByLabelText('Vendor')).toHaveValue('');
+
+    release(fail(500, 'INTERNAL'));
+    await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('Shufersal'));
+    expect(screen.getByLabelText(/^Date/)).toHaveValue('2026-10-24');
+    // Typed by the person before Approve: kept.
+    expect(screen.getByLabelText(/Amount/)).toHaveValue('10');
+  });
+
   it('failed shows nothing special and does not poll; the form works as today', async () => {
     const { api, user } = reading(receipt(R1, { reading: 'failed' }));
     const amount = await screen.findByLabelText(/Amount/);

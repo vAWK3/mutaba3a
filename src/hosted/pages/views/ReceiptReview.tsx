@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useWatch } from 'react-hook-form';
+import { useFormState, useWatch } from 'react-hook-form';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -273,7 +273,8 @@ const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor'];
  * MUT-441 §4, R10 #9: a suggestion that lands after the page opened (the server finished reading). It fills a field
  * only when the person hasn't changed it (typed, picked, or typed then cleared: any change event counts, and so does
  * touched or dirty) and it is still empty (amount, vendor) or still its default (date, currency); the amount only in
- * the currency it was read in. Nothing is filled while Approve is in flight. Returns the late suggestion, for hints.
+ * the currency it was read in. Nothing is filled while Approve is in flight; an Approve that fails then fills what is
+ * still untouched (the effect re-runs when submitting ends). Returns the late suggestion, for hints.
  */
 function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseReceipt['suggested']): SuggestionPrefill | null {
   const changed = useRef(new Set<string>());
@@ -292,8 +293,10 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
     setLate(suggested ? suggestionToFormValues(suggested, { currencies: HOSTED_CURRENCIES }) : null);
   }
 
+  // Subscribed, so the fill below runs again when an Approve that held it back ends (MUT-441 review).
+  const { isSubmitting } = useFormState({ control: form.control });
   useEffect(() => {
-    if (!late || form.formState.isSubmitting) return;
+    if (!late || isSubmitting) return;
     const untouched = (name: SuggestedFormField) => {
       const state = form.getFieldState(name);
       return !changed.current.has(name) && !state.isDirty && !state.isTouched;
@@ -305,7 +308,7 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
     }
     // An amount read in another currency than the one the form now holds would be the wrong number.
     if (late.values.amount !== undefined && fillable('amount') && form.getValues('currency') === late.values.currency) form.setValue('amount', late.values.amount);
-  }, [form, late]);
+  }, [form, late, isSubmitting]);
 
   return late;
 }
