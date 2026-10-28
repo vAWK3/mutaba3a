@@ -188,6 +188,15 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...deployed, READ_QUEUE: 'receipt-reads' })).toThrow(/READ_QUEUE/);
   });
 
+  it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {
+    expect(loadConfig(base).QA_READ_DELAY_MS).toBeUndefined();
+    expect(loadConfig({ ...base, QA_READ_DELAY_MS: '5000' }).QA_READ_DELAY_MS).toBe(5000);
+    expect(() => loadConfig({ ...base, QA_READ_DELAY_MS: '-1' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...base, QA_READ_DELAY_MS: '60001' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...deployed, QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
+  });
+
   it('the read job\'s audience defaults to API_ORIGIN', () => {
     expect(readOidcAudience(loadConfig(deployed))).toBe('https://api.example.test');
     expect(readOidcAudience(loadConfig({ ...deployed, READ_OIDC_AUDIENCE: 'https://other.example.test' }))).toBe('https://other.example.test');

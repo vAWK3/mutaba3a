@@ -164,7 +164,7 @@ const receiptReading =
         dispatcher:
           config.READ_QUEUE && config.API_ORIGIN && config.READ_INVOKER_SA && readAudience
             ? new CloudTasksDispatcher({ queue: config.READ_QUEUE, apiOrigin: config.API_ORIGIN, invokerServiceAccount: config.READ_INVOKER_SA, audience: readAudience })
-            : new InlineDispatcher(),
+            : new InlineDispatcher({ delayMs: config.QA_READ_DELAY_MS }),
       }
     : null;
 const readInvokers = [config.READ_INVOKER_SA, config.SWEEP_INVOKER_SA].filter((email): email is string => Boolean(email));

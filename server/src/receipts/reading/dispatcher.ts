@@ -17,6 +17,15 @@ export class InlineDispatcher implements ReadDispatcher {
   private run: ((receiptId: string) => Promise<unknown>) | null = null;
   private readonly queued = new Set<string>();
   private readonly running = new Set<Promise<unknown>>();
+  private readonly delayMs: number;
+
+  /**
+   * `delayMs` (QA_READ_DELAY_MS, local QA only): wait this long before each read, standing in for Cloud Tasks' dispatch
+   * and a cold start, so release-QA can see the portal's "Reading…" state before the fields fill. Default: no wait.
+   */
+  constructor(options: { delayMs?: number | undefined } = {}) {
+    this.delayMs = options.delayMs ?? 0;
+  }
 
   /** The read function; bound after construction because the reader itself takes this dispatcher. */
   bind(run: (receiptId: string) => Promise<unknown>): void {
@@ -28,13 +37,15 @@ export class InlineDispatcher implements ReadDispatcher {
     if (this.queued.has(name)) return;
     this.queued.add(name);
     const task = new Promise<void>((resolve) => {
-      setImmediate(() => {
+      const start = () => {
         this.queued.delete(name);
         // The reader logs and settles its own failures; a throw here would only be an unhandled rejection.
         void Promise.resolve(this.run?.(receiptId))
           .catch(() => undefined)
           .finally(() => resolve());
-      });
+      };
+      if (this.delayMs > 0) setTimeout(start, this.delayMs);
+      else setImmediate(start);
     });
     this.running.add(task);
     void task.finally(() => this.running.delete(task));

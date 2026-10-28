@@ -235,6 +235,11 @@ const envSchema = z.object({
    * staging. Unset = the product limit.
    */
   QA_MAX_OWNED_PROFILES: z.coerce.number().int().min(6).max(1000).optional(),
+  /**
+   * MUT-441: local QA only. How long an in-process read waits before it starts, standing in for Cloud Tasks' dispatch
+   * and a cold start, so the release-QA spec can see the portal's "Reading…" state. Refused in production and staging.
+   */
+  QA_READ_DELAY_MS: z.coerce.number().int().min(0).max(60_000).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -331,6 +336,9 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   if (config.SERVER_OCR && !config.OCR_URL) refuse('OCR_URL', 'SERVER_OCR needs the OCR service\'s URL');
   if (config.SERVER_OCR && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.READ_QUEUE) {
     refuse('READ_QUEUE', `SERVER_OCR on ${config.NODE_ENV} reads through Cloud Tasks; in-process reads are for the dev server and local QA only`);
+  }
+  if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);
   }
   if (config.READ_QUEUE) {
     for (const name of ['API_ORIGIN', 'READ_INVOKER_SA'] as const) if (!config[name]) refuse(name, 'READ_QUEUE needs it: read tasks POST to API_ORIGIN with an OIDC token for READ_INVOKER_SA');

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CloudTasksDispatcher, type TasksClient } from '../reading/cloud-tasks.js';
 import { InlineDispatcher } from '../reading/dispatcher.js';
 
@@ -65,5 +65,23 @@ describe('InlineDispatcher', () => {
     await dispatcher.enqueue('a', 0);
     await dispatcher.idle();
     expect(ran).toEqual(['a', 'b', 'a']);
+  });
+
+  describe('with a QA delay (QA_READ_DELAY_MS)', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('waits that long before the read, standing in for Cloud Tasks\' dispatch and a cold start', async () => {
+      vi.useFakeTimers();
+      const dispatcher = new InlineDispatcher({ delayMs: 5_000 });
+      const ran: string[] = [];
+      dispatcher.bind(async (id) => {
+        ran.push(id);
+      });
+      await dispatcher.enqueue('a', 0);
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(ran).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(ran).toEqual(['a']);
+    });
   });
 });
