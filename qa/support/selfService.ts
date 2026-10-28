@@ -19,6 +19,8 @@ interface LiveState {
   container: string;
   /** MUT-460: OPERATOR_ALERT_EMAIL, the digest's address. */
   operatorDigest: string;
+  /** MUT-441: the receipt-ocr sidecar runs and the API reads receipts on it (false without Tesseract on PATH). */
+  ocr?: boolean;
 }
 
 export interface Mail {

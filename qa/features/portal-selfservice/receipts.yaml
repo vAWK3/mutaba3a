@@ -1,0 +1,32 @@
+app: portal-selfservice
+area: receipts
+title: Receipts read by our own server (Expenses › Receipts on a live API)
+tier: secondary
+# MUT-441 (ADR-220): the server reads every receipt uploaded without a suggestion, on the receipt-ocr sidecar it runs
+# itself. This env (support/selfservice-live.mjs) starts the sidecar from server/ocr/run_local.sh (no Docker) and the
+# API reads in process (SERVER_OCR, no READ_QUEUE) after QA_READ_DELAY_MS, standing in for Cloud Tasks' dispatch.
+# The stubbed gallery, upload and review flows are portal/receipts.yaml's.
+paths:
+  - server/src/receipts/**
+  - server/src/routes/receipt-reading.ts
+  - server/ocr/app/**
+features:
+  - id: server-reading
+    title: I upload a receipt photo and the server reads it; the review page fills in the amount and date
+    tier: secondary
+    tickets: [MUT-441]
+    paths:
+      - src/hosted/pages/views/ReceiptReview.tsx
+      - src/hosted/components/ReceiptCard.tsx
+      - src/hosted/data/receiptQueries.ts
+      - src/hosted/lib/receiptSuggestion.ts
+      - server/src/expenses/receipts-compose.ts
+    steps:
+      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Upload a photo of a bookshop receipt
+      - Open the new receipt while the server reads it
+      - Wait for the reading to finish
+    expect:
+      - The new To-review card says "Reading…"
+      - The review page says "Reading the receipt…" and the expense form already works
+      - The amount fills in as 52.470 JOD and the date as 2026-06-25, each marked "From the receipt", and "Reading the receipt…" goes away
