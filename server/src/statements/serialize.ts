@@ -1,4 +1,5 @@
 import { formatMoney, type Currency } from '../money.js';
+import type { CreditReasonCode } from '../payments/credit.js';
 import { encodeStatementCursor, type StatementLine, type StatementPage, type StatementView } from './build.js';
 
 /** MUT-478: the wire shape of a statement page (`CustomerStatementSchema`); every amount gross, in the statement's currency. */
@@ -40,7 +41,7 @@ function serializeLine(line: StatementLine, money: (minor: bigint) => string) {
       };
     }
     case 'CREDIT':
-      return { ...base, kind: 'CREDIT' as const, receivableId: line.receivable!.id, receivableNumber: line.receivable!.number, reason: line.credit!.reason };
+      return { ...base, kind: 'CREDIT' as const, receivableId: line.receivable!.id, receivableNumber: line.receivable!.number, reason: line.credit!.reason, reasonCode: line.credit!.reasonCode as CreditReasonCode | null };
     case 'PAYMENT': {
       const p = line.payment!;
       return { ...base, kind: 'PAYMENT' as const, paymentId: p.id, method: p.method, reference: p.reference, unallocated: line.unallocatedMinor === null ? null : money(line.unallocatedMinor), allocated: line.allocatedMinor === null ? null : money(line.allocatedMinor) };

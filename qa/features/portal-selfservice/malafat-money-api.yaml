@@ -8,6 +8,8 @@ tier: secondary
 paths:
   - server/src/statements/**
   - server/src/payments/numbering.ts
+  - server/src/agreements/reduce.ts
+  - server/src/agreements/reduce-compose.ts
 features:
   - id: statement
     title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
@@ -25,3 +27,21 @@ features:
       - The reversed payment shows its payment line and its reversal line
       - The closing balance equals the client summary's outstanding minus unallocated
       - From May, the earlier lines fold into the opening balance and the totals still add up
+  - id: reduce
+    title: Malafat lowers a fixed fee past what is unbilled, and the rest becomes a credit with its reason
+    tier: secondary
+    # MUT-480 (ADR-222): POST /v1/agreements/{id}/reduce and its preview. Malafat's "Lower the fee" sheet is MAL-1424.
+    paths:
+      - server/src/agreements/reduce.ts
+      - server/src/agreements/reduce-compose.ts
+      - server/src/routes/agreements.ts
+      - server/src/routes/installments.ts
+    steps:
+      - Malafat sets up a firm with a ₪3,540 fee in three stages; the first is billed on signing and partly paid
+      - Malafat previews lowering the fee by ₪3,000
+      - Malafat confirms it with the reason Discount
+      - Malafat reads the agreement and the client's statement
+    expect:
+      - "The preview voids both unbilled stages and credits ₪640 on the billed one; what is outstanding goes from ₪680 to ₪40"
+      - The agreement shows the effective total ₪540, the credited ₪640 and a REDUCTION row with its reason
+      - The statement shows the credit line with the reason code, and the balance dropped by exactly the credit

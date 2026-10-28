@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-480: lower a fixed fee in one call (API 1.85.0-mut480, ADR-222)
+
+**Why:** a partner giving a discount or forgiving part of a fee needed a negative supplement plus credits receivable by receivable, and Malafat may not split amounts itself (ADR-150). Unblocks MAL-1424 ("Lower the fee"). Plan `.claude/designs/mut-480-lower-the-fee.md` (eng-reviewed; Basel approved D1–D9).
+
+### Added
+- `POST /v1/agreements/{id}/reduce/preview` and `/reduce`: `by` or `to` (the new effective total), unbilled installments first (latest first, at most one lowered partly), then credits on the open receivables (latest posting first); `reasonCode` required (OTHER needs a note). Errors 422 `NOT_FIXED`, `AMOUNT_INVALID`, `REDUCTION_EXCEEDS_OPEN {unbilled, outstanding, maximum}`, `USE_CANCEL`, `REASON_REQUIRED`; 409 `AGREEMENT_CANCELLED`, `PREVIEW_STALE`.
+- `agreements/reduce.ts` (pure plan, gross-to-pricing-basis inverse), `agreements/reduce-compose.ts` (shared by preview and commit), `agreements.reduce` on both stores.
+- `AgreementDetail.credited` / `effectiveTotal`; `Supplement.reasonCode` / `appliedGross` / `credited` and distribution `REDUCTION`; `Credit.reasonCode`; `CreditRequest.reasonCode?`; the statement CREDIT line's `reasonCode`. `CreditReasonCodeSchema` for MUT-443.
+- Audit `agreement.reduced`, plus `receivable.credited` (source `REDUCTION`) per credit.
+- Release-QA `portal-selfservice.malafat-money-api.reduce`.
+
+### Changed
+- `postInstallment` claims on the version the caller read (lazy poster, manual trigger), so a post never bills an amount a reduction or supplement changed since (E1). The manual trigger answers 409 `INSTALLMENT_VOIDED` for a line a reduction voided and 409 `VERSION_MISMATCH` for a lost claim (O4).
+- `upfrontMoved` is `receivablesMoved` (its contingency callers unchanged).
+
+### Technical
+- Migrations `20261028170000_mut480_supplement_reduction` (enum value alone) and `20261028170100_mut480_reduction_columns` (`agreement_supplements.reasonCode`, `appliedGrossMinor`, `creditedMinor`; `receivable_credits.reasonCode`). Additive.
+- Local snapshot format 10 (9 → 10 fills the new fields as Postgres defaults them); records export carries them.
+- OpenAPI regenerated. Debt: TD-281.
+
 ## [Unreleased] - 2026-10-28 — MUT-441: our own server reads receipts (API 1.84.0-mut441, ADR-220)
 
 **Why:** Basel made the server the receipt reader (2026-10-28), not ADR-199's fallback: the device engines miss the bar (Android Arabic dates, the browser), and every original is already on our server. Self-hosted OCR, no LLM, no third party; ships dark. Plan `.claude/designs/mut-441-server-ocr.md` (eng-reviewed, R-D1..R10), benchmark `.claude/designs/mut-441-bench.md`.

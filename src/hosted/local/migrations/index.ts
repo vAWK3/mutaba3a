@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, ReceivableRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -170,6 +170,23 @@ function addReceivableNumbers(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-480, 9 → 10: credits gain `reasonCode` and supplements gain `reasonCode`, `appliedGrossMinor` and `creditedMinor`,
+ * set only by lowering a fee; every existing row reads as Postgres's defaults do (null, null, 0).
+ */
+function addReductionFields(snapshot: StoredSnapshot): StoredSnapshot {
+  const credits = snapshot.maps.credits as Map<string, Omit<CreditRecord, 'reasonCode'>>;
+  const supps = snapshot.maps.supps as Map<string, Omit<SupplementRecord, 'reasonCode' | 'appliedGrossMinor' | 'creditedMinor'>>;
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      credits: new Map([...credits].map(([id, c]) => [id, { ...c, reasonCode: null }])),
+      supps: new Map([...supps].map(([id, s]) => [id, { ...s, reasonCode: null, appliedGrossMinor: null, creditedMinor: 0n }])),
+    },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -184,6 +201,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 6, to: 7, migrate: addClosure },
   { from: 7, to: 8, migrate: addOperatorAt },
   { from: 8, to: 9, migrate: addReceivableNumbers },
+  { from: 9, to: 10, migrate: addReductionFields },
 ];
 
 /**

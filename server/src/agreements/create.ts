@@ -1,4 +1,4 @@
-import { formatMoney } from '../money.js';
+import { formatMoney, type Currency } from '../money.js';
 import type { AgreementRecord, ApproveProposalInput, CreateInstallmentInput, InstallmentRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import { serializeAgreement, serializeInstallment, serializeSupplement } from '../serializers.js';
 import {
@@ -17,6 +17,7 @@ import {
 } from './compose.js';
 import { COMMISSION_RATE_RULE, isCommissionRate, type UpfrontTreatment } from './contingency.js';
 import { postDueItems, type PostingActor } from './posting.js';
+import { effectiveTotalsOf } from './reduce-compose.js';
 
 /**
  * Creating a fixed-fee or contingency agreement from a composed preview (M3 brief §2.3, MUT-100),
@@ -110,10 +111,14 @@ export async function createAgreementFromPreview(
 export async function agreementDetail(store: LedgerStore, organization: Organization, agreement: AgreementRecord, today: string) {
   const [installments, supplements] = await Promise.all([store.agreements.listInstallments(organization.id, agreement.id), store.agreements.listSupplements(organization.id, agreement.id)]);
   const paidByReceivable = await paidMap(store, organization.id, installments);
+  const effective = effectiveTotalsOf(agreement, installments, paidByReceivable);
+  const money = (minor: bigint) => formatMoney({ minor, currency: agreement.currency as Currency });
   return {
     agreement: serializeAgreement(agreement),
     installments: installments.map((i) => serializeInstallment({ installment: i, currency: agreement.currency, ...installmentView(i, agreement, today, paidByReceivable.get(i.receivableId ?? '')) })),
     supplements: supplements.map((s) => serializeSupplement(s, agreement.currency)),
+    credited: effective ? money(effective.creditedMinor) : null,
+    effectiveTotal: effective ? money(effective.effectiveMinor) : null,
   };
 }
 

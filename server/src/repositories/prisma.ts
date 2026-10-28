@@ -70,6 +70,7 @@ import type {
   ApiKeyRecord,
   ApiKeyRepository,
   ApplySupplementInput,
+  ReduceAgreementInput,
   CorrectOutcomeInput,
   OutcomeWriteInput,
   AuditRepository,
@@ -1431,6 +1432,10 @@ export class PrismaLedgerStore implements LedgerStore {
         return receivable ? { installment: current, receivable, created: false } : null;
       }
       if (current.voidedAt) return null;
+      // MUT-480 (E1): claim on the version the caller read, so a reduction or supplement landing in between is never
+      // billed at the old amount. A lost claim returns null; the line posts on the next read.
+      const expectedVersion = input.expectedVersion ?? current.version;
+      if (current.version !== expectedVersion) return null;
       const agreement = await this.prisma.agreement.findFirst({ where: { id: current.agreementId, organizationId } });
       if (!agreement) return null;
       try {
@@ -1456,9 +1461,10 @@ export class PrismaLedgerStore implements LedgerStore {
               createdAt: input.at,
             },
           });
-          // Only the first poster wins, and never on a voided line (a correction or cancel voiding it concurrently).
+          // Only the first poster wins, never on a voided line (a correction or cancel voiding it concurrently), and never
+          // on a line whose amount changed since it was read (MUT-480 E1).
           const { count } = await tx.installment.updateMany({
-            where: { id: current.id, receivableId: null, voidedAt: null },
+            where: { id: current.id, receivableId: null, voidedAt: null, version: expectedVersion },
             data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
           });
           if (count !== 1) throw new AlreadyPosted();
@@ -1468,7 +1474,7 @@ export class PrismaLedgerStore implements LedgerStore {
       } catch (err) {
         if (!(err instanceof AlreadyPosted)) throw err;
         const installment = await this.prisma.installment.findFirstOrThrow({ where: { id: installmentId } });
-        if (!installment.receivableId) return null; // voided under us: nothing posts.
+        if (!installment.receivableId) return null; // voided or changed under us: nothing posts now.
         const receivable = await this.prisma.receivable.findUniqueOrThrow({ where: { id: installment.receivableId ?? '' } });
         return { installment, receivable, created: false };
       }
@@ -1497,6 +1503,48 @@ export class PrismaLedgerStore implements LedgerStore {
         const installments = await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } });
         return { kind: 'updated' as const, record: { agreement, supplement, installments } };
       }),
+    reduce: async (organizationId, agreementId, input: ReduceAgreementInput, at) => {
+      try {
+        return await this.asStaleOnLockConflict(organizationId, agreementId, () =>
+          translate(() =>
+            this.prisma.$transaction(async (tx) => {
+              // Agreement row, then receivables in id order: the lock order of correctOutcome and the payment writes.
+              const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+              if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
+              const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+              if (current.version !== input.expectedVersion || current.status !== 'ACTIVE') return { kind: 'stale' as const };
+              // Every posted receivable the plan read, not only the credited ones (O-F4): its outstanding fed the plan.
+              if (await receivablesMoved(tx, organizationId, input.receivables)) return { kind: 'stale' as const };
+              // Conditional on what the plan read: a line posted, voided or changed since matches no row and rolls back.
+              for (const u of input.installmentUpdates) {
+                const { count } = await tx.installment.updateMany({ where: { id: u.id, agreementId, receivableId: null, voidedAt: null, version: u.expectedVersion }, data: { amountMinor: u.amountMinor, netMinor: u.netMinor, vatMinor: u.vatMinor, grossMinor: u.grossMinor, version: { increment: 1 } } });
+                if (count !== 1) throw new StaleWrite();
+              }
+              for (const v of input.voids) {
+                const { count } = await tx.installment.updateMany({ where: { id: v.id, agreementId, receivableId: null, voidedAt: null, version: v.expectedVersion }, data: { voidedAt: at, version: { increment: 1 } } });
+                if (count !== 1) throw new StaleWrite();
+              }
+              const credits: CreditRecord[] = [];
+              for (const c of input.credits) {
+                const r = await tx.receivable.findUniqueOrThrow({ where: { id: c.receivableId } });
+                if (r.status !== 'OPEN' || c.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new StaleWrite();
+                credits.push(await tx.receivableCredit.create({ data: { organizationId, receivableId: c.receivableId, amountMinor: c.amountMinor, netMinor: c.netMinor, vatMinor: c.vatMinor, ...input.credit, createdAt: at } }));
+                await settleReceivable(tx, c.receivableId, { creditedMinor: { increment: c.amountMinor } });
+              }
+              const { count } = await tx.agreement.updateMany({ where: { id: agreementId, version: input.expectedVersion }, data: { ...input.totals, version: { increment: 1 }, updatedAt: at } });
+              if (count !== 1) throw new Error('reduce: agreement moved under its row lock');
+              const supplement = await tx.agreementSupplement.create({ data: { organizationId, agreementId, ...input.supplement, resultingAmountMinor: input.totals.amountMinor, createdAt: at } });
+              const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+              const installments = await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } });
+              return { kind: 'updated' as const, record: { agreement, supplement, installments, credits } };
+            }),
+          ),
+        );
+      } catch (err) {
+        if (err instanceof StaleWrite) return { kind: 'stale' };
+        throw err;
+      }
+    },
     listSupplements: (organizationId, agreementId) => this.prisma.agreementSupplement.findMany({ where: { organizationId, agreementId }, orderBy: { createdAt: 'asc' } }),
     appendVersion: async (input: AppendVersionInput, at) =>
       translate(() =>
@@ -1536,7 +1584,7 @@ export class PrismaLedgerStore implements LedgerStore {
           const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
           if (lockedAgreement.length === 0) return { kind: 'not_found' as const };
           const current = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
-          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
+          if (await receivablesMoved(tx, organizationId, input.upfrontReceivables)) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
           // The conditional write is the guard: a second record, or one racing a terms change, matches no row.
           const { count } = await tx.agreement.updateMany({ where: { id: agreementId, organizationId, version: input.expectedVersion, outcome: null }, data: outcomeData(input, at) });
           if (count !== 1) return { kind: 'stale' as const, record: { agreement: current, installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }) } };
@@ -1559,7 +1607,7 @@ export class PrismaLedgerStore implements LedgerStore {
           const replaced = input.replaceInstallmentId ? await tx.installment.findFirst({ where: { id: input.replaceInstallmentId, organizationId, agreementId, isCommission: true, voidedAt: null } }) : null;
           // Gone, or posted since the bill was composed (its preview promised no credit): stale either way.
           if (input.replaceInstallmentId && (!replaced || replaced.receivableId !== input.replaceReceivableId)) return stale();
-          if (await upfrontMoved(tx, organizationId, input.upfrontReceivables)) return stale();
+          if (await receivablesMoved(tx, organizationId, input.upfrontReceivables)) return stale();
           // Under the receivable's row lock, before anything is written: a payment or credit that landed after the
           // preview refuses the whole correction (an allocation waits on this lock until we commit or roll back).
           const locked = replaced?.receivableId ? await lockReceivable(tx, replaced.receivableId) : null;
@@ -3265,12 +3313,12 @@ async function purgeDecisionIn(db: Tx | PrismaClient, userId: string): Promise<P
 }
 
 /**
- * MUT-100 review D2: locks the posted upfront receivables the counted upfront was read from (in id order) and reports
- * whether any is gone or moved since — a credit landing between the commit's compose and this write would otherwise
- * bill against an upfront that no longer stands. Allocations and reversals lock receivables in request order, so a
+ * MUT-100 review D2: locks the posted receivables a write was planned from (in id order) and reports whether any is
+ * gone or moved since — for an outcome, a credit landing between the commit's compose and this write would otherwise
+ * bill against an upfront that no longer stands; for a reduction (MUT-480 R3), the outstanding the partner saw. Allocations and reversals lock receivables in request order, so a
  * deadlock with one is possible; `asStaleOnLockConflict` turns it into a retryable `stale` instead of a 500.
  */
-async function upfrontMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): Promise<boolean> {
+async function receivablesMoved(tx: Tx, organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): Promise<boolean> {
   if (seen.length === 0) return false;
   const ids = [...seen.map((s) => s.id)].sort();
   const rows = await tx.$queryRaw<Array<{ id: string; version: number }>>`SELECT "id"::text AS "id", "version" FROM "receivables" WHERE "id" = ANY(${ids}::uuid[]) AND "organizationId" = ${organizationId}::uuid ORDER BY "id" FOR UPDATE`;
@@ -3317,7 +3365,7 @@ async function lockReceivable(tx: Tx, receivableId: string): Promise<{ id: strin
 
 /**
  * Locks every receivable a write will touch, in id order: the order the contingency outcome writes lock the upfront
- * receivables (`upfrontMoved`), so a payment write and an outcome write can't deadlock (MUT-130). The caller then
+ * receivables (`receivablesMoved`), so a payment write and an outcome write can't deadlock (MUT-130). The caller then
  * works in its own order on rows it already holds.
  */
 async function lockReceivablesInIdOrder(tx: Tx, receivableIds: readonly string[]): Promise<void> {
@@ -3433,6 +3481,9 @@ async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: reado
 
 /** Thrown inside the posting transaction to roll back a receivable another poster beat us to. */
 class AlreadyPosted extends Error {}
+
+/** MUT-480: a conditional write inside `reduce` missed; thrown to roll back what the transaction already wrote. */
+class StaleWrite extends Error {}
 
 export type { AgreementRecord, RetainerChargeRecord, ReceivableRecord };
 

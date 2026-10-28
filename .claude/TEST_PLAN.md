@@ -4150,3 +4150,13 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Local mode | `src/hosted/local/__tests__/receipts.test.ts` | signed out, a PENDING receipt whose file never arrived deletes (204) and the expense lists none |
 | Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt`) | a text file refused; PDF + JPEG, JPEG removed, Save: one POST, one start/PUT/complete, the drawer closes, reopening lists the PDF; a failed PUT leaves the new expense open at `?expense=` and Upload again lands it; 11 picked: 10 listed, the 11th named, Add receipt off, Cancel sends nothing |
 | Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt-arabic`) | in Arabic: right to left, الإيصالات / إضافة إيصال, the Arabic refusal toast, a Latin filename in its own `<bdi>` with إزالة and تُضاف عند الحفظ. |
+
+## MUT-480 — lower a fixed fee (ADR-222)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/agreements/__tests__/reduce.test.ts` | the plan: latest first, boundary voids, partial lowering per VAT treatment, credits latest posting first at each receivable's treatment, refusals (AMOUNT_INVALID, REDUCTION_EXCEEDS_OPEN with maximum, USE_CANCEL), the VAT-exclusive gap as roundedBy; `amountForGrossAtLeast` swept over every gross 1..20000 at 17 % and 18 % |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut480.ts` (memory + Prisma) | reduce writes lowered/voided lines, credits with reasonCode, totals, version and a REDUCTION row; stale with nothing written on any moved agreement, installment or receivable (including rollback of an earlier write); E1: a post on the old version posts nothing and the next one bills the lowered amount; concurrent post vs reduce and payment vs reduce never over-bill or over-settle |
+| Route | `server/src/__tests__/agreement-reduce.route.test.ts` | AC1–AC5 (AC6: the pinned 1.85.0-mut480 literals in routes-m2..m8), `to` = `by`, E2 reason outside the token, idempotent replay, audit counts, R1 lazy posting first, D5 rounding over HTTP, NOT_FIXED / AGREEMENT_CANCELLED / 404, detail `credited`/`effectiveTotal`, statement `reasonCode`, O4 trigger answers, the credit route's optional reasonCode |
+| Local mode | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` (everyRecord lowers a fee) | 9 → 10 fills the new fields; the store restores; the fingerprint sees every new field with a value |
+| Release-QA | `qa/specs/portal-selfservice/malafat-money-api.spec.ts` `@portal-selfservice.malafat-money-api.reduce` | Malafat previews and commits a reduction past the unbilled amount on a live API, then reads the agreement and statement |

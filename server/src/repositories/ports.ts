@@ -6,6 +6,7 @@ import type { TermsLocale, TermsSurface } from '../legal.js';
 import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
+import type { CreditReasonCode } from '../payments/credit.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -602,7 +603,7 @@ export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
 export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
-export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT';
+export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION';
 
 export interface AgreementRecord {
   id: string;
@@ -770,6 +771,12 @@ export interface PostingInput {
   postingDate: IsoDate;
   dueDate: IsoDate;
   at: Date;
+  /**
+   * MUT-480 (E1): the installment version the caller read. The claim only wins on that version, so a post never bills an
+   * amount a reduction or supplement changed since; a lost claim returns null and the line posts on the next read.
+   * Defaults to the version the store reads itself.
+   */
+  expectedVersion?: number;
 }
 
 export interface SupplementInput {
@@ -778,6 +785,12 @@ export interface SupplementInput {
   effectiveDate: IsoDate;
   distribution: SupplementDistribution;
   requestId: string | null;
+  /** MUT-480: REDUCTION rows only; a `CreditReasonCode` (VARCHAR in storage). */
+  reasonCode?: string | null;
+  /** MUT-480: REDUCTION rows only; the gross taken off, installments and credits together. */
+  appliedGrossMinor?: bigint | null;
+  /** MUT-480: REDUCTION rows only; the part of `appliedGrossMinor` that became credits. */
+  creditedMinor?: bigint;
 }
 
 export interface SupplementRecord extends SupplementInput {
@@ -785,6 +798,9 @@ export interface SupplementRecord extends SupplementInput {
   organizationId: string;
   agreementId: string;
   resultingAmountMinor: bigint;
+  reasonCode: string | null;
+  appliedGrossMinor: bigint | null;
+  creditedMinor: bigint;
   createdAt: Date;
 }
 
@@ -795,6 +811,31 @@ export interface InstallmentAmountUpdate {
   vatMinor: bigint;
   grossMinor: bigint;
 }
+
+// ---- MUT-480: lowering a fixed fee ------------------------------------------
+
+/**
+ * One reduction, written atomically. Every installment write and the agreement version are conditional on what the
+ * plan read, and every posted receivable the plan read is version-checked under its row lock (R3, O-F4), so any move
+ * since the read answers `stale` with nothing written.
+ */
+export interface ReduceAgreementInput {
+  expectedVersion: number;
+  installmentUpdates: Array<InstallmentAmountUpdate & { expectedVersion: number }>;
+  voids: Array<{ id: string; expectedVersion: number }>;
+  /** Every posted receivable of the agreement the plan read, with the version it read. */
+  receivables: ReadonlyArray<{ id: string; version: number }>;
+  credits: Array<{ receivableId: string; amountMinor: bigint; netMinor: bigint; vatMinor: bigint }>;
+  /** The text, code and date every credit row carries. */
+  credit: { reason: string; reasonCode: CreditReasonCode; effectiveDate: IsoDate; requestId: string | null };
+  supplement: SupplementInput;
+  totals: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint };
+}
+
+export type ReduceAgreementResult =
+  | { kind: 'not_found' }
+  | { kind: 'stale' }
+  | { kind: 'updated'; record: { agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[]; credits: CreditRecord[] } };
 
 export interface ApplySupplementInput {
   supplement: SupplementInput;
@@ -912,6 +953,8 @@ export interface AgreementRepository {
   /** Unposted, non-voided installments on ACTIVE agreements that should have a receivable by `today`: DATE ones whose trigger date has arrived, and IMMEDIATE ones left unposted by a crash between create and post (M8, D16). Never MANUAL. */
   listUnpostedDue(organizationId: string, today: IsoDate): Promise<InstallmentRecord[]>;
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
+  /** MUT-480: installments lowered or voided, credits on the open receivables, totals, version and a REDUCTION supplement row, atomically. */
+  reduce(organizationId: string, agreementId: string, input: ReduceAgreementInput, at: Date): Promise<ReduceAgreementResult>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
   /** FIXED / CONTINGENCY: status CANCELLED, unposted installments voided — never once a contingency outcome is recorded (returned unchanged). RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
   cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
@@ -1140,6 +1183,8 @@ export interface CreditInput {
   netMinor: bigint;
   vatMinor: bigint;
   reason: string;
+  /** MUT-480: a `CreditReasonCode` (VARCHAR in storage); null on credits made before reason codes. */
+  reasonCode?: string | null;
   effectiveDate: IsoDate;
   requestId: string | null;
 }
@@ -1148,6 +1193,7 @@ export interface CreditRecord extends CreditInput {
   id: string;
   organizationId: string;
   receivableId: string;
+  reasonCode: string | null;
   createdAt: Date;
 }
 

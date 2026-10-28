@@ -78,3 +78,57 @@ test('Malafat reads a client\'s ledger card, with CHG numbers, a running balance
     expect(fromMay.closingBalance).toBe(whole.closingBalance);
   });
 });
+
+/**
+ * MUT-480: lowering a fixed fee (MAL-1424's "Lower the fee"), against the same live dev API. ₪3,540 VAT-inclusive in
+ * three ₪1,180 stages; the first is billed on signing and ₪500 of it is paid.
+ */
+test('Malafat lowers a fixed fee past what is unbilled, and the rest becomes a credit with its reason', { tag: '@portal-selfservice.malafat-money-api.reduce' }, async ({ step }) => {
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let customerId = '';
+  let agreementId = '';
+  let billed = '';
+  let plan: Json = {};
+
+  await step('Malafat sets up a firm with a ₪3,540 fee in three stages; the first is billed on signing and partly paid', async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const apiKey = await call('POST', `/admin/v1/organizations/${org.id}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    await call('PUT', '/v1/settings/vat', key, { rateBasisPoints: 1800, effectiveFrom: '2025-01-01' });
+    customerId = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    const projectId = (await call('POST', '/v1/projects', key, { customerId, name: 'Lawsuit', currency: 'ILS' })).id;
+    const stage = (label: string, type: string) => ({ label, amount: '1180.00', trigger: { type } });
+    const body = { projectId, amount: '3540.00', pricingBasis: 'VAT_INCLUSIVE', agreementDate: '2026-10-01', paymentTerms: 'EOM', installments: [stage('Signing', 'IMMEDIATE'), stage('Hearing', 'MANUAL'), stage('Judgment', 'MANUAL')] };
+    const preview = await call('POST', '/v1/agreements/preview', key, body);
+    const created = await call('POST', '/v1/agreements', key, { ...body, previewToken: preview.previewToken });
+    agreementId = created.agreement.id;
+    billed = created.installments[0].receivableId;
+    const allocations = [{ receivableId: billed, amount: '500.00' }];
+    const paid = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount: '500.00', allocations });
+    await call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount: '500.00', receivedOn: '2026-10-15', method: 'BANK', allocations, previewToken: paid.previewToken });
+  });
+
+  await step('Malafat previews lowering the fee by ₪3,000', async () => {
+    plan = await call('POST', `/v1/agreements/${agreementId}/reduce/preview`, key, { by: '3000.00' });
+    expect(plan.installments.map((i: Json) => [i.label, i.after])).toEqual([['Judgment', null], ['Hearing', null]]);
+    expect(plan.credits).toEqual([expect.objectContaining({ receivableId: billed, receivableNumber: expect.stringMatching(/^CHG-\d{4}-\d{4}$/), amount: '640.00' })]);
+    expect(plan.outstanding).toEqual({ before: '680.00', after: '40.00' });
+    expect(plan.effectiveTotal).toEqual({ before: '3540.00', after: '540.00' });
+  });
+
+  await step('Malafat confirms it with the reason Discount', async () => {
+    const done = await call('POST', `/v1/agreements/${agreementId}/reduce`, key, { by: '3000.00', reasonCode: 'DISCOUNT', note: 'Agreed at the meeting', previewToken: plan.previewToken });
+    expect(done.credits).toEqual([expect.objectContaining({ amount: '640.00', reasonCode: 'DISCOUNT', reason: 'Agreed at the meeting' })]);
+  });
+
+  await step("Malafat reads the agreement and the client's statement", async () => {
+    const detail = await call('GET', `/v1/agreements/${agreementId}`, key);
+    expect(detail).toMatchObject({ effectiveTotal: '540.00', credited: '640.00' });
+    expect(detail.installments.map((i: Json) => i.status)).toEqual([expect.not.stringMatching(/^VOID$/), 'VOID', 'VOID']);
+    expect(detail.supplements).toEqual([expect.objectContaining({ distribution: 'REDUCTION', reasonCode: 'DISCOUNT', appliedGross: '3000.00', credited: '640.00' })]);
+    const statement = await call('GET', `/v1/customers/${customerId}/statement?currency=ILS`, key);
+    expect(statement.lines.find((l: Json) => l.kind === 'CREDIT')).toMatchObject({ credit: '640.00', reasonCode: 'DISCOUNT' });
+    expect(statement.closingBalance).toBe('40.00');
+  });
+});

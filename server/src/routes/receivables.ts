@@ -127,13 +127,13 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const split = splitCredit({ amountMinor, treatment: receivable.vatTreatment, rateBasisPoints: receivable.vatRateBasisPoints });
       let result;
       try {
-        result = await store.receivables.credit(organization.id, receivable.id, { amountMinor: split.amountMinor, netMinor: split.netMinor, vatMinor: split.vatMinor, reason: body.reason, effectiveDate, requestId: c.get('requestId') }, now);
+        result = await store.receivables.credit(organization.id, receivable.id, { amountMinor: split.amountMinor, netMinor: split.netMinor, vatMinor: split.vatMinor, reason: body.reason, reasonCode: body.reasonCode ?? null, effectiveDate, requestId: c.get('requestId') }, now);
       } catch (err) {
         if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'The receivable changed while crediting; re-read and retry', { reason: 'VERSION_MISMATCH' });
         throw err;
       }
       if (!result) throw new ApiError('NOT_FOUND', 'No such receivable');
-      await store.audit.append({ organizationId: organization.id, ...actor, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
+      await store.audit.append({ organizationId: organization.id, ...actor, action: 'receivable.credited', entityType: 'receivable', entityId: receivable.id, metadata: { creditId: result.credit.id, amount: body.amount, reason: body.reason, ...(body.reasonCode ? { reasonCode: body.reasonCode } : {}), settled: result.receivable.status === 'SETTLED' }, requestId: c.get('requestId') });
       return c.json({ receivable: serializeReceivable(result.receivable, today), credit: serializeCredit(result.credit, currency) }, 201);
     },
   );

@@ -18,6 +18,7 @@ import { CLIENT_RELEASE_MAX, CLIENT_RELEASE_PATTERN, TERMS_VERSION_PATTERN } fro
 import { ITEM_STATUSES } from './agreements/status.js';
 import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
+import { CREDIT_REASON_CODES } from './payments/credit.js';
 import { VERDICT_PROFILE_KINDS, VERDICT_TOTAL_LABELS } from './summaries/verdict.js';
 
 /**
@@ -1946,14 +1947,25 @@ export const InstallmentSchema = z
   })
   .openapi('Installment');
 
+/** MUT-480 (D3): why a fee was lowered or a receivable credited. OTHER needs a note. MUT-443 reuses it. */
+export const CreditReasonCodeSchema = z.enum(CREDIT_REASON_CODES).openapi('CreditReasonCode');
+
 export const SupplementSchema = z
   .object({
     id: uuid,
+    /** The change to the installments, in the agreement's pricing basis (≤ 0 for a REDUCTION). */
     amount: AmountSchema,
     description: z.string().nullable(),
     effectiveDate: IsoDateSchema,
-    distribution: z.enum(['LAST_UNPOSTED', 'PRORATE_UNPOSTED', 'NEW_INSTALLMENT']),
+    /** MUT-480 added REDUCTION: a fee lowered through POST /v1/agreements/{id}/reduce. */
+    distribution: z.enum(['LAST_UNPOSTED', 'PRORATE_UNPOSTED', 'NEW_INSTALLMENT', 'REDUCTION']),
     resultingAmount: AmountSchema,
+    /** MUT-480: REDUCTION rows only (null otherwise). */
+    reasonCode: CreditReasonCodeSchema.nullable(),
+    /** MUT-480: REDUCTION rows only (null otherwise): the gross taken off, installments and credits together. */
+    appliedGross: AmountSchema.nullable(),
+    /** MUT-480: the part of `appliedGross` that became credits on posted receivables; 0 on other rows. */
+    credited: AmountSchema,
     createdAt: z.string().datetime(),
   })
   .openapi('Supplement');
@@ -2002,8 +2014,61 @@ export const AgreementSchema = z
   .openapi('Agreement');
 
 export const AgreementDetailSchema = z
-  .object({ agreement: AgreementSchema, installments: z.array(InstallmentSchema), supplements: z.array(SupplementSchema) })
+  .object({
+    agreement: AgreementSchema,
+    installments: z.array(InstallmentSchema),
+    supplements: z.array(SupplementSchema),
+    /** MUT-480 (O2): what was credited on the live installments' receivables, gross; null for a retainer. */
+    credited: AmountSchema.nullable(),
+    /** MUT-480 (O2): the fee as it stands, = the live installments' gross − `credited`; what `reduce`'s `to` measures. Null for a retainer. */
+    effectiveTotal: AmountSchema.nullable(),
+  })
   .openapi('AgreementDetail');
+
+// ---- MUT-480: lowering a fixed fee ------------------------------------------
+
+const reduceAmount = {
+  /** The gross to take off (positive). Exactly one of `by` and `to`. */
+  by: AmountSchema.optional(),
+  /** The new effective total, gross (below the current one). Exactly one of `by` and `to`. */
+  to: AmountSchema.optional(),
+};
+
+export const ReducePreviewRequestSchema = z
+  .object({ ...reduceAmount, reasonCode: CreditReasonCodeSchema.optional(), note: z.string().max(500).optional() })
+  .openapi('ReducePreviewRequest');
+
+export const ReduceRequestSchema = z
+  .object({
+    ...reduceAmount,
+    reasonCode: CreditReasonCodeSchema,
+    /** Required when reasonCode is OTHER (422 REASON_REQUIRED); stored as the credits' reason text. */
+    note: z.string().max(500).optional(),
+    previewToken: z.string().length(64),
+  })
+  .openapi('ReduceRequest');
+
+const ReduceFiguresSchema = z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema });
+const BeforeAfterSchema = z.object({ before: AmountSchema, after: AmountSchema });
+
+export const ReducePreviewResponseSchema = z
+  .object({
+    /** The installments that change, latest first; `after` null = voided. */
+    installments: z.array(z.object({ id: uuid, position: z.number().int(), label: z.string(), before: ReduceFiguresSchema, after: ReduceFiguresSchema.nullable() })),
+    /** Credits on this agreement's open receivables, latest posting first. */
+    credits: z.array(z.object({ receivableId: uuid, receivableNumber: z.string(), amount: AmountSchema, net: AmountSchema, vat: AmountSchema })),
+    requested: AmountSchema,
+    /** What lands; below `requested` only on a VAT-exclusive agreement whose gross can't be hit exactly (by `roundedBy`, under one net minor unit). */
+    applied: AmountSchema,
+    roundedBy: AmountSchema,
+    /** This agreement's open receivables. */
+    outstanding: BeforeAfterSchema,
+    effectiveTotal: BeforeAfterSchema,
+    previewToken: z.string().length(64),
+  })
+  .openapi('ReducePreviewResponse');
+
+export const ReduceResponseSchema = AgreementDetailSchema.extend({ supplement: SupplementSchema, credits: z.array(z.lazy(() => CreditSchema)) }).openapi('ReduceResponse');
 
 export const AgreementPreviewResponseSchema = z
   .object({
@@ -2361,7 +2426,7 @@ export const StatementLineSchema = z
       /** Days past dueDate as of asOf while overdue; null otherwise. */
       daysOverdue: z.number().int().nullable(),
     }),
-    z.object({ ...StatementLineBase, kind: z.literal('CREDIT'), receivableId: uuid, receivableNumber: z.string(), reason: z.string() }),
+    z.object({ ...StatementLineBase, kind: z.literal('CREDIT'), receivableId: uuid, receivableNumber: z.string(), reason: z.string(), reasonCode: CreditReasonCodeSchema.nullable() }),
     z.object({
       ...StatementLineBase,
       kind: z.literal('PAYMENT'),
@@ -2547,13 +2612,15 @@ export const CreditRequestSchema = z
     /** Positive magnitude in the receivable's currency (gross). */
     amount: AmountSchema,
     reason: z.string().min(1).max(500),
+    /** MUT-480: optional here (a retainer month credited from the ledger carries one); stored on the credit. */
+    reasonCode: CreditReasonCodeSchema.optional(),
     /** Defaults to today in the organization timezone. */
     effectiveDate: IsoDateSchema.optional(),
   })
   .openapi('CreditRequest');
 
 export const CreditSchema = z
-  .object({ id: uuid, receivableId: uuid, amount: AmountSchema, net: AmountSchema, vat: AmountSchema, reason: z.string(), effectiveDate: IsoDateSchema, createdAt: z.string().datetime() })
+  .object({ id: uuid, receivableId: uuid, amount: AmountSchema, net: AmountSchema, vat: AmountSchema, reason: z.string(), reasonCode: CreditReasonCodeSchema.nullable(), effectiveDate: IsoDateSchema, createdAt: z.string().datetime() })
   .openapi('Credit');
 
 export const CreditResponseSchema = z.object({ receivable: ReceivableSchema, credit: CreditSchema }).openapi('CreditResponse');

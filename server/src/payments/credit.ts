@@ -12,6 +12,10 @@ export interface CreditSplit {
   vatMinor: bigint;
 }
 
+/** Why a fee was lowered or a receivable credited (MUT-480 D3); MUT-443 reuses the list. OTHER needs a note. */
+export const CREDIT_REASON_CODES = ['DISCOUNT', 'GOODWILL', 'ENTERED_BY_MISTAKE', 'CLIENT_DISPUTE', 'OTHER'] as const;
+export type CreditReasonCode = (typeof CREDIT_REASON_CODES)[number];
+
 export type CreditErrorReason = 'AMOUNT_INVALID' | 'RECEIVABLE_NOT_OPEN' | 'CREDIT_EXCEEDS_OUTSTANDING';
 
 export function splitCredit(input: { amountMinor: bigint; treatment: VatTreatment; rateBasisPoints: number }): CreditSplit {

@@ -180,6 +180,7 @@ export const STORE_ACCESS: StoreAccess = {
     postInstallment: { write: 'agreements' },
     listUnpostedDue: 'read',
     applySupplement: { write: 'agreements' },
+    reduce: { write: 'agreements' },
     listSupplements: 'read',
     cancel: { write: 'agreements' },
     appendVersion: { write: 'agreements' },

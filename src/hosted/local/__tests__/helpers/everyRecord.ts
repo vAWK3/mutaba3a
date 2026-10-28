@@ -114,6 +114,26 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   // credits: a credit note on what is left
   await store.receivables.credit(org, posted.receivable.id, { amountMinor: 5_000n, netMinor: 5_000n, vatMinor: 0n, reason: 'Discount', effectiveDate: '2026-10-04', requestId: null }, LATER);
 
+  // supps (REDUCTION), credits with a reason code: the fee lowered by a credit on what is still left (MUT-480)
+  const lowering = (await store.agreements.getById(org, fixed.agreement.id))!;
+  const creditedLine = (await store.receivables.getById(org, posted.receivable.id))!;
+  const reduced = await store.agreements.reduce(
+    org,
+    lowering.id,
+    {
+      expectedVersion: lowering.version,
+      installmentUpdates: [],
+      voids: [],
+      receivables: [{ id: creditedLine.id, version: creditedLine.version }],
+      credits: [{ receivableId: creditedLine.id, amountMinor: 1_000n, netMinor: 1_000n, vatMinor: 0n }],
+      credit: { reason: 'Loyal client', reasonCode: 'GOODWILL', effectiveDate: '2026-10-05', requestId: null },
+      supplement: { amountMinor: 0n, description: 'Loyal client', effectiveDate: '2026-10-05', distribution: 'REDUCTION', requestId: null, reasonCode: 'GOODWILL', appliedGrossMinor: 1_000n, creditedMinor: 1_000n },
+      totals: { amountMinor: lowering.amountMinor, netMinor: lowering.netMinor, vatMinor: lowering.vatMinor, grossMinor: lowering.grossMinor },
+    },
+    LATER,
+  );
+  if (reduced.kind !== 'updated') throw new Error(`the fixture reduction was ${reduced.kind}`);
+
   // props: a fee proposal on a second matter (one open proposal per matter)
   const second = await store.projects.create({ organizationId: org, customerId: customer.id, name: 'Logo', currency: 'ILS' }, AT);
   await store.feeProposals.create(

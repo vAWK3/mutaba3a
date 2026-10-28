@@ -159,6 +159,8 @@ enum SupplementDistribution {
   LAST_UNPOSTED
   PRORATE_UNPOSTED
   NEW_INSTALLMENT
+  /// MUT-480: a fee lowered (installments lowered or voided, then credits); written only by POST /v1/agreements/{id}/reduce.
+  REDUCTION
 }
 
 model Organization {
@@ -986,6 +988,10 @@ model AgreementSupplement {
   effectiveDate        String                 @db.VarChar(10)
   distribution         SupplementDistribution
   resultingAmountMinor BigInt
+  /// MUT-480, REDUCTION rows only: the reason code, the gross taken off, and the part of it that became credits.
+  reasonCode           String?                @db.VarChar(32)
+  appliedGrossMinor    BigInt?
+  creditedMinor        BigInt                 @default(0)
   requestId            String?
   createdAt            DateTime               @default(now())
 
@@ -1076,6 +1082,8 @@ model ReceivableCredit {
   netMinor       BigInt
   vatMinor       BigInt
   reason         String
+  /// MUT-480: DISCOUNT, GOODWILL, ENTERED_BY_MISTAKE, CLIENT_DISPUTE or OTHER; null on credits made before reason codes.
+  reasonCode     String?    @db.VarChar(32)
   effectiveDate  String     @db.VarChar(10)
   requestId      String?
   createdAt      DateTime   @default(now())

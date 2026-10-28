@@ -40,17 +40,21 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!installment) throw new ApiError('NOT_FOUND', 'No such installment');
       const agreement = await store.agreements.getById(organization.id, installment.agreementId);
       if (!agreement) throw new ApiError('NOT_FOUND', 'No such installment');
-      if (agreement.status === 'CANCELLED' || installment.voidedAt) throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
+      if (agreement.status === 'CANCELLED') throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
+      if (installment.voidedAt) throw installmentVoided();
       if (installment.triggerType !== 'MANUAL') throw validationError('NOT_MANUAL', `This installment posts ${installment.triggerType === 'IMMEDIATE' ? 'immediately' : 'on its date'}; only MANUAL installments are triggered`);
       if (body.dueDate) assertIsoDate(body.dueDate, 'dueDate');
 
       const postingDate = postingDateFor(installment, agreement.agreementDate, today);
       const dueDate = body.dueDate ?? installmentDueDate(installment, agreement, postingDate);
-      const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate, at: now });
+      const result = await store.agreements.postInstallment(organization.id, installment.id, { postingDate, dueDate, at: now, expectedVersion: installment.version });
       if (!result) {
-        // MUT-100: null is also "voided under us" — a cancel landed after the check above.
-        if ((await store.agreements.getInstallment(organization.id, installment.id))?.voidedAt) throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
-        throw new ApiError('NOT_FOUND', 'No such installment');
+        // MUT-100: null is also "voided under us" (a cancel, a correction or a reduction landed after the check above);
+        // MUT-480 (O4): or "changed under us", a claim lost to a change of the line's amount, which a retry posts.
+        const latest = await store.agreements.getInstallment(organization.id, installment.id);
+        if (!latest) throw new ApiError('NOT_FOUND', 'No such installment');
+        if (latest.voidedAt) throw (await store.agreements.getById(organization.id, agreement.id))?.status === 'CANCELLED' ? new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' }) : installmentVoided();
+        throw new ApiError('CONFLICT', 'The installment changed while posting; retry', { reason: 'VERSION_MISMATCH', currentVersion: latest.version });
       }
       if (result.created) {
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'installment.posted', entityType: 'installment', entityId: installment.id, metadata: { agreementId: agreement.id, receivableId: result.receivable.id, trigger: 'MANUAL', dueDate }, requestId: c.get('requestId') });
@@ -61,4 +65,9 @@ export function installmentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   );
 
   return app;
+}
+
+/** MUT-480 (O4): a line voided on a still-active agreement (a fee lowered, or a contingency outcome corrected). */
+function installmentVoided(): ApiError {
+  return new ApiError('CONFLICT', 'This installment was voided; nothing is left to bill on it', { reason: 'INSTALLMENT_VOIDED' });
 }
