@@ -5665,6 +5665,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 6. **Contrast**: the secondary ink `#564E68` misses 7:1 on the mood tints (6.3–7.0), so it appears only on the white card and the canvas; tints carry ink-coloured text. `TEXT_PAIRS` and a test enforce it.
 **Consequences**: one release carries art and frame together; a portal outage takes the art down with the product it belongs to. Regression contract (eng review D3): the MUT-359 template rules stay unchanged; no golden snapshots. Client checks (Gmail, Apple Mail, Outlook) are by hand with `npm --prefix server run mail:preview -- --send <inbox> --yes`; mail is live in production, so they run right after the release that ships the frame (before-release.md), with a server rollback if a client renders it broken. Known: the opaque art shows as pale squares in Gmail and Outlook dark mode.
 **Amendment (2026-10-27, Basel's Apple Mail check):** Apple Mail repainted the live mails dark around the opaque art, because `color-scheme: light` is a preference, not an opt-out. Every mail now declares `light only` (the `color-scheme` and `supported-color-schemes` metas, and inline on the body and the outer table), which Apple Mail and iOS Mail honour: they show the light design in dark mode. Gmail's and Outlook's dark modes ignore any opt-out; MUT-484 (transparent art, chip tile as a cell) is the fix there.
+**Amendment (2026-10-28, MUT-484):** the served art moves to `mail/v2` (`MAIL_ART_PATH`), re-exported from the kit with transparent backgrounds. Headers keep the kit's halo, a thin outline in the band colour that shows as a pale sticker edge in dark mode (Basel's call). Chips keep their round tile with transparent corners: a small pastel circle in dark mode, not an HTML tile cell (supersedes the MUT-484 plan's D2/D5). v1 is never rewritten and is pinned by SHA-256 in `look.test.ts`. Brief: `.claude/designs/mut-484-transparent-mail-art.md`.
 **Alternatives considered:**
 - Art on the website (mtb3a.com/mail/v1), the intake's first answer. Rejected at eng review: separate release, separate outage.
 - Inline CID attachments: heavier mails, and some clients list them as attachments.
@@ -5751,3 +5752,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - A separate loop beside `bucketize`, checked by a property test. Rejected (D2): the rule would be written twice.
 - A date field inside `Buckets`. Rejected: an amount struct shared by every project figure and test, for a value only two rows need.
+
+## ADR-217: The Customer Statement Is Computed per Request, and Receivables Are Numbered CHG-YYYY-NNNN (MUT-478)
+
+**Status:** Accepted (2026-10-27, MUT-478; epic MUT-25). Plan: `.claude/designs/mut-478-customer-statement.md`. Unblocks Malafat's client ledger card (MAL-1425).
+
+**Context:** Malafat's client money page becomes a ledger card (כרטסת): dated debit and credit lines with a running balance. Malafat may not add up a balance itself (Malafat ADR-150), and receivables had no reference a partner could reconcile by.
+
+**Decision:**
+1. **Receivable numbers are CHG-YYYY-NNNN** (Basel, D1), gap-free per organization and year of `postingDate`, from a `receivable_counters` row taken inside the posting transaction, exactly as payments' PAY- numbers (`payments/numbering.ts` holds both). Every receivable is numbered, an Owed included. The migration backfills existing rows in (postingDate, postedAt, id) order, and a BEFORE INSERT trigger numbers whatever the previous revision inserts during the roll, so the NOT NULL never refuses the old image (PATTERNS: never a constraint the previous image can't satisfy; dropped later, TD-272); the portal's local mode numbers a device's receivables the same way (snapshot format 8 → 9) and the hosted export carries the counters.
+2. **The statement is computed, never stored.** `receivables.statementSources` reads the customer's rows in one currency (six queries on Prisma, none per row); the pure `statements/build.ts` orders them, folds what lies before `from` into the opening balance, cuts after `to`, runs the balance and slices a page. Computing the whole period on every request is what keeps `openingBalance`, `totals` and `closingBalance` identical on every page and the running balance continuous (D3, D4).
+3. **Which lines count:** a charge counts when the summary counts it (`countsOn`), so with no project and no period the closing balance equals the customer summary's outstanding − unallocated (AC1). Credits are their own lines; a reversed payment shows its PAYMENT line and a PAYMENT_REVERSAL dated by the reversal's day in the organization timezone. A capture the person undid (`capture_undo`) is left out entirely (D2). Nothing else is netted away.
+4. **Order:** (date, created, kind rank, id), stable on every call; a payment before its own reversal on the same day. Charges are dated by `postingDate`, credits by `effectiveDate`, payments by `receivedOn`.
+5. **A project statement** shows the project's charges and credits and payments as their allocations there, dated by the payment's `receivedOn`. Unallocated money appears only on the whole-customer statement (D8).
+6. **The route** is `GET /v1/customers/{customerId}/statement`, scope `payments:read`, open to API keys, sessions and device sessions like the other reads, so local mode serves it too (D9). Contract 1.83.0-mut478.
+
+**Consequences:**
+- A MUT-444 correction reposts on the original posting dates, so its reposted charge sorts before the credit dated today. The balance moves by exactly the difference (AC3), but the lines read "charge, …, credit", not "credit then repost" as the ticket's wording suggests.
+- Past ~20k lines for one customer the per-request pass gets slow (TD-271).
+- PAYMENT lines carry the PAY- number; the receipt number arrives with MUT-481.
+
+**Alternatives considered:**
+- A stored ledger table maintained on every write. Rejected: a second source of truth for money that every writer would have to keep in step.
+- SQL window functions for the running balance. Rejected for now: local mode runs the memory store, so the JavaScript pass is needed anyway; it is the TD-271 upgrade path.
+- One sequence with no year (CHG-000123). Rejected by Basel: unlike PAY- numbers.

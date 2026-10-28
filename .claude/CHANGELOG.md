@@ -28,6 +28,40 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
+
+**Why:** Gmail, Outlook.com and Outlook for Mac darken a mail's colours in dark mode but not its images, and ignore the `light only` opt-out; v1's opaque art showed as pale squares (Basel's Outlook screenshots). ADR-214 amendment; brief `.claude/designs/mut-484-transparent-mail-art.md`.
+
+### Added
+- `src/hosted/public/mail/v2/`: the 35 art files from Claude Design export 5, transparent, 8-bit RGBA non-interlaced. Headers keep the kit's halo (a pale sticker edge in dark mode, Basel's call); chips keep their round tile with transparent corners.
+
+### Changed
+- `server/src/email/templates/look.ts`: `MAIL_ART_PATH` is `/mail/v2/`. v1 stays for sent mails.
+- Tests and QA follow `MAIL_ART_PATH` (`templates.test.ts`, `mailer.test.ts`, `qa/specs/portal-selfservice/mail.spec.ts`, `mail.yaml`).
+
+### Technical
+- `look.test.ts` reads every served PNG (`__tests__/png.ts`): format, alpha 0 at corners (and mid-edges for headers), a v1 alpha-255 control, every v1 file pinned by SHA-256 (`mail-art-v1.sha256.json`).
+
+## [Unreleased] - 2026-10-27 — MUT-478: the customer statement (ledger card) and receivable numbers (API 1.83.0-mut478, ADR-217)
+
+**Why:** Malafat's client money page becomes a ledger card (MAL-1425, Money overhaul MAL-1410). Malafat may not add up a balance itself (Malafat ADR-150), and a charge had no reference to reconcile by.
+
+### Added
+- **Server:** `GET /v1/customers/{customerId}/statement?currency=&projectId=&from=&to=&limit=&cursor=`: charges, credits, payments and reversals in one currency, oldest first, with debit, credit and a running balance that carries across pages; `openingBalance`, `totals` and `closingBalance` are the period's. A project statement shows payments as their allocations there. API keys, sessions and device sessions, scope `payments:read`.
+- Every receivable has a `number`, `CHG-YYYY-NNNN`, gap-free per organization and posting year (Basel's D1), on every receivable read. Existing receivables are backfilled in posting order.
+- `receivables.statementSources` (memory + Prisma: six queries, none per row).
+
+### Changed
+- `payments/numbering.ts` numbers both payments and receivables (`ledgerNumber`); the memory store uses it for PAY- numbers too.
+- The hosted records export carries the receivable counters after the payment ones (`${org}:CHG:${year}`).
+
+### Technical
+- Migration `20261027160000_mut478_receivable_numbers`: `receivables.number` (backfilled, then NOT NULL, unique per organization), `receivable_counters`, and a BEFORE INSERT trigger that numbers the previous revision's inserts during the roll (TD-272: drop it after the release).
+- Store contract `store-contract-mut478.ts` (memory + Prisma) and `migration-mut478.test.ts` (backfill order, old-shape insert, duplicate refused, schema match).
+- Local mode: snapshot format 9 (`recs.number`, receivable counters), migration 8 → 9; `payments/numbering` joins the local backend's server allowlist.
+- `server/src/statements/{build,serialize}.ts`. TD-271 (the statement recomputes the ledger per page).
+- Files: `server/{prisma/schema.prisma,prisma/migrations/20261027160000_*,openapi/openapi.yaml}`, `server/src/{statements/*,payments/numbering.ts,routes/customers.ts,repositories/{ports,memory,prisma,prisma-records-export}.ts,auth/store-guard.ts,schemas.ts,serializers.ts,app.ts}`, `src/hosted/local/migrations/index.ts`, `eslint.config.js`, `qa/**/malafat-money-api.*`.
+
 ## [Unreleased] - 2026-10-27 — MUT-468: mails stay light in Apple Mail's dark mode
 
 **Why:** Basel's client check after api-v0.10.0: Apple Mail repainted the new mails dark around their opaque art (light squares on a dark band, lavender text). `color-scheme: light` is only a preference; `light only` opts out. ADR-214 amendment.

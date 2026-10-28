@@ -1,5 +1,6 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, ReceivableRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
+import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
  * The portal's local-mode migrations key off `CURRENT_STORE_SNAPSHOT_VERSION`
@@ -152,6 +153,23 @@ function addOperatorAt(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-478, 8 → 9: receivables gain `number` (CHG-YYYY-NNNN), backfilled in the order the server's migration uses, and
+ * the counters resume after each organization-year's last number.
+ */
+function addReceivableNumbers(snapshot: StoredSnapshot): StoredSnapshot {
+  const recs = snapshot.maps.recs as Map<string, Omit<ReceivableRecord, 'number'>>;
+  const { numbers, counters } = backfillReceivableNumbers([...recs.values()]);
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      recs: new Map([...recs].map(([id, r]) => [id, { ...r, number: numbers.get(id)! }])),
+      counters: new Map([...snapshot.maps.counters, ...counters]),
+    },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -165,6 +183,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 5, to: 6, migrate: addVendors },
   { from: 6, to: 7, migrate: addClosure },
   { from: 7, to: 8, migrate: addOperatorAt },
+  { from: 8, to: 9, migrate: addReceivableNumbers },
 ];
 
 /**

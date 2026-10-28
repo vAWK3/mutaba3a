@@ -82,7 +82,7 @@ if (!url) {
     await client.receivable.createMany({
       data: Array.from({ length: 2_000 }, (_, i) => ({
         organizationId: org.id, customerId: org.id, origin: 'INSTALLMENT' as const, currency: 'ILS', netMinor: 100n, vatMinor: 0n, grossMinor: 100n,
-        vatTreatment: 'EXEMPT' as const, vatRateBasisPoints: 0, dueDate: '2026-10-31', postingDate: '2026-10-01', postedAt: new Date(base + i * 60_000), createdAt: new Date(base + i * 60_000),
+        vatTreatment: 'EXEMPT' as const, vatRateBasisPoints: 0, dueDate: '2026-10-31', postingDate: '2026-10-01', postedAt: new Date(base + i * 60_000), createdAt: new Date(base + i * 60_000), number: `CHG-2026-${String(i + 1).padStart(4, '0')}`,
       })),
     });
     await client.$executeRawUnsafe('ANALYZE receivables');

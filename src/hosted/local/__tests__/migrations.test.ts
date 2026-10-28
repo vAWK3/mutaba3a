@@ -128,9 +128,34 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(8);
+    // 8 → 9 runs next and touches only receivables.
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.people.values()]).toEqual([...before.maps.people.values()].map((p) => ({ ...p, operatorAt: null })));
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('8 → 9 (MUT-478): receivables arrive numbered in posting order, and numbering resumes after them', async () => {
+    const store = new MemoryLedgerStore();
+    const { user, personalOrganization: org } = await store.users.create({ email: 'rana@studio.ps', displayName: 'Rana', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-rana', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const customer = await store.customers.create({ organizationId: org.id, name: 'Haddad', email: null, phone: null, notes: null }, AT);
+    const owed = (postingDate: string) => store.receivables.createAdjustment({ organizationId: org.id, customerId: customer.id, projectId: null, currency: 'ILS', netMinor: 100n, vatMinor: 0n, grossMinor: 100n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: 'Work', dueDate: postingDate, postingDate, postedAt: new Date(`${postingDate}T08:00:00Z`), createdByUserId: user.id, requestId: null });
+    const later = await owed('2026-09-01');
+    const earlier = await owed('2026-02-01');
+    const lastYear = await owed('2025-12-31');
+    const { maps } = store.snapshot();
+    const recs = new Map([...maps.recs].map(([id, r]) => [id, Object.fromEntries(Object.entries(r).filter(([field]) => field !== 'number'))]));
+    const counters = new Map([...maps.counters].filter(([key]) => !key.includes(':CHG:')));
+    const before: StoredSnapshot = { formatVersion: 8, stateVersion: 4, savedAt: AT, maps: { ...maps, recs, counters } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(9);
+    expect(after.maps.recs.get(lastYear.id)?.number).toBe('CHG-2025-0001');
+    expect(after.maps.recs.get(earlier.id)?.number).toBe('CHG-2026-0001');
+    expect(after.maps.recs.get(later.id)?.number).toBe('CHG-2026-0002');
+    const restored = new MemoryLedgerStore();
+    restored.restore(after);
+    expect((await restored.receivables.createAdjustment({ organizationId: org.id, customerId: customer.id, projectId: null, currency: 'ILS', netMinor: 1n, vatMinor: 0n, grossMinor: 1n, vatTreatment: 'EXEMPT', vatRateBasisPoints: 0, title: null, dueDate: '2026-10-01', postingDate: '2026-10-01', postedAt: AT, createdByUserId: user.id, requestId: null })).number).toBe('CHG-2026-0003');
   });
 
   it("leaves the snapshot it was given untouched", async () => {

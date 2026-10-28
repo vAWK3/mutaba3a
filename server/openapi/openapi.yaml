@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.83.0-mut441
+  version: 1.84.0-mut441
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -17,7 +17,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -2900,6 +2900,10 @@ components:
           nullable: true
           format: uuid
           description: Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
+        number:
+          type: string
+          description: "CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478."
+          example: CHG-2026-0042
         version:
           type: integer
       required:
@@ -2924,6 +2928,7 @@ components:
         - status
         - title
         - capturedByUserId
+        - number
         - version
     TriggerInstallmentRequest:
       type: object
@@ -4200,6 +4205,376 @@ components:
             - $ref: "#/components/schemas/VatTreatment"
             - nullable: true
       additionalProperties: false
+    CustomerStatement:
+      type: object
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        currency:
+          $ref: "#/components/schemas/Currency"
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        from:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        to:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        openingBalance:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        totals:
+          type: object
+          properties:
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          required:
+            - debit
+            - credit
+        closingBalance:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/StatementLine"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - customerId
+        - currency
+        - projectId
+        - from
+        - to
+        - asOf
+        - openingBalance
+        - totals
+        - closingBalance
+        - lines
+        - nextCursor
+    StatementLine:
+      oneOf:
+        - type: object
+          properties:
+            id:
+              type: string
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            number:
+              type: string
+              nullable: true
+            projectId:
+              type: string
+              nullable: true
+              format: uuid
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            runningBalance:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            kind:
+              type: string
+              enum:
+                - CHARGE
+            receivableId:
+              type: string
+              format: uuid
+            origin:
+              $ref: "#/components/schemas/StatementChargeOrigin"
+            dueDate:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            net:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            vat:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            gross:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            outstanding:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            status:
+              $ref: "#/components/schemas/ItemStatus"
+            daysOverdue:
+              type: integer
+              nullable: true
+          required:
+            - id
+            - date
+            - number
+            - projectId
+            - debit
+            - credit
+            - runningBalance
+            - kind
+            - receivableId
+            - origin
+            - dueDate
+            - net
+            - vat
+            - gross
+            - outstanding
+            - status
+            - daysOverdue
+        - type: object
+          properties:
+            id:
+              type: string
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            number:
+              type: string
+              nullable: true
+            projectId:
+              type: string
+              nullable: true
+              format: uuid
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            runningBalance:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            kind:
+              type: string
+              enum:
+                - CREDIT
+            receivableId:
+              type: string
+              format: uuid
+            receivableNumber:
+              type: string
+            reason:
+              type: string
+          required:
+            - id
+            - date
+            - number
+            - projectId
+            - debit
+            - credit
+            - runningBalance
+            - kind
+            - receivableId
+            - receivableNumber
+            - reason
+        - type: object
+          properties:
+            id:
+              type: string
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            number:
+              type: string
+              nullable: true
+            projectId:
+              type: string
+              nullable: true
+              format: uuid
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            runningBalance:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            kind:
+              type: string
+              enum:
+                - PAYMENT
+            paymentId:
+              type: string
+              format: uuid
+            method:
+              $ref: "#/components/schemas/PaymentMethod"
+            reference:
+              type: string
+              nullable: true
+            unallocated:
+              type: string
+              nullable: true
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            allocated:
+              type: string
+              nullable: true
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          required:
+            - id
+            - date
+            - number
+            - projectId
+            - debit
+            - credit
+            - runningBalance
+            - kind
+            - paymentId
+            - method
+            - reference
+            - unallocated
+            - allocated
+        - type: object
+          properties:
+            id:
+              type: string
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            number:
+              type: string
+              nullable: true
+            projectId:
+              type: string
+              nullable: true
+              format: uuid
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            runningBalance:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            kind:
+              type: string
+              enum:
+                - PAYMENT_REVERSAL
+            paymentId:
+              type: string
+              format: uuid
+            reason:
+              type: string
+              nullable: true
+          required:
+            - id
+            - date
+            - number
+            - projectId
+            - debit
+            - credit
+            - runningBalance
+            - kind
+            - paymentId
+            - reason
+    StatementChargeOrigin:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - INSTALLMENT
+            agreementId:
+              type: string
+              format: uuid
+            position:
+              type: integer
+            of:
+              type: integer
+          required:
+            - type
+            - agreementId
+            - position
+            - of
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - RETAINER_CHARGE
+            agreementId:
+              type: string
+              format: uuid
+            serviceMonth:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+              description: Calendar month, YYYY-MM
+          required:
+            - type
+            - agreementId
+            - serviceMonth
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - CONTINGENCY_FEE
+            agreementId:
+              type: string
+              format: uuid
+          required:
+            - type
+            - agreementId
+        - type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - ADJUSTMENT
+            title:
+              type: string
+              nullable: true
+          required:
+            - type
+            - title
     Project:
       type: object
       properties:
@@ -6396,7 +6771,7 @@ components:
         - done
         - failed
         - null
-      description: "MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.83.0-mut441."
+      description: "MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.84.0-mut441."
     CreateExpenseRequest:
       type: object
       properties:
@@ -7533,7 +7908,7 @@ components:
       enum:
         - scanned
         - photo
-      description: "MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.83.0-mut441."
+      description: "MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.84.0-mut441."
     ReceiptPage:
       type: object
       properties:
@@ -7654,7 +8029,7 @@ components:
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
-            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)
+            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.84.0-mut441, MUT-441 R7)
       required:
         - occurredOn
         - amount
@@ -7680,7 +8055,7 @@ components:
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
-            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.83.0-mut441, MUT-441 R7)
+            - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.84.0-mut441, MUT-441 R7)
       required:
         - expenseId
       additionalProperties: false
@@ -13356,6 +13731,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/customers/{customerId}/statement:
+    get:
+      tags:
+        - Customers
+      summary: "The customer statement: dated charges, credits, payments and reversals with a running balance, in one currency"
+      description: Oldest first. Charges are debits; credits, payments are credits; a reversed payment shows its PAYMENT line and a PAYMENT_REVERSAL debit. Amounts are gross. With no projectId and no period, closingBalance equals the customer summary's outstanding − unallocated for the currency. Lines before `from` fold into openingBalance; openingBalance, totals and closingBalance are the whole period's and the same on every page, and runningBalance carries across pages. A project statement shows payments as their allocations to that project; unallocated money appears only on the whole-customer statement. Dated installments and retainer charges whose date has arrived are posted first.
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: customerId
+          in: path
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Currency"
+              - description: "Required: a statement is in one currency."
+          required: true
+          description: "Required: a statement is in one currency."
+          name: currency
+          in: query
+        - schema:
+            type: string
+            format: uuid
+            description: "Narrows to one of the customer's projects: its charges and credits, and payments as their allocations there."
+          required: false
+          description: "Narrows to one of the customer's projects: its charges and credits, and payments as their allocations there."
+          name: projectId
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Lines before this date fold into openingBalance.
+          required: false
+          description: Lines before this date fold into openingBalance.
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: "Lines after this date are left out. Omitted: every line, including ones dated after asOf."
+          required: false
+          description: "Lines after this date are left out. Omitted: every line, including ones dated after asOf."
+          name: to
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 200
+            description: Lines per page, 1–500.
+          required: false
+          description: Lines per page, 1–500.
+          name: limit
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+      responses:
+        "200":
+          description: One page of the statement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerStatement"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/projects:
     post:
       tags:
@@ -18244,7 +18722,7 @@ paths:
       tags:
         - Receipts
       summary: Add to what was read off the receipt (optimistic, If-Match)
-      description: "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused."
+      description: "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.84.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused."
       security:
         - session: []
         - deviceSession: []

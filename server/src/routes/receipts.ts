@@ -254,7 +254,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: "Add to what was read off the receipt (optimistic, If-Match)",
       description:
-        "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.",
+        "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.84.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.",
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ReceiptIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(ReceiptSuggestionSchema) },

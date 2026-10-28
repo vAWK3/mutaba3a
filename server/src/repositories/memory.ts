@@ -188,6 +188,7 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
+import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -199,8 +200,9 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
  * 6 (MUT-254): new `vendors` and `vendorNames` maps; `exps` gained `vendorId`.
  * 7 (MUT-333): `people` gained `closure`.
  * 8 (MUT-459): `people` gained `operatorAt`.
+ * 9 (MUT-478): `recs` gained `number`; `counters` gained `${organizationId}:CHG:${year}` keys.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 8;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 9;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -1882,6 +1884,21 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     listCredits: async (organizationId, receivableId) =>
       [...this.credits.values()].filter((c) => c.organizationId === organizationId && c.receivableId === receivableId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || (a.id < b.id ? 1 : -1)).map((c) => ({ ...c })),
+    statementSources: async (organizationId, customerId, currency) => {
+      const receivables = [...this.recs.values()].filter((r) => r.organizationId === organizationId && r.customerId === customerId && r.currency === currency && !r.deletedAt);
+      const receivableIds = new Set(receivables.map((r) => r.id));
+      const payments = [...this.pays.values()].filter((p) => p.organizationId === organizationId && p.customerId === customerId && p.currency === currency);
+      const paymentIds = new Set(payments.map((p) => p.id));
+      const agreementIds = new Set([...this.agrs.values()].filter((a) => a.organizationId === organizationId && a.customerId === customerId && a.currency === currency).map((a) => a.id));
+      return {
+        receivables: receivables.map((r) => ({ ...r })),
+        credits: [...this.credits.values()].filter((c) => receivableIds.has(c.receivableId)).map((c) => ({ ...c })),
+        payments: payments.map((p) => ({ ...p })),
+        allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId)).map((a) => ({ ...a })),
+        installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
+        charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
+      };
+    },
     list: async (organizationId, filter: ReceivableFilter, page) =>
       paginate(
         [...this.recs.values()].filter(
@@ -1954,7 +1971,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const seq = (this.counters.get(counterKey) ?? 0) + 1;
       this.counters.set(counterKey, seq);
       const { allocations: requested, ...rest } = input;
-      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: `PAY-${year}-${String(seq).padStart(4, '0')}`, allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
+      const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, version: 1, createdAt: at, updatedAt: at };
       this.pays.set(payment.id, payment);
       const allocations = this.applyAllocations(payment, requested, at);
       return { payment: { ...payment }, allocations };
@@ -2079,14 +2096,20 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   private newReceivable(
-    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId'> & {
+    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number'> & {
       title?: string | null;
       createdByUserId?: string | null;
     },
   ): ReceivableRecord {
+    // MUT-478: every receivable is numbered as it posts, from its organization's counter for the posting year.
+    const year = ledgerYear(input.postingDate);
+    const counterKey = receivableCounterKey(input.organizationId, year);
+    const seq = (this.counters.get(counterKey) ?? 0) + 1;
+    this.counters.set(counterKey, seq);
     const receivable: ReceivableRecord = {
       id: randomUUID(),
       ...input,
+      number: receivableNumber(year, seq),
       title: input.title ?? null,
       createdByUserId: input.createdByUserId ?? null,
       paidMinor: 0n,

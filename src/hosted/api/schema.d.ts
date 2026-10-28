@@ -5879,6 +5879,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customers/{customerId}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The customer statement: dated charges, credits, payments and reversals with a running balance, in one currency
+         * @description Oldest first. Charges are debits; credits, payments are credits; a reversed payment shows its PAYMENT line and a PAYMENT_REVERSAL debit. Amounts are gross. With no projectId and no period, closingBalance equals the customer summary's outstanding − unallocated for the currency. Lines before `from` fold into openingBalance; openingBalance, totals and closingBalance are the whole period's and the same on every page, and runningBalance carries across pages. A project statement shows payments as their allocations to that project; unallocated money appears only on the whole-customer statement. Dated installments and retainer charges whose date has arrived are posted first.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Required: a statement is in one currency. */
+                    currency: components["schemas"]["Currency"] & unknown;
+                    /** @description Narrows to one of the customer's projects: its charges and credits, and payments as their allocations there. */
+                    projectId?: string;
+                    /** @description Lines before this date fold into openingBalance. */
+                    from?: string;
+                    /** @description Lines after this date are left out. Omitted: every line, including ones dated after asOf. */
+                    to?: string;
+                    /** @description Lines per page, 1–500. */
+                    limit?: number;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                };
+                header?: never;
+                path: {
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One page of the statement */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CustomerStatement"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects": {
         parameters: {
             query?: never;
@@ -12667,7 +12766,7 @@ export interface paths {
         head?: never;
         /**
          * Add to what was read off the receipt (optimistic, If-Match)
-         * @description To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.83.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.
+         * @description To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.84.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.
          */
         patch: {
             parameters: {
@@ -18638,6 +18737,11 @@ export interface components {
              * @description Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
              */
             capturedByUserId: string | null;
+            /**
+             * @description CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478.
+             * @example CHG-2026-0042
+             */
+            number: string;
             version: number;
         };
         TriggerInstallmentRequest: {
@@ -19133,6 +19237,146 @@ export interface components {
             phone?: string | null;
             notes?: string | null;
             vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+        };
+        CustomerStatement: {
+            /** Format: uuid */
+            customerId: string;
+            currency: components["schemas"]["Currency"];
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            from: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            to: string | null;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            asOf: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            openingBalance: string;
+            totals: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                debit: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                credit: string;
+            };
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            closingBalance: string;
+            lines: components["schemas"]["StatementLine"][];
+            nextCursor: string | null;
+        };
+        StatementLine: {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            /** @enum {string} */
+            kind: "CHARGE";
+            /** Format: uuid */
+            receivableId: string;
+            origin: components["schemas"]["StatementChargeOrigin"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            outstanding: string;
+            status: components["schemas"]["ItemStatus"];
+            daysOverdue: number | null;
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            /** @enum {string} */
+            kind: "CREDIT";
+            /** Format: uuid */
+            receivableId: string;
+            receivableNumber: string;
+            reason: string;
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            /** @enum {string} */
+            kind: "PAYMENT";
+            /** Format: uuid */
+            paymentId: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            unallocated: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            allocated: string | null;
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            /** @enum {string} */
+            kind: "PAYMENT_REVERSAL";
+            /** Format: uuid */
+            paymentId: string;
+            reason: string | null;
+        };
+        StatementChargeOrigin: {
+            /** @enum {string} */
+            type: "INSTALLMENT";
+            /** Format: uuid */
+            agreementId: string;
+            position: number;
+            of: number;
+        } | {
+            /** @enum {string} */
+            type: "RETAINER_CHARGE";
+            /** Format: uuid */
+            agreementId: string;
+            /** @description Calendar month, YYYY-MM */
+            serviceMonth: string;
+        } | {
+            /** @enum {string} */
+            type: "CONTINGENCY_FEE";
+            /** Format: uuid */
+            agreementId: string;
+        } | {
+            /** @enum {string} */
+            type: "ADJUSTMENT";
+            title: string | null;
         };
         Project: {
             /** Format: uuid */
@@ -19952,7 +20196,7 @@ export interface components {
             categoryId: string | null;
         } | null;
         /**
-         * @description MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.83.0-mut441.
+         * @description MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.84.0-mut441.
          * @enum {string|null}
          */
         ReceiptReading: "pending" | "done" | "failed" | null;
@@ -20406,7 +20650,7 @@ export interface components {
             capture?: components["schemas"]["ReceiptCapture"];
         };
         /**
-         * @description MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.83.0-mut441.
+         * @description MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.84.0-mut441.
          * @enum {string}
          */
         ReceiptCapture: "scanned" | "photo";

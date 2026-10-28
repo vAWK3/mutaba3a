@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { RECEIVABLE_NUMBER_PREFIX, receivableCounterKey } from '../payments/numbering.js';
 import type {
   AgreementRecord,
   VendorRecord,
@@ -65,7 +66,7 @@ const RETAINER_CHARGE = cols<RetainerChargeRecord>()({
 const RECEIVABLE = cols<ReceivableRecord>()({
   id: true, organizationId: true, customerId: true, projectId: true, agreementId: true, origin: true, originId: true, currency: true, netMinor: true,
   vatMinor: true, grossMinor: true, paidMinor: true, creditedMinor: true, vatTreatment: true, vatRateBasisPoints: true, title: true, dueDate: true,
-  postingDate: true, postedAt: true, status: true, createdByUserId: true, deletedAt: true, version: true, createdAt: true,
+  postingDate: true, postedAt: true, status: true, createdByUserId: true, deletedAt: true, number: true, version: true, createdAt: true,
 });
 const SUPPLEMENT = cols<SupplementRecord>()({ id: true, organizationId: true, agreementId: true, amountMinor: true, resultingAmountMinor: true, distribution: true, effectiveDate: true, description: true, requestId: true, createdAt: true });
 const RETAINER_VERSION = cols<RetainerVersionRecord>()({
@@ -169,10 +170,17 @@ export function prismaRecordsExport(client: () => PrismaClient): RecordsExportRe
     return pageOf(rows.map((row) => [row.id, row as T]), limit);
   }
 
+  /** Payment counters (`${org}:${year}`), then receivable counters (`${org}:CHG:${year}`, MUT-478): the memory store's keys. */
   async function counterPage(organizationId: string, afterKey: string | null, limit: number): Promise<ExportPage<number>> {
-    const afterYear = afterKey ? Number(afterKey.slice(organizationId.length + 1)) : null;
-    const rows = await client().paymentCounter.findMany({ where: { organizationId, ...(afterYear !== null ? { year: { gt: afterYear } } : {}) }, orderBy: { year: 'asc' }, take: limit + 1 });
-    return pageOf(rows.map((row) => [`${organizationId}:${row.year}`, row.next]), limit);
+    const rest = afterKey ? afterKey.slice(organizationId.length + 1) : null;
+    const receivablePrefix = `${RECEIVABLE_NUMBER_PREFIX}:`;
+    const receivableRows = async (afterYear: number | null, take: number): Promise<Array<[string, number]>> =>
+      (await client().receivableCounter.findMany({ where: { organizationId, ...(afterYear !== null ? { year: { gt: afterYear } } : {}) }, orderBy: { year: 'asc' }, take })).map((row) => [receivableCounterKey(organizationId, row.year), row.next]);
+    if (rest?.startsWith(receivablePrefix)) return pageOf(await receivableRows(Number(rest.slice(receivablePrefix.length)), limit + 1), limit);
+    const afterYear = rest !== null ? Number(rest) : null;
+    const payments = (await client().paymentCounter.findMany({ where: { organizationId, ...(afterYear !== null ? { year: { gt: afterYear } } : {}) }, orderBy: { year: 'asc' }, take: limit + 1 })).map((row): [string, number] => [`${organizationId}:${row.year}`, row.next]);
+    if (payments.length > limit) return pageOf(payments, limit);
+    return pageOf([...payments, ...(await receivableRows(null, limit - payments.length + 1))], limit);
   }
 
   async function groupMarkPage(organizationId: string, afterKey: string | null, limit: number): Promise<ExportPage<ExpenseGroupOverrideRecord>> {
