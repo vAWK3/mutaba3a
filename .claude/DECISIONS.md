@@ -5802,7 +5802,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:**
 - Wire: receipts carry `reading: pending | done | failed | null`; uploads take an optional `capture: scanned | photo` (the phone's Scan skips the perspective step). The portal's review page polls while pending and fills only untouched fields (AC8).
 - Every receipt from a granted person costs a read (about $0.11–0.74 per 1,000 at list price, depending on Cloud Run's real speed), not only misses as ADR-199 expected; nothing while idle.
-- The privacy policy says receipts may be read on our own servers by software we run (AC9; draft pending Basel's wording approval).
+- The privacy policy says receipts may be read on our own servers by software we run (AC9; wording approved by Basel on 2026-10-28).
 - Open debt: TD-275 (readerVersion per suggestion), TD-276 (gallery doesn't poll), TD-277 (extractor untuned on real receipts; Hebrew bar provisional), TD-278 (Cloud Run speed and cold start unmeasured until MUT-487).
 
 **Alternatives considered:**

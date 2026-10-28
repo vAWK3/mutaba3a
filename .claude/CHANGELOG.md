@@ -43,7 +43,7 @@
 
 ### Changed
 - Approve, file and `PATCH /v1/receipts/{id}/suggestion` add only the fields the stored suggestion lacks; they never replace a server-read field (R7).
-- Privacy policy (ar, en), **draft pending Basel's approval** (AC9): uploaded receipts may be read automatically on our own servers; no outside AI or OCR company and no language model sees them; the read text isn't kept.
+- Privacy policy (ar, en), **approved by Basel on 2026-10-28** (AC9; move "Last updated" when it ships): uploaded receipts may be read automatically on our own servers; no outside AI or OCR company and no language model sees them; the read text isn't kept.
 
 ### Technical
 - Migration `20261028090000_mut441_receipt_reading`: `expense_receipts.readStatus` (NONE | PENDING | DONE | FAILED | SKIPPED), `readAttempts`, `readLeaseUntil`, `readRequestedAt`, `readFailReason` (a code only), `captureHint` (SCANNED | PHOTO), all with defaults; a partial index for the sweep. Additive; the local records format is unchanged (the fields are optional on records).
