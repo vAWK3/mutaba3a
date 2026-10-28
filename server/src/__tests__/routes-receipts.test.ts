@@ -492,8 +492,11 @@ describe('MUT-441 R7: a client suggestion fills only what the server has not rea
     readerVersion: 'phone-2.0',
     totalMinor: { value: '9900', source: 'ocr', confidence: 0.99 },
     currency: { value: 'ILS', source: 'qr', confidence: 1 },
+    vendorName: { value: 'Cafe', source: 'vendor', confidence: 0.95 },
   };
-  const merged = { ...serverRead, readerVersion: 'phone-2.0', currency: phoneRead.currency };
+  // The server's total has no currency (two decimals assumed), so the phone's money group, ILS included, is not taken
+  // (MUT-441 review: currency and amounts merge as one group); the vendor still fills.
+  const merged = { ...serverRead, readerVersion: 'phone-2.0', vendorName: phoneRead.vendorName };
 
   it("approve: the server's fields survive the phone's suggestion; absent ones are added", async () => {
     const { h, as } = await setup();
@@ -501,6 +504,18 @@ describe('MUT-441 R7: a client suggestion fills only what the server has not rea
     const res = await h.app.request(`/v1/receipts/${receipt.id}/approve`, json({ ...approveBody, suggested: phoneRead }, { ...as(), ...idem() }));
     expect(res.status).toBe(201);
     expect((await read(res)).receipt.suggested).toEqual(merged);
+  });
+
+  it('approve: a server read in JOD takes the phone VAT only when the phone read the same currency', async () => {
+    const { h, as } = await setup();
+    const jodRead = { readerVersion: 'server-ocr-test-1', currency: { value: 'JOD', source: 'ocr', confidence: 0.9 }, totalMinor: { value: '15000', source: 'ocr', confidence: 0.9 } };
+    const vat = { value: '2000', source: 'ocr', confidence: 0.9 };
+    const other = await upload(h, as(), { ...FILE, suggested: jodRead });
+    const otherRes = await h.app.request(`/v1/receipts/${other.id}/approve`, json({ ...approveBody, suggested: { readerVersion: 'phone-2.0', currency: { value: 'ILS', source: 'qr', confidence: 1 }, vatMinor: vat } }, { ...as(), ...idem() }));
+    expect((await read(otherRes)).receipt.suggested).toEqual(jodRead);
+    const same = await upload(h, as(), { ...FILE, suggested: jodRead });
+    const sameRes = await h.app.request(`/v1/receipts/${same.id}/approve`, json({ ...approveBody, suggested: { readerVersion: 'phone-2.0', currency: { value: 'JOD', source: 'qr', confidence: 1 }, vatMinor: vat } }, { ...as(), ...idem() }));
+    expect((await read(sameRes)).receipt.suggested).toEqual({ ...jodRead, readerVersion: 'phone-2.0', vatMinor: vat });
   });
 
   it('file onto an expense: the same', async () => {
