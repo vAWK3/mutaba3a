@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { eligibleFor, outstandingOf, resultingBalances, suggestAllocations, validateAllocations, type AllocatableReceivable } from '../allocate.js';
+import { eligibleFor, outstandingOf, releaseAllocations, resultingBalances, suggestAllocations, validateAllocations, type AllocatableReceivable } from '../allocate.js';
 
 const TODAY = '2026-10-08';
 let n = 0;
@@ -148,6 +148,49 @@ describe('resultingBalances', () => {
     const overdue = rec({ gross: 1000n, due: '2026-10-01' });
     const balances = resultingBalances([{ receivableId: overdue.id, amountMinor: 1n }], [overdue], TODAY);
     expect(balances.receivables[0]).toMatchObject({ statusAfter: 'OVERDUE', outstandingAfter: 999n });
+  });
+});
+
+describe('releaseAllocations (MUT-443)', () => {
+  it('reopens a receivable the payment settled, lowers a partly paid one, and leaves the rest alone', () => {
+    const settled = rec({ gross: 100000n, paidMinor: 100000n, status: 'SETTLED' });
+    const partly = rec({ gross: 50000n, paidMinor: 30000n });
+    const other = rec({ gross: 70000n, paidMinor: 10000n });
+    const released = releaseAllocations([settled, partly, other], [{ receivableId: settled.id, amountMinor: 100000n }, { receivableId: partly.id, amountMinor: 20000n }]);
+    expect(released.map((r) => [r.id, r.paidMinor, r.status])).toEqual([
+      [settled.id, 0n, 'OPEN'],
+      [partly.id, 10000n, 'OPEN'],
+      [other.id, 10000n, 'OPEN'],
+    ]);
+    expect(released[2]).toBe(other);
+    expect(settled.paidMinor).toBe(100000n);
+  });
+
+  it('adds up two allocations of the same payment on one receivable; a credit keeps it SETTLED when nothing is outstanding', () => {
+    const twice = rec({ gross: 1000n, paidMinor: 1000n, status: 'SETTLED' });
+    const credited = rec({ gross: 1000n, paidMinor: 400n, creditedMinor: 600n, status: 'SETTLED' });
+    const out = releaseAllocations([twice, credited], [{ receivableId: twice.id, amountMinor: 300n }, { receivableId: twice.id, amountMinor: 200n }]);
+    expect(out[0]).toMatchObject({ paidMinor: 500n, status: 'OPEN' });
+    expect(out[1]).toBe(credited);
+  });
+});
+
+describe('resultingBalances with released (MUT-443, R2)', () => {
+  it('before is the ledger now, after is after the correction; a released-only receivable shows', () => {
+    const charge = rec({ gross: 100000n, paidMinor: 100000n, status: 'SETTLED', due: '2026-10-31' });
+    const balances = resultingBalances([{ receivableId: charge.id, amountMinor: 60000n }], [charge], TODAY, [{ receivableId: charge.id, amountMinor: 100000n }]);
+    expect(balances.receivables).toEqual([{ receivableId: charge.id, projectId: 'p1', outstandingBefore: 0n, outstandingAfter: 40000n, statusBefore: 'PAID', statusAfter: 'PARTIALLY_PAID' }]);
+    expect(balances.customer).toEqual({ before: { outstandingMinor: 0n, overdueMinor: 0n }, after: { outstandingMinor: 40000n, overdueMinor: 0n } });
+
+    const releasedOnly = resultingBalances([], [charge], TODAY, [{ receivableId: charge.id, amountMinor: 100000n }]);
+    expect(releasedOnly.receivables).toEqual([{ receivableId: charge.id, projectId: 'p1', outstandingBefore: 0n, outstandingAfter: 100000n, statusBefore: 'PAID', statusAfter: 'DUE' }]);
+  });
+
+  it('an unchanged allocation nets to zero and leaves no row; other callers are unchanged', () => {
+    const charge = rec({ gross: 1000n, paidMinor: 1000n, status: 'SETTLED' });
+    const same = resultingBalances([{ receivableId: charge.id, amountMinor: 1000n }], [charge], TODAY, [{ receivableId: charge.id, amountMinor: 1000n }]);
+    expect(same.receivables).toEqual([]);
+    expect(same.customer.after).toEqual(same.customer.before);
   });
 });
 

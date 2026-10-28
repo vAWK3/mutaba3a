@@ -174,14 +174,39 @@ export interface ResultingBalances {
   customer: { before: Balance; after: Balance };
 }
 
+/** Sums amounts per receivable (a payment allocated twice to one receivable releases both). */
+function byReceivable(allocations: readonly AllocationRequest[]): Map<string, bigint> {
+  const sums = new Map<string, bigint>();
+  for (const a of allocations) sums.set(a.receivableId, (sums.get(a.receivableId) ?? 0n) + a.amountMinor);
+  return sums;
+}
+
+/**
+ * MUT-443: the receivables as they would read once a payment's allocations (`released`) are undone: paid lowered, and
+ * OPEN again when something is outstanding. Pure; a receivable the payment never paid is returned as it is.
+ */
+export function releaseAllocations<T extends AllocatableReceivable>(receivables: readonly T[], released: readonly AllocationRequest[]): T[] {
+  const sums = byReceivable(released);
+  return receivables.map((r) => {
+    const amount = sums.get(r.id);
+    if (amount === undefined || amount === 0n) return r;
+    const paidMinor = r.paidMinor - amount;
+    return { ...r, paidMinor, status: r.grossMinor - paidMinor - r.creditedMinor > 0n ? 'OPEN' : 'SETTLED' };
+  });
+}
+
 /**
  * The balances a validated set would leave, over the customer's receivables in
  * the payment currency (`scope`), with statuses computed for `today` in the
  * organization timezone. Pure; the route feeds it the eligible set plus the
  * allocated receivables.
+ *
+ * MUT-443 (R2): `released` is what a corrected payment's reversal gives back. The applied amount is then new − released,
+ * so *before* is the ledger now and *after* is the ledger after the correction; a receivable only released shows too.
  */
-export function resultingBalances(allocations: readonly AllocationRequest[], scope: readonly AllocatableReceivable[], today: IsoDate): ResultingBalances {
-  const alloc = new Map(allocations.map((a) => [a.receivableId, a.amountMinor]));
+export function resultingBalances(allocations: readonly AllocationRequest[], scope: readonly AllocatableReceivable[], today: IsoDate, released: readonly AllocationRequest[] = []): ResultingBalances {
+  const alloc = byReceivable(allocations);
+  for (const [id, amount] of byReceivable(released)) alloc.set(id, (alloc.get(id) ?? 0n) - amount);
   const status = (r: AllocatableReceivable, paidMinor: bigint): ItemStatus => itemStatus({ voided: false, posted: true, dueDate: r.dueDate, grossMinor: r.grossMinor, paidMinor, creditedMinor: r.creditedMinor, today });
   const receivables: ReceivableBalance[] = [];
   const projects = new Map<string, ProjectBalance>();
@@ -191,7 +216,7 @@ export function resultingBalances(allocations: readonly AllocationRequest[], sco
     const applied = alloc.get(r.id) ?? 0n;
     const after = before - applied;
     const overdue = compareIsoDates(r.dueDate, today) < 0;
-    if (applied > 0n) {
+    if (applied !== 0n) {
       receivables.push({ receivableId: r.id, projectId: r.projectId, outstandingBefore: before, outstandingAfter: after, statusBefore: status(r, r.paidMinor), statusAfter: status(r, r.paidMinor + applied) });
     }
     const p = projects.get(r.projectId) ?? { projectId: r.projectId, before: { outstandingMinor: 0n, overdueMinor: 0n }, after: { outstandingMinor: 0n, overdueMinor: 0n } };
