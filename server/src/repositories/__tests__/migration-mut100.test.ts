@@ -15,7 +15,8 @@ import { insertFirmRow } from './fixtures/raw-rows.js';
  * in the next one. Each file is applied as `prisma migrate deploy` would, one
  * transaction per file, on a scratch database built from the history before them.
  */
-vi.setConfig({ testTimeout: 60_000 });
+// One `prisma db execute` per migration after MUT-100 (40 by MUT-479): ~117 s alone at load 25 on 11 cores.
+vi.setConfig({ testTimeout: 240_000 });
 
 const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');

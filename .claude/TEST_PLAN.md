@@ -4170,3 +4170,15 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Route | `server/src/__tests__/payment-receipt-number.route.test.ts` | AC1 with/without and 422; AC2 on the payment, the list, the filter and both statement lines; AC3 a correction keeps, changes or clears it (audited as carried); D5 PUT set/clear/no-op repeat/409 VERSION_MISMATCH/422 without If-Match/409 ALREADY_REVERSED/404; D6 a capture reads null. AC4: the pinned 1.86.0-mut481 literals |
 | Local mode | `migrations.test.ts` (10 → 11), `format-fingerprint.test.ts` (everyRecord adds a Malafat payment with a number) | |
 | Release-QA | `@portal-selfservice.malafat-money-api.receipt-number` | record with 2041, find it, correct it and keep it, set 2050 later, read both statement lines |
+
+## MUT-479 — approve a fee proposal with the full agreement (ADR-224)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/proposals/__tests__/draft.test.ts` | type and agreed amount per kind, the body each kind composes from, the stored draft (schemaVersion, JSON only), draftChanged (order-blind, null without a draft), the token parts |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut479.ts` (memory + Prisma) | draft and agreementType through get/list/open lookup; a null draft; the stored draft never handed out; a retainer created with approveProposal approves it; two racing approvals make one agreement |
+| Route | `server/src/__tests__/fee-proposals-full-approve.test.ts` | AC1 30/70 with MANUAL; AC2 retainer start month and charges due, audits; AC3 PREVIEW_STALE (edit, midnight) and PROPOSAL_NOT_OPEN at preview and approve; AC4 1.87.0-mut479 and the schemas; create refusals (PERCENTS_DO_NOT_SUM, VAT_RATE_MISSING, DRAFT_CONFLICT, AMOUNT_REQUIRED, FIXED + contingency); contingency approve; edit at approval (draftChanged); legacy proposal; PREVIEW_TOKEN_REQUIRED; idempotent replay; R1 DRAFT_REQUIRED; D3 summaries; review: AGREEMENT_TYPE_MISMATCH / PRICING_BASIS_MISMATCH at preview and approve, DRAFT_REQUIRED for any draft, DRAFT_CONFLICT for a legacy previewToken |
+| Retainer extraction | `routes-m3.test.ts`, `routes-m5.test.ts`, `server/src/retainers/__tests__/*` | unchanged behaviour of `POST /v1/retainers` (version literal only) |
+| Migration | by hand on `mutaba3a_test_mut479` | backfill CONTINGENCY where terms are set; the CHECK refuses RECURRING with terms |
+| Local mode | `migrations.test.ts` (11 → 12), `format-fingerprint.test.ts` (everyRecord: a retainer proposal with a draft) | |
+| Release-QA | `@portal-selfservice.malafat-money-api.proposal-any-schedule` | 30/70 proposal, preview, approve; retainer proposal left out of `proposed`, then approved with the previewed charges |

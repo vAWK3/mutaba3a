@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -193,6 +193,18 @@ function addReceiptNumber(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-479, 11 → 12: fee proposals gain `agreementType` and `draft`. As the SQL backfill: CONTINGENCY where contingency
+ * terms are set, else FIXED; no proposal had a draft.
+ */
+function addProposalDrafts(snapshot: StoredSnapshot): StoredSnapshot {
+  const props = snapshot.maps.props as Map<string, Omit<FeeProposalRecord, 'agreementType' | 'draft'>>;
+  return {
+    ...snapshot,
+    maps: { ...snapshot.maps, props: new Map([...props].map(([id, p]) => [id, { ...p, agreementType: p.commissionRateBasisPoints === null ? 'FIXED' : 'CONTINGENCY', draft: null }])) },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -209,6 +221,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 8, to: 9, migrate: addReceivableNumbers },
   { from: 9, to: 10, migrate: addReductionFields },
   { from: 10, to: 11, migrate: addReceiptNumber },
+  { from: 11, to: 12, migrate: addProposalDrafts },
 ];
 
 /**

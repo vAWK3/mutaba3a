@@ -2888,3 +2888,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: a claim carries the version the caller read (MUT-480)
 **Where**: `postInstallment` in `server/src/repositories/prisma.ts` and `memory.ts` (`PostingInput.expectedVersion`), `agreements/posting.ts`, `routes/installments.ts`.
 **Rule**: a write that reads a row, computes from it, then claims it (posting an installment from its amount) puts the version it read in the claim's WHERE, and the caller passes the version from its own earlier read when there is one (the lazy poster's list, the route's lookup). A lost claim writes nothing and the next read retries. Any write that changes the row's figures bumps its version (supplement, reduction).
+
+## Pattern: one draft union, each kind's own composer (MUT-479)
+**Where**: `server/src/proposals/draft.ts` (`composeDraft`), `server/src/retainers/create.ts`, `server/src/agreements/create.ts`.
+**Rule**: when one endpoint accepts several kinds of thing that already have their own create routes, take a discriminated union whose variants are those routes' bodies (`.omit` what the context supplies, `.strict()` so another kind's fields are refused) and route each variant to the kind's existing composer and create function. Never re-implement a kind's rules in the new endpoint; extract the route's inline compose/create into a shared module first, guarded by that route's untouched tests. Stored copies of the body carry a `schemaVersion` and are pre-fill only.

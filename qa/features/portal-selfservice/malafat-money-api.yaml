@@ -11,6 +11,8 @@ paths:
   - server/src/agreements/reduce.ts
   - server/src/agreements/reduce-compose.ts
   - server/src/payments/receipt-number.ts
+  - server/src/proposals/draft.ts
+  - server/src/retainers/create.ts
 features:
   - id: statement
     title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
@@ -66,3 +68,24 @@ features:
       - The replacement still carries receipt 2041
       - The later payment carries receipt 2050 after it is set
       - The statement shows the receipt number on the payment line and on its reversal line
+  - id: proposal-any-schedule
+    title: Malafat proposes a 30/70 split and a retainer, previews each approval and approves it into exactly that agreement
+    tier: secondary
+    # MUT-479 (ADR-224): POST /v1/fee-proposals with a draft, POST .../approve/preview, approve with the full body and its
+    # previewToken. Malafat's proposal screens are MAL-1426.
+    paths:
+      - server/src/proposals/draft.ts
+      - server/src/routes/fee-proposals.ts
+      - server/src/retainers/create.ts
+    steps:
+      - Malafat proposes a 30/70 fee to a client, the second stage due when the judgment comes
+      - Malafat previews the approval, then approves with the preview's token
+      - Malafat proposes a monthly retainer on another matter and reads the organization summary
+      - Malafat previews the retainer's approval and approves it
+      - Malafat approves with a preview taken before the fee changed, then approves a proposal already approved
+    expect:
+      - The proposal reads back with its draft and is APPROVED, linked to the agreement it made
+      - The agreement has the two stages, the first posted and the second (MANUAL) still pending
+      - The retainer starts on the proposed month, and the charges the preview said were due now have posted
+      - The summary's proposed total leaves the retainer's monthly amount out, while the client's row lists it as RECURRING
+      - The stale approval is 409 PREVIEW_STALE and the proposal stays PROPOSED; approving the approved one is 409 PROPOSAL_NOT_OPEN

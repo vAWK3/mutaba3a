@@ -22,6 +22,8 @@ function proposal(over: Partial<FeeProposalRecord> = {}): FeeProposalRecord {
     agreementId: null,
     commissionRateBasisPoints: null,
     upfrontTreatment: null,
+    agreementType: 'FIXED',
+    draft: null,
     requestId: null,
     version: 1,
     createdAt: new Date('2026-10-09T10:00:00Z'),

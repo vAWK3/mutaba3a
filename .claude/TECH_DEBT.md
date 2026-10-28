@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-283: A legacy-revision contingency proposal reads FIXED after a rolling deploy
+**Status**: Accepted (MUT-479, 2026-10-28; ADR-224)
+- **What:** `fee_proposals.agreementType` defaults to FIXED. A contingency proposal an old revision creates while MUT-479's revision rolls out gets FIXED, because the backfill ran before it.
+- **Why it's acceptable:** the legacy approve still decides the agreement from the contingency columns, so the agreement is right; only `agreementType` on reads and summaries is wrong, and only for that window. `docs/operations/before-release.md` says to re-run the backfill after the roll.
+- **Fix:** none needed once the release has rolled and the backfill re-run.
+
+### TD-282: A proposal's stored draft can't be edited in place
+**Status**: Accepted (MUT-479, 2026-10-28; ADR-224 D6)
+- **What:** no `PATCH /v1/fee-proposals/{id}`. Changing an open proposal's draft is withdraw-and-repropose, or an edit at approval (the approve body is the agreement made).
+- **Why it's acceptable:** the ticket asks for a stored draft that "Client agreed" reopens; nothing needs in-place edits yet.
+- **Fix:** if MAL-1414 asks for it, add `PATCH` with `If-Match`, composing the new draft on proposedOn as create does.
+
 ### TD-281: A null from postInstallment still means three things
 **Status**: Accepted (MUT-480, 2026-10-28; ADR-222)
 - **What:** `postInstallment` returns null for "no such line", "voided under us" and (since MUT-480) "changed under us, claim lost". The manual trigger tells them apart by re-reading the line and its agreement; the lazy poster just skips.
@@ -1770,6 +1782,7 @@
 **Remediation**: Raise `testTimeout` for the DB-backed and heavy component suites (per-file `describe` options or a vitest project config) rather than globally. For `routes-m6`, advance the harness clock between the two audited writes so the ordering is determined by time rather than by UUID.
 **Update 2026-10-13**: `make release full`'s `release-web` leg hit the same pattern — `ConversionDrawer.test.tsx`, `ExpenseDrawer.oneTimeFields.test.tsx`, `visitorSample.test.ts`, `ProfileSwitcher.test.tsx` and `SavedFlashAnnouncer.test.tsx` all timed out in the root `npm run test:run` (238 files on 11 cores) and passed every time alone or in a small group. Applied the same `vi.setConfig({ testTimeout: 15_000 })` per-file override already used by the `migration-mut*` suites (the DB suites' 60 s is tuned for `createdb`/`dropdb`; 15 s is proportionate for a Dexie round-trip + userEvent render). Still open: `IncomeDrawer.test.tsx` and the `routes-m6` ordering race are untouched, and more component/demo tests can hit the same ceiling as the suite grows — a vitest `projects` config with a higher default timeout for `src/**` component/demo tests would close this for good instead of patching file by file.
 **Update 2026-10-13 (MUT-47, D9 bounded investigation)**: `IncomeDrawer.test.tsx`'s MUT-89 AC4 case ("offers to create a new client only once a business is chosen") failed once in a root run on main a48f72d: `findByRole('option', { name: /Brand New Co/ })` not found, the file taking 78 s in a run that took 227 s overall. The same suite on the MUT-47 branch ran green in 49 s (246 files, 3536 tests); the file passed alone, in `src/components src/pages` runs twice, and three times under 22 busy-loop processes on 11 cores (17–23 s per file). Not a component race: `ClientTypeahead`'s "Create new" option is computed synchronously from `inputValue` and `canCreate`, with no query or timer between `selectOptions` and the click. The failing wait is `asyncUtilTimeout` (3 s, `src/test/setup.ts:10`), not the 5 s test timeout, so the per-file `testTimeout` patch does not cover it; the remediation above (a vitest `projects` config for component suites, or a higher `asyncUtilTimeout` there) is still the fix. The 227 s run coincided with other sessions' suites on the same machine.
+**Update 2026-10-28 (MUT-479)**: `migration-mut100.test.ts` replays every migration after MUT-100 through one `prisma db execute` spawn each (40 by now), so its runtime grows with the history and with machine load: it timed out at 60 s in a full run and alone (117 s at load 25 on 11 cores). Raised that file's `testTimeout` to 240 s. The lasting fix is to apply the tail of the history in one spawn per transaction batch, or through `prisma migrate deploy` on the scratch database, rather than raising the ceiling again.
 ### TD-063: Sample part-paid entries have a received amount but no payment record, so paying one raises Owed now
 **Status**: Resolved 2026-10-15 (MUT-95): `demoData.seed` writes a `demo_payment_` record for every paid and part-paid sample entry, by the v23 backfill's rule (`uncoveredPaymentAmount`), dated on the entry's paid or issue date and never after today. `removeDemoData` deletes every payment on a sample entry.
 **Added**: 2026-10-12 (MUT-86, found in the browser on `/app/clients?sample=1`)

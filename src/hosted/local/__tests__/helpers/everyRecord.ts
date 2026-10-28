@@ -147,7 +147,12 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   // props: a fee proposal on a second matter (one open proposal per matter)
   const second = await store.projects.create({ organizationId: org, customerId: customer.id, name: 'Logo', currency: 'ILS' }, AT);
   await store.feeProposals.create(
-    { organizationId: org, projectId: second.id, customerId: customer.id, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 30_000n, proposedOn: '2026-10-02', note: null, requestId: null },
+    {
+      organizationId: org, projectId: second.id, customerId: customer.id, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 30_000n, proposedOn: '2026-10-02', note: null, requestId: null,
+      // MUT-479: a retainer proposal with its draft
+      agreementType: 'RECURRING',
+      draft: { schemaVersion: 1, kind: 'RETAINER', monthlyAmount: '300.00', pricingBasis: 'VAT_EXCLUSIVE', startMonth: '2026-11', billingDay: 1, paymentTerms: 'EOM', description: 'Monthly logo work' },
+    },
     AT,
   );
 
@@ -356,14 +361,14 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   const approved = await store.feeProposals.create(
     {
       organizationId: org, projectId: approvedMatter.id, customerId: ids.customer, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 20_000n, proposedOn: '2026-10-02',
-      note: 'Flat fee', commissionRateBasisPoints: 2_000, upfrontTreatment: 'CREDITED', requestId: 'req-proposal',
+      note: 'Flat fee', commissionRateBasisPoints: 2_000, upfrontTreatment: 'CREDITED', requestId: 'req-proposal', agreementType: 'CONTINGENCY', draft: null,
     },
     AT,
   );
   await store.feeProposals.transition(org, approved.id, ['PROPOSED'], { status: 'APPROVED', clientApprovedOn: '2026-10-03', clientApprovalNote: 'By phone', agreedAmountMinor: 19_000n, agreementId: ids.fixed }, LATER);
   const withdrawnMatter = await store.projects.create({ organizationId: org, customerId: ids.customer, name: 'Lease', currency: 'ILS' }, AT);
   const withdrawn = await store.feeProposals.create(
-    { organizationId: org, projectId: withdrawnMatter.id, customerId: ids.customer, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 5_000n, proposedOn: '2026-10-02', note: null, requestId: null },
+    { organizationId: org, projectId: withdrawnMatter.id, customerId: ids.customer, currency: 'ILS', pricingBasis: 'VAT_EXCLUSIVE', proposedAmountMinor: 5_000n, proposedOn: '2026-10-02', note: null, requestId: null, agreementType: 'FIXED', draft: null },
     AT,
   );
   await store.feeProposals.transition(org, withdrawn.id, ['PROPOSED'], { status: 'WITHDRAWN', withdrawnAt: LATER, withdrawnReason: 'Client went elsewhere' }, LATER);

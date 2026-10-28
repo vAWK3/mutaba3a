@@ -1831,6 +1831,13 @@ export const VALIDATION_REASONS = [
   'REDUCTION_EXCEEDS_OPEN',
   'USE_CANCEL',
   'REASON_REQUIRED',
+  // MUT-479: a fee proposal's draft sent together with the legacy amount/pricingBasis/contingency/schedule fields; the
+  // legacy approve on a retainer proposal (only its draft can make a retainer).
+  'DRAFT_CONFLICT',
+  'DRAFT_REQUIRED',
+  // MUT-479 (review): approving as another agreement type or pricing basis than proposed.
+  'AGREEMENT_TYPE_MISMATCH',
+  'PRICING_BASIS_MISMATCH',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -2775,9 +2782,9 @@ const overdueSinceFields = {
   daysOverdue: z.number().int().positive().nullable(),
 };
 
-/** M8 (D17): a customer's open (PROPOSED) fee proposal as the overview lists it, in the block's currency. MUT-107: `amount` is the upfront for a contingency proposal; `contingency` echoes its terms. */
+/** M8 (D17): a customer's open (PROPOSED) fee proposal as the overview lists it, in the block's currency. MUT-107: `amount` is the upfront for a contingency proposal; `contingency` echoes its terms. MUT-479: `amount` is the monthly amount for a RECURRING (retainer) proposal. */
 export const CustomerSummaryProposalSchema = z
-  .object({ proposalId: uuid, projectId: uuid, amount: AmountSchema, proposedOn: IsoDateSchema, contingency: ContingencyTermsSchema.nullable() })
+  .object({ proposalId: uuid, projectId: uuid, amount: AmountSchema, proposedOn: IsoDateSchema, contingency: ContingencyTermsSchema.nullable(), agreementType: AgreementTypeSchema })
   .openapi('CustomerSummaryProposal');
 
 export const CustomerSummaryRowSchema = z
@@ -2789,7 +2796,7 @@ export const CurrencySummarySchema = z
     currency: CurrencySchema,
     ...bucketFields,
     unallocated: AmountSchema,
-    /** M8: the sum of the block's open (PROPOSED) fee proposals, in the pricing basis. */
+    /** M8: the sum of the block's open (PROPOSED) fee proposals, in the pricing basis. MUT-479 (D3): one-off amounts only (fixed totals and contingency upfronts); a retainer proposal's monthly amount is left out, though its row lists it and `counts.openProposals` counts it. */
     proposed: AmountSchema,
     counts: z.object({ customers: z.number().int(), overdueCustomers: z.number().int(), unallocatedPayments: z.number().int(), openProposals: z.number().int() }),
     customers: z.array(CustomerSummaryRowSchema),
@@ -2797,6 +2804,34 @@ export const CurrencySummarySchema = z
   .openapi('CurrencySummary');
 
 export const OrganizationSummarySchema = z.object({ asOf: IsoDateSchema, currencies: z.array(CurrencySummarySchema) }).openapi('OrganizationSummary');
+
+// ---- MUT-479: a fee proposal's draft agreement ---------------------------------
+
+/** The project is the proposal's, the agreement date is the day it is composed for (proposedOn, then approvedOn) and the currency is the project's, so none is in a draft. */
+const DRAFT_OMITS = { projectId: true, agreementDate: true, currency: true } as const;
+
+export const FixedAgreementDraftSchema = AgreementPreviewRequestSchema.omit({ ...DRAFT_OMITS, contingency: true })
+  .extend({ kind: z.literal('FIXED') })
+  .strict()
+  .openapi('FixedAgreementDraft');
+export const ContingencyAgreementDraftSchema = AgreementPreviewRequestSchema.omit(DRAFT_OMITS)
+  .extend({ kind: z.literal('CONTINGENCY'), contingency: ContingencyTermsSchema })
+  .strict()
+  .openapi('ContingencyAgreementDraft');
+export const RetainerAgreementDraftSchema = RetainerPreviewRequestSchema.omit(DRAFT_OMITS)
+  .extend({ kind: z.literal('RETAINER') })
+  .strict()
+  .openapi('RetainerAgreementDraft');
+
+/** MUT-479 (D1): the agreement a proposal would make — the body of POST /v1/agreements (FIXED, CONTINGENCY) or POST /v1/retainers (RETAINER), less the project, the date and the currency. The type comes from `kind` alone: fields of another kind are refused. */
+export const AgreementDraftSchema = z
+  .discriminatedUnion('kind', [FixedAgreementDraftSchema, ContingencyAgreementDraftSchema, RetainerAgreementDraftSchema])
+  .openapi('AgreementDraft');
+
+/** MUT-479 (R3): the draft as it was proposed, stamped with its schemaVersion (1). Tolerant on read: a later schemaVersion may carry fields this one lacks. */
+export const StoredAgreementDraftSchema = z
+  .looseObject({ schemaVersion: z.number().int(), kind: z.enum(['FIXED', 'CONTINGENCY', 'RETAINER']) })
+  .openapi('StoredAgreementDraft', { description: 'An AgreementDraft as proposed, plus schemaVersion. Pre-fill for the approval; it is never re-composed after the proposal is made.' });
 
 // ---- Milestone 7: fee proposals ---------------------------------------------
 
@@ -2828,6 +2863,10 @@ export const FeeProposalSchema = z
     agreementId: uuid.nullable(),
     /** MUT-107: the proposed terms when this is a contingency proposal; null for FIXED. */
     contingency: ContingencyTermsSchema.nullable(),
+    /** MUT-479 (D2): the agreement an approval makes; RECURRING for a retainer proposal, whose proposedAmount is the monthly amount. */
+    agreementType: AgreementTypeSchema,
+    /** MUT-479 (D2): the draft agreement proposed; null for a proposal made with amount and pricingBasis. */
+    draft: StoredAgreementDraftSchema.nullable(),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -2836,20 +2875,22 @@ export const FeeProposalSchema = z
 
 /** The proposal block on a project summary: the open one, else the latest approved one. */
 export const FeeProposalSummarySchema = z
-  .object({ id: uuid, status: FeeProposalStatusSchema, pricingBasis: PricingBasisSchema, proposedAmount: AmountSchema, agreedAmount: AmountSchema.nullable(), proposedOn: IsoDateSchema, agreementId: uuid.nullable(), contingency: ContingencyTermsSchema.nullable() })
+  .object({ id: uuid, status: FeeProposalStatusSchema, pricingBasis: PricingBasisSchema, proposedAmount: AmountSchema, agreedAmount: AmountSchema.nullable(), proposedOn: IsoDateSchema, agreementId: uuid.nullable(), contingency: ContingencyTermsSchema.nullable(), agreementType: AgreementTypeSchema })
   .openapi('FeeProposalSummary');
 
 export const CreateFeeProposalRequestSchema = z
   .object({
     projectId: uuid,
-    /** In the pricing basis, project currency. With `contingency`: the proposed upfront, which may be 0. */
-    amount: AmountSchema,
-    pricingBasis: PricingBasisSchema,
+    /** In the pricing basis, project currency. With `contingency`: the proposed upfront, which may be 0. Required with pricingBasis unless `draft` is given (422 AMOUNT_REQUIRED). */
+    amount: AmountSchema.optional(),
+    pricingBasis: PricingBasisSchema.optional(),
     /** Defaults to today in the organization timezone. */
     proposedOn: IsoDateSchema.optional(),
     note: proposalNote.optional(),
     /** MUT-107: present = a contingency proposal (amount is the upfront); absent = FIXED. */
     contingency: ContingencyTermsSchema.optional(),
+    /** MUT-479 (D2): the full agreement proposed, instead of amount, pricingBasis and contingency (both forms: 422 DRAFT_CONFLICT). Composed on proposedOn, so one that could never be approved is refused now. */
+    draft: AgreementDraftSchema.optional(),
   })
   .openapi('CreateFeeProposalRequest');
 
@@ -2863,8 +2904,8 @@ export const ApproveScheduleSchema = z
 
 export const ApproveFeeProposalRequestSchema = z
   .object({
-    /** The final amount, in the pricing basis and project currency; prefilled with the proposed one by clients. The agreed upfront for a contingency proposal, which may be 0. */
-    amount: AmountSchema,
+    /** The final amount, in the pricing basis and project currency; prefilled with the proposed one by clients. The agreed upfront for a contingency proposal, which may be 0. Required unless `agreement` is given (422 AMOUNT_REQUIRED). */
+    amount: AmountSchema.optional(),
     /** Defaults to today in the organization timezone; the agreement is dated the same, so the VAT rate in force on it applies (D18). */
     approvedOn: IsoDateSchema.optional(),
     /** MUT-107 (D10): required only when the agreed amount is greater than 0; omitting it otherwise is 422 SCHEDULE_REQUIRED. */
@@ -2872,8 +2913,29 @@ export const ApproveFeeProposalRequestSchema = z
     note: proposalNote.optional(),
     /** MUT-107: overrides the proposed contingency terms for the created agreement; only valid when the proposal itself is a contingency one (422 NOT_CONTINGENCY otherwise). */
     contingency: ContingencyTermsSchema.optional(),
+    /** MUT-479 (D4, D5): the agreement made, in full, instead of amount, schedule and contingency (422 DRAFT_CONFLICT when mixed). Prefilled from the proposal's draft and editable, keeping its kind and pricingBasis (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH). */
+    agreement: AgreementDraftSchema.optional(),
+    /** MUT-479: from POST /v1/fee-proposals/{id}/approve/preview with the same approvedOn and agreement; required with `agreement` (422 PREVIEW_TOKEN_REQUIRED). */
+    previewToken: z.string().length(64).optional(),
   })
   .openapi('ApproveFeeProposalRequest');
+
+/** MUT-479 (D4): what approving with this agreement on this date would make. */
+export const ApproveFeeProposalPreviewRequestSchema = z
+  .object({
+    /** Defaults to today in the organization timezone; the agreement is dated the same. */
+    approvedOn: IsoDateSchema.optional(),
+    agreement: AgreementDraftSchema,
+  })
+  .openapi('ApproveFeeProposalPreviewRequest');
+
+/** MUT-479 (D4): the agreement preview (as POST /v1/agreements/preview) or the retainer preview (as POST /v1/retainers/preview), by kind; its previewToken is the approval's. */
+export const ApproveFeeProposalPreviewResponseSchema = z
+  .union([
+    AgreementPreviewResponseSchema.extend({ kind: z.enum(['FIXED', 'CONTINGENCY']) }).openapi('ApproveFeeProposalAgreementPreview'),
+    RetainerPreviewResponseSchema.extend({ kind: z.literal('RETAINER') }).openapi('ApproveFeeProposalRetainerPreview'),
+  ])
+  .openapi('ApproveFeeProposalPreviewResponse');
 export const WithdrawFeeProposalRequestSchema = z.object({ reason: proposalNote.optional() }).openapi('WithdrawFeeProposalRequest');
 
 export const ListFeeProposalsQuerySchema = z.object({
@@ -2884,8 +2946,8 @@ export const ListFeeProposalsQuerySchema = z.object({
   open: z.enum(['true', 'false']).optional().openapi({ description: '`true` narrows to PROPOSED; `false` to APPROVED | WITHDRAWN.' }),
 });
 export const FeeProposalPageSchema = z.object({ items: z.array(FeeProposalSchema), nextCursor: z.string().nullable() }).openapi('FeeProposalPage');
-/** M8: approving returns the proposal and the agreement it created, with its installments (the first already posted). */
-export const ApproveFeeProposalResponseSchema = z.object({ proposal: FeeProposalSchema, agreement: AgreementDetailSchema }).openapi('ApproveFeeProposalResponse');
+/** M8: approving returns the proposal and the agreement it created, with its installments (the first already posted). MUT-479 (R2): a retainer has no installments; `charges` holds its charges to date (empty for FIXED and CONTINGENCY). */
+export const ApproveFeeProposalResponseSchema = z.object({ proposal: FeeProposalSchema, agreement: AgreementDetailSchema, charges: z.array(RetainerChargeSchema) }).openapi('ApproveFeeProposalResponse');
 export const FeeProposalIdParamSchema = z.object({ proposalId: uuid });
 
 export const ProjectSummarySchema = z

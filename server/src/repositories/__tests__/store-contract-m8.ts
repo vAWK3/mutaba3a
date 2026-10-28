@@ -29,6 +29,8 @@ export function describeLedgerStoreM8Contract(name: string, makeStore: () => Pro
     proposedOn: '2026-10-10',
     note: null,
     requestId: 'req',
+    agreementType: 'FIXED' as const,
+    draft: null,
   });
 
   const installment = (over: Partial<CreateInstallmentInput> = {}): CreateInstallmentInput => ({
@@ -99,7 +101,7 @@ export function describeLedgerStoreM8Contract(name: string, makeStore: () => Pro
       const store = await makeStore();
       const a = await org(store, 'A');
       const p = await project(store, a);
-      const contingent = await store.feeProposals.create({ ...input(a, p), commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' }, at(1));
+      const contingent = await store.feeProposals.create({ ...input(a, p), agreementType: 'CONTINGENCY', commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' }, at(1));
       expect(contingent).toMatchObject({ commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' });
       expect(await store.feeProposals.getById(a.id, contingent.id)).toMatchObject({ commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' });
       await store.feeProposals.transition(a.id, contingent.id, ['PROPOSED'], { status: 'WITHDRAWN', withdrawnAt: at(2), withdrawnReason: null }, at(2));

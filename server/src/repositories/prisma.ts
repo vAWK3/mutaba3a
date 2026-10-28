@@ -1336,10 +1336,11 @@ export class PrismaLedgerStore implements LedgerStore {
           if (locked.length === 0) throw new ForeignKeyViolation('fee_proposals.projectId');
           const open = await tx.feeProposal.findFirst({ where: { organizationId: input.organizationId, projectId: input.projectId, status: { in: [...OPEN_PROPOSAL_STATUSES] } }, select: { id: true } });
           if (open) throw new UniqueViolation('fee_proposals.open_per_project');
-          return tx.feeProposal.create({ data: { ...input, createdAt: at, updatedAt: at } });
+          const { draft, ...rest } = input;
+          return toFeeProposal(await tx.feeProposal.create({ data: { ...rest, draft: draft === null ? Prisma.DbNull : (draft as Prisma.InputJsonValue), createdAt: at, updatedAt: at } }));
         }),
       ),
-    getById: (organizationId, id) => this.prisma.feeProposal.findFirst({ where: { id, organizationId } }),
+    getById: async (organizationId, id) => toFeeProposalOrNull(await this.prisma.feeProposal.findFirst({ where: { id, organizationId } })),
     list: async (organizationId, filter, page) => {
       const rows = await this.prisma.feeProposal.findMany({
         where: {
@@ -1353,14 +1354,14 @@ export class PrismaLedgerStore implements LedgerStore {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: page.limit + 1,
       });
-      return toPage(rows, page);
+      return toPage(rows.map(toFeeProposal), page);
     },
-    findOpenByProject: (organizationId, projectId) => this.prisma.feeProposal.findFirst({ where: { organizationId, projectId, status: { in: [...OPEN_PROPOSAL_STATUSES] } } }),
+    findOpenByProject: async (organizationId, projectId) => toFeeProposalOrNull(await this.prisma.feeProposal.findFirst({ where: { organizationId, projectId, status: { in: [...OPEN_PROPOSAL_STATUSES] } } })),
     transition: async (organizationId, id, from, patch, at): Promise<TransitionResult<FeeProposalRecord>> => {
       const { status, ...rest } = patch;
       const defined = Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)) as Prisma.FeeProposalUpdateManyMutationInput;
       const { count } = await this.prisma.feeProposal.updateMany({ where: { id, organizationId, status: { in: [...from] } }, data: { ...defined, status, version: { increment: 1 }, updatedAt: at } });
-      const record = await this.prisma.feeProposal.findFirst({ where: { id, organizationId } });
+      const record = toFeeProposalOrNull(await this.prisma.feeProposal.findFirst({ where: { id, organizationId } }));
       if (!record) return { kind: 'not_found' };
       return count === 1 ? { kind: 'updated', record } : { kind: 'wrong_status', record };
     },
@@ -3498,6 +3499,15 @@ class StaleWrite extends Error {}
 export type { AgreementRecord, RetainerChargeRecord, ReceivableRecord };
 
 /** Keyset condition for (createdAt, id) ascending. */
+/** MUT-479 (R3): a proposal row's draft column is Prisma's JsonValue; the store hands out the JSON object it wrote. */
+function toFeeProposal(row: Prisma.FeeProposalGetPayload<object>): FeeProposalRecord {
+  return { ...row, draft: row.draft !== null && typeof row.draft === 'object' && !Array.isArray(row.draft) ? (row.draft as JsonObject) : null };
+}
+
+function toFeeProposalOrNull(row: Prisma.FeeProposalGetPayload<object> | null): FeeProposalRecord | null {
+  return row ? toFeeProposal(row) : null;
+}
+
 function toAuditEvent(r: { id: string; organizationId: string; actorType: AuditEventRecord['actorType']; actorId: string | null; action: string; entityType: string; entityId: string | null; metadata: unknown; requestId: string | null; createdAt: Date }): AuditEventRecord {
   return {
     id: r.id,

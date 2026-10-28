@@ -2477,7 +2477,7 @@ export interface paths {
         put?: never;
         /**
          * Propose a fee on a project
-         * @description The currency is the project's. One proposal may be open (PROPOSED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal.
+         * @description The currency is the project's. One proposal may be open (PROPOSED) per project: a second one is refused with 409 PROPOSAL_OPEN naming the open proposal. Either amount and pricingBasis (with optional contingency terms), or a full `draft` agreement (MUT-479): FIXED with any schedule, CONTINGENCY, or RETAINER; both forms are 422 DRAFT_CONFLICT, neither is 422 AMOUNT_REQUIRED. A draft is composed on proposedOn as POST /v1/agreements or /v1/retainers would compose it, so its refusals apply now (e.g. 422 PERCENTS_DO_NOT_SUM, VAT_RATE_MISSING for a backdated proposal before any rate, CUSTOMER_ARCHIVED); proposedAmount is then the fixed total, the contingency upfront or the retainer's monthly amount.
          */
         post: {
             parameters: {
@@ -2640,6 +2640,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/fee-proposals/{proposalId}/approve/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview approving with a full agreement: what it makes, and the previewToken approve needs
+         * @description MUT-479 (D4). The agreement is composed on the proposal's project, dated approvedOn (default today), as POST /v1/agreements/preview (FIXED, CONTINGENCY) or POST /v1/retainers/preview (RETAINER) would compose it, and answers in the same shape with `kind`. Its kind and pricingBasis must be the proposal's (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH). The previewToken covers the proposal and its version, the resolved approvedOn, the agreement and the VAT rate, so any change before approve is 409 PREVIEW_STALE there. 409 PROPOSAL_NOT_OPEN unless the proposal is PROPOSED.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    proposalId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ApproveFeeProposalPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description Preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApproveFeeProposalPreviewResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/fee-proposals/{proposalId}/approve": {
         parameters: {
             query?: never;
@@ -2651,7 +2750,7 @@ export interface paths {
         put?: never;
         /**
          * Approve: the client accepted the fee; creates the agreement and posts its first installment
-         * @description PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) at the final amount, in one transaction with the status change — FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them). schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. 409 PROPOSAL_NOT_OPEN from any other state.
+         * @description PROPOSED → APPROVED. Creates an agreement on the project dated approvedOn (so the VAT rate in force on that date applies; 422 VAT_RATE_MISSING otherwise) in one transaction with the status change. Two forms. (1) MUT-479: `agreement`, the full agreement (prefilled from the proposal's draft and editable), with the previewToken from approve/preview (422 PREVIEW_TOKEN_REQUIRED without one; 409 PREVIEW_STALE when anything changed): FIXED or CONTINGENCY with any schedule, or RETAINER, whose charges due by today post at once and come back in `charges`; agreedAmount is the fixed total, the contingency upfront or the monthly amount. Its kind and pricingBasis must be the proposal's (422 AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH; withdraw and re-propose to change them). Mixing it with amount, schedule or contingency is 422 DRAFT_CONFLICT. (2) amount and schedule: FIXED, or CONTINGENCY if the proposal carried contingency terms (an optional contingency here overrides them); refused with 422 DRAFT_REQUIRED on a proposal that carries a draft (a retainer proposal always does), and with DRAFT_CONFLICT when a previewToken is sent. schedule is required only when the agreed amount is greater than 0 (422 SCHEDULE_REQUIRED otherwise, e.g. a 0-upfront contingency approval). ONCE posts one installment now, due on dueOn; INSTALLMENTS splits the amount into equal monthly shares (remainder on the first), posts the first now and the rest on their due dates. Neither form is 422 AMOUNT_REQUIRED. 409 PROPOSAL_NOT_OPEN from any other state.
          */
         post: {
             parameters: {
@@ -2671,7 +2770,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Approved; the agreement and its installments */
+                /** @description Approved; the agreement and its installments (a retainer: its charges) */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -7798,7 +7897,7 @@ export interface paths {
         };
         /**
          * Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer
-         * @description outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer's row. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row's oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).
+         * @description outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8) except retainer (RECURRING) ones, whose monthly amount is left out of the sum (MUT-479); every open proposal also appears on its customer's row and in counts.openProposals. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row's oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).
          */
         get: {
             parameters: {
@@ -18624,6 +18723,8 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             contingency: components["schemas"]["ContingencyTerms"];
+            agreementType: components["schemas"]["AgreementType"];
+            draft: components["schemas"]["StoredAgreementDraft"];
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -18641,24 +18742,191 @@ export interface components {
         } | null;
         /** @enum {string} */
         UpfrontTreatment: "SEPARATE" | "CREDITED";
+        /** @enum {string} */
+        AgreementType: "FIXED" | "RECURRING" | "CONTINGENCY";
+        /** @description An AgreementDraft as proposed, plus schemaVersion. Pre-fill for the approval; it is never re-composed after the proposal is made. */
+        StoredAgreementDraft: ({
+            schemaVersion: number;
+            /** @enum {string} */
+            kind: "FIXED" | "CONTINGENCY" | "RETAINER";
+        } & {
+            [key: string]: unknown;
+        }) | null;
         CreateFeeProposalRequest: {
             /** Format: uuid */
             projectId: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            pricingBasis: components["schemas"]["PricingBasis"];
+            amount?: string;
+            pricingBasis?: components["schemas"]["PricingBasis"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn?: string;
             note?: string;
             contingency?: components["schemas"]["ContingencyTerms"];
+            draft?: components["schemas"]["AgreementDraft"];
+        };
+        AgreementDraft: components["schemas"]["FixedAgreementDraft"] | components["schemas"]["ContingencyAgreementDraft"] | components["schemas"]["RetainerAgreementDraft"];
+        FixedAgreementDraft: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            pricingBasis: components["schemas"]["PricingBasis"];
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            description?: string;
+            paymentTerms?: components["schemas"]["PaymentTerms"];
+            installments: components["schemas"]["InstallmentSpec"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "FIXED";
+        };
+        /** @enum {string} */
+        VatTreatment: "STANDARD_RATED" | "ZERO_RATED" | "EXEMPT" | "OUT_OF_SCOPE";
+        /**
+         * @default EOM
+         * @enum {string}
+         */
+        PaymentTerms: "IMMEDIATE" | "EOM" | "EOM_15" | "EOM_30" | "EOM_45" | "EOM_60";
+        InstallmentSpec: {
+            label: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount?: string;
+            percentBasisPoints?: number;
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            trigger: components["schemas"]["InstallmentTrigger"];
+            paymentTerms?: components["schemas"]["PaymentTerms"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate?: string;
+        };
+        InstallmentTrigger: {
+            type: components["schemas"]["TriggerType"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date?: string;
+        };
+        /** @enum {string} */
+        TriggerType: "IMMEDIATE" | "DATE" | "MANUAL";
+        ContingencyAgreementDraft: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            pricingBasis: components["schemas"]["PricingBasis"];
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            description?: string;
+            paymentTerms?: components["schemas"]["PaymentTerms"];
+            installments: components["schemas"]["InstallmentSpec"][];
+            contingency: components["schemas"]["ContingencyTerms"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "CONTINGENCY";
+        };
+        RetainerAgreementDraft: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            monthlyAmount: string;
+            pricingBasis: components["schemas"]["PricingBasis"];
+            vatTreatment?: components["schemas"]["VatTreatment"];
+            /** @description Calendar month, YYYY-MM */
+            startMonth: string;
+            /** @default 1 */
+            billingDay: number;
+            paymentTerms?: components["schemas"]["PaymentTerms"];
+            /** @description Calendar month, YYYY-MM */
+            endMonth?: string;
+            description?: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "RETAINER";
         };
         FeeProposalPage: {
             items: components["schemas"]["FeeProposal"][];
             nextCursor: string | null;
         };
+        ApproveFeeProposalPreviewResponse: components["schemas"]["ApproveFeeProposalAgreementPreview"] | components["schemas"]["ApproveFeeProposalRetainerPreview"];
+        ApproveFeeProposalAgreementPreview: components["schemas"]["AgreementPreviewResponse"] & {
+            /** @enum {string} */
+            kind: "FIXED" | "CONTINGENCY";
+        };
+        /** @enum {string} */
+        ItemStatus: "PENDING" | "DUE" | "OVERDUE" | "PARTIALLY_PAID" | "PAID" | "VOID";
+        AgreementPreviewResponse: {
+            /** @enum {string} */
+            type: "FIXED" | "CONTINGENCY";
+            contingency: components["schemas"]["ContingencyTerms"];
+            totals: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            };
+            vatRateBasisPoints: number;
+            vatTreatment: components["schemas"]["VatTreatment"];
+            currency: components["schemas"]["Currency"];
+            installments: {
+                position: number;
+                label: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+                vatTreatment: components["schemas"]["VatTreatment"];
+                rateBasisPoints: number;
+                trigger: components["schemas"]["InstallmentTrigger"];
+                paymentTerms: components["schemas"]["PaymentTerms"] & unknown;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                dueDate: string;
+                status: components["schemas"]["ItemStatus"];
+                isCommission: boolean;
+            }[];
+            previewToken: string;
+        };
+        ApproveFeeProposalRetainerPreview: components["schemas"]["RetainerPreviewResponse"] & {
+            /** @enum {string} */
+            kind: "RETAINER";
+        };
+        RetainerPreviewResponse: {
+            monthly: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            };
+            vatRateBasisPoints: number;
+            vatTreatment: components["schemas"]["VatTreatment"];
+            currency: components["schemas"]["Currency"];
+            chargesDueNow: {
+                /** @description Calendar month, YYYY-MM */
+                serviceMonth: string;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                chargeDate: string;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                dueDate: string;
+            }[];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            nextChargeDate: string | null;
+            previewToken: string;
+        };
+        ApproveFeeProposalPreviewRequest: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            approvedOn?: string;
+            agreement: components["schemas"]["AgreementDraft"];
+        };
         ApproveFeeProposalResponse: {
             proposal: components["schemas"]["FeeProposal"];
             agreement: components["schemas"]["AgreementDetail"];
+            charges: components["schemas"]["RetainerCharge"][];
         };
         AgreementDetail: {
             agreement: components["schemas"]["Agreement"];
@@ -18717,12 +18985,6 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @enum {string} */
-        AgreementType: "FIXED" | "RECURRING" | "CONTINGENCY";
-        /** @enum {string} */
-        VatTreatment: "STANDARD_RATED" | "ZERO_RATED" | "EXEMPT" | "OUT_OF_SCOPE";
-        /** @enum {string} */
-        PaymentTerms: "IMMEDIATE" | "EOM" | "EOM_15" | "EOM_30" | "EOM_45" | "EOM_60";
         AgreementContingency: {
             commissionRateBasisPoints: number;
             upfrontTreatment: components["schemas"]["UpfrontTreatment"];
@@ -18763,15 +19025,6 @@ export interface components {
             isCommission: boolean;
             version: number;
         };
-        InstallmentTrigger: {
-            type: components["schemas"]["TriggerType"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            date?: string;
-        };
-        /** @enum {string} */
-        TriggerType: "IMMEDIATE" | "DATE" | "MANUAL";
-        /** @enum {string} */
-        ItemStatus: "PENDING" | "DUE" | "OVERDUE" | "PARTIALLY_PAID" | "PAID" | "VOID";
         Supplement: {
             /** Format: uuid */
             id: string;
@@ -18794,14 +19047,42 @@ export interface components {
         };
         /** @enum {string|null} */
         CreditReasonCode: "DISCOUNT" | "GOODWILL" | "ENTERED_BY_MISTAKE" | "CLIENT_DISPUTE" | "OTHER" | null;
-        ApproveFeeProposalRequest: {
+        RetainerCharge: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @description Calendar month, YYYY-MM */
+            serviceMonth: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            chargeDate: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            vatTreatment: components["schemas"]["VatTreatment"];
+            rateBasisPoints: number;
+            /** Format: uuid */
+            receivableId: string;
+            status: components["schemas"]["ItemStatus"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string;
+            /** Format: date-time */
+            postedAt: string;
+        };
+        ApproveFeeProposalRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount?: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             approvedOn?: string;
             schedule?: components["schemas"]["ApproveSchedule"];
             note?: string;
             contingency?: components["schemas"]["ContingencyTerms"];
+            agreement?: components["schemas"]["AgreementDraft"];
+            previewToken?: string;
         };
         ApproveSchedule: {
             /** @enum {string} */
@@ -18818,45 +19099,6 @@ export interface components {
         WithdrawFeeProposalRequest: {
             reason?: string;
         };
-        AgreementPreviewResponse: {
-            /** @enum {string} */
-            type: "FIXED" | "CONTINGENCY";
-            contingency: components["schemas"]["ContingencyTerms"];
-            totals: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                gross: string;
-            };
-            vatRateBasisPoints: number;
-            vatTreatment: components["schemas"]["VatTreatment"];
-            currency: components["schemas"]["Currency"];
-            installments: {
-                position: number;
-                label: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                gross: string;
-                vatTreatment: components["schemas"]["VatTreatment"];
-                rateBasisPoints: number;
-                trigger: components["schemas"]["InstallmentTrigger"];
-                paymentTerms: components["schemas"]["PaymentTerms"] & unknown;
-                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-                dueDate: string;
-                status: components["schemas"]["ItemStatus"];
-                isCommission: boolean;
-            }[];
-            previewToken: string;
-        };
         AgreementPreviewRequest: {
             /** Format: uuid */
             projectId: string;
@@ -18871,17 +19113,6 @@ export interface components {
             paymentTerms?: components["schemas"]["PaymentTerms"];
             installments: components["schemas"]["InstallmentSpec"][];
             contingency?: components["schemas"]["ContingencyTerms"];
-        };
-        InstallmentSpec: {
-            label: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount?: string;
-            percentBasisPoints?: number;
-            vatTreatment?: components["schemas"]["VatTreatment"];
-            trigger: components["schemas"]["InstallmentTrigger"];
-            paymentTerms?: components["schemas"]["PaymentTerms"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            dueDate?: string;
         };
         AgreementCreateRequest: components["schemas"]["AgreementPreviewRequest"] & {
             previewToken: string;
@@ -19161,32 +19392,6 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate?: string;
         };
-        RetainerPreviewResponse: {
-            monthly: {
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                amount: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                net: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                vat: string;
-                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-                gross: string;
-            };
-            vatRateBasisPoints: number;
-            vatTreatment: components["schemas"]["VatTreatment"];
-            currency: components["schemas"]["Currency"];
-            chargesDueNow: {
-                /** @description Calendar month, YYYY-MM */
-                serviceMonth: string;
-                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-                chargeDate: string;
-                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-                dueDate: string;
-            }[];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            nextChargeDate: string | null;
-            previewToken: string;
-        };
         RetainerPreviewRequest: {
             /** Format: uuid */
             projectId: string;
@@ -19231,32 +19436,6 @@ export interface components {
             /** @description Calendar month, YYYY-MM */
             endMonth: string | null;
             reason: string | null;
-        };
-        RetainerCharge: {
-            /** Format: uuid */
-            id: string;
-            version: number;
-            /** @description Calendar month, YYYY-MM */
-            serviceMonth: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            chargeDate: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            gross: string;
-            vatTreatment: components["schemas"]["VatTreatment"];
-            rateBasisPoints: number;
-            /** Format: uuid */
-            receivableId: string;
-            status: components["schemas"]["ItemStatus"];
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            dueDate: string;
-            /** Format: date-time */
-            postedAt: string;
         };
         RetainerCreateRequest: components["schemas"]["RetainerPreviewRequest"] & {
             previewToken: string;
@@ -20110,6 +20289,7 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             proposedOn: string;
             contingency: components["schemas"]["ContingencyTerms"];
+            agreementType: components["schemas"]["AgreementType"];
         };
         CustomerSummary: {
             /** Format: uuid */
@@ -20187,6 +20367,7 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             contingency: components["schemas"]["ContingencyTerms"];
+            agreementType: components["schemas"]["AgreementType"];
         } | null;
         ProjectContingency: {
             /** Format: uuid */

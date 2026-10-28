@@ -38,7 +38,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       path: '/v1/summaries/organization',
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
-      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8), which also appear on their customer\'s row. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row\'s oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).',
+      description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8) except retainer (RECURRING) ones, whose monthly amount is left out of the sum (MUT-479); every open proposal also appears on its customer\'s row and in counts.openProposals. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row\'s oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
@@ -73,7 +73,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
           const u = unallocatedOf(own);
           const ownProposals = props
             .filter((p) => p.customerId === customerId)
-            .map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn, contingency: p.commissionRateBasisPoints === null ? null : { commissionRateBasisPoints: p.commissionRateBasisPoints, upfrontTreatment: p.upfrontTreatment } }));
+            .map((p) => ({ proposalId: p.id, projectId: p.projectId, amount: fmt(p.proposedAmountMinor), proposedOn: p.proposedOn, contingency: p.commissionRateBasisPoints === null ? null : { commissionRateBasisPoints: p.commissionRateBasisPoints, upfrontTreatment: p.upfrontTreatment }, agreementType: p.agreementType }));
           return { customerId, ...bucketsWire(b, fmt), ...overdueSinceWire(oldestOverdueDueDate(ownRecs, today), today), unallocated: fmt(u.amount), lastPaymentOn: lastPaymentOn(own), status: customerStatus(b), proposals: ownProposals };
         });
         const total = bucketize(recs, today);
@@ -82,7 +82,8 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
           currency: currency as Currency,
           ...bucketsWire(total, fmt),
           unallocated: fmt(u.amount),
-          proposed: fmt(props.reduce((sum, p) => sum + p.proposedAmountMinor, 0n)),
+          // MUT-479 (D3): a retainer's monthly amount added to one-off fees would be a figure that means nothing.
+          proposed: fmt(props.filter((p) => p.agreementType !== 'RECURRING').reduce((sum, p) => sum + p.proposedAmountMinor, 0n)),
           counts: { customers: rows.length, overdueCustomers: rows.filter((r) => r.status === 'OVERDUE').length, unallocatedPayments: u.count, openProposals: props.length },
           customers: rows,
         };
