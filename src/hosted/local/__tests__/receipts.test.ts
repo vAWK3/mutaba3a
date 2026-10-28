@@ -89,6 +89,19 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     expect(await (await reloaded.readBlob(url))?.text()).toBe(PDF);
   });
 
+  it('deletes a PENDING receipt whose file never reached this device (MUT-491: an upload that failed cleans up)', async () => {
+    const page = await openPage();
+    const profileId = await profileOf(page);
+    const expenseId = await anExpense(page, profileId);
+    const { receipt } = await startReceipt(page, profileId, expenseId);
+
+    const response = await call(page, profileId, 'DELETE', `/v1/expenses/${expenseId}/receipts/${receipt.id}`);
+
+    expect(response.status).toBe(204);
+    const detail = (await (await call(page, profileId, 'GET', `/v1/expenses/${expenseId}`)).json()) as { receipts: unknown[] };
+    expect(detail.receipts).toEqual([]);
+  });
+
   it('refuses to complete before the file is on this device (422 UPLOAD_INCOMPLETE)', async () => {
     const page = await openPage();
     const profileId = await profileOf(page);

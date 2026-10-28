@@ -537,7 +537,11 @@
           "uploadFailed": "Couldn't upload the receipt. Try again.",
           "downloadFailed": "Couldn't prepare the download. Try again.",
           "deleteFailed": "Couldn't remove the receipt. Try again.",
-          "badName": "This file's name can't be used. Rename it (no slashes, at most 200 characters) and try again."
+          "badName": "This file's name can't be used. Rename it (no slashes, at most 200 characters) and try again.",
+          "remove": "Remove",
+          "retry": "Upload again",
+          "willUpload": "They're added when you save.",
+          "queuedAtCap": "An expense holds at most 10 receipts. Not added: {names}."
         },
         "addedByClaude": "Added by {claude}",
         "deleteConfirm": "Delete this expense ({amount})? This can't be undone.",

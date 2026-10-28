@@ -58,6 +58,38 @@
 - **OCR sidecar:** a read never waits on a worker restart past its own deadline; with no ready child it answers `timeout` at once and one background restart replaces it.
 - `docs/operations/before-release.md`: switch reading off (or pause `receipt-read-sweep`) before rolling back to a pre-MUT-441 API.
 
+## [Unreleased] - 2026-10-28 — MUT-491: receipts on a new expense in the portal (ADR-221)
+
+**Why:** a receipt could only be added to an expense that already existed, so someone with the receipt in hand had to save, reopen, then upload, and many skipped it. Plan and eng review: `.claude/designs/mut-491-receipt-on-create.md`; tests brief `-tests.md`.
+
+### Added
+- The new-expense drawer has an optional **Add receipt** (`QueuedReceipts` in `src/hosted/components/ReceiptPickButton.tsx`): several PDF/JPEG/PNG files per pick, checked against the server's rules first, listed with Remove and "They're added when you save.", at most 10 (the files past the cap are named).
+- After Save the drawer becomes the new expense's edit drawer (`ExpenseDrawer` `onCreated`, `ExpensesList` moves to `?expense=<id>`), and its uploader sends the files one at a time. All landed and nothing edited since: it closes and the row shows Saved. Any failed: it stays open with "Couldn't upload the receipt. Try again." on that file, Upload again and Remove.
+- `ReceiptPickButton`: the picker the live uploader and the queued list share.
+- `src/hosted/data/receiptUpload.ts`: `uploadReceiptFile` (start → PUT → complete with the cleanup rule), `uploadExpenseReceipt`, `uploadLibraryReceipt` and `putToSignedUrl`, out of expenseQueries/receiptQueries so neither imports the other back.
+- i18n (ar + en): `receipts.remove`, `retry`, `willUpload`, `queuedAtCap`.
+
+### Changed
+- `ReceiptUploader` keeps each upload listed ("Uploading…", or failed with Upload again and Remove) instead of a failure toast, takes several files per pick in edit mode too, and accepts `incoming` files from a new expense.
+- `useAddReceipt`/`useDeleteReceipt` moved to `receiptQueries.ts`. An attach puts the receipt in the expense cache at once and refreshes the Receipts tab's lists and counts (its Filed and All tabs were stale until a refetch); a failed attach refreshes too, since a lost complete may have landed.
+- A failed upload from the expense drawer now deletes its PENDING row, as library uploads already did (it held the profile's pending-upload cap). Each such delete writes an `expense_receipt.deleted` audit row with no `added` before it; accepted.
+
+### Technical
+- No server or OpenAPI change.
+- Release-QA: `portal.expenses.create-with-receipt` (now also picks 11 and cancels) and `portal.expenses.create-with-receipt-arabic` (the drawer in Arabic, right to left), added after qa-reconcile found the 11th-file and Arabic criteria proven by unit tests only.
+
+### Fixed (qa-reconcile)
+- `ReceiptPickButton`: a pick holding both a refused file and one past the cap now says both in the one toast; it named only the cap.
+
+## [Unreleased] - 2026-10-28 — Self-service go-live housekeeping
+
+**Why:** the self-service run (MUT-359…371) is live and Basel checked it on 2026-10-28, so its operator steps were stale.
+
+### Changed
+- `docs/operations/before-release.md`: dropped the done items for MUT-360, 362, 418, 359, 366, 368, 367, 419, 333, 370, 115 and 369; MUT-361 is cut to what's left, the minimum phone build (Android ≥ 11 now, iOS 8 after App Store approval).
+- `server/DEPLOYMENT.md` §7: the go-live dates.
+- `.claude/TECH_DEBT.md`: TD-234 resolved (the policy names Stripe); TD-244 and TD-245 accepted by Basel.
+
 ## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
 
 **Why:** Gmail, Outlook.com and Outlook for Mac darken a mail's colours in dark mode but not its images, and ignore the `light only` opt-out; v1's opaque art showed as pale squares (Basel's Outlook screenshots). ADR-214 amendment; brief `.claude/designs/mut-484-transparent-mail-art.md`.

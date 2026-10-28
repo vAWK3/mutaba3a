@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import { fail, ok, stubApi } from '../../__tests__/harness';
 import { checkReceiptFile, MAX_RECEIPT_BYTES } from '../receiptFileRules';
-import { filingStatusOf, isLibraryOff, nextReceiptId, uploadErrorOf, uploadLibraryReceipt } from '../receiptQueries';
+import { filingStatusOf, isLibraryOff, nextReceiptId, uploadErrorOf } from '../receiptQueries';
+import { uploadLibraryReceipt } from '../receiptUpload';
 
 /** MUT-260: the receipts library's pure rules and the upload sequence. */
 

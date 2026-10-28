@@ -4137,3 +4137,16 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Landing | `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` "reading receipts" (en, ar) | the draft AC9 copy |
 | Benchmark | `server/ocr/bench/run.py` (manual) | AC1 per language on the synthetic set, AC6 warm p95 and cold start; `.claude/designs/mut-441-bench.md` |
 | Browser | `qa/specs/portal-selfservice/receipts.spec.ts` `@portal-selfservice.receipts.server-reading` | on the live dev API with the real sidecar: upload a photo, the card says "Reading…", the review page says "Reading the receipt…", then 52.470 JOD and 2026-06-25 fill in, marked from the receipt |
+
+## MUT-491 — receipts on a new expense (ADR-221)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `src/hosted/data/__tests__/receiptUpload.test.ts` | an expense upload starts on the expense, PUTs without cookies and completes; a failed PUT deletes the PENDING row; a refused complete deletes it (a failed delete keeps the original error); a lost complete keeps it; a refused start sends nothing else |
+| Unit | `src/hosted/data/__tests__/receiptHooks.test.tsx` | `useAddReceipt` refreshes the expense and the Receipts tab's lists and counts, after a failure too |
+| Component | `src/hosted/components/__tests__/ReceiptPickButton.test.tsx` | several files per pick; a refused file shows the existing message and the good ones stay; Remove; an 11th file is not queued and is named; a refused file plus one over the cap names both in one toast |
+| Component | `src/hosted/components/__tests__/ReceiptUploader.test.tsx` | incoming files upload one at a time and settle once; a failed one stays with Upload again and Remove (no toast) and its PENDING row is deleted; a lost complete shows READY once listed; edit mode takes several files |
+| Component | `src/hosted/components/__tests__/ExpenseDrawer.test.tsx` | no receipts: as before; with receipts: one POST, the flip, uploads to the new id, close when all landed; a second Save in flight sends no second POST; a failure keeps the edit drawer open; unmounting mid-upload closes nothing later (fails without the mounted guard); no receipts without `onCreated` |
+| Page | `src/hosted/pages/__tests__/ExpensesList.test.tsx` | the real drawer and router: a failed PUT leaves `?expense=e1`, the other receipt READY, one POST |
+| Local mode | `src/hosted/local/__tests__/receipts.test.ts` | signed out, a PENDING receipt whose file never arrived deletes (204) and the expense lists none |
+| Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt`) | a text file refused; PDF + JPEG, JPEG removed, Save: one POST, one start/PUT/complete, the drawer closes, reopening lists the PDF; a failed PUT leaves the new expense open at `?expense=` and Upload again lands it; 11 picked: 10 listed, the 11th named, Add receipt off, Cancel sends nothing |
+| Browser | `qa/specs/portal/expenses.spec.ts` (`@portal.expenses.create-with-receipt-arabic`) | in Arabic: right to left, الإيصالات / إضافة إيصال, the Arabic refusal toast, a Latin filename in its own `<bdi>` with إزالة and تُضاف عند الحفظ. |

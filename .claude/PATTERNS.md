@@ -2876,3 +2876,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: errors on a content path rethrow as a fixed-message code (MUT-441)
 **Where**: `server/src/receipts/ocr-client.ts` (`OcrReadError(code)`, `MESSAGES`), used by the reader's whole read path.
 **Rule**: on a path that handles a person's document content (OCR lines, extracted text), every failure, whatever threw it (fetch, `JSON.parse`, Zod, the extractor, a store call), is caught and rethrown as one error class with a fixed message per code and no `cause`. Logs and `report()` see only the code. Tests feed a malformed and a truncated body and assert the logger and reporter never see the content.
+
+## Pattern: a create that needs follow-up writes hands off to its edit drawer (MUT-491)
+**Where**: `src/hosted/components/ExpenseDrawer.tsx` (`onCreated`, `handOff`), `ReceiptUploader` `incoming`.
+**Rule**: when saving a new record needs more writes against its id (receipts, attachments), don't run them from the create drawer. Create once, seed the record in the cache, let the list move to `?<record>=<id>`, and let the edit drawer's own component do the follow-up writes with its usual per-item state. The drawer closes itself only when every write landed and the form is untouched, checks it is still mounted first, and marks Saved on close.

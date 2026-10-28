@@ -269,7 +269,7 @@
 **Fix**: if abuse shows, a stateless signed challenge plus a short replay cache (TD-017's shared store).
 
 ### TD-245: The AAGUID provider list is a hand-written seed
-**Status**: Open
+**Status**: Accepted (Basel, 2026-10-28: the seed list is fine as it is; refresh it with the command below when a missing provider shows up)
 **Ticket**: MUT-115 (DR8)
 **Added**: 2026-10-25
 **Priority**: Low
@@ -277,7 +277,7 @@
 **Fix**: `npm --prefix server run passkey-providers:update -- --commit <sha of passkeydeveloper/passkey-authenticator-aaguids>`, review, commit.
 
 ### TD-244: The passkey mark is a drawn stand-in, not the FIDO Alliance symbol
-**Status**: Open
+**Status**: Accepted (Basel, 2026-10-28: the drawn mark stays; no FIDO symbol needed)
 **Ticket**: MUT-115 (DR9)
 **Added**: 2026-10-25
 **Priority**: Low
@@ -356,7 +356,7 @@
 **Fix**: Add a `signup` value to `landing_cta_clicked.cta` (events contract minor bump, copy to the Flutter fixture per TD-218) and match the portal origin's `/signup` in `ctaForHref`.
 
 ### TD-234: The privacy policy doesn't name Stripe
-**Status**: Open
+**Status**: Resolved (checked 2026-10-28): the live policy names Stripe as the payment processor (`landing.privacyPolicy.*`), shipped before Stripe went live on 2026-10-25
 **Ticket**: MUT-369 (D13); billing MUT-362/418
 **Added**: 2026-10-24
 **Priority**: High before the first live charge
