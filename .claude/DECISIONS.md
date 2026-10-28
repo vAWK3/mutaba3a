@@ -5832,3 +5832,28 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Upload inside the create drawer with a mounted guard, a saving lock, a read-only form and a deferred Saved mark. Rejected (D5): more states to guard than the flip removes.
 - Upload as To-review receipts first, then file them. Rejected: orphans on Cancel, and the library is off in local mode and behind `RECEIPTS_LIBRARY`.
 - One `ReceiptUploader` with live and queued modes. Rejected (D6): its hooks would run with an empty expense id.
+
+## ADR-222: Lowering a Fixed Fee Is One Planned Write: Unbilled First, Then Credits (MUT-480)
+
+**Status:** Accepted (2026-10-28, MUT-480; epic MUT-25; blocks MAL-1424). Plan and eng review: `.claude/designs/mut-480-lower-the-fee.md` (D1–D9, E1–E4, O1–O5, R1–R10; Basel approved every decision 2026-10-27/28). ADR-220 and ADR-221 went to MUT-441 and MUT-491, and API 1.84.0 to MUT-441, so this is ADR-222 and 1.85.0-mut480.
+
+**Context:** a partner giving a discount or forgiving part of a fee needed two tools (a negative supplement within the unposted capacity, then credits receivable by receivable), and Malafat may not split amounts itself (ADR-150). The installments store their amount in the pricing basis, so on a VAT-exclusive fee some gross figures can't be reached.
+
+**Decision:**
+1. **`POST /v1/agreements/{id}/reduce/preview` and `/reduce`** (FIXED only; retainers and contingency 422 `NOT_FIXED`, D1). Body: exactly one of `by` (gross to take off) or `to` (the new effective total), `reasonCode` (`DISCOUNT | GOODWILL | ENTERED_BY_MISTAKE | CLIENT_DISPUTE | OTHER`; OTHER needs a note, 422 `REASON_REQUIRED`), `note?`, `previewToken`.
+2. **Effective total** = live installments' gross − credits on their receivables (D5). `GET /v1/agreements/{id}` (and every `AgreementDetail`) shows `credited` and `effectiveTotal` (O2; null for a retainer).
+3. **The plan is pure** (`agreements/reduce.ts` `planReduction`): unbilled installments latest first, whole ones voided, at most one lowered partly; then the open receivables, latest posting date first, credited with `splitCredit` at each receivable's frozen rate (D6). On VAT-exclusive fees the partial installment lands on the smallest reachable gross at or above its target (`amountForGrossAtLeast`); the gap (< one net minor unit) is `roundedBy`, never a stray credit (D5 amends D2). `applied = 0` is 422 `AMOUNT_INVALID`. With nothing posted, voiding everything is 422 `USE_CANCEL` and the largest accepted reduction is one minor unit less (D4, O-F9).
+4. **Due items post before planning** (R1), as on any read, so "unbilled" is literal.
+5. **The token covers the amount and the ledger** (agreement version, every installment's version/receivable/void, every posted receivable's version), **not the reason** (E2, MUT-100's rule).
+6. **One write** (`agreements.reduce`, both stores): agreement row lock and version; every posted receivable the plan read version-checked in id order (`receivablesMoved`, formerly `upfrontMoved`, R3/O-F4/E3); conditional installment writes on the version read (a miss rolls back everything); credits inserted and settled; totals; a `REDUCTION` supplement row whose `amount` is the pricing-basis change (≤ 0) beside `appliedGross` and `credited` (O3). Any move answers 409 `PREVIEW_STALE`, nothing written.
+7. **Posting claims on the version it read** (E1): `postInstallment` takes `expectedVersion` (the lazy poster passes the version it listed, the manual trigger the version it read); a lost claim returns null and the line posts on the next read. The manual trigger tells the cases apart by re-reading: voided by a reduction → 409 `INSTALLMENT_VOIDED`, changed → 409 `VERSION_MISMATCH` (retry), cancelled → `AGREEMENT_CANCELLED` (O4).
+8. **Audit:** one `agreement.reduced` (requested, applied, roundedBy, before/after effective total and outstanding) plus one `receivable.credited` per credit with `source: REDUCTION` (O5).
+9. **Credits carry `reasonCode`** (nullable column; `CREDIT_REASON_CODES` in `payments/credit.ts`, `CreditReasonCodeSchema` exported for MUT-443). `POST /v1/receivables/{id}/credits` accepts it optionally (MAL-1424's retainer path), and the statement's CREDIT line shows it (R8).
+10. **The commit's credits sit under `agreements:write`**, not `payments:write`, as the contingency correction's do (O-F10).
+
+**Consequences:** two migrations (`20261028170000` adds the enum value alone; `20261028170100` the nullable/defaulted columns); local snapshot format 10. `SupplementSchema.distribution` gains `REDUCTION` (Malafat's client must accept it, noted on MAL-1424). A post that loses its claim waits for the next read instead of billing a stale amount, which also closes the same race supplements had.
+
+**Alternatives considered:**
+- A leftover agora as a credit (D2 as first approved). Rejected (D5): it only fires when the reduction is below the unbilled amount, where AC1 forbids credits.
+- Allow a zero fee, or cancel in the same write (D4 B/C). Rejected: a state no reader was built for, or "lower" silently becoming "cancel".
+- A typed `raced` result from `postInstallment` (the plan's D8 wording). Built as null plus the trigger's re-read instead: same answers, without changing a return type 30 callers and tests read (TD-281).

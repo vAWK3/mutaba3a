@@ -2359,7 +2359,7 @@ Read the row, refuse 404 unless it is the person's own, compare its `version` wi
 
 ## Lock Receivables in Id Order (MUT-130)
 
-Every write that locks more than one receivable takes the row locks in ascending id order before it changes anything: `lockReceivablesInIdOrder` in `server/src/repositories/prisma.ts` for payments, and `upfrontMoved` for the contingency outcome writes. Two writes that lock in the same order can't deadlock. The write then works in its own order on rows it already holds, so allocation rows keep the request's order.
+Every write that locks more than one receivable takes the row locks in ascending id order before it changes anything: `lockReceivablesInIdOrder` in `server/src/repositories/prisma.ts` for payments, and `receivablesMoved` (MUT-480's rename of `upfrontMoved`) for the contingency outcome writes and the fee reduction. Two writes that lock in the same order can't deadlock. The write then works in its own order on rows it already holds, so allocation rows keep the request's order.
 
 A lock conflict that still happens (40P01 / 40001) is turned into `LockConflict` (`repositories/memory.ts`) by `asLockConflict`, and the route answers 409, never 500. Postgres rolled the transaction back, so nothing was written. A new multi-receivable write uses the same helper and the same mapping.
 
@@ -2880,3 +2880,11 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: a create that needs follow-up writes hands off to its edit drawer (MUT-491)
 **Where**: `src/hosted/components/ExpenseDrawer.tsx` (`onCreated`, `handOff`), `ReceiptUploader` `incoming`.
 **Rule**: when saving a new record needs more writes against its id (receipts, attachments), don't run them from the create drawer. Create once, seed the record in the cache, let the list move to `?<record>=<id>`, and let the edit drawer's own component do the follow-up writes with its usual per-item state. The drawer closes itself only when every write landed and the form is untouched, checks it is still mounted first, and marks Saved on close.
+
+## Pattern: a gross the partner types maps to the pricing basis through one rounding point (MUT-480)
+**Where**: `server/src/agreements/reduce.ts` (`amountForGrossAtLeast`, `planReduction`).
+**Rule**: when a person gives a gross figure and installments store the pricing basis, change whole installments (void) and at most one partly. The partial one gets the smallest amount whose gross is at least its target: the rounded inverse, then walk one step each way. On VAT-exclusive standard-rated amounts some grosses are unreachable (gross = net + round(net × rate)), so report the gap (`roundedBy`, under one net minor unit) in the preview rather than moving it into another write (no stray 0.01 credit). VAT-inclusive and non-standard treatments are the identity. Test it with an exhaustive sweep, not examples.
+
+## Pattern: a claim carries the version the caller read (MUT-480)
+**Where**: `postInstallment` in `server/src/repositories/prisma.ts` and `memory.ts` (`PostingInput.expectedVersion`), `agreements/posting.ts`, `routes/installments.ts`.
+**Rule**: a write that reads a row, computes from it, then claims it (posting an installment from its amount) puts the version it read in the claim's WHERE, and the caller passes the version from its own earlier read when there is one (the lazy poster's list, the route's lookup). A lost claim writes nothing and the next read retries. Any write that changes the row's figures bumps its version (supplement, reduction).

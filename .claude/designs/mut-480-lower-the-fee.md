@@ -1,6 +1,6 @@
 # MUT-480 — Lower an agreement's fee in one atomic call (unbilled installments first, then credits)
 
-Status: PLAN (eng-ticket, 2026-10-27; re-checked against main a6ebbbbe on 2026-10-28, see "Revision 2026-10-28", which wins where it differs). Not built. Jira In Progress.
+Status: BUILT on feature/mut-480-lower-the-fee (2026-10-28; eng-build). Numbers moved at build: API 1.85.0-mut480, ADR-222, TD-281 (MUT-441 took 1.84.0 and ADR-220, MUT-491 ADR-221); snapshot 10; migrations 20261028170000/170100. One deviation, recorded in ADR-222 and TD-281: D8's `raced` is a null from postInstallment plus the trigger's re-read, not a new result type. Planned 2026-10-27; re-checked against main a6ebbbbe on 2026-10-28 ("Revision 2026-10-28" wins where it differs). Jira In Progress.
 Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → Planned → In Progress (eng-build) → In Review (qa-reconcile).
 
 ## Revision 2026-10-28 (after MUT-478 merged)

@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-281: A null from postInstallment still means three things
+**Status**: Accepted (MUT-480, 2026-10-28; ADR-222)
+- **What:** `postInstallment` returns null for "no such line", "voided under us" and (since MUT-480) "changed under us, claim lost". The manual trigger tells them apart by re-reading the line and its agreement; the lazy poster just skips.
+- **Why it's acceptable:** the answers are right (404, `INSTALLMENT_VOIDED` / `AGREEMENT_CANCELLED`, `VERSION_MISMATCH`), and a typed result would change a return type about 30 callers and tests read.
+- **Fix:** when `postInstallment` is next touched, return `{ kind: 'posted' | 'already_posted' | 'voided' | 'raced' | 'not_found' }` and drop the trigger's re-read.
+
 ### TD-280: The read-pending partial index is built non-concurrently
 **Status**: Open (MUT-441, 2026-10-28; ADR-220)
 - **What:** migration `20261028090000_mut441_receipt_reading` creates `expense_receipts_read_pending_idx` with a plain `CREATE INDEX`, which locks `expense_receipts` against writes while it builds.
