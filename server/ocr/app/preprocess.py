@@ -106,9 +106,9 @@ def clahe(gray: np.ndarray) -> np.ndarray:
     return cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
 
 
-def fit_size(gray: np.ndarray) -> np.ndarray:
+def fit_size(gray: np.ndarray, upscale_below: int = config.UPSCALE_BELOW_SHORT_SIDE) -> np.ndarray:
     h, w = gray.shape[:2]
-    if min(h, w) < config.UPSCALE_BELOW_SHORT_SIDE:
+    if min(h, w) < upscale_below:
         factor = min(2.0, config.MAX_WORK_SIDE / max(h, w))
         if factor > 1.05:
             return cv2.resize(gray, None, fx=factor, fy=factor, interpolation=cv2.INTER_CUBIC)
@@ -119,7 +119,7 @@ def fit_size(gray: np.ndarray) -> np.ndarray:
     return gray
 
 
-def prepare(rgb: np.ndarray, hint: str, flat: bool = False) -> np.ndarray:
+def prepare(rgb: np.ndarray, hint: str, flat: bool = False, upscale_below: int = config.UPSCALE_BELOW_SHORT_SIDE) -> np.ndarray:
     """A grayscale image ready for both engines. `hint` is `photo` or `scanned`; `flat` marks a rasterised PDF page."""
     gray = to_gray(rgb)
     # Shrink a huge photo first: the page search and the warp don't need 40 MP.
@@ -132,4 +132,4 @@ def prepare(rgb: np.ndarray, hint: str, flat: bool = False) -> np.ndarray:
         gray = deskew(gray)
     if not binary:
         gray = clahe(gray)
-    return fit_size(gray)
+    return fit_size(gray, upscale_below)

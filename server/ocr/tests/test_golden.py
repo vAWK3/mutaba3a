@@ -74,3 +74,21 @@ def test_scanned_hint_skips_the_perspective_step_and_still_reads(client):
 
 def test_healthz(client):
     assert client.get("/healthz").json() == {"ok": True}
+
+
+def test_the_tuned_reader_reads_what_the_mut_253_rule_reads(manifest):
+    """Tesseract beside RapidOCR with a half-size script pick (the defaults) vs. one after the other at full size: the
+    same script and the same total and date digits on an Arabic, a Hebrew and an English photo."""
+    from dataclasses import replace
+
+    from app.pipeline import Reader
+    from conftest import SETTINGS
+
+    tuned = Reader(SETTINGS)
+    spike = Reader(replace(SETTINGS, parallel=False, script_pick_scale=1.0))
+    for name in ("syn-001-ar-photo.jpg", "syn-009-he-photo.jpg", "syn-025-en-photo.jpg"):
+        total, date = EXPECTED[name]
+        for reader in (tuned, spike):
+            texts = [line["text"] for line in reader.read(*fixture_bytes(name), "photo")["lines"]]
+            assert any(total in t for t in texts), f"{name}: total {total} not read"
+            assert any(re.search(date, t) for t in texts), f"{name}: date not read"

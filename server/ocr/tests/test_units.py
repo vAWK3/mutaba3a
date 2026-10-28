@@ -10,6 +10,7 @@ import pytest
 
 import check_licenses
 from app import preprocess
+from app.config import Settings, load_settings
 from app.engines import Segment
 from app.merge import is_separator_noise, join_number_fragments, merge
 from app.text import get_display, script_of, visual_to_logical
@@ -138,6 +139,39 @@ def test_a_small_photo_is_upscaled_and_a_huge_one_is_capped():
     assert small.shape == (800, 600)
     big = preprocess.fit_size(np.zeros((4000, 3000), np.uint8))
     assert max(big.shape) == 2_500
+
+
+def test_upscale_below_zero_never_upscales_and_a_lower_bar_upscales_less():
+    assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=0).shape == (400, 300)
+    assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=250).shape == (400, 300)
+    assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=301).shape == (800, 600)
+
+
+# --- settings (MUT-441 benchmark tuning) --------------------------------------------------------------------------
+
+
+def test_the_defaults_are_what_the_benchmark_chose_for_the_4_vcpu_service():
+    s = Settings()
+    assert s.threads == 3  # + 1 for Tesseract beside it = the 4 vCPU in receipt_ocr.tf
+    assert s.parallel is True
+    assert s.script_pick_scale == 0.5
+    assert s.upscale_below == 1_000
+
+
+def test_load_settings_keeps_the_defaults_without_env(monkeypatch):
+    for name in ("OCR_THREADS", "OCR_PARALLEL", "OCR_SCRIPT_PICK_SCALE", "OCR_UPSCALE_BELOW"):
+        monkeypatch.delenv(name, raising=False)
+    s = load_settings()
+    assert (s.threads, s.parallel, s.script_pick_scale, s.upscale_below) == (3, True, 0.5, 1_000)
+
+
+def test_load_settings_reads_the_tuning_overrides(monkeypatch):
+    monkeypatch.setenv("OCR_THREADS", "4")
+    monkeypatch.setenv("OCR_PARALLEL", "0")
+    monkeypatch.setenv("OCR_SCRIPT_PICK_SCALE", "1")
+    monkeypatch.setenv("OCR_UPSCALE_BELOW", "0")
+    s = load_settings()
+    assert (s.threads, s.parallel, s.script_pick_scale, s.upscale_below) == (4, False, 1.0, 0)
 
 
 # --- licences (AC7) -----------------------------------------------------------------------------------------------
