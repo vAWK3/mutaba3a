@@ -1,0 +1,5 @@
+# Local Python env and the fetched models (fetch_models.py; the image fetches its own at build time).
+.venv/
+models/
+__pycache__/
+.pytest_cache/

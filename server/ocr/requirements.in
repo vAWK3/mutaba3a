@@ -1,0 +1,12 @@
+# receipt-ocr runtime dependencies (MUT-441). Pinned with hashes in requirements.txt:
+#   uv pip compile requirements.in --universal --python-version 3.12 --generate-hashes -o requirements.txt
+# Every package here and below it must pass check_licenses.py (AC7). Not python-bidi (LGPL-3.0): app/text.py reorders.
+fastapi==0.162.0
+uvicorn==0.54.0
+pillow==13.0.0
+numpy==2.5.4
+opencv-python-headless==5.0.0.93
+pypdfium2==5.14.0
+rapidocr==3.10.0
+onnxruntime==1.31.1
+pytesseract==0.3.13

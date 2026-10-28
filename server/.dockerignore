@@ -8,3 +8,5 @@ infrastructure
 openapi
 *.md
 .eslintcache
+# MUT-441: the OCR sidecar has its own image (server/ocr/Dockerfile).
+ocr

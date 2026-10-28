@@ -85,7 +85,7 @@ export interface OcrClient {
 }
 
 export interface HttpOcrClientOptions {
-  /** OCR_URL, e.g. https://receipt-ocr-….run.app, or http://localhost:8790 for a local sidecar. */
+  /** OCR_URL, e.g. https://receipt-ocr-….run.app, or http://127.0.0.1:8090 for a local sidecar (server/ocr/run_local.sh). */
   baseUrl: string;
   /** Production: a Google ID token for the audience `baseUrl`. Absent: no Authorization header (a local sidecar). */
   authHeaders?: () => Promise<Record<string, string>>;
