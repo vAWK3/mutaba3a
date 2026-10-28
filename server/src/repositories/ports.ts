@@ -2982,6 +2982,8 @@ export interface ReceiptReadState {
   readAttempts?: number;
   readLeaseUntil?: Date | null;
   readRequestedAt?: Date | null;
+  /** The first claim's time (set once by `claimRead`): the 30-minute give-up clock runs from it. */
+  readFirstClaimedAt?: Date | null;
   /** A code only (`unreadable`, `timeout`, `exhausted`), never receipt text. */
   readFailReason?: string | null;
   captureHint?: ReceiptCaptureHint;

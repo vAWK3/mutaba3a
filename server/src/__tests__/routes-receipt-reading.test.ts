@@ -358,7 +358,9 @@ describe('the read (claim, lease, end states)', () => {
     const fresh = await upload(h, as);
     const raw = (h.store as unknown as { expReceipts: Map<string, Loose> }).expReceipts;
     raw.get(tried.id).readAttempts = MAX_READ_ATTEMPTS;
-    raw.get(old.id).readRequestedAt = new Date(h.clock.now.getTime() - READ_GIVE_UP_MS - 1);
+    // The 30 minutes run from the first claim, once there has been one (MUT-441 review).
+    raw.get(old.id).readAttempts = 1;
+    raw.get(old.id).readFirstClaimedAt = new Date(h.clock.now.getTime() - READ_GIVE_UP_MS - 1);
     raw.get(fresh.id).readAttempts = 1;
     const dispatcher = h.dispatcher as RecordingDispatcher;
     dispatcher.asked.length = 0;
@@ -368,6 +370,33 @@ describe('the read (claim, lease, end states)', () => {
     // A receipt under a live lease is left to its reader.
     await h.store.expenseReceipts.claimRead(fresh.id, h.clock.now, READ_LEASE_MS);
     expect(await read(await job(h, undefined, asScheduler))).toMatchObject({ enqueued: 0, failed: 0 });
+  });
+
+  it('a backlog receipt asked for 2 h ago and never claimed is still read, not given up on (MUT-441 review)', async () => {
+    const { h, orgId, as } = await setup({ dispatcher: 'recording' });
+    const waiting = await upload(h, as);
+    const raw = (h.store as unknown as { expReceipts: Map<string, Loose> }).expReceipts;
+    raw.get(waiting.id).readRequestedAt = new Date(h.clock.now.getTime() - 2 * 60 * 60_000);
+    const dispatcher = h.dispatcher as RecordingDispatcher;
+    dispatcher.asked.length = 0;
+    expect(await read(await job(h, undefined, asScheduler))).toEqual({ status: 'swept', enqueued: 1, failed: 0, enqueueErrors: 0 });
+    expect(dispatcher.asked).toEqual([`${waiting.id}-0`]);
+    expect(await read(await job(h, { receiptId: waiting.id }))).toEqual({ status: 'done' });
+    expect(await stored(h, orgId, waiting.id)).toMatchObject({ readStatus: 'DONE' });
+    expect((h.ocr as FakeOcr).calls).toHaveLength(1);
+  });
+
+  it('a read past 30 minutes since its first claim is given up on at the next claim', async () => {
+    const { h, orgId, as } = await setup({ dispatcher: 'recording' });
+    const slow = await upload(h, as);
+    (h.ocr as FakeOcr).next = async () => {
+      throw new OcrReadError('timeout');
+    };
+    expect(await read(await job(h, { receiptId: slow.id }))).toEqual({ status: 'retry' });
+    h.clock.now = new Date(h.clock.now.getTime() + READ_GIVE_UP_MS + 1);
+    expect(await read(await job(h, { receiptId: slow.id }))).toEqual({ status: 'failed' });
+    expect(await stored(h, orgId, slow.id)).toMatchObject({ readStatus: 'FAILED', readFailReason: 'exhausted' });
+    expect((h.ocr as FakeOcr).calls).toHaveLength(1);
   });
 
   it('a read that found nothing new on an incomplete suggestion is DONE, unchanged', async () => {

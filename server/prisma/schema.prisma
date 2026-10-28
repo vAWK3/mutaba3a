@@ -1387,8 +1387,11 @@ model ExpenseReceipt {
   readAttempts     Int                 @default(0)
   /// A reader's claim: no other reader takes the receipt before this passes.
   readLeaseUntil   DateTime?
-  /// When reading was first asked for; the give-up clock (FAILED 30 minutes after it).
+  /// When reading was (last) asked for; the sweep takes the oldest first.
   readRequestedAt  DateTime?
+  /// The first reader's claim; the give-up clock (FAILED 30 minutes after it). Null until a reader claims the receipt,
+  /// so a backlog that waits for a reader is never given up on before it was tried.
+  readFirstClaimedAt DateTime?
   /// A code only (`unreadable`, `timeout`, `exhausted`), never receipt text.
   readFailReason   String?             @db.VarChar(40)
   captureHint      ReceiptCaptureHint  @default(PHOTO)

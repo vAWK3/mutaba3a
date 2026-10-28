@@ -2194,6 +2194,8 @@ export class PrismaLedgerStore implements LedgerStore {
         where: { id, readStatus: 'PENDING', OR: [{ readLeaseUntil: null }, { readLeaseUntil: { lt: now } }] },
         data: { readLeaseUntil: new Date(now.getTime() + leaseMs), readAttempts: { increment: 1 } },
       });
+      // The give-up clock starts at the first claim; only the claimer (it holds the lease) can stamp it.
+      if (count === 1) await this.prisma.expenseReceipt.updateMany({ where: { id, readFirstClaimedAt: null }, data: { readFirstClaimedAt: now } });
       const row = await this.prisma.expenseReceipt.findUnique({ where: { id } });
       if (count === 1 && row) return { kind: 'claimed', record: toExpenseReceipt(row) };
       return row?.readStatus === 'PENDING' ? { kind: 'busy' } : { kind: 'none' };

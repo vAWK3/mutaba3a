@@ -2493,6 +2493,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (r.readLeaseUntil && r.readLeaseUntil >= now) return { kind: 'busy' };
       r.readLeaseUntil = new Date(now.getTime() + leaseMs);
       r.readAttempts = (r.readAttempts ?? 0) + 1;
+      r.readFirstClaimedAt ??= now;
       return { kind: 'claimed', record: { ...r } };
     },
     releaseRead: async (id) => {

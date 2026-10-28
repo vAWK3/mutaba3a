@@ -64,8 +64,10 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       const first = await store.expenseReceipts.claimRead(r.id, at(10), LEASE);
       expect(first).toMatchObject({ kind: 'claimed', record: { id: r.id, readAttempts: 1, readLeaseUntil: at(10 + LEASE), version: r.version } });
       expect(await store.expenseReceipts.claimRead(r.id, at(20), LEASE)).toEqual({ kind: 'busy' });
+      expect(first.kind === 'claimed' && first.record.readFirstClaimedAt).toEqual(at(10));
       const lapsed = await store.expenseReceipts.claimRead(r.id, at(11 + LEASE), LEASE);
-      expect(lapsed).toMatchObject({ kind: 'claimed', record: { readAttempts: 2 } });
+      // The give-up clock starts at the first claim and stays there (MUT-441 review).
+      expect(lapsed).toMatchObject({ kind: 'claimed', record: { readAttempts: 2, readFirstClaimedAt: at(10) } });
       const plain = await w.started();
       await store.expenseReceipts.complete(w.a.id, plain.id, at(1));
       expect(await store.expenseReceipts.claimRead(plain.id, at(10), LEASE)).toEqual({ kind: 'none' });

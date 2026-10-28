@@ -11,7 +11,10 @@ import type { ReadDispatcher } from './dispatcher.js';
 export const READ_LEASE_MS = 90_000;
 /** A receipt is tried this many times, then FAILED (`exhausted`); the person types the fields, as before. */
 export const MAX_READ_ATTEMPTS = 3;
-/** R10 #6: or once this long has passed since it was asked for, whatever the attempts. */
+/**
+ * R10 #6: or once this long has passed since its first claim, whatever the attempts. Never before a reader has
+ * claimed it: a backlog that waits for a reader (a slow queue, a paused sweep) is tried before it is given up on.
+ */
 export const READ_GIVE_UP_MS = 30 * 60_000;
 /** Receipts one sweep looks at; the next sweep (5 min) takes the rest. */
 export const SWEEP_BATCH = 100;
@@ -90,8 +93,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   }
 
   function exhausted(receipt: ExpenseReceiptRecord, at: Date, attemptsDone: number): boolean {
-    const asked = receipt.readRequestedAt;
-    return attemptsDone >= MAX_READ_ATTEMPTS || (asked !== null && asked !== undefined && at.getTime() - asked.getTime() > READ_GIVE_UP_MS);
+    if (attemptsDone >= MAX_READ_ATTEMPTS) return true;
+    const firstClaim = receipt.readFirstClaimedAt;
+    return (receipt.readAttempts ?? 0) > 0 && firstClaim !== null && firstClaim !== undefined && at.getTime() - firstClaim.getTime() > READ_GIVE_UP_MS;
   }
 
   /** MUT-254: a registration no. that names a saved vendor gives its name, unless the stored suggestion has one. */
