@@ -71,7 +71,7 @@ async function hostedAccount() {
   const client1 = await store.customers.create({ organizationId: firm.id, name: 'Nablus Trading', email: null, phone: null, notes: null }, NOW);
   await store.externalReferences.link({ organizationId: firm.id, provider: 'MALAFAT', externalId: 'mal-c-1', entityType: 'CUSTOMER', entityId: client1.id }, NOW);
   const owed = await store.receivables.createAdjustment({ organizationId: firm.id, customerId: client1.id, projectId: null, currency: 'ILS', netMinor: 500_000n, vatMinor: 0n, grossMinor: 500_000n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Retainer', dueDate: '2026-10-01', postingDate: '2026-09-01', postedAt: NOW, createdByUserId: null, requestId: null }, NOW);
-  await store.payments.create({ organizationId: firm.id, customerId: client1.id, projectId: null, currency: 'ILS', amountMinor: 200_000n, receivedOn: '2026-10-05', method: 'BANK', reference: 'TR-1', notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'MALAFAT', captureSource: null, allocations: [{ receivableId: owed.id, amountMinor: 200_000n }] } as never, NOW);
+  await store.payments.create({ organizationId: firm.id, customerId: client1.id, projectId: null, currency: 'ILS', amountMinor: 200_000n, receivedOn: '2026-10-05', method: 'BANK', reference: 'TR-1', receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'MALAFAT', captureSource: null, allocations: [{ receivableId: owed.id, amountMinor: 200_000n }] } as never, NOW);
 
   const call = client(app, token);
   const json = async (res: Response) => (await res.json()) as Record<string, unknown>;

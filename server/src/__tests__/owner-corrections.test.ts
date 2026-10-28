@@ -116,7 +116,7 @@ async function malafatRows(h: Harness, organizationId: string) {
   );
   const receivable = (await h.store.agreements.postInstallment(organizationId, installments[0]!.id, { postingDate: '2026-10-08', dueDate: '2026-10-31', at }))!.receivable;
   const { payment } = await h.store.payments.create(
-    { organizationId, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 20000n, receivedOn: '2026-10-09', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 20000n }] },
+    { organizationId, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 20000n, receivedOn: '2026-10-09', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 20000n }] },
     at,
   );
   return { receivable, payment };
@@ -284,7 +284,7 @@ describe('MUT-453: a person reverses only what a person put on the books (review
     const { h, u } = await setup();
     const { receivable } = await malafatRows(h, u.personal);
     const { payment } = await h.store.payments.create(
-      { organizationId: u.personal, customerId: receivable.customerId, projectId: receivable.projectId, currency: 'ILS', amountMinor: 10000n, receivedOn: '2026-10-20', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 10000n }] },
+      { organizationId: u.personal, customerId: receivable.customerId, projectId: receivable.projectId, currency: 'ILS', amountMinor: 10000n, receivedOn: '2026-10-20', method: 'CASH', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 10000n }] },
       h.clock.now,
     );
     const res = await reverse(h, u.as(u.personal), payment.id);

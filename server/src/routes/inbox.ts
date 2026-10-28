@@ -289,6 +289,7 @@ function incomeWrite(
         receivedOn: entry.occurredOn,
         method: body.method ?? ('CASH' as const),
         reference: null,
+        receiptNumber: null,
         notes: entry.note,
         replacesPaymentId: null,
         requestId,

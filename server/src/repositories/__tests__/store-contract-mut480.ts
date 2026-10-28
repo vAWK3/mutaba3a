@@ -121,7 +121,7 @@ export function describeLedgerStoreMut480Contract(name: string, makeStore: () =>
       const { o, c, agreement, posted } = await threeLines(store);
       const results = await Promise.allSettled([
         store.agreements.reduce(o.id, agreement.id, { expectedVersion: agreement.version, installmentUpdates: [], voids: [], receivables: [{ id: posted.receivable.id, version: posted.receivable.version }], credits: [{ receivableId: posted.receivable.id, amountMinor: 60_000n, netMinor: 60_000n, vatMinor: 0n }], credit, supplement: supplement(0n, 60_000n, 60_000n), totals: { amountMinor: 300_000n, netMinor: 300_000n, vatMinor: 0n, grossMinor: 300_000n } }, at(4)),
-        store.payments.create({ organizationId: o.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 70_000n, receivedOn: '2026-10-28', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: posted.receivable.id, amountMinor: 70_000n }] }, at(5)),
+        store.payments.create({ organizationId: o.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 70_000n, receivedOn: '2026-10-28', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: posted.receivable.id, amountMinor: 70_000n }] }, at(5)),
       ]);
       const r = (await store.receivables.getById(o.id, posted.receivable.id))!;
       expect(r.paidMinor + r.creditedMinor <= r.grossMinor).toBe(true);

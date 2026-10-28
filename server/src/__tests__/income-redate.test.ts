@@ -383,7 +383,7 @@ describe('what may not be touched (AC5)', () => {
     );
     const posted = await s.h.store.agreements.postInstallment(p, installments[0]!.id, { postingDate: '2026-10-01', dueDate: '2026-10-31', at: s.h.clock.now });
     const receivable = posted!.receivable;
-    const { payment } = await s.h.store.payments.create({ organizationId: p, customerId: s.customer.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-05', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, s.h.clock.now);
+    const { payment } = await s.h.store.payments.create({ organizationId: p, customerId: s.customer.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-05', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, s.h.clock.now);
 
     const headers = s.u.as(p);
     expect((await s.h.app.request(`/v1/income/${receivable.id}`, patch({ occurredOn: '2026-09-01' }, headers, receivable.version))).status).toBe(404);

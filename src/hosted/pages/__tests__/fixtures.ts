@@ -119,6 +119,7 @@ export function payment(id: string, number: string): Payment {
     receivedOn: '2026-10-05',
     method: 'BANK',
     reference: null,
+    receiptNumber: null,
     notes: null,
     status: 'POSTED',
     reversedAt: null,

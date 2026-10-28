@@ -426,7 +426,7 @@ describe('DELETE /v1/income/{id} on a Malafat-fed profile — MUT-61 (AC 5)', ()
 
   it('a payment Malafat recorded is not the session’s to undo → 404, untouched', async () => {
     const { h, m, c, del } = await captured();
-    const { payment } = await h.store.payments.create({ organizationId: m.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
+    const { payment } = await h.store.payments.create({ organizationId: m.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
     expect((await del(payment.id, m.id)).status).toBe(404);
     expect(await h.store.payments.getById(m.id, payment.id)).toMatchObject({ status: 'POSTED' });
   });
@@ -744,7 +744,7 @@ describe('GET /v1/payments shows Malafat what the phone captured — MUT-61 (AC 
   it('a payment Malafat recorded reads as origin integration with no source and no capturer', async () => {
     const { h, m, mAuth } = await setup();
     const c = await malafatClient(h, mAuth);
-    const { payment } = await h.store.payments.create({ organizationId: m.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
+    const { payment } = await h.store.payments.create({ organizationId: m.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
     const one = await read(await h.app.request(`/v1/payments/${payment.id}`, { headers: mAuth }));
     expect(one).toMatchObject({ origin: 'integration', captureSource: null, capturedBy: null, allocationState: 'unallocated', projectId: null });
     const integration = await read(await h.app.request('/v1/payments?origin=integration', { headers: mAuth }));

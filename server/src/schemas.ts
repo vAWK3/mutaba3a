@@ -1822,6 +1822,8 @@ export const VALIDATION_REASONS = [
   'PASSKEY_NOT_VERIFIED',
   // MUT-478: a statement whose `from` is after its `to`.
   'PERIOD_INVALID',
+  // MUT-481: a receipt number that is blank, longer than 64 characters or holds control characters.
+  'RECEIPT_NUMBER_INVALID',
   // MUT-480: lowering a fee by more than is unbilled and outstanding; lowering the whole fee with nothing billed; a
   // reason code OTHER without a note.
   'REDUCTION_EXCEEDS_OPEN',
@@ -2440,12 +2442,14 @@ export const StatementLineSchema = z
       paymentId: uuid,
       method: PaymentMethodSchema,
       reference: z.string().nullable(),
+      /** MUT-481: the legal receipt's number, when the payment carries one. */
+      receiptNumber: z.string().nullable(),
       /** Whole-customer statement: what is still to apply (0 once reversed); null on a project statement. */
       unallocated: AmountSchema.nullable(),
       /** Project statement: the allocation shown; null on the whole-customer statement. */
       allocated: AmountSchema.nullable(),
     }),
-    z.object({ ...StatementLineBase, kind: z.literal('PAYMENT_REVERSAL'), paymentId: uuid, reason: z.string().nullable() }),
+    z.object({ ...StatementLineBase, kind: z.literal('PAYMENT_REVERSAL'), paymentId: uuid, receiptNumber: z.string().nullable(), reason: z.string().nullable() }),
   ])
   .openapi('StatementLine');
 
@@ -2540,6 +2544,12 @@ export const CreatePaymentRequestSchema = z
     receivedOn: BoundedMoneyDateSchema,
     method: PaymentMethodSchema,
     reference: z.string().max(120).optional(),
+    receiptNumber: z
+      .string()
+      .max(200)
+      .nullable()
+      .optional()
+      .openapi({ description: "MUT-481: the legal receipt's number from the firm's invoicing app; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Not unique. With replacesPaymentId, leaving it out keeps the replaced payment's number and null clears it, so a client that always sends null clears it on every correction." }),
     notes: z.string().max(2000).optional(),
     /** A REVERSED payment of the same customer this one corrects. */
     replacesPaymentId: uuid.optional(),
@@ -2575,6 +2585,8 @@ export const PaymentSchema = z
     receivedOn: IsoDateSchema,
     method: PaymentMethodSchema,
     reference: z.string().nullable(),
+    /** MUT-481: the legal receipt's number; null when none was given, and always on person-made payments. */
+    receiptNumber: z.string().nullable(),
     notes: z.string().nullable(),
     status: PaymentStatusSchema,
     reversedAt: z.string().datetime().nullable(),
@@ -2598,6 +2610,8 @@ export const ListPaymentsQuerySchema = z.object({
   status: PaymentStatusSchema.optional(),
   receivedBefore: IsoDateSchema.optional(),
   receivedAfter: IsoDateSchema.optional(),
+  /** MUT-481: exact match on the trimmed value; a blank value is ignored. */
+  receiptNumber: z.string().max(200).optional().openapi({ param: { description: 'MUT-481: payments carrying exactly this receipt number (trimmed). A reversed payment and its correction share one.' } }),
   /** MUT-61. */
   origin: PaymentOriginSchema.optional().openapi({ param: { description: '`capture`: money a person recorded (the phone, the portal); `integration`: recorded through this API key.' } }),
   /** MUT-61: POSTED payments only. `?origin=capture&allocationState=unallocated` is what the phone left for Malafat to allocate. */
@@ -2607,6 +2621,11 @@ export const ListPaymentsQuerySchema = z.object({
 });
 
 export const PaymentIdParamSchema = z.object({ paymentId: uuid });
+
+/** MUT-481 (D5): set or clear a payment's receipt number after it was recorded. */
+export const SetReceiptNumberRequestSchema = z
+  .object({ receiptNumber: z.string().max(200).nullable().openapi({ description: 'Trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID); null clears it.' }) })
+  .openapi('SetReceiptNumberRequest');
 
 export const AllocatePaymentRequestSchema = z
   .object({ allocations: z.array(AllocationRequestSchema).min(1).max(200), previewToken: z.string().length(64) })

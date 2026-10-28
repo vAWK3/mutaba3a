@@ -175,9 +175,25 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(10);
+    // 10 → 11 runs next and touches only payments.
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.credits.values()]).toEqual([...maps.credits.values()].map((c) => ({ ...c, reasonCode: null })));
     expect([...after.maps.supps.values()]).toEqual([...maps.supps.values()].map((s) => ({ ...s, reasonCode: null, appliedGrossMinor: null, creditedMinor: 0n })));
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('10 → 11 (MUT-481): payments gain a null receiptNumber, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { user, personalOrganization: org } = await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.payments.capture({ organizationId: org.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 500n, receivedOn: '2026-10-01', method: 'CASH', notes: null, requestId: null, createdByUserId: user.id, captureSource: null }, AT);
+    const { maps } = store.snapshot();
+    const pays = new Map([...maps.pays].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'receiptNumber'))]));
+    const before: StoredSnapshot = { formatVersion: 10, stateVersion: 4, savedAt: AT, maps: { ...maps, pays } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(11);
+    expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()].map((p) => ({ ...p, receiptNumber: null })));
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

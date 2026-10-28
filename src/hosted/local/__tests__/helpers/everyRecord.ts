@@ -105,8 +105,18 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   await store.payments.create(
     {
       organizationId: org, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 20_000n, receivedOn: '2026-10-03', method: 'BANK',
-      reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: user.id, origin: 'CAPTURE', captureSource: null,
+      reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: user.id, origin: 'CAPTURE', captureSource: null,
       allocations: [{ receivableId: posted.receivable.id, amountMinor: 20_000n }],
+    },
+    LATER,
+  );
+
+  // pays.receiptNumber: a payment Malafat recorded with its legal receipt's number (MUT-481; person-made ones never carry one)
+  await store.payments.create(
+    {
+      organizationId: org, customerId: customer.id, projectId: null, currency: 'ILS', amountMinor: 1_000n, receivedOn: '2026-10-04', method: 'BANK',
+      reference: 'TR-77', receiptNumber: '2041', notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null,
+      allocations: [],
     },
     LATER,
   );
@@ -328,7 +338,7 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   const mistaken = await store.payments.create(
     {
       organizationId: org, customerId: ids.customer, projectId: null, currency: 'USD', amountMinor: 5_000n, receivedOn: '2026-10-04', method: 'CASH',
-      reference: 'RCPT-9', notes: 'Cash at the office', replacesPaymentId: null, requestId: 'req-pay', createdByUserId: userId, origin: 'CAPTURE', captureSource: 'ios', allocations: [],
+      reference: 'RCPT-9', receiptNumber: null, notes: 'Cash at the office', replacesPaymentId: null, requestId: 'req-pay', createdByUserId: userId, origin: 'CAPTURE', captureSource: 'ios', allocations: [],
     },
     LATER,
   );
@@ -336,7 +346,7 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   await store.payments.create(
     {
       organizationId: org, customerId: ids.customer, projectId: null, currency: 'ILS', amountMinor: 18_000n, receivedOn: '2026-10-04', method: 'CASH',
-      reference: null, notes: null, replacesPaymentId: mistaken.payment.id, requestId: null, createdByUserId: userId, origin: 'CAPTURE', captureSource: null, allocations: [],
+      reference: null, receiptNumber: null, notes: null, replacesPaymentId: mistaken.payment.id, requestId: null, createdByUserId: userId, origin: 'CAPTURE', captureSource: null, allocations: [],
     },
     LATER,
   );

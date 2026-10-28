@@ -570,7 +570,7 @@ describe('correcting an outcome', () => {
     const body = award({ awardedAmount: '90000.00', correctionReason: 'Typo' });
     const preview = await read(await previewOutcome(h, auth, detail.agreement.id, body));
 
-    await h.store.payments.create({ organizationId: org.id, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 100_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: line.receivableId, amountMinor: 100_000n }] }, h.clock.now);
+    await h.store.payments.create({ organizationId: org.id, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 100_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: line.receivableId, amountMinor: 100_000n }] }, h.clock.now);
 
     const raced = await h.app.request(`/v1/agreements/${detail.agreement.id}/outcome/correct`, json({ ...body, previewToken: preview.previewToken }, { ...auth, ...idem() }));
     expect(raced.status).toBe(409);
@@ -776,7 +776,7 @@ describe('project summary', () => {
     const { org, auth, project, customer } = await firm(h);
     const { detail } = await create(h, auth, contingent(project.id));
     const upfront = detail.installments[0].receivableId;
-    await h.store.payments.create({ organizationId: org.id, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 177_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: upfront, amountMinor: 177_000n }] }, h.clock.now);
+    await h.store.payments.create({ organizationId: org.id, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 177_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: upfront, amountMinor: 177_000n }] }, h.clock.now);
 
     const awaiting = await read(await h.app.request(`/v1/summaries/projects/${project.id}`, { headers: auth }));
     expect(awaiting).toMatchObject({ kind: 'FIXED', agreed: '1770.00', paid: '1770.00', status: 'PENDING', contingency: { agreementId: detail.agreement.id, commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE', outcome: 'AWAITING', awarded: null } });

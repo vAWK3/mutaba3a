@@ -60,6 +60,7 @@ function payment(amount: bigint, receivedOn: string, o: Partial<PaymentRecord> =
     receivedOn,
     method: 'BANK',
     reference: null,
+    receiptNumber: null,
     notes: null,
     status: 'POSTED',
     reversedAt: null,

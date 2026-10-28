@@ -3264,6 +3264,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agreements/{agreementId}/reduce/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview lowering a fixed fee: unbilled installments first, then credits
+         * @description Give `by` (the gross to take off) or `to` (the new effective total = live installments’ gross − credits on their receivables). Due installments are billed first, as on any read. The plan voids unbilled installments latest first and lowers at most one partly; anything beyond the unbilled amount is credited on this agreement’s open receivables, latest posting first. On a VAT-exclusive agreement a gross that can’t be hit exactly is reported in `roundedBy` (applied = requested − roundedBy). 422 NOT_FIXED (retainers, contingency), AMOUNT_INVALID, REDUCTION_EXCEEDS_OPEN {unbilled, outstanding, maximum}, USE_CANCEL (nothing billed and the whole fee); 409 AGREEMENT_CANCELLED. The token covers the amount and the ledger (agreement, installment and receivable versions), not the reason.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReducePreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description The plan */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReducePreviewResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/reduce": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lower a fixed fee in one atomic write
+         * @description The previewed plan, written at once: installments lowered or voided, credits on the open receivables (reasonCode on each), the totals, and a REDUCTION supplement row. reasonCode is required; OTHER needs a note (422 REASON_REQUIRED). Anything that moved since the preview (a payment, a credit, a posting, another change) is 409 PREVIEW_STALE with nothing written. Its credits sit under agreements:write, like the contingency correction’s. Audits agreement.reduced and one receivable.credited (source REDUCTION) per credit.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReduceRequest"];
+                };
+            };
+            responses: {
+                /** @description Lowered */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReduceResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agreements/{agreementId}/cancel": {
         parameters: {
             query?: never;
@@ -6964,6 +7165,8 @@ export interface paths {
                     receivedBefore?: string;
                     /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                     receivedAfter?: string;
+                    /** @description MUT-481: payments carrying exactly this receipt number (trimmed). A reversed payment and its correction share one. */
+                    receiptNumber?: string;
                     /** @description `capture`: money a person recorded (the phone, the portal); `integration`: recorded through this API key. */
                     origin?: components["schemas"]["PaymentOrigin"];
                     /** @description Matches POSTED payments only (a REVERSED payment reads `unallocated` in the response but is never matched here). `?customerId=…&origin=capture&allocationState=unallocated` lists what a client's phone captures still need allocating; add `partial` for ones allocated in part. */
@@ -7281,6 +7484,108 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/v1/payments/{paymentId}/receipt-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or clear the legal receipt number of a recorded payment (optimistic, If-Match)
+         * @description For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetReceiptNumberRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Payment"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/payments/{paymentId}/allocations": {
@@ -18359,6 +18664,10 @@ export interface components {
             agreement: components["schemas"]["Agreement"];
             installments: components["schemas"]["Installment"][];
             supplements: components["schemas"]["Supplement"][];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credited: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            effectiveTotal: string | null;
         };
         Agreement: {
             /** Format: uuid */
@@ -18472,12 +18781,19 @@ export interface components {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             effectiveDate: string;
             /** @enum {string} */
-            distribution: "LAST_UNPOSTED" | "PRORATE_UNPOSTED" | "NEW_INSTALLMENT";
+            distribution: "LAST_UNPOSTED" | "PRORATE_UNPOSTED" | "NEW_INSTALLMENT" | "REDUCTION";
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             resultingAmount: string;
+            reasonCode: components["schemas"]["CreditReasonCode"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            appliedGross: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credited: string;
             /** Format: date-time */
             createdAt: string;
         };
+        /** @enum {string|null} */
+        CreditReasonCode: "DISCOUNT" | "GOODWILL" | "ENTERED_BY_MISTAKE" | "CLIENT_DISPUTE" | "OTHER" | null;
         ApproveFeeProposalRequest: {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
@@ -18601,6 +18917,103 @@ export interface components {
                 /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                 dueDate?: string;
             };
+        };
+        ReducePreviewResponse: {
+            installments: {
+                /** Format: uuid */
+                id: string;
+                position: number;
+                label: string;
+                before: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                };
+                after: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                } | null;
+            }[];
+            credits: {
+                /** Format: uuid */
+                receivableId: string;
+                receivableNumber: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            requested: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            applied: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            roundedBy: string;
+            outstanding: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                before: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                after: string;
+            };
+            effectiveTotal: {
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                before: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                after: string;
+            };
+            previewToken: string;
+        };
+        ReducePreviewRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            by?: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            to?: string;
+            reasonCode?: components["schemas"]["CreditReasonCode"];
+            note?: string;
+        };
+        ReduceResponse: components["schemas"]["AgreementDetail"] & {
+            supplement: components["schemas"]["Supplement"];
+            credits: components["schemas"]["Credit"][];
+        };
+        Credit: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            receivableId: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            reason: string;
+            reasonCode: components["schemas"]["CreditReasonCode"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            effectiveDate: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReduceRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            by?: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            to?: string;
+            reasonCode: components["schemas"]["CreditReasonCode"];
+            note?: string;
+            previewToken: string;
         };
         CancelAgreementRequest: Record<string, never>;
         ContingencyTermsPatchRequest: {
@@ -19312,6 +19725,7 @@ export interface components {
             receivableId: string;
             receivableNumber: string;
             reason: string;
+            reasonCode: components["schemas"]["CreditReasonCode"];
         } | {
             id: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -19331,6 +19745,7 @@ export interface components {
             paymentId: string;
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
+            receiptNumber: string | null;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string | null;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -19352,6 +19767,7 @@ export interface components {
             kind: "PAYMENT_REVERSAL";
             /** Format: uuid */
             paymentId: string;
+            receiptNumber: string | null;
             reason: string | null;
         };
         StatementChargeOrigin: {
@@ -19421,27 +19837,11 @@ export interface components {
             receivable: components["schemas"]["Receivable"];
             credit: components["schemas"]["Credit"];
         };
-        Credit: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            receivableId: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            vat: string;
-            reason: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            effectiveDate: string;
-            /** Format: date-time */
-            createdAt: string;
-        };
         CreditRequest: {
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             reason: string;
+            reasonCode?: components["schemas"]["CreditReasonCode"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             effectiveDate?: string;
         };
@@ -19484,6 +19884,7 @@ export interface components {
             receivedOn: string;
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
+            receiptNumber: string | null;
             notes: string | null;
             status: components["schemas"]["PaymentStatus"];
             /** Format: date-time */
@@ -19622,6 +20023,8 @@ export interface components {
             receivedOn: string;
             method: components["schemas"]["PaymentMethod"];
             reference?: string;
+            /** @description MUT-481: the legal receipt's number from the firm's invoicing app; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID). Not unique. With replacesPaymentId, leaving it out keeps the replaced payment's number and null clears it, so a client that always sends null clears it on every correction. */
+            receiptNumber?: string | null;
             notes?: string;
             /** Format: uuid */
             replacesPaymentId?: string;
@@ -19635,6 +20038,10 @@ export interface components {
         UpdatePaymentRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
             receivedOn: string;
+        };
+        SetReceiptNumberRequest: {
+            /** @description Trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID); null clears it. */
+            receiptNumber: string | null;
         };
         AllocatePaymentRequest: {
             allocations: components["schemas"]["AllocationRequest"][];

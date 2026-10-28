@@ -406,6 +406,7 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
     receivedOn: p.receivedOn,
     method: p.method,
     reference: p.reference,
+    receiptNumber: p.receiptNumber,
     notes: p.notes,
     status: p.status,
     reversedAt: iso(p.reversedAt),

@@ -1819,6 +1819,7 @@ export class PrismaLedgerStore implements LedgerStore {
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
           ...(filter.status ? { status: filter.status } : {}),
           ...(filter.origin ? { origin: filter.origin } : {}),
+          ...(filter.receiptNumber ? { receiptNumber: filter.receiptNumber } : {}),
           ...(filter.receivedBefore || filter.receivedAfter ? { receivedOn: { ...(filter.receivedBefore ? { lte: filter.receivedBefore } : {}), ...(filter.receivedAfter ? { gte: filter.receivedAfter } : {}) } } : {}),
           // Every OR-shaped condition goes in AND: spread side by side, the cursor's OR used to replace the project's (MUT-61).
           AND: [
@@ -1872,7 +1873,7 @@ export class PrismaLedgerStore implements LedgerStore {
     capture: (input, at) =>
       this.paymentWrite(() =>
         this.prisma.$transaction(async (tx) => {
-          const { payment } = await createPaymentTx(tx, { ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+          const { payment } = await createPaymentTx(tx, { ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
           const postedCount = await tx.payment.count({ where: { organizationId: input.organizationId, status: 'POSTED' } });
           return { payment, postedCount };
         }),
@@ -1899,6 +1900,13 @@ export class PrismaLedgerStore implements LedgerStore {
         const record = await tx.payment.findFirst({ where: owned });
         return record ? { kind: 'stale', record } : { kind: 'not_found' };
       }),
+    setReceiptNumber: async (organizationId, paymentId, expectedVersion, receiptNumber, at) => {
+      const { count } = await this.prisma.payment.updateMany({ where: { id: paymentId, organizationId, status: 'POSTED', version: expectedVersion }, data: { receiptNumber, version: { increment: 1 }, updatedAt: at } });
+      // A miss re-reads without the status filter, so a reversed payment is told apart from a stale version (review R3).
+      const record = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
   };
 
   /** MUT-61: allocationStateOf (payments/allocation-state.ts) as a where clause, POSTED payments only. */

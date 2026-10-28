@@ -51,6 +51,7 @@ export function describeLedgerStoreM4Contract(name: string, makeStore: () => Pro
     receivedOn: '2026-10-08',
     method: 'BANK' as const,
     reference: 'TRX-1',
+    receiptNumber: null,
     notes: null,
     replacesPaymentId: null,
     requestId: 'req-1',

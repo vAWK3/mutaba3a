@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -186,6 +186,12 @@ function addReductionFields(snapshot: StoredSnapshot): StoredSnapshot {
   };
 }
 
+/** MUT-481, 10 → 11: payments gain `receiptNumber`. A device's payments are a person's own, which never carry one: null. */
+function addReceiptNumber(snapshot: StoredSnapshot): StoredSnapshot {
+  const pays = snapshot.maps.pays as Map<string, Omit<PaymentRecord, 'receiptNumber'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, pays: new Map([...pays].map(([id, p]) => [id, { ...p, receiptNumber: null }])) } };
+}
+
 /**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
@@ -202,6 +208,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 7, to: 8, migrate: addOperatorAt },
   { from: 8, to: 9, migrate: addReceivableNumbers },
   { from: 9, to: 10, migrate: addReductionFields },
+  { from: 10, to: 11, migrate: addReceiptNumber },
 ];
 
 /**

@@ -224,6 +224,7 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
               receivedOn: '2026-10-05',
               method: 'CASH',
               reference: null,
+              receiptNumber: null,
               notes: 'Taxi from court',
               replacesPaymentId: null,
               requestId: null,

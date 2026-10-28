@@ -145,7 +145,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const owed = await w.owed(1);
       const other = await w.owed(2);
       const pay = (allocations: Array<{ receivableId: string; amountMinor: bigint }>, s: number) =>
-        store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations }, at(s));
+        store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations }, at(s));
       const settle = (await pay([{ receivableId: owed.id, amountMinor: 50_000n }], 3)).payment;
       const split = (await pay([{ receivableId: other.id, amountMinor: 25_000n }, { receivableId: (await w.owed(4)).id, amountMinor: 25_000n }], 5)).payment;
       const bare = await w.capture(w.b.id, 6);
@@ -175,7 +175,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const store = await makeStore();
       const w = await world(store);
       const owed = await w.owed(1);
-      const { payment } = await store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: owed.id, amountMinor: 50_000n }] }, at(3));
+      const { payment } = await store.payments.create({ organizationId: w.b.id, customerId: w.client.id, projectId: null, currency: 'ILS', amountMinor: 50_000n, receivedOn: '2026-10-08', method: 'CASH', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: w.user.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: owed.id, amountMinor: 50_000n }] }, at(3));
       expect((await store.entries.settledOwedIds([w.b.id], [payment.id])).get(payment.id)).toBe(owed.id);
 
       await store.payments.reverse(w.b.id, payment.id, 'Wrong job', at(4));

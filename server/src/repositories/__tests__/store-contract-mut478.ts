@@ -47,7 +47,7 @@ export function describeLedgerStoreMut478Contract(name: string, makeStore: () =>
       const r1 = (await store.agreements.postInstallment(o.id, installments[0]!.id, { postingDate: '2026-02-01', dueDate: '2026-02-28', at: at(3) }))!.receivable;
       await store.receivables.credit(o.id, r1.id, { amountMinor: 10n, netMinor: 10n, vatMinor: 0n, reason: 'Goodwill', effectiveDate: '2026-02-10', requestId: null }, at(4));
       const pay = (amount: bigint, allocations: Array<{ receivableId: string; amountMinor: bigint }>, currency = 'ILS', customerId: string | null = c.id) =>
-        store.payments.create({ organizationId: o.id, customerId, projectId: null, currency, amountMinor: amount, receivedOn: '2026-02-15', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations }, at(5));
+        store.payments.create({ organizationId: o.id, customerId, projectId: null, currency, amountMinor: amount, receivedOn: '2026-02-15', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations }, at(5));
       const kept = await pay(50n, [{ receivableId: r1.id, amountMinor: 50n }]);
       const reversed = await pay(20n, [{ receivableId: r1.id, amountMinor: 20n }]);
       await store.payments.reverse(o.id, reversed.payment.id, 'Bounced', at(6));

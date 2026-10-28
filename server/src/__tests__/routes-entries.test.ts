@@ -212,7 +212,7 @@ describe('GET /v1/entries — what counts as an entry', () => {
     const client = await customer(h, key);
     h.tick();
     const { payment } = await h.store.payments.create(
-      { organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 30_000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] },
+      { organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 30_000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] },
       h.clock.now,
     );
     await h.store.payments.reverse(firm.id, payment.id, 'bounced', h.clock.now);
@@ -235,7 +235,7 @@ describe('GET /v1/entries — what counts as an entry', () => {
       );
     const pay = async (amountMinor: bigint, allocations: Array<{ receivableId: string; amountMinor: bigint }>) => {
       h.tick();
-      return (await h.store.payments.create({ organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations }, h.clock.now)).payment;
+      return (await h.store.payments.create({ organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations }, h.clock.now)).payment;
     };
     const r1 = await owed(10_000n);
     const r2 = await owed(5_000n);
@@ -261,7 +261,7 @@ describe('GET /v1/entries — what counts as an entry', () => {
     await h.app.request(`/admin/v1/users/${u.userId}/memberships`, json({ organizationId: firm.id }, admin));
     const client = await customer(h, key);
     const malafatPayment = (replacesPaymentId: string | null) =>
-      h.store.payments.create({ organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 30_000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
+      h.store.payments.create({ organizationId: firm.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 30_000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, h.clock.now);
     h.tick();
     const original = (await malafatPayment(null)).payment;
     await h.store.payments.reverse(firm.id, original.id, 'corrected', h.clock.now);
