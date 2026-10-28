@@ -5,8 +5,9 @@ import type { LedgerStore } from './repositories/ports.js';
  * column is plain text, so a new flag is a change here and needs no migration. Every flag is off until granted.
  *
  * `agent_access`: the person may connect their own AI agent over MCP (epic MUT-432).
+ * `receipt_reading`: the server reads the receipts this person uploads (MUT-441, D3), while SERVER_OCR is on.
  */
-export const FEATURES = ['agent_access'] as const;
+export const FEATURES = ['agent_access', 'receipt_reading'] as const;
 export type Feature = (typeof FEATURES)[number];
 
 export function isFeature(name: string): name is Feature {

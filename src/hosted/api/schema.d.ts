@@ -11867,6 +11867,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/receipts/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read one receipt (Cloud Tasks), or sweep the waiting ones (Cloud Scheduler) (MUT-441)
+         * @description With `{receiptId}`: claim the receipt for 90 s, read its file on our own OCR service, and fill the suggestion's empty fields. With no body: ask again for every waiting receipt whose claim lapsed, and give up on those past 3 tries or 30 minutes. Google OIDC only (the queue's and the Scheduler's service accounts); the X-Job-Token does not open it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["ReceiptReadJobRequest"];
+                };
+            };
+            responses: {
+                /** @description An end state (or the sweep ran) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReceiptReadJobResult"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description retry: the OCR service timed out or is unavailable; or JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReceiptReadJobResult"] | components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/receipts/uploads": {
         parameters: {
             query?: never;
@@ -20313,6 +20383,20 @@ export interface components {
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
             returnPath: string;
+        };
+        ReceiptReadJobResult: {
+            /**
+             * @description done: read, and the fields it found fill the suggestion's empty ones. skipped: nothing to read for (filed, deleted, every field present, no grant). failed: given up (unreadable, or exhausted). busy: another read holds it. none: not waiting to be read. retry (503): try again. off: SERVER_OCR is off. swept: the no-body sweep ran.
+             * @enum {string}
+             */
+            status: "done" | "skipped" | "failed" | "busy" | "none" | "retry" | "off" | "swept";
+            enqueued?: number;
+            failed?: number;
+            enqueueErrors?: number;
+        };
+        ReceiptReadJobRequest: {
+            /** Format: uuid */
+            receiptId: string;
         };
         CreateLibraryReceiptUploadRequest: {
             filename: string;

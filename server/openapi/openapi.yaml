@@ -116,6 +116,11 @@ components:
       in: header
       name: X-Job-Token
       description: The nightly Cloud Scheduler job (MUTABA3A_JOB_TOKEN, MUT-360). Opens /jobs/* only.
+    googleOidc:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "MUT-441 (R8): a Google-signed OIDC token for the receipt-read queue's or the sweep Scheduler's service account (READ_INVOKER_SA, SWEEP_INVOKER_SA), audience READ_OIDC_AUDIENCE. Opens POST /jobs/v1/receipts/read only."
     adminToken:
       type: apiKey
       in: header
@@ -7468,6 +7473,37 @@ components:
       required:
         - returnPath
       additionalProperties: false
+    ReceiptReadJobResult:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - done
+            - skipped
+            - failed
+            - busy
+            - none
+            - retry
+            - off
+            - swept
+          description: "done: read, and the fields it found fill the suggestion's empty ones. skipped: nothing to read for (filed, deleted, every field present, no grant). failed: given up (unreadable, or exhausted). busy: another read holds it. none: not waiting to be read. retry (503): try again. off: SERVER_OCR is off. swept: the no-body sweep ran."
+        enqueued:
+          type: integer
+        failed:
+          type: integer
+        enqueueErrors:
+          type: integer
+      required:
+        - status
+    ReceiptReadJobRequest:
+      type: object
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+      required:
+        - receiptId
     CreateLibraryReceiptUploadRequest:
       type: object
       properties:
@@ -17675,6 +17711,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/receipts/read:
+    post:
+      tags:
+        - Receipts
+      summary: Read one receipt (Cloud Tasks), or sweep the waiting ones (Cloud Scheduler) (MUT-441)
+      description: "With `{receiptId}`: claim the receipt for 90 s, read its file on our own OCR service, and fill the suggestion's empty fields. With no body: ask again for every waiting receipt whose claim lapsed, and give up on those past 3 tries or 30 minutes. Google OIDC only (the queue's and the Scheduler's service accounts); the X-Job-Token does not open it."
+      security:
+        - googleOidc: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptReadJobRequest"
+      responses:
+        "200":
+          description: An end state (or the sweep ran)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptReadJobResult"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "retry: the OCR service timed out or is unavailable; or JOBS_NOT_CONFIGURED"
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: "#/components/schemas/ReceiptReadJobResult"
+                  - $ref: "#/components/schemas/ErrorEnvelope"
   /v1/receipts/uploads:
     post:
       tags:

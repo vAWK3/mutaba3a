@@ -40,7 +40,7 @@ const COMPLETE_OUTPUT = { receiptId: z.string(), expenseId: z.string().nullable(
 export function registerReceiptTools(server: McpServer, ctx: McpContext, options: ReceiptToolOptions): void {
   // Review D14 (MUT-437): like every write tool, only for a grant that can also read.
   if (!hasScope(ctx, 'write') || !hasScope(ctx, 'read')) return;
-  const deps: ReceiptDeps = { store: ctx.store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds };
+  const deps: ReceiptDeps = { store: ctx.store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds, reading: options.reading ?? null };
   const actorFor = (organization: Organization): ReceiptActor => ({
     organization,
     userId: ctx.agent.user.id,

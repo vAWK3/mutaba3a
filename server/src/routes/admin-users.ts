@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { normalizeEmail } from '../auth/users.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
-import { featureActions, featureOf } from '../operator/actions/features.js';
+import { featureActions, featureOf, type FeatureActionOptions } from '../operator/actions/features.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
@@ -56,6 +56,8 @@ export interface AdminUserOptions {
   terms: CurrentTerms;
   /** MUT-434 (D14): forced agent disconnects are noted here. Absent = nowhere. */
   reporter?: ErrorReporter;
+  /** MUT-441 (R5): told after a feature is granted (receipt_reading queues the person's unread receipts). */
+  onGranted?: FeatureActionOptions['onGranted'];
 }
 
 const adminErrors = {
