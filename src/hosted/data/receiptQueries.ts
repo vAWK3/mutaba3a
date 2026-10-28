@@ -71,24 +71,34 @@ export const READING_POLL_MAX_MS = 120_000;
 
 type ReceiptQuery = Query<ExpenseReceipt, Error, ExpenseReceipt, readonly unknown[]>;
 
-/** When each receipt query first answered `pending` (its data's time), so the two minutes survive a remount. */
+/** When each receipt query was first seen `pending`, on the wall clock, so the two minutes survive a remount. */
 const pendingSince = new WeakMap<ReceiptQuery, number>();
 
+/**
+ * Whether the two minutes since the query was first seen pending are up. Wall time, not `dataUpdatedAt`: a refetch
+ * that fails leaves `dataUpdatedAt` where it was, which would never reach the limit (MUT-441 review).
+ */
+function readingTimedOut(query: ReceiptQuery): boolean {
+  const since = pendingSince.get(query);
+  return since !== undefined && Date.now() - since >= READING_POLL_MAX_MS;
+}
+
 function readingPoll(query: ReceiptQuery): number | false {
-  const { data, dataUpdatedAt } = query.state;
-  if (data?.reading !== 'pending') {
+  if (query.state.data?.reading !== 'pending') {
     pendingSince.delete(query);
     return false;
   }
-  const since = pendingSince.get(query) ?? dataUpdatedAt;
-  pendingSince.set(query, since);
-  return dataUpdatedAt - since >= READING_POLL_MAX_MS ? false : READING_POLL_MS;
+  if (!pendingSince.has(query)) pendingSince.set(query, Date.now());
+  // A refetch that failed (a 404, or retries used up) stops the polling; the form stays usable as it is.
+  if (query.state.status === 'error') return false;
+  return readingTimedOut(query) ? false : READING_POLL_MS;
 }
 
 /**
  * One receipt. MUT-441: polls while the server reads it (`reading: 'pending'`) and stops two minutes after first
- * seeing that; `readingShown` is false after that too, so the page just shows the form. When the reading ends, the
- * gallery's lists refresh (their cards say "Reading…"). Local mode and unread receipts answer null: no polling.
+ * seeing that, or once a refetch fails; `readingShown` is false after that too, so the page just shows the form. When
+ * the reading ends, the gallery's lists refresh (their cards say "Reading…"). Local mode and unread receipts answer
+ * null: no polling.
  */
 export function useReceipt(profileId: string, receiptId: string) {
   const queryClient = useQueryClient();
@@ -106,8 +116,7 @@ export function useReceipt(profileId: string, receiptId: string) {
     refetchInterval: readingPoll,
   });
   const cached = queryClient.getQueryCache().find<ExpenseReceipt>({ queryKey: key, exact: true }) as ReceiptQuery | undefined;
-  const since = cached ? pendingSince.get(cached) : undefined;
-  const readingShown = query.data?.reading === 'pending' && (since === undefined || query.dataUpdatedAt - since < READING_POLL_MAX_MS);
+  const readingShown = query.data?.reading === 'pending' && !query.isError && !(cached && readingTimedOut(cached));
   return { ...query, readingShown };
 }
 

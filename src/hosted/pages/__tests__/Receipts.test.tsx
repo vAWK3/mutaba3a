@@ -447,6 +447,21 @@ describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
     expect(screen.getByLabelText(/Amount/)).toBeEnabled();
   });
 
+  it.each([
+    ['refetches that keep failing (500)', () => fail(500, 'INTERNAL')],
+    ['a 404 (the receipt is gone)', () => fail(404, 'NOT_FOUND')],
+  ])('stops polling on %s, and the Reading row goes (MUT-441 review)', async (_label, failure) => {
+    const state = { failing: false };
+    const { api } = reading(receipt(R1, { reading: 'pending' }), { [ONE]: () => (state.failing ? failure() : ok(plain(receipt(R1, { reading: 'pending' })))) });
+    await screen.findByText(READING);
+    state.failing = true;
+    await tick(20_000);
+    const fetched = api.count(ONE);
+    await tick(60_000);
+    expect(api.count(ONE)).toBe(fetched);
+    expect(screen.queryByText(READING)).toBeNull();
+  });
+
   it('null, as local mode and an unread receipt answer, never shows Reading… and never polls', async () => {
     const { api } = reading(receipt(R1, { reading: null }));
     await screen.findByLabelText(/Amount/);
