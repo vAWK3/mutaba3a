@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — Self-service go-live housekeeping
+
+**Why:** the self-service run (MUT-359…371) is live and Basel checked it on 2026-10-28, so its operator steps were stale.
+
+### Changed
+- `docs/operations/before-release.md`: dropped the done items for MUT-360, 362, 418, 359, 366, 368, 367, 419, 333, 370, 115 and 369; MUT-361 is cut to what's left, the minimum phone build (Android ≥ 11 now, iOS 8 after App Store approval).
+- `server/DEPLOYMENT.md` §7: the go-live dates.
+- `.claude/TECH_DEBT.md`: TD-234 resolved (the policy names Stripe); TD-244 and TD-245 accepted by Basel.
+
 ## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
 
 **Why:** Gmail, Outlook.com and Outlook for Mac darken a mail's colours in dark mode but not its images, and ignore the `light only` opt-out; v1's opaque art showed as pale squares (Basel's Outlook screenshots). ADR-214 amendment; brief `.claude/designs/mut-484-transparent-mail-art.md`.
