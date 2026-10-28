@@ -2552,6 +2552,10 @@ export interface FeeProposalRecord {
   /** MUT-107: both set on a contingency proposal, both null on a FIXED one. */
   commissionRateBasisPoints: number | null;
   upfrontTreatment: UpfrontTreatment | null;
+  /** MUT-479 (D2): the agreement an approval would make; RECURRING for a retainer proposal. Legacy rows: FIXED, or CONTINGENCY with terms. */
+  agreementType: AgreementType;
+  /** MUT-479 (D2, R3): the draft agreement as proposed (`{ schemaVersion: 1, kind, … }`, wire strings only); null for a proposal made without one. Pre-fill only: never re-composed after create. */
+  draft: JsonObject | null;
   requestId: string | null;
   version: number;
   createdAt: Date;
@@ -2570,6 +2574,9 @@ export interface CreateFeeProposalInput {
   /** MUT-107: present together = a contingency proposal (the upfront is proposedAmountMinor); absent = FIXED. */
   commissionRateBasisPoints?: number;
   upfrontTreatment?: UpfrontTreatment;
+  /** MUT-479: always written explicitly (R10). */
+  agreementType: AgreementType;
+  draft: JsonObject | null;
   requestId: string | null;
 }
 

@@ -205,8 +205,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 9 (MUT-478): `recs` gained `number`; `counters` gained `${organizationId}:CHG:${year}` keys.
  * 10 (MUT-480): `credits` gained `reasonCode`; `supps` gained `reasonCode`, `appliedGrossMinor` and `creditedMinor`.
  * 11 (MUT-481): `pays` gained `receiptNumber`.
+ * 12 (MUT-479): `props` gained `agreementType` and `draft`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 11;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 12;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -1556,10 +1557,11 @@ export class MemoryLedgerStore implements LedgerStore {
       const project = this.projs.get(input.projectId);
       if (!project || project.organizationId !== input.organizationId) throw new ForeignKeyViolation('fee_proposals.projectId');
       if (await this.feeProposals.findOpenByProject(input.organizationId, input.projectId)) throw new UniqueViolation('fee_proposals.open_per_project');
-      const { commissionRateBasisPoints, upfrontTreatment, ...rest } = input;
+      const { commissionRateBasisPoints, upfrontTreatment, draft, ...rest } = input;
       const record: FeeProposalRecord = {
         id: randomUUID(),
         ...rest,
+        draft: draft === null ? null : structuredClone(draft),
         commissionRateBasisPoints: commissionRateBasisPoints ?? null,
         upfrontTreatment: upfrontTreatment ?? null,
         status: 'PROPOSED',
@@ -1574,14 +1576,14 @@ export class MemoryLedgerStore implements LedgerStore {
         updatedAt: at,
       };
       this.props.set(record.id, record);
-      return { ...record };
+      return cloneProposal(record);
     },
     getById: async (organizationId, id) => {
       const p = this.props.get(id);
-      return p && p.organizationId === organizationId ? { ...p } : null;
+      return p && p.organizationId === organizationId ? cloneProposal(p) : null;
     },
-    list: async (organizationId, filter: FeeProposalFilter, page) =>
-      paginate(
+    list: async (organizationId, filter: FeeProposalFilter, page) => {
+      const found = paginate(
         [...this.props.values()].filter(
           (p) =>
             p.organizationId === organizationId &&
@@ -1591,13 +1593,17 @@ export class MemoryLedgerStore implements LedgerStore {
             (filter.open === undefined || OPEN_PROPOSAL_STATUSES.includes(p.status) === filter.open),
         ),
         page,
-      ),
-    findOpenByProject: async (organizationId, projectId) =>
-      clone([...this.props.values()].find((p) => p.organizationId === organizationId && p.projectId === projectId && OPEN_PROPOSAL_STATUSES.includes(p.status))),
+      );
+      return { ...found, items: found.items.map(cloneProposal) };
+    },
+    findOpenByProject: async (organizationId, projectId) => {
+      const p = [...this.props.values()].find((x) => x.organizationId === organizationId && x.projectId === projectId && OPEN_PROPOSAL_STATUSES.includes(x.status));
+      return p ? cloneProposal(p) : null;
+    },
     transition: async (organizationId, id, from, patch: FeeProposalTransitionPatch, at) => {
       const p = this.props.get(id);
       if (!p || p.organizationId !== organizationId) return { kind: 'not_found' };
-      if (!from.includes(p.status)) return { kind: 'wrong_status', record: { ...p } };
+      if (!from.includes(p.status)) return { kind: 'wrong_status', record: cloneProposal(p) };
       const { status, ...rest } = patch;
       p.status = status;
       if (rest.clientApprovedOn !== undefined) p.clientApprovedOn = rest.clientApprovedOn;
@@ -1608,7 +1614,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (rest.agreementId !== undefined) p.agreementId = rest.agreementId;
       p.version += 1;
       p.updatedAt = at;
-      return { kind: 'updated', record: { ...p } };
+      return { kind: 'updated', record: cloneProposal(p) };
     },
   };
 
@@ -3609,6 +3615,11 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 /** MUT-434: a stored token without its digest, which never leaves the store. */
 function oauthTokenRecordOf(t: OAuthTokenRecord & { digest: string }): OAuthTokenRecord {
   return { id: t.id, grantId: t.grantId, kind: t.kind, createdAt: t.createdAt, expiresAt: t.expiresAt, rotatedAt: t.rotatedAt, successorId: t.successorId };
+}
+
+/** MUT-479 (R3): a proposal's draft is a nested object, so a shallow copy would hand out the stored one. */
+function cloneProposal(p: FeeProposalRecord): FeeProposalRecord {
+  return { ...p, draft: p.draft === null ? null : structuredClone(p.draft) };
 }
 
 function clonePasskey(p: PasskeyRecord): PasskeyRecord {

@@ -1191,6 +1191,10 @@ model FeeProposal {
   /// MUT-107: both set on a contingency proposal, both null on a FIXED one (CHECK in migration).
   commissionRateBasisPoints Int?
   upfrontTreatment          UpfrontTreatment?
+  /// MUT-479 (D2): the agreement an approval makes. RECURRING carries no contingency terms (CHECK in migration).
+  agreementType             AgreementType     @default(FIXED)
+  /// MUT-479 (D2, R3): the draft agreement as proposed ({ schemaVersion: 1, kind, … }); null for a proposal made without one.
+  draft                     Json?
   requestId                 String?
   version                   Int               @default(1)
   createdAt                 DateTime          @default(now())
