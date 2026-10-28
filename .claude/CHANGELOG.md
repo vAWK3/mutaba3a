@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-481: a receipt number on payments (API 1.86.0-mut481, ADR-223)
+
+**Why:** Malafat's ledger shows the legal receipt (קבלה) the firm issued in its invoicing app beside each payment. Unblocks MAL-1420's receipt field and MAL-1422's payment sheet. Plan `.claude/designs/mut-481-receipt-number.md` (reviewed; Basel chose D5 A).
+
+### Added
+- `receiptNumber` on `POST /v1/payments` and every payment read; `GET /v1/payments?receiptNumber=`; on the statement's PAYMENT and PAYMENT_REVERSAL lines. A correction (`replacesPaymentId`) keeps the reversed payment's number unless it sends one or `null`.
+- `PUT /v1/payments/{id}/receipt-number` (If-Match, API key, POSTED only): set or clear it after recording; audits `payment.receipt_number_set`.
+- `payments/receipt-number.ts` (`normalizeReceiptNumber`, `carriedReceiptNumber`); 422 `RECEIPT_NUMBER_INVALID`.
+- Release-QA `portal-selfservice.malafat-money-api.receipt-number`.
+
+### Fixed
+- MUT-480's reasons (`REDUCTION_EXCEEDS_OPEN`, `USE_CANCEL`, `REASON_REQUIRED`, `INSTALLMENT_VOIDED`) are now in the published reason lists, and the portal's generated API types (`src/hosted/api/schema.d.ts`) now carry MUT-480's fields.
+
+### Technical
+- Migration `20261028190000_mut481_payment_receipt_number` (nullable column + `(organizationId, receiptNumber)` index). Local snapshot format 11 (10 → 11 sets null). `CreatePaymentInput.receiptNumber` is required.
+
 ## [Unreleased] - 2026-10-28 — MUT-480: lower a fixed fee in one call (API 1.85.0-mut480, ADR-222)
 
 **Why:** a partner giving a discount or forgiving part of a fee needed a negative supplement plus credits receivable by receivable, and Malafat may not split amounts itself (ADR-150). Unblocks MAL-1424 ("Lower the fee"). Plan `.claude/designs/mut-480-lower-the-fee.md` (eng-reviewed; Basel approved D1–D9).

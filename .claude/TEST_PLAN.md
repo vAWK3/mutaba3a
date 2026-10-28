@@ -4160,3 +4160,13 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Route | `server/src/__tests__/agreement-reduce.route.test.ts` | AC1–AC5 (AC6: the pinned 1.85.0-mut480 literals in routes-m2..m8), `to` = `by`, E2 reason outside the token, idempotent replay, audit counts, R1 lazy posting first, D5 rounding over HTTP, NOT_FIXED / AGREEMENT_CANCELLED / 404, detail `credited`/`effectiveTotal`, statement `reasonCode`, O4 trigger answers, the credit route's optional reasonCode |
 | Local mode | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` (everyRecord lowers a fee) | 9 → 10 fills the new fields; the store restores; the fingerprint sees every new field with a value |
 | Release-QA | `qa/specs/portal-selfservice/malafat-money-api.spec.ts` `@portal-selfservice.malafat-money-api.reduce` | Malafat previews and commits a reduction past the unbilled amount on a live API, then reads the agreement and statement |
+
+## MUT-481 — a receipt number on payments (ADR-223)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/payments/__tests__/receipt-number.test.ts` | D3 (trim, 64/65, blank, control characters, Arabic/Hebrew) and D1 (absent/null/value × with/without a replaced payment) |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut481.ts` (memory + Prisma) | stored; exact filter, never across organizations; `setReceiptNumber` on the version, stale with the record, REVERSED told apart, not_found for another organization |
+| Route | `server/src/__tests__/payment-receipt-number.route.test.ts` | AC1 with/without and 422; AC2 on the payment, the list, the filter and both statement lines; AC3 a correction keeps, changes or clears it (audited as carried); D5 PUT set/clear/no-op repeat/409 VERSION_MISMATCH/422 without If-Match/409 ALREADY_REVERSED/404; D6 a capture reads null. AC4: the pinned 1.86.0-mut481 literals |
+| Local mode | `migrations.test.ts` (10 → 11), `format-fingerprint.test.ts` (everyRecord adds a Malafat payment with a number) | |
+| Release-QA | `@portal-selfservice.malafat-money-api.receipt-number` | record with 2041, find it, correct it and keep it, set 2050 later, read both statement lines |

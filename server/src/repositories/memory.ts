@@ -204,8 +204,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 8 (MUT-459): `people` gained `operatorAt`.
  * 9 (MUT-478): `recs` gained `number`; `counters` gained `${organizationId}:CHG:${year}` keys.
  * 10 (MUT-480): `credits` gained `reasonCode`; `supps` gained `reasonCode`, `appliedGrossMinor` and `creditedMinor`.
+ * 11 (MUT-481): `pays` gained `receiptNumber`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 10;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 11;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -2022,6 +2023,7 @@ export class MemoryLedgerStore implements LedgerStore {
             (!filter.receivedAfter || p.receivedOn >= filter.receivedAfter) &&
             (!filter.projectId || (p.projectId === filter.projectId && !this.hasAllocations(p.id)) || (onProject?.has(p.id) ?? false)) &&
             (!filter.origin || p.origin === filter.origin) &&
+            (!filter.receiptNumber || p.receiptNumber === filter.receiptNumber) &&
             (!filter.allocationState || (p.status === 'POSTED' && allocationStateOf(p) === filter.allocationState)),
         ),
         page,
@@ -2067,7 +2069,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
-      const { payment } = await this.payments.create({ ...input, reference: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
+      const { payment } = await this.payments.create({ ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
       // Counted up to this payment in insertion order, as Postgres's counter lock serializes it: captures in flight at
       // once each see only the ones before them.
       let postedCount = 0;
@@ -2090,6 +2092,13 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!p || p.organizationId !== organizationId || p.origin !== 'CAPTURE' || p.createdByUserId !== userId || p.status !== 'POSTED') return { kind: 'not_found' };
       if (p.version !== expectedVersion) return { kind: 'stale', record: { ...p } };
       Object.assign(p, { receivedOn, version: p.version + 1, updatedAt: at });
+      return { kind: 'updated', record: { ...p } };
+    },
+    setReceiptNumber: async (organizationId, paymentId, expectedVersion, receiptNumber, at) => {
+      const p = this.pays.get(paymentId);
+      if (!p || p.organizationId !== organizationId) return { kind: 'not_found' };
+      if (p.status !== 'POSTED' || p.version !== expectedVersion) return { kind: 'stale', record: { ...p } };
+      Object.assign(p, { receiptNumber, version: p.version + 1, updatedAt: at });
       return { kind: 'updated', record: { ...p } };
     },
   };

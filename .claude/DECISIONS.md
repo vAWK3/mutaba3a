@@ -5857,3 +5857,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A leftover agora as a credit (D2 as first approved). Rejected (D5): it only fires when the reduction is below the unbilled amount, where AC1 forbids credits.
 - Allow a zero fee, or cancel in the same write (D4 B/C). Rejected: a state no reader was built for, or "lower" silently becoming "cancel".
 - A typed `raced` result from `postInstallment` (the plan's D8 wording). Built as null plus the trigger's re-read instead: same answers, without changing a return type 30 callers and tests read (TD-281).
+
+## ADR-223: A Payment's Receipt Number Is a Label, Kept Through a Correction (MUT-481)
+
+**Status:** Accepted (2026-10-28, MUT-481; epic MUT-25; blocks MAL-1420's receipt field and MAL-1422's payment sheet). Plan and review: `.claude/designs/mut-481-receipt-number.md` (D1–D7, R1–R10; Basel approved D5 on 2026-10-28).
+
+**Context:** firms issue the legal receipt (קבלה) in registered invoicing software. Malafat records the payment and wants the receipt's number on it, so the ledger reads "Receipt 2041". The payment's `reference` already holds the transfer reference.
+
+**Decision:**
+1. **`payments.receiptNumber`** (VARCHAR 64, nullable, indexed with the organization). Set on `POST /v1/payments`, returned on every payment read and on the statement's PAYMENT and PAYMENT_REVERSAL lines (D4), filterable with `?receiptNumber=` (exact, trimmed; blank ignored).
+2. **A label, not a document:** not unique (D2); trimmed, 1–64 characters, no control characters, any script; checked in the handler so a bad value is 422 `RECEIPT_NUMBER_INVALID` (D3, R6).
+3. **A correction keeps it** (D1): with `replacesPaymentId`, leaving the field out carries the reversed payment's number, `null` clears it, a value replaces it (`carriedReceiptNumber`, which MUT-443 reuses). A replay is deterministic: a reversed payment's number never changes. The OpenAPI description warns that always sending `null` clears it on every correction.
+4. **Set later** (D5, Basel): `PUT /v1/payments/{id}/receipt-number`, API key only (sessions refused, R7), `If-Match` without an idempotency key (R1: the fingerprint ignores headers and stores 4xx answers); POSTED only (409 `ALREADY_REVERSED`); the same value again answers 200 with no new version, so a retry after a lost response succeeds. The store tells a reversed payment from a stale version by re-reading (R3). Audits `payment.receipt_number_set` with from/to.
+5. **Malafat-fed payments only** (D6): capture, settle and inbox write null; `CreatePaymentInput.receiptNumber` is required so every writer says so (R4). The PUT refuses a payment a person recorded with 422 `RECEIPT_NUMBER_NOT_ALLOWED`, so its owner's re-date keeps its version (pre-landing review).
+6. **Pre-landing review fixes:** the PUT answers a same-value request with 200 before checking the version, so a retry that carries the version first read succeeds; Prisma's write and read-back share one transaction; invisible marks (zero-width, direction marks, BOM) are dropped before trimming so an exact search still matches, and control characters are checked on the trimmed value.
+
+**Consequences:** migration `20261028190000` (additive); local snapshot format 11; API 1.86.0-mut481; the portal's generated types regenerated (they had also missed MUT-480's fields).
+
+**Alternatives considered:**
+- Put the number in `reference`. Rejected by the ticket: it holds the transfer reference.
+- Unique per organization. Rejected (D2): the reversed payment and its correction share the number.
+- Create and correct only (D5 B). Rejected by Basel: a number known after recording would need a reversal and a re-record.

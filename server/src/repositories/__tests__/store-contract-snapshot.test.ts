@@ -118,6 +118,7 @@ describe('MemoryLedgerStore snapshot/restore (MUT-286)', () => {
         receivedOn: '2026-10-19',
         method: 'BANK',
         reference: 'TRX-1',
+        receiptNumber: null,
         notes: null,
         replacesPaymentId: null,
         requestId: 'req-settle',

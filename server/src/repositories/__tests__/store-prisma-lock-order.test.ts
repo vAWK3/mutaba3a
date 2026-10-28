@@ -50,7 +50,7 @@ if (!url) {
 
   const payment = (organizationId: string, customerId: string, allocations: Array<{ receivableId: string; amountMinor: bigint }>) => ({
     organizationId, customerId, projectId: null, currency: 'ILS', amountMinor: 20000n, receivedOn: '2026-10-08', method: 'BANK' as const,
-    reference: null, notes: null, replacesPaymentId: null, requestId: 'req-1', createdByUserId: null, origin: 'INTEGRATION' as const, captureSource: null, allocations,
+    reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: 'req-1', createdByUserId: null, origin: 'INTEGRATION' as const, captureSource: null, allocations,
   });
 
   /** Holds a row lock on `id` from another connection until the returned release() is called. */

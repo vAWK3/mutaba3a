@@ -1021,6 +1021,8 @@ model Payment {
   receivedOn        String        @db.VarChar(10)
   method            PaymentMethod
   reference         String?
+  /// MUT-481: the legal receipt the firm issued in its invoicing app (a label, not unique; a correction keeps it).
+  receiptNumber     String?       @db.VarChar(64)
   notes             String?
   status            PaymentStatus @default(POSTED)
   reversedAt        DateTime?
@@ -1044,6 +1046,8 @@ model Payment {
   @@unique([organizationId, number])
   @@index([organizationId, customerId])
   @@index([organizationId, projectId])
+  /// MUT-481: GET /v1/payments?receiptNumber= (exact match).
+  @@index([organizationId, receiptNumber])
   @@index([organizationId, createdAt, id])
   /// MUT-390: the entries feed by money date (receivedOn), newest day first, then newest logged.
   @@index([organizationId, receivedOn(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])

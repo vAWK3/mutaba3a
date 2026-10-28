@@ -207,6 +207,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             receivedOn: paidAt,
             method: body.method ?? 'CASH',
             reference: null,
+            receiptNumber: null,
             notes: null,
             replacesPaymentId: null,
             requestId,

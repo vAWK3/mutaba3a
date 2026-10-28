@@ -132,3 +132,53 @@ test('Malafat lowers a fixed fee past what is unbilled, and the rest becomes a c
     expect(statement.closingBalance).toBe('40.00');
   });
 });
+
+/** MUT-481: the legal receipt's number on payments (MAL-1420's field, MAL-1422's sheet), against the same live dev API. */
+test("Malafat keeps the legal receipt's number on a payment, through a correction, and sets one later", { tag: '@portal-selfservice.malafat-money-api.receipt-number' }, async ({ step }) => {
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let customerId = '';
+  let firstId = '';
+  const pay = async (extra: Json, amount = '100.00') => {
+    const preview = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount, allocations: [] });
+    return call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount, receivedOn: '2026-10-27', method: 'BANK', reference: 'TR-9', allocations: [], previewToken: preview.previewToken, ...extra });
+  };
+
+  await step("Malafat records a client's payment with receipt 2041", async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const apiKey = await call('POST', `/admin/v1/organizations/${org.id}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    customerId = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    const first = await pay({ receiptNumber: '2041' });
+    firstId = first.id;
+    expect(first.receiptNumber).toBe('2041');
+  });
+
+  await step('Malafat finds it by its receipt number', async () => {
+    await pay({ receiptNumber: '20410' });
+    const found = await call('GET', '/v1/payments?receiptNumber=2041', key);
+    expect(found.items.map((p: Json) => p.id)).toEqual([firstId]);
+  });
+
+  let replacementId = '';
+  await step('Malafat corrects it (reverses it and records the replacement without a number)', async () => {
+    await call('POST', `/v1/payments/${firstId}/reverse`, key, { reason: 'Wrong amount' });
+    const replacement = await pay({ replacesPaymentId: firstId }, '90.00');
+    replacementId = replacement.id;
+    expect(replacement.receiptNumber).toBe('2041');
+  });
+
+  await step('Malafat records another payment without a number and sets 2050 once the receipt is issued', async () => {
+    const later = await pay({}, '50.00');
+    expect(later.receiptNumber).toBeNull();
+    const res = await fetch(`${liveState().origin}/v1/payments/${later.id}/receipt-number`, { method: 'PUT', headers: { 'content-type': 'application/json', 'if-match': String(later.version), ...key }, body: JSON.stringify({ receiptNumber: '2050' }) });
+    expect(res.status).toBe(200);
+    expect((await res.json()).receiptNumber).toBe('2050');
+  });
+
+  await step("Malafat reads the client's statement", async () => {
+    const statement = await call('GET', `/v1/customers/${customerId}/statement?currency=ILS`, key);
+    expect(statement.lines.filter((l: Json) => l.paymentId === firstId).map((l: Json) => [l.kind, l.receiptNumber])).toEqual([['PAYMENT', '2041'], ['PAYMENT_REVERSAL', '2041']]);
+    expect(statement.lines.find((l: Json) => l.paymentId === replacementId)).toMatchObject({ kind: 'PAYMENT', receiptNumber: '2041' });
+  });
+});

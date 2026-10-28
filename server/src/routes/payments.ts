@@ -12,6 +12,7 @@ import { notOwner } from '../personal-profile.js';
 import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
+import { carriedReceiptNumber, normalizeReceiptNumber } from '../payments/receipt-number.js';
 import { verifyPreviewToken } from '../preview-token.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
 import { CAPTURE_UNDO_REASON, type JsonObject, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
@@ -26,6 +27,7 @@ import {
   IfMatchHeaderSchema,
   PaymentSchema,
   ReversePaymentRequestSchema,
+  SetReceiptNumberRequestSchema,
   UpdatePaymentRequestSchema,
 } from '../schemas.js';
 import { outstandingMinor, receivableStatus, serializeAllocation, serializePayment, type CapturedBy } from '../serializers.js';
@@ -219,9 +221,11 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const today = todayFor(organization, now);
       assertIsoDate(body.receivedOn, 'receivedOn');
       assertNotAbsurdDate(body.receivedOn, today, 'receivedOn');
+      const givenReceiptNumber = body.receiptNumber === undefined ? undefined : receiptNumberOf(body.receiptNumber);
       let replacedOn: IsoDate | null = null;
+      let replaced: PaymentRecord | null = null;
       if (body.replacesPaymentId) {
-        const replaced = await store.payments.getById(organization.id, body.replacesPaymentId);
+        replaced = await store.payments.getById(organization.id, body.replacesPaymentId);
         if (!replaced || replaced.status !== 'REVERSED') throw validationError('REPLACES_NOT_REVERSED', 'replacesPaymentId must name a REVERSED payment', { field: 'replacesPaymentId' });
         if (replaced.customerId !== body.customerId) throw validationError('REPLACES_CUSTOMER_MISMATCH', 'The replaced payment belongs to another customer', { field: 'replacesPaymentId' });
         // Only the first replacement keeps the exemption below: it is the one correction, not a standing licence.
@@ -240,10 +244,12 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         throw new ApiError('CONFLICT', 'previewToken does not match this allocation set and the current balances; preview again', { reason: 'PREVIEW_STALE' });
       }
       void token;
+      // MUT-481 (D1): a correction that leaves the field out keeps the reversed payment's number.
+      const receipt = carriedReceiptNumber({ given: givenReceiptNumber, replaced });
       let created;
       try {
         created = await store.payments.create(
-          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations },
+          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, receiptNumber: receipt.value, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations },
           now,
         );
       } catch (err) {
@@ -251,7 +257,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was recorded, preview again', { reason: 'PREVIEW_STALE' });
         throw err;
       }
-      await audit(actor, 'payment.recorded', 'payment', created.payment.id, { number: created.payment.number, customerId: src.customerId, amount: formatMoney({ minor: src.amountMinor, currency: src.currency }), currency: src.currency, allocations: created.allocations.length, unallocated: formatMoney({ minor: value.unallocatedMinor, currency: src.currency }), ...(body.replacesPaymentId ? { replacesPaymentId: body.replacesPaymentId } : {}) });
+      await audit(actor, 'payment.recorded', 'payment', created.payment.id, { number: created.payment.number, customerId: src.customerId, amount: formatMoney({ minor: src.amountMinor, currency: src.currency }), currency: src.currency, allocations: created.allocations.length, unallocated: formatMoney({ minor: value.unallocatedMinor, currency: src.currency }), ...(body.replacesPaymentId ? { replacesPaymentId: body.replacesPaymentId } : {}), ...(receipt.value ? { receiptNumber: receipt.value } : {}), ...(receipt.carried ? { receiptNumberCarried: true } : {}) });
       await auditSettled(actor, created.allocations.map((a) => a.receivableId), created.payment.id);
       return c.json(await viewOf(organization.id, created.payment, today), 201);
     },
@@ -289,6 +295,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           ...(q.receivedAfter ? { receivedAfter: q.receivedAfter } : {}),
           ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : ('INTEGRATION' as const) } : {}),
           ...(q.allocationState ? { allocationState: q.allocationState } : {}),
+          ...(q.receiptNumber?.trim() ? { receiptNumber: q.receiptNumber.trim() } : {}),
         },
         toPageRequest(q),
       );
@@ -340,6 +347,43 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!payment || !isOwnProfile(organization, user.id, membershipRole) || !isOwnCapture(payment, user.id)) throw notFound();
       const updated = await redateOwnCapture(store, c, payment, receivedOn, notFound);
       return c.json(await viewOf(organization.id, updated, todayFor(organization, now)), 200);
+    },
+  );
+
+  // ---- MUT-481 (D5): the receipt number, set after recording ----
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/payments/{paymentId}/receipt-number',
+      tags: ['Payments'],
+      summary: 'Set or clear the legal receipt number of a recorded payment (optimistic, If-Match)',
+      description:
+        'For a receipt the firm issued in its invoicing app after the payment was recorded. A label only: no money moves, the allocations and the ledger figures are untouched. API key only. POSTED payments the key recorded only (a reversed one is 409 ALREADY_REVERSED: record its correction with the number instead; one a person recorded is 422 RECEIPT_NUMBER_NOT_ALLOWED). Send the version you read in If-Match; another version is 409 VERSION_MISMATCH. Setting the value it already has answers 200 without a new version, so a retry after a lost response succeeds.',
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('payments:write'), ifMatch()] as const,
+      request: { params: PaymentIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(SetReceiptNumberRequestSchema) },
+      responses: { 200: { description: 'Set', content: { 'application/json': { schema: PaymentSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      // A disconnected firm's session holds payments:write: this route is the integration's only (review R7).
+      const actor = keyActorOf(c);
+      const { organization } = c.get('auth');
+      const now = c.get('now')();
+      const receiptNumber = receiptNumberOf(c.req.valid('json').receiptNumber);
+      const payment = await mustGetPayment(organization.id, c.req.valid('param').paymentId);
+      // D6: a payment a person recorded never carries one, and its own re-date (If-Match) must keep its version.
+      if (payment.origin !== 'INTEGRATION') throw validationError('RECEIPT_NUMBER_NOT_ALLOWED', 'Only payments recorded through the API key carry a receipt number', { field: 'receiptNumber' });
+      if (payment.status === 'REVERSED') throw alreadyReversed(payment);
+      const today = todayFor(organization, now);
+      // Before the version check: a retry after a lost response carries the version it first read (review 1).
+      if (payment.receiptNumber === receiptNumber) return c.json(await viewOf(organization.id, payment, today), 200);
+      const expected = c.get('expectedVersion');
+      if (payment.version !== expected) throw versionMismatch(payment.version);
+      const result = await store.payments.setReceiptNumber(organization.id, payment.id, expected, receiptNumber, now);
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such payment');
+      if (result.kind === 'stale') throw result.record.status === 'REVERSED' ? alreadyReversed(result.record) : versionMismatch(result.record.version);
+      await audit(actor, 'payment.receipt_number_set', 'payment', payment.id, { from: payment.receiptNumber, to: receiptNumber, version: result.record.version });
+      return c.json(await viewOf(organization.id, result.record, today), 200);
     },
   );
 
@@ -413,7 +457,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // MUT-453 (review D5): a disconnected Malafat firm reads as writer-null, so its session holds payments:write; Malafat's
       // own payments stay its to reverse. 404, not 403, as settle answers for a receivable it may not touch.
       if (actor.actorType === 'USER' && payment.origin !== 'CAPTURE') throw new ApiError('NOT_FOUND', 'No such payment');
-      if (payment.status === 'REVERSED') throw new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
+      if (payment.status === 'REVERSED') throw alreadyReversed(payment);
       const allocations = await store.payments.listAllocations(organization.id, payment.id);
       // MUT-453 (review fix): a person's reversal never reopens an entry Malafat posted (an installment or retainer
       // charge its key once applied this capture to); like undo's ALREADY_ALLOCATED, only what a person put on the books.
@@ -479,4 +523,15 @@ export async function redateOwnCapture(store: LedgerStore, c: Context<AppEnv>, p
     requestId: c.get('requestId'),
   });
   return result.record;
+}
+
+function alreadyReversed(payment: PaymentRecord): ApiError {
+  return new ApiError('CONFLICT', 'This payment is already reversed', { reason: 'ALREADY_REVERSED', reversedAt: payment.reversedAt?.toISOString() ?? null });
+}
+
+/** MUT-481 (D3, review R6): normalized in the handler, so a bad value is RECEIPT_NUMBER_INVALID, not a schema failure. */
+function receiptNumberOf(raw: string | null): string | null {
+  const result = normalizeReceiptNumber(raw);
+  if (!result.ok) throw validationError('RECEIPT_NUMBER_INVALID', 'receiptNumber must be 1–64 characters with no control characters; send null for none', { field: 'receiptNumber' });
+  return result.value;
 }

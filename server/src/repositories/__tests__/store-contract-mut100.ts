@@ -215,7 +215,7 @@ export function describeLedgerStoreMut100Contract(name: string, makeStore: () =>
       expect((await store.agreements.correctOutcome(o.id, agreement.id, { ...input, expectedVersion: agreement.version + 1 }, at(4))).kind).toBe('stale');
 
       // A payment allocated after the preview: the in-transaction guard refuses.
-      await store.payments.create({ organizationId: o.id, customerId: p.customerId, projectId: p.id, currency: 'ILS', amountMinor: 100_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 100_000n }] }, at(4));
+      await store.payments.create({ organizationId: o.id, customerId: p.customerId, projectId: p.id, currency: 'ILS', amountMinor: 100_000n, receivedOn: '2026-10-13', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 100_000n }] }, at(4));
       const refused = await store.agreements.correctOutcome(o.id, agreement.id, input, at(5));
       expect(refused).toEqual({ kind: 'has_payments', receivableId: receivable.id });
 

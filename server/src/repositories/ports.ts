@@ -1091,6 +1091,8 @@ export interface PaymentRecord {
   receivedOn: IsoDate;
   method: PaymentMethod;
   reference: string | null;
+  /** MUT-481: the legal receipt's number (a label; not unique). Null on person-made payments. */
+  receiptNumber: string | null;
   notes: string | null;
   status: PaymentStatus;
   reversedAt: Date | null;
@@ -1131,6 +1133,8 @@ export interface CreatePaymentInput {
   receivedOn: IsoDate;
   method: PaymentMethod;
   reference: string | null;
+  /** MUT-481: required, so every writer says which it is; null for person-made payments. */
+  receiptNumber: string | null;
   notes: string | null;
   replacesPaymentId: string | null;
   requestId: string | null;
@@ -1217,6 +1221,8 @@ export interface PaymentFilter {
   status?: PaymentStatus;
   receivedBefore?: IsoDate;
   receivedAfter?: IsoDate;
+  /** MUT-481: exact match. */
+  receiptNumber?: string;
 }
 
 export interface PaymentRepository {
@@ -1253,6 +1259,11 @@ export interface PaymentRepository {
    * conditional-write and `not_found` rules as `receivables.redateAdjustment`. The number keeps its year.
    */
   redateCapture(organizationId: string, paymentId: string, userId: string, expectedVersion: number, receivedOn: IsoDate, at: Date): Promise<UpdateResult<PaymentRecord>>;
+  /**
+   * MUT-481 (D5): sets or clears the receipt number of a POSTED payment on its version, bumping it. `stale` carries the
+   * record (REVERSED, or another version) so the caller can tell the two apart; `not_found` for another organization.
+   */
+  setReceiptNumber(organizationId: string, paymentId: string, expectedVersion: number, receiptNumber: string | null, at: Date): Promise<UpdateResult<PaymentRecord>>;
 }
 
 export interface ExternalReferenceRepository {

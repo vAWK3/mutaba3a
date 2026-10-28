@@ -33,7 +33,7 @@ if (!url) {
       const tag = randomUUID().slice(0, 8);
       const org = await store.organizations.create({ name: 'Firm', slug: `post-roll-${tag}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
       const { user } = await store.users.create({ email: `post-roll-${tag}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: org.id, personal: { name: 'Personal', slug: `personal-${tag}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at });
-      const base = { organizationId: org.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-10', method: 'CASH' as const, reference: null, notes: null, replacesPaymentId: null, requestId: null, captureSource: null, allocations: [] };
+      const base = { organizationId: org.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-10', method: 'CASH' as const, reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, captureSource: null, allocations: [] };
       // What the old revision wrote during the window: a person's payment with the column default.
       const stranded = (await store.payments.create({ ...base, createdByUserId: user.id, origin: 'INTEGRATION' }, at)).payment;
       const integration = (await store.payments.create({ ...base, createdByUserId: null, origin: 'INTEGRATION' }, at)).payment;

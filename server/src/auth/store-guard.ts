@@ -223,6 +223,7 @@ export const STORE_ACCESS: StoreAccess = {
     undoCapture: { write: 'capture' },
     // MUT-223: re-dating a person's own capture (a settle payment included: settle writes origin CAPTURE).
     redateCapture: { write: 'capture' },
+    setReceiptNumber: { write: 'payments' },
   },
   attachments: {
     create: { write: 'attachments' },

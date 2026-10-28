@@ -71,7 +71,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const store = await makeStore();
       const a = await org(store);
       const { c, receivable } = await seed(store, a.id);
-      const { payment } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
+      const { payment } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
       expect(payment).toMatchObject({ origin: 'INTEGRATION', captureSource: null });
     });
 
@@ -109,7 +109,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const other = await person(store, a.id, 'Sami');
       const { c } = await seed(store, a.id);
       const mine = (await store.payments.capture(capture(a.id, u.id, 5000n), at(10))).payment;
-      const { payment: malafat } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, at(11));
+      const { payment: malafat } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, at(11));
 
       expect((await store.payments.undoCapture(a.id, mine.id, other.id, at(12))).result).toBe('not-found');
       expect((await store.payments.undoCapture(b.id, mine.id, u.id, at(12))).result).toBe('not-found');
@@ -166,7 +166,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       await store.payments.allocate(a.id, partial.id, [{ receivableId: receivable.id, amountMinor: 1000n }], at(14));
       await store.payments.allocate(a.id, full.id, [{ receivableId: receivable.id, amountMinor: 3000n }], at(15));
       await store.payments.undoCapture(a.id, undone.id, u.id, at(16));
-      const { payment: malafat } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 500n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, at(17));
+      const { payment: malafat } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 500n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [] }, at(17));
 
       expect(ids(await store.payments.list(a.id, { customerId: c.id, origin: 'CAPTURE', allocationState: 'unallocated' }, page))).toEqual([open.id]);
       expect(ids(await store.payments.list(a.id, { origin: 'CAPTURE', allocationState: 'partial' }, page))).toEqual([partial.id]);
@@ -291,7 +291,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const u = await person(store, a.id);
       const other = await person(store, a.id, 'Rami');
       const { c, receivable } = await seed(store, a.id);
-      const { payment: integration } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
+      const { payment: integration } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 1000n, receivedOn: '2026-10-08', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: receivable.id, amountMinor: 1000n }] }, at(10));
       const undone = (await store.payments.capture(capture(a.id, u.id, 500n), at(11))).payment;
       await store.payments.undoCapture(a.id, undone.id, u.id, at(12));
       const mine = (await store.payments.capture(capture(a.id, u.id, 500n), at(13))).payment;
@@ -308,7 +308,7 @@ export function describeLedgerStoreCaptureContract(name: string, makeStore: () =
       const u = await person(store, a.id);
       const { c } = await seed(store, a.id);
       const r = await store.receivables.createAdjustment(owed(a.id, c.id, u.id), at(20));
-      const { payment, allocations } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 3000n, receivedOn: '2026-10-10', method: 'CASH', reference: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: r.id, amountMinor: 3000n }] }, at(21));
+      const { payment, allocations } = await store.payments.create({ organizationId: a.id, customerId: c.id, projectId: null, currency: 'ILS', amountMinor: 3000n, receivedOn: '2026-10-10', method: 'CASH', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: u.id, origin: 'CAPTURE', captureSource: null, allocations: [{ receivableId: r.id, amountMinor: 3000n }] }, at(21));
       const settled = await store.receivables.getById(a.id, r.id);
 
       const result = await store.payments.redateCapture(a.id, payment.id, u.id, payment.version, '2026-10-09', at(40));
