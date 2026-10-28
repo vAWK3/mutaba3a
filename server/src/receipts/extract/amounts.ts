@@ -44,6 +44,12 @@ export function amountsIn(text: string, exponent: number | null): Amount[] {
   return out;
 }
 
+/** How many decimals each amount on the row is printed with (0 for a bare integer), left to right. */
+export function decimalPlacesIn(text: string): number[] {
+  const cleaned = NOT_MONEY.reduce((t, pattern) => t.replace(pattern, ' '), text);
+  return [...cleaned.matchAll(AMOUNT)].map((match) => (match[1] ?? '').split('.')[1]?.length ?? 0);
+}
+
 /** The money on a row: amounts printed with decimals; bare integers only when `allowIntegers` and nothing has decimals. */
 export function moneyIn(text: string, exponent: number | null, allowIntegers: boolean): bigint[] {
   const amounts = amountsIn(text, exponent);

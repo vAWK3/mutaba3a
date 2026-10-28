@@ -1,5 +1,5 @@
 import type { ReceiptSuggestion, SuggestedField, SuggestionSource } from '../../repositories/ports.js';
-import { exponentOf, readCurrency } from './currency.js';
+import { exponentOf, inferFromDecimals, readCurrency } from './currency.js';
 import { readDate } from './dates.js';
 import { readEmail, readPhone, readRegistration, readVendor } from './fields.js';
 import { orderedRows, pdfRows } from './rows.js';
@@ -36,7 +36,7 @@ export function extractReceipt(input: ExtractInput, options: { readerVersion: st
   // The currency sets the money's scale, and the total's row is where it is most often printed: read the total once
   // without a scale to find that row, then read the money again in the currency's own.
   const totalRow = readMoney(rows, null).total?.row ?? null;
-  const currency = readCurrency(rows, totalRow);
+  const currency = readCurrency(rows, totalRow) ?? inferFromDecimals(rows);
   const money = readMoney(rows, exponentOf(currency));
   const date = readDate(rows);
   const vendor = readVendor(rows);

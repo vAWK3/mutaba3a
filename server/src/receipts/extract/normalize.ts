@@ -6,6 +6,12 @@ const ARABIC_DIACRITICS = /[ً-ْٰ]/g;
 const ARABIC_INDIC_DIGITS = /[٠-٩]/g;
 const PERSIAN_DIGITS = /[۰-۹]/g;
 
+/**
+ * The Arabic comma (،) squeezed between digits, with two or three digits after it: PP-OCR's Arabic recogniser prints
+ * the Arabic decimal mark (٫) this way (MUT-441 benchmark). A listing comma has a space after it, so it stays.
+ */
+const ARABIC_COMMA_DECIMAL = /(\d)،(\d{2,3})(?!\d)/g;
+
 /** Arabic-Indic (٠-٩) and Persian (۰-۹) digits to 0-9. */
 export function normalizeDigits(text: string): string {
   return text
@@ -27,6 +33,7 @@ export function normalizeText(text: string): string {
       .replace(/[״“”]|''/g, '"')
       .replace(/[׳‘’]/g, "'"),
   )
+    .replace(ARABIC_COMMA_DECIMAL, '$1.$2')
     .replace(/\s+/g, ' ')
     .trim();
 }

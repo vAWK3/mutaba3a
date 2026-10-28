@@ -39,10 +39,10 @@ const max = (values: readonly bigint[]): bigint | null => (values.length ? value
 const near = (a: bigint, b: bigint) => (a > b ? a - b : b - a) <= ROUNDING;
 
 /** The amount on the first row matching `match` (its last amount: labels come first in reading order). */
-function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, exponent: number | null): { minor: bigint; row: Row } | null {
+function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, exponent: number | null, integers: boolean): { minor: bigint; row: Row } | null {
   for (const row of rows) {
     if (!match(row)) continue;
-    const minor = last(moneyIn(row.text, exponent, true));
+    const minor = last(moneyIn(row.text, exponent, integers));
     if (minor !== null) return { minor, row };
   }
   return null;
@@ -56,6 +56,8 @@ interface Parts {
   change: { minor: bigint; row: Row } | null;
   /** Every decimal amount on the receipt, with the confidence of its row. */
   all: Array<{ minor: bigint; conf: number }>;
+  /** Whether a bare integer on a labelled row may be money: only when the receipt prints no decimal amount at all. */
+  integers: boolean;
 }
 
 function vatRateOn(row: Row): number | null {
@@ -65,14 +67,19 @@ function vatRateOn(row: Row): number | null {
 }
 
 function partsOf(rows: readonly Row[], exponent: number | null): Parts {
-  const vat = firstAmount(rows, isVatRow, exponent);
+  const all = rows.flatMap((r) => moneyIn(r.text, exponent, false).map((minor) => ({ minor, conf: r.conf })));
+  // A receipt that prints its money with decimals and shows a bare integer on a labelled row has lost a decimal point
+  // to OCR (MUT-441 benchmark: "15.01" read as 15001); taking it as whole units would fill a wrong amount.
+  const integers = all.length === 0;
+  const vat = firstAmount(rows, isVatRow, exponent, integers);
   return {
-    subtotal: firstAmount(rows, (r) => hasKeyword(r.folded, SUBTOTAL) && !isVatRow(r), exponent),
+    subtotal: firstAmount(rows, (r) => hasKeyword(r.folded, SUBTOTAL) && !isVatRow(r), exponent, integers),
     vat,
     rateBasisPoints: vat ? vatRateOn(vat.row) : (rows.filter(isVatRow).map(vatRateOn).find((r) => r !== null) ?? null),
-    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH), exponent),
-    change: firstAmount(rows, (r) => hasKeyword(r.folded, CHANGE), exponent),
-    all: rows.flatMap((r) => moneyIn(r.text, exponent, false).map((minor) => ({ minor, conf: r.conf }))),
+    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH), exponent, integers),
+    change: firstAmount(rows, (r) => hasKeyword(r.folded, CHANGE), exponent, integers),
+    all,
+    integers,
   };
 }
 
@@ -91,10 +98,17 @@ function confirmation(total: bigint, parts: Parts): 'guided' | 'loose' | null {
 }
 
 function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | null): MoneyReading | null {
+  const candidates = rows.filter(isTotalRow).flatMap((row) => {
+    const minor = max(moneyIn(row.text, exponent, parts.integers));
+    return minor === null ? [] : [{ row, minor }];
+  });
+  // A total-labelled amount that a larger total-labelled one equals plus another amount the receipt prints (its VAT,
+  // a service charge) is a subtotal whose own label OCR misread.
+  const printed = new Set([...parts.all.map((a) => a.minor), ...(parts.vat ? [parts.vat.minor] : [])]);
+  const isSubtotal = (minor: bigint) => candidates.some((c) => c.minor > minor && printed.has(c.minor - minor));
   let best: MoneyReading | null = null;
-  for (const row of rows.filter(isTotalRow)) {
-    const minor = max(moneyIn(row.text, exponent, true));
-    if (minor === null) continue;
+  for (const { row, minor } of candidates) {
+    if (isSubtotal(minor)) continue;
     const confirmed = confirmation(minor, parts);
     const rule = confirmed === 'guided' ? RULE_LABELLED_CONFIRMED : confirmed === 'loose' ? RULE_LABELLED_LOOSELY_CONFIRMED : RULE_LABELLED;
     const better = !best || rule * row.conf > best.rule * best.conf || (rule * row.conf === best.rule * best.conf && minor > best.minor);

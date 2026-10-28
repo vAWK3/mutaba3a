@@ -146,6 +146,47 @@ describe('extractReceipt (MUT-441)', () => {
   });
 });
 
+/** MUT-441 task 8: where the benchmark's misses clustered on the synthetic set, as minimal receipts. */
+describe('benchmark failure clusters', () => {
+  it('reads the Arabic comma between digits as the decimal point (the recogniser prints ٫ as ،)', () => {
+    const s = read(receipt(['سوبرماركت النور', 'المجموع الفرعي ٧٤،٧٤', 'ضريبة القيمة المضافة %16 ١١،٩٦', 'الإجمالي ٨٦،٧٠']));
+    expect(value(s, 'totalMinor')).toBe('8670');
+    expect(value(s, 'vatMinor')).toBe('1196');
+  });
+
+  it('never fills a bare integer as money when the receipt prints its amounts with decimals (a lost decimal point)', () => {
+    const s = read(receipt(['مطعم', 'المجموع الفرعي 93.83', 'ضريبة القيمة المضافة %16 15001', 'المبلغ الإجمالي شيكل 108084', 'نقداً 130.00', 'الباقي 2116']));
+    expect(value(s, 'totalMinor')).toBeUndefined();
+    expect(value(s, 'vatMinor')).toBeUndefined();
+  });
+
+  it('still reads a bare integer total on a receipt that prints no decimals at all', () => {
+    expect(value(read(receipt(['Shop', 'Total ₪ 120'])), 'totalMinor')).toBe('12000');
+  });
+
+  it('a total-labelled amount that another one equals plus the VAT is the subtotal, not the total (subtotal label misread)', () => {
+    const s = read(receipt(['مقهى', { text: 'المجموع الفرمي 173.19', conf: 0.92 }, 'ضريبة القيمة المضافة 25.98', { text: 'الإجمالي 199.17', conf: 0.8 }]));
+    expect(value(s, 'totalMinor')).toBe('19917');
+    // The VAT's own label misread too: the VAT amount is still printed on the receipt.
+    const unlabelled = read(receipt(['سوبرماركت', { text: 'المجموع القرعي 74.74', conf: 0.88 }, 'ضريية القيمة المضاقة %17 11.96', { text: 'الإجمالي 86.70', conf: 0.7 }]));
+    expect(value(unlabelled, 'totalMinor')).toBe('8670');
+  });
+
+  it('a receipt whose every amount has three decimals and that names no currency is in dinars (the one three-decimal currency the API takes)', () => {
+    const s = read(receipt(['سامح مول', 'المجموع الفرعي 226.474', 'ضريبة القيمة المضافة %16 36.236', 'المجموع دينان 262.710', 'نقداً 270.000', 'الباقي 7.290']));
+    expect(value(s, 'currency')).toBe('JOD');
+    expect(value(s, 'totalMinor')).toBe('262710');
+  });
+
+  it('three decimals are not enough when the receipt names a currency the API does not take, or prints two-decimal amounts too', () => {
+    const kwd = read(receipt(['Shop', 'Subtotal 10.000', 'VAT 1.000', 'Total KWD 11.000']));
+    expect(value(kwd, 'currency')).toBeUndefined();
+    expect(value(kwd, 'totalMinor')).toBeUndefined();
+    const mixed = read(receipt(['Shop', 'Coffee 2.50', 'Subtotal 10.000', 'VAT 1.000', 'Total 11.000']));
+    expect(value(mixed, 'currency')).toBeUndefined();
+  });
+});
+
 describe('the confidence threshold (AC2)', () => {
   it('keeps a field exactly at the threshold and drops one just under it', () => {
     expect(isConfident(MIN_FIELD_CONFIDENCE)).toBe(true);
@@ -165,6 +206,12 @@ describe('normalizeText', () => {
     expect(normalizeText('٠١٢٣٤٥٦٧٨٩ ۰۱۲۳۴۵۶۷۸۹')).toBe('0123456789 0123456789');
     expect(normalizeText('١٬٢٣٤٫٥٠')).toBe('1,234.50');
     expect(normalizeText('‏المجمـــوع‎')).toBe('المجموع');
+  });
+
+  it('turns an Arabic comma between digits into the decimal point, and leaves a listing comma alone', () => {
+    expect(normalizeText('٤٤،٠٦')).toBe('44.06');
+    expect(normalizeText('17،750')).toBe('17.750');
+    expect(normalizeText('1، 2')).toBe('1، 2');
   });
 });
 
