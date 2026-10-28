@@ -64,7 +64,7 @@ features:
       - POST /v1/expenses is sent once, then the PDF is started on the new expense, PUT to the bucket and completed; the drawer closes and the row is Saved
       - Reopening the expense lists the PDF under Receipts
       - A failed upload leaves the drawer open on the new expense at ?expense=<id> with "Couldn't upload the receipt. Try again." on that file; Upload again lands it
-      - Of 11 picked, 10 are listed, "An expense holds at most 10 receipts. Not added: r11.pdf." is shown and Add receipt is disabled; Cancel sends no receipt
+      - 'Of 11 picked, 10 are listed, "An expense holds at most 10 receipts. Not added: r11.pdf." is shown and Add receipt is disabled; Cancel sends no receipt'
   - id: create-with-receipt-arabic
     title: In Arabic the new-expense drawer's receipts read right to left, with Arabic copy and a Latin filename kept in its own order (MUT-491)
     tier: secondary
