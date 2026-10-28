@@ -12,6 +12,8 @@
 #      dist-hosted/ from the same origin as the API (hosted-portal.md §9).
 #      MUT-347: an image that already holds this clean HEAD is reused (steps 1
 #      and 2 are skipped), and a tag is never pushed over (src/scripts/release-image.ts).
+#      MUT-441: while server_ocr_enabled, also receipt-ocr:<short git sha> from
+#      server/ocr (lib/receipt-ocr.sh), reused and never pushed over the same way.
 #   3. Cloud SQL Auth Proxy on 127.0.0.1:5440, then `prisma migrate deploy` and the read-only pre-roll checks (src/scripts/pre-roll.ts)
 #      from this directory against the production database. The proxy is
 #      stopped afterwards. A failed migration stops here; the service is not
@@ -64,6 +66,8 @@ source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 source "${SERVER_DIR}/scripts/lib/release-guard.sh"
 # shellcheck source=lib/db-checks.sh
 source "${SERVER_DIR}/scripts/lib/db-checks.sh"
+# shellcheck source=lib/receipt-ocr.sh
+source "${SERVER_DIR}/scripts/lib/receipt-ocr.sh"
 # shellcheck source=lib/rollback.sh
 source "${SERVER_DIR}/scripts/lib/rollback.sh"
 # MUT-381 / MUT-360 / MUT-148 / MUT-359 / MUT-471: the release guards with this release's own terraform arguments; run inside TF_DIR.
@@ -183,6 +187,10 @@ guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJEC
 guard_min_build_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # MUT-368 (D6): with mail on, the portal built below must carry the production Turnstile site key, not a test key.
 guard_turnstile_site_key "${TF_ARGS[@]}"
+# MUT-441 (F6): the receipt-ocr service runs the same commit as the API; its image is built in step 2b.
+ocr_read_enabled "${TF_ARGS[@]}"
+OCR_IMAGE="${REGISTRY}/receipt-ocr:${SHORT_SHA}"
+[[ "${OCR_ENABLED}" == "true" ]] && TF_ARGS+=(-var "ocr_image_tag=${SHORT_SHA}")
 # First run only: the registry must exist before `docker push`, the database
 # before the migration. Skipped once they are in state (lib/tf-bootstrap.sh).
 ensure_bootstrap "${TF_ARGS[@]}" "${APPROVE[@]}"
@@ -236,7 +244,16 @@ else
     --label "portal-config=${PORTAL_CONFIG}" -t "${IMAGE}" .
   info "pushing ${IMAGE}"
   docker push "${IMAGE}"
+  popd >/dev/null
 fi
+
+# ---------------------------------------------------------------------------
+# 2b. MUT-441: the receipt-ocr image, only while server_ocr_enabled (lib/receipt-ocr.sh)
+# ---------------------------------------------------------------------------
+if [[ "${OCR_ENABLED}" == "true" ]]; then
+  ocr_release_image "${OCR_IMAGE}" "${HEAD_SHA}" "${TREE_DIRTY}" "${SERVER_DIR}"
+fi
+pushd "${SERVER_DIR}" >/dev/null
 
 # ---------------------------------------------------------------------------
 # 3. Migrate from this machine through the Cloud SQL Auth Proxy
