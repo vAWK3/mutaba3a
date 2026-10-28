@@ -76,7 +76,10 @@ describe('receipts signed out (AC2)', { timeout: PAGE_LOAD_TIMEOUT_MS }, () => {
     await page.putBlob(upload.url, new Blob([PDF], { type: 'application/pdf' }));
     const completed = await call(page, profileId, 'POST', `/v1/expenses/${expenseId}/receipts/${receipt.id}/complete`);
     expect(completed.status).toBe(200);
-    expect(((await completed.json()) as { status: string }).status).toBe('READY');
+    const body = (await completed.json()) as { status: string; reading: unknown };
+    expect(body.status).toBe('READY');
+    // MUT-441: no server reader signed out, so the portal never waits on one.
+    expect(body.reading).toBeNull();
 
     const reloaded = await openPage();
     const download = await call(reloaded, profileId, 'GET', `/v1/expenses/${expenseId}/receipts/${receipt.id}/download`);
