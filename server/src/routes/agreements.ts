@@ -320,11 +320,13 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
-  /** R1: due items are billed before anything is planned (as `GET /v1/agreements/{id}` does), so "unbilled" is what it says. */
-  async function reducibleAfterPosting(c: Parameters<typeof lazyPostingOf>[0], organization: Organization, agreementId: string, now: Date): Promise<AgreementRecord> {
+  /**
+   * R1: due items are billed before anything is planned (as `GET /v1/agreements/{id}` does), so "unbilled" is what it
+   * says. API key only, so the key's own guarded store and actor post (never `lazyPostingOf`'s unguarded one).
+   */
+  async function reducibleAfterPosting(c: Parameters<typeof postingActorOf>[0], organization: Organization, agreementId: string, now: Date): Promise<AgreementRecord> {
     assertReducible(await mustGet(store, organization.id, agreementId));
-    const posting = lazyPostingOf(c, store);
-    await postDueItems(posting.store, organization, todayFor(organization, now), now, posting.actor);
+    await postDueItems(store, organization, todayFor(organization, now), now, postingActorOf(c));
     return mustGet(store, organization.id, agreementId);
   }
 
