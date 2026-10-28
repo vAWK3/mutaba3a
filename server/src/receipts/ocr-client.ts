@@ -15,7 +15,7 @@ import type { OcrLine } from './extract/types.js';
  *   413  { error: 'too_large' }    (terminal)
  *   504  { error: 'timeout' }      the sidecar's own deadline (worth retrying)
  *
- * R10 #3: every failure, whatever threw it (fetch, JSON.parse, Zod, the extractor), leaves here as an
+ * R10 #3: every failure, whatever threw it (fetch, JSON.parse, Zod, the extractor, a store call on the read path), leaves here as an
  * `OcrReadError(code)` with a fixed message and no `cause`, so no receipt text can reach a log line or Sentry.
  */
 
@@ -25,7 +25,7 @@ export const OCR_TIMEOUT_MS = 35_000;
 
 export type CaptureHintHeader = 'scanned' | 'photo';
 
-export type OcrReadErrorCode = 'unreadable' | 'too_large' | 'timeout' | 'unavailable' | 'malformed' | 'missing' | 'extract_failed';
+export type OcrReadErrorCode = 'unreadable' | 'too_large' | 'timeout' | 'unavailable' | 'malformed' | 'missing' | 'extract_failed' | 'store_failed';
 
 /** Codes a retry can't fix: the receipt becomes FAILED at once. The rest leave it PENDING for the next attempt. */
 const TERMINAL: ReadonlySet<OcrReadErrorCode> = new Set(['unreadable', 'too_large', 'missing', 'extract_failed']);
@@ -38,6 +38,9 @@ const MESSAGES: Record<OcrReadErrorCode, string> = {
   malformed: 'The OCR service answered with an unexpected body',
   missing: 'The receipt file is not in storage',
   extract_failed: 'Reading the fields failed',
+  // A store call on the read path (the vendor lookup, saving the suggestion, the claim) threw. Its own message (a
+  // Prisma validation error can echo the vendor name or the amount it was given) is dropped here.
+  store_failed: 'Saving the reading failed',
 };
 
 /** A fixed message per code and never a `cause`: nothing a receipt says can ride an error into logs or Sentry. */

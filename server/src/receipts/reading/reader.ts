@@ -98,12 +98,17 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   async function withVendor(receipt: ExpenseReceiptRecord, read: ReceiptSuggestion): Promise<ReceiptSuggestion> {
     const registration = receipt.suggested?.registrationNo?.value ?? read.registrationNo?.value;
     if (!registration || receipt.suggested?.vendorName) return read;
-    const vendor = await store.vendors.findByRegistration(receipt.organizationId, registration);
+    const vendor = await scrubbed('store_failed', () => store.vendors.findByRegistration(receipt.organizationId, registration));
     return vendor ? { ...read, vendorName: { value: vendor.canonicalName, source: 'vendor', confidence: 1 } } : read;
   }
 
+  /** Every write of a read's outcome: a store error here may echo the suggestion it was given, so only a code leaves. */
+  function finishRead(receiptId: string, version: number, outcome: FinishReadOutcome) {
+    return scrubbed('store_failed', () => receipts.finishRead(receiptId, version, outcome));
+  }
+
   async function finish(receiptId: string, version: number, outcome: FinishReadOutcome): Promise<ReadJobStatus> {
-    const result = await receipts.finishRead(receiptId, version, outcome);
+    const result = await finishRead(receiptId, version, outcome);
     if (result.kind === 'saved') return outcome.status === 'DONE' ? 'done' : outcome.status === 'FAILED' ? 'failed' : 'skipped';
     if (result.kind === 'skipped') return 'skipped';
     return 'none';
@@ -115,7 +120,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     for (let i = 0; i < STALE_RETRIES; i += 1) {
       const { merged, added } = fillAbsent(current.suggested, read);
       const outcome: FinishReadOutcome = added.length > 0 ? { status: 'DONE', suggested: merged } : isCompleteSuggestion(current.suggested) ? { status: 'SKIPPED' } : { status: 'DONE' };
-      const result = await receipts.finishRead(current.id, current.version, outcome);
+      const result = await finishRead(current.id, current.version, outcome);
       if (result.kind === 'stale') {
         current = result.record;
         continue;
@@ -123,7 +128,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
       if (result.kind === 'saved') return { status: outcome.status === 'DONE' ? 'done' : 'skipped', added: outcome.status === 'DONE' ? added.length : 0 };
       return { status: result.kind === 'skipped' ? 'skipped' : 'none', added: 0 };
     }
-    await receipts.releaseRead(claimed.id);
+    await scrubbed('store_failed', () => receipts.releaseRead(claimed.id));
     return { status: 'retry', added: 0 };
   }
 
@@ -132,10 +137,18 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     if (!body) throw new OcrReadError('missing');
     const result = await ocr.read({ body, contentType: receipt.mimeType, hint: receipt.captureHint === 'SCANNED' ? 'scanned' : 'photo' });
     const read = await scrubbed('extract_failed', () => extractReceipt({ lines: result.lines, pdfText: result.pdfText }, { readerVersion: serverReaderVersion(result.engine) }));
-    return { read: await scrubbed('unavailable', () => withVendor(receipt, read)), lines: result.lines.length };
+    return { read: await withVendor(receipt, read), lines: result.lines.length };
   }
 
-  async function readOne(receiptId: string): Promise<ReadJobStatus> {
+  /**
+   * Part B of R10 #3: whatever escapes a read (the claim, a terminal write, the release) leaves as
+   * `OcrReadError('store_failed')`, so the route's error handler logs and reports a fixed message with no `cause`.
+   */
+  function readOne(receiptId: string): Promise<ReadJobStatus> {
+    return scrubbed('store_failed', () => readOneUnscrubbed(receiptId));
+  }
+
+  async function readOneUnscrubbed(receiptId: string): Promise<ReadJobStatus> {
     const started = Date.now();
     const at = now();
     const claim = await receipts.claimRead(receiptId, at, READ_LEASE_MS);
@@ -161,13 +174,17 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     } catch (err) {
       const failure = err instanceof OcrReadError ? err : new OcrReadError('unavailable');
       if (failure.terminal) return done(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: failure.code }), { code: failure.code });
-      await receipts.releaseRead(receiptId);
+      await scrubbed('store_failed', () => receipts.releaseRead(receiptId));
       return done('retry', { code: failure.code });
     }
   }
 
   /** R10 #7: the sweep never reads; it asks again (named tasks drop duplicates) or gives up on the exhausted. */
-  async function sweep(): Promise<SweepSummary> {
+  function sweep(): Promise<SweepSummary> {
+    return scrubbed('store_failed', sweepUnscrubbed);
+  }
+
+  async function sweepUnscrubbed(): Promise<SweepSummary> {
     const at = now();
     const summary: SweepSummary = { enqueued: 0, failed: 0, enqueueErrors: 0 };
     for (const receipt of await receipts.listPendingForSweep(at, SWEEP_BATCH)) {

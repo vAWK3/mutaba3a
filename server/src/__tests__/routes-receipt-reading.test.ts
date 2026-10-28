@@ -400,6 +400,37 @@ describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
     });
   }
 
+  // Part B: a store call on the read path that throws with the suggestion in its message (a Prisma validation error
+  // echoes the data it was given) is retried under the fixed `store_failed` code, and its message goes nowhere.
+  const echo = () => new Error(`Invalid value for vendorName: "${SECRET_WORDS[0]} ${SECRET_WORDS[1]}", totalMinor 1540`);
+  for (const [name, breakStore] of [
+    ['saving the suggestion (finishRead)', (h: Harness) => { h.store.expenseReceipts.finishRead = async () => { throw echo(); }; }],
+    ['the vendor lookup', (h: Harness) => { h.store.vendors.findByRegistration = async () => { throw echo(); }; }],
+  ] as const) {
+    it(`a store error in ${name} carrying receipt text: retry, logged as store_failed, the text nowhere`, async () => {
+      const { h, orgId, as } = await setup({ dispatcher: 'recording' });
+      const done = await upload(h, as);
+      breakStore(h);
+      const res = await job(h, { receiptId: done.id });
+      expect(res.status).toBe(503);
+      expect(await stored(h, orgId, done.id)).toMatchObject({ readStatus: 'PENDING', readAttempts: 1, readLeaseUntil: null });
+      const seen = JSON.stringify([h.logs.lines, h.logs.reports]);
+      for (const word of [...SECRET_WORDS, '1540']) expect(seen).not.toContain(word);
+      expect(h.logs.lines.some((l) => l.includes('"code":"store_failed"'))).toBe(true);
+    });
+  }
+
+  it('a store error that escapes the read (the claim) reaches the error handler as a fixed message with no cause', async () => {
+    const { h, as } = await setup({ dispatcher: 'recording' });
+    const done = await upload(h, as);
+    h.store.expenseReceipts.claimRead = async () => { throw echo(); };
+    const res = await job(h, { receiptId: done.id });
+    expect(res.status).toBe(500);
+    const seen = JSON.stringify([h.logs.lines, h.logs.reports, await res.text()]);
+    for (const word of [...SECRET_WORDS, '1540']) expect(seen).not.toContain(word);
+    expect(h.logs.reports).toEqual(expect.arrayContaining([expect.objectContaining({ err: expect.objectContaining({ name: 'OcrReadError', message: 'Saving the reading failed', cause: undefined }) })]));
+  });
+
   it('a successful read logs counts only', async () => {
     const { h, as } = await setup({ dispatcher: 'recording' });
     const done = await upload(h, as);
