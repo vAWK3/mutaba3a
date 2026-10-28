@@ -1,6 +1,6 @@
 # MUT-443: correct a recorded payment in one atomic call
 
-**Status:** PLANNED 2026-10-28, awaiting Basel's answers on D1–D9.
+**Status:** APPROVED 2026-10-28. Basel chose D1 B (reversalReasonCode column), and the R10 defaults: reference and notes carry, an archived client is refused, a no-op is refused. D2–D9 as recommended, with the review's changes (R1–R12).
 **Ticket:** MUT-443 (parent MUT-25). Blocks MAL-1367 "Correct a recorded payment in one step".
 **Numbers:** API `1.88.0-mut443`, ADR-225, TD-284 onward, store snapshot 13 (only with D1 B), migration after `20261028200000`.
 **Builds on:** MUT-480 (`CREDIT_REASON_CODES`, ADR-222), MUT-481 (`carriedReceiptNumber`, ADR-223), M4 allocation preview (brief decision 2), ADR-086 (correction date floor).
@@ -169,7 +169,7 @@ Commands: `npm --prefix server test` with `MUTABA3A_TEST_DATABASE_URL` on `mutab
   - `payment.corrected` on the original.
   - `payment.recorded` on the replacement, with `replacesPaymentId`, so the replacement has its own history.
   - `receivable.settled` only for receivables whose status changes.
-- **R10 Edge rulings (defaults, pending Basel):**
+- **R10 Edge rulings (Basel, 2026-10-28):**
   - `reference` and `notes` follow the receipt-number rule: left out keeps the original's, `null` clears, a value replaces.
   - An archived customer is 422 `CUSTOMER_ARCHIVED`, as record answers.
   - A correction that changes nothing is 422 `NOTHING_TO_CORRECT`.
