@@ -128,6 +128,7 @@ ESLint enforces it (MUT-47, ADR-071).
 3. **"All Converted" is optional** and must show FX source/date
 
 ### Receivable Logic
+- **Hosted API (MUT-479, ADR-224):** a fee proposal may store a full draft agreement (FIXED with any schedule, CONTINGENCY, RETAINER); `approve/preview` and `approve` take the full body with a preview token, so a retainer or a 30/70 split is approved, not withdrawn and recreated. Retainer proposals stay out of the summary's `proposed` total.
 - **Hosted API (MUT-481, ADR-223):** payments carry the legal receipt's `receiptNumber` (set on create or later with `PUT /v1/payments/{id}/receipt-number`, kept through a correction, filterable, shown on statement lines).
 - **Hosted API (MUT-480, ADR-222):** `POST /v1/agreements/{id}/reduce` (with a preview) lowers a fixed fee in one write: unbilled installments first, then credits with a reason code on its open receivables; the agreement detail shows `credited` and `effectiveTotal`.
 - **Hosted API (MUT-478, ADR-217):** every receivable carries a `CHG-YYYY-NNNN` number, and `GET /v1/customers/{id}/statement` is the customer's ledger card (charges, credits, payments, reversals, running balance), computed per request from the rows.

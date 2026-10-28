@@ -18,6 +18,18 @@
 
 ## Open Debt
 
+### TD-283: A legacy-revision contingency proposal reads FIXED after a rolling deploy
+**Status**: Accepted (MUT-479, 2026-10-28; ADR-224)
+- **What:** `fee_proposals.agreementType` defaults to FIXED. A contingency proposal an old revision creates while MUT-479's revision rolls out gets FIXED, because the backfill ran before it.
+- **Why it's acceptable:** the legacy approve still decides the agreement from the contingency columns, so the agreement is right; only `agreementType` on reads and summaries is wrong, and only for that window. `docs/operations/before-release.md` says to re-run the backfill after the roll.
+- **Fix:** none needed once the release has rolled and the backfill re-run.
+
+### TD-282: A proposal's stored draft can't be edited in place
+**Status**: Accepted (MUT-479, 2026-10-28; ADR-224 D6)
+- **What:** no `PATCH /v1/fee-proposals/{id}`. Changing an open proposal's draft is withdraw-and-repropose, or an edit at approval (the approve body is the agreement made).
+- **Why it's acceptable:** the ticket asks for a stored draft that "Client agreed" reopens; nothing needs in-place edits yet.
+- **Fix:** if MAL-1414 asks for it, add `PATCH` with `If-Match`, composing the new draft on proposedOn as create does.
+
 ### TD-281: A null from postInstallment still means three things
 **Status**: Accepted (MUT-480, 2026-10-28; ADR-222)
 - **What:** `postInstallment` returns null for "no such line", "voided under us" and (since MUT-480) "changed under us, claim lost". The manual trigger tells them apart by re-reading the line and its agreement; the lazy poster just skips.

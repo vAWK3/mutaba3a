@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-479: approve a fee proposal with the full agreement (API 1.87.0-mut479, ADR-224)
+
+**Why:** a partner proposes any real fee (a 30/70 split with a stage "on judgment", a monthly retainer, a contingency deal), and when the client agrees it becomes exactly that agreement, recorded as approved. Unblocks MAL-1426 (Money overhaul MAL-1410); Malafat can drop MAL-1094's separate contingency path. Plan `.claude/designs/mut-479-proposal-full-approve.md` (reviewed; Basel approved D3).
+
+### Added
+- `draft` on `POST /v1/fee-proposals` (FIXED with any schedule, CONTINGENCY, RETAINER), composed on proposedOn and stored; `FeeProposal.draft` and `agreementType` on every read; 422 `DRAFT_CONFLICT`.
+- `POST /v1/fee-proposals/{id}/approve/preview`; `approve` takes `{ agreement, previewToken }` (409 `PREVIEW_STALE`, `PROPOSAL_NOT_OPEN`; 422 `PREVIEW_TOKEN_REQUIRED`, `DRAFT_CONFLICT`) and returns a retainer's `charges`. The legacy form on a retainer proposal is 422 `DRAFT_REQUIRED`.
+- `agreementType` on the organization summary's proposal rows and the project summary's proposal block.
+- `proposals/draft.ts`; `retainers/create.ts` (extracted from `routes/retainers.ts`). Audit `fee_proposal.approved` gains `agreementType` and `draftChanged`; `retainer.created` gains `feeProposalId`.
+- Release-QA `portal-selfservice.malafat-money-api.proposal-any-schedule`.
+
+### Changed
+- The organization summary's `proposed` leaves retainer proposals out (D3); they stay on their customer's row and in `counts.openProposals`.
+
+### Technical
+- Migration `20261028200000_mut479_proposal_drafts` (agreementType + backfill, JSONB draft, CHECK). Local snapshot format 12 (11 → 12 as the SQL backfill). Prisma proposal reads map through `toFeeProposal`; the memory store deep-copies drafts. Portal types regenerated.
+
 ## [Unreleased] - 2026-10-28 — MUT-481: a receipt number on payments (API 1.86.0-mut481, ADR-223)
 
 **Why:** Malafat's ledger shows the legal receipt (קבלה) the firm issued in its invoicing app beside each payment. Unblocks MAL-1420's receipt field and MAL-1422's payment sheet. Plan `.claude/designs/mut-481-receipt-number.md` (reviewed; Basel chose D5 A).

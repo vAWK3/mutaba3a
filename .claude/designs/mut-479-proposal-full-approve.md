@@ -1,6 +1,6 @@
 # MUT-479 — Approve a fee proposal with a full agreement body (any schedule, retainer, contingency)
 
-Status: PLAN, re-checked against main 89cc00c7 on 2026-10-28 ("Review 2026-10-28" below wins where it differs). Not built. Jira In Progress. Numbers: API 1.87.0-mut479, ADR-224, TD-282 onward, snapshot 12, migrations after 20261028190000.
+Status: BUILT 2026-10-28 on feature/mut-479-proposal-full-approve (ADR-224, TD-282/283); plan re-checked against main 89cc00c7 ("Review 2026-10-28" below wins where it differs). Jira In Progress. Numbers: API 1.87.0-mut479, ADR-224, TD-282 onward, snapshot 12, migrations after 20261028190000.
 Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → Planned → In Progress (eng-build) → In Review (qa-reconcile).
 
 ## Neighborhood

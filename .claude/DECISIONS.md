@@ -5878,3 +5878,25 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Put the number in `reference`. Rejected by the ticket: it holds the transfer reference.
 - Unique per organization. Rejected (D2): the reversed payment and its correction share the number.
 - Create and correct only (D5 B). Rejected by Basel: a number known after recording would need a reversal and a re-record.
+
+## ADR-224: A Fee Proposal Is a Stored Draft Agreement, Approved With the Full Body (MUT-479)
+
+**Status:** Accepted (2026-10-28, MUT-479; epic MUT-25; blocks MAL-1426, supersedes MAL-1094). Plan and review: `.claude/designs/mut-479-proposal-full-approve.md` (D1–D6, Basel approved D3 on 2026-10-27; review R1–R10).
+
+**Context:** a proposal held one amount, and approving offered ONCE or equal INSTALLMENTS. A partner proposing a 30/70 split with a stage "on judgment", a monthly retainer or a contingency deal had to withdraw the proposal and create the agreement separately, so the history said "withdrawn" instead of "approved".
+
+**Decision:**
+1. **One draft union** (D1): `AgreementDraft` is `{ kind: FIXED | CONTINGENCY }` + the `POST /v1/agreements` body, or `{ kind: RETAINER }` + the `POST /v1/retainers` body, less the project (the proposal's), the agreement date (proposedOn, then approvedOn) and the currency (the project's). The type comes from `kind` alone; each variant is strict, so another kind's fields are refused. Each kind is composed by its own composer (`composePreview`, `composeRetainerPreview`), never a fork of their rules.
+2. **The proposal stores it** (D2): `fee_proposals.draft` (JSONB, `{ schemaVersion: 1, … }`, wire strings only, pre-fill only, never re-composed after create) and `agreementType` (FIXED by default, backfilled CONTINGENCY where terms are set; a CHECK keeps RECURRING free of contingency terms). `POST /v1/fee-proposals` takes `draft` instead of amount/pricingBasis/contingency (both: 422 `DRAFT_CONFLICT`; neither: `AMOUNT_REQUIRED`) and composes it on proposedOn, so a draft that could never approve is refused when saved. proposedAmount derives from it: the fixed total, the contingency upfront, or the retainer's monthly amount.
+3. **Retainers stay out of `proposed`** (D3, Basel): the organization summary's per-currency `proposed` sums one-off amounts only; a retainer proposal is still on its customer's row (with `agreementType: RECURRING` and its monthly amount) and in `counts.openProposals`.
+4. **The full approve has its own preview and token** (D4, R5): `POST /v1/fee-proposals/{id}/approve/preview` answers the agreement or retainer preview by kind, with a token over `[org, 'proposal-approve', id, version, resolved approvedOn, agreement, rate]` (so an omitted date crossing midnight is stale). `approve` takes `{ agreement, previewToken }` (422 `PREVIEW_TOKEN_REQUIRED` without one, 409 `PREVIEW_STALE`, 409 `PROPOSAL_NOT_OPEN` at both). The legacy `{ amount, schedule, contingency }` form is unchanged, refuses a retainer proposal with 422 `DRAFT_REQUIRED` (R1), and mixing forms is `DRAFT_CONFLICT`.
+5. **The approved agreement is the body** (D5): the partner may edit the draft at approval; agreedAmount derives from the body; the `fee_proposal.approved` audit records `agreementType` and `draftChanged` (null when the proposal had no draft).
+6. **A retainer approve shows its charges** (R2): `ApproveFeeProposalResponse.charges` (empty for FIXED and CONTINGENCY); `retainer.created` carries `feeProposalId`. The retainer's compose and create moved to `retainers/create.ts`, shared with `POST /v1/retainers` (behaviour unchanged, guarded by the untouched retainer suites).
+7. **No in-place edit of a stored draft** (D6): withdraw and re-propose, or edit at approval (TD-282).
+
+**Consequences:** migration `20261028200000_mut479_proposal_drafts` (additive); local snapshot format 12; API 1.87.0-mut479. The approve keeps the existing posting model: the agreement and the approval in one transaction, IMMEDIATE installments and due charges right after, healed by lazy posting.
+
+**Alternatives considered:**
+- Count one retainer month in `proposed` (D3). Rejected: still a mixed figure.
+- Re-use the agreement or retainer token at approve. Rejected: it doesn't cover the proposal, its version or the approval date.
+- A PATCH on the draft now (D6). Deferred until MAL-1414 asks for it.
