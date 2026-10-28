@@ -165,3 +165,28 @@ def visual_to_logical(text: str) -> str:
     if not _STRONG_RTL.search(text):
         return text
     return get_display(text).strip()
+
+
+#: One Arabic word: letters and their marks, no digits (an Arabic-Indic number keeps its own order).
+_ARABIC_WORD = re.compile(r"[ء-يً-ْٰ]+")
+#: Taa marbuta and alef maqsura only ever end an Arabic word, so a word that starts with one has its letters reversed.
+_FINAL_ONLY = ("ة", "ى")
+#: A reversed word ending in the article ("تقولا" for "الوقت") is at least this long; shorter ones ("أهلا") are real.
+_REVERSED_ARTICLE_MIN_LEN = 5
+
+
+def _looks_reversed(word: str) -> bool:
+    return word.startswith(_FINAL_ONLY) or (len(word) >= _REVERSED_ARTICLE_MIN_LEN and word.endswith("لا") and not word.startswith("ال"))
+
+
+def pdf_text_to_logical(text: str) -> str:
+    """A PDF text layer with its Arabic words put in logical order (MUT-441 benchmark).
+
+    Some generators (Chromium among them) write each Arabic word's letters in visual order while keeping the words in
+    logical order, and only for some words ("ةيلديص الشفاء"), so a whole-line reorder would break the right ones. A layer
+    counts as visual only when some Arabic word starts with a final-only letter (impossible in logical text); then
+    each word that looks reversed goes through the same reorder RapidOCR's lines get. A logical layer is unchanged.
+    """
+    if not any(w.startswith(_FINAL_ONLY) for w in _ARABIC_WORD.findall(text)):
+        return text
+    return _ARABIC_WORD.sub(lambda m: visual_to_logical(m.group(0)) if _looks_reversed(m.group(0)) else m.group(0), text)

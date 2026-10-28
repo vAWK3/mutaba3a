@@ -21,7 +21,7 @@ from .decode import decode
 from .engines import RapidReader, Segment, TesseractReader
 from .merge import merge
 from .preprocess import prepare
-from .text import script_of
+from .text import pdf_text_to_logical, script_of
 
 log = logging.getLogger("receipt_ocr.pipeline")
 
@@ -86,7 +86,7 @@ class Reader:
         decode_ms = _ms(started)
         if decoded.pdf_text is not None:
             log.info("read", extra={"stats": {"engine": ENGINE_PDF_TEXT, "pages": decoded.page_count, "chars": len(decoded.pdf_text), "decodeMs": decode_ms}})
-            return {"engine": ENGINE_PDF_TEXT, "lines": [], "pdfText": decoded.pdf_text[:MAX_PDF_TEXT], "pages": decoded.page_count}
+            return {"engine": ENGINE_PDF_TEXT, "lines": [], "pdfText": pdf_text_to_logical(decoded.pdf_text)[:MAX_PDF_TEXT], "pages": decoded.page_count}
 
         lines: list[dict[str, Any]] = []
         offset = 0.0

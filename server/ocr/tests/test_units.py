@@ -13,7 +13,7 @@ from app import preprocess
 from app.config import Settings, load_settings
 from app.engines import Segment
 from app.merge import is_separator_noise, join_number_fragments, merge
-from app.text import get_display, script_of, visual_to_logical
+from app.text import get_display, pdf_text_to_logical, script_of, visual_to_logical
 from conftest import FIXTURES
 
 
@@ -145,6 +145,28 @@ def test_upscale_below_zero_never_upscales_and_a_lower_bar_upscales_less():
     assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=0).shape == (400, 300)
     assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=250).shape == (400, 300)
     assert preprocess.fit_size(np.zeros((400, 300), np.uint8), upscale_below=301).shape == (800, 600)
+
+
+# --- PDF text layers whose Arabic words are in visual order (MUT-441 benchmark) -------------------------------------
+
+
+def test_a_visual_order_text_layer_gets_its_reversed_arabic_words_put_back():
+    # Chromium's Arabic PDF text layer: words in logical order, some words' letters reversed (syn-038).
+    layer = "ةيلديص الشفاء\nخيراتلا 23/02/2025 تقولا 10:24\nالمجموع يعرفلا 185.19"
+    assert pdf_text_to_logical(layer) == "صيدلية الشفاء\nالتاريخ 23/02/2025 الوقت 10:24\nالمجموع الفرعي 185.19"
+
+
+@pytest.mark.parametrize(
+    "layer",
+    [
+        "مطعم أبو شكري\nأهلا وسهلا\nالمجموع 12.00",  # logical: nothing starts with a final-only letter
+        "שלום ע\"מ 123\nTotal 9.90",  # no Arabic at all
+        "أهلا وسهلا\nةيلديص",  # visual layer: a short word ending in لا is not taken for a reversed article
+    ],
+)
+def test_a_logical_text_layer_and_short_words_are_left_alone(layer):
+    fixed = pdf_text_to_logical(layer)
+    assert "أهلا" in fixed if "أهلا" in layer else fixed == layer
 
 
 # --- settings (MUT-441 benchmark tuning) --------------------------------------------------------------------------
