@@ -125,7 +125,8 @@ export class HttpOcrClient implements OcrClient {
       res = await this.fetchFn(this.url, {
         method: 'POST',
         headers: { 'content-type': input.contentType, 'x-capture-hint': input.hint, ...auth },
-        body: input.body,
+        // Node's and the DOM's BodyInit differ on Uint8Array's buffer type; tsconfig.hosted-local checks this file under the DOM lib.
+        body: input.body as unknown as NonNullable<RequestInit['body']>,
         signal: AbortSignal.timeout(this.timeoutMs),
         // Node's fetch needs this to send a stream body.
         ...({ duplex: 'half' } as object),
