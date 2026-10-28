@@ -16,6 +16,7 @@ from app.config import Settings
 from app.decode import decode
 from app.errors import Refusal
 from app.main import create_app
+from app.worker import ProcessWorker
 
 FAST_S = 2.0
 
@@ -117,8 +118,11 @@ def test_the_deadline_answers_504_timeout_and_the_worker_comes_back(stub_client)
     res = stub_client.post("/v1/read", content=b"slow", headers={"content-type": "image/jpeg"})
     assert res.status_code == 504 and res.json() == {"error": "timeout"}
     assert time.perf_counter() - started < 4
-    # The stuck child was killed and replaced; the next read works.
-    ok = stub_client.post("/v1/read", content=b"fine", headers={"content-type": "image/jpeg", "x-capture-hint": "scanned"}, timeout=60)
+    # The stuck child was killed and replaced (reads meanwhile answer `timeout` within their deadline); then reads work.
+    until = time.perf_counter() + 30
+    while stub_client.get("/healthz").status_code != 200 and time.perf_counter() < until:
+        time.sleep(0.05)
+    ok = stub_client.post("/v1/read", content=b"fine", headers={"content-type": "image/jpeg", "x-capture-hint": "scanned"})
     assert ok.status_code == 200 and ok.json()["engine"] == "test"
 
 
@@ -139,3 +143,39 @@ def test_decode_module_sets_pillows_own_bomb_guard():
 
     assert Image.MAX_IMAGE_PIXELS == config.MAX_PIXELS
     assert decode_mod.config.MAX_PIXELS == 40_000_000
+
+
+def _wait_ready(worker, limit_s: float = 30.0) -> None:
+    until = time.perf_counter() + limit_s
+    while not worker.ready and time.perf_counter() < until:
+        time.sleep(0.05)
+    assert worker.ready
+
+
+def test_a_read_never_waits_on_a_worker_restart_past_its_deadline(monkeypatch):
+    """MUT-441 review: a restart (up to START_TIMEOUT_S) must not hold a request past the request's own deadline."""
+    worker = ProcessWorker(Settings(worker="process"), factory="slow_reader:SlowStartReader")
+    worker.start()
+    try:
+        monkeypatch.setenv("SLOW_READER_WARM_UP_S", "6")
+        assert refusal_of(lambda: worker.run(b"slow", "image/jpeg", "photo", 0.5))[0] == "timeout"
+        # The child is being replaced (6 s to warm up): the next read answers `timeout` within its own deadline.
+        code, took = refusal_of(lambda: worker.run(b"fine", "image/jpeg", "photo", 0.5))
+        assert code == "timeout" and took < 1.5
+        _wait_ready(worker)
+        assert worker.run(b"fine", "image/jpeg", "photo", 2.0)["engine"] == "test"
+    finally:
+        worker.stop()
+
+
+def test_a_worker_that_is_not_ready_answers_timeout_at_once_and_restarts_in_the_background():
+    worker = ProcessWorker(Settings(worker="process"), factory="slow_reader:SlowReader")
+    worker.start()
+    worker.stop()
+    try:
+        code, took = refusal_of(lambda: worker.run(b"fine", "image/jpeg", "photo", 5.0))
+        assert code == "timeout" and took < 1.0
+        _wait_ready(worker)
+        assert worker.run(b"fine", "image/jpeg", "photo", 2.0)["engine"] == "test"
+    finally:
+        worker.stop()

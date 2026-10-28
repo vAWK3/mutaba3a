@@ -12,6 +12,7 @@ import importlib
 import logging
 import multiprocessing as mp
 import threading
+import time
 from typing import Any, Callable
 
 from .config import Settings
@@ -64,6 +65,7 @@ class ProcessWorker:
         self._proc = None
         self._conn = None
         self._ready = threading.Event()
+        self._restarting = threading.Event()
 
     @property
     def ready(self) -> bool:
@@ -97,36 +99,55 @@ class ProcessWorker:
         self._start_locked()
 
     def run(self, body: bytes, content_type: str, hint: str, timeout: float) -> dict[str, Any]:
-        with self._lock:
+        """Never waits past `timeout` (MUT-441 review): not even on a restart, which can take START_TIMEOUT_S. A read
+        that arrives while the child is being replaced waits for it only within its own deadline; one that finds no
+        child at all answers `timeout` at once and starts the replacement in the background."""
+        deadline = time.monotonic() + max(0.0, timeout)
+        if not self._lock.acquire(timeout=max(0.0, timeout)):
+            raise Refusal("timeout")
+        try:
             if not self._ready.is_set():
-                self._restart_locked()
+                self._restart_in_background()
+                raise Refusal("timeout")
             assert self._conn is not None
             try:
                 self._conn.send(("read", body, content_type, hint))
-                if not self._conn.poll(max(0.0, timeout)):
+                remaining = deadline - time.monotonic()
+                if not self._conn.poll(max(0.0, remaining)):
                     log.warning("read timed out; restarting the worker", extra={"stats": {"timeoutS": round(timeout, 2)}})
                     self._ready.clear()
-                    threading.Thread(target=self._background_restart, daemon=True).start()
+                    self._restart_in_background()
                     raise Refusal("timeout")
                 reply = self._conn.recv()
             except (EOFError, BrokenPipeError, OSError):
                 self._ready.clear()
-                threading.Thread(target=self._background_restart, daemon=True).start()
+                self._restart_in_background()
                 raise WorkerError("worker died") from None
+        finally:
+            self._lock.release()
         if reply[0] == "ok":
             return reply[1]
         if reply[0] == "refused":
             raise Refusal(reply[1])
         raise WorkerError("read failed")
 
+    def _restart_in_background(self) -> None:
+        # One replacement at a time; it takes the lock once the caller has released it.
+        if self._restarting.is_set():
+            return
+        self._restarting.set()
+        threading.Thread(target=self._background_restart, daemon=True).start()
+
     def _background_restart(self) -> None:
-        # Runs after `run` released the lock; the next read waits on the lock until the new child is ready.
+        # Reads that arrive meanwhile wait on the lock only within their own deadlines (see `run`).
         try:
             with self._lock:
                 if not self._ready.is_set():
                     self._restart_locked()
         except WorkerError:
             log.error("worker restart failed")
+        finally:
+            self._restarting.clear()
 
     def stop(self) -> None:
         with self._lock:

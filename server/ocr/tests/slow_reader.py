@@ -3,6 +3,7 @@ raises, b"fine" answers; anything else goes through the real decode (and its ref
 
 from __future__ import annotations
 
+import os
 import time
 
 
@@ -24,3 +25,10 @@ class SlowReader:
 
         decoded = decode(body, content_type)
         return {"engine": "test", "lines": [], "pages": decoded.page_count}
+
+
+class SlowStartReader(SlowReader):
+    """SlowReader whose child takes SLOW_READER_WARM_UP_S to warm up: a worker restart that outlives a deadline."""
+
+    def warm_up(self) -> None:
+        time.sleep(float(os.environ.get("SLOW_READER_WARM_UP_S", "0")))
