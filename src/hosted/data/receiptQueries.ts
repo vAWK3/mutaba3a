@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { ApiError, api, type ApproveReceiptRequest, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
+import { ApiError, api, type ApproveReceiptRequest, type Expense, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
 import { profileKey } from '../session/me';
 import { useCursorList } from './queries';
 import { expenseKey, invalidateExpenses } from './expenseQueries';
@@ -114,6 +114,11 @@ export function useAddReceipt(profileId: string, expenseId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (file: File) => uploadExpenseReceipt(profileId, expenseId, file),
+    // Listed at once, so the drawer's "Uploading…" row hands over to the READY one without a gap before the refetch.
+    onSuccess: (receipt) =>
+      queryClient.setQueryData<Expense>(expenseKey(profileId, expenseId), (expense) =>
+        expense ? { ...expense, receipts: [...expense.receipts.filter((r) => r.id !== receipt.id), receipt] } : expense,
+      ),
     onSettled: () => refreshExpenseReceipts(queryClient, profileId, expenseId),
   });
 }

@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../Toast';
-import { ReceiptUploader } from '../ReceiptUploader';
+import { ReceiptUploader, type ReceiptUploaderProps } from '../ReceiptUploader';
 import type { ExpenseReceipt } from '../../api/client';
 
 // The portal opens in Arabic until a person chooses (MUT-209); these cases speak English, so choose it as a person would
@@ -32,17 +32,19 @@ function receipt(overrides: Partial<ExpenseReceipt> = {}): ExpenseReceipt {
   } as ExpenseReceipt;
 }
 
-function renderUploader(receipts: ExpenseReceipt[] = []) {
+function renderUploader(receipts: ExpenseReceipt[] = [], extra: Partial<ReceiptUploaderProps> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(
+  const tree = (list: ExpenseReceipt[]) => (
     <QueryClientProvider client={queryClient}>
       <HostedLanguageProvider>
         <ToastProvider>
-          <ReceiptUploader profileId="org-1" expenseId="e1" receipts={receipts} />
+          <ReceiptUploader profileId="org-1" expenseId="e1" receipts={list} {...extra} />
         </ToastProvider>
       </HostedLanguageProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const { rerender } = render(tree(receipts));
+  return { rerenderWith: (list: ExpenseReceipt[]) => rerender(tree(list)) };
 }
 
 beforeEach(() => {
@@ -206,4 +208,60 @@ describe('ReceiptUploader', () => {
       expect(fetchMock.mock.calls.some(([u, i]) => String(u).includes('/receipts/r1') && (i as RequestInit | undefined)?.method === 'DELETE')).toBe(true),
     );
   });
+
+  describe('incoming files from a new expense (MUT-491 R3)', () => {
+    it('uploads them one at a time on mount and reports none failed', async () => {
+      const onIncomingSettled = vi.fn();
+      renderUploader([], { incoming: [pdfFile('a.pdf'), pdfFile('b.pdf')], onIncomingSettled });
+      expect(screen.getAllByText('Uploading…').length).toBeGreaterThan(0);
+      await waitFor(() => expect(onIncomingSettled).toHaveBeenCalledWith([]));
+      const starts = fetchMock.mock.calls.filter(([u, i]) => String(u).endsWith('/v1/expenses/e1/receipts') && (i as RequestInit).method === 'POST');
+      expect(starts.map(([, i]) => JSON.parse(String((i as RequestInit).body)).filename)).toEqual(['a.pdf', 'b.pdf']);
+      expect(onIncomingSettled).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a failed file in the list with Upload again and Remove, and reports it by name', async () => {
+      const user = userEvent.setup();
+      putMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
+      const onIncomingSettled = vi.fn();
+      renderUploader([], { incoming: [pdfFile('taxi.pdf')], onIncomingSettled });
+      await waitFor(() => expect(onIncomingSettled).toHaveBeenCalledWith(['taxi.pdf']));
+      expect(screen.getByText("Couldn't upload the receipt. Try again.")).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      // The failed PUT's PENDING row was deleted (R1)
+      expect(fetchMock.mock.calls.some(([u, i]) => String(u).endsWith('/receipts/r1') && (i as RequestInit).method === 'DELETE')).toBe(true);
+
+      await user.click(screen.getByRole('button', { name: 'Upload again' }));
+      await waitFor(() => expect(screen.queryByText("Couldn't upload the receipt. Try again.")).not.toBeInTheDocument());
+      expect(onIncomingSettled).toHaveBeenCalledTimes(1);
+    });
+
+    it('a complete whose answer was lost shows READY once the refetch lists it, not failed', async () => {
+      const remote = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        if (String(input).includes('/receipts/r1/complete')) return ok({ error: { code: 'UNKNOWN', message: 'bad gateway' } }, 502);
+        return remote(input, init);
+      });
+      const { rerenderWith } = renderUploader([], { incoming: [pdfFile('taxi.pdf')] });
+      expect(await screen.findByText("Couldn't upload the receipt. Try again.")).toBeInTheDocument();
+      rerenderWith([receipt({ id: 'r1', filename: 'taxi.pdf' })]);
+      expect(screen.queryByText("Couldn't upload the receipt. Try again.")).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument();
+    });
+
+    it('Remove drops a failed file', async () => {
+      const user = userEvent.setup();
+      putMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
+      renderUploader([], { incoming: [pdfFile('taxi.pdf')] });
+      await user.click(await screen.findByRole('button', { name: 'Remove' }));
+      expect(screen.queryByText('taxi.pdf')).not.toBeInTheDocument();
+    });
+
+    it('takes several files in one pick in edit mode too', async () => {
+      renderUploader([]);
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      expect(input.multiple).toBe(true);
+    });
+  });
 });
+
