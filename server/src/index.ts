@@ -1,5 +1,10 @@
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
-import { loadConfig } from './config.js';
+import { loadConfig, readOidcAudience } from './config.js';
+import { HttpOcrClient } from './receipts/ocr-client.js';
+import { CloudTasksDispatcher } from './receipts/reading/cloud-tasks.js';
+import { InlineDispatcher } from './receipts/reading/dispatcher.js';
+import { googleIdTokenHeaders } from './receipts/reading/id-token.js';
+import { googleOidcVerifier } from './receipts/reading/oidc.js';
 import { startServer } from './listen.js';
 import { createLogger } from './logger.js';
 import { shutdownAndFlush } from './observability/reporter.js';
@@ -149,6 +154,22 @@ const localAttachments =
       })
     : null;
 
+// MUT-441: the server's receipt reader. Config has refused SERVER_OCR without OCR_URL, and a deployed one without
+// READ_QUEUE (and READ_QUEUE without API_ORIGIN and READ_INVOKER_SA). A local http sidecar takes no ID token.
+const readAudience = readOidcAudience(config);
+const receiptReading =
+  config.SERVER_OCR && config.OCR_URL
+    ? {
+        ocr: new HttpOcrClient({ baseUrl: config.OCR_URL, ...(config.OCR_URL.startsWith('https://') ? { authHeaders: googleIdTokenHeaders(config.OCR_URL) } : {}) }),
+        dispatcher:
+          config.READ_QUEUE && config.API_ORIGIN && config.READ_INVOKER_SA && readAudience
+            ? new CloudTasksDispatcher({ queue: config.READ_QUEUE, apiOrigin: config.API_ORIGIN, invokerServiceAccount: config.READ_INVOKER_SA, audience: readAudience })
+            : new InlineDispatcher({ delayMs: config.QA_READ_DELAY_MS }),
+      }
+    : null;
+const readInvokers = [config.READ_INVOKER_SA, config.SWEEP_INVOKER_SA].filter((email): email is string => Boolean(email));
+const receiptReadVerifier = readAudience && readInvokers.length > 0 ? googleOidcVerifier({ audience: readAudience, allowedEmails: readInvokers }) : null;
+
 const app = createApp({
   store,
   logger,
@@ -160,6 +181,8 @@ const app = createApp({
   localAttachments,
   attachmentUrlTtlSeconds: config.ATTACHMENTS_URL_TTL_SECONDS,
   receiptsLibrary: config.RECEIPTS_LIBRARY,
+  receiptReading,
+  receiptReadVerifier,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   billingGate: config.BILLING_GATE,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
@@ -221,6 +244,8 @@ if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_
 else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
+if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; receipts are read for uploaders granted receipt_reading');
+if (!receiptReadVerifier) logger.info('READ_OIDC_AUDIENCE/API_ORIGIN or READ_INVOKER_SA/SWEEP_INVOKER_SA are not set; POST /jobs/v1/receipts/read answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
 if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
 if (!config.OPERATOR_ALERT_EMAIL) logger.warn('OPERATOR_ALERT_EMAIL is not set; no signup review digest is mailed');

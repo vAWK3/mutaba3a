@@ -4,7 +4,8 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptSuggestion } from '../repositories/ports.js';
+import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
+import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion } from '../repositories/ports.js';
 import { MAX_RECEIPTS_PER_EXPENSE, tooManyReceipts } from './compose.js';
 
 /**
@@ -24,6 +25,8 @@ export interface ReceiptDeps {
   /** Null: the deployment has no attachments bucket, and every receipt operation answers 503. */
   storage: AttachmentStorage | null;
   urlTtlSeconds: number;
+  /** MUT-441: the server's reader, while SERVER_OCR is on. Absent = no receipt is read (readStatus stays NONE). */
+  reading?: ReceiptReadTrigger | null;
 }
 
 export type ReceiptAuditWriter = (action: string, entityType: 'expense' | 'expense_receipt', entityId: string, metadata?: JsonObject) => Promise<unknown>;
@@ -136,11 +139,15 @@ export async function completeExpenseReceipt(deps: ReceiptDeps, actor: ReceiptAc
   return result.receipt;
 }
 
+/** MUT-441: how the image was taken, as a client says it (`capture`) and as it is stored (`captureHint`). */
+export type ReceiptCapture = 'scanned' | 'photo';
+const CAPTURE_HINT: Record<ReceiptCapture, ReceiptCaptureHint> = { scanned: 'SCANNED', photo: 'PHOTO' };
+
 /** MUT-255: a To-review receipt with no expense, behind the per-person start budget and the profile's pending cap. Either refusal is a 429, so an idempotency key stays free. */
 export async function startLibraryReceipt(
   deps: ReceiptDeps & { uploadLimiter: RateLimiter },
   actor: ReceiptActor,
-  file: ReceiptFile & { suggested?: ReceiptSuggestion | null | undefined },
+  file: ReceiptFile & { suggested?: ReceiptSuggestion | null | undefined; capture?: ReceiptCapture | undefined },
 ): Promise<{ receipt: ExpenseReceiptRecord; upload: SignedReceiptUpload }> {
   requireStorage(deps);
   assertFile(file);
@@ -148,7 +155,18 @@ export async function startLibraryReceipt(
   const { organization, now } = actor;
   const receipt = await createKeyed(
     deps,
-    { organizationId: organization.id, expenseId: null, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes, receivedOn: todayFor(organization, now), suggested: file.suggested ?? null, uploadedByUserId: actor.userId, requestId: actor.requestId },
+    {
+      organizationId: organization.id,
+      expenseId: null,
+      filename: file.filename,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      receivedOn: todayFor(organization, now),
+      suggested: file.suggested ?? null,
+      uploadedByUserId: actor.userId,
+      requestId: actor.requestId,
+      ...(file.capture ? { captureHint: CAPTURE_HINT[file.capture] } : {}),
+    },
     now,
   );
   return { receipt, upload: await signReceiptUpload(deps, receipt, now) };
@@ -161,10 +179,17 @@ export async function completeLibraryReceipt(deps: ReceiptDeps, actor: ReceiptAc
   const receipt = await deps.store.expenseReceipts.getById(organization.id, receiptId);
   if (!receipt) throw new ApiError('NOT_FOUND', 'No such receipt');
   if (receipt.expenseId !== null) throw new ApiError('NOT_FOUND', 'No such receipt in the library');
-  if (receipt.status === 'READY') return receipt;
+  if (receipt.status === 'READY') {
+    // A retried complete re-asks for a read still waiting (its first ask may have failed); the task name dedupes it.
+    await deps.reading?.requested(receipt, actor.now);
+    return receipt;
+  }
   await verifyUploadedObject(storage, receipt);
-  const ready = await deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now);
+  // MUT-441 (R10 #5): whether the server reads it is decided first and saved in the same UPDATE as READY.
+  const read = deps.reading ? await deps.reading.decide(receipt) : null;
+  const ready = await deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now, read ?? undefined);
   if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
   await actor.audit('expense_receipt.added', 'expense_receipt', ready.id, { expenseId: ready.expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes, ...auditMetadata });
+  await deps.reading?.requested(ready, actor.now);
   return ready;
 }

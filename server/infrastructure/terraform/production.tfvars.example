@@ -21,6 +21,9 @@ log_level           = "info"
 # receipts_library_enabled = false
 # MUT-436: agents adding to the inbox. Only after the phone release decoding 'mcp' is live and the minimum build is raised.
 # mcp_inbox_writes_enabled = false
+# MUT-441: the server reads receipts. Only when piloting, and only after MUT-487's project move (docs/operations/before-release.md).
+# server_ocr_enabled = false
+# ocr_min_instances  = 0   # R4: 1 keeps one warm (about $50-70 a month)
 # Uptime alerts (MUT-328, server/DEPLOYMENT.md §6b). Real values only in the git-ignored production.tfvars.
 # alert_email      = "you@example.com"
 # alert_sms_number = "+9725XXXXXXXX"   # E.164; verify the SMS channel once after the apply

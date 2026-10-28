@@ -2857,6 +2857,26 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 **Where**: `server/src/statements/build.ts` (`buildStatement`), fed by `receivables.statementSources`.
 **Rule**: a figure that runs across rows (a running balance, an opening balance) is computed from the rows that justify it, in one pure pass with no store and no clock, and paged after the whole period is computed. Never page first and carry a balance in the cursor: the opening balance and totals would then depend on the page. The store method returns everything in a fixed number of queries; the route only composes. A new line kind is a new branch in the builder and a new row in its table tests.
 
+## Pattern: one job route on Google-signed OIDC, not the shared job token (MUT-441)
+**Where**: `server/src/receipts/reading/oidc.ts` (`googleOidcVerifier`), `server/src/routes/receipt-reading.ts`, `app.ts` (keeps `jobAuth` off that one path).
+**Rule**: a job route that Cloud Tasks or Cloud Scheduler calls with work for one record takes only a Google-signed OIDC token whose audience is the API's URL and whose verified email is one of that job's dedicated service accounts. It never accepts `X-Job-Token`: that token opens every `/jobs` route (`/jobs/v1/accounts/purge` included), so it must never sit in a task's headers. The verifier never throws (false on anything wrong). The inline (local) adapter calls the job's function directly, never the route.
+
+## Pattern: service-to-service calls carry a Google ID token for the callee's URL (MUT-441)
+**Where**: `server/src/receipts/reading/id-token.ts` (`googleIdTokenHeaders(audience)`), `server/src/receipts/ocr-client.ts` (`authHeaders`).
+**Rule**: the API calls a private Cloud Run service (ingress all, only the API's service account holds `run.invoker`) with `Authorization: Bearer <ID token, audience = the service URL>` from `google-auth-library`. A local `http://127.0.0.1` sidecar gets no header, decided once at wiring (`index.ts`), never per call. MUT-56's scanner reuses this.
+
+## Pattern: a ReadDispatcher port with a Cloud Tasks and an inline adapter (MUT-441)
+**Where**: `server/src/receipts/reading/dispatcher.ts` (`ReadDispatcher`, `InlineDispatcher`), `cloud-tasks.ts` (`CloudTasksDispatcher`).
+**Rule**: work that production runs on a queue is scheduled through a one-method port (`enqueue(id, attempt)`), injected like `store`. Production uses Cloud Tasks with a deterministic task name (`<id>-<attempt>`) so a repeat ask is one task; dev, tests and release-QA use the inline adapter, which runs the function after the response (`setImmediate`, or `QA_READ_DELAY_MS` in local QA) and dedupes the same name while queued. The state that says "work is owed" (PENDING) is written in the request's own UPDATE; the enqueue is best effort and a sweep is the backstop. Config refuses the inline adapter outside development and tests. Tests `await dispatcher.idle()`.
+
+## Pattern: server-only fields stay optional on records, so the local records format doesn't change (MUT-441)
+**Where**: `server/src/repositories/ports.ts` (`readStatus?: ReceiptReadStatus` on the receipt record), `server/src/serializers.ts` (`readingOf`).
+**Rule**: a field only the hosted server sets (read state, leases, attempts) is optional on the shared record type, and the serializer maps "absent" to the wire's null. Local mode's memory store and the records file never carry it, so no snapshot format bump and no carry-over change. The Prisma store always fills it.
+
+## Pattern: errors on a content path rethrow as a fixed-message code (MUT-441)
+**Where**: `server/src/receipts/ocr-client.ts` (`OcrReadError(code)`, `MESSAGES`), used by the reader's whole read path.
+**Rule**: on a path that handles a person's document content (OCR lines, extracted text), every failure, whatever threw it (fetch, `JSON.parse`, Zod, the extractor, a store call), is caught and rethrown as one error class with a fixed message per code and no `cause`. Logs and `report()` see only the code. Tests feed a malformed and a truncated body and assert the logger and reporter never see the content.
+
 ## Pattern: a create that needs follow-up writes hands off to its edit drawer (MUT-491)
 **Where**: `src/hosted/components/ExpenseDrawer.tsx` (`onCreated`, `handOff`), `ReceiptUploader` `incoming`.
 **Rule**: when saving a new record needs more writes against its id (receipts, attachments), don't run them from the create drawer. Create once, seed the record in the cache, let the list move to `?<record>=<id>`, and let the edit drawer's own component do the follow-up writes with its usual per-item state. The drawer closes itself only when every write landed and the form is untouched, checks it is still mounted first, and marks Saved on close.

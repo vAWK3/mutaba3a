@@ -13,7 +13,14 @@ import { accountActions, accountAudit, type AccountActionOptions } from './accou
  * /v1/operator/accounts/{userId}/features (a signed-in operator); only the audit row's actorId and `grantedBy` differ.
  * Both are idempotent and audited, in the write's own transaction, on every profile the person belongs to.
  */
-export type FeatureActionOptions = Pick<AccountActionOptions, 'store' | 'logger' | 'sessions' | 'reporter'>;
+export type FeatureActionOptions = Pick<AccountActionOptions, 'store' | 'logger' | 'sessions' | 'reporter'> & {
+  /**
+   * MUT-441 (R5): told after every grant, a repeat included, so granting `receipt_reading` again after SERVER_OCR is
+   * turned on still queues that person's unread receipts. Best effort: a failure is logged and reported, and the grant
+   * stands (granting again retries it).
+   */
+  onGranted?: ((userId: string, feature: Feature) => Promise<void>) | undefined;
+};
 
 /** The token's `grantedBy`, as MUT-433 always wrote it. */
 const TOKEN_GRANTED_BY = 'admin';
@@ -64,6 +71,14 @@ export function featureActions(options: FeatureActionOptions) {
         audit: accountAudit(ctx, organizationIds, user.id, 'user.feature_granted', { feature }),
       }),
     );
+    if (options.onGranted) {
+      try {
+        await options.onGranted(user.id, feature);
+      } catch {
+        logger.warn({ requestId: ctx.requestId, userId: user.id, feature, code: 'feature_grant_hook_failed' }, 'feature granted; its follow-up failed');
+        reporter.captureMessage('warning', 'Feature grant follow-up failed', { feature });
+      }
+    }
     return { feature, grantedAt: record.grantedAt.toISOString(), granted };
   }
 

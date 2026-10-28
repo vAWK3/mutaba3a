@@ -2972,6 +2972,12 @@ export const ApprovedReceiptFieldsSchema = z
   .object({ occurredOn: IsoDateSchema, amountMinor: minorUnits, currency: z.string(), vendor: z.string().nullable(), categoryId: uuid.nullable() })
   .openapi('ApprovedReceiptFields', { description: 'What approval wrote into the expense, in minor units like the suggestion' });
 
+/** MUT-441: the read state a client acts on (the stored NONE and SKIPPED are both null on the wire). */
+export const ReceiptReadingSchema = z.enum(['pending', 'done', 'failed']).openapi('ReceiptReading');
+
+/** MUT-441: how the image was taken; `scanned` = the phone's Scan (cropped, straightened, cleaned). */
+export const ReceiptCaptureSchema = z.enum(['scanned', 'photo']).openapi('ReceiptCapture');
+
 export const ExpenseReceiptSchema = z
   .object({
     id: uuid,
@@ -2990,6 +2996,9 @@ export const ExpenseReceiptSchema = z
     uploadedByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
     createdAt: z.string().datetime(),
     completedAt: z.string().datetime().nullable(),
+    reading: ReceiptReadingSchema.nullable().openapi({
+      description: "MUT-441: the server reading the receipt. 'pending' while it reads (poll the receipt); 'done' once what it read is merged into `suggested` (only fields that were absent); 'failed' when it gave up (type the fields). Null when it isn't reading this receipt. Since 1.84.0-mut441.",
+    }),
   })
   .openapi('ExpenseReceipt');
 
@@ -3172,6 +3181,7 @@ export const ReceiptIdParamSchema = z.object({ receiptId: uuid });
 
 export const CreateLibraryReceiptUploadRequestSchema = CreateReceiptUploadRequestSchema.extend({
   suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the device already read, when it read before uploading' }),
+  capture: ReceiptCaptureSchema.optional().openapi({ description: "MUT-441: 'scanned' from the phone's Scan (already cropped and cleaned, so the server's reader only normalises it); 'photo' (the default) for anything else. Since 1.84.0-mut441." }),
 })
   .strict()
   .openapi('CreateLibraryReceiptUploadRequest');
@@ -3209,7 +3219,7 @@ export const ReceiptDownloadQuerySchema = z.object({
 export const ReceiptCountsSchema = z.object({ toReview: z.number().int(), filed: z.number().int() }).openapi('ReceiptCounts', { description: 'READY receipts in the library, per filing status' });
 
 export const ApproveReceiptRequestSchema = CreateExpenseRequestSchema.extend({
-  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+  suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.84.0-mut441, MUT-441 R7)' }),
 })
   .strict()
   .openapi('ApproveReceiptRequest');
@@ -3220,7 +3230,7 @@ export const ApproveReceiptResponseSchema = z.object({ expense: ExpenseSchema, r
 export const FileReceiptRequestSchema = z
   .object({
     expenseId: z.string().uuid(),
-    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; replaces the stored one' }),
+    suggested: ReceiptSuggestionSchema.optional().openapi({ description: 'What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.84.0-mut441, MUT-441 R7)' }),
   })
   .strict()
   .openapi('FileReceiptRequest');

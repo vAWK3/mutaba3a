@@ -2420,3 +2420,10 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - Server: `createReviewDigest({ reviewLink })`, `REVIEW_PAGE_PATH`.
 - QA: `pendingSignup`, `grantOperator`, `signsIn` (`qa/support/selfService.ts`); `liveState().operatorDigest`. MUT-461: `liveSession` / `sessionWorks` (another device's session), `redeemSetupLink`.
 
+
+### Server receipt reading — MUT-441 (ADR-220)
+- `server/src/receipts/extract/`: `extractReceipt(input, {readerVersion})` → a `ReceiptSuggestion` with per-field confidence (`MIN_FIELD_CONFIDENCE` 0.6, `isConfident`); `fillAbsent(stored, incoming)` fills only absent fields (the server's read and every client write use it, R7), `isCompleteSuggestion`. Pure, no I/O; `server/src/scripts/receipt-bench-extract.ts` runs it for the benchmark.
+- `server/src/receipts/ocr-client.ts`: `HttpOcrClient({baseUrl, authHeaders?})` (the sidecar's `/v1/read` contract), `OcrReadError(code)` with fixed messages, `OcrResultSchema`. Reuse the error pattern on any path that handles document content.
+- `server/src/receipts/reading/`: `ReadDispatcher` with `InlineDispatcher({delayMs?})` and `CloudTasksDispatcher` (named HTTP tasks with an OIDC token); `googleOidcVerifier({audience, allowedEmails})` for a job route that takes only Google-signed tokens; `googleIdTokenHeaders(audience)` for service-to-service calls; `createReceiptReader` (read one, sweep, backlog; `READ_LEASE_MS`, `MAX_READ_ATTEMPTS`, `READ_GIVE_UP_MS`). MUT-56's scanner can reuse the dispatcher, verifier and ID-token helper.
+- `server/ocr/`: the `receipt-ocr` sidecar (`app/main.py` `create_app`, `ProcessWorker`), `run_local.sh`, `bench/run.py`, `check_licenses.py`.
+- Portal: `useReceipt` returns `readingShown` and polls while `reading === 'pending'` (`READING_POLL_MS`, `READING_POLL_MAX_MS`); `ReceiptReview`'s `useLateSuggestion` fills untouched fields from a suggestion that lands after mount.

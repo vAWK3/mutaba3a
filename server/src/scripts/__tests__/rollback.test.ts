@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
  */
 const LIB = resolve(process.cwd(), 'scripts/lib/rollback.sh');
 const GUARDS = resolve(process.cwd(), 'scripts/lib/release-guard.sh');
+const OCR = resolve(process.cwd(), 'scripts/lib/receipt-ocr.sh');
 const DEPLOY = resolve(process.cwd(), 'scripts/deploy.sh');
 let dir: string;
 let REPO_ROOT: string;
@@ -114,6 +115,15 @@ describe('scripts/lib/rollback.sh', { timeout: 30_000 }, () => {
       expect(r.err).toMatch(/infrastructure differs from what is deployed/);
     });
 
+    it('MUT-441 (F6): plans at the receipt-ocr tag that serves too, when there is one', () => {
+      fake('terraform', 'exit 0');
+      const r = run('rollback_infra_gate 5119667b 0cc0cc0');
+      expect(r.status).toBe(0);
+      expect(r.calls).toMatch(/-var image_tag=5119667b -var ocr_image_tag=0cc0cc0/);
+      const none = run('rollback_infra_gate 5119667b ""').calls.trim().split('\n');
+      expect(none.at(-1)).toMatch(/-var image_tag=5119667b$/); // the log holds both runs: the second names no OCR tag
+    });
+
     it('refuses when the plan fails, rather than guess', () => {
       fake('terraform', 'echo "Error: state lock" >&2; exit 1');
       const r = run('rollback_infra_gate 5119667b');
@@ -165,19 +175,25 @@ describe('scripts/lib/rollback.sh', { timeout: 30_000 }, () => {
  */
 describe('rollback_main', { timeout: 30_000 }, () => {
   const TAG = 'abc1234';
-  function rollback(o: { sentry?: 'true' | 'false'; deployed?: () => string; gate?: number; target?: () => string } = {}) {
+  type Ocr = { enabled: boolean; image?: boolean; serving?: string };
+  function rollback(o: { sentry?: 'true' | 'false'; deployed?: () => string; gate?: number; target?: () => string; ocr?: Ocr } = {}) {
     const log = join(dir, 'calls.log');
     rmSync(log, { force: true });
-    fake('terraform', `[[ "$1" == console ]] && { cat >/dev/null; echo '"${o.sentry ?? 'true'}"'; }\nexit 0`);
-    fake('gcloud', `[[ "$*" == *"print-access-token"* ]] && { echo tok; exit 0; }\necho '{"spec":{"template":{"spec":{"containers":[{"env":[{"name":"SERVICE_VERSION","value":"${(o.deployed ?? (() => git('rev-parse', '--short', 'HEAD')))()}"}]}]}}}}'`);
-    fake('npm', `case "$*" in *release-image*) echo ${TAG} ;; *rollback:check*) exit ${o.gate ?? 0} ;; esac\nexit 0`);
-    const stubs = ['tf_init', 'start_proxy', 'stop_proxy', 'apply_release', 'guard_release']
+    const ocr = o.ocr ?? { enabled: false };
+    fake('terraform', `[[ "$1" == console ]] && { in="$(cat)"; [[ "$in" == *server_ocr_enabled* ]] && echo '"${ocr.enabled}"' || echo '"${o.sentry ?? 'true'}"'; }\nexit 0`);
+    const ocrDescribe = ocr.serving
+      ? `echo me-west1-docker.pkg.dev/demo/mutaba3a/receipt-ocr:${ocr.serving}; exit 0`
+      : 'echo "ERROR: (gcloud.run.services.describe) Cannot find service [receipt-ocr]" >&2; exit 1';
+    fake('gcloud', `[[ "$*" == *"print-access-token"* ]] && { echo tok; exit 0; }\n[[ "$*" == *"describe receipt-ocr"* ]] && { ${ocrDescribe}; }\necho '{"spec":{"template":{"spec":{"containers":[{"env":[{"name":"SERVICE_VERSION","value":"${(o.deployed ?? (() => git('rev-parse', '--short', 'HEAD')))()}"}]}]}}}}'`);
+    fake('npm', `case "$*" in *receipt-ocr*) ${ocr.image === false ? 'echo "[image] no image" >&2; exit 1' : `echo ${TAG}`} ;; *release-image*) echo ${TAG} ;; *rollback:check*) exit ${o.gate ?? 0} ;; esac\nexit 0`);
+    const stubs = ['tf_init', 'start_proxy', 'stop_proxy', 'guard_release']
       .map((f) => `${f}() { echo "${f}" >> "${log}"; }`)
       .join('; ');
     return run(
       [
-        `source "${GUARDS}"`,
+        `source "${GUARDS}"; source "${OCR}"`,
         `need() { :; }; tf_output() { echo "x"; }; ${stubs}`,
+        `apply_release() { echo "apply_release \${TF_ARGS[*]}" >> "${log}"; }`,
         `smoke_release() { echo "smoke_release EXPECT=\${EXPECT_ERROR_REPORTING}" >> "${log}"; }`,
         'SUFFIX=""; REGISTRY=me-west1-docker.pkg.dev/demo/mutaba3a; AUTO_APPROVE=0; SERVICE_URL=https://svc',
         `touch "${dir}/production.tfvars"; ROLLBACK_TO=${(o.target ?? (() => MUT148))()}`,
@@ -229,6 +245,40 @@ describe('rollback_main', { timeout: 30_000 }, () => {
     const unknown = rollback({ deployed: () => 'f00dfee' });
     expect(unknown.status, unknown.err).toBe(0);
     expect(unknown.err).toMatch(/can't check that .* is older/);
+  });
+
+  describe('MUT-441 (F6): receipt-ocr', () => {
+    it('leaves it alone while server_ocr_enabled is off', () => {
+      const r = rollback();
+      expect(r.status, r.err).toBe(0);
+      expect(r.calls).not.toMatch(/receipt-ocr|ocr_image_tag/);
+      expect(r.calls).toMatch(/apply_release -input=false -var-file=production.tfvars -var image_tag=abc1234\n/);
+    });
+
+    it('pins it to the commit’s own image, and plans the gate at the receipt-ocr tag that serves', () => {
+      const r = rollback({ ocr: { enabled: true, serving: 'f00dfee' } });
+      expect(r.status, r.err).toBe(0);
+      expect(r.calls).toContain('release-image -- rollback --repository me-west1-docker.pkg.dev/demo/mutaba3a/receipt-ocr --commit');
+      expect(r.calls).toMatch(/terraform plan .*-var image_tag=\S+ -var ocr_image_tag=f00dfee/);
+      expect(r.err).toMatch(/receipt-ocr rolls back with the API, to abc1234/);
+      expect(r.calls).toMatch(/apply_release .*-var image_tag=abc1234 -var ocr_image_tag=abc1234/);
+      const at = order(r.calls, ['repository me-west1-docker.pkg.dev/demo/mutaba3a/receipt-ocr', 'terraform plan -detailed-exitcode', 'apply_release']);
+      expect([...at].sort((a, b) => a - b)).toEqual(at);
+    });
+
+    it('keeps the running image when the commit has none (older than MUT-441, or built with the flag off)', () => {
+      const r = rollback({ ocr: { enabled: true, image: false, serving: 'f00dfee' } });
+      expect(r.status, r.err).toBe(0);
+      expect(r.err).toMatch(/has no usable receipt-ocr image .*keeping the running f00dfee/);
+      expect(r.calls).toMatch(/apply_release .*-var image_tag=abc1234 -var ocr_image_tag=f00dfee/);
+    });
+
+    it('refuses when the commit has no image and no receipt-ocr service runs', () => {
+      const r = rollback({ ocr: { enabled: true, image: false } });
+      expect(r.status).not.toBe(0);
+      expect(r.err).toMatch(/no receipt-ocr service runs/);
+      expect(r.calls).not.toContain('apply_release');
+    });
   });
 
   it('refuses HEAD (a normal deploy) and a dirty tree', () => {

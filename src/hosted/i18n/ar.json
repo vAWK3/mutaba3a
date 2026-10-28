@@ -1045,6 +1045,7 @@
       "upload": "رفع إيصال",
       "uploading": "جارٍ الرفع…",
       "uploadingName": "جارٍ رفع {name}",
+      "reading": "جارٍ القراءة…",
       "status": {
         "to_review": "للمراجعة",
         "filed": "مُدرجة",
@@ -1099,6 +1100,7 @@
         "fromReceiptUnsure": "من الإيصال — تحقّق منه",
         "receiptSays": "يقول الإيصال {currency} {amount}",
         "receiptSaysCurrency": "يقول الإيصال {currency}",
+        "reading": "جارٍ قراءة الإيصال…",
         "approve": "وافق وأدرِج",
         "approving": "جارٍ الإدراج…",
         "next": "الإيصال التالي",

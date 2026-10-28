@@ -180,6 +180,26 @@ describe('PrivacyPolicyPage', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'لا إعلانات، لا تتبّع' })).toBeInTheDocument();
   });
 
+  it('says receipts are read on our own servers, by no outside company or language model, and the read text is not kept (MUT-441, AC9)', () => {
+    renderPage('en');
+    const body = (name: RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const entered = body(/What you enter/);
+    expect(entered).toMatch(/Receipts you upload may be read automatically on MTB3A's own servers, to suggest the amount, date, currency and vendor/);
+    expect(entered).toMatch(/no outside AI or OCR company ever sees your receipts, and no AI language model reads them/);
+    expect(entered).toMatch(/We don't keep the text read from a receipt, only the suggested fields, and you review them before you save the expense/);
+    expect(body(/Who else handles your data/)).toMatch(/our own software does it on those servers, so no other company reads it/);
+  });
+
+  it('says the same about reading receipts in Arabic (MUT-441, AC9)', () => {
+    renderPage('ar');
+    const body = (name: string) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+    const entered = body('ما الذي تُدخله');
+    expect(entered).toContain('وقد تُقرأ الإيصالات التي ترفعها آليًا على خوادم متابعة الخاصة');
+    expect(entered).toContain('لا تطّلع على إيصالاتك أي شركة خارجية للذكاء الاصطناعي أو لقراءة النصوص');
+    expect(entered).toContain('ولا نحتفظ بالنص المقروء من الإيصال، بل بالحقول المقترحة فقط');
+    expect(body('من يتعامل مع بياناتك أيضًا')).toContain('يقرؤه برنامجنا الخاص على تلك الخوادم');
+  });
+
   it('gives MTB3A’s own contact address, and never the old Malafat one (MUT-382, B2)', () => {
     renderPage('en');
     expect(document.querySelector('main')?.textContent).toContain('info@mtb3a.com');

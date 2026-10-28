@@ -2671,6 +2671,8 @@ export interface VendorRepository {
    * An empty query is the most recently used. Never another profile's vendors.
    */
   search(organizationId: string, query: string, limit: number): Promise<VendorSuggestion[]>;
+  /** MUT-441: the profile's vendor with this registration number (compared by `registrationKey`), or null. One indexed lookup. */
+  findByRegistration(organizationId: string, registrationNo: string): Promise<VendorRecord | null>;
 }
 
 
@@ -2949,8 +2951,46 @@ export interface ApprovedReceiptFields {
   categoryId: string | null;
 }
 
+/** MUT-441: where the server's reading of a receipt stands (schema.prisma `ReceiptReadStatus`). */
+export type ReceiptReadStatus = 'NONE' | 'PENDING' | 'DONE' | 'FAILED' | 'SKIPPED';
+/** MUT-441: SCANNED came through the phone's Scan (already cleaned); PHOTO is anything else. */
+export type ReceiptCaptureHint = 'SCANNED' | 'PHOTO';
+
+/**
+ * MUT-441: the server's reading state. Server-only, like an expense's `captureSource` (MUT-436): optional on the
+ * record because local-mode records never carry it (the local records format is unchanged); absent reads as NONE,
+ * 0, null and PHOTO.
+ */
+/** MUT-441: what `complete` sets with READY: PENDING (the server will read it) or SKIPPED (nothing to read for). */
+export type ReceiptReadRequest = 'PENDING' | 'SKIPPED';
+
+/** MUT-441: how a read ended. `failReason` is a code, never receipt text. */
+export type FinishReadOutcome = { status: 'DONE'; suggested?: ReceiptSuggestion } | { status: 'FAILED'; failReason: string } | { status: 'SKIPPED' };
+
+/** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED, so SKIPPED with nothing written; `not_pending`: someone ended it first. */
+export type FinishReadResult =
+  | { kind: 'saved'; record: ExpenseReceiptRecord }
+  | { kind: 'stale'; record: ExpenseReceiptRecord }
+  | { kind: 'skipped' }
+  | { kind: 'not_pending' }
+  | { kind: 'not_found' };
+
+export type ClaimReadResult = { kind: 'claimed'; record: ExpenseReceiptRecord } | { kind: 'busy' } | { kind: 'none' };
+
+export interface ReceiptReadState {
+  readStatus?: ReceiptReadStatus;
+  readAttempts?: number;
+  readLeaseUntil?: Date | null;
+  readRequestedAt?: Date | null;
+  /** The first claim's time (set once by `claimRead`): the 30-minute give-up clock runs from it. */
+  readFirstClaimedAt?: Date | null;
+  /** A code only (`unreadable`, `timeout`, `exhausted`), never receipt text. */
+  readFailReason?: string | null;
+  captureHint?: ReceiptCaptureHint;
+}
+
 /** A receipt file behind the M6 signed-URL pipeline, in its own table so Malafat's attachment routes can never reach it (MUT-42 D1). */
-export interface ExpenseReceiptRecord {
+export interface ExpenseReceiptRecord extends ReceiptReadState {
   id: string;
   organizationId: string;
   /** MUT-255: null while the receipt waits in the library as To review. */
@@ -2987,6 +3027,8 @@ export interface CreateExpenseReceiptInput {
   suggested?: ReceiptSuggestion | null;
   uploadedByUserId: string;
   requestId: string | null;
+  /** MUT-441: absent = PHOTO. */
+  captureHint?: ReceiptCaptureHint;
 }
 
 export interface ReceiptLibraryFilter {
@@ -3062,8 +3104,36 @@ export interface ExpenseReceiptRepository {
   getById(organizationId: string, id: string): Promise<ExpenseReceiptRecord | null>;
   /** READY, live receipts of one expense, oldest first. */
   listByExpense(organizationId: string, expenseId: string): Promise<ExpenseReceiptRecord[]>;
-  complete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
+  /**
+   * PENDING_UPLOAD → READY. MUT-441 (R10 #5): `read` is the reading state set in the same UPDATE, only when this call
+   * makes the receipt READY (PENDING also stamps `readRequestedAt`); absent leaves it as it is (NONE).
+   */
+  complete(organizationId: string, id: string, at: Date, read?: ReceiptReadRequest): Promise<ExpenseReceiptRecord | null>;
   softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
+  /**
+   * MUT-441: take the read of one receipt, atomically: a PENDING receipt whose lease is free (never taken, or
+   * expired) gets `readLeaseUntil = now + leaseMs` and one more attempt. `busy`: someone holds a live lease; `none`:
+   * no such receipt, or it is not PENDING. Any profile (a job, not a person's request); a soft-deleted receipt is
+   * claimed with its `deletedAt`. Never bumps `version`, so a person's open edit stays current.
+   */
+  claimRead(id: string, now: Date, leaseMs: number): Promise<ClaimReadResult>;
+  /** MUT-441: give a PENDING receipt's lease back after a failure worth retrying, so the next try may claim at once. */
+  releaseRead(id: string): Promise<void>;
+  /**
+   * MUT-441: end the read of a PENDING receipt and free its lease. A DONE with `suggested` writes it (the caller
+   * merged it fill-absent onto the record at `expectedVersion`) and bumps `version`, only at that version; any other
+   * outcome writes only the state. A deleted or FILED receipt becomes SKIPPED and is given no suggestion (F8: a read
+   * that lands after filing writes nothing). `stale`: the version moved (the person edited); merge again onto `record`.
+   */
+  finishRead(id: string, expectedVersion: number, outcome: FinishReadOutcome): Promise<FinishReadResult>;
+  /** MUT-441: PENDING receipts whose lease is free (never taken, or expired), oldest request first: the sweep's work. */
+  listPendingForSweep(now: Date, limit: number): Promise<ExpenseReceiptRecord[]>;
+  /**
+   * MUT-441 (R5): when a person is granted `receipt_reading`, the To-review READY receipts they uploaded (on one
+   * profile, or all) whose suggestion is missing a field and which were never asked to be read (NONE) become PENDING,
+   * requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
+   */
+  markBacklogPending(scope: { userId: string; organizationId?: string }, now: Date): Promise<string[]>;
   /**
    * MUT-270: READY, live receipts per expense, the same rule as `listByExpense`. Expenses with none are absent from
    * the map. The caller passes organizations the person belongs to; the expense ids come from those organizations.
@@ -3076,14 +3146,15 @@ export interface ExpenseReceiptRepository {
   /** MUT-255: live PENDING_UPLOAD receipts created at or after `since` (the per-profile upload cap). */
   countPendingSince(organizationId: string, since: Date): Promise<number>;
   /**
-   * MUT-255: replace a To-review receipt's suggestion, optimistically. `not_found` also covers a filed receipt's
-   * id being absent; a FILED receipt answers `filed`.
+   * MUT-255: set a To-review receipt's suggestion, optimistically. Since MUT-441 (R7) it fills only the fields the
+   * stored one lacks (`fillAbsent`). `not_found` also covers a filed receipt's id being absent; a FILED receipt
+   * answers `filed`.
    */
   setSuggested(organizationId: string, id: string, expectedVersion: number, suggested: ReceiptSuggestion): Promise<UpdateResult<ExpenseReceiptRecord> | { kind: 'filed' }>;
   /**
    * MUT-255 approve, one transaction: lock the receipt; refuse unless it is READY, live and To review; create the
    * expense; then move the receipt to FILED with what was approved (and the request's suggestion, when it carries
-   * one). If that last update matches no row the transaction throws, so no expense is left behind. MUT-307's
+   * one, filling only the stored one's absent fields: MUT-441 R7). If that last update matches no row the transaction throws, so no expense is left behind. MUT-307's
    * approval and MUT-312's closed-month check plug in between the lock and the insert.
    */
   fileAsExpense(params: { organizationId: string; receiptId: string; userId: string; expense: CreateExpenseInput; approved: ApprovedReceiptFields; suggested?: ReceiptSuggestion }, at: Date): Promise<FileReceiptResult>;
@@ -3091,7 +3162,8 @@ export interface ExpenseReceiptRepository {
    * MUT-389, one transaction: the same receipt lock and refusals as `fileAsExpense`; then lock the expense (live, on
    * this profile) and refuse it once it holds `maxReceipts` READY receipts; then move the receipt to FILED on it. No
    * expense field changes and nothing is approved: `approved` keeps whatever an earlier approval left. A sent
-   * suggestion replaces the stored one, except on a receipt that keeps an earlier approval: that pair stays as approved.
+   * suggestion fills the stored one's absent fields (MUT-441 R7), except on a receipt that keeps an earlier approval:
+   * that pair stays as approved.
    */
   fileOntoExpense(params: { organizationId: string; receiptId: string; expenseId: string; maxReceipts: number; suggested?: ReceiptSuggestion }): Promise<FileOntoExpenseResult>;
   /**

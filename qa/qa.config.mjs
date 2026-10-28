@@ -203,10 +203,16 @@ export default {
         // MUT-482: the summaries Malafat reads with an API key, checked on the live API.
         'server/src/summaries/compute.ts',
         'server/src/routes/summaries.ts',
+        // MUT-441: the server reads receipts on its own receipt-ocr sidecar (selfservice-live.mjs starts it).
+        'server/src/receipts/**',
+        'server/src/routes/receipt-reading.ts',
+        'server/ocr/app/**',
         '!src/hosted/**/__tests__/**',
         '!server/src/**/__tests__/**',
+        '!server/ocr/app/__pycache__/**',
       ],
-      // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both.
+      // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both,
+      // reading receipts on the receipt-ocr sidecar on :8792 (MUT-441; server/ocr/run_local.sh, needs Tesseract).
       // `localhost`, not 127.0.0.1: the passkey flows (MUT-115) need it as their WebAuthn RP ID.
       baseURL: 'http://localhost:8791',
       attachURL: 'http://localhost:8791',

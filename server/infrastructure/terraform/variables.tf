@@ -330,3 +330,32 @@ variable "android_sha256_fingerprints" {
   type        = string
   default     = ""
 }
+
+# MUT-441: the server reads receipts (receipt_ocr.tf).
+variable "server_ocr_enabled" {
+  description = "MUT-441: the receipt-ocr service, its locked network, the receipt-reads queue, the 5-minute sweep and their service accounts, and SERVER_OCR=true plus OCR_URL, READ_QUEUE, API_ORIGIN, READ_INVOKER_SA and SWEEP_INVOKER_SA on the API. false (default) = none of it exists and the API gets SERVER_OCR=false. Even on, a receipt reads only for an uploader granted receipt_reading in the operator console. First apply after MUT-487's project move (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "ocr_image_tag" {
+  description = "MUT-441: tag of the receipt-ocr image. null (default) = image_tag, the same commit as the API; deploy.sh passes it, and a rollback keeps the running one when the target commit has no OCR image (F6)."
+  type        = string
+  default     = null
+}
+
+variable "ocr_min_instances" {
+  description = "MUT-441 (R4): receipt-ocr instances kept warm. 0 (default) sleeps when idle; the first read after a quiet spell takes about 12–18 s. Set 1 (about $50–70 a month) when pilots complain or volume grows."
+  type        = number
+  default     = 0
+  validation {
+    condition     = var.ocr_min_instances >= 0 && var.ocr_min_instances <= 3
+    error_message = "ocr_min_instances must be 0 to 3 (the service's max instances)."
+  }
+}
+
+variable "ocr_subnet_cidr" {
+  description = "MUT-441 (R9): the receipt-ocr subnet Direct VPC egress takes instance IPs from. /26 or larger; it connects to nothing, so any private range the project doesn't use."
+  type        = string
+  default     = "10.80.0.0/26"
+}

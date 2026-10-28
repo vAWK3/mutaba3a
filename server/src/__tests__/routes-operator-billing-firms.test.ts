@@ -130,7 +130,7 @@ describe('MUT-462 feature flags on an account', () => {
     const p = await person(h);
 
     const view = await read(await get(h, `/v1/operator/accounts/${p.id}`, op.token));
-    expect(view.account.availableFeatures).toEqual(['agent_access']);
+    expect(view.account.availableFeatures).toEqual(['agent_access', 'receipt_reading']);
 
     const on = await send(h, 'PUT', accountPath(p.id, 'features/agent_access'), op.token);
     expect(on.status).toBe(200);

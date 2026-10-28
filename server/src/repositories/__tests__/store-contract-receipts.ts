@@ -120,7 +120,7 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       expect(await store.expenseReceipts.countPendingSince(w.b.id, at(0))).toBe(0);
     });
 
-    it('replaces a To-review suggestion optimistically; refuses a stale version and a filed receipt', async () => {
+    it('sets a To-review suggestion optimistically (fill-absent, MUT-441 R7); refuses a stale version and a filed receipt', async () => {
       const store = await makeStore();
       const w = await world(store);
       const r = await w.ready();
@@ -148,7 +148,7 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       expect((await store.expenses.list(w.a.id, {}, { limit: 10, cursor: null })).items).toHaveLength(1);
     });
 
-    it('stores the suggestion sent with the approval, replacing the upload-time one', async () => {
+    it('fills the upload-time suggestion with the one sent with the approval (MUT-441 R7: absent fields only)', async () => {
       const store = await makeStore();
       const w = await world(store);
       const r = await w.ready({ suggested: { readerVersion: 'old' } });
@@ -205,7 +205,7 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
         expect(await store.expenseReceipts.countByFilingStatus(w.a.id)).toEqual({ toReview: 0, filed: 1 });
       });
 
-      it('replaces the stored suggestion with one sent at review time', async () => {
+      it('fills the stored suggestion with one sent at review time (MUT-441 R7: absent fields only)', async () => {
         const store = await makeStore();
         const w = await world(store);
         const e = await store.expenses.create(w.expense(), at(1));
@@ -450,6 +450,63 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
         fields: { date: { suggested: 3, edited: 0 }, amount: { suggested: 3, edited: 2 }, currency: { suggested: 3, edited: 1 }, vendor: { suggested: 0, edited: 0 } },
         amountAndDate: { suggested: 3, unedited: 1 },
       });
+    });
+  });
+
+  describe(`${name} LedgerStore receipts: server reading state (MUT-441)`, () => {
+    it('keeps how a receipt was captured; absent means a photo, and nothing is being read yet', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const scanned = await store.expenseReceipts.create(w.upload({ captureHint: 'SCANNED' }), at(1));
+      expect(scanned.captureHint).toBe('SCANNED');
+      expect((await store.expenseReceipts.getById(w.a.id, scanned.id))?.captureHint).toBe('SCANNED');
+      const photo = await w.ready({}, 2);
+      // Memory (local mode) leaves the server-only fields off a record (MUT-436's pattern); both read the same.
+      expect(photo.captureHint ?? 'PHOTO').toBe('PHOTO');
+      expect(photo.readStatus ?? 'NONE').toBe('NONE');
+      expect(photo.readAttempts ?? 0).toBe(0);
+      expect(photo.readLeaseUntil ?? null).toBeNull();
+      expect(photo.readRequestedAt ?? null).toBeNull();
+      expect(photo.readFailReason ?? null).toBeNull();
+    });
+
+    // R7 (Basel, 2026-10-28): every writer fills only absent fields; what the server read is never replaced.
+    const serverRead: ReceiptSuggestion = {
+      readerVersion: 'server-ocr-test-1',
+      date: { value: '2026-10-21', source: 'ocr', confidence: 0.9 },
+      totalMinor: { value: '1500', source: 'ocr', confidence: 0.88 },
+    };
+    const clientRead: ReceiptSuggestion = {
+      readerVersion: 'phone-2.0',
+      totalMinor: { value: '9900', source: 'ocr', confidence: 0.99 },
+      vendorName: { value: 'Cafe', source: 'ocr', confidence: 0.8 },
+    };
+    const merged: ReceiptSuggestion = { ...serverRead, readerVersion: 'phone-2.0', vendorName: clientRead.vendorName };
+
+    it('setSuggested fills only the absent fields of the stored suggestion', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const r = await w.ready({ suggested: serverRead });
+      const updated = await store.expenseReceipts.setSuggested(w.a.id, r.id, r.version, clientRead);
+      expect(updated).toMatchObject({ kind: 'updated', record: { suggested: merged, version: r.version + 1 } });
+      expect((await store.expenseReceipts.getById(w.a.id, r.id))?.suggested).toEqual(merged);
+    });
+
+    it('approval with a suggestion keeps what the server read and adds only what it lacked', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const r = await w.ready({ suggested: serverRead });
+      const result = await store.expenseReceipts.fileAsExpense({ organizationId: w.a.id, receiptId: r.id, userId: w.user.id, expense: w.expense(), approved: w.approved(), suggested: clientRead }, at(9));
+      expect(result.kind === 'filed' && result.receipt.suggested).toEqual(merged);
+    });
+
+    it('filing onto an expense with a suggestion keeps what the server read and adds only what it lacked', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense(), at(1));
+      const r = await w.ready({ suggested: serverRead }, 2);
+      const result = await store.expenseReceipts.fileOntoExpense({ organizationId: w.a.id, receiptId: r.id, expenseId: e.id, maxReceipts: 10, suggested: clientRead });
+      expect(result.kind === 'filed' && result.receipt.suggested).toEqual(merged);
     });
   });
 }

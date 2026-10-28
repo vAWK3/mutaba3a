@@ -143,6 +143,23 @@ const envSchema = z.object({
    * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
    */
   RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, a receipt reads only for an
+   * uploader granted `receipt_reading`. Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
+   * server_ocr_enabled). Only "true" turns it on, as above.
+   */
+  SERVER_OCR: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-441: the receipt-ocr service (https on Cloud Run, called with an ID token; or a local sidecar on http://localhost). */
+  OCR_URL: z.string().url().refine(isHttpsOrLocalHttp, 'must be https, or http on localhost').optional(),
+  /** MUT-441 (F3): the Cloud Tasks queue for reads, projects/<p>/locations/<l>/queues/<q>. Unset = reads run in this process (dev, QA). */
+  READ_QUEUE: z.string().regex(/^projects\/[^/]+\/locations\/[^/]+\/queues\/[^/]+$/, 'must be projects/<project>/locations/<location>/queues/<queue>').optional(),
+  /** MUT-441: this API's own origin, which read tasks POST to (<origin>/jobs/v1/receipts/read). */
+  API_ORIGIN: z.string().url().refine(isHttpsOrLocalHttp, 'must be https, or http on localhost').optional(),
+  /** MUT-441 (R8): the service account read tasks carry an OIDC token for (the queue's), and the sweep Scheduler's. */
+  READ_INVOKER_SA: z.string().email().optional(),
+  SWEEP_INVOKER_SA: z.string().email().optional(),
+  /** MUT-441 (R8): the audience the read job's OIDC tokens must name. Unset = API_ORIGIN. */
+  READ_OIDC_AUDIENCE: z.string().url().optional(),
   // MUT-436 (review D3/D5): an agent may add to the inbox only once the phone decodes 'mcp' and its minimum build is raised.
   MCP_INBOX_WRITES: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
@@ -218,6 +235,11 @@ const envSchema = z.object({
    * staging. Unset = the product limit.
    */
   QA_MAX_OWNED_PROFILES: z.coerce.number().int().min(6).max(1000).optional(),
+  /**
+   * MUT-441: local QA only. How long an in-process read waits before it starts, standing in for Cloud Tasks' dispatch
+   * and a cold start, so the release-QA spec can see the portal's "Reading…" state. Refused in production and staging.
+   */
+  QA_READ_DELAY_MS: z.coerce.number().int().min(0).max(60_000).optional(),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -292,6 +314,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (config.STRIPE_SECRET_KEY && config.API_KEY_ENVIRONMENT === 'live' && !/^rk_live_/.test(config.STRIPE_SECRET_KEY)) {
     throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live server needs a restricted live key (rk_live_…), never sk_ or a test key');
   }
+  receiptReadingConfig(config);
   if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     throw new ConfigError(`Invalid configuration:\n  QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only, never ${config.NODE_ENV}`);
   }
@@ -303,6 +326,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
   }
   return { ...config, ...attachments, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
+}
+
+/** MUT-441: the refusals for the server's receipt reader (the kill switch, the queue and the job's OIDC check). */
+function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
+  const refuse = (name: string, why: string): never => {
+    throw new ConfigError(`Invalid configuration:\n  ${name}: ${why}`);
+  };
+  if (config.SERVER_OCR && !config.OCR_URL) refuse('OCR_URL', 'SERVER_OCR needs the OCR service\'s URL');
+  if (config.SERVER_OCR && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.READ_QUEUE) {
+    refuse('READ_QUEUE', `SERVER_OCR on ${config.NODE_ENV} reads through Cloud Tasks; in-process reads are for the dev server and local QA only`);
+  }
+  if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);
+  }
+  if (config.READ_QUEUE) {
+    for (const name of ['API_ORIGIN', 'READ_INVOKER_SA'] as const) if (!config[name]) refuse(name, 'READ_QUEUE needs it: read tasks POST to API_ORIGIN with an OIDC token for READ_INVOKER_SA');
+  }
+}
+
+/** MUT-441 (R8): the read job's audience; unset = the API's own origin. */
+export function readOidcAudience(config: Pick<Config, 'READ_OIDC_AUDIENCE' | 'API_ORIGIN'>): string | undefined {
+  return config.READ_OIDC_AUDIENCE ?? config.API_ORIGIN;
 }
 
 /** MUT-367 (D3): the fixture would let anyone choose their own verdict, so production always asks DNS and RDAP. */

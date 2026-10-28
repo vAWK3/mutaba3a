@@ -41,6 +41,7 @@ import type {
   ProfileOwnerEntry,
   ProjectRecord,
   ReceiptLibraryItem,
+  ReceiptReadStatus,
   ReceivableRecord,
   RetainerChargeRecord,
   SupplementRecord,
@@ -601,7 +602,16 @@ export function serializeExpenseReceipt(r: ExpenseReceiptRecord) {
     uploadedByUserId: r.uploadedByUserId,
     createdAt: r.createdAt.toISOString(),
     completedAt: iso(r.completedAt),
+    reading: readingOf(r.readStatus),
   };
+}
+
+/** MUT-441: the wire's `reading`: the states a client acts on; NONE, SKIPPED and a local-mode record (no state) are null. */
+function readingOf(status: ReceiptReadStatus | undefined): 'pending' | 'done' | 'failed' | null {
+  if (status === 'PENDING') return 'pending';
+  if (status === 'DONE') return 'done';
+  if (status === 'FAILED') return 'failed';
+  return null;
 }
 
 /** MUT-464: `c` as `displayCategoryNames` gives it — the name in the viewer's language, and the preset entry it is. */

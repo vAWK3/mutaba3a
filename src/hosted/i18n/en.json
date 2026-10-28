@@ -1013,6 +1013,7 @@
       "upload": "Upload receipt",
       "uploading": "Uploading…",
       "uploadingName": "Uploading {name}",
+      "reading": "Reading…",
       "status": {
         "to_review": "To review",
         "filed": "Filed",
@@ -1063,6 +1064,7 @@
         "fromReceiptUnsure": "From the receipt — check it",
         "receiptSays": "The receipt says {currency} {amount}",
         "receiptSaysCurrency": "The receipt says {currency}",
+        "reading": "Reading the receipt…",
         "approve": "Approve and file",
         "approving": "Filing…",
         "next": "Next receipt",

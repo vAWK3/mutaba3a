@@ -76,6 +76,12 @@ export function ReceiptCard({ profileId, item, to }: ReceiptCardProps) {
           <span className={`hp-receipt-chip hp-receipt-chip-${status}`}>{t(`hosted.receipts.status.${status}`)}</span>
           <span className="hp-receipt-card-day">{formatDay(item.receivedOn, language)}</span>
         </span>
+        {/* MUT-441: the server is reading it (the review page fills in when it's done). */}
+        {item.reading === 'pending' && (
+          <span className="hp-receipt-card-meta">
+            <span className="hp-receipt-card-day">{t('hosted.receipts.reading')}</span>
+          </span>
+        )}
         {item.expense && (
           <span className="hp-receipt-card-expense">
             {item.expense.vendor || item.expense.title ? <bdi>{item.expense.vendor ?? item.expense.title}</bdi> : null}

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadConfig } from '../config.js';
+import { ConfigError, loadConfig, readOidcAudience } from '../config.js';
 import { UNOWNED_DOMAINS } from '../email/ports.js';
 
 const base = {
@@ -162,6 +162,44 @@ describe('loadConfig — receipts library switch (MUT-389)', () => {
 
   it.each(['1', 'yes', 'TRUE', ''])('refuses RECEIPTS_LIBRARY=%j', (value) => {
     expect(() => loadConfig({ ...base, RECEIPTS_LIBRARY: value })).toThrow(/RECEIPTS_LIBRARY/);
+  });
+});
+
+describe('loadConfig — the server reads receipts (MUT-441)', () => {
+  const queue = 'projects/p/locations/me-west1/queues/receipt-reads';
+  const deployed = { ...base, NODE_ENV: 'production', SERVER_OCR: 'true', OCR_URL: 'https://receipt-ocr.example.run.app', READ_QUEUE: queue, API_ORIGIN: 'https://api.example.test', READ_INVOKER_SA: 'reads@p.iam.gserviceaccount.com' };
+
+  it('is off by default, and only "true" turns it on', () => {
+    expect(loadConfig(base).SERVER_OCR).toBe(false);
+    expect(() => loadConfig({ ...base, SERVER_OCR: 'yes' })).toThrow(/SERVER_OCR/);
+  });
+
+  it('needs OCR_URL, https or a local http sidecar', () => {
+    expect(() => loadConfig({ ...base, SERVER_OCR: 'true' })).toThrow(/OCR_URL/);
+    expect(loadConfig({ ...base, SERVER_OCR: 'true', OCR_URL: 'http://localhost:8790' }).OCR_URL).toBe('http://localhost:8790');
+    expect(() => loadConfig({ ...base, SERVER_OCR: 'true', OCR_URL: 'http://ocr.example.test' })).toThrow(/OCR_URL/);
+  });
+
+  it('a deployed service reads through Cloud Tasks only: READ_QUEUE, with API_ORIGIN and READ_INVOKER_SA', () => {
+    expect(loadConfig(deployed).READ_QUEUE).toBe(queue);
+    expect(() => loadConfig({ ...deployed, READ_QUEUE: undefined })).toThrow(/READ_QUEUE/);
+    expect(() => loadConfig({ ...deployed, API_ORIGIN: undefined })).toThrow(/API_ORIGIN/);
+    expect(() => loadConfig({ ...deployed, READ_INVOKER_SA: undefined })).toThrow(/READ_INVOKER_SA/);
+    expect(() => loadConfig({ ...deployed, READ_QUEUE: 'receipt-reads' })).toThrow(/READ_QUEUE/);
+  });
+
+  it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {
+    expect(loadConfig(base).QA_READ_DELAY_MS).toBeUndefined();
+    expect(loadConfig({ ...base, QA_READ_DELAY_MS: '5000' }).QA_READ_DELAY_MS).toBe(5000);
+    expect(() => loadConfig({ ...base, QA_READ_DELAY_MS: '-1' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...base, QA_READ_DELAY_MS: '60001' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...deployed, QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
+  });
+
+  it('the read job\'s audience defaults to API_ORIGIN', () => {
+    expect(readOidcAudience(loadConfig(deployed))).toBe('https://api.example.test');
+    expect(readOidcAudience(loadConfig({ ...deployed, READ_OIDC_AUDIENCE: 'https://other.example.test' }))).toBe('https://other.example.test');
   });
 });
 

@@ -4,6 +4,7 @@ import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, todayFor, validationError } from '../agreements/compose.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { ApiError } from '../errors.js';
+import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
 import { completeLibraryReceipt, MAX_PENDING_LIBRARY_UPLOADS, receiptAudit, signReceiptUpload, startLibraryReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
 import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
@@ -44,6 +45,8 @@ export interface ReceiptRouteOptions {
   urlTtlSeconds: number;
   /** Per-person budget for starting uploads (decision P3). */
   uploadLimiter: RateLimiter;
+  /** MUT-441: the server's reader while SERVER_OCR is on; absent = receipts are not read. */
+  reading?: ReceiptReadTrigger | null;
 }
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -76,7 +79,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
     return receipt;
   }
 
-  const receiptDeps: ReceiptDeps = { store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds };
+  const receiptDeps: ReceiptDeps = { store, storage: options.storage, urlTtlSeconds: options.urlTtlSeconds, reading: options.reading ?? null };
 
   function receiptActor(c: Context<AppEnv>): ReceiptActor {
     const { organization, user } = sessionAuth(c);
@@ -249,12 +252,13 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       method: 'patch',
       path: '/v1/receipts/{receiptId}/suggestion',
       tags: ['Receipts'],
-      summary: "Replace what the device's reader suggested (optimistic, If-Match)",
-      description: 'To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Unknown fields in the suggestion are dropped, not refused.',
+      summary: "Add to what was read off the receipt (optimistic, If-Match)",
+      description:
+        "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.84.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.",
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ReceiptIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(ReceiptSuggestionSchema) },
-      responses: { 200: { description: 'Replaced', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+      responses: { 200: { description: 'Updated', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
       storage();

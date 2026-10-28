@@ -102,7 +102,11 @@ resource "google_project_service" "apis" {
     "storage.googleapis.com",
     "iamcredentials.googleapis.com",
     "cloudscheduler.googleapis.com",
-  ], local.cmek_enabled ? ["cloudkms.googleapis.com"] : []))
+    ],
+    local.cmek_enabled ? ["cloudkms.googleapis.com"] : [],
+    # MUT-441: the read queue, and the sidecar's locked network (receipt_ocr.tf).
+    local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
+  ))
   project            = var.project_id
   service            = each.key
   disable_on_destroy = false
@@ -713,6 +717,15 @@ resource "google_cloud_run_v2_service" "api" {
       # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
       dynamic "env" {
         for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
+      # MUT-441: the server reads receipts (receipt_ocr.tf); SERVER_OCR=false and nothing else until server_ocr_enabled.
+      dynamic "env" {
+        for_each = local.ocr_api_env
         content {
           name  = env.key
           value = env.value

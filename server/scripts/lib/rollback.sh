@@ -15,6 +15,9 @@
 #          images from MUT-148 on, whose /health reports it.
 # The hosted portal rolls back with the image. A phone build that calls an endpoint newer than the commit gets
 # 404s until you roll forward.
+# MUT-441 (F6): while server_ocr_enabled, the receipt-ocr service rolls back to the commit's own receipt-ocr image;
+# a commit without a usable one (older than MUT-441, or built while the flag was off) keeps the running image. The
+# sidecar's /v1/read is versioned, so either side rolls alone (lib/receipt-ocr.sh).
 
 # MUT-148's first commit: /health reports errorReporting from here on (smoke --expect-error-reporting).
 ROLLBACK_MUT148_COMMIT="21f1d467"
@@ -38,13 +41,15 @@ rollback_deployed_tag() {
   printf '%s\n' "${tag}"
 }
 
-# rollback_infra_gate <deployed tag>: terraform apply -var image_tag=<old> also applies this checkout's main.tf
-# and tfvars. Plan them at the tag that serves now: anything but "no changes" means this checkout's
-# infrastructure differs from what is deployed, and the rollback would ship that difference too. Run in TF_DIR.
+# rollback_infra_gate <deployed tag> [<deployed receipt-ocr tag>]: terraform apply -var image_tag=<old> also applies
+# this checkout's main.tf and tfvars. Plan them at the tags that serve now: anything but "no changes" means this
+# checkout's infrastructure differs from what is deployed, and the rollback would ship that difference too. Run in TF_DIR.
 rollback_infra_gate() {
-  local deployed="$1" out rc=0
+  local deployed="$1" deployed_ocr="${2:-}" out rc=0 ocr_args=()
+  [[ -n "${deployed_ocr}" ]] && ocr_args=(-var "ocr_image_tag=${deployed_ocr}")
   out="$(mktemp "${TMPDIR:-/tmp}/rollback-plan-XXXX")"
-  terraform plan -detailed-exitcode -input=false -no-color -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${deployed}" >"${out}" 2>&1 || rc=$?
+  terraform plan -detailed-exitcode -input=false -no-color -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${deployed}" \
+    ${ocr_args[@]+"${ocr_args[@]}"} >"${out}" 2>&1 || rc=$?
   case "${rc}" in
     0) rm -f "${out}"; info "infra-drift gate: this checkout's terraform matches what serves ${deployed}" ;;
     2) grep -E '^  # |^Plan:' "${out}" >&2 || cat "${out}" >&2
@@ -78,7 +83,7 @@ rollback_expects_error_reporting() {
 # are read by deploy.sh's apply_release, smoke_release and start_proxy.
 # shellcheck disable=SC2034
 rollback_main() {
-  local commit tag deployed deployed_commit
+  local commit tag deployed deployed_commit deployed_ocr="" ocr_tag
   [[ -z "${IMAGE_TAG:-}" ]] || die "ROLLBACK_TO and IMAGE_TAG are both set: a rollback deploys the commit's existing image, so unset IMAGE_TAG"
   need gcloud "https://cloud.google.com/sdk/docs/install"
   need cloud-sql-proxy "brew install cloud-sql-proxy"
@@ -120,7 +125,16 @@ rollback_main() {
   fi
   TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${tag}")
   APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
-  (cd "${TF_DIR}" && rollback_infra_gate "${deployed}")
+  # MUT-441 (F6): pin receipt-ocr too, to the commit's image or, when it has none, the one that serves.
+  pushd "${TF_DIR}" >/dev/null || die "cannot enter ${TF_DIR}"
+  ocr_read_enabled "${TF_ARGS[@]}"
+  popd >/dev/null || die "cannot leave ${TF_DIR}"
+  if [[ "${OCR_ENABLED}" == "true" ]]; then
+    deployed_ocr="$(ocr_deployed_tag "receipt-ocr${SUFFIX}" "${GCP_REGION}" "${GCP_PROJECT_ID}")"
+    ocr_tag="$(ocr_rollback_tag "${commit}" "${deployed_ocr}" "${REGISTRY}/receipt-ocr")"
+    TF_ARGS+=(-var "ocr_image_tag=${ocr_tag}")
+  fi
+  (cd "${TF_DIR}" && rollback_infra_gate "${deployed}" "${deployed_ocr}")
   guard_release
   # guard_release runs in a subshell, so SENTRY_ENABLED never reaches here from it: read it at the top level,
   # as deploy.sh's step 0 does, or smoke would expect error reporting off on a service that has it on.

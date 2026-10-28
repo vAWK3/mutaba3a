@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { ApiError, api, type ApproveReceiptRequest, type ExpenseDetail, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
+import { useMutation, useQuery, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query';
+import { ApiError, api, type ApproveReceiptRequest, type ExpenseDetail, type ExpenseReceipt, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
 import { profileKey } from '../session/me';
 import { useCursorList } from './queries';
 import { expenseKey, invalidateExpenses } from './expenseQueries';
@@ -65,13 +65,59 @@ export function useReceiptsAvailability(profileId: string): { availability: Rece
   return { availability: 'checking', toReview: null };
 }
 
+/** MUT-441 §4: while the server reads a receipt, its page re-reads it this often, for at most this long. */
+export const READING_POLL_MS = 3_000;
+export const READING_POLL_MAX_MS = 120_000;
+
+type ReceiptQuery = Query<ExpenseReceipt, Error, ExpenseReceipt, readonly unknown[]>;
+
+/** When each receipt query was first seen `pending`, on the wall clock, so the two minutes survive a remount. */
+const pendingSince = new WeakMap<ReceiptQuery, number>();
+
+/**
+ * Whether the two minutes since the query was first seen pending are up. Wall time, not `dataUpdatedAt`: a refetch
+ * that fails leaves `dataUpdatedAt` where it was, which would never reach the limit (MUT-441 review).
+ */
+function readingTimedOut(query: ReceiptQuery): boolean {
+  const since = pendingSince.get(query);
+  return since !== undefined && Date.now() - since >= READING_POLL_MAX_MS;
+}
+
+function readingPoll(query: ReceiptQuery): number | false {
+  if (query.state.data?.reading !== 'pending') {
+    pendingSince.delete(query);
+    return false;
+  }
+  if (!pendingSince.has(query)) pendingSince.set(query, Date.now());
+  // A refetch that failed (a 404, or retries used up) stops the polling; the form stays usable as it is.
+  if (query.state.status === 'error') return false;
+  return readingTimedOut(query) ? false : READING_POLL_MS;
+}
+
+/**
+ * One receipt. MUT-441: polls while the server reads it (`reading: 'pending'`) and stops two minutes after first
+ * seeing that, or once a refetch fails; `readingShown` is false after that too, so the page just shows the form. When
+ * the reading ends, the gallery's lists refresh (their cards say "Reading…"). Local mode and unread receipts answer
+ * null: no polling.
+ */
 export function useReceipt(profileId: string, receiptId: string) {
-  return useQuery({
-    queryKey: receiptKey(profileId, receiptId),
-    queryFn: () => api.getReceipt(profileId, receiptId),
+  const queryClient = useQueryClient();
+  const key = receiptKey(profileId, receiptId);
+  const query = useQuery({
+    queryKey: key,
+    queryFn: async () => {
+      const before = queryClient.getQueryData<ExpenseReceipt>(key)?.reading;
+      const receipt = await api.getReceipt(profileId, receiptId);
+      if (before === 'pending' && receipt.reading !== 'pending') void queryClient.invalidateQueries({ queryKey: receiptsKey(profileId, 'list') });
+      return receipt;
+    },
     staleTime: RECEIPT_STALE_MS,
     retry: (failures, error) => !(error instanceof ApiError && error.status === 404) && failures < 2,
+    refetchInterval: readingPoll,
   });
+  const cached = queryClient.getQueryCache().find<ExpenseReceipt>({ queryKey: key, exact: true }) as ReceiptQuery | undefined;
+  const readingShown = query.data?.reading === 'pending' && !query.isError && !(cached && readingTimedOut(cached));
+  return { ...query, readingShown };
 }
 
 /** A3: the receipt as the gallery last listed it (with its linked expense), from any loaded page. */
