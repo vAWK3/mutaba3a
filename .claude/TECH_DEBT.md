@@ -18,6 +18,30 @@
 
 ## Open Debt
 
+### TD-278: Server receipt reading's speed and cold start are unmeasured on Cloud Run
+**Status**: Open (MUT-441, 2026-10-28; ADR-220)
+- **What:** AC6's warm p95 (about 1.1–1.35 s) and the cold start (1.5 s to ready) were measured on a shared Mac, not on `receipt-ocr`'s 4 vCPU / 4 GiB Cloud Run instances. The plan's cold-start estimate (12–18 s with `startup_cpu_boost`) and the cost per 1,000 reads (`.claude/designs/mut-441-bench.md`) are estimates until then.
+- **Why it's acceptable:** the service ships dark, and its first production apply waits for MUT-487 (D6).
+- **Fix:** after MUT-487, measure warm p50/p95 from the sidecar's `totalMs` logs and the first read after scale-to-zero; try `OCR_THREADS=4`; quote the matching cost row; set `min_instances = 1` if pilots complain about the wait (R4).
+
+### TD-277: The receipt extractor's rule weights are untuned on real receipts; the Hebrew bar is provisional
+**Status**: Open (MUT-441, 2026-10-28; ADR-220)
+- **What:** `server/src/receipts/extract/**` was tuned on the 50 synthetic MUT-253 fixtures only (Hebrew photos n=12). `~/Work/Barmajiyat/Mutaba3a/receipt-bench/` has no real receipts yet, so AC1's Hebrew result, the 0.6 field threshold and the keyword and arithmetic weights are unproven on real paper.
+- **Why it's acceptable:** wrong-and-confident is 0 on the set, and a field below the threshold stays empty for the person to type.
+- **Fix:** drop real receipts in `receipt-bench/`, run `server/ocr/bench/run.py`, correct `manifest.draft.json`, re-score (`--rescore`) and tune with tests first.
+
+### TD-276: The receipts gallery doesn't poll; a card says "Reading…" until the list refetches
+**Status**: Open (MUT-441, 2026-10-28; ADR-220)
+- **What:** only the review page polls (`useReceipt`, 3 s, at most 2 minutes). A gallery card's "Reading…" stays until the list is refetched (focus, a new upload, or the review page seeing the read finish).
+- **Why it's acceptable:** the card is a hint; opening it shows the current state and fills the form.
+- **Fix:** poll the list while any loaded item is `pending` (same 3 s / 2 minute bounds), or invalidate it from the review page's poll only.
+
+### TD-275: A client adding a field over a server read takes over the suggestion's readerVersion
+**Status**: Open (MUT-441, 2026-10-28; ADR-220 R7)
+- **What:** `readerVersion` belongs to the whole `ReceiptSuggestion`. When approve, file or `PATCH …/suggestion` fills a field the server's read left absent (fill-absent both ways), the stored version becomes the client's, though most fields came from `server-ocr-*`. Each field keeps its own `source`, but edit-rate reports that group by `readerVersion` would count those receipts under the client's reader.
+- **Why it's acceptable:** no client reader writes suggestions in production yet (MUT-256 and MUT-304 are decided after this ships, D7), and the fields' `source` keeps the truth.
+- **Fix:** a per-field `readerVersion`, or keep the first reader's version and add `alsoReadBy`, before a device reader ships beside the server.
+
 ### TD-273: The project summary leaves out a matter's Owed in another currency
 **Status**: Open (MUT-488, 2026-10-27, ADR-218)
 - **What:** `GET /v1/summaries/projects/{id}` and the customer summary's project rows count only receivables in the project's currency. A USD Owed on an ILS matter shows in the customer's USD block but on no project row, and the matter's status ignores it.

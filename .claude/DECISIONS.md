@@ -678,6 +678,7 @@ The superseded ADRs keep their text in place, so numbers and links stay stable; 
 | ADR-037 MUT-182 amendment, "an owned profile is never granted to or provisioned into another user" | ADR-099 | 2026-10-19 | MUT-300: an operator may convert an owned Business profile into a firm (ownership moves to an OWNER role). **Withdrawn 2026-10-20** (MUT-300 D4: firm features in place, no conversion; sharing decided in v3) |
 | MUT-298 intake decision 6, "the invite always yields a copyable link" (Jira, not an ADR) | ADR-099 | 2026-10-19 | MUT-299 D10: the link goes only to the invited email; the owner never sees it |
 | ADR-099 §8, "there is no server … reading" (the server part), and MUT-252's on-device-only reading | ADR-199 | 2026-10-26 | MUT-253: on-device engines miss some fields (Android Arabic dates, the browser); our own server re-reads the stored original with self-hosted OCR to fill only the empty fields. No LLM, no third party |
+| ADR-199 §1, "the device reads first, always" (the server only fills what the device left empty), and its consequence "the volume is bounded by misses" | ADR-220 | 2026-10-28 | MUT-441, Basel: the server reads every uploaded receipt that has no suggestion yet, for the phone and the portal; device readers (MUT-256, MUT-304) become optional and are decided after it ships. Still self-hosted, no LLM, no third party; fill-absent kept |
 
 ---
 
@@ -5321,7 +5322,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 ## ADR-199: The Server Re-Reads a Receipt With Self-Hosted OCR When the Device Leaves a Field Empty; Still No LLM, No Third Party (Amends ADR-099 §8 and MUT-252's On-Device-Only Reading; Epic MUT-252)
 
-**Status:** Accepted (2026-10-26, Basel chose option B, "self-hosted server fallback", over staying device-only (A) and an LLM reader (C)). The engine and the trigger are decided in the follow-up story; this ADR sets the rules they must meet.
+**Status:** Accepted (2026-10-26, Basel chose option B, "self-hosted server fallback", over staying device-only (A) and an LLM reader (C)). The engine and the trigger are decided in the follow-up story; this ADR sets the rules they must meet. *§1 (device first) superseded 2026-10-28 by ADR-220: the server is the reader; §2–§7 stand.*
 
 **Context:** MUT-253 (spike, ADR-182 draft in `mutaba3a-flutter/docs/spikes/mut-253-ocr-engine.md`) picked on-device engines per platform. They pass the 85% amount/date bar on iOS in all three languages, but Android Arabic dates reach 78.6% (Arabic-Indic digits), and tesseract.js alone misses in the browser (MUT-304). Under D5 a missed field opens empty for the person to type. Every receipt's original is already uploaded and stored by us (`expense_receipts`, MUT-255; the inbox attachment, MUT-116), so reading it on our own server adds processing, not a new copy or a new recipient.
 
@@ -5776,3 +5777,38 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A stored ledger table maintained on every write. Rejected: a second source of truth for money that every writer would have to keep in step.
 - SQL window functions for the running balance. Rejected for now: local mode runs the memory store, so the JavaScript pass is needed anyway; it is the TD-271 upgrade path.
 - One sequence with no year (CHG-000123). Rejected by Basel: unlike PAY- numbers.
+
+## ADR-220: The Server Is the Receipt Reader (Amends ADR-199; MUT-441, Epic MUT-252)
+
+**Status:** Accepted (2026-10-28, Basel; MUT-441 plan and eng review R-D1, R-D2, R3–R10, D1–D7). Plan `.claude/designs/mut-441-server-ocr.md`, benchmark `.claude/designs/mut-441-bench.md`. Built, merged dark (`server_ocr_enabled = false`); API 1.84.0-mut441.
+
+**Override log (ADR-199):**
+- **What changes:** ADR-199 §1, "the device reads first, always; the server only fills what the device left empty", becomes: **the server reads every uploaded receipt that has no suggestion yet**, from the phone and the portal. The phone's Scan button (a Flutter ticket) only captures, straightens, cleans and uploads in grayscale (D4); it does no OCR.
+- **Why:** the device engines miss the bar where it matters (MUT-253: Android Arabic dates 78.6%; the browser alone misses more, MUT-304), two device engines are two rule sets to keep in step, and every original is already stored on our server, so reading it there adds processing, not a recipient. On the synthetic set the server reaches the bar in all three languages with no wrong-and-confident field.
+- **What replaces it:** this ADR. ADR-199 §2–§7 (self-hosted, only what is stored, a suggestion never a record, no new retention, commercial-safe licences, ships dark) stand unchanged.
+- **Date / who:** 2026-10-28, Basel.
+
+**Decision:**
+1. **Trigger (D1, R-D2, R8).** `complete` sets `readStatus = PENDING` in its own UPDATE and asks a `ReadDispatcher` to read (best effort; a failed enqueue is logged and the sweep catches it). Production uses Cloud Tasks; dev, tests and release-QA run the read in process (`InlineDispatcher`; config refuses it in production and staging). **One job route**, `POST /jobs/v1/receipts/read`: `{receiptId}` reads that receipt (a task), no body is the 5-minute Scheduler sweep, which only re-asks with tasks named `<receiptId>-<attempt>` and gives up (FAILED `exhausted`) after 3 attempts or 30 minutes. The route takes **only a Google-signed OIDC token** (audience = the API's URL, email = the queue's or the sweep's own service account), never the shared `X-Job-Token`, which would open `/jobs/v1/accounts/purge` to anyone who could read a task's headers. A 90 s lease (over the 60 s dispatch deadline) stops double reads; every end state answers 2xx.
+2. **The reader** is `receipt-ocr`, our own Cloud Run service (`server/ocr`, Python: RapidOCR PP-OCRv5 on ONNX Runtime beside Tesseract 5 ara/heb/eng fast; pypdfium2 for text-layer PDFs). **Decode caps (R3):** 40 MP checked from the header before decoding, 2 PDF pages and a rasterised-size cap, a 30 s deadline, one read per instance; too big or undecodable is a terminal FAILED `unreadable`. Cold start is min 0 instances plus `startup_cpu_boost` (R4); `min_instances = 1` is the upgrade if pilots find the first read slow.
+3. **Sandbox and egress lock (R9).** The service's account holds no roles; only the API's account may invoke it; non-root, read-only filesystem, models baked in. Direct VPC egress `ALL_TRAFFIC` into its own subnet with no Cloud NAT, no default route and a deny-all egress rule at priority 0; a tftest asserts all three. The API calls it with an ID token for its URL; a local http sidecar takes none.
+4. **Extraction in the API, in TypeScript (D2)**, pure functions under `server/src/receipts/extract/`; a field under 0.6 confidence stays empty (AC2). **JOD rule (Basel confirmed, 2026-10-28):** a receipt that names no currency at all, not even an unsupported one, and prints three or more amounts that all have three decimals is read as JOD (confidence 0.8); a receipt naming any currency is never guessed, and one three-decimal amount is not enough.
+5. **Fill-absent, both ways (R7).** The server fills only the fields the stored suggestion lacks; approve, file and `PATCH …/suggestion` likewise add only absent fields and never replace a server-read one. A read that adds nothing to a full suggestion is SKIPPED. A deleted, FILED or null-uploader receipt is SKIPPED (F5, F8): a late read writes nothing.
+6. **Gating (D3).** A deploy-level kill switch (`SERVER_OCR`, Terraform `server_ocr_enabled`, default false) **and** a per-user `receipt_reading` grant (operator console, ADR-216). Granting it queues that person's unread To-review receipts once (R5); nobody else's receipts are read.
+7. **No text kept or logged.** The sidecar logs counts and timings only and has no Sentry SDK; on the API every failure on the read path is rethrown as `OcrReadError(code)` with a fixed message and no `cause` (R10 #3). Only the suggested fields are stored (`readFailReason` holds a code).
+8. **Scope.** QR codes (ZATCA, Israeli e-invoices) are deferred to **MUT-490** (R-D1). **MUT-256** (phone reader) and **MUT-304** (browser OCR) are decided after this ships (D7). **Licences (AC7):** Basel accepted LGPL-2.1 for FFmpeg (inside opencv) and GEOS (inside shapely), dynamically linked; the CI check passes exactly those two and refuses AGPL and OpenRAIL revenue caps.
+9. **Deploy order (D6).** The first production apply that creates any of it comes **after MUT-487** moves the stack to its own project; every resource is named from `project_id`, so nothing is created in `malafat-production` only to be moved.
+
+**Consequences:**
+- Wire: receipts carry `reading: pending | done | failed | null`; uploads take an optional `capture: scanned | photo` (the phone's Scan skips the perspective step). The portal's review page polls while pending and fills only untouched fields (AC8).
+- Every receipt from a granted person costs a read (about $0.11–0.74 per 1,000 at list price, depending on Cloud Run's real speed), not only misses as ADR-199 expected; nothing while idle.
+- The privacy policy says receipts may be read on our own servers by software we run (AC9; draft pending Basel's wording approval).
+- Open debt: TD-275 (readerVersion per suggestion), TD-276 (gallery doesn't poll), TD-277 (extractor untuned on real receipts; Hebrew bar provisional), TD-278 (Cloud Run speed and cold start unmeasured until MUT-487).
+
+**Alternatives considered:**
+- Keep the device first and the server as fallback (ADR-199 as written). Rejected by Basel: two device engines that miss the bar, and the phone would still need an engine per platform.
+- Sweep only, no Cloud Tasks (D1 B). Rejected: 1–5 minutes before fields fill.
+- `X-Job-Token` on tasks (F2's first remedy). Superseded by R8: the shared token in task headers widens every job route.
+- Extraction inside the Python service (D2 B). Not taken: rules split from the rest of the stack; raw text crosses to the API in memory only and is never stored or logged.
+- An LLM or a third-party OCR API. Rejected, as in ADR-199.
+
