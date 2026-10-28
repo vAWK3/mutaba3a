@@ -1,6 +1,6 @@
 # MUT-481 — A receipt number on payments, carried on statement lines
 
-Status: PLAN (eng-ticket, 2026-10-28). Not built. Jira Backlog.
+Status: BUILT on feature/mut-481-receipt-number (2026-10-28). Migration 20261028190000; API 1.86.0-mut481; ADR-223; snapshot 11. Jira In Progress.
 Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → In Progress (eng-build) → In Review (qa-reconcile).
 Branch: `feature/mut-481-receipt-number` (worktree `.claude/worktrees/mut-481`), from main c4fb69ec.
 Numbers (next free at merge): API `1.86.0-mut481`, ADR-223, TD-282 onward, `CURRENT_STORE_SNAPSHOT_VERSION` 11.
