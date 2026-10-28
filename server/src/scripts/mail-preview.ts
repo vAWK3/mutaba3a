@@ -12,12 +12,13 @@ import type { UserLocale } from '../repositories/ports.js';
  * MUT-468: every mail in both languages, for review and for the client checks.
  *
  *   npm --prefix server run mail:preview
- *       Writes server/.mail-preview/: <id>.<locale>.html (pictures on, loaded from src/hosted/public/mail/v1 by
- *       relative path), <id>.<locale>.no-images.html, and index.html listing them. Open index.html in a browser.
+ *       Writes server/.mail-preview/: <id>.<locale>.html (pictures on, loaded from src/hosted/public<MAIL_ART_PATH>
+ *       by relative path), <id>.<locale>.no-images.html, and index.html listing them. Open index.html in a browser.
  *   npm --prefix server run mail:preview -- --send <address> --yes
  *       Sends each mail, both languages, through Resend to one inbox (Gmail, Apple Mail, Outlook checks). Without
  *       --yes it only says how many mails it would send, from which address, to whom. Needs
- *       RESEND_API_KEY, MAIL_FROM_ADDRESS and PORTAL_ORIGIN (a portal that already serves /mail/v1); WEBSITE_ORIGIN
+ *       RESEND_API_KEY, MAIL_FROM_ADDRESS and PORTAL_ORIGIN (a portal that already serves this branch's MAIL_ART_PATH: art in a
+ *       new folder shows broken until it is released); WEBSITE_ORIGIN
  *       optional. scripts/mail-preview.sh fills them from Secret Manager and config/hosts.json when unset.
  *       Bypasses the mailer's log and caps: it is an operator tool, one address, sample values only.
  */

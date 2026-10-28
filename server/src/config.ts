@@ -375,7 +375,7 @@ function mailConfig(config: z.infer<typeof envSchema>): { MAIL_DAILY_CAP: number
   // MUT-468: the mail art is served by the portal; without its origin every production mail would go out without it,
   // and anything but an https origin would point every mail at broken or mixed-content pictures.
   if (config.NODE_ENV === 'production' && config.MAILER === 'resend' && !(config.PORTAL_ORIGIN && isHttpsOrigin(config.PORTAL_ORIGIN))) {
-    refuse('PORTAL_ORIGIN', 'production mail needs an https origin with no path: the mail art is served from <PORTAL_ORIGIN>/mail/v1');
+    refuse('PORTAL_ORIGIN', 'production mail needs an https origin with no path: the mail art is served from <PORTAL_ORIGIN>/mail/v<N>');
   }
   if (config.RESEND_WEBHOOK_SECRET && !config.MAIL_FROM_ADDRESS) refuse('MAIL_FROM_ADDRESS', 'the Resend webhook keeps only events sent from this address\'s domain, so it needs it');
   for (const name of ['MAIL_FROM_ADDRESS', 'MAIL_REPLY_TO'] as const) {

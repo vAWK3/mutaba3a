@@ -87,7 +87,7 @@ describe('mailer (memory transport)', () => {
     await h.mailer.send(signup('Rana@Studio.Example'));
     const [mail] = h.transport.list();
     expect(mail!.html).toContain('<bdi dir="ltr">rana@studio.example</bdi>');
-    expect(mail!.html).toContain('src="https://app.example.test/mail/v1/mail-header-hello-spot-email-2x.png"');
+    expect(mail!.html).toContain('src="https://app.example.test/mail/v2/mail-header-hello-spot-email-2x.png"');
     expect(mail!.html).toContain('href="https://site.example.test/privacy?lang=en"');
     // Without the origins (development, tests) the mail has no pictures and no Privacy link.
     const bare = harness();

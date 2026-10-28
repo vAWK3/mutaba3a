@@ -5,7 +5,7 @@ import { stubTurnstile } from '../../support/turnstile';
 /**
  * MUT-468: the new mail frame, on the live dev API (support/selfservice-live.mjs). The API mails into its memory
  * outbox and serves the built portal on its own origin, which is also PORTAL_ORIGIN, so the mail's pictures load
- * from <origin>/mail/v1 exactly as they will from the production portal. The mail is opened in the page as a mail app would.
+ * from <origin>/mail/v2 exactly as they will from the production portal (MUT-484: transparent art). The mail is opened in the page as a mail app would.
  */
 
 const HEADLINE = 'خطوة أخيرة: عيّن كلمة المرور';
@@ -35,7 +35,7 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
     await expect(page.getByRole('heading', { level: 1, name: HEADLINE })).toBeVisible();
     const header = page.getByRole('img', { name: 'ظرف داخل دائرة' });
     await expect(header).toBeVisible();
-    await expect(header).toHaveAttribute('src', `${origin}/mail/v1/mail-header-hello-spot-email-2x.png`);
+    await expect(header).toHaveAttribute('src', `${origin}/mail/v2/mail-header-hello-spot-email-2x.png`);
     // Loaded, not a broken-image box: the picture has real pixels.
     expect(await header.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(320);
     await expect(page.getByRole('img', { name: 'أيقونة ظرف' })).toBeVisible();
@@ -43,7 +43,7 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
   });
 
   await step('Its pictures come from the portal as PNGs cached for a year', async () => {
-    const res = await request.get(`${origin}/mail/v1/mail-header-hello-spot-email-2x.png`);
+    const res = await request.get(`${origin}/mail/v2/mail-header-hello-spot-email-2x.png`);
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toBe('image/png');
     expect(res.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
@@ -52,7 +52,7 @@ test('The Arabic signup mail is on brand, its pictures load from the portal, and
   await step('Turn images off and open it again: the headline, the button and the copyable link are all there', async () => {
     // A fresh page with pictures blocked before it loads, so no cached copy can stand in (review T2).
     const imagesOff = await page.context().newPage();
-    await imagesOff.route('**/mail/v1/**', (route) => route.abort());
+    await imagesOff.route('**/mail/v*/**', (route) => route.abort());
     await imagesOff.setContent(mail.html, { waitUntil: 'load' });
     expect(await imagesOff.getByRole('img', { name: 'ظرف داخل دائرة' }).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(0);
     await expect(imagesOff.getByRole('heading', { level: 1, name: HEADLINE })).toBeVisible();
@@ -98,7 +98,7 @@ test("An approved Arabic account's ready mail faces its directional art right to
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'حسابك جاهز' })).toBeVisible();
     const header = page.getByRole('img', { name: 'ثلاث درجات وعلم فوقها' });
-    await expect(header).toHaveAttribute('src', `${origin}/mail/v1/mail-header-hello-milestone-firm-rtl-2x.png`);
+    await expect(header).toHaveAttribute('src', `${origin}/mail/v2/mail-header-hello-milestone-firm-rtl-2x.png`);
     expect(await header.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(320);
   });
 });

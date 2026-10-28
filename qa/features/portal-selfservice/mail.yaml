@@ -4,7 +4,7 @@ title: The mails look like MTB3A (the new frame, its pictures, images off)
 tier: secondary
 # MUT-468 (epic MUT-466, .claude/designs/mut-468-mail-frame.md §6): the transactional mails in the approved frame
 # (Claude Design 1b): a mood band with the header art, a chip and a headline, served from the portal at
-# <PORTAL_ORIGIN>/mail/v1. Read from the live dev API's memory outbox (GET /admin/v1/dev-outbox); the QA API serves
+# <PORTAL_ORIGIN>/mail/v2 (MUT-484: transparent art; v1 stays for sent mails). Read from the live dev API's memory outbox (GET /admin/v1/dev-outbox); the QA API serves
 # the built portal, so the pictures load from its own origin.
 paths:
   - server/src/email/templates/**
@@ -23,7 +23,7 @@ features:
       - Press the mail's button
     expect:
       - 'The mail is Arabic, right to left, with the hello band, the envelope picture and chip, and the headline "خطوة أخيرة: عيّن كلمة المرور"'
-      - Its pictures come from the portal's /mail/v1/ as PNGs cached for a year, and the footer names the recipient
+      - Its pictures come from the portal's /mail/v2/ as PNGs cached for a year, and the footer names the recipient
       - With images off the headline, the button and the copyable link are all still there
       - The button opens /setup, "Finish creating your account"
   - id: mail-directional-art

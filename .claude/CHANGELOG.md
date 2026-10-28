@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-484: transparent mail art, so dark-mode mail shows no pale squares
+
+**Why:** Gmail, Outlook.com and Outlook for Mac darken a mail's colours in dark mode but not its images, and ignore the `light only` opt-out; v1's opaque art showed as pale squares (Basel's Outlook screenshots). ADR-214 amendment; brief `.claude/designs/mut-484-transparent-mail-art.md`.
+
+### Added
+- `src/hosted/public/mail/v2/`: the 35 art files from Claude Design export 5, transparent, 8-bit RGBA non-interlaced. Headers keep the kit's halo (a pale sticker edge in dark mode, Basel's call); chips keep their round tile with transparent corners.
+
+### Changed
+- `server/src/email/templates/look.ts`: `MAIL_ART_PATH` is `/mail/v2/`. v1 stays for sent mails.
+- Tests and QA follow `MAIL_ART_PATH` (`templates.test.ts`, `mailer.test.ts`, `qa/specs/portal-selfservice/mail.spec.ts`, `mail.yaml`).
+
+### Technical
+- `look.test.ts` reads every served PNG (`__tests__/png.ts`): format, alpha 0 at corners (and mid-edges for headers), a v1 alpha-255 control, every v1 file pinned by SHA-256 (`mail-art-v1.sha256.json`).
+
 ## [Unreleased] - 2026-10-27 — MUT-478: the customer statement (ledger card) and receivable numbers (API 1.83.0-mut478, ADR-217)
 
 **Why:** Malafat's client money page becomes a ledger card (MAL-1425, Money overhaul MAL-1410). Malafat may not add up a balance itself (Malafat ADR-150), and a charge had no reference to reconcile by.

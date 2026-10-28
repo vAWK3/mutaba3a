@@ -7,7 +7,7 @@ import { artFor, MAIL_ART_PATH, MOODS, type Look } from './look.js';
  * `<html lang dir>`, tables and inline styles only, system fonts, Brand v2's AAA light inks (src/styles/brand/
  * mutaba3a-theme.css, as hex because mail clients drop custom properties). A customer mail's mood tints a band that
  * runs edge to edge behind the wordmark and header art; the white card rises out of it with the chip and headline.
- * Pictures come only from `<artOrigin>/mail/v1/` (static, the same URL for everyone, ADR override of §8.4) and every
+ * Pictures come only from `<artOrigin><MAIL_ART_PATH>` (static, the same URL for everyone, ADR override of §8.4) and every
  * one has alt text, so a mail with images off still reads fully. A link is a button plus its raw URL in
  * `<bdi dir="ltr">` for copying (ADR-101). Every interpolated value is escaped here, so a template never writes raw HTML.
  */
@@ -84,7 +84,7 @@ export interface CustomerMailBody extends MailBody {
 /** What the mailer adds around a template's words: the recipient, and where the pictures and the website are. */
 export interface MailFrame {
   to?: string | undefined;
-  /** PORTAL_ORIGIN: the pictures are served from `<artOrigin>/mail/v1/`. Unset = no pictures. */
+  /** PORTAL_ORIGIN: the pictures are served from `<artOrigin><MAIL_ART_PATH>`. Unset = no pictures. */
   artOrigin?: string | undefined;
   /** WEBSITE_ORIGIN: the footer's Privacy link. Unset = no Privacy link. */
   websiteOrigin?: string | undefined;
