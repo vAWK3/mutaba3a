@@ -182,3 +182,65 @@ test("Malafat keeps the legal receipt's number on a payment, through a correctio
     expect(statement.lines.find((l: Json) => l.paymentId === replacementId)).toMatchObject({ kind: 'PAYMENT', receiptNumber: '2041' });
   });
 });
+
+test('Malafat proposes a 30/70 split and a retainer, previews each approval and approves it into exactly that agreement', { tag: '@portal-selfservice.malafat-money-api.proposal-any-schedule' }, async ({ step }) => {
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let customerId = '';
+  let splitId = '';
+  const split = {
+    kind: 'FIXED',
+    amount: '10000.00',
+    pricingBasis: 'VAT_EXCLUSIVE',
+    installments: [
+      { label: 'On signing', percentBasisPoints: 3000, trigger: { type: 'IMMEDIATE' } },
+      { label: 'On judgment', percentBasisPoints: 7000, trigger: { type: 'MANUAL' } },
+    ],
+  };
+  const project = async (name: string) => (await call('POST', '/v1/projects', key, { customerId, name, currency: 'ILS' })).id as string;
+  const approve = async (id: string, agreement: Json) => {
+    const preview = await call('POST', `/v1/fee-proposals/${id}/approve/preview`, key, { agreement });
+    return { preview, approved: await call('POST', `/v1/fee-proposals/${id}/approve`, key, { agreement, previewToken: preview.previewToken }) };
+  };
+
+  await step('Malafat proposes a 30/70 fee to a client, the second stage due when the judgment comes', async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const apiKey = await call('POST', `/admin/v1/organizations/${org.id}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    await call('PUT', '/v1/settings/vat', key, { rateBasisPoints: 1800, effectiveFrom: '2025-01-01' });
+    customerId = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    const proposal = await call('POST', '/v1/fee-proposals', key, { projectId: await project('Lawsuit'), draft: split });
+    splitId = proposal.id;
+    expect(proposal).toMatchObject({ status: 'PROPOSED', agreementType: 'FIXED', proposedAmount: '10000.00', draft: { schemaVersion: 1, kind: 'FIXED' } });
+  });
+
+  await step("Malafat previews the approval, then approves with the preview's token", async () => {
+    const { preview, approved } = await approve(splitId, split);
+    expect(preview.installments.map((i: Json) => [i.amount, i.trigger.type])).toEqual([['3000.00', 'IMMEDIATE'], ['7000.00', 'MANUAL']]);
+    expect(approved.proposal).toMatchObject({ status: 'APPROVED', agreedAmount: '10000.00', agreementId: approved.agreement.agreement.id });
+    const [first, second] = approved.agreement.installments;
+    expect(first).toMatchObject({ amount: '3000.00', receivableId: expect.any(String) });
+    expect(second).toMatchObject({ amount: '7000.00', trigger: { type: 'MANUAL' }, receivableId: null, status: 'PENDING' });
+  });
+
+  const now = new Date();
+  const startMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  const retainer = { kind: 'RETAINER', monthlyAmount: '1500.00', pricingBasis: 'VAT_EXCLUSIVE', startMonth, billingDay: 1 };
+  let retainerId = '';
+  await step('Malafat proposes a monthly retainer on another matter and reads the organization summary', async () => {
+    retainerId = (await call('POST', '/v1/fee-proposals', key, { projectId: await project('Monthly advice'), draft: retainer })).id;
+    const summary = await call('GET', '/v1/summaries/organization?currency=ILS', key);
+    const block = summary.currencies[0];
+    expect(block.proposed).toBe('0.00');
+    expect(block.counts.openProposals).toBe(1);
+    expect(block.customers[0].proposals).toEqual([expect.objectContaining({ proposalId: retainerId, amount: '1500.00', agreementType: 'RECURRING' })]);
+  });
+
+  await step("Malafat previews the retainer's approval and approves it", async () => {
+    const { preview, approved } = await approve(retainerId, retainer);
+    expect(approved.proposal).toMatchObject({ status: 'APPROVED', agreedAmount: '1500.00', agreementType: 'RECURRING' });
+    expect(approved.agreement.agreement).toMatchObject({ type: 'RECURRING', retainer: { startMonth } });
+    expect(approved.charges.map((c: Json) => c.serviceMonth)).toEqual(preview.chargesDueNow.map((c: Json) => c.serviceMonth));
+    expect(approved.charges.length).toBeGreaterThan(0);
+  });
+});
