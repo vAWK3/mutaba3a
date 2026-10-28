@@ -80,3 +80,13 @@ output "alert_sms_channel" {
   description = "Resource name of the SMS notification channel, for the one-time verification in DEPLOYMENT.md §6b. null without alert_sms_number."
   value       = one(google_monitoring_notification_channel.sms[*].name)
 }
+
+output "receipt_ocr_url" {
+  description = "MUT-441: the receipt-ocr service's URL (the API's OCR_URL); null until server_ocr_enabled."
+  value       = one(google_cloud_run_v2_service.receipt_ocr[*].uri)
+}
+
+output "receipt_read_queue" {
+  description = "MUT-441: the receipt-reads Cloud Tasks queue (the API's READ_QUEUE); null until server_ocr_enabled."
+  value       = local.read_queue_id
+}
