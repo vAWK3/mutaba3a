@@ -159,8 +159,11 @@ function useUploadQueue(
   const incomingKeys = useRef(new Set(rows.map((row) => row.key)));
   const draining = useRef(false);
   const readyIds = useRef<string[]>([]);
+  // The drain outlives the render that started it, so it reads the latest receipts and callback through refs.
+  const settled = useRef(onIncomingSettled);
   useEffect(() => {
     readyIds.current = receipts.filter((r) => r.status === 'READY').map((r) => r.id);
+    settled.current = onIncomingSettled;
   });
 
   const apply = (next: (current: LocalUpload[]) => LocalUpload[]) => {
@@ -174,7 +177,7 @@ function useUploadQueue(
     const batch = rowsRef.current.filter((row) => incomingKeys.current.has(row.key));
     if (batch.some((row) => row.status !== 'failed')) return;
     incomingKeys.current = new Set();
-    onIncomingSettled?.(batch.map((row) => row.file.name));
+    settled.current?.(batch.map((row) => row.file.name));
   };
 
   const drain = async () => {

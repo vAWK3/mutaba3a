@@ -108,3 +108,42 @@ describe('ExpensesList', () => {
     expect(within(nav).getByRole('link', { name: 'Spent' })).toHaveAttribute('href', `/p/${ORG_A}/expenses`);
   });
 });
+
+describe('ExpensesList: receipts on a new expense (MUT-491)', () => {
+  const R = (id: string, filename: string, status = 'READY') => ({ id, expenseId: 'e1', filename, mimeType: 'application/pdf', sizeBytes: 4, status, uploadedByUserId: 'u1', createdAt: '', completedAt: '' });
+
+  it('a failed receipt leaves the new expense open at ?expense=<id>, the others in, created once', async () => {
+    const landed: ReturnType<typeof R>[] = [];
+    let n = 0;
+    const names = new Map<string, string>();
+    const { user, router, api } = portal(`/p/${ORG_A}/expenses?newExpense=true`, {
+      'POST /v1/expenses': () => ok(expense({ id: 'e1', title: null, customerId: null }), 201),
+      'GET /v1/expenses/e1': () => ok({ ...expense({ id: 'e1', title: null, customerId: null }), receipts: landed }),
+      'POST /v1/expenses/e1/receipts': ({ body }) => {
+        const id = `r${++n}`;
+        names.set(id, (body as { filename: string }).filename);
+        return ok({ receipt: R(id, names.get(id)!, 'PENDING_UPLOAD'), upload: { url: `https://storage.googleapis.com/b/${id}`, method: 'PUT', headers: {}, expiresAt: '' } }, 201);
+      },
+      'PUT /b/r1': () => new Response(null, { status: 200 }),
+      'PUT /b/r2': () => new Response(null, { status: 403 }),
+      'DELETE /v1/expenses/e1/receipts/r2': () => new Response(null, { status: 204 }),
+      'POST /v1/expenses/e1/receipts/r1/complete': () => {
+        landed.push(R('r1', names.get('r1')!));
+        return ok(landed[0]);
+      },
+    });
+    await user.type(await screen.findByPlaceholderText('0.00'), '12.50');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    const input = document.querySelector('.drawer input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [new File(['%PDF'], 'taxi.pdf', { type: 'application/pdf' }), new File(['%PDF'], 'hotel.pdf', { type: 'application/pdf' })]);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText("Couldn't upload the receipt. Try again.")).toBeInTheDocument();
+    await waitFor(() => expect(locationOf(router)).toContain('expense=e1'));
+    expect(locationOf(router)).not.toContain('newExpense');
+    expect(screen.getByText('Edit expense', { selector: '.drawer-title' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download' })).toBeInTheDocument());
+    expect(api.count('POST /v1/expenses')).toBe(1);
+  });
+});
+
