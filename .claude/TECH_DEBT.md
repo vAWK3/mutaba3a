@@ -18,6 +18,16 @@
 
 ## Open Debt
 
+### TD-294: A Kvish 6 bill's registration number and a government document's vendor can be wrong
+**Status**: Open (MUT-504, 2026-10-29; ADR-229)
+- **What:** an Israeli toll bill prints its issuer's ח"פ (512475203) beside a sister company's (513927285); the reader takes the first valid one after a label, which can be the sister's. A Jordanian eVisa's vendor is read as its header ("The Hashemite Kingdom of Jordan") rather than the issuing directorate. Neither is an AC1 field, and the reader is still dark.
+- **Fix:** prefer the registration number on the same row as the vendor's name (or a "בע"מ" line), and score vendor candidates against a learned vendor (MUT-254) before suggesting one.
+
+### TD-293: The real-receipt bench is one person's eye-read of 16 receipts
+**Status**: Open (MUT-504, 2026-10-29; ADR-229)
+- **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 11 Hebrew, 4 English or JOD, 1 Arabic. AC2's 6/10 is provisional on so few.
+- **Fix:** Basel checks the manifest and adds receipts (more Arabic ones especially); raise AC2's bar as the set grows.
+
 ### TD-292: A summary block can name a retired currency
 **Status**: Open (MUT-483 pre-landing review, 2026-10-29; ADR-227)
 - **What:** `/v1/summaries/period` and `/v1/summaries/organization`, called without `currency`, return a block for every currency with rows, including a retired one (AED, SAR, QAR, BHD, OMR), whose code is outside the published `Currency` enum. A strict generated client could reject the response.

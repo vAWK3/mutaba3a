@@ -4138,6 +4138,14 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Benchmark | `server/ocr/bench/run.py` (manual) | AC1 per language on the synthetic set, AC6 warm p95 and cold start; `.claude/designs/mut-441-bench.md` |
 | Browser | `qa/specs/portal-selfservice/receipts.spec.ts` `@portal-selfservice.receipts.server-reading` | on the live dev API with the real sidecar: upload a photo, the card says "Reading…", the review page says "Reading the receipt…", then 52.470 JOD and 2026-06-25 fill in, marked from the receipt |
 
+## MUT-504 — real Hebrew receipts (ADR-229)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/receipts/extract/__tests__/extract.test.ts` "real receipt patterns (MUT-504)" | a sure date beside a junk box; a labelled amount needs a sure label; a toll bill's issue date over a billing period, a validity date and an older payment, subtotal + VAT with `מצ"מ`; disagreeing dates and a billing period leave the date empty; a till total whose label OCR lost (read three times, or two printed amounts adding up to it); one amount printed many times can't out-vote; the card slip's `סכום עסקה`; the VAT on a joined row; a statement has no total; an unsure strict rule doesn't block a sure loose one; `17-פבר-26`, `5 נוב' 2026`, `17-Feb-26`; the `מצ"מ` fold leaves `בע"מ`; a long top row isn't the vendor |
+| Python | `server/ocr/tests/test_units.py` | on a Hebrew page RapidOCR's sure digits replace Tesseract's unsure words, uncovered words stay, sure Tesseract digits stay, unsure RapidOCR digits don't replace; other scripts unchanged; two complete amounts aren't joined |
+| Python | `server/ocr/tests/test_caps.py` | a visible text layer is read as text; an invisible one (render mode 3) is rasterised |
+| Benchmark | `server/ocr/bench/run.py --real-detail` (manual, port 8197) | real set: AC1 fields 0 wrong, Hebrew amount ≥ 6/10 and date ≥ 6/10 (AC2); synthetic not worse (AC3); warm p95 < 5 s (AC5) |
+
 ## MUT-491 — receipts on a new expense (ADR-221)
 | Level | Where | What it proves |
 |---|---|---|

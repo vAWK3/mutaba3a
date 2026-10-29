@@ -91,3 +91,17 @@ Business / product impact
 - Turning reading on for anyone in Israel is only safe after this: today it fills wrong dates and totals on the most common Hebrew documents (fuel, supermarket, Kvish 6).
 - It is the step before MUT-487 and the pilot in the MUT-252 epic, and MUT-505 (statements) builds on its date and text-layer rules.
 - It costs no extra infrastructure and nothing changes in production, since reading stays dark until the pilot grant.
+
+## Build notes (2026-10-29)
+The first bench after the plan's changes left Hebrew amounts at 3/10 and two wrong values. Each further fix below was measured on the real set, written test-first, and is needed for AC1 or AC2. None widens scope.
+- **B1:** two complete amounts side by side are never joined (`61.8361.83`).
+- **B2:** the Hebrew splice works word by word, not line by line. The line-level version dropped a synthetic Hebrew date whose line RapidOCR read only in part.
+- **B3:** the vote counts each value once. A total printed four times out-voted the arithmetic for its own difference with the VAT, which was wrong and confident.
+- **B4:** a new rule, "sum of two": the largest amount that two printed amounts add up to, when it is printed twice or one of the two is the labelled subtotal. The repeated-largest rule counts readings, not rows.
+- **B5:** the VAT on a row OCR joined with the total is the smaller amount.
+- **B6:** total-labelled rows with three different amounts mean a statement, with no single total. This is a stopgap until MUT-505.
+- **B7:** a document that prints a billing period takes only a labelled date.
+- **B8:** total rules run strictest first, and the first sure one wins.
+- **B9:** `חייב במע"מ` is a subtotal label.
+
+Result: Hebrew amounts 7/10, dates 6/11, AC1 fields 0 wrong.
