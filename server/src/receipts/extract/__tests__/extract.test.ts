@@ -3,7 +3,7 @@ import type { ReceiptSuggestion } from '../../../repositories/ports.js';
 import { ReceiptSuggestionSchema } from '../../../schemas.js';
 import { extractReceipt, isConfident, MIN_FIELD_CONFIDENCE } from '../extract.js';
 import { isValidIsraeliRegistration } from '../fields.js';
-import { normalizeText } from '../normalize.js';
+import { foldForMatch, normalizeText } from '../normalize.js';
 import { orderedRows } from '../rows.js';
 import type { ExtractInput } from '../types.js';
 import { receipt, REG_BAD_CHECK_DIGIT, REG_VALID_COMPANY, REG_VALID_DEALER } from './fixtures.js';
@@ -184,6 +184,84 @@ describe('benchmark failure clusters', () => {
     expect(value(kwd, 'totalMinor')).toBeUndefined();
     const mixed = read(receipt(['Shop', 'Coffee 2.50', 'Subtotal 10.000', 'VAT 1.000', 'Total 11.000']));
     expect(value(mixed, 'currency')).toBeUndefined();
+  });
+});
+
+/**
+ * MUT-504: what 16 real scans showed (2026-10-29 bench), as synthetic rows that reproduce each pattern. No real
+ * receipt's text is here: the shapes are, with made-up shops and amounts.
+ */
+describe('real receipt patterns (MUT-504)', () => {
+  it('reads a sure date on a row that also holds a junk box (a field takes its own box\'s confidence, not the row\'s worst)', () => {
+    const s = read(receipt(['מכולת הגפן', [{ text: '11/12/25 12:50', x: 10, conf: 0.99 }, { text: 'ae Wt?', x: 250, conf: 0.2 }], 'סה"כ 9.90']));
+    expect(value(s, 'date')).toBe('2025-12-11');
+  });
+
+  it('a labelled amount still needs its label to be read surely', () => {
+    const s = read(receipt(['Shop', [{ text: '9.90', x: 10, conf: 0.99 }, { text: 'סה"כ', x: 300, conf: 0.3, script: 'hebr' }]]));
+    expect(value(s, 'totalMinor')).toBeUndefined();
+  });
+
+  const tollBill = (issueConf: number) =>
+    receipt([
+      'חשבון לשירותי כביש אגרה',
+      { text: 'תאריך הפקת החשבונית 20/08/2026', conf: issueConf },
+      { text: 'תקופת החשבונית 20/07/26-19/08/26', conf: 0.9 },
+      'תשלומים עבור נסיעות 63.60',
+      'סה"כ סכומים ב-18% מצ"מ 63.60',
+      'סה"כ מצ"מ 11.45',
+      { text: 'תוקף כרטיס האשראי הוארך עד 01/06/2029', conf: 0.95 },
+      { text: 'חשבונית קודמת שולמה בכרטיס ביום 21/07/2026', conf: 0.9 },
+    ]);
+
+  it('a toll bill: the issue date over a billing period, a card validity date and an older payment; subtotal + VAT is the total (מע"מ read as מצ"מ)', () => {
+    const s = read(tollBill(0.7));
+    expect(value(s, 'date')).toBe('2026-08-20');
+    expect(value(s, 'totalMinor')).toBe('7505');
+    expect(value(s, 'vatMinor')).toBe('1145');
+  });
+
+  it('leaves the date empty when its label is unsure and the unlabelled dates disagree', () => {
+    expect(value(read(tollBill(0.4)), 'date')).toBeUndefined();
+  });
+
+  it('a date range is a period, never the receipt\'s date', () => {
+    expect(value(read(receipt(['Utility Co', 'Period 01/09/2026-30/09/2026', 'Total 40.00'])), 'date')).toBeUndefined();
+  });
+
+  it('two unlabelled readings of the same day still agree', () => {
+    expect(value(read(receipt(['מכולת', '11/12/2025 12:49', 'סה"כ 5.00', '11/12/25 12:50'])), 'date')).toBe('2025-12-11');
+  });
+
+  it('a till receipt whose to-pay label OCR lost: the largest amount, printed on three rows, is the total', () => {
+    const s = read(
+      receipt(['מחסני הגפן', 'ביצים 13.13', 'גבינה 19.90', 'לחם 15.90', 'סבון 12.90', [{ text: '61.83', x: 10 }, { text: ':0.0 תיז', x: 300, conf: 0.1, script: 'hebr' }], 'שראכרט 61.83', 'Bs ~ 0190 עשקה: 61.83']),
+    );
+    expect(value(s, 'totalMinor')).toBe('6183');
+  });
+
+  it('an amount printed three times is not the total when a larger amount is printed', () => {
+    expect(value(read(receipt(['Shop', 'Pen 5.90', 'Pen 5.90', 'Pen 5.90', 'Book 20.00'])), 'totalMinor')).toBeUndefined();
+  });
+
+  it('the card transaction amount (סכום עסקה) is the total', () => {
+    expect(value(read(receipt(['מחסני הגפן', 'לחם 15.90', 'חלב 6.50', 'סכום עסקה: 22.40'])), 'totalMinor')).toBe('2240');
+  });
+
+  it.each([
+    ['17-פבר-26', '2026-02-17'],
+    ["5 נוב' 2026", '2026-11-05'],
+    ['17-Feb-26', '2026-02-17'],
+  ])('reads %s', (printed, want) => expect(value(read(receipt(['Shop', printed, 'Total 1.00'])), 'date')).toBe(want));
+
+  it('folds the VAT misread מצ"מ back to מע"מ for matching, and leaves a company form (בע"מ) alone', () => {
+    expect(foldForMatch('סה"כ מצ"מ 11.45')).toBe('סה"כ מע"מ 11.45');
+    expect(foldForMatch('שופרסל בע"מ')).toBe('שופרסל בע"מ');
+  });
+
+  it('a long first row (two columns OCR joined) is not the vendor, even with a company form in it', () => {
+    const s = read(receipt(['TU KN FY )1997( בע"מ 9°N) 512475203( ודרך NCW ₪ הנסיעות נקלטות במערכות לאחר מספר ימים', 'סה"כ 10.00']));
+    expect(value(s, 'vendorName')).toBeUndefined();
   });
 });
 

@@ -81,6 +81,8 @@ const RULE_VENDOR = 0.7;
 const RULE_VENDOR_COMPANY = 0.85;
 
 function looksLikeName(row: Row): boolean {
+  // MUT-504: a row longer than a name is two columns OCR joined or a sentence; cutting it down would still be wrong.
+  if (row.text.length > VENDOR_MAX_LENGTH) return false;
   const compact = row.text.replace(/\s/g, '');
   const letters = countMatches(compact, /\p{L}/gu);
   const digits = countMatches(compact, /\d/g);
@@ -93,7 +95,7 @@ function looksLikeName(row: Row): boolean {
 export function readVendor(rows: readonly Row[]): Reading<string> | null {
   for (const row of rows.slice(0, VENDOR_ROWS)) {
     if (!looksLikeName(row)) continue;
-    const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').slice(0, VENDOR_MAX_LENGTH).trim();
+    const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').trim();
     if (!value) continue;
     const company = hasKeyword(row.folded, COMPANY);
     return { value, rule: company ? RULE_VENDOR_COMPANY : RULE_VENDOR, conf: row.conf };

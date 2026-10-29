@@ -1,5 +1,7 @@
 import { countMatches, foldForMatch, LATIN_LETTER, normalizeText, RTL_LETTER } from './normalize.js';
-import type { OcrLine, Row } from './types.js';
+import type { KeywordSet } from './keywords.js';
+import { hasKeyword } from './keywords.js';
+import type { OcrLine, Row, RowPart } from './types.js';
 
 /** Two boxes share a row when their vertical overlap is at least this share of the shorter one. */
 const SAME_ROW_OVERLAP = 0.5;
@@ -32,7 +34,11 @@ function toRow(draft: RowDraft): Row | null {
   const ordered = [...draft.segments].sort((a, b) => (rtl ? b.box[2] - a.box[2] : a.box[0] - b.box[0]));
   const text = normalizeText(ordered.map((s) => s.text).join(' '));
   if (!text) return null;
-  return { text, folded: foldForMatch(text), conf: Math.min(...draft.segments.map((s) => s.conf)) };
+  const parts = ordered.flatMap((s): RowPart[] => {
+    const partText = normalizeText(s.text);
+    return partText ? [{ text: partText, folded: foldForMatch(partText), conf: s.conf }] : [];
+  });
+  return { text, folded: foldForMatch(text), conf: Math.min(...draft.segments.map((s) => s.conf)), parts };
 }
 
 /**
@@ -58,6 +64,22 @@ export function orderedRows(lines: readonly OcrLine[]): Row[] {
 export function pdfRows(text: string): Row[] {
   return text.split(/\r?\n/).flatMap((line) => {
     const normalized = normalizeText(line);
-    return normalized ? [{ text: normalized, folded: foldForMatch(normalized), conf: 1 }] : [];
+    if (!normalized) return [];
+    const folded = foldForMatch(normalized);
+    return [{ text: normalized, folded, conf: 1, parts: [{ text: normalized, folded, conf: 1 }] }];
   });
+}
+
+/**
+ * MUT-504: how sure the reader was of what `matches` finds on the row: its most confident box that matches; the row's
+ * own (least) confidence when no single box holds it (a value OCR split across two boxes).
+ */
+export function confOf(row: Row, matches: (part: RowPart) => boolean): number {
+  const found = row.parts.filter(matches);
+  return found.length ? Math.max(...found.map((p) => p.conf)) : row.conf;
+}
+
+/** The confidence of the box holding a keyword of `set` (a label), else the row's. */
+export function labelConf(row: Row, set: KeywordSet): number {
+  return confOf(row, (p) => hasKeyword(p.folded, set));
 }

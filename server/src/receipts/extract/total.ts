@@ -1,11 +1,12 @@
 import { moneyIn } from './amounts.js';
-import { CASH, CHANGE, hasKeyword, INCLUSIVE, NOT_TOTAL, REGISTRATION, SUBTOTAL, TOTAL, VAT } from './keywords.js';
+import { CASH, CHANGE, hasKeyword, INCLUSIVE, type KeywordSet, NOT_TOTAL, REGISTRATION, SUBTOTAL, TOTAL, VAT } from './keywords.js';
+import { confOf, labelConf } from './rows.js';
 import type { Row } from './types.js';
 
 /**
  * MUT-441: the total, the VAT and its rate. A total-labelled row first; the receipt's own arithmetic (subtotal + VAT,
  * cash − change) confirms it, and stands in for it only when no labelled total survived OCR (the MUT-253 spike's
- * lesson). The largest amount alone is never a total. Pure.
+ * lesson). The largest amount alone is never a total, unless the receipt prints it on three rows (MUT-504). Pure.
  */
 
 export interface MoneyReading {
@@ -22,6 +23,9 @@ const RULE_LABELLED_LOOSELY_CONFIRMED = 0.85;
 const RULE_SUBTOTAL_PLUS_VAT = 0.8;
 const RULE_CASH_MINUS_CHANGE = 0.75;
 const RULE_TWO_AMOUNTS_AGREE = 0.65;
+const RULE_REPEATED_LARGEST = 0.7;
+/** A till receipt prints its total on the to-pay row, the card row and the card slip: three rows at least (MUT-504). */
+const MIN_REPEATS = 3;
 const RULE_VAT = 0.8;
 const RULE_VAT_CONFIRMED = 0.92;
 const RULE_VAT_RATE = 0.85;
@@ -38,24 +42,36 @@ const last = (values: readonly bigint[]): bigint | null => values[values.length 
 const max = (values: readonly bigint[]): bigint | null => (values.length ? values.reduce((a, b) => (a > b ? a : b)) : null);
 const near = (a: bigint, b: bigint) => (a > b ? a - b : b - a) <= ROUNDING;
 
+/** How sure the reader was of `minor` on the row: the box it was printed in (MUT-504), else the row's least. */
+function amountConf(row: Row, minor: bigint, exponent: number | null, integers: boolean): number {
+  return confOf(row, (part) => moneyIn(part.text, exponent, integers).includes(minor));
+}
+
+interface Labelled {
+  minor: bigint;
+  row: Row;
+  /** The lower of the amount's box and its label's box. */
+  conf: number;
+}
+
 /** The amount on the first row matching `match` (its last amount: labels come first in reading order). */
-function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, exponent: number | null, integers: boolean): { minor: bigint; row: Row } | null {
+function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, labels: KeywordSet, exponent: number | null, integers: boolean): Labelled | null {
   for (const row of rows) {
     if (!match(row)) continue;
     const minor = last(moneyIn(row.text, exponent, integers));
-    if (minor !== null) return { minor, row };
+    if (minor !== null) return { minor, row, conf: Math.min(amountConf(row, minor, exponent, integers), labelConf(row, labels)) };
   }
   return null;
 }
 
 interface Parts {
-  subtotal: { minor: bigint; row: Row } | null;
-  vat: { minor: bigint; row: Row } | null;
+  subtotal: Labelled | null;
+  vat: Labelled | null;
   rateBasisPoints: number | null;
-  cash: { minor: bigint; row: Row } | null;
-  change: { minor: bigint; row: Row } | null;
-  /** Every decimal amount on the receipt, with the confidence of its row. */
-  all: Array<{ minor: bigint; conf: number }>;
+  cash: Labelled | null;
+  change: Labelled | null;
+  /** Every decimal amount on the receipt, with the confidence of its box and the row it is on. */
+  all: Array<{ minor: bigint; conf: number; row: Row }>;
   /** Whether a bare integer on a labelled row may be money: only when the receipt prints no decimal amount at all. */
   integers: boolean;
 }
@@ -67,17 +83,17 @@ function vatRateOn(row: Row): number | null {
 }
 
 function partsOf(rows: readonly Row[], exponent: number | null): Parts {
-  const all = rows.flatMap((r) => moneyIn(r.text, exponent, false).map((minor) => ({ minor, conf: r.conf })));
+  const all = rows.flatMap((row) => moneyIn(row.text, exponent, false).map((minor) => ({ minor, conf: amountConf(row, minor, exponent, false), row })));
   // A receipt that prints its money with decimals and shows a bare integer on a labelled row has lost a decimal point
   // to OCR (MUT-441 benchmark: "15.01" read as 15001); taking it as whole units would fill a wrong amount.
   const integers = all.length === 0;
-  const vat = firstAmount(rows, isVatRow, exponent, integers);
+  const vat = firstAmount(rows, isVatRow, VAT, exponent, integers);
   return {
-    subtotal: firstAmount(rows, (r) => hasKeyword(r.folded, SUBTOTAL) && !isVatRow(r), exponent, integers),
+    subtotal: firstAmount(rows, (r) => hasKeyword(r.folded, SUBTOTAL) && !isVatRow(r), SUBTOTAL, exponent, integers),
     vat,
     rateBasisPoints: vat ? vatRateOn(vat.row) : (rows.filter(isVatRow).map(vatRateOn).find((r) => r !== null) ?? null),
-    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH), exponent, integers),
-    change: firstAmount(rows, (r) => hasKeyword(r.folded, CHANGE), exponent, integers),
+    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH), CASH, exponent, integers),
+    change: firstAmount(rows, (r) => hasKeyword(r.folded, CHANGE), CHANGE, exponent, integers),
     all,
     integers,
   };
@@ -111,8 +127,9 @@ function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | nu
     if (isSubtotal(minor)) continue;
     const confirmed = confirmation(minor, parts);
     const rule = confirmed === 'guided' ? RULE_LABELLED_CONFIRMED : confirmed === 'loose' ? RULE_LABELLED_LOOSELY_CONFIRMED : RULE_LABELLED;
-    const better = !best || rule * row.conf > best.rule * best.conf || (rule * row.conf === best.rule * best.conf && minor > best.minor);
-    if (better) best = { minor, rule, conf: row.conf, row };
+    const conf = Math.min(amountConf(row, minor, exponent, parts.integers), labelConf(row, TOTAL));
+    const better = !best || rule * conf > best.rule * best.conf || (rule * conf === best.rule * best.conf && minor > best.minor);
+    if (better) best = { minor, rule, conf, row };
   }
   return best;
 }
@@ -120,22 +137,34 @@ function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | nu
 /** No labelled total: subtotal + VAT, else cash − change, else an amount two others add up to, at least twice. */
 function arithmeticTotal(parts: Parts): MoneyReading | null {
   if (parts.subtotal && parts.vat) {
-    return { minor: parts.subtotal.minor + parts.vat.minor, rule: RULE_SUBTOTAL_PLUS_VAT, conf: Math.min(parts.subtotal.row.conf, parts.vat.row.conf), row: null };
+    return { minor: parts.subtotal.minor + parts.vat.minor, rule: RULE_SUBTOTAL_PLUS_VAT, conf: Math.min(parts.subtotal.conf, parts.vat.conf), row: null };
   }
   if (parts.cash && parts.change && parts.cash.minor > parts.change.minor) {
-    return { minor: parts.cash.minor - parts.change.minor, rule: RULE_CASH_MINUS_CHANGE, conf: Math.min(parts.cash.row.conf, parts.change.row.conf), row: null };
+    return { minor: parts.cash.minor - parts.change.minor, rule: RULE_CASH_MINUS_CHANGE, conf: Math.min(parts.cash.conf, parts.change.conf), row: null };
   }
   const votes = new Map<bigint, number>();
-  const confOf = new Map(parts.all.map((a) => [a.minor, a.conf]));
+  const confByAmount = new Map(parts.all.map((a) => [a.minor, a.conf]));
   const amounts = parts.all.map((a) => a.minor);
   for (let i = 0; i < amounts.length; i += 1) {
     for (let j = i + 1; j < amounts.length; j += 1) {
       const [a, b] = [amounts[i]!, amounts[j]!];
-      for (const candidate of [a + b, a > b ? a - b : b - a]) if (confOf.has(candidate) && candidate !== a && candidate !== b) votes.set(candidate, (votes.get(candidate) ?? 0) + 1);
+      for (const candidate of [a + b, a > b ? a - b : b - a]) if (confByAmount.has(candidate) && candidate !== a && candidate !== b) votes.set(candidate, (votes.get(candidate) ?? 0) + 1);
     }
   }
   const agreed = [...votes].filter(([, n]) => n >= 2).sort(([a], [b]) => (a > b ? -1 : 1))[0];
-  return agreed ? { minor: agreed[0], rule: RULE_TWO_AMOUNTS_AGREE, conf: confOf.get(agreed[0]) ?? 0, row: null } : null;
+  return agreed ? { minor: agreed[0], rule: RULE_TWO_AMOUNTS_AGREE, conf: confByAmount.get(agreed[0]) ?? 0, row: null } : null;
+}
+
+/**
+ * MUT-504: no labelled total survived OCR and no arithmetic gives one, but the receipt prints its largest amount on
+ * three rows or more (a till receipt's to-pay row, card row and card slip). Its surest reading is the confidence.
+ */
+function repeatedLargest(parts: Parts): MoneyReading | null {
+  const largest = max(parts.all.map((a) => a.minor));
+  if (largest === null) return null;
+  const readings = parts.all.filter((a) => a.minor === largest);
+  if (new Set(readings.map((a) => a.row)).size < MIN_REPEATS) return null;
+  return { minor: largest, rule: RULE_REPEATED_LARGEST, conf: Math.max(...readings.map((a) => a.conf)), row: null };
 }
 
 export interface MoneyFields {
@@ -146,11 +175,11 @@ export interface MoneyFields {
 
 export function readMoney(rows: readonly Row[], exponent: number | null): MoneyFields {
   const parts = partsOf(rows, exponent);
-  const total = labelledTotal(rows, parts, exponent) ?? arithmeticTotal(parts);
+  const total = labelledTotal(rows, parts, exponent) ?? arithmeticTotal(parts) ?? repeatedLargest(parts);
   const vatConfirmed = parts.vat && total && ((parts.subtotal && near(parts.subtotal.minor + parts.vat.minor, total.minor)) || confirmation(total.minor, parts) === 'guided');
   return {
     total,
-    vat: parts.vat ? { minor: parts.vat.minor, rule: vatConfirmed ? RULE_VAT_CONFIRMED : RULE_VAT, conf: parts.vat.row.conf, row: parts.vat.row } : null,
-    vatRate: parts.rateBasisPoints !== null && parts.vat ? { basisPoints: parts.rateBasisPoints, rule: RULE_VAT_RATE, conf: parts.vat.row.conf } : null,
+    vat: parts.vat ? { minor: parts.vat.minor, rule: vatConfirmed ? RULE_VAT_CONFIRMED : RULE_VAT, conf: parts.vat.conf, row: parts.vat.row } : null,
+    vatRate: parts.rateBasisPoints !== null && parts.vat ? { basisPoints: parts.rateBasisPoints, rule: RULE_VAT_RATE, conf: parts.vat.conf } : null,
   };
 }

@@ -20,6 +20,8 @@ export function hasKeyword(folded: string, set: KeywordSet): boolean {
 
 export const TOTAL = keywords(
   'סה"כ', 'סהכ', 'סך הכל', 'סך הכול', 'לתשלום', 'המחיר', 'סכום לתשלום',
+  // MUT-504: the card slip's amount on an Israeli till receipt is what was paid.
+  'סכום עסקה', 'סכום חיוב', 'סה"כ לחיוב',
   'المجموع', 'الإجمالي', 'اجمالي', 'المبلغ الإجمالي', 'المبلغ المستحق', 'المطلوب', 'المجموع الكلي',
   'total', 'amount due', 'grand total', 'balance due', 'total due', 'to pay',
 );
@@ -27,6 +29,8 @@ export const TOTAL = keywords(
 /** The amount before VAT. */
 export const SUBTOTAL = keywords(
   'סכום ביניים', 'לפני מע"מ', 'ללא מע"מ', 'המחיר לפני מע"מ',
+  // MUT-504: an Israeli bill's "total of the amounts at 18% VAT", before the VAT is added.
+  'סה"כ סכומים', 'סכומים ב',
   'المجموع الفرعي', 'قبل الضريبة', 'غير شامل',
   'subtotal', 'sub total', 'sub-total', 'before vat', 'before tax', 'excl', 'excluding',
 );
@@ -44,6 +48,9 @@ export const CASH = keywords('מזומן', 'שולם', 'نقدا', 'نقدي', '
 export const CHANGE = keywords('עודף', 'الباقي', 'المتبقي', 'الفكة', 'باقي', 'change');
 
 export const DATE_LABEL = keywords('תאריך', 'التاريخ', 'تاريخ', 'date');
+
+/** MUT-504: a card's or a contract's validity ("valid until 01/06/2029"): its date is never the receipt's. */
+export const VALIDITY = keywords('תוקף', 'בתוקף', 'صالح', 'صلاحية', 'انتهاء', 'valid', 'validity', 'expiry', 'expires', 'exp');
 
 export const REGISTRATION = keywords(
   'ח.פ', 'ח"פ', 'חפ', 'ע.מ', 'ע"מ', 'עוסק מורשה', 'עוסק פטור', "מס' עוסק", 'מספר עוסק', 'מס עוסק', 'ח.צ', 'ע.ר',
