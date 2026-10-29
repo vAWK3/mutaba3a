@@ -67,7 +67,7 @@ describe('STORE_ACCESS', () => {
     const expenseRepos = ['expenses', 'expenseCategories', 'expenseReceipts'];
     // MUT-255: the operator's cross-profile edit-rate figure is an exception, kept to /admin; so are MUT-441's read-job
     // methods, which only /jobs and the operator's grant reach, on the unguarded store.
-    const crossProfile = new Set(['expenseReceipts.editRates', 'expenseReceipts.claimRead', 'expenseReceipts.releaseRead', 'expenseReceipts.finishRead', 'expenseReceipts.listPendingForSweep', 'expenseReceipts.markBacklogPending']);
+    const crossProfile = new Set(['expenseReceipts.editRates', 'expenseReceipts.claimRead', 'expenseReceipts.releaseRead', 'expenseReceipts.releaseMovedRead', 'expenseReceipts.finishRead', 'expenseReceipts.listPendingForSweep', 'expenseReceipts.markBacklogPending']);
     const methods = entries.filter(([repo, method]) => expenseRepos.includes(repo) && !crossProfile.has(`${repo}.${method}`));
     expect(new Set(methods.map(([repo]) => repo))).toEqual(new Set(expenseRepos));
     for (const [repo, method, access] of methods) {
@@ -127,6 +127,7 @@ describe('STORE_ACCESS', () => {
       'expenseReceipts.finishRead',
       'expenseReceipts.listPendingForSweep',
       'expenseReceipts.markBacklogPending',
+      'expenseReceipts.releaseMovedRead',
       'expenseReceipts.releaseRead',
       // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
       'features.grant',
