@@ -29,6 +29,36 @@ describe('createLocalApp + mintLocalSession', () => {
     expect(body.profiles).toHaveLength(1); // the one personal profile users.create wrote
   });
 
+  it('MUT-483: answers the period totals signed out over the memory store, the same route as the hosted server', async () => {
+    const store = new MemoryLedgerStore();
+    const now = () => new Date('2026-10-20T09:00:00.000Z');
+    const { token } = await mintLocalSession(store, now, 'ar');
+    const app = createLocalApp({ store, now });
+    const auth = { Authorization: `Bearer ${token}` };
+    const me = (await (await app.fetch(new Request('http://local/v1/me', { headers: auth }))).json()) as { profiles: Array<{ id: string }> };
+    const headers = { ...auth, 'Content-Type': 'application/json', 'X-Mutaba3a-Profile': me.profiles[0]!.id };
+    let key = 0;
+    const post = async (path: string, body: unknown) => {
+      const res = await app.fetch(new Request(`http://local${path}`, { method: 'POST', headers: { ...headers, 'Idempotency-Key': `period-local-${++key}` }, body: JSON.stringify(body) }));
+      expect(res.status).toBe(201);
+      return (await res.json()) as { id: string };
+    };
+    const customer = await post('/v1/customers', { name: 'Haddad' });
+    await post('/v1/income', { kind: 'owed', amount: '300.00', currency: 'ILS', occurredOn: '2026-10-02', customerId: customer.id });
+    await post('/v1/income', { kind: 'received', amount: '120.00', currency: 'ILS', occurredOn: '2026-10-05', customerId: customer.id });
+    await post('/v1/income', { kind: 'received', amount: '40.00', currency: 'ILS', occurredOn: '2026-09-28' });
+
+    const res = await app.fetch(new Request('http://local/v1/summaries/period?currency=ILS', { headers }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+      asOf: '2026-10-20',
+      timezone: expect.any(String),
+      currencies: [{ currency: 'ILS', openingBalance: '-40.00', billed: '300.00', credited: '0.00', received: '120.00', payments: '120.00', reversals: '0.00', change: '180.00', closingBalance: '140.00' }],
+    });
+  });
+
   it('MUT-447: answers the Reports verdict signed out, with no profile header, the local profile owned', async () => {
     const store = new MemoryLedgerStore();
     const now = () => new Date('2026-10-20T09:00:00.000Z');
