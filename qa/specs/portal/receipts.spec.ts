@@ -318,3 +318,32 @@ test('A Filed receipt has no Move, on its card or its page', { tag: '@portal.rec
     await expect(page.getByRole('button', { name: 'Move to profile…' })).toHaveCount(0);
   });
 });
+
+test('In Arabic on a 375 px phone, Move reads right to left and fills the screen', { tag: '@portal.receipts.move-arabic' }, async ({ page, step }) => {
+  const api = moveWorld();
+  const dialog = page.getByRole('dialog', { name: 'نقل الإيصال' });
+
+  await step('Open Receipts in Arabic on a 375 px wide screen and choose نقل إلى ملف آخر… on a card', async () => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await api.open(page, `${BASE}/receipts`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.getByRole('button', { name: 'إجراءات أخرى لـ taxi.pdf' }).click();
+    await page.getByRole('menuitem', { name: 'نقل إلى ملف آخر…' }).click();
+    await expect(dialog).toBeVisible();
+  });
+
+  await step('The drawer is Arabic, fills the screen, and the button names the profile chosen', async () => {
+    const box = await dialog.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(374);
+    await expect(dialog.getByRole('button', { name: 'نقل', exact: true })).toBeDisabled();
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await expect(dialog.getByRole('button', { name: 'نقل إلى Cedar Consulting' })).toBeEnabled();
+    await expect(dialog.getByRole('radio', { name: /Olive Translations/ })).toContainText('للقراءة فقط حتى يُدفع');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  await step('Moving it says نُقل إلى Cedar Consulting', async () => {
+    await dialog.getByRole('button', { name: 'نقل إلى Cedar Consulting' }).click();
+    await expect(page.getByText('نُقل إلى Cedar Consulting').first()).toBeVisible();
+  });
+});
