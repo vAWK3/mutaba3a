@@ -1742,6 +1742,21 @@ export class PrismaLedgerStore implements LedgerStore {
       );
       return { receivables, credits, payments, allocations, installments, charges };
     },
+    // MUT-483: three queries over the organization, each led by organizationId (the first column of an existing index on
+    // every table; currency is a residual filter), with only the ledger fields: deserializing whole rows is the cost
+    // (TD-291). One REPEATABLE READ snapshot, so a payment and the charge it pays never land in different reads.
+    periodSources: async (organizationId, currency) => {
+      const inCurrency = currency === null ? {} : { currency };
+      const [receivables, credits, payments] = await this.prisma.$transaction(
+        [
+          this.prisma.receivable.findMany({ where: { organizationId, deletedAt: null, ...inCurrency }, select: PERIOD_RECEIVABLE_FIELDS }),
+          this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { deletedAt: null, ...inCurrency } }, select: PERIOD_CREDIT_FIELDS }),
+          this.prisma.payment.findMany({ where: { organizationId, ...inCurrency }, select: PERIOD_PAYMENT_FIELDS }),
+        ],
+        { isolationLevel: 'RepeatableRead' },
+      );
+      return { receivables, credits, payments };
+    },
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
         where: {
@@ -3190,6 +3205,11 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 }
 
 /** Lock waits count inside these transactions, so they get more than Prisma's 5 s default; lock_timeout ends first. */
+/** MUT-483: the ledger fields `periodSources` reads (ports.ts `Ledger*Row`), so a period read never loads whole rows. */
+const PERIOD_RECEIVABLE_FIELDS = { id: true, customerId: true, currency: true, origin: true, postingDate: true, grossMinor: true, paidMinor: true, creditedMinor: true, deletedAt: true, createdAt: true } as const;
+const PERIOD_CREDIT_FIELDS = { id: true, receivableId: true, amountMinor: true, effectiveDate: true, createdAt: true } as const;
+const PERIOD_PAYMENT_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, receivedOn: true, status: true, reversalReason: true, reversedAt: true, updatedAt: true, createdAt: true } as const;
+
 const RECEIPT_LOCK_TIMEOUT = '8s';
 const RECEIPT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
 

@@ -1121,6 +1121,13 @@ export interface ReceivableRepository {
    * and the installments and retainer charges that name a charge's origin.
    */
   statementSources(organizationId: string, customerId: string, currency: string): Promise<StatementSourceRows>;
+  /**
+   * MUT-483: everything a period figure reads, across the whole organization, in three queries in one snapshot: the
+   * receivables that aren't deleted, the credits on them, and every payment of any status (one with no client too),
+   * each with only the ledger fields. `currency` narrows all three; null reads every currency. Allocations and
+   * installments are not read: a period figure is the ledger lines summed, and no line comes from them.
+   */
+  periodSources(organizationId: string, currency: string | null): Promise<PeriodSourceRows>;
   /** MUT-65: "Owed", written directly as origin ADJUSTMENT, agreementId null. */
   createAdjustment(input: CreateAdjustmentReceivableInput, at: Date): Promise<ReceivableRecord>;
   /**

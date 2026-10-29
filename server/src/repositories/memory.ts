@@ -2054,6 +2054,19 @@ export class MemoryLedgerStore implements LedgerStore {
         charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
       };
     },
+    // MUT-483: the same rows and fields as Prisma's narrow select, so nothing downstream can lean on a field it won't get there.
+    periodSources: async (organizationId, currency) => {
+      const inCurrency = (row: { organizationId: string; currency: string }) => row.organizationId === organizationId && (currency === null || row.currency === currency);
+      const receivables = [...this.recs.values()].filter((r) => inCurrency(r) && !r.deletedAt);
+      const receivableIds = new Set(receivables.map((r) => r.id));
+      return {
+        receivables: receivables.map((r) => ({ id: r.id, customerId: r.customerId, currency: r.currency, origin: r.origin, postingDate: r.postingDate, grossMinor: r.grossMinor, paidMinor: r.paidMinor, creditedMinor: r.creditedMinor, deletedAt: r.deletedAt, createdAt: r.createdAt })),
+        credits: [...this.credits.values()].filter((c) => receivableIds.has(c.receivableId)).map((c) => ({ id: c.id, receivableId: c.receivableId, amountMinor: c.amountMinor, effectiveDate: c.effectiveDate, createdAt: c.createdAt })),
+        payments: [...this.pays.values()]
+          .filter(inCurrency)
+          .map((p) => ({ id: p.id, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor, receivedOn: p.receivedOn, status: p.status, reversalReason: p.reversalReason, reversedAt: p.reversedAt, updatedAt: p.updatedAt, createdAt: p.createdAt })),
+      };
+    },
     list: async (organizationId, filter: ReceivableFilter, page) =>
       paginate(
         [...this.recs.values()].filter(
