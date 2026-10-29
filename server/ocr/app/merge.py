@@ -25,6 +25,9 @@ MIN_ALNUM = 1
 #: row's height (RapidOCR's detector sometimes boxes "64." and "180" apart); under the tight share, with no space.
 NUMBER_GAP_SHARE = 0.8
 NUMBER_TIGHT_GAP_SHARE = 0.25
+#: On a Hebrew page, a reader is sure of its digits at this mean confidence (MUT-504). RapidOCR's sure digits replace
+#: Tesseract's unsure ones on the same line; Tesseract's words stay.
+SURE_DIGITS = 0.85
 
 
 @dataclass
@@ -112,10 +115,38 @@ def _better(a: Row, b: Row) -> Row:
     return a if a.conf >= b.conf else b
 
 
+def _has_digit(text: str) -> bool:
+    return any(ch.isdigit() for ch in text)
+
+
+def _mean_conf(segments: list[Segment]) -> float:
+    return sum(s.conf for s in segments) / len(segments) if segments else 0.0
+
+
+def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
+    """A Tesseract line on a Hebrew page, with RapidOCR's digit readings of it (MUT-504).
+
+    Tesseract reads the Hebrew; RapidOCR, which has no Hebrew model, reads the digits better (bold totals and dates
+    Tesseract garbles). When RapidOCR is sure of its digits and Tesseract is not, the line keeps Tesseract's letter
+    words, as one segment at their own confidence, and takes RapidOCR's digit segments. Otherwise it stays as it is.
+    """
+    words = list(line.words) or [line]
+    tess_digits = [w for w in words if _has_digit(w.text)]
+    if _mean_conf(rapid_digits) < SURE_DIGITS or (tess_digits and _mean_conf(tess_digits) >= SURE_DIGITS):
+        return [line]
+    letters = [w for w in words if not _has_digit(w.text) and any(ch.isalpha() for ch in w.text)]
+    kept = list(rapid_digits)
+    if letters:
+        box = (min(w.box[0] for w in letters), line.box[1], max(w.box[2] for w in letters), line.box[3])
+        kept.insert(0, Segment(" ".join(w.text for w in letters), _mean_conf(letters), box))
+    return kept
+
+
 def merge(rapid: list[Segment], tess: list[Segment], page_script: str) -> list[Segment]:
     """The kept segments, top to bottom. `page_script` is the script Tesseract picked for the page.
 
-    On a Hebrew page Tesseract is the reader; RapidOCR only adds digit lines Tesseract missed. Otherwise each
+    On a Hebrew page Tesseract is the reader; RapidOCR adds digit lines Tesseract missed, and its sure digits replace
+    Tesseract's unsure ones on a line both read (`_hebrew_line`, MUT-504). Otherwise each
     Tesseract line is weighed against every RapidOCR row it overlaps (a tilted line can be two RapidOCR rows) that
     no earlier line claimed. A Tesseract line whose rows were all claimed already is a second reading of a line that
     is decided, so it is dropped.
@@ -139,7 +170,8 @@ def merge(rapid: list[Segment], tess: list[Segment], page_script: str) -> list[S
             continue
         claimed.update(free)
         if hebrew:
-            kept.append(t_row)
+            digits = sorted((s for i in free for s in rapid_rows[i].segments), key=lambda s: s.box[0])
+            kept.append(Row(t_row.top, t_row.bottom, _hebrew_line(seg, digits)))
             continue
         joined = Row(min(rapid_rows[i].top for i in free), max(rapid_rows[i].bottom for i in free), [s for i in free for s in rapid_rows[i].segments])
         kept.append(_better(joined, t_row))

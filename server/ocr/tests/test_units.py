@@ -84,6 +84,40 @@ def test_on_a_hebrew_page_tesseract_reads_and_rapid_only_adds_digit_lines_it_mis
     assert [s.text for s in out] == ['סה"כ לתשלום (₪) 240.82', "04-9675428"]
 
 
+def tess_line(words, y0=50, y1=70):
+    """A Tesseract line with its words (text, conf, x0, x1), as TesseractReader returns it."""
+    segs = [seg(text, conf, x0, y0, x1, y1) for text, conf, x0, x1 in words]
+    return Segment(" ".join(w.text for w in segs), sum(w.conf for w in segs) / len(segs), (min(w.box[0] for w in segs), y0, max(w.box[2] for w in segs), y1), tuple(segs))
+
+
+def test_on_a_hebrew_page_rapid_digits_replace_tesseracts_unsure_ones_and_its_words_stay():
+    # MUT-504: Tesseract garbles bold digits ("2025 12:49" for "11/12/2025 12:49") that RapidOCR reads at 0.99.
+    rapid = [seg("11/12/2025", 0.99, 40, 50, 140, 70), seg("12:49:52", 0.98, 150, 50, 230, 70), seg("RRSEEERR", 0.7, 0, 200, 300, 220)]
+    tess = [tess_line([("12:49", 0.55, 150, 200), ("2025", 0.4, 90, 140), ("תאריך", 0.82, 300, 360)])]
+    out = merge(rapid, tess, "hebr")
+    # The two digit boxes sit side by side, so they join into one (join_number_fragments).
+    assert [s.text for s in out] == ["תאריך", "11/12/2025 12:49:52"]
+    assert out[0].conf == pytest.approx(0.82) and out[0].box == (300, 50, 360, 70)
+
+
+def test_on_a_hebrew_page_sure_tesseract_digits_are_kept():
+    rapid = [seg("61.83", 0.99, 0, 50, 60, 70)]
+    tess = [tess_line([("61.83", 0.9, 0, 60), ("לתשלום", 0.9, 200, 300)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["61.83 לתשלום"]
+
+
+def test_on_a_hebrew_page_unsure_rapid_digits_do_not_replace_tesseracts():
+    rapid = [seg("61.88", 0.6, 0, 50, 60, 70)]
+    tess = [tess_line([("61.83", 0.7, 0, 60), ("לתשלום", 0.9, 200, 300)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["61.83 לתשלום"]
+
+
+def test_off_a_hebrew_page_the_merge_is_unchanged_by_tesseract_words():
+    rapid = [seg("Total", 0.99, 0, 100, 50, 120), seg("52.470", 0.99, 300, 100, 360, 120)]
+    tess = [tess_line([("Tota1", 0.6, 0, 50), ("52.47O", 0.5, 300, 360)], 101, 121)]
+    assert [s.text for s in merge(rapid, tess, "latn")] == ["Total", "52.470"]
+
+
 @pytest.mark.parametrize(("text", "noise"), [("RRREEERRSRSR", True), ("ERRBREERSRSRESHEER", True), ("Notebook", False), ("University", False), ("Bookshop12345678", False)])
 def test_separator_noise(text, noise):
     assert is_separator_noise(text) is noise

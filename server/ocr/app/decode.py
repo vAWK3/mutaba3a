@@ -2,7 +2,8 @@
 
 Images: the size is read from the header (Pillow opens lazily) and checked against MAX_PIXELS before a single pixel is
 decoded. PDFs: refused past MAX_PDF_PAGES, at most PDF_PAGES_READ pages read, each rasterised at PDF_DPI or lower so the
-raster stays under MAX_PIXELS. Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
+raster stays under MAX_PIXELS. A text layer is used instead of OCR only when its text is drawn visibly: an invisible
+layer is a scanner's own OCR (MUT-504). Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def _decode_pdf(body: bytes) -> Decoded:
             raise Refusal("too_large")
         count = min(total, config.PDF_PAGES_READ)
         text = _text_layer(pdf, count)
-        if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS:
+        if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS and not _invisible_text(pdf, count):
             return Decoded(pdf_text=text, page_count=count, flat=True)
         return Decoded(pages=[_rasterise(pdf[i]) for i in range(count)], page_count=count, flat=True)
     except Refusal:
@@ -104,6 +105,21 @@ def _text_layer(pdf, count: int) -> str:
         finally:
             textpage.close()
     return "\n".join(parts).replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _invisible_text(pdf, count: int) -> bool:
+    """Whether most of the text is drawn invisibly (render mode 3): another reader's OCR over a scanned image, as a
+    scanner app writes it (MUT-504). Adobe Scan's Hebrew comes out as Latin junk, so the page is read as an image."""
+    import pypdfium2.raw as pdfium_c
+
+    invisible = visible = 0
+    for i in range(count):
+        for obj in pdf[i].get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_TEXT,), max_depth=3):
+            if pdfium_c.FPDFTextObj_GetTextRenderMode(obj.raw) == pdfium_c.FPDF_TEXTRENDERMODE_INVISIBLE:
+                invisible += 1
+            else:
+                visible += 1
+    return invisible > visible
 
 
 def _rasterise(page) -> np.ndarray:

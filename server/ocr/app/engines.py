@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -27,6 +27,8 @@ class Segment:
     text: str
     conf: float  # 0..1
     box: tuple[float, float, float, float]  # x0, y0, x1, y1, y down
+    #: Tesseract's words on the line, each with its own confidence (MUT-504); empty for RapidOCR.
+    words: tuple["Segment", ...] = field(default=())
 
 
 class RapidReader:
@@ -110,5 +112,13 @@ class TesseractReader:
             y1 = max(data["top"][i] + data["height"][i] for i in idx)
             text = " ".join(data["text"][i].strip() for i in idx)
             conf = sum(float(data["conf"][i]) for i in idx) / len(idx) / 100
-            segments.append(Segment(text, max(0.0, min(1.0, conf)), (float(x0), float(y0), float(x1), float(y1))))
+            words = tuple(
+                Segment(
+                    data["text"][i].strip(),
+                    max(0.0, min(1.0, float(data["conf"][i]) / 100)),
+                    (float(data["left"][i]), float(data["top"][i]), float(data["left"][i] + data["width"][i]), float(data["top"][i] + data["height"][i])),
+                )
+                for i in idx
+            )
+            segments.append(Segment(text, max(0.0, min(1.0, conf)), (float(x0), float(y0), float(x1), float(y1)), words))
         return segments

@@ -41,6 +41,42 @@ def pdf_with_pages(count: int, size: tuple[float, float] = (200, 200)) -> bytes:
     return buf.getvalue()
 
 
+def pdf_with_text(text: str, render_mode: int) -> bytes:
+    """A one-page PDF whose text is drawn with `render_mode` (0 visible, 3 invisible: what a scanner's OCR writes)."""
+    stream = f"BT /F1 12 Tf {render_mode} Tr 20 100 Td ({text}) Tj ET".encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return bytes(out)
+
+
+RECEIPT_TEXT = "Grocer Ltd Total 61.83 Date 11/12/2025"
+
+
+def test_a_visible_text_layer_is_read_as_text():
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 0), "application/pdf")
+    assert decoded.pdf_text is not None and "61.83" in decoded.pdf_text and decoded.pages == []
+
+
+def test_an_invisible_text_layer_is_another_readers_ocr_so_the_page_is_rasterised():
+    # MUT-504: Adobe Scan writes its OCR as invisible text over the scan; its Hebrew comes out as Latin junk.
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 3), "application/pdf")
+    assert decoded.pdf_text is None and len(decoded.pages) == 1 and decoded.flat
+
+
 @pytest.fixture(scope="module")
 def stub_client():
     """The real HTTP layer over a stand-in reader (tests/slow_reader.py) in a real worker process."""
