@@ -105,3 +105,7 @@ The first bench after the plan's changes left Hebrew amounts at 3/10 and two wro
 - **B9:** `חייב במע"מ` is a subtotal label.
 
 Result: Hebrew amounts 7/10, dates 6/11, AC1 fields 0 wrong.
+
+## Pre-landing review (2026-10-29)
+Two reviewers (one specialist pass, one adversarial) reproduced six inputs where the first build filled a wrong field, plus smaller issues. Each became a failing test, then a fix: ADR-229 "Pre-landing review" lists them. The bench after the fixes: unchanged (Hebrew amounts 7/10, dates 6/11, AC1 fields 0 wrong; synthetic not worse; warm p95 1.7 s).
+Left as INVESTIGATE, not fixed: RapidOCR's sure digits replace Tesseract's unsure ones with no agreement check (measured on the bench only); TD-294.

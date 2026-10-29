@@ -39,6 +39,7 @@
 ### Technical
 - Test-first: `extract.test.ts` "real receipt patterns (MUT-504)" (synthetic rows, no real text); `server/ocr/tests/test_units.py` Hebrew merge cases; `test_caps.py` visible and invisible text layers from a hand-built PDF.
 - `server/ocr/bench/run.py --real-detail` writes per-receipt results into the real folder only. Bench: real AC1 fields 0 wrong, Hebrew amounts 7/10 and dates 6/11; synthetic unchanged or better (`.claude/designs/mut-441-bench.md`, MUT-504 section).
+- Pre-landing review fixes (ADR-229 R1–R12): disagreeing totals give none, discount/cash/one-row guards on the largest-amount rules, card-slip agreement, VAT only joined rows' smaller amount, no year from a price, due dates skipped, 0% VAT lines ignored, area-weighted and bounded hidden-text check that rasterises on failure; each reproduced input is a test.
 - TD-293 (the real set's truth), TD-294 (toll-bill registration number, government-document vendor). No API contract, schema or migration change.
 
 ## [Unreleased] - 2026-10-29 — MUT-483: firm period totals readable with an API key (API 1.90.0-mut483, ADR-227)
