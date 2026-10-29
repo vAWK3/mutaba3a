@@ -5,6 +5,7 @@ import type { ReceiptListItem } from '../api/client';
 import { useReceiptDownload } from '../data/receiptQueries';
 import { DecimalAmount } from '../format/DecimalAmount';
 import { formatDay } from '../format/dates';
+import { MoreActionsMenu, type MoreAction } from './MoreActionsMenu';
 
 /**
  * One receipt in the Receipts gallery (MUT-260 D5, layout B): a thumbnail, its status, when it came in, and for a
@@ -15,6 +16,10 @@ export interface ReceiptCardProps {
   profileId: string;
   item: ReceiptListItem;
   to: string;
+  /** MUT-503 (DR5): the card's ⋯ menu; absent or empty, no ⋯. */
+  actions?: readonly MoreAction[];
+  /** MUT-503 (DR4): moved away; the card fades out before the list drops it. */
+  leaving?: boolean;
 }
 
 /** True once the element has been in view (IntersectionObserver); at once where there is none to ask. */
@@ -58,12 +63,12 @@ function ImageThumb({ profileId, item }: { profileId: string; item: ReceiptListI
   );
 }
 
-export function ReceiptCard({ profileId, item, to }: ReceiptCardProps) {
+export function ReceiptCard({ profileId, item, to, actions, leaving = false }: ReceiptCardProps) {
   const { t, language } = useLanguage();
   const isPdf = item.mimeType === 'application/pdf';
   const status = item.filingStatus === 'FILED' ? 'filed' : 'to_review';
   return (
-    <li className="hp-receipt-card" data-receipt-id={item.id} data-status={status}>
+    <li className={`hp-receipt-card ${leaving ? 'hp-receipt-card-leaving' : ''}`} data-receipt-id={item.id} data-status={status} aria-hidden={leaving || undefined}>
       <Link to={to} className="hp-receipt-card-link" aria-label={t('hosted.receipts.open', { name: item.filename })}>
         {isPdf ? (
           <span className="hp-receipt-thumb hp-receipt-thumb-pdf" aria-hidden="true">
@@ -89,6 +94,13 @@ export function ReceiptCard({ profileId, item, to }: ReceiptCardProps) {
           </span>
         )}
       </Link>
+      {actions && actions.length > 0 && (
+        <MoreActionsMenu label={t('hosted.receipts.moreActions', { name: item.filename })} actions={actions} buttonClassName="hp-receipt-more" panelClassName="hp-receipt-menu">
+          <span className="hp-receipt-more-chip hp-glass" aria-hidden="true">
+            ⋯
+          </span>
+        </MoreActionsMenu>
+      )}
     </li>
   );
 }

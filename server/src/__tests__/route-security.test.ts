@@ -60,6 +60,8 @@ const EXPENSE_OPERATIONS = [
   'POST /v1/receipts/{receiptId}/approve',
   // MUT-389: filing onto an existing expense.
   'POST /v1/receipts/{receiptId}/file',
+  // MUT-503: to another of the person's profiles.
+  'POST /v1/receipts/{receiptId}/move',
   'DELETE /v1/receipts/{receiptId}',
 ];
 

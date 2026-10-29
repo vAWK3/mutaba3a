@@ -493,3 +493,82 @@ describe('R5: granting receipt_reading queues the person\'s unread To-review rec
     expect((await stored(h, orgId, waiting.id)).readStatus ?? 'NONE').toBe('NONE');
   });
 });
+
+describe('MUT-503 (D6): a receipt moved to another profile while it is being read', () => {
+  async function withSecondProfile(opts: Options = {}) {
+    const s = await setup({ dispatcher: 'recording', ...opts });
+    const b = (await read(await s.h.app.request('/admin/v1/organizations', json({ name: `Studio ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)))).id as string;
+    await s.h.app.request(`/admin/v1/users/${s.userId}/memberships`, json({ organizationId: b }, admin));
+    const moveTo = (receiptId: string) => s.h.app.request(`/v1/receipts/${receiptId}/move`, json({ profileId: b }, { ...s.as, ...idem() }));
+    return { ...s, b, moveTo };
+  }
+
+  /** Moves the receipt the first time the reader asks storage for its bytes, before they are read. */
+  function moveOnFirstRead(h: Harness, move: () => Response | Promise<Response>) {
+    const realRead = h.storage.read.bind(h.storage);
+    let once = true;
+    h.storage.read = async (key: string) => {
+      if (once) {
+        once = false;
+        expect((await move()).status).toBe(200);
+      }
+      return realRead(key);
+    };
+  }
+
+  it('moved before its bytes were read: the old file is gone, so the read is retried (503), not FAILED, and the try is not counted', async () => {
+    const { h, b, as, moveTo } = await withSecondProfile();
+    const done = await upload(h, as);
+    moveOnFirstRead(h, () => moveTo(done.id));
+    const res = await job(h, { receiptId: done.id });
+    expect(res.status).toBe(503);
+    expect(await read(res)).toEqual({ status: 'retry' });
+    const retried = await stored(h, b, done.id);
+    expect(retried).toMatchObject({ readStatus: 'PENDING', readAttempts: 0, readLeaseUntil: null });
+    expect(retried.readFailReason ?? null).toBeNull();
+
+    expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'done' });
+    const after = await stored(h, b, done.id);
+    expect(after).toMatchObject({ readStatus: 'DONE', readAttempts: 1 });
+    expect(after.suggested?.totalMinor?.value).toBe('1540');
+  });
+
+  it('moved during its third try: the retry is not given up on', async () => {
+    const { h, orgId, b, as, moveTo } = await withSecondProfile();
+    const done = await upload(h, as);
+    (h.ocr as FakeOcr).next = async () => {
+      throw new OcrReadError('timeout');
+    };
+    await job(h, { receiptId: done.id });
+    await job(h, { receiptId: done.id });
+    expect((await stored(h, orgId, done.id)).readAttempts).toBe(2);
+    (h.ocr as FakeOcr).next = async () => ({ engine: 'test', lines: SUPERMARKET, pages: 1 });
+    moveOnFirstRead(h, () => moveTo(done.id));
+    expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'retry' });
+    expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'done' });
+    expect((await stored(h, b, done.id)).readStatus).toBe('DONE');
+  });
+
+  it('moved during the OCR call: the reading lands on the moved receipt, with the vendor saved on its new profile', async () => {
+    const { h, b, as, moveTo } = await withSecondProfile();
+    await h.store.vendors.resolve({ organizationId: b, name: 'Shufersal Ltd', registrationNo: REG_VALID_COMPANY }, h.clock.now);
+    const done = await upload(h, as);
+    (h.ocr as FakeOcr).next = async () => {
+      expect((await moveTo(done.id)).status).toBe(200);
+      return { engine: 'test', lines: SUPERMARKET, pages: 1 };
+    };
+    expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'done' });
+    const after = await stored(h, b, done.id);
+    expect(after.readStatus).toBe('DONE');
+    expect(after.suggested?.totalMinor?.value).toBe('1540');
+    expect(after.suggested?.vendorName).toEqual({ value: 'Shufersal Ltd', source: 'vendor', confidence: 1 });
+  });
+
+  it('a file missing for any other reason is still FAILED missing', async () => {
+    const { h, orgId, as } = await withSecondProfile();
+    const done = await upload(h, as);
+    h.storage.objects.delete((await stored(h, orgId, done.id)).storageKey);
+    expect(await read(await job(h, { receiptId: done.id }))).toEqual({ status: 'failed' });
+    expect(await stored(h, orgId, done.id)).toMatchObject({ readStatus: 'FAILED', readFailReason: 'missing' });
+  });
+});

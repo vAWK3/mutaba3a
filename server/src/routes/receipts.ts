@@ -5,7 +5,7 @@ import { assertIsoDate, todayFor, validationError } from '../agreements/compose.
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { ApiError } from '../errors.js';
 import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
-import { completeLibraryReceipt, MAX_PENDING_LIBRARY_UPLOADS, receiptAudit, signReceiptUpload, startLibraryReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
+import { completeLibraryReceipt, MAX_PENDING_LIBRARY_UPLOADS, moveLibraryReceipt, receiptAudit, signReceiptUpload, startLibraryReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
 import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
@@ -24,6 +24,8 @@ import {
   FileReceiptResponseSchema,
   IfMatchHeaderSchema,
   ListReceiptsQuerySchema,
+  MoveReceiptRequestSchema,
+  MoveReceiptResponseSchema,
   ReceiptCountsSchema,
   ReceiptDownloadQuerySchema,
   ReceiptIdParamSchema,
@@ -338,6 +340,25 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'existing' });
       const receipts = await store.expenseReceipts.listByExpense(organization.id, result.expense.id);
       return c.json({ expense: { ...serializeExpense(result.expense), receipts: receipts.map(serializeExpenseReceipt) }, receipt: serializeExpenseReceipt(result.receipt) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/receipts/{receiptId}/move',
+      tags: ['Receipts'],
+      summary: 'Move a To-review receipt to another of your profiles (MUT-503)',
+      description:
+        'The receipt keeps its id, upload day, suggestion and reading state; its file is copied inside the bucket to the other profile and removed from this one. An approval left by a deleted expense is cleared, since its category belongs to this profile. 422 SAME_PROFILE for this profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when that profile is read-only or locked; 404 RECEIPT_NOT_FOUND; 409 CONFLICT RECEIPT_ALREADY_FILED (details.expenseId) for a filed receipt; 409 CONFLICT RECEIPT_FILE_MISSING when its file is gone; 422 ATTACHMENT_NOT_READY before the upload completes. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.',
+      security: SESSION_ONLY,
+      middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.move')] as const,
+      request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(MoveReceiptRequestSchema) },
+      responses: { 200: { description: 'Moved', content: { 'application/json': { schema: MoveReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+    }),
+    async (c) => {
+      const result = await moveLibraryReceipt(receiptDeps, receiptActor(c), c.req.valid('param').receiptId, c.req.valid('json').profileId, { billingGate: c.get('billingGate') === true, reportError: c.get('reportError') });
+      return c.json({ receipt: serializeExpenseReceipt(result.receipt), fromProfileId: result.fromProfileId }, 200);
     },
   );
 

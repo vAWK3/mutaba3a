@@ -523,6 +523,29 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 .hp-receipt-chip-to_review { background: var(--m-lavender); color: var(--m-lavender-ink); }
 .hp-receipt-chip-filed { background: var(--m-mint); color: var(--m-mint-ink); }
 .hp-receipt-card-uploading { opacity: 0.8; }
+/* MUT-503 (DR5): a To-review card's ⋯, a glass chip at the thumbnail's top end; the 44px hit area is the button, the
+   32px chip its look. A sibling of the card's link, never inside it. */
+.hp-receipt-card { position: relative; }
+.hp-receipt-more { position: absolute; inset-block-start: var(--space-1); inset-inline-end: var(--space-1); width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text); cursor: pointer; }
+.hp-receipt-more-chip { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-pill); font-weight: var(--weight-bold); }
+.hp-receipt-more:focus-visible { outline: none; }
+.hp-receipt-more:focus-visible .hp-receipt-more-chip { box-shadow: var(--focus-ring); }
+.hp-receipt-menu { inset-block-start: calc(var(--space-1) + 44px); inset-inline-end: var(--space-1); width: 220px; }
+/* DR4: a moved card leaves (a fade under reduced motion: the motion tokens zero themselves). */
+.hp-receipt-card-leaving { opacity: 0; transform: scale(0.92); transition: opacity var(--duration-toggle) var(--ease-spring), transform var(--duration-toggle) var(--ease-spring); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .hp-receipt-card-leaving { transform: none; transition: opacity 150ms linear; } }
+
+/* MUT-503 (DR6): the move drawer's profiles, radio rows on the profile-row recipe. */
+.hp-move-receipt-lead { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-label); }
+.hp-move-receipt .hp-banner { margin-block-end: var(--space-3); }
+.hp-move-receipt-profiles .hp-profile-row + .hp-profile-row { border-block-start: 1px solid var(--divider); }
+.hp-profile-row-on, button.hp-profile-row-on:hover { background: var(--accent-subtle); color: var(--on-accent-subtle); }
+.hp-profile-row-on .hp-option-sub { color: var(--on-accent-subtle); }
+button.hp-profile-row[aria-disabled="true"] { cursor: default; }
+button.hp-profile-row[aria-disabled="true"]:hover { background: transparent; }
+button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--muted); }
+.hp-radio { flex: none; width: 20px; height: 20px; border-radius: var(--radius-pill); border: 2px solid var(--border-strong); }
+.hp-profile-row-on .hp-radio { border: 6px solid var(--accent-solid); }
 .hp-receipt-reading { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-label); }
 
 .hp-receipt-back { display: inline-flex; align-items: center; gap: var(--space-1); margin-block-end: var(--space-2); font-size: var(--text-label); }

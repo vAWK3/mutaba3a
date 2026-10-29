@@ -15,7 +15,7 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
+import { omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptReview, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
 import { ReportsPage } from './pages/views/ReportsPage';
 import { GlancePage } from './pages/views/GlancePage';
@@ -264,10 +264,11 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => profileRoute,
     ...PAGE_CRASH,
     path: '/expenses/receipts/$receiptId',
+    validateSearch: parseReceiptReview,
     component: function Receipt() {
       const { receiptId } = receiptRoute.useParams();
       // Keyed: another receipt starts a fresh form and attempt key (A2)
-      return <ReceiptReviewPage key={receiptId} receiptId={receiptId} />;
+      return <ReceiptReviewPage key={receiptId} receiptId={receiptId} search={omitShellOverlay(receiptRoute.useSearch())} setSearch={useReplaceSearch()} />;
     },
   });
 

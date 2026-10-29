@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-29 — MUT-503: move a To-review receipt to another profile (API 1.91.0-mut503, ADR-228)
+
+**Why:** a receipt landed on the profile it was uploaded from and could never leave it, so "drop it anywhere, sort it later" didn't work; a receipt on the wrong profile had to be deleted and uploaded again, losing its reading. Plan `.claude/designs/mut-503-move-receipt.md` (eng D1–D8, design DR1–DR9, all answered by Basel).
+
+### Added
+- `POST /v1/receipts/{id}/move {profileId}` (session, Idempotency-Key): copies the object inside the bucket to a key of its own on the target, re-homes the row in one transaction (same id, day, suggestion, reading; leftover approval cleared), then removes the old object. 404 `PROFILE_NOT_FOUND`, 402 lapsed target, 409 `RECEIPT_ALREADY_FILED` / `RECEIPT_FILE_MISSING`, 422 `SAME_PROFILE` / `ATTACHMENT_NOT_READY`. Audits `expense_receipt.moved_out` / `moved_in`. Files: `server/src/routes/receipts.ts`, `server/src/expenses/receipts-compose.ts` (`moveLibraryReceipt`), `server/src/attachments/{storage,local-storage,rules}.ts`, `server/src/repositories/{ports,memory,prisma}.ts` (`moveToProfile`, `releaseMovedRead`), `server/src/schemas.ts`.
+- Portal: "Move to profile…" in a ⋯ menu on To-review receipt cards and beside the review page's title; the Move drawer (`?move=`) lists the person's other profiles, read-only or locked ones disabled with their reason, and the primary names the profile chosen; after the move the card leaves, focus goes to its neighbour, and a toast "Moved to <name>" offers Open. Files: `src/hosted/components/{MoveReceiptDrawer,MoreActionsMenu,ReceiptCard}.tsx`, `src/hosted/pages/views/{ReceiptsGallery,ReceiptReview}.tsx`, `src/hosted/data/{receiptQueries,filters}.ts`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`.
+
+### Changed
+- The receipt reader: a read whose file vanished because the receipt moved is retried with its try given back, not FAILED; the vendor comes from the receipt's current profile (`server/src/receipts/reading/reader.ts`).
+- `ExpenseGroupDetail`'s narrow-screen ⋯ menu now uses the shared `MoreActionsMenu` (adds ↑/↓, Home and End).
+- API 1.90.0-mut483 → 1.91.0-mut503; `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Technical
+- Tests first: `server/src/__tests__/routes-receipts-move.test.ts` (14), reader cases in `routes-receipt-reading.test.ts` (4), `repositories/__tests__/store-prisma-receipt-move.test.ts` (5, Postgres), `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx` (14), `src/hosted/data/__tests__/receiptHooks.test.tsx` (+10). Release-QA features `portal.receipts.move`, `move-review`, `move-refused`, `filed-no-move` with the FakeApi's per-profile receipts.
+- No migration. The phone half is in the Flutter repo on its own branch.
+
 ## [Unreleased] - 2026-10-29 — MUT-483: firm period totals readable with an API key (API 1.90.0-mut483, ADR-227)
 
 **Why:** at month end a partner checks billed, received and credited with the accountant, and an API key could read no figure over time; Malafat may not add them up itself. Unblocks MAL-1428 "Month summary". Plan `.claude/designs/mut-483-period-totals.md` (D1–D5 answered by Basel; eng review R1–R12; build notes B1–B6).

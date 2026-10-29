@@ -1083,6 +1083,34 @@
         "actual": "Actual size",
         "openFull": "Open full size",
         "pdfTitle": "Receipt {name} (PDF)"
+      },
+      "moreActions": "More actions for {name}",
+      "move": {
+        "action": "Move to profile…",
+        "title": "Move receipt",
+        "submit": "Move",
+        "moveTo": "Move to {name}",
+        "lead": "Received {day} · now on {profile}",
+        "pick": "The profile to move it to",
+        "reading": "Still being read. The reading finishes on the profile you choose.",
+        "noneTitle": "No other profile can take it.",
+        "noneBody": "Your other profiles can only be read until they're paid.",
+        "billing": "Billing",
+        "reason": {
+          "readOnly": "Read-only until it's paid",
+          "locked": "Locked · its trial has ended"
+        },
+        "moved": "Moved to {name}",
+        "open": "Open",
+        "errors": {
+          "lapsed": "{name} can't take receipts right now: it's read-only until it's paid. The receipt stays here.",
+          "noAccess": "You're no longer on {name}. The receipt stays here.",
+          "alreadyFiled": "This receipt was filed meanwhile, so it stays here.",
+          "fileMissing": "This receipt's file is missing, so it can't be moved.",
+          "notReady": "This receipt hasn't finished uploading.",
+          "gone": "This receipt isn't here any more. It may have been moved or deleted.",
+          "failed": "The receipt couldn't be moved. Check your connection and try again."
+        }
       }
     },
     "firm": {

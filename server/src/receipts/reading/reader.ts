@@ -118,10 +118,14 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return 'none';
   }
 
-  /** Fill-absent onto what is stored now; a person's edit in between means merging again onto theirs. */
-  async function save(claimed: ExpenseReceiptRecord, read: ReceiptSuggestion): Promise<{ status: ReadJobStatus; added: number }> {
+  /**
+   * Fill-absent onto what is stored now; a person's edit in between means merging again onto theirs. The vendor is
+   * looked up on the profile the receipt is on now (MUT-503: it may have moved during the read).
+   */
+  async function save(claimed: ExpenseReceiptRecord, raw: ReceiptSuggestion): Promise<{ status: ReadJobStatus; added: number }> {
     let current = claimed;
     for (let i = 0; i < STALE_RETRIES; i += 1) {
+      const read = await withVendor(current, raw);
       const { merged, added } = fillAbsent(current.suggested, read);
       const outcome: FinishReadOutcome = added.length > 0 ? { status: 'DONE', suggested: merged } : isCompleteSuggestion(current.suggested) ? { status: 'SKIPPED' } : { status: 'DONE' };
       const result = await finishRead(current.id, current.version, outcome);
@@ -141,7 +145,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     if (!body) throw new OcrReadError('missing');
     const result = await ocr.read({ body, contentType: receipt.mimeType, hint: receipt.captureHint === 'SCANNED' ? 'scanned' : 'photo' });
     const read = await scrubbed('extract_failed', () => extractReceipt({ lines: result.lines, pdfText: result.pdfText }, { readerVersion: serverReaderVersion(result.engine) }));
-    return { read: await withVendor(receipt, read), lines: result.lines.length };
+    return { read, lines: result.lines.length };
   }
 
   /**
@@ -162,7 +166,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     }
     const receipt = claim.record;
     const attempts = receipt.readAttempts ?? 1;
-    const done = (status: ReadJobStatus, extra: { code?: OcrReadErrorCode | 'exhausted'; lines?: number; added?: number } = {}) => {
+    const done = (status: ReadJobStatus, extra: { code?: OcrReadErrorCode | 'exhausted' | 'moved'; lines?: number; added?: number } = {}) => {
       logger.info({ receiptId, status, attempts, durationMs: Date.now() - started, ...extra }, 'receipt read');
       return status;
     };
@@ -177,6 +181,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
       return done(saved.status, { lines, added: saved.added });
     } catch (err) {
       const failure = err instanceof OcrReadError ? err : new OcrReadError('unavailable');
+      // MUT-503 (D6): the receipt moved to another profile since the claim and its old file is gone. Not missing:
+      // the lease and the try go back, and the retry reads the file at its new key.
+      if (failure.code === 'missing' && (await scrubbed('store_failed', () => receipts.releaseMovedRead(receiptId, receipt.storageKey)))) return done('retry', { code: 'moved' });
       if (failure.terminal) return done(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: failure.code }), { code: failure.code });
       await scrubbed('store_failed', () => receipts.releaseRead(receiptId));
       return done('retry', { code: failure.code });
