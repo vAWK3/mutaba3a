@@ -1844,6 +1844,8 @@ export const VALIDATION_REASONS = [
   // MUT-443: correcting a payment a person recorded (D4); a correction that changes nothing (R10).
   'PAYMENT_NOT_CORRECTABLE',
   'NOTHING_TO_CORRECT',
+  // MUT-444: a correction that changes a billed line's trigger or drops a billed line (details: position, change).
+  'POSTED_INSTALLMENT_CHANGED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -1974,22 +1976,19 @@ export const InstallmentSchema = z
 /** MUT-480 (D3): why a fee was lowered or a receivable credited. OTHER needs a note. MUT-443 reuses it. */
 export const CreditReasonCodeSchema = z.enum(CREDIT_REASON_CODES).openapi('CreditReasonCode');
 
+/** MUT-444 (R12): what each field means, per distribution. */
 export const SupplementSchema = z
   .object({
     id: uuid,
-    /** The change to the installments, in the agreement's pricing basis (≤ 0 for a REDUCTION). */
-    amount: AmountSchema,
-    description: z.string().nullable(),
+    amount: AmountSchema.openapi({ description: 'The change to the contractual amount, in the pricing basis. Supplements: the delta. REDUCTION: the delta, ≤ 0. CORRECTION: the new amount − the old one when the pricing basis is unchanged; "0.00" when the basis changed, since the two figures are not comparable (read appliedGross).' }),
+    description: z.string().nullable().openapi({ description: "Supplements: the partner's text. REDUCTION and CORRECTION: the note given with the reason." }),
     effectiveDate: IsoDateSchema,
-    /** MUT-480 added REDUCTION: a fee lowered through POST /v1/agreements/{id}/reduce. */
-    distribution: z.enum(['LAST_UNPOSTED', 'PRORATE_UNPOSTED', 'NEW_INSTALLMENT', 'REDUCTION']),
-    resultingAmount: AmountSchema,
-    /** MUT-480: REDUCTION rows only (null otherwise). */
-    reasonCode: CreditReasonCodeSchema.nullable(),
-    /** MUT-480: REDUCTION rows only (null otherwise): the gross taken off, installments and credits together. */
-    appliedGross: AmountSchema.nullable(),
-    /** MUT-480: the part of `appliedGross` that became credits on posted receivables; 0 on other rows. */
-    credited: AmountSchema,
+    /** MUT-480 added REDUCTION (POST /v1/agreements/{id}/reduce); MUT-444 added CORRECTION (POST /v1/agreements/{id}/correct). */
+    distribution: z.enum(['LAST_UNPOSTED', 'PRORATE_UNPOSTED', 'NEW_INSTALLMENT', 'REDUCTION', 'CORRECTION']).openapi({ description: 'LAST_UNPOSTED, PRORATE_UNPOSTED, NEW_INSTALLMENT: a supplement. REDUCTION: a fee lowered (MUT-480). CORRECTION: the terms corrected after posting (MUT-444): every line was replaced.' }),
+    resultingAmount: AmountSchema.openapi({ description: 'The contractual amount after the row, in the (new) pricing basis.' }),
+    reasonCode: CreditReasonCodeSchema.nullable().openapi({ description: 'REDUCTION and CORRECTION rows: the reason code; null otherwise.' }),
+    appliedGross: AmountSchema.nullable().openapi({ description: 'Supplements: null. REDUCTION: the gross taken off (> 0), installments and credits together. CORRECTION: the gross taken off the effective total, old − new, with the same sign: positive when the fee went down, negative when it went up.' }),
+    credited: AmountSchema.openapi({ description: 'Supplements: "0.00". REDUCTION: the part of appliedGross that became credits. CORRECTION: the credits written on the replaced charges (their remainders).' }),
     createdAt: z.string().datetime(),
   })
   .openapi('Supplement');
@@ -2093,6 +2092,73 @@ export const ReducePreviewResponseSchema = z
   .openapi('ReducePreviewResponse');
 
 export const ReduceResponseSchema = AgreementDetailSchema.extend({ supplement: SupplementSchema, credits: z.array(z.lazy(() => CreditSchema)) }).openapi('ReduceResponse');
+
+// ---- MUT-444: correcting an agreement's terms after posting ----------------
+
+const correctTerms = {
+  /** The new contractual amount, in `pricingBasis`. FIXED: positive. CONTINGENCY: the upfront, ≥ 0 (0 with no installments). */
+  amount: AmountSchema,
+  pricingBasis: PricingBasisSchema,
+  vatTreatment: VatTreatmentSchema.optional().openapi({ description: "The installments' default treatment; left out keeps the agreement's own." }),
+  paymentTerms: PaymentTermsSchema.optional().openapi({ description: "Left out keeps the agreement's own." }),
+  installments: z.array(InstallmentSpecSchema).max(MAX_INSTALLMENTS).openapi({
+    description: "The full new schedule, matched to the agreement's live lines by order (k-th to k-th). A billed line keeps its place and its trigger (type, and for DATE the date): otherwise 422 POSTED_INSTALLMENT_CHANGED with details { position, change: TRIGGER | REMOVED }. Unbilled lines change freely, and lines may be added.",
+  }),
+};
+
+export const CorrectAgreementPreviewRequestSchema = z
+  .object({ ...correctTerms, reasonCode: CreditReasonCodeSchema.optional(), note: z.string().max(500).optional() })
+  .strict()
+  .openapi('CorrectAgreementPreviewRequest');
+
+export const CorrectAgreementRequestSchema = z
+  .object({
+    ...correctTerms,
+    reasonCode: CreditReasonCodeSchema,
+    /** Required when reasonCode is OTHER (422 REASON_REQUIRED); stored as the credits' reason text and the CORRECTION row's description. */
+    note: z.string().max(500).optional(),
+    previewToken: z.string().length(64),
+  })
+  .strict()
+  .openapi('CorrectAgreementRequest');
+
+const CorrectionTermsSchema = z.object({ amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema, pricingBasis: PricingBasisSchema, vatTreatment: VatTreatmentSchema, paymentTerms: PaymentTermsSchema, vatRateBasisPoints: z.number().int() });
+const BeforeAfter = <T extends z.ZodTypeAny>(schema: T) => z.object({ before: schema, after: schema });
+
+export const CorrectAgreementPreviewResponseSchema = z
+  .object({
+    terms: BeforeAfter(CorrectionTermsSchema),
+    /** One entry per place k: the live line there now (`before`) and the line that replaces it (`after`); null where there is none. */
+    installments: z.array(
+      z.object({
+        before: z.object({ id: uuid, position: z.number().int(), label: z.string(), amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema, trigger: InstallmentTriggerSchema, dueDate: IsoDateSchema, status: ItemStatusSchema, receivableId: uuid.nullable(), receivableNumber: z.string().nullable(), postingDate: IsoDateSchema.nullable() }).nullable(),
+        after: z.object({ label: z.string(), amount: AmountSchema, net: AmountSchema, vat: AmountSchema, gross: AmountSchema, vatTreatment: VatTreatmentSchema, trigger: InstallmentTriggerSchema, dueDate: IsoDateSchema, postingDate: IsoDateSchema.nullable().openapi({ description: 'Billed in the same write on this date (a billed line keeps its original date); null: it waits for its trigger.' }) }).nullable(),
+      }),
+    ),
+    /** Each billed charge is credited for what is left of it (gross − earlier credits), dated its own posting date. */
+    credits: z.array(z.object({ receivableId: uuid, receivableNumber: z.string(), effectiveDate: IsoDateSchema, amount: AmountSchema, net: AmountSchema, vat: AmountSchema, priorCredited: AmountSchema.openapi({ description: 'Credits already on the charge, absorbed by the correction and not carried over.' }) })),
+    /** The payments that move, oldest first: what each releases from the old charges, where it lands, and what stays unallocated on it. */
+    allocations: z.array(z.object({ paymentId: uuid, paymentNumber: z.string(), receivedOn: IsoDateSchema, released: z.array(z.object({ receivableId: uuid, receivableNumber: z.string(), amount: AmountSchema })), placed: z.array(z.object({ position: z.number().int(), amount: AmountSchema })), unallocated: AmountSchema })),
+    agreement: z.object({ effectiveTotal: BeforeAfterSchema, outstanding: BeforeAfterSchema }),
+    /** The client's figures in the agreement's currency, as the customer summary computes them; `after` = `before` + this correction's change. */
+    customer: z.object({ outstanding: BeforeAfterSchema, unallocated: BeforeAfterSchema, balance: BeforeAfterSchema }),
+    /** AC1: the change in the client's balance (outstanding − unallocated) = new billed gross − (old billed gross − earlier credits). */
+    balanceChange: AmountSchema,
+    priorCredited: AmountSchema,
+    previewToken: z.string().length(64),
+  })
+  .openapi('CorrectAgreementPreviewResponse');
+
+export const CorrectAgreementResponseSchema = AgreementDetailSchema.extend({
+  supplement: SupplementSchema,
+  credits: z.array(z.lazy(() => CreditSchema)),
+  /** The charges this write billed: the reposts on their original dates, and any other line due now. */
+  receivables: z.array(z.lazy(() => ReceivableSchema)),
+  /** The new allocation rows on those charges. */
+  allocations: z.array(z.object({ paymentId: uuid, receivableId: uuid, amount: AmountSchema })),
+  /** What a moved payment could not place again, left unallocated on it. */
+  unallocated: z.array(z.object({ paymentId: uuid, amount: AmountSchema })),
+}).openapi('CorrectAgreementResponse');
 
 export const AgreementPreviewResponseSchema = z
   .object({

@@ -3564,6 +3564,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agreements/{agreementId}/correct/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview correcting an agreement’s terms after posting: the new lines, the credits, the payments that move, the balance change
+         * @description The only write is the lazy billing every read does. Every live line is replaced: each billed charge is credited for its remainder on its own posting date and the matching new line is billed on that same date; payments on the old charges move to the new ones oldest first, and what doesn’t fit stays unallocated. `balanceChange` is the change in the client’s balance (outstanding − unallocated). reasonCode and note are optional here and not part of the token. The token covers the resolved terms, the rate, today, the agreement’s lines and charges and the payments that move, so anything that moves in between is 409 PREVIEW_STALE at correct. Needs agreements:read and payments:read. FIXED, or CONTINGENCY before its outcome (the upfront; amount 0 with no installments is allowed). The body is the full new terms: amount and pricingBasis, vatTreatment and paymentTerms (left out keep the agreement’s), and the installments. agreementDate, description, the currency, the project and the customer can’t change here (the body is strict: 422 VALIDATION_FAILED). The rate is the one the agreement froze (if it froze 0 and a line is now STANDARD_RATED, the rate in force on agreementDate, or 422 VAT_RATE_MISSING). Lines are matched by order: a billed line keeps its place and trigger (422 POSTED_INSTALLMENT_CHANGED, details { position, change: TRIGGER | REMOVED }); unbilled lines change freely. Due lines are billed first, as on any read. Refusals: 422 NOT_FIXED (a retainer: POST /v1/retainers/{id}/change), AMOUNT_INVALID, the schedule reasons, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED (use /outcome/correct). After a correction every installment id changes (the old lines read VOID; a manual trigger on one is 409 INSTALLMENT_VOIDED), and a moved payment’s version is bumped.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectAgreementPreviewRequest"];
+                };
+            };
+            responses: {
+                /** @description The plan */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CorrectAgreementPreviewResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agreements/{agreementId}/correct": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct an agreement’s terms after posting, in one atomic write
+         * @description The previewed plan, written at once or not at all: every live line voided; each billed charge credited for its remainder, dated its own posting date (reasonCode on each, source CORRECTION); the new lines added at the next positions, a billed one reposted on its original date with the next CHG number of that year; the payments’ allocations on the old charges released and placed on the new ones oldest first (the rest unallocated); the new totals; and a CORRECTION supplement row. reasonCode is required; OTHER needs a note (422 REASON_REQUIRED). Anything that moved since the preview (a payment, a credit, a billing, another change, or midnight) is 409 PREVIEW_STALE with nothing written. A replay with the same Idempotency-Key returns the stored answer. Needs agreements:write and payments:write. Audits agreement.corrected (before and after), receivable.credited per credit, installment.posted per repost (trigger CORRECTION) and receivable.settled per charge it settles. FIXED, or CONTINGENCY before its outcome (the upfront; amount 0 with no installments is allowed). The body is the full new terms: amount and pricingBasis, vatTreatment and paymentTerms (left out keep the agreement’s), and the installments. agreementDate, description, the currency, the project and the customer can’t change here (the body is strict: 422 VALIDATION_FAILED). The rate is the one the agreement froze (if it froze 0 and a line is now STANDARD_RATED, the rate in force on agreementDate, or 422 VAT_RATE_MISSING). Lines are matched by order: a billed line keeps its place and trigger (422 POSTED_INSTALLMENT_CHANGED, details { position, change: TRIGGER | REMOVED }); unbilled lines change freely. Due lines are billed first, as on any read. Refusals: 422 NOT_FIXED (a retainer: POST /v1/retainers/{id}/change), AMOUNT_INVALID, the schedule reasons, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED (use /outcome/correct). After a correction every installment id changes (the old lines read VOID; a manual trigger on one is 409 INSTALLMENT_VOIDED), and a moved payment’s version is bumped.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    agreementId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectAgreementRequest"];
+                };
+            };
+            responses: {
+                /** @description Corrected */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CorrectAgreementResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agreements/{agreementId}/cancel": {
         parameters: {
             query?: never;
@@ -3575,7 +3776,7 @@ export interface paths {
         put?: never;
         /**
          * Cancel a fixed-fee or contingency agreement while nothing is posted
-         * @description Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.
+         * @description Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted (to fix a fee saved with the wrong amount, basis or treatment, use POST /v1/agreements/{agreementId}/correct), and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. The cancel is conditional on the agreement as read: if another write lands first, it is answered by the state found (those two, or 409 VERSION_MISMATCH: read and retry). Retainers cancel through POST /v1/retainers/{id}/cancel.
          */
         post: {
             parameters: {
@@ -19229,24 +19430,31 @@ export interface components {
         Supplement: {
             /** Format: uuid */
             id: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description The change to the contractual amount, in the pricing basis. Supplements: the delta. REDUCTION: the delta, ≤ 0. CORRECTION: the new amount − the old one when the pricing basis is unchanged; "0.00" when the basis changed, since the two figures are not comparable (read appliedGross). */
             amount: string;
+            /** @description Supplements: the partner's text. REDUCTION and CORRECTION: the note given with the reason. */
             description: string | null;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             effectiveDate: string;
-            /** @enum {string} */
-            distribution: "LAST_UNPOSTED" | "PRORATE_UNPOSTED" | "NEW_INSTALLMENT" | "REDUCTION";
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /**
+             * @description LAST_UNPOSTED, PRORATE_UNPOSTED, NEW_INSTALLMENT: a supplement. REDUCTION: a fee lowered (MUT-480). CORRECTION: the terms corrected after posting (MUT-444): every line was replaced.
+             * @enum {string}
+             */
+            distribution: "LAST_UNPOSTED" | "PRORATE_UNPOSTED" | "NEW_INSTALLMENT" | "REDUCTION" | "CORRECTION";
+            /** @description The contractual amount after the row, in the (new) pricing basis. */
             resultingAmount: string;
             reasonCode: components["schemas"]["CreditReasonCode"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description Supplements: null. REDUCTION: the gross taken off (> 0), installments and credits together. CORRECTION: the gross taken off the effective total, old − new, with the same sign: positive when the fee went down, negative when it went up. */
             appliedGross: string | null;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description Supplements: "0.00". REDUCTION: the part of appliedGross that became credits. CORRECTION: the credits written on the replaced charges (their remainders). */
             credited: string;
             /** Format: date-time */
             createdAt: string;
         };
-        /** @enum {string|null} */
+        /**
+         * @description REDUCTION and CORRECTION rows: the reason code; null otherwise.
+         * @enum {string|null}
+         */
         CreditReasonCode: "DISCOUNT" | "GOODWILL" | "ENTERED_BY_MISTAKE" | "CLIENT_DISPUTE" | "OTHER" | null;
         RetainerCharge: {
             /** Format: uuid */
@@ -19447,6 +19655,245 @@ export interface components {
             note?: string;
             previewToken: string;
         };
+        CorrectAgreementPreviewResponse: {
+            terms: {
+                before: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                    pricingBasis: components["schemas"]["PricingBasis"];
+                    vatTreatment: components["schemas"]["VatTreatment"];
+                    paymentTerms: components["schemas"]["PaymentTerms"];
+                    vatRateBasisPoints: number;
+                };
+                after: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                    pricingBasis: components["schemas"]["PricingBasis"];
+                    vatTreatment: components["schemas"]["VatTreatment"];
+                    paymentTerms: components["schemas"]["PaymentTerms"];
+                    vatRateBasisPoints: number;
+                };
+            };
+            installments: {
+                before: {
+                    /** Format: uuid */
+                    id: string;
+                    position: number;
+                    label: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                    trigger: components["schemas"]["InstallmentTrigger"];
+                    /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                    dueDate: string;
+                    status: components["schemas"]["ItemStatus"];
+                    /** Format: uuid */
+                    receivableId: string | null;
+                    receivableNumber: string | null;
+                    /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                    postingDate: string | null;
+                } | null;
+                after: {
+                    label: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    net: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    vat: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    gross: string;
+                    vatTreatment: components["schemas"]["VatTreatment"];
+                    trigger: components["schemas"]["InstallmentTrigger"];
+                    /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                    dueDate: string;
+                    /** @description Billed in the same write on this date (a billed line keeps its original date); null: it waits for its trigger. */
+                    postingDate: string | null;
+                } | null;
+            }[];
+            credits: {
+                /** Format: uuid */
+                receivableId: string;
+                receivableNumber: string;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                effectiveDate: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+                /** @description Credits already on the charge, absorbed by the correction and not carried over. */
+                priorCredited: string;
+            }[];
+            allocations: {
+                /** Format: uuid */
+                paymentId: string;
+                paymentNumber: string;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+                released: {
+                    /** Format: uuid */
+                    receivableId: string;
+                    receivableNumber: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                }[];
+                placed: {
+                    position: number;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    amount: string;
+                }[];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unallocated: string;
+            }[];
+            agreement: {
+                effectiveTotal: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    before: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    after: string;
+                };
+                outstanding: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    before: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    after: string;
+                };
+            };
+            customer: {
+                outstanding: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    before: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    after: string;
+                };
+                unallocated: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    before: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    after: string;
+                };
+                balance: {
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    before: string;
+                    /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                    after: string;
+                };
+            };
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            balanceChange: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            priorCredited: string;
+            previewToken: string;
+        };
+        CorrectAgreementPreviewRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            pricingBasis: components["schemas"]["PricingBasis"];
+            vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+            paymentTerms?: components["schemas"]["PaymentTerms"] & unknown;
+            /** @description The full new schedule, matched to the agreement's live lines by order (k-th to k-th). A billed line keeps its place and its trigger (type, and for DATE the date): otherwise 422 POSTED_INSTALLMENT_CHANGED with details { position, change: TRIGGER | REMOVED }. Unbilled lines change freely, and lines may be added. */
+            installments: components["schemas"]["InstallmentSpec"][];
+            reasonCode?: components["schemas"]["CreditReasonCode"];
+            note?: string;
+        };
+        CorrectAgreementResponse: components["schemas"]["AgreementDetail"] & {
+            supplement: components["schemas"]["Supplement"];
+            credits: components["schemas"]["Credit"][];
+            receivables: components["schemas"]["Receivable"][];
+            allocations: {
+                /** Format: uuid */
+                paymentId: string;
+                /** Format: uuid */
+                receivableId: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+            }[];
+            unallocated: {
+                /** Format: uuid */
+                paymentId: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                amount: string;
+            }[];
+        };
+        Receivable: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            customerId: string;
+            /** Format: uuid */
+            projectId: string | null;
+            /** Format: uuid */
+            agreementId: string | null;
+            /** @enum {string} */
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            /** Format: uuid */
+            originId: string | null;
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            paid: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credited: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            outstanding: string;
+            vatTreatment: components["schemas"]["VatTreatment"];
+            vatRateBasisPoints: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            postingDate: string;
+            /** Format: date-time */
+            postedAt: string;
+            status: components["schemas"]["ItemStatus"];
+            title: string | null;
+            /**
+             * Format: uuid
+             * @description Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
+             */
+            capturedByUserId: string | null;
+            /**
+             * @description CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478.
+             * @example CHG-2026-0042
+             */
+            number: string;
+            version: number;
+        };
+        CorrectAgreementRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            pricingBasis: components["schemas"]["PricingBasis"];
+            vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+            paymentTerms?: components["schemas"]["PaymentTerms"] & unknown;
+            /** @description The full new schedule, matched to the agreement's live lines by order (k-th to k-th). A billed line keeps its place and its trigger (type, and for DATE the date): otherwise 422 POSTED_INSTALLMENT_CHANGED with details { position, change: TRIGGER | REMOVED }. Unbilled lines change freely, and lines may be added. */
+            installments: components["schemas"]["InstallmentSpec"][];
+            reasonCode: components["schemas"]["CreditReasonCode"];
+            note?: string;
+            previewToken: string;
+        };
         CancelAgreementRequest: Record<string, never>;
         ContingencyTermsPatchRequest: {
             commissionRateBasisPoints?: number;
@@ -19540,54 +19987,6 @@ export interface components {
             installment: components["schemas"]["Installment"];
             receivable: components["schemas"]["Receivable"];
             created: boolean;
-        };
-        Receivable: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            customerId: string;
-            /** Format: uuid */
-            projectId: string | null;
-            /** Format: uuid */
-            agreementId: string | null;
-            /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
-            /** Format: uuid */
-            originId: string | null;
-            currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            net: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            vat: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            gross: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            paid: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            credited: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            outstanding: string;
-            vatTreatment: components["schemas"]["VatTreatment"];
-            vatRateBasisPoints: number;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            dueDate: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            postingDate: string;
-            /** Format: date-time */
-            postedAt: string;
-            status: components["schemas"]["ItemStatus"];
-            title: string | null;
-            /**
-             * Format: uuid
-             * @description Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
-             */
-            capturedByUserId: string | null;
-            /**
-             * @description CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478.
-             * @example CHG-2026-0042
-             */
-            number: string;
-            version: number;
         };
         TriggerInstallmentRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */

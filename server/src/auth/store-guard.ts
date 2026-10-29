@@ -181,6 +181,8 @@ export const STORE_ACCESS: StoreAccess = {
     listUnpostedDue: 'read',
     applySupplement: { write: 'agreements' },
     reduce: { write: 'agreements' },
+    // MUT-444: the route also requires payments:write (R7), since it moves payments; the store write is the agreement's.
+    correct: { write: 'agreements' },
     listSupplements: 'read',
     cancel: { write: 'agreements' },
     appendVersion: { write: 'agreements' },
@@ -215,6 +217,7 @@ export const STORE_ACCESS: StoreAccess = {
     list: 'read',
     listAllocations: 'read',
     listAllocationsFor: 'read',
+    listLiveAllocationsOn: 'read',
     allocate: { write: 'payments' },
     reverse: { write: 'payments' },
     // MUT-443: a reversal and its replacement in one write; the same domain as each half.

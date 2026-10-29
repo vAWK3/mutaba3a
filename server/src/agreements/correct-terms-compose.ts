@@ -7,6 +7,7 @@ import { bucketize, unallocatedOf } from '../summaries/compute.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
 import { installmentView, loadAgreementParties, parseAmount, resolveRate, validationError } from './compose.js';
 import { composeSchedule, type PreviewBody } from './create.js';
+import type { TriggerType } from './schedule.js';
 import { planCorrection, type CorrectionPlan, type CorrectionTerms, type LiveAllocation, type MovedPayment, type OldLine } from './correct-terms.js';
 import { outcomeAlreadyRecorded } from './outcome.js';
 import { agreementCancelled } from './reduce-compose.js';
@@ -187,7 +188,7 @@ export function correctionView(c: ComposedTermsCorrection, agreement: AgreementR
   const numberOf = new Map(c.oldReceivables.map((r) => [r.id, r.number]));
   const receivableOf = new Map(c.oldReceivables.map((r) => [r.id, r]));
   const record = new Map(c.installments.map((i) => [i.id, i]));
-  const trigger = (type: string, date: string | null | undefined) => ({ type, ...(date ? { date } : {}) });
+  const trigger = (type: TriggerType, date: string | null | undefined) => ({ type, ...(date ? { date } : {}) });
   const termsOf = (t: CorrectionTerms, totals: { netMinor: bigint; vatMinor: bigint; grossMinor: bigint }) => ({ amount: money(t.amountMinor), net: money(totals.netMinor), vat: money(totals.vatMinor), gross: money(totals.grossMinor), pricingBasis: t.pricingBasis, vatTreatment: t.vatTreatment, paymentTerms: t.paymentTerms, vatRateBasisPoints: t.vatRateBasisPoints });
   const count = Math.max(c.old.length, c.plan.lines.length);
   const outstandingDelta = f.outstandingAfterMinor - f.outstandingBeforeMinor;
