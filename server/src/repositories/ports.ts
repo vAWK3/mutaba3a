@@ -1078,6 +1078,23 @@ export interface StatementSourceRows {
   charges: RetainerChargeRecord[];
 }
 
+/** MUT-483: the receivable fields a ledger line reads (`statements/lines.ts`), and nothing more. */
+export type LedgerReceivableRow = Pick<ReceivableRecord, 'id' | 'customerId' | 'currency' | 'origin' | 'postingDate' | 'grossMinor' | 'paidMinor' | 'creditedMinor' | 'deletedAt' | 'createdAt'>;
+/** MUT-483: the credit fields a ledger line reads. */
+export type LedgerCreditRow = Pick<CreditRecord, 'id' | 'receivableId' | 'amountMinor' | 'effectiveDate' | 'createdAt'>;
+/** MUT-483: the payment fields a ledger line reads. */
+export type LedgerPaymentRow = Pick<PaymentRecord, 'id' | 'customerId' | 'currency' | 'amountMinor' | 'receivedOn' | 'status' | 'reversalReason' | 'reversedAt' | 'updatedAt' | 'createdAt'>;
+
+/** MUT-483: what `receivables.periodSources` returns; `statements/period.ts` sums its ledger lines. */
+export interface PeriodSourceRows {
+  /** The organization's receivables that are not deleted. */
+  receivables: LedgerReceivableRow[];
+  /** Every credit on those receivables. */
+  credits: LedgerCreditRow[];
+  /** Every payment of any status, a payment with no client included (D4). */
+  payments: LedgerPaymentRow[];
+}
+
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
   /** In the order of `ids`; unknown or foreign ids are skipped. */

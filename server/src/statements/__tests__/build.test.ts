@@ -362,3 +362,42 @@ describe('buildStatement after terms corrections (MUT-444)', () => {
     expect(buildStatement(s, view({ projectId: P2 }), all).lines.filter((l) => l.kind === 'PAYMENT').map((l) => l.allocatedMinor)).toEqual([1_000n]);
   });
 });
+
+/** MUT-483 (eng review R1): the edges the line classifier's extraction must keep. */
+describe('buildStatement line edges (MUT-483)', () => {
+  it('a reversal at 22:30 UTC is dated the next day in Asia/Jerusalem', () => {
+    const s = empty();
+    const p = payment(1_000n, '2026-10-20');
+    s.payments.push(p);
+    reverse(p, s.allocations, s.receivables, '2026-10-27');
+    p.reversedAt = new Date('2026-10-27T22:30:00Z');
+    const reversal = buildStatement(s, view(), all).lines.find((l) => l.kind === 'PAYMENT_REVERSAL')!;
+    expect(reversal.date).toBe('2026-10-28');
+    expect(buildStatement(s, view({ timezone: 'UTC' }), all).lines.find((l) => l.kind === 'PAYMENT_REVERSAL')!.date).toBe('2026-10-27');
+  });
+
+  it('a REVERSED payment with no reversedAt is dated by its updatedAt', () => {
+    const s = empty();
+    const p = payment(1_000n, '2026-10-01', { status: 'REVERSED', reversalReason: 'Bounced', reversedAt: null, updatedAt: new Date('2026-10-12T07:00:00Z') });
+    s.payments.push(p);
+    const reversal = buildStatement(s, view(), all).lines.find((l) => l.kind === 'PAYMENT_REVERSAL')!;
+    expect(reversal).toMatchObject({ date: '2026-10-12', id: `${p.id}:reversal` });
+  });
+
+  it('on a project statement a reversal line is the allocation\'s id with :reversal', () => {
+    const s = ledger();
+    const p = s.payments[0]!;
+    reverse(p, s.allocations, s.receivables, '2026-05-02');
+    const own = s.allocations.filter((a) => a.paymentId === p.id);
+    const p1 = buildStatement(s, view({ projectId: P1 }), all).lines.filter((l) => l.kind === 'PAYMENT_REVERSAL');
+    expect(p1.map((l) => l.id)).toEqual([`${own.find((a) => s.receivables.find((r) => r.id === a.receivableId)!.projectId === P1)!.id}:reversal`]);
+  });
+
+  it('a soft-deleted receivable is never a line, nor its credits', () => {
+    const s = empty();
+    const gone = receivable({ gross: 1_000n, postingDate: '2026-10-01', deletedAt: new Date('2026-10-02T00:00:00Z') });
+    s.receivables.push(gone);
+    expect(buildStatement(s, view(), all).lines).toEqual([]);
+    expect(buildStatement(s, view({ projectId: P1 }), all).lines).toEqual([]);
+  });
+});

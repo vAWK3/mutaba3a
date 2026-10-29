@@ -1,9 +1,10 @@
 import type { ItemStatus } from '../agreements/status.js';
-import { daysBetween, todayIn, type IsoDate } from '../dates.js';
+import { daysBetween, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { CAPTURE_UNDO_REASON, type AllocationRecord, type CreditRecord, type InstallmentRecord, type PaymentRecord, type ReceivableRecord, type RetainerChargeRecord } from '../repositories/ports.js';
+import type { AllocationRecord, CreditRecord, InstallmentRecord, PaymentRecord, ReceivableRecord, RetainerChargeRecord } from '../repositories/ports.js';
 import { receivableStatus } from '../serializers.js';
-import { countsOn, outstandingOf } from '../summaries/compute.js';
+import { outstandingOf } from '../summaries/compute.js';
+import { isStatementPayment, LINE_RANK, ledgerEntries, reversalDateOf, reversalInstantOf, type LedgerEntry, type StatementLineKind } from './lines.js';
 
 /**
  * A customer statement (MUT-478, ADR-217): the ledger card a partner
@@ -17,10 +18,12 @@ import { countsOn, outstandingOf } from '../summaries/compute.js';
  * The balance is what the customer owes: charges are debits, credits and
  * payments are credits, a reversal is a debit. With no period it equals the
  * customer summary's outstanding − unallocated, because the same `countsOn`
- * decides which charges count (D5).
+ * decides which charges count (D5). Which rows are lines, and how each is
+ * dated, is `lines.ts`'s one classifier (MUT-483), which the period totals read
+ * too; this file decorates its entries, orders and pages them.
  */
 
-export type StatementLineKind = 'CHARGE' | 'CREDIT' | 'PAYMENT' | 'PAYMENT_REVERSAL';
+export type { StatementLineKind } from './lines.js';
 
 export type ChargeOrigin =
   | { type: 'INSTALLMENT'; agreementId: string; position: number; of: number }
@@ -98,9 +101,6 @@ export interface StatementPage {
   nextCursor: StatementCursor | null;
 }
 
-/** A payment sorts before its own reversal on the same day; the rest is tie-breaking only. */
-const RANK: Record<StatementLineKind, number> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3 };
-
 export function buildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null }): StatementPage {
   const lines = ledgerLines(sources, view).sort(compareLines);
   let openingMinor = 0n;
@@ -132,39 +132,50 @@ export function buildStatement(sources: StatementSources, view: StatementView, p
   };
 }
 
+type Entry = LedgerEntry<ReceivableRecord, CreditRecord, PaymentRecord>;
+
 function ledgerLines(sources: StatementSources, view: StatementView): SortedLine[] {
   // MUT-444 (D1): a row a terms correction released is history; only live rows say where a payment went.
   const s = { ...sources, allocations: sources.allocations.filter((a) => !a.releasedAt) };
-  const counted = s.receivables.filter((r) => r.deletedAt === null && countsOn(r, view.asOf) && (view.projectId === null || r.projectId === view.projectId));
-  const byId = new Map(counted.map((r) => [r.id, r]));
-  const lines: SortedLine[] = counted.map((r) => chargeLine(r, s, view.asOf));
-  for (const c of s.credits) {
-    const r = byId.get(c.receivableId);
-    if (r) lines.push(line({ id: c.id, kind: 'CREDIT', date: c.effectiveDate, atMs: c.createdAt.getTime(), projectId: r.projectId, creditMinor: c.amountMinor, receivableId: r.id, receivable: r, credit: c, number: null }));
-  }
-  const shown = s.payments.filter((p) => p.status === 'POSTED' || (p.status === 'REVERSED' && p.reversalReason !== CAPTURE_UNDO_REASON));
-  if (view.projectId === null) {
-    const projectOf = new Map(s.receivables.map((r) => [r.id, r.projectId]));
-    const allocationsOf = new Map<string, AllocationRecord[]>();
-    for (const a of s.allocations) allocationsOf.set(a.paymentId, [...(allocationsOf.get(a.paymentId) ?? []), a]);
-    for (const p of shown) lines.push(...wholePaymentLines(p, allocationsOf.get(p.id) ?? [], projectOf, view.timezone));
-  } else {
-    const paymentsById = new Map(shown.map((p) => [p.id, p]));
+  const whole = view.projectId === null;
+  // The whole-customer statement is every line of the classifier; a project's takes its charges and their credits
+  // from it, and shows payments as their allocations there (D8).
+  const receivables = whole ? s.receivables : s.receivables.filter((r) => r.projectId === view.projectId);
+  const entries = ledgerEntries({ receivables, credits: s.credits, payments: whole ? s.payments : [] }, view);
+  const projectOfPayment = whole ? wholePaymentProjects(s) : new Map<string, string | null>();
+  const lines = entries.map((e) => decorate(e, s, view.asOf, projectOfPayment));
+  if (!whole) {
+    const charged = new Set(entries.filter((e) => e.kind === 'CHARGE').map((e) => e.id));
+    const paymentsById = new Map(s.payments.filter(isStatementPayment).map((p) => [p.id, p]));
     for (const a of s.allocations) {
       const p = paymentsById.get(a.paymentId);
-      if (p && byId.has(a.receivableId)) lines.push(...allocationLines(p, a, view.projectId, view.timezone));
+      if (p && charged.has(a.receivableId)) lines.push(...allocationLines(p, a, view.projectId!, view.timezone));
     }
   }
   return lines;
 }
 
-function chargeLine(r: ReceivableRecord, s: StatementSources, asOf: IsoDate): SortedLine {
+/** A classifier entry, decorated with what only the statement shows (origin, status, matter, unallocated). */
+function decorate(e: Entry, s: StatementSources, asOf: IsoDate, projectOfPayment: ReadonlyMap<string, string | null>): SortedLine {
+  const at = { id: e.id, kind: e.kind, date: e.date, atMs: e.atMs };
+  switch (e.kind) {
+    case 'CHARGE':
+      return chargeLine(e.source, at, s, asOf);
+    case 'CREDIT':
+      return line({ ...at, projectId: e.receivable.projectId, creditMinor: e.creditMinor, receivableId: e.receivable.id, receivable: e.receivable, credit: e.source, number: null });
+    case 'PAYMENT': {
+      const p = e.source;
+      return line({ ...at, projectId: projectOfPayment.get(p.id) ?? null, number: p.number, creditMinor: e.creditMinor, paymentId: p.id, payment: p, unallocatedMinor: p.status === 'POSTED' ? p.amountMinor - p.allocatedMinor : 0n });
+    }
+    case 'PAYMENT_REVERSAL':
+      return line({ ...at, projectId: projectOfPayment.get(e.source.id) ?? null, number: e.source.number, debitMinor: e.debitMinor, paymentId: e.source.id, payment: e.source });
+  }
+}
+
+function chargeLine(r: ReceivableRecord, at: Pick<SortedLine, 'id' | 'kind' | 'date' | 'atMs'>, s: StatementSources, asOf: IsoDate): SortedLine {
   const status = receivableStatus(r, asOf);
   return line({
-    id: r.id,
-    kind: 'CHARGE',
-    date: r.postingDate,
-    atMs: r.createdAt.getTime(),
+    ...at,
     projectId: r.projectId,
     number: r.number,
     debitMinor: r.grossMinor,
@@ -195,12 +206,18 @@ function originOf(r: ReceivableRecord, s: StatementSources): ChargeOrigin {
 }
 
 /** On the whole-customer statement a payment is one line for its full amount; its matter is shown only when all of it went to one. */
-function wholePaymentLines(p: PaymentRecord, own: readonly AllocationRecord[], projectOf: ReadonlyMap<string, string | null>, timezone: string): SortedLine[] {
-  const projects = new Set(own.map((a) => projectOf.get(a.receivableId) ?? null));
-  const allocatedEver = own.reduce((sum, a) => sum + a.amountMinor, 0n);
-  const projectId = projects.size === 1 && allocatedEver === p.amountMinor ? [...projects][0]! : null;
-  const posted = line({ id: p.id, kind: 'PAYMENT', date: p.receivedOn, atMs: p.createdAt.getTime(), projectId, number: p.number, creditMinor: p.amountMinor, paymentId: p.id, payment: p, unallocatedMinor: p.status === 'POSTED' ? p.amountMinor - p.allocatedMinor : 0n });
-  return p.status === 'REVERSED' ? [posted, reversalLine(p, `${p.id}:reversal`, projectId, p.amountMinor, timezone)] : [posted];
+function wholePaymentProjects(s: StatementSources): Map<string, string | null> {
+  const projectOf = new Map(s.receivables.map((r) => [r.id, r.projectId]));
+  const allocationsOf = new Map<string, AllocationRecord[]>();
+  for (const a of s.allocations) allocationsOf.set(a.paymentId, [...(allocationsOf.get(a.paymentId) ?? []), a]);
+  const projects = new Map<string, string | null>();
+  for (const p of s.payments) {
+    const own = allocationsOf.get(p.id) ?? [];
+    const matters = new Set(own.map((a) => projectOf.get(a.receivableId) ?? null));
+    const allocatedEver = own.reduce((sum, a) => sum + a.amountMinor, 0n);
+    projects.set(p.id, matters.size === 1 && allocatedEver === p.amountMinor ? [...matters][0]! : null);
+  }
+  return projects;
 }
 
 /** On a project statement a payment is its allocations there, dated by the payment's received date (D8). */
@@ -210,8 +227,7 @@ function allocationLines(p: PaymentRecord, a: AllocationRecord, projectId: strin
 }
 
 function reversalLine(p: PaymentRecord, id: string, projectId: string | null, amountMinor: bigint, timezone: string): SortedLine {
-  const reversedAt = p.reversedAt ?? p.updatedAt;
-  return line({ id, kind: 'PAYMENT_REVERSAL', date: todayIn(timezone, reversedAt), atMs: reversedAt.getTime(), projectId, number: p.number, debitMinor: amountMinor, paymentId: p.id, payment: p });
+  return line({ id, kind: 'PAYMENT_REVERSAL', date: reversalDateOf(p, timezone), atMs: reversalInstantOf(p).getTime(), projectId, number: p.number, debitMinor: amountMinor, paymentId: p.id, payment: p });
 }
 
 function line(o: Partial<SortedLine> & Pick<SortedLine, 'id' | 'kind' | 'date' | 'atMs' | 'projectId' | 'number'>): SortedLine {
@@ -229,7 +245,7 @@ function line(o: Partial<SortedLine> & Pick<SortedLine, 'id' | 'kind' | 'date' |
     payment: null,
     unallocatedMinor: null,
     allocatedMinor: null,
-    rank: RANK[o.kind],
+    rank: LINE_RANK[o.kind],
     ...o,
   };
 }
