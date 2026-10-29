@@ -51,6 +51,15 @@ export function receiptStorageKey(organizationId: string, receiptId: string): st
 }
 
 /**
+ * MUT-503 (D5): where a moved receipt's object goes on its new profile. A key of its own per move (`nonce`), so two
+ * moves of one receipt never write the same object and the loser's clean-up can't delete the winner's file. Still
+ * under the profile's prefix, so its purge (profileStoragePrefix) takes it.
+ */
+export function movedReceiptStorageKey(organizationId: string, receiptId: string, nonce: string): string {
+  return `${receiptStorageKey(organizationId, receiptId)}-${nonce}`;
+}
+
+/**
  * MUT-260 (D3): how a signed download is served. `attachment` saves the file (every caller's default); `inline` lets
  * the portal show a PDF receipt in an iframe, which would otherwise download instead of displaying.
  */

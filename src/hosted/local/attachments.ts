@@ -56,6 +56,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     });
   }
 
+  /** The interface's, for moving a receipt between profiles (MUT-503); local mode has no receipts library, so never. */
+  async copy(): Promise<void> {
+    throw new Error('Receipts are not moved between profiles on this device');
+  }
+
   /** After the snapshot saved. A failed delete only leaves an orphan, which the next boot sweeps. */
   async flushRemovals(): Promise<void> {
     const keys = [...this.staged];
@@ -108,6 +113,13 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
         controller.close();
       },
     });
+  }
+
+  /** The interface's, for moving a receipt between profiles (MUT-503); the carry-over never calls it. */
+  async copy(from: string, to: string): Promise<void> {
+    const file = this.stored.get(from);
+    if (!file) throw new Error(`No file at ${from}`);
+    this.stored.set(to, file);
   }
 
   /** What the portal's local branch does with a signed `local-blob:` upload. */

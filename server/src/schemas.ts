@@ -3528,6 +3528,15 @@ export const FileReceiptResponseSchema = z
   .object({ expense: ExpenseDetailSchema, receipt: ExpenseReceiptSchema })
   .openapi('FileReceiptResponse', { description: 'The expense with its READY receipts (the filed one among them), and the filed receipt' });
 
+export const MoveReceiptRequestSchema = z
+  .object({ profileId: z.string().uuid().openapi({ description: 'Another profile of the person\'s, which they may write now' }) })
+  .strict()
+  .openapi('MoveReceiptRequest');
+
+export const MoveReceiptResponseSchema = z
+  .object({ receipt: ExpenseReceiptSchema, fromProfileId: z.string().uuid() })
+  .openapi('MoveReceiptResponse', { description: 'The receipt on its new profile (same id), and the profile it left (since 1.91.0-mut503, MUT-503)' });
+
 const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
 
 export const ReceiptEditRatesQuerySchema = z.object({

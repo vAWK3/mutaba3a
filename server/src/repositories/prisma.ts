@@ -2297,6 +2297,14 @@ export class PrismaLedgerStore implements LedgerStore {
     releaseRead: async (id) => {
       await this.prisma.expenseReceipt.updateMany({ where: { id, readStatus: 'PENDING' }, data: { readLeaseUntil: null } });
     },
+    releaseMovedRead: async (id, claimedKey) => {
+      // One conditional UPDATE: only a receipt whose key moved on since the claim, still PENDING, gets its try back.
+      const { count } = await this.prisma.expenseReceipt.updateMany({
+        where: { id, readStatus: 'PENDING', storageKey: { not: claimedKey }, readAttempts: { gt: 0 } },
+        data: { readLeaseUntil: null, readAttempts: { decrement: 1 } },
+      });
+      return count === 1;
+    },
     finishRead: async (id, expectedVersion, outcome) => {
       const end = (status: 'DONE' | 'FAILED' | 'SKIPPED', failReason: string | null) => ({ readStatus: status, readLeaseUntil: null, readFailReason: failReason });
       const live = { id, readStatus: 'PENDING' as const, deletedAt: null, filingStatus: 'TO_REVIEW' as const };
@@ -2436,6 +2444,20 @@ export class PrismaLedgerStore implements LedgerStore {
         });
         const expense = await tx.expense.findUniqueOrThrow({ where: { id: params.expenseId } });
         return { kind: 'filed' as const, expense, receipt };
+      }, RECEIPT_TX_OPTIONS),
+    moveToProfile: (params) =>
+      this.prisma.$transaction(async (tx) => {
+        const refused = await lockToReviewReceipt(tx, params.organizationId, params.receiptId);
+        if (refused) return refused;
+        const { storageKey: previousStorageKey } = await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId }, select: { storageKey: true } });
+        const { count } = await tx.expenseReceipt.updateMany({
+          where: { id: params.receiptId, organizationId: params.organizationId, filingStatus: 'TO_REVIEW', status: 'READY', deletedAt: null },
+          data: { organizationId: params.targetOrganizationId, storageKey: params.storageKey, approved: Prisma.DbNull, approvedAt: null, approvedByUserId: null, version: { increment: 1 } },
+        });
+        // The row is locked, so this can't happen short of a bug; throwing rolls the move back.
+        if (count !== 1) throw new Error(`receipt ${params.receiptId} changed under its lock`);
+        const receipt = toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId } }));
+        return { kind: 'moved' as const, receipt, previousStorageKey };
       }, RECEIPT_TX_OPTIONS),
     completeOnExpense: (params, at) =>
       this.prisma.$transaction(

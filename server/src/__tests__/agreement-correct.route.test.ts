@@ -277,11 +277,11 @@ describe('POST /v1/agreements/{id}/correct', () => {
     expect(await audit('receivable', repost.id, 'receivable.settled')).toEqual([]);
   });
 
-  it('AC6: the contract version is 1.90.0-mut483 and both routes are published', async () => {
+  it('AC6: the contract version is 1.91.0-mut503 and both routes are published', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.90.0-mut483');
+    expect(API_VERSION).toBe('1.91.0-mut503');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.90.0-mut483');
+    expect(doc.info.version).toBe('1.91.0-mut503');
     expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/v1/agreements/{agreementId}/correct', '/v1/agreements/{agreementId}/correct/preview']));
   });
 

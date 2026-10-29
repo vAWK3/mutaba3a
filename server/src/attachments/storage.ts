@@ -44,6 +44,11 @@ export interface AttachmentStorage {
    * to repeat: nothing there is not an error.
    */
   removePrefix(prefix: string): Promise<void>;
+  /**
+   * MUT-503: copies an object to a new key inside the bucket, never through this process (GCS rewrites it in place,
+   * under the bucket's default CMEK key, ADR-164). Overwrites `to`; throws when `from` is not there.
+   */
+  copy(from: string, to: string): Promise<void>;
 }
 
 export class GcsAttachmentStorage implements AttachmentStorage {
@@ -90,6 +95,11 @@ export class GcsAttachmentStorage implements AttachmentStorage {
     await this.storage.bucket(this.bucket).deleteFiles({ prefix: `${prefix}/`, force: true });
   }
 
+  async copy(from: string, to: string): Promise<void> {
+    const bucket = this.storage.bucket(this.bucket);
+    await bucket.file(from).copy(bucket.file(to));
+  }
+
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const file = this.storage.bucket(this.bucket).file(key);
     const [exists] = await file.exists();
@@ -132,6 +142,14 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
 
   async removePrefix(prefix: string): Promise<void> {
     for (const key of [...this.objects.keys()]) if (key.startsWith(`${prefix}/`)) await this.remove(key);
+  }
+
+  async copy(from: string, to: string): Promise<void> {
+    const object = this.objects.get(from);
+    if (!object) throw new Error(`No object at ${from}`);
+    this.objects.set(to, { ...object });
+    const bytes = this.contents.get(from);
+    if (bytes) this.contents.set(to, bytes.slice());
   }
 
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
