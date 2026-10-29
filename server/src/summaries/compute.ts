@@ -146,7 +146,11 @@ export function projectFigures(input: { agreements: readonly AgreementRecord[]; 
   let postedMinor = 0n;
   let paidMinor = 0n;
   let creditedMinor = 0n;
+  // MUT-444 (R4, ADR-226): a charge whose line is voided and posted was replaced (a terms correction, or a MUT-100
+  // outcome correction): its repost carries the figure, and it carries none (outstanding 0, so no bucket moves).
+  const superseded = new Set(input.installments.filter((i) => i.voidedAt !== null && i.receivableId !== null).map((i) => i.receivableId!));
   for (const r of counted) {
+    if (superseded.has(r.id)) continue;
     postedMinor += r.grossMinor;
     paidMinor += r.paidMinor;
     creditedMinor += r.creditedMinor;

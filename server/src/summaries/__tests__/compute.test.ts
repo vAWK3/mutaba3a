@@ -196,3 +196,36 @@ describe('projectFigures with contingency agreements (MUT-100)', () => {
     expect(f).toMatchObject({ kind: 'FIXED', agreedMinor: 3000n, monthlyMinor: 2360n, contingency: null });
   });
 });
+
+/** MUT-444 (R4, ADR-226): a charge a correction replaced is superseded: left out of posted, paid and credited. */
+describe('projectFigures with superseded charges', () => {
+  const today = '2026-10-29';
+  const voided = new Date('2026-10-20T08:00:00Z');
+  // A ₪1,000 line, paid ₪300, corrected to ₪1,180 (credit ₪1,000, ₪300 moved), then to ₪200 (credit ₪1,180, ₪200 placed).
+  const old = rec({ id: 'r1', grossMinor: 100_000n, paidMinor: 0n, creditedMinor: 100_000n, status: 'SETTLED' });
+  const mid = rec({ id: 'r2', grossMinor: 118_000n, paidMinor: 0n, creditedMinor: 118_000n, status: 'SETTLED' });
+  const live = rec({ id: 'r3', grossMinor: 20_000n, paidMinor: 20_000n, status: 'SETTLED' });
+  const lines = [inst({ id: 'i1', receivableId: 'r1', voidedAt: voided }), inst({ id: 'i2', position: 2, receivableId: 'r2', voidedAt: new Date('2026-10-21T08:00:00Z') }), inst({ id: 'i3', position: 3, receivableId: 'r3' })];
+
+  it('posted is the latest repost only, after one and after two corrections; nothing else moves', () => {
+    const once = projectFigures({ agreements: [agreement({})], installments: [lines[0]!, { ...lines[1]!, voidedAt: null }], receivables: [old, { ...mid, paidMinor: 30_000n, creditedMinor: 0n, status: 'OPEN' }], today });
+    expect(once).toMatchObject({ postedMinor: 118_000n, paidMinor: 30_000n, creditedMinor: 0n });
+    expect(once.buckets.outstanding).toBe(88_000n);
+    const twice = projectFigures({ agreements: [agreement({})], installments: lines, receivables: [old, mid, live], today });
+    expect(twice).toMatchObject({ postedMinor: 20_000n, paidMinor: 20_000n, creditedMinor: 0n, status: 'PAID_IN_FULL' });
+  });
+
+  it('a MUT-100 corrected commission counts the new commission only (fixed in passing)', () => {
+    const upfront = rec({ id: 'u', grossMinor: 10_000n });
+    const replaced = rec({ id: 'c1', grossMinor: 50_000n, creditedMinor: 50_000n, status: 'SETTLED' });
+    const commission = rec({ id: 'c2', grossMinor: 40_000n });
+    const installments = [inst({ id: 'iu', receivableId: 'u' }), inst({ id: 'ic1', position: 2, isCommission: true, receivableId: 'c1', voidedAt: voided }), inst({ id: 'ic2', position: 3, isCommission: true, receivableId: 'c2' })];
+    const f = projectFigures({ agreements: [agreement({ type: 'CONTINGENCY', outcome: 'AWARDED' })], installments, receivables: [upfront, replaced, commission], today });
+    expect(f).toMatchObject({ postedMinor: 50_000n, creditedMinor: 0n });
+  });
+
+  it('an unposted voided line supersedes nothing', () => {
+    const f = projectFigures({ agreements: [agreement({})], installments: [inst({ id: 'x', voidedAt: voided })], receivables: [rec({ id: 'r' })], today });
+    expect(f.postedMinor).toBe(1000n);
+  });
+});

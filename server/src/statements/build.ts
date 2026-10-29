@@ -132,7 +132,9 @@ export function buildStatement(sources: StatementSources, view: StatementView, p
   };
 }
 
-function ledgerLines(s: StatementSources, view: StatementView): SortedLine[] {
+function ledgerLines(sources: StatementSources, view: StatementView): SortedLine[] {
+  // MUT-444 (D1): a row a terms correction released is history; only live rows say where a payment went.
+  const s = { ...sources, allocations: sources.allocations.filter((a) => !a.releasedAt) };
   const counted = s.receivables.filter((r) => r.deletedAt === null && countsOn(r, view.asOf) && (view.projectId === null || r.projectId === view.projectId));
   const byId = new Map(counted.map((r) => [r.id, r]));
   const lines: SortedLine[] = counted.map((r) => chargeLine(r, s, view.asOf));
@@ -184,8 +186,10 @@ function originOf(r: ReceivableRecord, s: StatementSources): ChargeOrigin {
     const installment = s.installments.find((i) => i.id === r.originId);
     if (installment?.isCommission) return { type: 'CONTINGENCY_FEE', agreementId: installment.agreementId };
     // "N of M" counts the agreement's live, non-commission lines in position order, so a gap left by an edit never shows.
-    const live = s.installments.filter((i) => i.agreementId === r.agreementId && !i.isCommission && i.voidedAt === null).sort((a, b) => a.position - b.position);
-    return { type: 'INSTALLMENT', agreementId: r.agreementId ?? '', position: live.findIndex((i) => i.id === r.originId) + 1, of: live.length };
+    // MUT-444 (R3): a charge a terms correction replaced counts within its own generation: the lines voided with it.
+    const voidedAt = installment?.voidedAt?.getTime() ?? null;
+    const generation = s.installments.filter((i) => i.agreementId === r.agreementId && !i.isCommission && (i.voidedAt?.getTime() ?? null) === voidedAt).sort((a, b) => a.position - b.position);
+    return { type: 'INSTALLMENT', agreementId: r.agreementId ?? '', position: generation.findIndex((i) => i.id === r.originId) + 1, of: generation.length };
   }
   return { type: 'ADJUSTMENT', title: r.title };
 }
