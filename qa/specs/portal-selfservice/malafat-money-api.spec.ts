@@ -299,6 +299,9 @@ test('Malafat corrects a recorded payment in one call, from a preview, and a rep
     expect(preview).toMatchObject({ amount: '600.00', allocated: '600.00', unallocated: '0.00', receiptNumber: '3001' });
     expect(preview.balances.receivables).toEqual([expect.objectContaining({ receivableId: chargeId, outstandingBefore: '0.00', outstandingAfter: '400.00' })]);
     request = { ...correction, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: preview.previewToken };
+    // AC6: had the client paid ₪700, the ₪100 not allocated would stay on the payment as credit.
+    const more = await call('POST', `/v1/payments/${originalId}/correct/preview`, key, { ...correction, amount: '700.00' });
+    expect(more).toMatchObject({ amount: '700.00', allocated: '600.00', unallocated: '100.00' });
   });
 
   const replayKey = `qa-443-${randomUUID()}`;
