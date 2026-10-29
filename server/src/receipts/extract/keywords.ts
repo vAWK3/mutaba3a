@@ -30,7 +30,7 @@ export const TOTAL = keywords(
 export const SUBTOTAL = keywords(
   'סכום ביניים', 'לפני מע"מ', 'ללא מע"מ', 'המחיר לפני מע"מ',
   // MUT-504: an Israeli bill's "total of the amounts at 18% VAT", before the VAT is added.
-  'סה"כ סכומים', 'סכומים ב',
+  'סה"כ סכומים', 'סכומים ב', 'חייב במע"מ', 'חייב מע"מ',
   'المجموع الفرعي', 'قبل الضريبة', 'غير شامل',
   'subtotal', 'sub total', 'sub-total', 'before vat', 'before tax', 'excl', 'excluding',
 );

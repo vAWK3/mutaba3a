@@ -240,6 +240,59 @@ describe('real receipt patterns (MUT-504)', () => {
     expect(value(s, 'totalMinor')).toBe('6183');
   });
 
+  it('the largest amount read three times on one row (OCR joined the to-pay rows) is the total; one amount printed many times does not out-vote the arithmetic', () => {
+    const s = read(receipt(['מחסני הגפן', 'לחם 21.90', 'גבינה 15.90', { text: '189.50 189.50 189.50 ny cit', conf: 0.95 }, 'חייב במע"מ 160.59', 'מע"מ 28.91', 'Bs ~ 0190 עסקה: 189.50']));
+    expect(value(s, 'totalMinor')).toBe('18950');
+    const voted = read(receipt(['Shop', 'Item 160.59', 'Fee 28.91', '189.50', '189.50', 'Card 189.50 ref']));
+    expect(value(voted, 'totalMinor')).not.toBe('16059');
+  });
+
+  it('the largest amount, printed twice, that two other printed amounts add up to is the total (subtotal and VAT labels garbled)', () => {
+    const s = read(receipt(['MAX', 'פלסטלינה 4.00', 'זיב מ"מ 464.24', '83.56 מע" %', 'שואי 547.80', 'ש"ת 547.80 0130']));
+    expect(value(s, 'totalMinor')).toBe('54780');
+  });
+
+  it('an unsure total from an earlier rule does not keep out a sure one from a later rule', () => {
+    const unsure = 0.5;
+    const s = read(
+      receipt([
+        'MAX',
+        { text: 'מדבקות 2.00', conf: unsure },
+        { text: 'צבעים 4.00', conf: unsure },
+        { text: 'מספריים 6.00', conf: unsure },
+        { text: 'דבק 8.00', conf: unsure },
+        'זיב מ"מ 464.24',
+        '83.56 מע" %',
+        'שואי 547.80',
+        'ש"ת 547.80 0130',
+      ]),
+    );
+    expect(value(s, 'totalMinor')).toBe('54780');
+  });
+
+  it('the subtotal plus another printed amount is a printed total whose label OCR lost (the VAT label lost too)', () => {
+    const s = read(receipt(['חשבון לשירותי כביש אגרה', 'סה"כ סכומים ב-18% מצ"מ 97.92', 'סה ויל 17.63', 'ס"כ כולל מע" 115.55', 'חשבונית קודמת בסך 75.05 שולמה']));
+    expect(value(s, 'totalMinor')).toBe('11555');
+  });
+
+  it('a VAT line OCR joined with the total line: the VAT is the smaller amount, subtotal + VAT the total', () => {
+    const s = read(receipt(['חשבון לשירותי כביש אגרה', 'סה"כ סכומים ב-18% מצ"מ 27.76', 'סה"כ מע"מ 5.00 32.76']));
+    expect(value(s, 'vatMinor')).toBe('500');
+    expect(value(s, 'totalMinor')).toBe('3276');
+  });
+
+  it('a document that prints a billing period is a bill: only a labelled date is its date, never a trip\'s', () => {
+    const s = read(receipt(['חשבון לשירותי כביש אגרה', 'תקופת החשבונית 20/05/26-19/07/26', '27.76 13:46:03 16/06/2026 36547601', 'סה"כ 27.76']));
+    expect(value(s, 'date')).toBeUndefined();
+  });
+
+  it('a statement (total-labelled lines with three different amounts) has no single total', () => {
+    const s = read(
+      receipt(['קופת חולים', 'סה"כ חיוב כרטיס אשראי בתאריך 02/12/2025 118.29', 'סה"כ חיוב כרטיס אשראי בתאריך 02/01/2026 121.08', 'סה"כ חיוב כרטיס אשראי בתאריך 02/05/2026 154.08']),
+    );
+    expect(value(s, 'totalMinor')).toBeUndefined();
+  });
+
   it('an amount printed three times is not the total when a larger amount is printed', () => {
     expect(value(read(receipt(['Shop', 'Pen 5.90', 'Pen 5.90', 'Pen 5.90', 'Book 20.00'])), 'totalMinor')).toBeUndefined();
   });

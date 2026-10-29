@@ -9,6 +9,7 @@ holds two readings of the same line, so the extractor's own row grouping sees ea
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from .engines import Segment
@@ -55,13 +56,18 @@ def _is_number_fragment(text: str) -> bool:
     return any(ch.isdigit() for ch in text) and not any(ch.isalpha() for ch in text)
 
 
+#: An amount with its decimals: a whole number already, never the first half of one (MUT-504: "61.8361.83").
+_COMPLETE_AMOUNT = re.compile(r"\d+[.,]\d{2,3}")
+
+
 def join_number_fragments(segments: list[Segment]) -> list[Segment]:
     """Within one row, number fragments that sit side by side become one segment, read left to right."""
     ordered = sorted(segments, key=lambda s: s.box[0])
     out: list[Segment] = []
     for seg in ordered:
         prev = out[-1] if out else None
-        if prev is not None and _is_number_fragment(prev.text) and _is_number_fragment(seg.text):
+        both_complete = prev is not None and bool(_COMPLETE_AMOUNT.fullmatch(prev.text.strip()) and _COMPLETE_AMOUNT.fullmatch(seg.text.strip()))
+        if prev is not None and _is_number_fragment(prev.text) and _is_number_fragment(seg.text) and not both_complete:
             height = max(prev.box[3] - prev.box[1], seg.box[3] - seg.box[1], 1.0)
             gap = seg.box[0] - prev.box[2]
             if gap < NUMBER_GAP_SHARE * height:
@@ -123,23 +129,37 @@ def _mean_conf(segments: list[Segment]) -> float:
     return sum(s.conf for s in segments) / len(segments) if segments else 0.0
 
 
+def _x_overlap(a: Segment, b: Segment) -> bool:
+    """Whether two boxes on one row cover the same stretch: at least SAME_ROW_OVERLAP of the narrower one."""
+    return overlap_share((a.box[0], a.box[2]), (b.box[0], b.box[2])) >= SAME_ROW_OVERLAP
+
+
 def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
     """A Tesseract line on a Hebrew page, with RapidOCR's digit readings of it (MUT-504).
 
     Tesseract reads the Hebrew; RapidOCR, which has no Hebrew model, reads the digits better (bold totals and dates
-    Tesseract garbles). When RapidOCR is sure of its digits and Tesseract is not, the line keeps Tesseract's letter
-    words, as one segment at their own confidence, and takes RapidOCR's digit segments. Otherwise it stays as it is.
+    Tesseract garbles). Word by word: a digit word Tesseract is unsure of gives way to a sure RapidOCR box covering
+    it, and a sure RapidOCR box Tesseract has no word under is added. Tesseract's other words stay, as one segment at
+    their own confidence. With nothing replaced or added, the line stays as it is.
     """
     words = list(line.words) or [line]
-    tess_digits = [w for w in words if _has_digit(w.text)]
-    if _mean_conf(rapid_digits) < SURE_DIGITS or (tess_digits and _mean_conf(tess_digits) >= SURE_DIGITS):
+    sure = [r for r in rapid_digits if r.conf >= SURE_DIGITS]
+    taken: list[Segment] = []
+    kept: list[Segment] = []
+    for word in words:
+        cover = [r for r in sure if _x_overlap(word, r)] if _has_digit(word.text) and word.conf < SURE_DIGITS else []
+        if cover:
+            taken.extend(r for r in cover if r not in taken)
+        else:
+            kept.append(word)
+    taken.extend(r for r in sure if r not in taken and not any(_x_overlap(word, r) for word in words))
+    if not taken:
         return [line]
-    letters = [w for w in words if not _has_digit(w.text) and any(ch.isalpha() for ch in w.text)]
-    kept = list(rapid_digits)
-    if letters:
-        box = (min(w.box[0] for w in letters), line.box[1], max(w.box[2] for w in letters), line.box[3])
-        kept.insert(0, Segment(" ".join(w.text for w in letters), _mean_conf(letters), box))
-    return kept
+    out = sorted(taken, key=lambda r: r.box[0])
+    if kept:
+        box = (min(w.box[0] for w in kept), line.box[1], max(w.box[2] for w in kept), line.box[3])
+        out.insert(0, Segment(" ".join(w.text for w in kept), _mean_conf(kept), box))
+    return out
 
 
 def merge(rapid: list[Segment], tess: list[Segment], page_script: str) -> list[Segment]:

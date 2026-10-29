@@ -1,4 +1,5 @@
 import { moneyIn } from './amounts.js';
+import { isConfident } from './confidence.js';
 import { CASH, CHANGE, hasKeyword, INCLUSIVE, type KeywordSet, NOT_TOTAL, REGISTRATION, SUBTOTAL, TOTAL, VAT } from './keywords.js';
 import { confOf, labelConf } from './rows.js';
 import type { Row } from './types.js';
@@ -24,7 +25,10 @@ const RULE_SUBTOTAL_PLUS_VAT = 0.8;
 const RULE_CASH_MINUS_CHANGE = 0.75;
 const RULE_TWO_AMOUNTS_AGREE = 0.65;
 const RULE_REPEATED_LARGEST = 0.7;
-/** A till receipt prints its total on the to-pay row, the card row and the card slip: three rows at least (MUT-504). */
+const RULE_SUM_OF_TWO = 0.75;
+/** Total-labelled rows with this many different amounts are a statement's monthly lines, not one receipt (MUT-504). */
+const STATEMENT_TOTALS = 3;
+/** A till receipt prints its total on the to-pay row, the card row and the card slip: three readings at least (MUT-504). */
 const MIN_REPEATS = 3;
 const RULE_VAT = 0.8;
 const RULE_VAT_CONFIRMED = 0.92;
@@ -40,6 +44,7 @@ const isTotalRow = (row: Row) => hasKeyword(row.folded, TOTAL) && !hasKeyword(ro
 
 const last = (values: readonly bigint[]): bigint | null => values[values.length - 1] ?? null;
 const max = (values: readonly bigint[]): bigint | null => (values.length ? values.reduce((a, b) => (a > b ? a : b)) : null);
+const min = (values: readonly bigint[]): bigint | null => (values.length ? values.reduce((a, b) => (a < b ? a : b)) : null);
 const near = (a: bigint, b: bigint) => (a > b ? a - b : b - a) <= ROUNDING;
 
 /** How sure the reader was of `minor` on the row: the box it was printed in (MUT-504), else the row's least. */
@@ -54,11 +59,15 @@ interface Labelled {
   conf: number;
 }
 
-/** The amount on the first row matching `match` (its last amount: labels come first in reading order). */
-function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, labels: KeywordSet, exponent: number | null, integers: boolean): Labelled | null {
+/**
+ * The amount on the first row matching `match`: its last amount (labels come first in reading order), or its smallest
+ * with `smallest` (a VAT row OCR joined with the total's row holds both; the VAT is the smaller, MUT-504).
+ */
+function firstAmount(rows: readonly Row[], match: (row: Row) => boolean, labels: KeywordSet, exponent: number | null, integers: boolean, smallest = false): Labelled | null {
   for (const row of rows) {
     if (!match(row)) continue;
-    const minor = last(moneyIn(row.text, exponent, integers));
+    const amounts = moneyIn(row.text, exponent, integers);
+    const minor = smallest ? min(amounts) : last(amounts);
     if (minor !== null) return { minor, row, conf: Math.min(amountConf(row, minor, exponent, integers), labelConf(row, labels)) };
   }
   return null;
@@ -87,7 +96,7 @@ function partsOf(rows: readonly Row[], exponent: number | null): Parts {
   // A receipt that prints its money with decimals and shows a bare integer on a labelled row has lost a decimal point
   // to OCR (MUT-441 benchmark: "15.01" read as 15001); taking it as whole units would fill a wrong amount.
   const integers = all.length === 0;
-  const vat = firstAmount(rows, isVatRow, VAT, exponent, integers);
+  const vat = firstAmount(rows, isVatRow, VAT, exponent, integers, true);
   return {
     subtotal: firstAmount(rows, (r) => hasKeyword(r.folded, SUBTOTAL) && !isVatRow(r), SUBTOTAL, exponent, integers),
     vat,
@@ -144,7 +153,8 @@ function arithmeticTotal(parts: Parts): MoneyReading | null {
   }
   const votes = new Map<bigint, number>();
   const confByAmount = new Map(parts.all.map((a) => [a.minor, a.conf]));
-  const amounts = parts.all.map((a) => a.minor);
+  // Each value once (MUT-504): a total printed four times would otherwise vote for its own difference with the VAT.
+  const amounts = [...confByAmount.keys()];
   for (let i = 0; i < amounts.length; i += 1) {
     for (let j = i + 1; j < amounts.length; j += 1) {
       const [a, b] = [amounts[i]!, amounts[j]!];
@@ -156,15 +166,50 @@ function arithmeticTotal(parts: Parts): MoneyReading | null {
 }
 
 /**
- * MUT-504: no labelled total survived OCR and no arithmetic gives one, but the receipt prints its largest amount on
- * three rows or more (a till receipt's to-pay row, card row and card slip). Its surest reading is the confidence.
+ * MUT-504: the receipt's largest amount is two other printed amounts added up (a subtotal and its VAT whose labels OCR
+ * garbled), and either it is printed twice or one of the two is the labelled subtotal. Never cash tendered.
+ */
+function sumOfTwo(parts: Parts): MoneyReading | null {
+  const largest = max(parts.all.map((a) => a.minor));
+  if (largest === null) return null;
+  const readings = parts.all.filter((a) => a.minor === largest);
+  if (readings.some((a) => hasKeyword(a.row.folded, CASH))) return null;
+  const others = [...new Set(parts.all.map((a) => a.minor))].filter((a) => a !== largest);
+  const adds = others.some((a) => others.some((b) => a < b && a + b === largest && (readings.length >= 2 || a === parts.subtotal?.minor || b === parts.subtotal?.minor)));
+  return adds ? { minor: largest, rule: RULE_SUM_OF_TWO, conf: Math.max(...readings.map((a) => a.conf)), row: null } : null;
+}
+
+/** MUT-504: a statement lists a total per month; picking one would be a wrong total. */
+function isStatement(rows: readonly Row[], exponent: number | null): boolean {
+  const totals = new Set(rows.filter(isTotalRow).flatMap((row) => moneyIn(row.text, exponent, false).slice(-1)));
+  return totals.size >= STATEMENT_TOTALS;
+}
+
+/**
+ * MUT-504: no labelled total survived OCR and no arithmetic gives one, but the receipt prints its largest amount three
+ * times or more (a till receipt's to-pay row, card row and card slip; OCR can join the first two into one row). Its
+ * surest reading is the confidence.
  */
 function repeatedLargest(parts: Parts): MoneyReading | null {
   const largest = max(parts.all.map((a) => a.minor));
   if (largest === null) return null;
   const readings = parts.all.filter((a) => a.minor === largest);
-  if (new Set(readings.map((a) => a.row)).size < MIN_REPEATS) return null;
+  if (readings.length < MIN_REPEATS) return null;
   return { minor: largest, rule: RULE_REPEATED_LARGEST, conf: Math.max(...readings.map((a) => a.conf)), row: null };
+}
+
+/**
+ * The first rule, strictest first, whose total is sure; else the first that gave one at all (left out later as unsure).
+ * An unsure reading from a strict rule never keeps out a sure one from a looser rule (MUT-504).
+ */
+function firstSure(rules: ReadonlyArray<() => MoneyReading | null>): MoneyReading | null {
+  let fallback: MoneyReading | null = null;
+  for (const rule of rules) {
+    const reading = rule();
+    if (reading && isConfident(reading.rule * reading.conf)) return reading;
+    fallback ??= reading;
+  }
+  return fallback;
 }
 
 export interface MoneyFields {
@@ -175,7 +220,7 @@ export interface MoneyFields {
 
 export function readMoney(rows: readonly Row[], exponent: number | null): MoneyFields {
   const parts = partsOf(rows, exponent);
-  const total = labelledTotal(rows, parts, exponent) ?? arithmeticTotal(parts) ?? repeatedLargest(parts);
+  const total = isStatement(rows, exponent) ? null : firstSure([() => labelledTotal(rows, parts, exponent), () => arithmeticTotal(parts), () => sumOfTwo(parts), () => repeatedLargest(parts)]);
   const vatConfirmed = parts.vat && total && ((parts.subtotal && near(parts.subtotal.minor + parts.vat.minor, total.minor)) || confirmation(total.minor, parts) === 'guided');
   return {
     total,

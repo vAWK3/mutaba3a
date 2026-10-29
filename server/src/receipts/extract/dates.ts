@@ -116,14 +116,16 @@ const surest = (candidates: readonly Candidate[]) => candidates.reduce<Candidate
 
 /**
  * The receipt's date. A sure date after a date label wins (an invoice's issue date over the dates it lists). With
- * none, the surest date, but only when every date on the receipt is the same day: a bill or a statement lists many
- * (trips, earlier payments), and picking one would suggest a wrong date (MUT-504). The first wins a tie.
+ * none, the surest date, but only when every date on the receipt is the same day and the receipt prints no billing
+ * period: a bill or a statement lists many dates (trips, earlier payments), and picking one would suggest a wrong
+ * date (MUT-504). The first wins a tie.
  */
 export function readDate(rows: readonly Row[]): DateReading | null {
   const candidates = rows.flatMap((row) => candidateOn(row) ?? []);
   const labelled = surest(candidates.filter((c) => c.labelled));
   if (labelled && isConfident(score(labelled))) return strip(labelled);
-  if (new Set(candidates.map((c) => c.iso)).size > 1) return null;
+  const bill = rows.some((row) => new RegExp(DATE_RANGE.source).test(row.text));
+  if (bill || new Set(candidates.map((c) => c.iso)).size > 1) return null;
   const best = surest(candidates);
   return best ? strip(best) : null;
 }

@@ -58,6 +58,12 @@ def test_split_number_boxes_join_left_to_right():
     assert joined[0].conf == 0.98 and joined[0].box == (20, 0, 90, 20)
 
 
+def test_two_complete_amounts_side_by_side_stay_apart():
+    # MUT-504: two readings of a till receipt's total were glued into "61.8361.83".
+    joined = join_number_fragments([seg("61.83", 0.99, 0, 0, 50, 20), seg("61.83", 0.99, 52, 0, 102, 20)])
+    assert [s.text for s in joined] == ["61.83", "61.83"]
+
+
 def test_number_boxes_far_apart_stay_apart():
     joined = join_number_fragments([seg("079", 1, 0, 0, 30, 20), seg("8452064", 1, 200, 0, 300, 20)])
     assert [s.text for s in joined] == ["079", "8452064"]
@@ -110,6 +116,20 @@ def test_on_a_hebrew_page_unsure_rapid_digits_do_not_replace_tesseracts():
     rapid = [seg("61.88", 0.6, 0, 50, 60, 70)]
     tess = [tess_line([("61.83", 0.7, 0, 60), ("לתשלום", 0.9, 200, 300)])]
     assert [s.text for s in merge(rapid, tess, "hebr")] == ["61.83 לתשלום"]
+
+
+def test_on_a_hebrew_page_a_tesseract_digit_word_no_rapid_box_covers_is_kept():
+    # RapidOCR read only the time; Tesseract's date, however unsure, is all the line has.
+    rapid = [seg("14:24", 0.97, 150, 50, 200, 70)]
+    tess = [tess_line([("תאריך", 0.9, 300, 360), ("07/05/2025", 0.5, 40, 140), ("14:2A", 0.5, 150, 200)])]
+    out = merge(rapid, tess, "hebr")
+    assert [s.text for s in out] == ["תאריך 07/05/2025", "14:24"]
+
+
+def test_on_a_hebrew_page_one_unsure_rapid_box_does_not_keep_out_a_sure_one():
+    rapid = [seg("88", 0.4, 200, 50, 230, 70), seg("61.83", 0.99, 0, 50, 60, 70)]
+    tess = [tess_line([("תיז", 0.2, 300, 340), ("88", 0.3, 200, 230)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["תיז 88", "61.83"]
 
 
 def test_off_a_hebrew_page_the_merge_is_unchanged_by_tesseract_words():
