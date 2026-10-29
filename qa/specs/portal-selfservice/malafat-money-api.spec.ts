@@ -535,7 +535,10 @@ test("Malafat corrects a billed and paid fee's amount, VAT basis and treatment i
   });
 
   await step('Malafat tries to correct a retainer: 422 NOT_FIXED (AC4)', async () => {
-    const body = { projectId, monthlyAmount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', startMonth: '2027-01', billingDay: 1 };
+    // Its own client and matter: its monthly charges must never reach this client's statement or matter (review P1).
+    const retainerClient = (await call('POST', '/v1/customers', key, { name: 'Khoury' })).id;
+    const retainerMatter = (await call('POST', '/v1/projects', key, { customerId: retainerClient, name: 'Monthly advice', currency: 'ILS' })).id;
+    const body = { projectId: retainerMatter, monthlyAmount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', startMonth: '2027-01', billingDay: 1 };
     const preview = await call('POST', '/v1/retainers/preview', key, body);
     const retainer = await call('POST', '/v1/retainers', key, { ...body, previewToken: preview.previewToken });
     const res = await send(`/v1/agreements/${retainer.agreement.id}/correct/preview`, exclusive);
