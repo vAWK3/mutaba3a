@@ -4223,3 +4223,13 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Local mode | `migrations.test.ts` (12 → 13), `format-fingerprint.test.ts` (everyRecord: a corrected Malafat payment) | |
 | Release-QA | `@portal-selfservice.malafat-money-api.payment-correct` | record with receipt 3001, preview to 600, confirm, replay, the four refusals, the statement |
 
+
+## MUT-503 — move a To-review receipt to another profile (ADR-228)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Route | `server/src/__tests__/routes-receipts-move.test.ts` | A→B keeps id, day, suggestion, reading, new key under B, old object gone; leftover approval cleared (D2); audits both sides (D3); replay moves once; filed 409, unfinished 422, same 422, stranger 404, unknown 404; file missing 409; failed copy leaves A untouched and the key free; a refusal under the lock removes only its own copy (D5); two moves at once keep the winner's file; a failed old-object delete still 200 (D8); PENDING moves PENDING; lapsed target 402 (D7) |
+| Reader | `server/src/__tests__/routes-receipt-reading.test.ts` (MUT-503 block) | moved before the bytes were read → retry, try given back; moved during the third try → not exhausted; moved during OCR → reading lands on B with B's vendor; a genuinely missing file is still FAILED missing |
+| Store (Postgres) | `server/src/repositories/__tests__/store-prisma-receipt-move.test.ts` | re-home under the lock, JSON-null approval; two moves → one wins; move vs approve → one wins; filed/unfinished refused; `releaseMovedRead` only when the key moved |
+| Portal | `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/receiptHooks.test.tsx` | ⋯ menu items and keys; Filed and solo have no Move (DR2, AC3); radio rows, named primary, Idempotency-Key, both profiles refreshed, toast with Open (DR4); read-only/locked disabled with reasons and the none-open note (AC2); reading note (DR9); 402 banner; D8 recovery; focus to the neighbour; review page button and next receipt (DR1); `moveErrorOf` table |
+| Release-QA | `@portal.receipts.move`, `@portal.receipts.move-review`, `@portal.receipts.move-refused`, `@portal.receipts.filed-no-move` | the four portal flows on the FakeApi's per-profile receipts |
