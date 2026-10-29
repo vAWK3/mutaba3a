@@ -560,6 +560,141 @@ test("Malafat corrects a billed and paid fee's amount, VAT basis and treatment i
     expect(audit).toHaveLength(3);
     expect(audit.map((e: Json) => [e.metadata.before.pricingBasis, e.metadata.after.pricingBasis]).sort()).toEqual([['VAT_EXCLUSIVE', 'VAT_INCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_EXCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_INCLUSIVE']]);
     const doc = await call('GET', '/openapi.json', {});
-    expect(doc.info.version).toBe('1.89.0-mut444');
+    expect(doc.info.version).toBe('1.90.0-mut483');
+  });
+});
+
+test('Malafat reads a month\'s billed, received and credited, and they add up to how much owed changed', { tag: '@portal-selfservice.malafat-money-api.period-totals' }, async ({ step }) => {
+  // MUT-483 (ADR-227): GET /v1/summaries/period with the integration key; Malafat's "Month summary" sheet is MAL-1428.
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let orgId = '';
+  const clients = { a: '', b: '' };
+  const matters = { a: '', b: '' };
+  let asOf = '';
+  let thisMonth = { from: '', to: '' };
+  let lastMonth = { from: '', to: '' };
+  const day = (month: { from: string }, dd: string) => `${month.from.slice(0, 8)}${dd}`;
+  const raw = async (path: string, headers: Record<string, string> = key) => {
+    const res = await fetch(`${liveState().origin}${path}`, { headers });
+    const json = (await res.json()) as Json;
+    return { status: res.status, body: json };
+  };
+  const fee = async (projectId: string, amount: string, agreementDate: string, trigger: Json) => {
+    const body = { projectId, amount, pricingBasis: 'VAT_INCLUSIVE', agreementDate, paymentTerms: 'EOM', installments: [{ label: 'Fee', amount, trigger }] };
+    const preview = await call('POST', '/v1/agreements/preview', key, body);
+    const created = await call('POST', '/v1/agreements', key, { ...body, previewToken: preview.previewToken });
+    expect(created.installments[0].receivableId, 'the fee is billed at once').toBeTruthy();
+    return { agreementId: created.agreement.id as string, charge: created.installments[0].receivableId as string };
+  };
+  const pay = async (customerId: string, amount: string, receivedOn: string, allocations: Json[]) => {
+    const preview = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount, allocations });
+    return call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount, receivedOn, method: 'BANK', allocations, previewToken: preview.previewToken });
+  };
+
+  await step('Malafat sets up a firm with two clients at 18 % VAT', async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    orgId = org.id;
+    const apiKey = await call('POST', `/admin/v1/organizations/${orgId}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    await call('PUT', '/v1/settings/vat', key, { rateBasisPoints: 1800, effectiveFrom: '2025-01-01' });
+    clients.a = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    clients.b = (await call('POST', '/v1/customers', key, { name: 'Nasser' })).id;
+    matters.a = (await call('POST', '/v1/projects', key, { customerId: clients.a, name: 'Sale', currency: 'ILS' })).id;
+    matters.b = (await call('POST', '/v1/projects', key, { customerId: clients.b, name: 'Lease', currency: 'ILS' })).id;
+    // M is the month of the firm's today and P the month before; everything in M is dated M-01 or today.
+    const empty = await call('GET', '/v1/summaries/period', key);
+    asOf = empty.asOf;
+    thisMonth = { from: empty.from, to: empty.to };
+    const lastDay = new Date(`${thisMonth.from}T00:00:00Z`);
+    lastDay.setUTCDate(0);
+    lastMonth = { from: `${lastDay.toISOString().slice(0, 8)}01`, to: lastDay.toISOString().slice(0, 10) };
+    expect(empty.currencies).toEqual([]);
+  });
+
+  let aFee = { agreementId: '', charge: '' };
+  let bFee = { agreementId: '', charge: '' };
+  await step('Last month, client A is billed ₪1,000 (VAT included) on its own agreement and pays ₪400 against it', async () => {
+    const aLast = await fee(matters.a, '1000.00', day(lastMonth, '05'), { type: 'DATE', date: day(lastMonth, '05') });
+    await pay(clients.a, '400.00', day(lastMonth, '15'), [{ receivableId: aLast.charge, amount: '400.00' }]);
+  });
+
+  await step('This month, A is billed a ₪1,000 fee (VAT included) on its own agreement and B ₪500 (VAT included)', async () => {
+    aFee = await fee(matters.a, '1000.00', thisMonth.from, { type: 'IMMEDIATE' });
+    bFee = await fee(matters.b, '500.00', thisMonth.from, { type: 'DATE', date: thisMonth.from });
+  });
+
+  await step('B gets a ₪50 credit and pays ₪300 with nothing applied; A pays ₪200 against its fee and the payment bounces', async () => {
+    await call('POST', `/v1/receivables/${bFee.charge}/credits`, key, { amount: '50.00', reason: 'Goodwill', effectiveDate: asOf });
+    await pay(clients.b, '300.00', asOf, []);
+    const bounced = await pay(clients.a, '200.00', asOf, [{ receivableId: aFee.charge, amount: '200.00' }]);
+    await call('POST', `/v1/payments/${bounced.id}/reverse`, key, { reason: 'Cheque bounced' });
+  });
+
+  await step('B pays ₪100 against its charge and Malafat corrects it to ₪120, applied to the same charge', async () => {
+    const paid = await pay(clients.b, '100.00', asOf, [{ receivableId: bFee.charge, amount: '100.00' }]);
+    const body = { amount: '120.00', receivedOn: asOf, method: 'BANK', allocations: [{ receivableId: bFee.charge, amount: '120.00' }] };
+    const preview = await call('POST', `/v1/payments/${paid.id}/correct/preview`, key, body);
+    await call('POST', `/v1/payments/${paid.id}/correct`, key, { ...body, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: preview.previewToken });
+  });
+
+  await step('Malafat corrects A\'s fee from ₪1,000 VAT-inclusive to ₪1,000 VAT-exclusive', async () => {
+    const body = { amount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', installments: [{ label: 'Fee', amount: '1000.00', trigger: { type: 'IMMEDIATE' } }] };
+    const preview = await call('POST', `/v1/agreements/${aFee.agreementId}/correct/preview`, key, body);
+    const done = await call('POST', `/v1/agreements/${aFee.agreementId}/correct`, key, { ...body, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: preview.previewToken });
+    expect(done.receivables).toEqual([expect.objectContaining({ gross: '1180.00' })]);
+  });
+
+  let month: Json = {};
+  let previous: Json = {};
+  const statementLines: Json[] = [];
+  await step('Malafat reads this month\'s totals in ILS, then last month\'s, then each client\'s statement for this month', async () => {
+    month = (await call('GET', `/v1/summaries/period?from=${thisMonth.from}&to=${thisMonth.to}&currency=ILS`, key)).currencies[0];
+    previous = (await call('GET', `/v1/summaries/period?from=${lastMonth.from}&to=${lastMonth.to}&currency=ILS`, key)).currencies[0];
+    for (const customerId of [clients.a, clients.b]) {
+      const statement = await call('GET', `/v1/customers/${customerId}/statement?currency=ILS&from=${thisMonth.from}&to=${thisMonth.to}&limit=500`, key);
+      statementLines.push(...statement.lines);
+    }
+    expect(month.currency).toBe('ILS');
+  });
+
+  await step('AC1: billed, credited, payments and reversals for this month equal both clients\' statement lines for the month, added up', async () => {
+    const sum = (kind: string, side: 'debit' | 'credit') => statementLines.filter((l) => l.kind === kind).reduce((s, l) => s + minor(l[side]), 0);
+    expect(minor(month.billed)).toBe(sum('CHARGE', 'debit'));
+    expect(minor(month.credited)).toBe(sum('CREDIT', 'credit'));
+    expect(minor(month.payments)).toBe(sum('PAYMENT', 'credit'));
+    expect(minor(month.reversals)).toBe(sum('PAYMENT_REVERSAL', 'debit'));
+  });
+
+  await step('AC2: closing minus opening equals billed minus received minus credited, and equals change; this month\'s opening equals last month\'s closing', async () => {
+    const change = minor(month.closingBalance) - minor(month.openingBalance);
+    expect(change).toBe(minor(month.billed) - minor(month.received) - minor(month.credited));
+    expect(minor(month.change)).toBe(change);
+    expect(minor(month.received)).toBe(minor(month.payments) - minor(month.reversals));
+    expect(month.openingBalance).toBe(previous.closingBalance);
+  });
+
+  await step('This month: opening ₪600, billed ₪2,680, credited ₪1,050, payments ₪720, reversals ₪300 (the bounce and the corrected original), received ₪420, change ₪1,210, closing ₪1,810', async () => {
+    expect(month).toEqual({ currency: 'ILS', openingBalance: '600.00', billed: '2680.00', credited: '1050.00', received: '420.00', payments: '720.00', reversals: '300.00', change: '1210.00', closingBalance: '1810.00' });
+  });
+
+  await step('Last month: billed ₪1,000, received ₪400, credited ₪0, opening ₪0, closing ₪600', async () => {
+    expect(previous).toMatchObject({ openingBalance: '0.00', billed: '1000.00', received: '400.00', credited: '0.00', closingBalance: '600.00' });
+  });
+
+  await step('AC3: a key without summaries:read gets 403 INSUFFICIENT_SCOPE, and to before from gets 422 END_BEFORE_START', async () => {
+    const narrow = await call('POST', `/admin/v1/organizations/${orgId}/api-keys`, admin, { name: 'Narrow', scopes: SCOPES.filter((s) => s !== 'summaries:read') });
+    const refused = await raw('/v1/summaries/period', { authorization: `Bearer ${narrow.secret}` });
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toMatchObject({ code: 'INSUFFICIENT_SCOPE', details: { required: 'summaries:read' } });
+    const inverted = await raw(`/v1/summaries/period?from=${thisMonth.to}&to=${thisMonth.from}`);
+    expect(inverted.status).toBe(422);
+    expect(inverted.body.error.details).toMatchObject({ reason: 'END_BEFORE_START', field: 'to' });
+  });
+
+  await step('AC4: the contract version reads 1.90.0-mut483', async () => {
+    const doc = await call('GET', '/openapi.json', {});
+    expect(doc.info.version).toBe('1.90.0-mut483');
+    expect(doc.paths['/v1/summaries/period'].get.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);
   });
 });

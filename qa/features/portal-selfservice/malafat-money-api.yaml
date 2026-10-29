@@ -150,4 +150,28 @@ features:
       - The EXEMPT correction makes the ₪100 charge net ₪100 and VAT ₪0 with the gross unchanged; the balance does not move and the payment's ₪100 sits on the new charge
       - The refusals are 409 PREVIEW_STALE, 422 REASON_REQUIRED, 422 NOTHING_TO_CORRECT, 422 POSTED_INSTALLMENT_CHANGED (position 1, TRIGGER), 409 AGREEMENT_CANCELLED, 409 OUTCOME_ALREADY_RECORDED and 422 NOT_FIXED, and none of them writes anything (the agreement's version is unchanged)
       - The statement shows, on the original date, each old charge, its credit, then its repost; the judgment charge and its payment follow; the closing balance is −₪200 and the matter's posted is ₪200, never the replaced charges
-      - The audit has agreement.corrected with the before and after terms, and the contract version reads 1.89.0-mut444
+      - The audit has agreement.corrected with the before and after terms, and the contract version reads 1.90.0-mut483
+  - id: period-totals
+    title: Malafat reads a month's billed, received and credited, and they add up to how much owed changed
+    tier: secondary
+    # MUT-483 (ADR-227): GET /v1/summaries/period with the integration key. Malafat's "Month summary" sheet is MAL-1428.
+    paths:
+      - server/src/statements/period.ts
+      - server/src/statements/lines.ts
+      - server/src/routes/summaries.ts
+    steps:
+      - Malafat sets up a firm with two clients at 18 % VAT
+      - Last month, client A is billed ₪1,000 (VAT included) on its own agreement and pays ₪400 against it
+      - This month, A is billed a ₪1,000 fee (VAT included) on its own agreement and B ₪500 (VAT included)
+      - B gets a ₪50 credit and pays ₪300 with nothing applied; A pays ₪200 against its fee and the payment bounces
+      - B pays ₪100 against its charge and Malafat corrects it to ₪120, applied to the same charge
+      - Malafat corrects A's fee from ₪1,000 VAT-inclusive to ₪1,000 VAT-exclusive
+      - Malafat reads this month's totals in ILS, then last month's, then each client's statement for this month
+      - Malafat reads the totals with a key that lacks summaries:read, with to before from, and reads the contract version
+    expect:
+      - Billed, credited, payments and reversals for this month equal both clients' statement lines for the month, added up (AC1)
+      - Closing minus opening equals billed minus received minus credited, and equals change; this month's opening equals last month's closing (AC2)
+      - "This month: opening ₪600, billed ₪2,680, credited ₪1,050, payments ₪720, reversals ₪300 (the bounce and the corrected original), received ₪420, change ₪1,210, closing ₪1,810"
+      - "Last month: billed ₪1,000, received ₪400, credited ₪0, opening ₪0, closing ₪600"
+      - The key without summaries:read gets 403 INSUFFICIENT_SCOPE, and to before from gets 422 END_BEFORE_START (AC3)
+      - The contract version reads 1.90.0-mut483 (AC4)

@@ -3625,6 +3625,42 @@ export const ActivitySummarySchema = z
   })
   .openapi('ActivitySummary');
 
+// ---- MUT-483: a period's billed, received and credited (ADR-227) ----------------
+
+export const PeriodSummaryQuerySchema = z.object({
+  from: IsoDateSchema.optional().openapi({ description: 'Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID)' }),
+  to: IsoDateSchema.optional().openapi({
+    description: `Inclusive; defaults to the last day of this month (not today, so lines dated later this month count). A real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the ${ACTIVITY_RANGE_MAX_MONTHS} calendar months starting with from's month (422 RANGE_TOO_LONG)`,
+  }),
+  currency: CurrencySchema.optional().openapi({ description: 'One block for this currency, all zeros if it has nothing. Omitted: a block per currency with a line in the period or a balance at either end.' }),
+});
+
+const signedAmount = (description: string) => AmountSchema.openapi({ description });
+
+export const PeriodCurrencyTotalsSchema = z
+  .object({
+    currency: CurrencySchema,
+    openingBalance: signedAmount('What clients owed at the start of `from`, net of money received and not yet applied: the statement balance of every client, plus payments with no client. May be negative.'),
+    billed: signedAmount('Gross of the CHARGE lines dated in the period (postingDate).'),
+    credited: signedAmount('CREDIT lines dated in the period (effectiveDate).'),
+    received: signedAmount('payments − reversals; may be negative when an earlier payment was reversed in the period.'),
+    payments: signedAmount('PAYMENT lines dated in the period (receivedOn).'),
+    reversals: signedAmount("PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment."),
+    change: signedAmount('closingBalance − openingBalance = billed − received − credited.'),
+    closingBalance: signedAmount('What clients owed at the end of `to`, on the same terms as openingBalance.'),
+  })
+  .openapi('PeriodCurrencyTotals');
+
+export const PeriodSummarySchema = z
+  .object({
+    from: IsoDateSchema,
+    to: IsoDateSchema,
+    asOf: IsoDateSchema.openapi({ description: "Today in the organization timezone: what an Owed dated ahead is measured against, and when the figures were read." }),
+    timezone: z.string().openapi({ description: 'The organization timezone the day boundaries are in.' }),
+    currencies: z.array(PeriodCurrencyTotalsSchema),
+  })
+  .openapi('PeriodSummary');
+
 // ---- MUT-447: the Reports verdict across a person's profiles (ADR-204) ---------------
 
 export const VerdictQuerySchema = z.object({

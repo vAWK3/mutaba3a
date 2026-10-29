@@ -197,6 +197,8 @@ const SESSION_OPERATIONS = [
   'GET /v1/retainers/{agreementId}/charges',
   'GET /v1/summaries/customers/{customerId}',
   'GET /v1/summaries/organization',
+  // MUT-483: a period's billed, received and credited.
+  'GET /v1/summaries/period',
   'GET /v1/summaries/projects/{projectId}',
   'GET /v1/vat-rates',
   // MUT-65: a session may now create a customer or a project on its own personal profile.

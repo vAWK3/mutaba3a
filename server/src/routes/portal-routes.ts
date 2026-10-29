@@ -2,6 +2,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import type { CachedFxRates } from '../fx-rates.js';
+import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { attachmentRoutes } from './attachments.js';
 import { conversionRoutes } from './conversions.js';
@@ -45,6 +46,8 @@ export interface PortalRouteDependencies {
    * on the hosted server unless RECEIPTS_LIBRARY is on (MUT-389).
    */
   receiptsLibrary: boolean;
+  /** MUT-483: where a route writes its operational line (`summaries.period`); absent in the portal's signed-out mode. */
+  logger?: Logger;
 }
 
 export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => OpenAPIHono<AppEnv>> = [
@@ -52,7 +55,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => projectRoutes(deps.store),
   (deps) => receivableRoutes(deps.store),
   (deps) => paymentRoutes(deps.store),
-  (deps) => summaryRoutes(deps.store, deps.fxRates),
+  (deps) => summaryRoutes(deps.store, deps.fxRates, deps.logger ?? null),
   (deps) => attachmentRoutes(deps.store, deps.attachments),
   (deps) => expenseRoutes(deps.store, { ...deps.attachments, receiptsLibrary: deps.receiptsLibrary }),
   (deps) => expenseCategoryRoutes(deps.store),

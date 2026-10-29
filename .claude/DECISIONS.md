@@ -5958,3 +5958,44 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Credits dated today (D5 A). Rejected by Basel: past periods would never net to the corrected figure.
 - Repost only the lines whose figures change (D4 B). Rejected: one rule is easier to reason about and audit.
 - Allow trigger changes and removals of posted lines now (R6 options). Deferred to a follow-up ticket (TD-290).
+
+## ADR-227: Period Totals Are the Statement's Lines Summed Across the Organization; Closed Months Still Move (MUT-483)
+
+**Status:** Accepted (2026-10-29, MUT-483; epic MUT-25; blocks MAL-1428 "Month summary"). Plan and review: `.claude/designs/mut-483-period-totals.md` (D1–D5 answered by Basel 2026-10-29; eng review R1–R12; build notes B1–B6).
+
+**Context:** at month end a partner checks the month with the accountant: how much was billed, how much came in, how much was credited (Malafat owner ruling 2026-10-27, MAL-1410 J5-4). An API key could read no figure over time (`/activity` and `/verdict` are session-only), and Malafat may not add up receivables and payments itself (Malafat ADR-150).
+
+**Decision:**
+1. **`GET /v1/summaries/period?from&to&currency`**, `summaries:read`, API key, session or device session, per organization (a session names the profile), the lapse gate as on every read (S6, AC3). Contract 1.90.0-mut483 (AC4).
+2. **One definition, by construction (S1, AC1).** The statement's line rule is extracted into `statements/lines.ts`: `isStatementCharge`, `isStatementPayment`, `reversalInstantOf`, `reversalDateOf` and `ledgerEntries`, the whole-customer line set undecorated. `build.ts` decorates and pages its entries; `statements/period.ts` (`summarizePeriod`) sums them. A line depends only on its own row (a credit on its receivable), so the organization's entries are the union of every customer's statement lines plus the lines of payments with no client (S2). The extraction is proven against a frozen copy of the old builder (R1).
+3. **The figures, per currency.** `billed` = CHARGE lines (gross, postingDate), `credited` = CREDIT lines (effectiveDate), `payments` = PAYMENT lines (receivedOn), `reversals` = PAYMENT_REVERSAL lines (the reversal instant's day in the organization timezone), `received = payments − reversals` (D3 B). `openingBalance` = Σ (debit − credit) over lines before `from`, `closingBalance` over lines through `to`, `change = closing − opening` (D2 A). So `change = billed − received − credited` is an identity over one line set (AC2), whatever mix of events. "Minus reversals in it" means reversal lines dated in the period, whenever the payment was received; the other reading breaks AC2.
+4. **Why the balance and not outstanding (§3.2).** Over every line, B(∞) = Σ_counted (gross − paid − credited) − unallocated = outstanding − unallocated, so with `to` on or after the last line `closingBalance` equals `/v1/summaries/organization` `outstanding − unallocated`. Receivables-only outstanding can't satisfy AC2: an allocation has no ledger date and can come weeks after the payment.
+5. **Clientless payments count (D4 A)** in payments, reversals, received and both balances. Exact on Malafat-fed profiles, which can't hold one (`CUSTOMER_REQUIRED`).
+6. **Corrections are the statement's (D1 A).** A MUT-444 correction bills the replaced charge, credits its remainder and bills the repost, all on the original posting date; a MUT-443 correction shows the original payment, its reversal on the correction day and the replacement on its own date; a MUT-100 outcome correction credits the old commission on the correction day and bills the new one on the outcome date; a MUT-480 reduction is credits. **A corrected month matches the accountant's books in net, not line for line** (R6): the books may hold only the corrected document. Basel was told this explicitly.
+7. **General rule: closed months still move (D5 A, R4).** Figures are the ledger as it stands at `asOf`: anything dated into a period changes it, whenever it was written. That covers back-dated creation, corrections, captured-payment and Owed redates, Owed undos, capture undos, key credits with any `effectiveDate`, and a timezone change (which re-dates reversals near midnight). Lazy posting does not move a closed period: `postDueItems` always runs before the read. A month-close snapshot (D5 B) is its own ticket. The route description says this.
+8. **Range (S3).** `reportRange()`, the Reports rule: inclusive org-local days, default this month with `to` = **the last day of this month**, not today (R11); `DATE_INVALID`, `END_BEFORE_START`, `RANGE_TOO_LONG` (13 months). Validated before anything posts. The cap is for one rule, not cost: the opening balance needs every earlier line either way.
+9. **Blocks (S4).** With `?currency=` exactly one block, zeros if nothing; without it, a block per currency with a line in the period or a non-zero balance at either end, sorted by code. Never summed across currencies (ADR-004).
+10. **Lazy posting (S5, R7)** through `lazyPostingOf`: a key posts as itself (API_KEY, guarded store), a session or device session as SYSTEM.
+11. **The read (S10).** `receivables.periodSources(organizationId, currency | null)`: three narrow selects in one REPEATABLE READ (live receivables, their credits, every payment of any status), no allocations, no installments; no new index or migration. One O(n) pass, no sort. One structured log line `summaries.period` (rows, posting/read/sum ms, currencies; no amounts) is TD-291's trigger (R5; the Sentry span was dropped, build note B2).
+12. **Local mode (S7)** serves it (the route is in `summaryRoutes`); no portal UI; snapshot format stays 13.
+
+**Differences from neighbours, kept and documented (S11, R12):**
+- An inverted range is `END_BEFORE_START` here, as `/activity` and `/verdict` answer; the statement answers `PERIOD_INVALID` for the same case. This route is a summary and takes the summaries rule.
+- `?currency=` with no data returns one block of zeros here; `/summaries/organization` returns an empty `currencies` list. A month sheet that asked for ILS gets ILS zeros.
+- `received` here is ledger-dated: a payment reversed later still counts in its own month, and its reversal counts on its own day. `/v1/summaries/activity`'s received (session Reports) counts POSTED payments only, so a reversed payment vanishes from its own month there.
+
+**Consequences:** the period read loads the organization's whole ledger history per request (TD-291; the upgrade path is one SQL aggregate per currency, both rules being plain SQL expressions). MAL-1428 ships only after the API roll and Malafat's re-vendor of 1.90.0-mut483 (`docs/operations/before-release.md`).
+
+**Build notes (2026-10-29, plan §15 B1–B6):** the R2 driver writes a person's session-only rows through the store methods those routes call (one profile can't take both a key and a session write); no Sentry span (errors-only Sentry, browser bundle); the frozen builder is shared test code; `LedgerEntry` carries `customerId` and a CREDIT's `receivable`; a project statement takes its charges and credits from `ledgerEntries`; the session-read inventory pin moves to 39.
+
+**Alternatives considered:**
+- Net out superseded charges and their credits (D1 B, the matter figures' rule, ADR-226 §8). Rejected: breaks AC1, and the statement shows them.
+- `outstandingAtStart/End` (D2 B). Rejected: clashes with `/summaries/organization` `outstanding`, which is receivables only, and can't satisfy AC2.
+- Leave clientless payments out (D4 B). Rejected: the closing balance would no longer equal the organization summary.
+- A stored month-close snapshot (D5 B). Deferred to its own ticket and Malafat UI.
+- Reuse `summaries/activity.ts`. Rejected: its received is the Reports definition (POSTED only).
+- A per-customer loop over `statementSources`. Rejected: N × 6 queries where 3 suffice.
+
+**Pre-landing review notes (2026-10-29):**
+- A ledger row in a retired currency (AED, SAR, QAR, BHD, OMR; `RETIRED_EXPONENT`) still yields its own block when `currency` is omitted, as `/v1/summaries/organization` does; its code is outside the published `Currency` enum and `?currency=` refuses it (422). Kept consistent with the organization summary; TD-292.
+- `from` and `to` go through the shared `reportRange`: a bound left out defaults to this month's, so `?to=` in the past alone answers 422 `END_BEFORE_START` and an old `?from=` alone 422 `RANGE_TOO_LONG`. Malafat sends both bounds.
