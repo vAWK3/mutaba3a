@@ -50,18 +50,27 @@ export async function loadAgreementContext(
   organization: Organization,
   input: { projectId: string; currency?: string | undefined; vatTreatment?: VatTreatment | undefined; agreementDate: IsoDate },
 ): Promise<AgreementContext> {
-  const project = await store.projects.getById(organization.id, input.projectId);
-  if (!project) throw validationError('PROJECT_NOT_FOUND', 'projectId does not name a project of this organization', { field: 'projectId' });
-  if (project.status === 'ARCHIVED') throw validationError('PROJECT_ARCHIVED', 'The project is archived', { field: 'projectId' });
-  const customer = await store.customers.getById(organization.id, project.customerId);
-  if (!customer) throw validationError('CUSTOMER_NOT_FOUND', 'The project has no customer', { field: 'projectId' });
-  if (customer.status === 'ARCHIVED') throw validationError('CUSTOMER_ARCHIVED', 'The customer is archived', { field: 'projectId' });
+  const { project, customer } = await loadAgreementParties(store, organization, input.projectId);
   if (input.currency && input.currency !== project.currency) {
     throw validationError('CURRENCY_MISMATCH', `The project is in ${project.currency}`, { field: 'currency', projectCurrency: project.currency });
   }
   const defaultTreatment = resolveTreatment(input.vatTreatment, project, customer);
   const rateBasisPoints = await resolveRate(store, organization.id, input.agreementDate, defaultTreatment);
   return { project, customer, currency: project.currency as Currency, defaultTreatment, rateBasisPoints };
+}
+
+/**
+ * The project and its customer, both present and not archived (MUT-444 R9: split out of `loadAgreementContext`, so a
+ * correction checks the parties without reading the rate table).
+ */
+export async function loadAgreementParties(store: LedgerStore, organization: Organization, projectId: string): Promise<{ project: ProjectRecord; customer: CustomerRecord }> {
+  const project = await store.projects.getById(organization.id, projectId);
+  if (!project) throw validationError('PROJECT_NOT_FOUND', 'projectId does not name a project of this organization', { field: 'projectId' });
+  if (project.status === 'ARCHIVED') throw validationError('PROJECT_ARCHIVED', 'The project is archived', { field: 'projectId' });
+  const customer = await store.customers.getById(organization.id, project.customerId);
+  if (!customer) throw validationError('CUSTOMER_NOT_FOUND', 'The project has no customer', { field: 'projectId' });
+  if (customer.status === 'ARCHIVED') throw validationError('CUSTOMER_ARCHIVED', 'The customer is archived', { field: 'projectId' });
+  return { project, customer };
 }
 
 /**

@@ -10,6 +10,7 @@ import {
   validationError,
 } from '../agreements/compose.js';
 import { agreementDetail, composePreview, createAgreementFromPreview, paidMap } from '../agreements/create.js';
+import { assertCorrectable, composeCorrection, correctionView, correctionWrite, customerFigures, type ComposedTermsCorrection } from '../agreements/correct-terms-compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { assertReducible, composeReduction, reductionView, reductionWrite } from '../agreements/reduce-compose.js';
 import { planSupplement } from '../agreements/supplement.js';
@@ -17,7 +18,7 @@ import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
 import { formatMoney, type Currency } from '../money.js';
 import { previewToken, verifyPreviewToken } from '../preview-token.js';
-import type { AgreementRecord, CreateInstallmentInput, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AgreementRecord, CorrectAgreementResult, CreateInstallmentInput, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   AgreementCreateRequestSchema,
   AgreementDetailSchema,
@@ -26,6 +27,10 @@ import {
   AgreementPreviewRequestSchema,
   AgreementPreviewResponseSchema,
   CancelAgreementRequestSchema,
+  CorrectAgreementPreviewRequestSchema,
+  CorrectAgreementPreviewResponseSchema,
+  CorrectAgreementRequestSchema,
+  CorrectAgreementResponseSchema,
   ListAgreementsQuerySchema,
   ReducePreviewRequestSchema,
   ReducePreviewResponseSchema,
@@ -34,7 +39,7 @@ import {
   SupplementRequestSchema,
   SupplementResponseSchema,
 } from '../schemas.js';
-import { serializeAgreement, serializeCredit, serializeInstallment, serializeSupplement } from '../serializers.js';
+import { serializeAgreement, serializeCredit, serializeInstallment, serializeReceivable, serializeSupplement } from '../serializers.js';
 import { computeVat } from '../vat.js';
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
 
@@ -330,6 +335,128 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     return mustGet(store, organization.id, agreementId);
   }
 
+  // ---- MUT-444 (ADR-226): correct the terms after posting ----
+  const CORRECT_RULES =
+    'FIXED, or CONTINGENCY before its outcome (the upfront; amount 0 with no installments is allowed). The body is the full new terms: amount and pricingBasis, vatTreatment and paymentTerms (left out keep the agreement’s), and the installments. agreementDate, description, the currency, the project and the customer can’t change here (the body is strict: 422 VALIDATION_FAILED). The rate is the one the agreement froze (if it froze 0 and a line is now STANDARD_RATED, the rate in force on agreementDate, or 422 VAT_RATE_MISSING). Lines are matched by order: a billed line keeps its place and trigger (422 POSTED_INSTALLMENT_CHANGED, details { position, change: TRIGGER | REMOVED }); unbilled lines change freely. Due lines are billed first, as on any read. Refusals: 422 NOT_FIXED (a retainer: POST /v1/retainers/{id}/change), AMOUNT_INVALID, the schedule reasons, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED (use /outcome/correct). After a correction every installment id changes (the old lines read VOID; a manual trigger on one is 409 INSTALLMENT_VOIDED), and a moved payment’s version is bumped.';
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/agreements/{agreementId}/correct/preview',
+      tags: ['Agreements'],
+      summary: 'Preview correcting an agreement’s terms after posting: the new lines, the credits, the payments that move, the balance change',
+      description: `The only write is the lazy billing every read does. Every live line is replaced: each billed charge is credited for its remainder on its own posting date and the matching new line is billed on that same date; payments on the old charges move to the new ones oldest first, and what doesn’t fit stays unallocated. \`balanceChange\` is the change in the client’s balance (outstanding − unallocated). reasonCode and note are optional here and not part of the token. The token covers the resolved terms, the rate, today, the agreement’s lines and charges and the payments that move, so anything that moves in between is 409 PREVIEW_STALE at correct. Needs agreements:read and payments:read. ${CORRECT_RULES}`,
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('agreements:read'), requireScope('payments:read')] as const,
+      request: { params: AgreementIdParamSchema, body: jsonBody(CorrectAgreementPreviewRequestSchema) },
+      responses: { 200: { description: 'The plan', content: { 'application/json': { schema: CorrectAgreementPreviewResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = keyAuth(c);
+      const now = c.get('now')();
+      const today = todayFor(organization, now);
+      const agreement = await correctableAfterPosting(c, organization, c.req.valid('param').agreementId, now);
+      const composed = await composeCorrection(store, organization, agreement, c.req.valid('json'), today);
+      const customer = await customerFigures(store, organization.id, agreement.customerId, agreement.currency, today);
+      return c.json(correctionView(composed, agreement, customer, today, previewToken(composed.tokenParts)), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/agreements/{agreementId}/correct',
+      tags: ['Agreements'],
+      summary: 'Correct an agreement’s terms after posting, in one atomic write',
+      description: `The previewed plan, written at once or not at all: every live line voided; each billed charge credited for its remainder, dated its own posting date (reasonCode on each, source CORRECTION); the new lines added at the next positions, a billed one reposted on its original date with the next CHG number of that year; the payments’ allocations on the old charges released and placed on the new ones oldest first (the rest unallocated); the new totals; and a CORRECTION supplement row. reasonCode is required; OTHER needs a note (422 REASON_REQUIRED). Anything that moved since the preview (a payment, a credit, a billing, another change, or midnight) is 409 PREVIEW_STALE with nothing written. A replay with the same Idempotency-Key returns the stored answer. Needs agreements:write and payments:write. Audits agreement.corrected (before and after), receivable.credited per credit, installment.posted per repost (trigger CORRECTION) and receivable.settled per charge it settles. ${CORRECT_RULES}`,
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('agreements:write'), requireScope('payments:write'), idempotent(store, 'agreements.correct')] as const,
+      request: { params: AgreementIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(CorrectAgreementRequestSchema) },
+      responses: { 200: { description: 'Corrected', content: { 'application/json': { schema: CorrectAgreementResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization, apiKey } = keyAuth(c);
+      const { previewToken: token, reasonCode, note: rawNote, ...body } = c.req.valid('json');
+      const now = c.get('now')();
+      const today = todayFor(organization, now);
+      const requestId = c.get('requestId');
+      const note = rawNote?.trim() || null;
+      if (reasonCode === 'OTHER' && !note) throw validationError('REASON_REQUIRED', 'Say why in a note when the reason is OTHER', { field: 'note' });
+      const agreement = await correctableAfterPosting(c, organization, c.req.valid('param').agreementId, now);
+      const composed = await composeCorrection(store, organization, agreement, body, today);
+      if (!verifyPreviewToken(token, composed.tokenParts)) throw staleCorrection();
+      const result = await store.agreements.correct(organization.id, agreement.id, correctionWrite(composed, agreement, { reasonCode, note }, today, requestId), now);
+      if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such agreement');
+      if (result.kind === 'stale') throw staleCorrection();
+      await auditCorrection(organization, { actorId: apiKey.id, requestId }, agreement, composed, result.record, { reasonCode, note });
+      const currency = agreement.currency;
+      const money = (minor: bigint) => formatMoney({ minor, currency: currency as Currency });
+      const fresh = await agreementDetail(store, organization, result.record.agreement, today);
+      return c.json(
+        {
+          ...fresh,
+          supplement: serializeSupplement(result.record.supplement, currency),
+          credits: result.record.credits.map((x) => serializeCredit(x, currency)),
+          receivables: result.record.receivables.map((r) => serializeReceivable(r, today)),
+          allocations: result.record.allocations.map((a) => ({ paymentId: a.paymentId, receivableId: a.receivableId, amount: money(a.amountMinor) })),
+          unallocated: composed.plan.moves.filter((m) => m.unallocatedMinor > 0n).map((m) => ({ paymentId: m.paymentId, amount: money(m.unallocatedMinor) })),
+        },
+        200,
+      );
+    },
+  );
+
+  /** R11 of MUT-480, kept: due items are billed before planning, with the key's own guarded store and actor. */
+  async function correctableAfterPosting(c: Parameters<typeof postingActorOf>[0], organization: Organization, agreementId: string, now: Date): Promise<AgreementRecord> {
+    assertCorrectable(await mustGet(store, organization.id, agreementId));
+    await postDueItems(store, organization, todayFor(organization, now), now, postingActorOf(c));
+    return mustGet(store, organization.id, agreementId);
+  }
+
+  /** D7 (R13): agreement.corrected with the before and after terms, one event per credit, repost and newly settled charge. */
+  async function auditCorrection(organization: Organization, who: { actorId: string; requestId: string | null }, agreement: AgreementRecord, composed: ComposedTermsCorrection, record: Extract<CorrectAgreementResult, { kind: 'updated' }>['record'], reason: { reasonCode: string; note: string | null }): Promise<void> {
+    const currency = agreement.currency as Currency;
+    const money = (minor: bigint) => formatMoney({ minor, currency });
+    const append = (action: string, entityType: string, entityId: string, metadata: JsonObject) => store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: who.actorId, action, entityType, entityId, metadata, requestId: who.requestId });
+    const f = composed.plan.figures;
+    const numberOf = new Map([...composed.oldReceivables, ...record.receivables].map((r) => [r.id, r.number]));
+    const newLines = record.installments.filter((i) => i.voidedAt === null && !i.isCommission);
+    const allocationOf = new Map(record.allocations.map((a) => [`${a.paymentId}:${a.receivableId}`, a.id]));
+    const lineOf = (i: { id: string; position: number; label: string; amountMinor: bigint; grossMinor: bigint; triggerType: string; triggerDate: string | null; receivableId: string | null; postingDate: string | null }) => ({ id: i.id, position: i.position, label: i.label, amount: money(i.amountMinor), gross: money(i.grossMinor), trigger: { type: i.triggerType, date: i.triggerDate }, receivableId: i.receivableId, receivableNumber: i.receivableId ? (numberOf.get(i.receivableId) ?? null) : null, postingDate: i.postingDate });
+    const terms = (t: { amountMinor: bigint; pricingBasis: string; vatTreatment: string; paymentTerms: string; vatRateBasisPoints: number }, totals: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint }, effective: bigint) => ({ amount: money(t.amountMinor), pricingBasis: t.pricingBasis, vatTreatment: t.vatTreatment, paymentTerms: t.paymentTerms, vatRateBasisPoints: t.vatRateBasisPoints, totals: { amount: money(totals.amountMinor), net: money(totals.netMinor), vat: money(totals.vatMinor), gross: money(totals.grossMinor) }, effectiveTotal: money(effective) });
+    const receivableOfLine = new Map(newLines.map((i) => [i.id, i.receivableId]));
+    await append('agreement.corrected', 'agreement', agreement.id, {
+      supplementId: record.supplement.id,
+      reasonCode: reason.reasonCode,
+      note: reason.note,
+      before: { ...terms(composed.before, agreement, f.effectiveBeforeMinor), installments: [...composed.old].sort((a, b) => a.position - b.position).map((o) => lineOf({ ...o, receivableId: o.receivable?.id ?? null, postingDate: o.receivable?.postingDate ?? null })) },
+      after: { ...terms(composed.after, composed.totals, f.effectiveAfterMinor), installments: newLines.map(lineOf) },
+      credits: record.credits.map((x) => ({ creditId: x.id, receivableId: x.receivableId, receivableNumber: numberOf.get(x.receivableId) ?? null, effectiveDate: x.effectiveDate, amount: money(x.amountMinor), priorCredited: money(composed.plan.credits.find((p) => p.receivableId === x.receivableId)?.priorCreditedMinor ?? 0n) })),
+      moved: composed.plan.moves.map((m) => ({
+        paymentId: m.paymentId,
+        paymentNumber: composed.payments.get(m.paymentId)!.number,
+        released: m.released.map((x) => ({ allocationId: x.allocationId, receivableId: x.receivableId, amount: money(x.amountMinor) })),
+        placed: m.placed.map((p) => {
+          const receivableId = receivableOfLine.get(newLines.find((i) => i.position === composed.plan.lines[p.line]!.position)?.id ?? '') ?? null;
+          return { allocationId: receivableId ? (allocationOf.get(`${m.paymentId}:${receivableId}`) ?? null) : null, receivableId, amount: money(p.amountMinor) };
+        }),
+        unallocated: money(m.unallocatedMinor),
+      })),
+      balanceChange: money(f.balanceChangeMinor),
+    });
+    const settled = new Set(record.settled);
+    for (const credit of record.credits) {
+      await append('receivable.credited', 'receivable', credit.receivableId, { creditId: credit.id, amount: money(credit.amountMinor), reason: credit.reason, reasonCode: reason.reasonCode, source: 'CORRECTION', agreementId: agreement.id, settled: settled.has(credit.receivableId) || (await store.receivables.getById(organization.id, credit.receivableId))?.status === 'SETTLED' });
+    }
+    for (const r of record.receivables) {
+      const line = newLines.find((i) => i.receivableId === r.id);
+      if (line) await append('installment.posted', 'installment', line.id, { agreementId: agreement.id, receivableId: r.id, trigger: 'CORRECTION', postingDate: r.postingDate, supplementId: record.supplement.id });
+    }
+    for (const id of record.settled) await append('receivable.settled', 'receivable', id, { agreementId: agreement.id, source: 'CORRECTION', supplementId: record.supplement.id });
+  }
+
+  const cancelRefusal = (organizationId: string, agreementId: string) => cancelRefusalOf(store, organizationId, agreementId);
+
   // ---- cancel ----
   app.openapi(
     createRoute({
@@ -337,7 +464,7 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/agreements/{agreementId}/cancel',
       tags: ['Agreements'],
       summary: 'Cancel a fixed-fee or contingency agreement while nothing is posted',
-      description: 'Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.',
+      description: 'Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted (to fix a fee saved with the wrong amount, basis or treatment, use POST /v1/agreements/{agreementId}/correct), and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. The cancel is conditional on the agreement as read: if another write lands first, it is answered by the state found (those two, or 409 VERSION_MISMATCH: read and retry). Retainers cancel through POST /v1/retainers/{id}/cancel.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('agreements:write'), idempotent(store, 'agreements.cancel')] as const,
       request: { params: AgreementIdParamSchema, headers: IdempotencyHeaderSchema, body: { required: false, content: { 'application/json': { schema: CancelAgreementRequestSchema } } } },
@@ -353,9 +480,9 @@ export function agreementRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         if (agreement.outcome !== null) throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
         const installments = await store.agreements.listInstallments(organization.id, agreement.id);
         if (installments.some((i) => i.receivableId)) throw new ApiError('CONFLICT', 'Installments have been posted; cancellation needs adjustments (M4)', { reason: 'AGREEMENT_HAS_POSTED_RECEIVABLES' });
-        const cancelled = await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null }, now);
-        // The store refuses once a contingency outcome exists, even one recorded after the read above.
-        if (cancelled?.status === 'ACTIVE') throw new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
+        // MUT-444 (R11): only on the version read, so a cancel never lands on an agreement a correction just reposted.
+        const cancelled = await store.agreements.cancel(organization.id, agreement.id, { cancelEffectiveMonth: null, finalMonth: null, expectedVersion: agreement.version }, now);
+        if (cancelled?.status === 'ACTIVE') throw await cancelRefusal(organization.id, agreement.id);
         await store.audit.append({ organizationId: organization.id, actorType: 'API_KEY', actorId: apiKey.id, action: 'agreement.cancelled', entityType: 'agreement', entityId: agreement.id, requestId: c.get('requestId') });
       }
       const fresh = await mustGet(store, organization.id, agreement.id);
@@ -370,6 +497,18 @@ export async function mustGet(store: LedgerStore, organizationId: string, id: st
   const agreement = await store.agreements.getById(organizationId, id);
   if (!agreement) throw new ApiError('NOT_FOUND', 'No such agreement');
   return agreement;
+}
+
+/** R11: a cancel whose write missed is answered by what stands now. */
+async function cancelRefusalOf(store: LedgerStore, organizationId: string, agreementId: string): Promise<ApiError> {
+  const now = await mustGet(store, organizationId, agreementId);
+  if (now.outcome !== null) return new ApiError('CONFLICT', 'The outcome is recorded; correct it instead of cancelling', { reason: 'OUTCOME_ALREADY_RECORDED' });
+  if ((await store.agreements.listInstallments(organizationId, agreementId)).some((i) => i.receivableId)) return new ApiError('CONFLICT', 'Installments have been posted; cancellation needs adjustments (M4)', { reason: 'AGREEMENT_HAS_POSTED_RECEIVABLES' });
+  return new ApiError('CONFLICT', 'The agreement changed while cancelling; read it again and retry', { reason: 'VERSION_MISMATCH', currentVersion: now.version });
+}
+
+function staleCorrection(): ApiError {
+  return new ApiError('CONFLICT', 'previewToken does not match the terms, the day and the ledger as it stands; preview again', { reason: 'PREVIEW_STALE' });
 }
 
 function staleReduction(): ApiError {

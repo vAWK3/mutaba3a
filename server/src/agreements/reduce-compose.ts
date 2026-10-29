@@ -37,7 +37,12 @@ export function effectiveTotalsOf(agreement: AgreementRecord, installments: read
 /** FIXED and ACTIVE, else the refusal (D1). */
 export function assertReducible(agreement: AgreementRecord): void {
   if (agreement.type !== 'FIXED') throw validationError('NOT_FIXED', agreement.type === 'CONTINGENCY' ? 'Lowering the fee applies to fixed-fee agreements; reduce a contingency upfront with a credit' : 'Lowering the fee applies to fixed-fee agreements; credit a retainer month instead');
-  if (agreement.status === 'CANCELLED') throw new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
+  if (agreement.status === 'CANCELLED') throw agreementCancelled();
+}
+
+/** 409 AGREEMENT_CANCELLED (MUT-480, the contingency outcome and MUT-444 share it). */
+export function agreementCancelled(): ApiError {
+  return new ApiError('CONFLICT', 'The agreement is cancelled', { reason: 'AGREEMENT_CANCELLED' });
 }
 
 export async function composeReduction(store: LedgerStore, organizationId: string, agreement: AgreementRecord, amount: ReduceAmount): Promise<ComposedReduction> {

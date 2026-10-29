@@ -5,6 +5,7 @@ import { previewToken } from '../preview-token.js';
 import type { AgreementRecord, CreateInstallmentInput, CreditRecord, InstallmentRecord, JsonObject, LedgerStore, Organization, ReceivableRecord } from '../repositories/ports.js';
 import { computeVat } from '../vat.js';
 import { assertIsoDate, assertNotAbsurdDate, installmentDueDate, parseAmount, resolveRate, validationError } from './compose.js';
+import { agreementCancelled } from './reduce-compose.js';
 import { COMMISSION_RATE_RULE, commissionMinor, isCommissionRate, planOutcome, upfrontCountedMinor, type ContingencyOutcome, type OutcomePlan, type UpfrontTreatment } from './contingency.js';
 
 /**
@@ -35,18 +36,23 @@ export type ComposedOutcome = Awaited<ReturnType<typeof composeOutcome>>;
 
 const conflict = (reason: string, message: string, extra: Record<string, unknown> = {}) => new ApiError('CONFLICT', message, { reason, ...extra });
 
+/** 409 OUTCOME_ALREADY_RECORDED: the outcome's own correction is the way forward (MUT-444 shares it). */
+export function outcomeAlreadyRecorded(): ApiError {
+  return conflict('OUTCOME_ALREADY_RECORDED', 'An outcome is already recorded; correct it with POST /v1/agreements/{agreementId}/outcome/correct');
+}
+
 /** A contingency agreement that is still ACTIVE; anything else is refused before any figure is computed. */
 export function assertActiveContingency(agreement: AgreementRecord): { rate: number; treatment: UpfrontTreatment } {
   if (agreement.type !== 'CONTINGENCY' || agreement.commissionRateBasisPoints === null || agreement.upfrontTreatment === null) {
     throw validationError('NOT_CONTINGENCY', 'Only a contingency agreement has contingency terms and an outcome');
   }
-  if (agreement.status === 'CANCELLED') throw conflict('AGREEMENT_CANCELLED', 'The agreement is cancelled');
+  if (agreement.status === 'CANCELLED') throw agreementCancelled();
   return { rate: agreement.commissionRateBasisPoints, treatment: agreement.upfrontTreatment };
 }
 
 export async function composeOutcome(store: LedgerStore, organization: Organization, agreement: AgreementRecord, body: OutcomeBody, mode: OutcomeMode, today: IsoDate) {
   const current = assertActiveContingency(agreement);
-  if (mode === 'RECORD' && agreement.outcome !== null) throw conflict('OUTCOME_ALREADY_RECORDED', 'An outcome is already recorded; correct it with POST /v1/agreements/{agreementId}/outcome/correct');
+  if (mode === 'RECORD' && agreement.outcome !== null) throw outcomeAlreadyRecorded();
   if (mode === 'CORRECT' && agreement.outcome === null) throw conflict('OUTCOME_NOT_RECORDED', 'No outcome is recorded yet; record one with POST /v1/agreements/{agreementId}/outcome');
   if (mode === 'RECORD' && (body.commissionRateBasisPoints !== undefined || body.upfrontTreatment !== undefined)) {
     throw conflict('OUTCOME_NOT_RECORDED', 'Before an outcome, terms change with PATCH /v1/agreements/{agreementId}/contingency; only a correction carries new terms');

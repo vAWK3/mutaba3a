@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-10-29 — MUT-444: correct an agreement's terms after posting (API 1.89.0-mut444, ADR-226)
+
+**Why:** a fee saved with the wrong VAT basis, treatment or amount could not be fixed once anything posted (cancel refuses, supplements can't reach posted charges, reduce only lowers). Unblocks MAL-1368. Plan `.claude/designs/mut-444-correct-agreement-terms.md` (D1–D7 answered by Basel; eng review R1–R16).
+
+### Added
+- `POST /v1/agreements/{id}/correct/preview` (agreements:read + payments:read) and `POST /v1/agreements/{id}/correct` (agreements:write + payments:write, idempotent `agreements.correct`), API key only, strict bodies. One write voids every live line, credits each posted charge's remainder dated its own posting date, reposts matched lines on their original dates (the rest follow their triggers), moves the payments on the old charges to the new ones oldest first (the rest unallocated), and records a `CORRECTION` supplement row. The preview shows each line before/after, the credits (with `priorCredited`), each moved payment, the agreement's and the customer's figures before/after and `balanceChange` (AC1: the change in outstanding − unallocated).
+- 422 `POSTED_INSTALLMENT_CHANGED` (`{ position, change: TRIGGER | REMOVED }`) in `VALIDATION_REASONS`; the other answers reuse existing reasons (NOT_FIXED, AMOUNT_INVALID, the schedule reasons, VAT_RATE_MISSING, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT, REASON_REQUIRED; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED, PREVIEW_STALE).
+- `SupplementSchema.distribution` gains `CORRECTION`, with per-distribution field descriptions (R12).
+- Audits `agreement.corrected`, `receivable.credited` (`source: CORRECTION`), `installment.posted` (`trigger: CORRECTION`), `receivable.settled`.
+- `agreements/correct-terms.ts` (`planCorrection`, pure), `agreements/correct-terms-compose.ts`; `AgreementRepository.correct`, `PaymentRepository.listLiveAllocationsOn`; rollback hazards for MUT-444 and MUT-480 (R1) with DEPLOYMENT §6 rows.
+- Release-QA `portal-selfservice.malafat-money-api.agreement-correct` (written, not run here).
+
+### Changed
+- Allocation rows can be released (`payment_allocations.releasedAt`); every allocation reader counts live rows only (R2).
+- `agreements.cancel` is conditional on the version read; a miss answers by the state found (R11). The cancel route's description points at `/correct`.
+- The matter's `posted`, `paid` and `credited` leave out a superseded charge (its line voided and posted), which also fixes MUT-100's corrected commission (R4).
+- The statement numbers a replaced charge within its own generation (R3) and reads live allocation rows only.
+
+### Technical
+- Migrations `20261029100000_mut444_supplement_correction` and `20261029100100_mut444_allocation_released_at` (additive). Local snapshot format stays 13. `postInstallmentTx` and `allocateRowTx` extracted in Prisma, `postNow` in memory; `loadAgreementParties` and `composeSchedule` extracted (behaviour unchanged). Records export drops released rows (TD-287). Portal types regenerated.
+- The worktree gets its own `server/node_modules/.prisma` and `@prisma` copies, so `prisma generate` for the new schema never touches the main checkout's client.
+
+### Fixed (pre-landing review P1–P4)
+- A frozen real 0 % rate stays frozen; only a 0 frozen for want of any rate is re-resolved, and a rate change is never `NOTHING_TO_CORRECT` (P2). Both stores refuse a placement for a payment the write didn't lock (P3). The QA spec's retainer gets its own client and matter (P1). Added tests for AC1 with other client activity, AC2 with an earlier credit, AC5 settled events, P2034/40P01 (P4).
+
 ## [Unreleased] - 2026-10-28 — MUT-443: correct a recorded payment in one atomic call (API 1.88.0-mut443, ADR-225)
 
 **Why:** a correction was two calls (reverse, then record with `replacesPaymentId`); a dropped connection in between left the payment reversed with nothing in its place and the client's balance wrong. Unblocks MAL-1367 (Money overhaul MAL-1410). Plan `.claude/designs/mut-443-correct-payment.md` (eng review R1–R12; Basel chose D1 B and the R10 rulings).

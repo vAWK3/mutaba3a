@@ -1,3 +1,4 @@
+import type { IsoDate, PaymentTerms } from '../dates.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { AgreementRecord, ApproveProposalInput, CreateInstallmentInput, InstallmentRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import { serializeAgreement, serializeInstallment, serializeSupplement } from '../serializers.js';
@@ -18,6 +19,8 @@ import {
 import { COMMISSION_RATE_RULE, isCommissionRate, type UpfrontTreatment } from './contingency.js';
 import { postDueItems, type PostingActor } from './posting.js';
 import { effectiveTotalsOf } from './reduce-compose.js';
+import type { ScheduledInstallment, ScheduleTotals } from './schedule.js';
+import type { PricingBasis, VatTreatment } from '../vat.js';
 
 /**
  * Creating a fixed-fee or contingency agreement from a composed preview (M3 brief §2.3, MUT-100),
@@ -146,6 +149,37 @@ export type PreviewBody = {
 
 const NO_TOTALS = { amountMinor: 0n, netMinor: 0n, vatMinor: 0n, grossMinor: 0n };
 
+export interface ScheduleCompositionInput {
+  currency: Currency;
+  amountMinor: bigint;
+  pricingBasis: PricingBasis;
+  defaultTreatment: VatTreatment;
+  rateBasisPoints: number;
+  installments: PreviewBody['installments'];
+  /** A contingency agreement may have no upfront: amount 0 and no lines schedule nothing. */
+  contingency: boolean;
+  agreementDate: IsoDate;
+  paymentTerms: PaymentTerms;
+  today: IsoDate;
+}
+
+/**
+ * The schedule step of a preview (MUT-444: extracted from `composePreview`, shared with the terms correction): the wire
+ * specs parsed in the currency, split at the given rate, and each line's due date if it posted today.
+ */
+export function composeSchedule(input: ScheduleCompositionInput): { items: ScheduledInstallment[]; totals: ScheduleTotals; dueDates: IsoDate[] } {
+  const specs = toInstallmentSpecs(input.installments, input.currency);
+  // A contingency agreement with no upfront schedules nothing; every other empty list is NO_INSTALLMENTS from the schedule.
+  const noUpfront = input.contingency && input.amountMinor === 0n && specs.length === 0;
+  const { items, totals } = noUpfront ? { items: [], totals: NO_TOTALS } : scheduleOrThrow({ amountMinor: input.amountMinor, pricingBasis: input.pricingBasis, defaultTreatment: input.defaultTreatment, rateBasisPoints: input.rateBasisPoints, installments: specs });
+  const draft = { paymentTerms: input.paymentTerms };
+  const dueDates = items.map((i) => {
+    const asRecord = { triggerType: i.trigger.type, triggerDate: i.trigger.date ?? null, dueDateOverride: i.dueDate ?? null, paymentTerms: i.paymentTerms ?? null };
+    return installmentDueDate(asRecord, draft, postingDateFor(asRecord, input.agreementDate, input.today));
+  });
+  return { items, totals, dueDates };
+}
+
 export async function composePreview(store: LedgerStore, organization: Organization, body: PreviewBody, today: string) {
   assertIsoDate(body.agreementDate, 'agreementDate');
   assertNotAbsurdDate(body.agreementDate, today, 'agreementDate');
@@ -157,15 +191,9 @@ export async function composePreview(store: LedgerStore, organization: Organizat
     throw validationError('COMMISSION_RATE_INVALID', `contingency.${COMMISSION_RATE_RULE}`, { field: 'contingency.commissionRateBasisPoints' });
   }
   if (contingency ? amountMinor < 0n : amountMinor <= 0n) throw validationError('AMOUNT_INVALID', contingency ? 'the upfront (amount) must not be negative' : 'amount must be positive', { field: 'amount' });
-  const specs = toInstallmentSpecs(body.installments, context.currency);
-  // A contingency agreement with no upfront schedules nothing; every other empty list is NO_INSTALLMENTS from the schedule.
-  const noUpfront = contingency !== null && amountMinor === 0n && specs.length === 0;
-  const { items, totals } = noUpfront ? { items: [], totals: NO_TOTALS } : scheduleOrThrow({ amountMinor, pricingBasis: body.pricingBasis, defaultTreatment: context.defaultTreatment, rateBasisPoints, installments: specs });
-  const draft = { paymentTerms: body.paymentTerms, agreementDate: body.agreementDate };
-  const installments = items.map((i) => {
-    const asRecord = { triggerType: i.trigger.type, triggerDate: i.trigger.date ?? null, dueDateOverride: i.dueDate ?? null, paymentTerms: i.paymentTerms ?? null };
-    const postingDate = postingDateFor(asRecord, body.agreementDate, today);
-    const dueDate = installmentDueDate(asRecord, draft, postingDate);
+  const { items, totals, dueDates } = composeSchedule({ currency: context.currency, amountMinor, pricingBasis: body.pricingBasis, defaultTreatment: context.defaultTreatment, rateBasisPoints, installments: body.installments, contingency: contingency !== null, agreementDate: body.agreementDate, paymentTerms: body.paymentTerms, today });
+  const installments = items.map((i, k) => {
+    const dueDate = dueDates[k]!;
     return {
       position: i.position,
       label: i.label,

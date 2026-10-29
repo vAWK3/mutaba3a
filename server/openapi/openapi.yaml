@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.88.0-mut443
+  version: 1.89.0-mut444
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -17,7 +17,7 @@ info:
 
     409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED, PAYMENT_NOT_POSTED.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH, PAYMENT_NOT_CORRECTABLE, NOTHING_TO_CORRECT (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH, PAYMENT_NOT_CORRECTABLE, NOTHING_TO_CORRECT, POSTED_INSTALLMENT_CHANGED (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -2611,10 +2611,11 @@ components:
         amount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          description: 'The change to the contractual amount, in the pricing basis. Supplements: the delta. REDUCTION: the delta, ≤ 0. CORRECTION: the new amount − the old one when the pricing basis is unchanged; "0.00" when the basis changed, since the two figures are not comparable (read appliedGross).'
         description:
           type: string
           nullable: true
+          description: "Supplements: the partner's text. REDUCTION and CORRECTION: the note given with the reason."
         effectiveDate:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -2626,21 +2627,23 @@ components:
             - PRORATE_UNPOSTED
             - NEW_INSTALLMENT
             - REDUCTION
+            - CORRECTION
+          description: "LAST_UNPOSTED, PRORATE_UNPOSTED, NEW_INSTALLMENT: a supplement. REDUCTION: a fee lowered (MUT-480). CORRECTION: the terms corrected after posting (MUT-444): every line was replaced."
         resultingAmount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          description: The contractual amount after the row, in the (new) pricing basis.
         reasonCode:
           $ref: "#/components/schemas/CreditReasonCode"
         appliedGross:
           type: string
           nullable: true
           pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          description: "Supplements: null. REDUCTION: the gross taken off (> 0), installments and credits together. CORRECTION: the gross taken off the effective total, old − new, with the same sign: positive when the fee went down, negative when it went up."
         credited:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          description: 'Supplements: "0.00". REDUCTION: the part of appliedGross that became credits. CORRECTION: the credits written on the replaced charges (their remainders).'
         createdAt:
           type: string
           format: date-time
@@ -2665,6 +2668,7 @@ components:
         - CLIENT_DISPUTE
         - OTHER
         - null
+      description: "REDUCTION and CORRECTION rows: the reason code; null otherwise."
     RetainerCharge:
       type: object
       properties:
@@ -3180,6 +3184,636 @@ components:
       required:
         - reasonCode
         - previewToken
+    CorrectAgreementPreviewResponse:
+      type: object
+      properties:
+        terms:
+          type: object
+          properties:
+            before:
+              type: object
+              properties:
+                amount:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                net:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                vat:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                gross:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                pricingBasis:
+                  $ref: "#/components/schemas/PricingBasis"
+                vatTreatment:
+                  $ref: "#/components/schemas/VatTreatment"
+                paymentTerms:
+                  $ref: "#/components/schemas/PaymentTerms"
+                vatRateBasisPoints:
+                  type: integer
+              required:
+                - amount
+                - net
+                - vat
+                - gross
+                - pricingBasis
+                - vatTreatment
+                - paymentTerms
+                - vatRateBasisPoints
+            after:
+              type: object
+              properties:
+                amount:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                net:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                vat:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                gross:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                pricingBasis:
+                  $ref: "#/components/schemas/PricingBasis"
+                vatTreatment:
+                  $ref: "#/components/schemas/VatTreatment"
+                paymentTerms:
+                  $ref: "#/components/schemas/PaymentTerms"
+                vatRateBasisPoints:
+                  type: integer
+              required:
+                - amount
+                - net
+                - vat
+                - gross
+                - pricingBasis
+                - vatTreatment
+                - paymentTerms
+                - vatRateBasisPoints
+          required:
+            - before
+            - after
+        installments:
+          type: array
+          items:
+            type: object
+            properties:
+              before:
+                type: object
+                nullable: true
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  position:
+                    type: integer
+                  label:
+                    type: string
+                  amount:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  net:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  vat:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  gross:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  trigger:
+                    $ref: "#/components/schemas/InstallmentTrigger"
+                  dueDate:
+                    type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                    description: Calendar date in the organization timezone, YYYY-MM-DD
+                  status:
+                    $ref: "#/components/schemas/ItemStatus"
+                  receivableId:
+                    type: string
+                    nullable: true
+                    format: uuid
+                  receivableNumber:
+                    type: string
+                    nullable: true
+                  postingDate:
+                    type: string
+                    nullable: true
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                    description: Calendar date in the organization timezone, YYYY-MM-DD
+                required:
+                  - id
+                  - position
+                  - label
+                  - amount
+                  - net
+                  - vat
+                  - gross
+                  - trigger
+                  - dueDate
+                  - status
+                  - receivableId
+                  - receivableNumber
+                  - postingDate
+              after:
+                type: object
+                nullable: true
+                properties:
+                  label:
+                    type: string
+                  amount:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  net:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  vat:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  gross:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  vatTreatment:
+                    $ref: "#/components/schemas/VatTreatment"
+                  trigger:
+                    $ref: "#/components/schemas/InstallmentTrigger"
+                  dueDate:
+                    type: string
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                    description: Calendar date in the organization timezone, YYYY-MM-DD
+                  postingDate:
+                    type: string
+                    nullable: true
+                    pattern: ^\d{4}-\d{2}-\d{2}$
+                    description: "Billed in the same write on this date (a billed line keeps its original date); null: it waits for its trigger."
+                required:
+                  - label
+                  - amount
+                  - net
+                  - vat
+                  - gross
+                  - vatTreatment
+                  - trigger
+                  - dueDate
+                  - postingDate
+            required:
+              - before
+              - after
+        credits:
+          type: array
+          items:
+            type: object
+            properties:
+              receivableId:
+                type: string
+                format: uuid
+              receivableNumber:
+                type: string
+              effectiveDate:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              amount:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              net:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              vat:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              priorCredited:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Credits already on the charge, absorbed by the correction and not carried over.
+            required:
+              - receivableId
+              - receivableNumber
+              - effectiveDate
+              - amount
+              - net
+              - vat
+              - priorCredited
+        allocations:
+          type: array
+          items:
+            type: object
+            properties:
+              paymentId:
+                type: string
+                format: uuid
+              paymentNumber:
+                type: string
+              receivedOn:
+                type: string
+                pattern: ^\d{4}-\d{2}-\d{2}$
+                description: Calendar date in the organization timezone, YYYY-MM-DD
+              released:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    receivableId:
+                      type: string
+                      format: uuid
+                    receivableNumber:
+                      type: string
+                    amount:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  required:
+                    - receivableId
+                    - receivableNumber
+                    - amount
+              placed:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    position:
+                      type: integer
+                    amount:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                  required:
+                    - position
+                    - amount
+              unallocated:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            required:
+              - paymentId
+              - paymentNumber
+              - receivedOn
+              - released
+              - placed
+              - unallocated
+        agreement:
+          type: object
+          properties:
+            effectiveTotal:
+              type: object
+              properties:
+                before:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                after:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              required:
+                - before
+                - after
+            outstanding:
+              type: object
+              properties:
+                before:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                after:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              required:
+                - before
+                - after
+          required:
+            - effectiveTotal
+            - outstanding
+        customer:
+          type: object
+          properties:
+            outstanding:
+              type: object
+              properties:
+                before:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                after:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              required:
+                - before
+                - after
+            unallocated:
+              type: object
+              properties:
+                before:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                after:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              required:
+                - before
+                - after
+            balance:
+              type: object
+              properties:
+                before:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                after:
+                  type: string
+                  pattern: ^-?\d+(\.\d+)?$
+                  description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              required:
+                - before
+                - after
+          required:
+            - outstanding
+            - unallocated
+            - balance
+        balanceChange:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        priorCredited:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - terms
+        - installments
+        - credits
+        - allocations
+        - agreement
+        - customer
+        - balanceChange
+        - priorCredited
+        - previewToken
+    CorrectAgreementPreviewRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - description: The installments' default treatment; left out keeps the agreement's own.
+        paymentTerms:
+          allOf:
+            - $ref: "#/components/schemas/PaymentTerms"
+            - description: Left out keeps the agreement's own.
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          maxItems: 60
+          description: "The full new schedule, matched to the agreement's live lines by order (k-th to k-th). A billed line keeps its place and its trigger (type, and for DATE the date): otherwise 422 POSTED_INSTALLMENT_CHANGED with details { position, change: TRIGGER | REMOVED }. Unbilled lines change freely, and lines may be added."
+        reasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        note:
+          type: string
+          maxLength: 500
+      required:
+        - amount
+        - pricingBasis
+        - installments
+      additionalProperties: false
+    CorrectAgreementResponse:
+      allOf:
+        - $ref: "#/components/schemas/AgreementDetail"
+        - type: object
+          properties:
+            supplement:
+              $ref: "#/components/schemas/Supplement"
+            credits:
+              type: array
+              items:
+                $ref: "#/components/schemas/Credit"
+            receivables:
+              type: array
+              items:
+                $ref: "#/components/schemas/Receivable"
+            allocations:
+              type: array
+              items:
+                type: object
+                properties:
+                  paymentId:
+                    type: string
+                    format: uuid
+                  receivableId:
+                    type: string
+                    format: uuid
+                  amount:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                required:
+                  - paymentId
+                  - receivableId
+                  - amount
+            unallocated:
+              type: array
+              items:
+                type: object
+                properties:
+                  paymentId:
+                    type: string
+                    format: uuid
+                  amount:
+                    type: string
+                    pattern: ^-?\d+(\.\d+)?$
+                    description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                required:
+                  - paymentId
+                  - amount
+          required:
+            - supplement
+            - credits
+            - receivables
+            - allocations
+            - unallocated
+    Receivable:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          nullable: true
+          format: uuid
+        agreementId:
+          type: string
+          nullable: true
+          format: uuid
+        origin:
+          type: string
+          enum:
+            - INSTALLMENT
+            - RETAINER_CHARGE
+            - ADJUSTMENT
+        originId:
+          type: string
+          nullable: true
+          format: uuid
+        currency:
+          $ref: "#/components/schemas/Currency"
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        paid:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        credited:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vatTreatment:
+          $ref: "#/components/schemas/VatTreatment"
+        vatRateBasisPoints:
+          type: integer
+        dueDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postingDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        postedAt:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ItemStatus"
+        title:
+          type: string
+          nullable: true
+        capturedByUserId:
+          type: string
+          nullable: true
+          format: uuid
+          description: Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
+        number:
+          type: string
+          description: "CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478."
+          example: CHG-2026-0042
+        version:
+          type: integer
+      required:
+        - id
+        - customerId
+        - projectId
+        - agreementId
+        - origin
+        - originId
+        - currency
+        - net
+        - vat
+        - gross
+        - paid
+        - credited
+        - outstanding
+        - vatTreatment
+        - vatRateBasisPoints
+        - dueDate
+        - postingDate
+        - postedAt
+        - status
+        - title
+        - capturedByUserId
+        - number
+        - version
+    CorrectAgreementRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricingBasis:
+          $ref: "#/components/schemas/PricingBasis"
+        vatTreatment:
+          allOf:
+            - $ref: "#/components/schemas/VatTreatment"
+            - description: The installments' default treatment; left out keeps the agreement's own.
+        paymentTerms:
+          allOf:
+            - $ref: "#/components/schemas/PaymentTerms"
+            - description: Left out keeps the agreement's own.
+        installments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstallmentSpec"
+          maxItems: 60
+          description: "The full new schedule, matched to the agreement's live lines by order (k-th to k-th). A billed line keeps its place and its trigger (type, and for DATE the date): otherwise 422 POSTED_INSTALLMENT_CHANGED with details { position, change: TRIGGER | REMOVED }. Unbilled lines change freely, and lines may be added."
+        reasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        note:
+          type: string
+          maxLength: 500
+        previewToken:
+          type: string
+          minLength: 64
+          maxLength: 64
+      required:
+        - amount
+        - pricingBasis
+        - installments
+        - reasonCode
+        - previewToken
+      additionalProperties: false
     CancelAgreementRequest:
       type: object
       properties: {}
@@ -3426,114 +4060,6 @@ components:
         - installment
         - receivable
         - created
-    Receivable:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        customerId:
-          type: string
-          format: uuid
-        projectId:
-          type: string
-          nullable: true
-          format: uuid
-        agreementId:
-          type: string
-          nullable: true
-          format: uuid
-        origin:
-          type: string
-          enum:
-            - INSTALLMENT
-            - RETAINER_CHARGE
-            - ADJUSTMENT
-        originId:
-          type: string
-          nullable: true
-          format: uuid
-        currency:
-          $ref: "#/components/schemas/Currency"
-        net:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        vat:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        gross:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        paid:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        credited:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        outstanding:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        vatTreatment:
-          $ref: "#/components/schemas/VatTreatment"
-        vatRateBasisPoints:
-          type: integer
-        dueDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        postingDate:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        postedAt:
-          type: string
-          format: date-time
-        status:
-          $ref: "#/components/schemas/ItemStatus"
-        title:
-          type: string
-          nullable: true
-        capturedByUserId:
-          type: string
-          nullable: true
-          format: uuid
-          description: Who captured this Owed entry (ADJUSTMENT origin), so a client can offer re-dating only to them. Null for installments, retainer charges, and once that person's account is gone.
-        number:
-          type: string
-          description: "CHG-YYYY-NNNN: gap-free per organization and year of postingDate, assigned when it posts, never reused. Since 1.83.0-mut478."
-          example: CHG-2026-0042
-        version:
-          type: integer
-      required:
-        - id
-        - customerId
-        - projectId
-        - agreementId
-        - origin
-        - originId
-        - currency
-        - net
-        - vat
-        - gross
-        - paid
-        - credited
-        - outstanding
-        - vatTreatment
-        - vatRateBasisPoints
-        - dueDate
-        - postingDate
-        - postedAt
-        - status
-        - title
-        - capturedByUserId
-        - number
-        - version
     TriggerInstallmentRequest:
       type: object
       properties:
@@ -12670,12 +13196,149 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/correct/preview:
+    post:
+      tags:
+        - Agreements
+      summary: "Preview correcting an agreement’s terms after posting: the new lines, the credits, the payments that move, the balance change"
+      description: "The only write is the lazy billing every read does. Every live line is replaced: each billed charge is credited for its remainder on its own posting date and the matching new line is billed on that same date; payments on the old charges move to the new ones oldest first, and what doesn’t fit stays unallocated. `balanceChange` is the change in the client’s balance (outstanding − unallocated). reasonCode and note are optional here and not part of the token. The token covers the resolved terms, the rate, today, the agreement’s lines and charges and the payments that move, so anything that moves in between is 409 PREVIEW_STALE at correct. Needs agreements:read and payments:read. FIXED, or CONTINGENCY before its outcome (the upfront; amount 0 with no installments is allowed). The body is the full new terms: amount and pricingBasis, vatTreatment and paymentTerms (left out keep the agreement’s), and the installments. agreementDate, description, the currency, the project and the customer can’t change here (the body is strict: 422 VALIDATION_FAILED). The rate is the one the agreement froze (if it froze 0 and a line is now STANDARD_RATED, the rate in force on agreementDate, or 422 VAT_RATE_MISSING). Lines are matched by order: a billed line keeps its place and trigger (422 POSTED_INSTALLMENT_CHANGED, details { position, change: TRIGGER | REMOVED }); unbilled lines change freely. Due lines are billed first, as on any read. Refusals: 422 NOT_FIXED (a retainer: POST /v1/retainers/{id}/change), AMOUNT_INVALID, the schedule reasons, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED (use /outcome/correct). After a correction every installment id changes (the old lines read VOID; a manual trigger on one is 409 INSTALLMENT_VOIDED), and a moved payment’s version is bumped."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectAgreementPreviewRequest"
+      responses:
+        "200":
+          description: The plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectAgreementPreviewResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/agreements/{agreementId}/correct:
+    post:
+      tags:
+        - Agreements
+      summary: Correct an agreement’s terms after posting, in one atomic write
+      description: "The previewed plan, written at once or not at all: every live line voided; each billed charge credited for its remainder, dated its own posting date (reasonCode on each, source CORRECTION); the new lines added at the next positions, a billed one reposted on its original date with the next CHG number of that year; the payments’ allocations on the old charges released and placed on the new ones oldest first (the rest unallocated); the new totals; and a CORRECTION supplement row. reasonCode is required; OTHER needs a note (422 REASON_REQUIRED). Anything that moved since the preview (a payment, a credit, a billing, another change, or midnight) is 409 PREVIEW_STALE with nothing written. A replay with the same Idempotency-Key returns the stored answer. Needs agreements:write and payments:write. Audits agreement.corrected (before and after), receivable.credited per credit, installment.posted per repost (trigger CORRECTION) and receivable.settled per charge it settles. FIXED, or CONTINGENCY before its outcome (the upfront; amount 0 with no installments is allowed). The body is the full new terms: amount and pricingBasis, vatTreatment and paymentTerms (left out keep the agreement’s), and the installments. agreementDate, description, the currency, the project and the customer can’t change here (the body is strict: 422 VALIDATION_FAILED). The rate is the one the agreement froze (if it froze 0 and a line is now STANDARD_RATED, the rate in force on agreementDate, or 422 VAT_RATE_MISSING). Lines are matched by order: a billed line keeps its place and trigger (422 POSTED_INSTALLMENT_CHANGED, details { position, change: TRIGGER | REMOVED }); unbilled lines change freely. Due lines are billed first, as on any read. Refusals: 422 NOT_FIXED (a retainer: POST /v1/retainers/{id}/change), AMOUNT_INVALID, the schedule reasons, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOTHING_TO_CORRECT; 409 AGREEMENT_CANCELLED, OUTCOME_ALREADY_RECORDED (use /outcome/correct). After a correction every installment id changes (the old lines read VOID; a manual trigger on one is 409 INSTALLMENT_VOIDED), and a moved payment’s version is bumped."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: agreementId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectAgreementRequest"
+      responses:
+        "200":
+          description: Corrected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CorrectAgreementResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/agreements/{agreementId}/cancel:
     post:
       tags:
         - Agreements
       summary: Cancel a fixed-fee or contingency agreement while nothing is posted
-      description: Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted, and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. Retainers cancel through POST /v1/retainers/{id}/cancel.
+      description: "Idempotent. Refused with 409 AGREEMENT_HAS_POSTED_RECEIVABLES once any installment has posted (to fix a fee saved with the wrong amount, basis or treatment, use POST /v1/agreements/{agreementId}/correct), and for a contingency agreement with 409 OUTCOME_ALREADY_RECORDED once its outcome is recorded. The cancel is conditional on the agreement as read: if another write lands first, it is answered by the state found (those two, or 409 VERSION_MISMATCH: read and retry). Retainers cancel through POST /v1/retainers/{id}/cancel."
       security:
         - apiKey: []
       parameters:

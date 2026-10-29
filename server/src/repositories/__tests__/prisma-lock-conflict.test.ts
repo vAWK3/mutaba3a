@@ -1,6 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { isLockConflict, isTransactionTimeout } from '../prisma.js';
+import type { CorrectAgreementInput } from '../ports.js';
+import { isLockConflict, isTransactionTimeout, PrismaLedgerStore } from '../prisma.js';
 
 /** MUT-100 review: a deadlock or serialization failure in an outcome write is retryable `stale`, not a 500. */
 describe('isLockConflict', () => {
@@ -32,5 +33,29 @@ describe('isTransactionTimeout', () => {
     expect(isTransactionTimeout(known('P2034'))).toBe(false);
     expect(isTransactionTimeout(new Error('Transaction already closed'))).toBe(false);
     expect(isTransactionTimeout(undefined)).toBe(false);
+  });
+});
+
+/** MUT-444: a terms correction that outlasts its 15 s limit rolled back whole; the caller previews again (409), not a 500. */
+describe('agreements.correct and P2028', () => {
+  it('answers stale when the transaction times out', async () => {
+    const timeout = new Prisma.PrismaClientKnownRequestError('Transaction already closed', { code: 'P2028', clientVersion: 'test' });
+    const client = { $transaction: async () => Promise.reject(timeout) } as unknown as PrismaClient;
+    const input = { expectedVersion: 1 } as unknown as CorrectAgreementInput;
+    expect(await new PrismaLedgerStore(client).agreements.correct('org', 'agreement', input, new Date())).toEqual({ kind: 'stale' });
+  });
+
+  it.each([
+    ['P2034 (a transaction conflict)', new Prisma.PrismaClientKnownRequestError('Transaction failed due to a write conflict or a deadlock', { code: 'P2034', clientVersion: 'test' })],
+    ['40P01 (a deadlock)', new Prisma.PrismaClientKnownRequestError('deadlock detected', { code: 'P2010', clientVersion: 'test', meta: { code: '40P01' } })],
+  ])('P4 (review): answers stale on %s, nothing written', async (_name, conflict) => {
+    const agreement = { id: 'agreement', organizationId: 'org', version: 1 };
+    const client = {
+      $transaction: async () => Promise.reject(conflict),
+      agreement: { findFirstOrThrow: async () => agreement },
+      installment: { findMany: async () => [] },
+    } as unknown as PrismaClient;
+    const input = { expectedVersion: 1 } as unknown as CorrectAgreementInput;
+    expect(await new PrismaLedgerStore(client).agreements.correct('org', 'agreement', input, new Date())).toEqual({ kind: 'stale' });
   });
 });

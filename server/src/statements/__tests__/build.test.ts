@@ -281,3 +281,84 @@ describe('buildStatement', () => {
     expect(() => decodeStatementCursor(Buffer.from(JSON.stringify({ d: 1 })).toString('base64url'))).toThrow();
   });
 });
+
+/**
+ * MUT-444 (ADR-226): a terms correction voids every line, credits each posted charge on its own posting date and
+ * reposts it there, created a millisecond after the credit (D5 B); the voided generation keeps its own "N of M" (R3);
+ * a released allocation row is history only (D1).
+ */
+describe('buildStatement after terms corrections (MUT-444)', () => {
+  const inst = (position: number, o: Partial<InstallmentRecord> = {}) => ({ id: uuid(), organizationId: ORG, agreementId: AGR, position, label: `I${position}`, amountMinor: 1n, netMinor: 1n, vatMinor: 0n, grossMinor: 1n, vatTreatment: 'EXEMPT', rateBasisPoints: 0, triggerType: 'IMMEDIATE', triggerDate: null, paymentTerms: null, dueDateOverride: null, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, isCommission: false, version: 1, ...o }) as InstallmentRecord;
+  const charge = (line: InstallmentRecord, gross: bigint, postingDate: string, createdAt: Date) => {
+    const r = receivable({ gross, postingDate, dueDate: '2026-10-31', origin: 'INSTALLMENT', originId: line.id, agreementId: AGR, createdAt });
+    line.receivableId = r.id;
+    return r;
+  };
+  const first = new Date('2026-10-20T08:00:00Z');
+  const second = new Date('2026-10-25T08:00:00Z');
+
+  /** Two posted lines through two corrections: generations g0 (voided at `first`), g1 (voided at `second`), g2 live. */
+  function twice() {
+    const s = empty();
+    const g = [0, 1, 2].map((k) => [inst(1 + 2 * k, { voidedAt: k === 0 ? first : k === 1 ? second : null }), inst(2 + 2 * k, { voidedAt: k === 0 ? first : k === 1 ? second : null })]);
+    s.installments.push(...g.flat());
+    const at0 = at('2026-10-01');
+    const rows = g.map((pair, k) => pair.map((line, j) => charge(line, 1_000n * BigInt(k + 1), j === 0 ? '2026-10-01' : '2026-10-05', k === 0 ? at0 : new Date((k === 1 ? first : second).getTime() + 1))));
+    s.receivables.push(...rows.flat());
+    // Each correction credits the generation it voided, dated each charge's own posting date, created at the instant.
+    for (const [k, when] of [[0, first], [1, second]] as const) {
+      for (const r of rows[k]!) {
+        const c = credit(r, r.grossMinor, r.postingDate, 'ENTERED_BY_MISTAKE');
+        c.createdAt = when;
+        s.credits.push(c);
+      }
+    }
+    return { s, rows };
+  }
+
+  it('each voided generation reads its own "N of M"; the live lines read theirs (R3)', () => {
+    const { s, rows } = twice();
+    const lines = buildStatement(s, view(), all).lines.filter((l) => l.kind === 'CHARGE');
+    const originOf = (id: string) => lines.find((l) => l.receivableId === id)!.origin;
+    for (const generation of rows) {
+      expect(originOf(generation[0]!.id)).toEqual({ type: 'INSTALLMENT', agreementId: AGR, position: 1, of: 2 });
+      expect(originOf(generation[1]!.id)).toEqual({ type: 'INSTALLMENT', agreementId: AGR, position: 2, of: 2 });
+    }
+  });
+
+  it('D5 B: on the shared date the old charge, its credit, then the repost; every period nets to the corrected figure', () => {
+    const { s, rows } = twice();
+    const page = buildStatement(s, view(), all);
+    const onFirst = page.lines.filter((l) => l.date === '2026-10-01').map((l) => [l.kind, l.receivableId]);
+    expect(onFirst).toEqual([
+      ['CHARGE', rows[0]![0]!.id],
+      ['CREDIT', rows[0]![0]!.id],
+      ['CHARGE', rows[1]![0]!.id],
+      ['CREDIT', rows[1]![0]!.id],
+      ['CHARGE', rows[2]![0]!.id],
+    ]);
+    // October 1 – 4 holds only the first line, at its corrected figure.
+    expect(buildStatement(s, view({ to: '2026-10-04' }), all).closingMinor).toBe(3_000n);
+    expect(page.closingMinor).toBe(6_000n);
+    expectRunning(page, 0n);
+  });
+
+  it('a released allocation row adds no line and no matter, on either statement (D1)', () => {
+    const s = empty();
+    const old = receivable({ gross: 1_000n, postingDate: '2026-10-01' });
+    const repost = receivable({ gross: 1_000n, postingDate: '2026-10-01', projectId: P2 });
+    s.receivables.push(old, repost);
+    const p = payment(1_000n, '2026-10-05');
+    s.payments.push(p);
+    const released = { ...allocate(p, old, 1_000n), releasedAt: new Date('2026-10-20T08:00:00Z') };
+    old.paidMinor = 0n;
+    s.credits.push(credit(old, 1_000n, '2026-10-01'));
+    p.allocatedMinor = 0n;
+    s.allocations.push(released, allocate(p, repost, 1_000n));
+    const whole = buildStatement(s, view(), all).lines.filter((l) => l.kind === 'PAYMENT');
+    expect(whole).toHaveLength(1);
+    expect(whole[0]!.projectId).toBe(P2);
+    expect(buildStatement(s, view({ projectId: P1 }), all).lines.filter((l) => l.kind === 'PAYMENT')).toEqual([]);
+    expect(buildStatement(s, view({ projectId: P2 }), all).lines.filter((l) => l.kind === 'PAYMENT').map((l) => l.allocatedMinor)).toEqual([1_000n]);
+  });
+});

@@ -161,6 +161,8 @@ enum SupplementDistribution {
   NEW_INSTALLMENT
   /// MUT-480: a fee lowered (installments lowered or voided, then credits); written only by POST /v1/agreements/{id}/reduce.
   REDUCTION
+  /// MUT-444: an agreement's terms corrected after posting; written only by POST /v1/agreements/{id}/correct.
+  CORRECTION
 }
 
 model Organization {
@@ -1071,6 +1073,9 @@ model PaymentAllocation {
   receivable     Receivable @relation(fields: [receivableId], references: [id])
   amountMinor    BigInt
   createdAt      DateTime   @default(now())
+  /// MUT-444 (ADR-226): set once when a terms correction moved this row's money to the corrected charges. Rows are
+  /// never edited otherwise; every reader counts live rows only (releasedAt IS NULL).
+  releasedAt     DateTime?
 
   @@index([organizationId, paymentId])
   @@index([organizationId, receivableId])
