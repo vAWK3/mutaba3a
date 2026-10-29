@@ -1,4 +1,4 @@
-Status: APPROVED (Basel 2026-10-29) — ready to build
+Status: BUILT (2026-10-29) on `feature/mut-444-correct-agreement-terms`; see "Build notes" at the end
 
 # MUT-444 — Correct a fixed or contingency agreement's terms after posting
 
@@ -713,3 +713,21 @@ This is an independent eng review of the first draft. Where it differs from the 
 | R14 | Local mode details | **Applied.** The fingerprint test is `src/hosted/local/__tests__/format-fingerprint.test.ts`; memory's `applyAllocations` never writes `releasedAt`; the export's `ALLOCATION` is `Omit<AllocationRecord,'releasedAt'>` and filters released rows. |
 | R15 | Malafat-visible changes weren't listed | **Applied.** "Note for Malafat" section. |
 | R16 | Test gaps | **Applied.** A payment split across two agreements, `originOf`, the R2 memory paths, the rollback-check entries; the QA scenario gains a STANDARD → EXEMPT step. |
+
+## Build notes 2026-10-29
+
+Built to the plan and the review above. Where the code made the plan's wording concrete, the smallest change that keeps every AC and Basel's decisions was taken; none changes what Malafat sees beyond the plan.
+
+| # | Where | What was built | Why |
+|---|---|---|---|
+| B1 | `CorrectAgreementResult.record` | Also carries `supplement` | The response returns the CORRECTION row; reading it back would be a second query outside the write. |
+| B2 | `agreements.cancel` | `expectedVersion` is an optional field of the input object, not a new positional argument | The retainer cancel shares the method and doesn't need it; the agreement cancel always passes it (R11). |
+| B3 | `POSTED_INSTALLMENT_CHANGED.position` | The 1-based place k in the request's `installments` (the old line's place among the live lines), not the stored `position` | Malafat knows its lines by place; stored positions grow with every correction. |
+| B4 | D2 `REMOVED` on a FIXED agreement with no lines | An empty `installments` on FIXED is 422 `NO_INSTALLMENTS` (the schedule's own rule) before the planner runs | Same answer as create; `REMOVED` is reachable with fewer lines than the posted ones (route test bills both lines, then sends one). |
+| B5 | Response `unallocated[]` | Lists only moved payments with something left over | An entry of 0.00 says nothing; the preview's `allocations[].unallocated` still shows every moved payment. |
+| B6 | Statement | `buildStatement` also drops released rows itself, besides `statementSources` | Defence in depth for any caller that feeds it raw rows. |
+| B7 | Memory records export | Filters released rows and strips `releasedAt` too | Keeps the Prisma/memory export parity (TD-287). |
+| B8 | QA | The receivable read shows the old charge as `PAID` (`receivableStatus`), so the spec checks `outstanding 0.00`, `credited 500.00` for "SETTLED by the credit" | The wire has no SETTLED status on receivables. |
+| B9 | QA | Each refusal is its own recorded step (stale, OTHER, same terms, trigger, cancelled, contingency outcome, retainer) | Every error code maps to a step. |
+| B10 | Worktree only | `server/node_modules` is a real directory linking to main's entries, with its own `.prisma` and `@prisma` copies | `prisma generate` for the new schema must not overwrite the main checkout's client (its typecheck would fail on `CORRECTION`). |
+

@@ -138,7 +138,9 @@ features:
       - Malafat confirms a correction with the reason OTHER and no note
       - Malafat sends the same terms again
       - Malafat changes "On signing" to MANUAL
-      - Malafat tries to correct a cancelled agreement, a contingency agreement with its outcome recorded, and a retainer
+      - Malafat tries to correct a cancelled agreement
+      - Malafat tries to correct a contingency agreement whose outcome is recorded
+      - Malafat tries to correct a retainer
       - Malafat reads the old charge's credit, the client's statement, the payment, the audit log and the contract version
     expect:
       - The first preview shows line 1 going from ₪500 gross (₪423.73 + ₪76.27) to ₪590 (₪500 + ₪90) billed on the original date, line 2 from ₪500 to ₪590 not billed yet, a ₪500 credit dated the original date, the ₪300 payment moving to line 1, and the client's outstanding and balance going from ₪200 to ₪290 (Δ ₪90)
