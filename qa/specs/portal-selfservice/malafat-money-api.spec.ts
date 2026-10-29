@@ -341,6 +341,12 @@ test('Malafat corrects a recorded payment in one call, from a preview, and a rep
     const tooMuch = await send(`/v1/payments/${replacementId}/correct/preview`, { ...correction, amount: '1500.00', allocations: [{ receivableId: chargeId, amount: '1500.00' }] });
     expect([tooMuch.status, tooMuch.reason]).toEqual([422, 'ALLOCATION_EXCEEDS_OUTSTANDING']);
     expect(tooMuch.body.error.details.receivableId).toBe(chargeId);
+
+    // AC1: none of these refusals wrote anything; the replacement is as the receipt-number change left it.
+    const kept = await call('GET', `/v1/payments/${replacementId}`, key);
+    expect(kept).toMatchObject({ status: 'POSTED', version: first.payment.version + 1, amount: '600.00', allocated: '600.00', replacedByPaymentId: null });
+    const all = await call('GET', `/v1/payments?customerId=${customerId}`, key);
+    expect(all.items.map((p: Json) => p.status).sort()).toEqual(['POSTED', 'REVERSED']);
   });
 
   await step("Malafat reads the client's statement", async () => {

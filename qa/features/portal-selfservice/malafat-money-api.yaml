@@ -113,5 +113,5 @@ features:
       - The preview releases ₪1,000, allocates ₪600, and the charge goes from ₪0 to ₪400 outstanding
       - The original reads REVERSED with the reason, and the replacement is POSTED with receipt 3001, ₪600 allocated, and replacesPaymentId
       - The replay answers the same, and there is still exactly one replacement
-      - The refusals are 409 PREVIEW_STALE, 409 PAYMENT_NOT_POSTED, 422 REASON_REQUIRED, and 422 ALLOCATION_EXCEEDS_OUTSTANDING naming the charge
+      - The refusals are 409 PREVIEW_STALE, 409 PAYMENT_NOT_POSTED, 422 REASON_REQUIRED, and 422 ALLOCATION_EXCEEDS_OUTSTANDING naming the charge, and none of them writes anything
       - The statement shows the payment line, its reversal line with the reason, and the new payment line, and the balance is ₪400
