@@ -18,6 +18,29 @@
 
 ## Open Debt
 
+### TD-287: The records file drops released allocation rows
+**Status**: Accepted (MUT-444, 2026-10-29; ADR-226)
+- **What:** the hosted records export (Prisma and memory) leaves out `payment_allocations` rows a terms correction released, and never carries `releasedAt`. A restored file holds the live ledger only: the history of where a moved payment's money sat before the correction is not in it (the audit's `agreement.corrected` keeps it on the server).
+- **Why it's acceptable:** a device never releases a row (correction is API-key only), and a released row read by a device as live would double the money; the live ledger reconciles exactly.
+- **Fix:** if a file must carry the history, add `releasedAt` to the local format (a snapshot migration) and teach every local reader to count live rows only.
+
+### TD-288: A reversal on an old instance during the roll could release a moved payment twice
+**Status**: Accepted (MUT-444, 2026-10-29; ADR-226 R1)
+- **What:** while a rolling deploy serves both revisions, an old instance answering `POST /v1/payments/{id}/reverse` for a payment a new instance has just moved would also release its released rows (it doesn't know `releasedAt`).
+- **Why it's acceptable:** only the new revision releases rows, and Malafat calls `/correct` only after re-vendoring 1.89.0-mut444, after the roll completes; the rollback gate (R1) refuses going back once a row is released.
+- **Fix:** none planned; keep the release order in `docs/operations/before-release.md`.
+
+### TD-289: A repost into an earlier year takes a CHG number out of issue order
+**Status**: Accepted (MUT-444, 2026-10-29; ADR-217 §1)
+- **What:** a correction reposts a charge on its original posting date, so a charge first posted in December 2025 and corrected in 2026 takes the next CHG-2025 number. Numbers stay gap-free per year, but the 2025 sequence then holds a number issued in 2026.
+- **Why it's acceptable:** numbers are per posting year by design (ADR-217); the statement sorts by date, and the audit records when it was issued.
+- **Fix:** if an accountant needs issue order, add an `issuedAt` column to the statement line.
+
+### TD-290: A billed line's trigger can't be corrected yet
+**Status**: Open (MUT-444, 2026-10-29; Basel's D2 answer)
+- **What:** `/correct` refuses a change to a posted line's trigger, or the removal of a posted line (422 `POSTED_INSTALLMENT_CHANGED`). A fee billed "on signing" that should have waited for "on judgment" still needs a manual path.
+- **Fix:** the follow-up ticket for posted-line trigger fixes (un-billing a line: credit it and leave the new line unposted).
+
 ### TD-284: The plain reverse route still takes a free-text reason only
 **Status**: Accepted (MUT-443, 2026-10-28; ADR-225 D8)
 - **What:** `POST /v1/payments/{id}/reverse` stores `reversalReason` text and never a `reversalReasonCode`; only a correction (`POST /v1/payments/{id}/correct`) sets the code. A statement's PAYMENT_REVERSAL line from a plain reversal has `reasonCode: null`.

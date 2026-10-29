@@ -15,6 +15,8 @@ paths:
   - server/src/retainers/create.ts
   - server/src/payments/correct.ts
   - server/src/payments/allocation-error.ts
+  - server/src/agreements/correct-terms.ts
+  - server/src/agreements/correct-terms-compose.ts
 features:
   - id: statement
     title: Malafat reads a client's ledger card, with CHG numbers, a running balance and a reversed payment
@@ -115,3 +117,35 @@ features:
       - The replay answers the same, and there is still exactly one replacement
       - The refusals are 409 PREVIEW_STALE, 409 PAYMENT_NOT_POSTED, 422 REASON_REQUIRED, and 422 ALLOCATION_EXCEEDS_OUTSTANDING naming the charge, and none of them writes anything
       - The statement shows the payment line, its reversal line with the reason, and the new payment line, and the balance is ₪400
+  - id: agreement-correct
+    title: Malafat corrects a billed and paid fee's amount, VAT basis and treatment in one call, and a replay never corrects twice
+    tier: secondary
+    # MUT-444 (ADR-226): POST /v1/agreements/{id}/correct and its preview. Malafat's "Correct an agreement's terms" is MAL-1368.
+    paths:
+      - server/src/agreements/correct-terms.ts
+      - server/src/agreements/correct-terms-compose.ts
+      - server/src/routes/agreements.ts
+      - server/src/statements/build.ts
+      - server/src/summaries/compute.ts
+    steps:
+      - Malafat sets up a client, a project and a ₪1,000 VAT-inclusive fee split 50/50, "On signing" (billed at once) and "On judgment" (manual), at 18 %, and records ₪300 on the signing charge
+      - Malafat previews correcting the fee to ₪1,000 VAT-exclusive, reason ENTERED_BY_MISTAKE
+      - Malafat confirms with the token
+      - Malafat sends the same request again with the same key
+      - Malafat corrects the fee again, to ₪200 VAT-inclusive
+      - Malafat corrects the VAT treatment from STANDARD_RATED to EXEMPT, same ₪200 VAT-inclusive
+      - Malafat bills "On judgment", previews a correction, records a new ₪100 payment on that charge, then confirms with the old token
+      - Malafat confirms a correction with the reason OTHER and no note
+      - Malafat sends the same terms again
+      - Malafat changes "On signing" to MANUAL
+      - Malafat tries to correct a cancelled agreement, a contingency agreement with its outcome recorded, and a retainer
+      - Malafat reads the old charge's credit, the client's statement, the payment, the audit log and the contract version
+    expect:
+      - The first preview shows line 1 going from ₪500 gross (₪423.73 + ₪76.27) to ₪590 (₪500 + ₪90) billed on the original date, line 2 from ₪500 to ₪590 not billed yet, a ₪500 credit dated the original date, the ₪300 payment moving to line 1, and the client's outstanding and balance going from ₪200 to ₪290 (Δ ₪90)
+      - After confirming, the old lines read VOID, the old charge is settled by the credit with ENTERED_BY_MISTAKE, a new ₪590 charge is dated the original day with ₪300 paid, and the payment shows ₪300 allocated to the new charge and ₪0 unallocated
+      - The replay answers the same; there is still one CORRECTION supplement and one credit from it
+      - The second correction leaves ₪100 paid on the new ₪100 charge and ₪200 unallocated; outstanding goes ₪290 → ₪0, unallocated ₪0 → ₪200, the balance moves by −₪490, and no payment is lost
+      - The EXEMPT correction makes the ₪100 charge net ₪100 and VAT ₪0 with the gross unchanged; the balance does not move and the payment's ₪100 sits on the new charge
+      - The refusals are 409 PREVIEW_STALE, 422 REASON_REQUIRED, 422 NOTHING_TO_CORRECT, 422 POSTED_INSTALLMENT_CHANGED (position 1, TRIGGER), 409 AGREEMENT_CANCELLED, 409 OUTCOME_ALREADY_RECORDED and 422 NOT_FIXED, and none of them writes anything (the agreement's version is unchanged)
+      - The statement shows, on the original date, each old charge, its credit, then its repost; the judgment charge and its payment follow; the closing balance is −₪200 and the matter's posted is ₪200, never the replaced charges
+      - The audit has agreement.corrected with the before and after terms, and the contract version reads 1.89.0-mut444

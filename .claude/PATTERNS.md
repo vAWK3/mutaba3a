@@ -2897,3 +2897,15 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 **Where**: `payments.correct` in `server/src/repositories/prisma.ts` (`markReversedTx`, `nextPaymentNumberTx`, `lockReceivablesInIdOrder`, `releaseAllocationsTx`, `insertPaymentTx`) and `memory.ts` (`reverseNow`, `insertPayment`, `assertCapacity(…, released)`).
 **Rule**: when two existing writes must happen together, split each into `…Tx(tx, …)` helpers and have the public methods (`reverse`, `create`) and the composed one (`correct`) call the same helpers; never copy their bodies. In Postgres, take the locks in the order the existing writes already take them (here: the row the caller names, the year counter, then every receivable either half touches, in id order, once), so the new write can't deadlock with the old ones. In the memory store, run every check before the first write with no `await` in between, and let a capacity check count what the first half gives back.
 
+## Pattern: an allocation is released, never edited (MUT-444)
+**Where**: `payment_allocations.releasedAt`; `agreements.correct` in `server/src/repositories/prisma.ts` and `memory.ts`; the reader list in ADR-226 §4.
+**Rule**: to move money a payment already applied, set `releasedAt` once on the old row (one conditional UPDATE: `releasedAt IS NULL`, count must match), lower the receivable's paid, and insert new rows. Every reader of allocations counts live rows only (`releasedAt: null` in Prisma, `!a.releasedAt` in memory), including the memory store's private helpers (`reverseNow`, `releasedBy`, `hasAllocations`) and any filter that asks "does this payment have allocations". A new reader starts from that filter.
+
+## Pattern: post inside another write with `postInstallmentTx`, counter before installment rows (MUT-444)
+**Where**: `postInstallmentTx` in `server/src/repositories/prisma.ts` (and `postNow` in `memory.ts`), shared by `postInstallment` and `agreements.correct`.
+**Rule**: a write that must bill a line as part of something larger calls the posting helper inside its own transaction: it takes the CHG counter first, creates the receivable, then claims the line on `receivableId IS NULL AND voidedAt IS NULL AND version`. Do the posts before touching any other installment row, so the write takes the counter before installment rows, as a plain post does, and can't deadlock with one.
+
+## Pattern: a rollback hazard entry for every migration that makes rows an older revision misreads (MUT-444)
+**Where**: `ROLLBACK_HAZARDS` in `server/src/scripts/rollback-check.ts`, `server/DEPLOYMENT.md` §6 "Roll back past" rows, `rollback-check.test.ts`.
+**Rule**: when a migration adds an enum value an older Prisma client can't read, or a column whose rows an older revision would misread (a released allocation counted as live), add a hazard with a count query over exactly those rows and the matching DEPLOYMENT row (the test holds the two together). Add it in the same ticket as the migration.
+

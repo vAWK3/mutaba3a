@@ -361,3 +361,202 @@ test('Malafat corrects a recorded payment in one call, from a preview, and a rep
     expect(statement.closingBalance).toBe('400.00');
   });
 });
+
+/**
+ * MUT-444 (ADR-226): correcting an agreement's terms after posting (MAL-1368), against the same live dev API. A ₪1,000
+ * VAT-inclusive fee at 18 %, split 50/50 "On signing" (billed at once) and "On judgment" (manual); ₪300 paid on the
+ * signing charge. Every refusal is its own step, and none of them writes anything.
+ */
+test("Malafat corrects a billed and paid fee's amount, VAT basis and treatment in one call, and a replay never corrects twice", { tag: '@portal-selfservice.malafat-money-api.agreement-correct' }, async ({ step }) => {
+  const admin = { 'x-admin-token': liveState().adminToken };
+  let key: Record<string, string> = {};
+  let customerId = '';
+  let projectId = '';
+  let agreementId = '';
+  let signingCharge = '';
+  let originalDate = '';
+  let paymentId = '';
+  const send = async (path: string, body: Json, idempotencyKey = `qa-444-${randomUUID()}`) => {
+    const res = await fetch(`${liveState().origin}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey, ...key }, body: JSON.stringify(body) });
+    const json = (await res.json()) as Json;
+    return { status: res.status, replayed: res.headers.get('idempotent-replayed'), body: json, reason: json.error?.details?.reason as string | undefined };
+  };
+  const halves = (amount: string, signing = 'IMMEDIATE') => [
+    { label: 'On signing', amount, trigger: { type: signing } },
+    { label: 'On judgment', amount, trigger: { type: 'MANUAL' } },
+  ];
+  const balance = async () => {
+    const ils = (await call('GET', `/v1/summaries/customers/${customerId}`, key)).currencies.find((c: Json) => c.currency === 'ILS');
+    return { outstanding: ils.outstanding as string, unallocated: ils.unallocated as string, balance: minor(ils.outstanding) - minor(ils.unallocated) };
+  };
+  const version = async () => (await call('GET', `/v1/agreements/${agreementId}`, key)).agreement.version as number;
+  const fee = async (body: Json) => {
+    const preview = await call('POST', '/v1/agreements/preview', key, body);
+    return call('POST', '/v1/agreements', key, { ...body, previewToken: preview.previewToken });
+  };
+
+  await step('Malafat sets up a client, a project and a ₪1,000 VAT-inclusive fee split 50/50, and records ₪300 on the signing charge', async () => {
+    const org = await call('POST', '/admin/v1/organizations', admin, { name: `QA firm ${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+    const apiKey = await call('POST', `/admin/v1/organizations/${org.id}/api-keys`, admin, { name: 'Malafat', scopes: SCOPES });
+    key = { authorization: `Bearer ${apiKey.secret}` };
+    await call('PUT', '/v1/settings/vat', key, { rateBasisPoints: 1800, effectiveFrom: '2025-01-01' });
+    customerId = (await call('POST', '/v1/customers', key, { name: 'Haddad' })).id;
+    projectId = (await call('POST', '/v1/projects', key, { customerId, name: 'Lawsuit', currency: 'ILS' })).id;
+    const created = await fee({ projectId, amount: '1000.00', pricingBasis: 'VAT_INCLUSIVE', agreementDate: '2026-10-01', paymentTerms: 'EOM', installments: halves('500.00') });
+    agreementId = created.agreement.id;
+    signingCharge = created.installments[0].receivableId;
+    originalDate = (await call('GET', `/v1/receivables/${signingCharge}`, key)).postingDate;
+    const allocations = [{ receivableId: signingCharge, amount: '300.00' }];
+    const preview = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount: '300.00', allocations });
+    paymentId = (await call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount: '300.00', receivedOn: originalDate, method: 'BANK', allocations, previewToken: preview.previewToken })).id;
+    expect(await balance()).toMatchObject({ outstanding: '200.00', unallocated: '0.00' });
+  });
+
+  const exclusive = { amount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', installments: halves('500.00') };
+  let request: Json = {};
+  await step('Malafat previews correcting the fee to ₪1,000 VAT-exclusive, reason ENTERED_BY_MISTAKE', async () => {
+    const plan = await call('POST', `/v1/agreements/${agreementId}/correct/preview`, key, { ...exclusive, reasonCode: 'ENTERED_BY_MISTAKE' });
+    expect(plan.installments[0].before).toMatchObject({ gross: '500.00', net: '423.73', vat: '76.27', receivableId: signingCharge, postingDate: originalDate });
+    expect(plan.installments[0].after).toMatchObject({ gross: '590.00', net: '500.00', vat: '90.00', postingDate: originalDate });
+    expect(plan.installments[1].after).toMatchObject({ gross: '590.00', postingDate: null });
+    expect(plan.credits).toEqual([expect.objectContaining({ receivableId: signingCharge, amount: '500.00', effectiveDate: originalDate })]);
+    expect(plan.allocations).toEqual([expect.objectContaining({ paymentId, released: [expect.objectContaining({ receivableId: signingCharge, amount: '300.00' })], placed: [expect.objectContaining({ amount: '300.00' })], unallocated: '0.00' })]);
+    expect(plan.customer).toEqual({ outstanding: { before: '200.00', after: '290.00' }, unallocated: { before: '0.00', after: '0.00' }, balance: { before: '200.00', after: '290.00' } });
+    expect(plan.balanceChange).toBe('90.00');
+    request = { ...exclusive, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: plan.previewToken };
+  });
+
+  const replayKey = `qa-444-${randomUUID()}`;
+  let first: Json = {};
+  await step('Malafat confirms with the token (AC1, AC2)', async () => {
+    const before = await balance();
+    const done = await send(`/v1/agreements/${agreementId}/correct`, request, replayKey);
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    first = done.body;
+    expect(first.installments.slice(0, 2).map((i: Json) => i.status)).toEqual(['VOID', 'VOID']);
+    expect(first.credits).toEqual([expect.objectContaining({ receivableId: signingCharge, amount: '500.00', reasonCode: 'ENTERED_BY_MISTAKE', effectiveDate: originalDate })]);
+    expect(await call('GET', `/v1/receivables/${signingCharge}`, key)).toMatchObject({ paid: '0.00', credited: '500.00', outstanding: '0.00' });
+    expect(first.receivables).toEqual([expect.objectContaining({ gross: '590.00', paid: '300.00', postingDate: originalDate, number: expect.stringMatching(/^CHG-\d{4}-\d{4}$/) })]);
+    const payment = await call('GET', `/v1/payments/${paymentId}`, key);
+    expect(payment).toMatchObject({ allocated: '300.00', unallocated: '0.00' });
+    expect(payment.allocations.map((a: Json) => a.receivableId)).toEqual([first.receivables[0].id]);
+    expect((await balance()).balance - before.balance).toBe(9_000);
+  });
+
+  await step('Malafat sends the same request again with the same key (AC3)', async () => {
+    const again = await send(`/v1/agreements/${agreementId}/correct`, request, replayKey);
+    expect(again.status).toBe(200);
+    expect(again.replayed).toBe('true');
+    expect(again.body).toEqual(first);
+    const detail = await call('GET', `/v1/agreements/${agreementId}`, key);
+    expect(detail.supplements.filter((s: Json) => s.distribution === 'CORRECTION')).toHaveLength(1);
+    expect((await call('GET', `/v1/receivables/${signingCharge}/credits`, key)).credits).toHaveLength(1);
+  });
+
+  const correctTo = async (body: Json) => {
+    const plan = await call('POST', `/v1/agreements/${agreementId}/correct/preview`, key, body);
+    const done = await send(`/v1/agreements/${agreementId}/correct`, { ...body, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: plan.previewToken });
+    expect(done.status, JSON.stringify(done.body)).toBe(200);
+    return { plan, done: done.body };
+  };
+  const inclusive200 = { amount: '200.00', pricingBasis: 'VAT_INCLUSIVE', installments: halves('100.00') };
+  await step('Malafat corrects the fee again, to ₪200 VAT-inclusive: the excess stays unallocated (AC2)', async () => {
+    const { plan, done } = await correctTo(inclusive200);
+    expect(plan.customer).toEqual({ outstanding: { before: '290.00', after: '0.00' }, unallocated: { before: '0.00', after: '200.00' }, balance: { before: '290.00', after: '-200.00' } });
+    expect(plan.balanceChange).toBe('-490.00');
+    expect(done.receivables).toEqual([expect.objectContaining({ gross: '100.00', paid: '100.00' })]);
+    expect(done.unallocated).toEqual([{ paymentId, amount: '200.00' }]);
+    expect(await call('GET', `/v1/payments/${paymentId}`, key)).toMatchObject({ amount: '300.00', allocated: '100.00', unallocated: '200.00' });
+  });
+
+  await step('Malafat corrects the VAT treatment from STANDARD_RATED to EXEMPT, same ₪200 VAT-inclusive', async () => {
+    const before = await balance();
+    const { plan, done } = await correctTo({ ...inclusive200, vatTreatment: 'EXEMPT' });
+    expect(plan.terms.before.vatTreatment).toBe('STANDARD_RATED');
+    expect(plan.terms.after).toMatchObject({ vatTreatment: 'EXEMPT', net: '200.00', vat: '0.00', gross: '200.00' });
+    expect(plan.balanceChange).toBe('0.00');
+    expect(done.receivables).toEqual([expect.objectContaining({ net: '100.00', vat: '0.00', gross: '100.00', paid: '100.00', postingDate: originalDate })]);
+    expect((await balance()).balance).toBe(before.balance);
+    const payment = await call('GET', `/v1/payments/${paymentId}`, key);
+    expect(payment.allocations.map((a: Json) => [a.receivableId, a.amount])).toEqual([[done.receivables[0].id, '100.00']]);
+  });
+
+  let judgmentCharge = '';
+  await step('Malafat bills "On judgment", previews a correction, records ₪100 on that charge, then confirms with the old token: 409 PREVIEW_STALE (AC3)', async () => {
+    const lines = (await call('GET', `/v1/agreements/${agreementId}`, key)).installments.filter((i: Json) => i.status !== 'VOID');
+    judgmentCharge = (await call('POST', `/v1/installments/${lines[1].id}/trigger`, key, {})).receivable.id;
+    const body = { ...inclusive200, vatTreatment: 'EXEMPT', amount: '300.00', installments: halves('150.00') };
+    const plan = await call('POST', `/v1/agreements/${agreementId}/correct/preview`, key, body);
+    const allocations = [{ receivableId: judgmentCharge, amount: '100.00' }];
+    const preview = await call('POST', '/v1/allocations/preview', key, { customerId, currency: 'ILS', amount: '100.00', allocations });
+    await call('POST', '/v1/payments', key, { customerId, currency: 'ILS', amount: '100.00', receivedOn: originalDate, method: 'BANK', allocations, previewToken: preview.previewToken });
+    const kept = await version();
+    const stale = await send(`/v1/agreements/${agreementId}/correct`, { ...body, reasonCode: 'ENTERED_BY_MISTAKE', previewToken: plan.previewToken });
+    expect([stale.status, stale.reason]).toEqual([409, 'PREVIEW_STALE']);
+    expect(await version()).toBe(kept);
+  });
+
+  const exempt200 = { ...inclusive200, vatTreatment: 'EXEMPT' };
+  await step('Malafat confirms with OTHER and no note: 422 REASON_REQUIRED', async () => {
+    const kept = await version();
+    const plan = await call('POST', `/v1/agreements/${agreementId}/correct/preview`, key, { ...exempt200, amount: '300.00', installments: halves('150.00') });
+    const res = await send(`/v1/agreements/${agreementId}/correct`, { ...exempt200, amount: '300.00', installments: halves('150.00'), reasonCode: 'OTHER', previewToken: plan.previewToken });
+    expect([res.status, res.reason]).toEqual([422, 'REASON_REQUIRED']);
+    expect(await version()).toBe(kept);
+  });
+
+  await step('Malafat sends the same terms again: 422 NOTHING_TO_CORRECT', async () => {
+    const res = await send(`/v1/agreements/${agreementId}/correct/preview`, exempt200);
+    expect([res.status, res.reason]).toEqual([422, 'NOTHING_TO_CORRECT']);
+  });
+
+  await step('Malafat changes "On signing" to MANUAL: 422 POSTED_INSTALLMENT_CHANGED (D2)', async () => {
+    const kept = await version();
+    const res = await send(`/v1/agreements/${agreementId}/correct/preview`, { ...exempt200, installments: halves('100.00', 'MANUAL') });
+    expect([res.status, res.reason]).toEqual([422, 'POSTED_INSTALLMENT_CHANGED']);
+    expect(res.body.error.details).toMatchObject({ position: 1, change: 'TRIGGER' });
+    expect(await version()).toBe(kept);
+  });
+
+  await step('Malafat tries to correct a cancelled agreement: 409 AGREEMENT_CANCELLED (AC4)', async () => {
+    const later = await fee({ projectId, amount: '400.00', pricingBasis: 'VAT_INCLUSIVE', agreementDate: '2026-10-01', paymentTerms: 'EOM', installments: [{ label: 'Later', amount: '400.00', trigger: { type: 'MANUAL' } }] });
+    await call('POST', `/v1/agreements/${later.agreement.id}/cancel`, key, {});
+    const res = await send(`/v1/agreements/${later.agreement.id}/correct/preview`, { amount: '300.00', pricingBasis: 'VAT_INCLUSIVE', installments: [{ label: 'Later', amount: '300.00', trigger: { type: 'MANUAL' } }] });
+    expect([res.status, res.reason]).toEqual([409, 'AGREEMENT_CANCELLED']);
+  });
+
+  await step('Malafat tries to correct a contingency agreement whose outcome is recorded: 409 OUTCOME_ALREADY_RECORDED (AC4)', async () => {
+    const contingency = await fee({ projectId, amount: '500.00', pricingBasis: 'VAT_INCLUSIVE', agreementDate: '2026-10-01', paymentTerms: 'EOM', installments: [{ label: 'Upfront', amount: '500.00', trigger: { type: 'MANUAL' } }], contingency: { commissionRateBasisPoints: 2000, upfrontTreatment: 'SEPARATE' } });
+    const outcome = { outcome: 'NO_RECOVERY', outcomeDate: '2026-10-01' };
+    const preview = await call('POST', `/v1/agreements/${contingency.agreement.id}/outcome/preview`, key, outcome);
+    await call('POST', `/v1/agreements/${contingency.agreement.id}/outcome`, key, { ...outcome, previewToken: preview.previewToken });
+    const res = await send(`/v1/agreements/${contingency.agreement.id}/correct/preview`, { amount: '400.00', pricingBasis: 'VAT_INCLUSIVE', installments: [{ label: 'Upfront', amount: '400.00', trigger: { type: 'MANUAL' } }] });
+    expect([res.status, res.reason]).toEqual([409, 'OUTCOME_ALREADY_RECORDED']);
+  });
+
+  await step('Malafat tries to correct a retainer: 422 NOT_FIXED (AC4)', async () => {
+    const body = { projectId, monthlyAmount: '1000.00', pricingBasis: 'VAT_EXCLUSIVE', startMonth: '2027-01', billingDay: 1 };
+    const preview = await call('POST', '/v1/retainers/preview', key, body);
+    const retainer = await call('POST', '/v1/retainers', key, { ...body, previewToken: preview.previewToken });
+    const res = await send(`/v1/agreements/${retainer.agreement.id}/correct/preview`, exclusive);
+    expect([res.status, res.reason]).toEqual([422, 'NOT_FIXED']);
+  });
+
+  await step("Malafat reads the old charge's credit, the client's statement, the payment, the audit log and the contract version (AC5, AC6)", async () => {
+    expect((await call('GET', `/v1/receivables/${signingCharge}/credits`, key)).credits).toEqual([expect.objectContaining({ amount: '500.00', reasonCode: 'ENTERED_BY_MISTAKE', effectiveDate: originalDate })]);
+    const statement = await call('GET', `/v1/customers/${customerId}/statement?currency=ILS`, key);
+    // On the original date: each charge, its credit, then its repost (three generations of the signing line).
+    const signingLines = statement.lines.filter((l: Json) => l.date === originalDate && (l.kind === 'CHARGE' || l.kind === 'CREDIT') && (l.kind === 'CREDIT' || l.origin?.position === 1));
+    expect(signingLines.map((l: Json) => l.kind)).toEqual(['CHARGE', 'CREDIT', 'CHARGE', 'CREDIT', 'CHARGE', 'CREDIT', 'CHARGE']);
+    expect(statement.lines.some((l: Json) => l.kind === 'CHARGE' && l.receivableId === judgmentCharge)).toBe(true);
+    expect(statement.closingBalance).toBe('-200.00');
+    const matter = await call('GET', `/v1/summaries/projects/${projectId}`, key);
+    expect(matter.posted).toBe('200.00');
+    expect(await call('GET', `/v1/payments/${paymentId}`, key)).toMatchObject({ allocated: '100.00', unallocated: '200.00' });
+    const audit = (await call('GET', `/v1/audit?entityType=agreement&entityId=${agreementId}`, key)).items.filter((e: Json) => e.action === 'agreement.corrected');
+    expect(audit).toHaveLength(3);
+    expect(audit.map((e: Json) => [e.metadata.before.pricingBasis, e.metadata.after.pricingBasis]).sort()).toEqual([['VAT_EXCLUSIVE', 'VAT_INCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_EXCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_INCLUSIVE']]);
+    const doc = await call('GET', '/openapi.json', {});
+    expect(doc.info.version).toBe('1.89.0-mut444');
+  });
+});

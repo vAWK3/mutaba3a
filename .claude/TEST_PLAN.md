@@ -4183,6 +4183,19 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Local mode | `migrations.test.ts` (11 → 12), `format-fingerprint.test.ts` (everyRecord: a retainer proposal with a draft) | |
 | Release-QA | `@portal-selfservice.malafat-money-api.proposal-any-schedule` | 30/70 proposal, preview, approve; retainer proposal left out of `proposed`, then approved with the previewed charges |
 
+## MUT-444 — correct an agreement's terms after posting (ADR-226)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/agreements/__tests__/correct-terms.test.ts` | AC1 inclusive → exclusive (credit dated the old posting date, repost on it); 50/50 with an unposted line; STANDARD ↔ EXEMPT; a line override; D2 TRIGGER, a DATE on another date, REMOVED, unposted triggers and extra lines, IMMEDIATE posts today, a past DATE on its date; contingency 0 → X and X → 0; D3 remainders and a fully credited charge; payments oldest first, one split across two charges, a lower fee leaves money unallocated, a split payment moves only this agreement's part (R16), same-day order by createdAt; due dates under new terms and an override; NOTHING_TO_CORRECT vs a label change; a seeded 2,000-case sweep over the invariants |
+| Unit | `server/src/statements/__tests__/build.test.ts` | two posted lines through two corrections: each generation reads 1/2 and 2/2 (R3); D5 order on the shared date and every period's net; a released row adds no line or matter |
+| Unit | `server/src/summaries/__tests__/compute.test.ts` | `posted` after one and two corrections; a MUT-100 corrected commission counts once (R4); an unposted voided line supersedes nothing |
+| Unit | `server/src/scripts/__tests__/rollback-check.test.ts` | the MUT-480 and MUT-444 hazards fire on their migrations, count their rows and refuse (R1) |
+| Unit | `server/src/repositories/__tests__/prisma-lock-conflict.test.ts` | `agreements.correct` answers stale on P2028 |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut444.ts` (memory + Postgres) | one write (voids, credits at `at`, reposts at `at` + 1 ms with the next CHG number, releases and placements, payment total and version, CORRECTION row, `settled`); each stale cause writes nothing (agreement version, installment version, old receivable version, payment reversed, payment total changed, row already released); not_found; sums equal rows after correction → reversal → allocation; every reader live-only (listAllocations, listAllocationsFor, statementSources, listLiveAllocationsOn, list by project); a MUT-443 correction of a moved payment; numbering in the posting year; version-conditional cancel; the records export; races with postInstallment, allocate, payments.correct, reverse, credit, reduce, recordOutcome, cancel and a lazy post on another agreement |
+| Route | `server/src/__tests__/agreement-correct.route.test.ts` | AC1 preview and commit, summary and statement balance move by balanceChange; AC2; AC3 replay, a new payment on this agreement's charge is stale, another client's isn't, midnight is stale, a reason added later commits; AC4 cancelled, outcome, retainer; contingency upfront to and from 0; AC5 credits, statement D5 order, audit rows; AC6 version and paths; D2 TRIGGER and REMOVED; NOTHING_TO_CORRECT, REASON_REQUIRED, AMOUNT_INVALID; strict body; archived customer; another firm 404; R7 scopes and sessions; due lines post first; a frozen 0 rate resolves or VAT_RATE_MISSING; after a correction: INSTALLMENT_VOIDED, reversal, MUT-443 correction, a second correction and the matter's posted, cancel refused, a raced cancel is VERSION_MISMATCH |
+| Release-QA | `@portal-selfservice.malafat-money-api.agreement-correct` | the QA scenario: preview, confirm, replay, ₪200, EXEMPT, each refusal as its own step, the statement, the matter, the audit and the version |
+
 ## MUT-443 — correct a recorded payment in one call (ADR-225)
 
 | Level | Where | What it proves |
