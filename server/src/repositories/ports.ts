@@ -3261,6 +3261,13 @@ export type FileReceiptResult =
   | { kind: 'not_ready' }
   | { kind: 'already_filed' };
 
+/** MUT-503: moving a To-review receipt to another profile; the same refusals as filing it. */
+export type MoveReceiptResult =
+  | { kind: 'moved'; receipt: ExpenseReceiptRecord; previousStorageKey: string }
+  | { kind: 'not_found' }
+  | { kind: 'not_ready' }
+  | { kind: 'already_filed' };
+
 /** MUT-389: `fileAsExpense`'s refusals, plus the existing expense's own. */
 export type FileOntoExpenseResult = FileReceiptResult | { kind: 'expense_not_found' } | { kind: 'too_many_receipts' };
 
@@ -3295,6 +3302,12 @@ export interface ExpenseReceiptRepository {
   claimRead(id: string, now: Date, leaseMs: number): Promise<ClaimReadResult>;
   /** MUT-441: give a PENDING receipt's lease back after a failure worth retrying, so the next try may claim at once. */
   releaseRead(id: string): Promise<void>;
+  /**
+   * MUT-503 (D6): a read that found no file at `claimedKey` because the receipt moved since (its key is another now):
+   * give the lease back and the attempt too, so the move costs no try. False, changing nothing, when the receipt still
+   * points at `claimedKey` (the file is really missing) or is no longer PENDING.
+   */
+  releaseMovedRead(id: string, claimedKey: string): Promise<boolean>;
   /**
    * MUT-441: end the read of a PENDING receipt and free its lease. A DONE with `suggested` writes it (the caller
    * merged it fill-absent onto the record at `expectedVersion`) and bumps `version`, only at that version; any other
@@ -3342,6 +3355,13 @@ export interface ExpenseReceiptRepository {
    * that pair stays as approved.
    */
   fileOntoExpense(params: { organizationId: string; receiptId: string; expenseId: string; maxReceipts: number; suggested?: ReceiptSuggestion }): Promise<FileOntoExpenseResult>;
+  /**
+   * MUT-503, one transaction: the same receipt lock and refusals as `fileAsExpense`; then the receipt belongs to
+   * `targetOrganizationId` with its object at `storageKey` (already copied there), and `version` bumps. Its id,
+   * upload day, suggestion and reading state stay; an approval left by an unlinked expense is cleared (D2: its
+   * category is the old profile's). The read lease is left alone (D6). `previousStorageKey` is the key it had.
+   */
+  moveToProfile(params: { organizationId: string; receiptId: string; targetOrganizationId: string; storageKey: string }): Promise<MoveReceiptResult>;
   /**
    * MUT-397, one transaction, in this order (the same in every store): lock the expense (live, on this profile), else
    * `expense_not_found`; lock the receipt only if it sits on that expense (live), else `receipt_not_found`; READY

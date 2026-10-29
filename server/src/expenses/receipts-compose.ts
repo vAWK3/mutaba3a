@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { todayFor, validationError } from '../agreements/compose.js';
-import { checkFile, receiptStorageKey } from '../attachments/rules.js';
+import { checkFile, movedReceiptStorageKey, receiptStorageKey } from '../attachments/rules.js';
+import { agentWriteGate } from '../auth/billing-gate.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
@@ -119,6 +121,67 @@ export async function startExpenseReceipt(
     actor.now,
   );
   return { receipt, upload: await signReceiptUpload(deps, receipt, actor.now) };
+}
+
+export interface MoveReceiptOptions {
+  /** MUT-361: whether the lapse gate is on; the target profile is gated here (the selected one was, at the door). */
+  billingGate: boolean;
+  /** A clean-up that failed after the move held (ADR-091): reported, never thrown (D8). */
+  reportError: (err: unknown) => void;
+  /** The per-move key suffix (D5); a test may fix it. */
+  nonce?: () => string;
+}
+
+const moveNonce = () => randomUUID().replace(/-/g, '').slice(0, 12);
+
+/** The target profile, refused unless the person belongs to it and may write it now (MUT-503 AC2, D7). */
+async function writableTarget(deps: ReceiptDeps, actor: ReceiptActor, targetProfileId: string, billingGate: boolean): Promise<Organization> {
+  const notFound = () => new ApiError('NOT_FOUND', 'No such profile', { reason: 'PROFILE_NOT_FOUND' });
+  if (!(await deps.store.memberships.find(actor.userId, targetProfileId))) throw notFound();
+  const target = await deps.store.organizations.getById(targetProfileId);
+  if (!target) throw notFound();
+  // `expenses` is read-write for every session (writability.ts), so a lapse is the only way a member can't write it.
+  await agentWriteGate(deps.store, target, actor.now, billingGate);
+  return target;
+}
+
+/**
+ * MUT-503 (ADR-228): move a To-review receipt from the actor's profile to another of theirs. The object is copied
+ * inside the bucket to a key of its own on the target (D5), then one transaction re-homes the row; only after that
+ * holds is the old object removed. A failure before the commit leaves the receipt on the source with its file (the
+ * copy is removed); nothing after the commit throws (D8). The reading travels with the row: an in-flight read that
+ * finds the old file gone is retried, not failed (reader.ts, D6).
+ */
+export async function moveLibraryReceipt(deps: ReceiptDeps, actor: ReceiptActor, receiptId: string, targetProfileId: string, options: MoveReceiptOptions): Promise<{ receipt: ExpenseReceiptRecord; fromProfileId: string }> {
+  const storage = requireStorage(deps);
+  const { organization } = actor;
+  if (targetProfileId === organization.id) throw validationError('SAME_PROFILE', 'The receipt is already on this profile');
+  const receipt = await deps.store.expenseReceipts.getById(organization.id, receiptId);
+  if (!receipt) throw new ApiError('NOT_FOUND', 'No such receipt', { reason: 'RECEIPT_NOT_FOUND' });
+  if (receipt.filingStatus === 'FILED') throw new ApiError('CONFLICT', 'This receipt is already filed', { reason: 'RECEIPT_ALREADY_FILED', expenseId: receipt.expenseId });
+  if (receipt.status !== 'READY') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
+  const target = await writableTarget(deps, actor, targetProfileId, options.billingGate);
+  if (!(await storage.head(receipt.storageKey))) throw new ApiError('CONFLICT', 'The receipt\'s file is missing', { reason: 'RECEIPT_FILE_MISSING' });
+
+  const storageKey = movedReceiptStorageKey(target.id, receipt.id, (options.nonce ?? moveNonce)());
+  // Storage first, outside any transaction: no network I/O under a database lock. A failed copy throws (a 5xx).
+  await storage.copy(receipt.storageKey, storageKey);
+  const result = await deps.store.expenseReceipts.moveToProfile({ organizationId: organization.id, receiptId: receipt.id, targetOrganizationId: target.id, storageKey });
+  if (result.kind !== 'moved') {
+    // The key is this move's own, so no receipt points at it: removing it can't touch a live file.
+    await storage.remove(storageKey).catch(options.reportError);
+    if (result.kind === 'already_filed') throw new ApiError('CONFLICT', 'This receipt is already filed', { reason: 'RECEIPT_ALREADY_FILED', expenseId: (await deps.store.expenseReceipts.getById(organization.id, receipt.id))?.expenseId ?? null });
+    if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
+    throw new ApiError('NOT_FOUND', 'No such receipt', { reason: 'RECEIPT_NOT_FOUND' });
+  }
+
+  // After the commit, never a throw (D8): the receipt is on the target whatever happens below.
+  const settle = (work: () => Promise<unknown>) => work().catch(options.reportError);
+  await settle(() => actor.audit('expense_receipt.moved_out', 'expense_receipt', receipt.id, { toProfileId: target.id }));
+  await settle(() => receiptAudit(deps.store, { organizationId: target.id, userId: actor.userId, requestId: actor.requestId })('expense_receipt.moved_in', 'expense_receipt', receipt.id, { fromProfileId: organization.id }));
+  // The old key was this receipt's alone and the row no longer names it (TD-190: the bucket keeps it 14 days).
+  await settle(() => storage.remove(result.previousStorageKey));
+  return { receipt: result.receipt, fromProfileId: organization.id };
 }
 
 /** Verify the object, then flip to READY under the expense lock (MUT-397); idempotent once READY. */

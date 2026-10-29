@@ -14,7 +14,7 @@ import { CategoryBars } from '../../components/groups/CategoryBars';
 import { DayBars } from '../../components/groups/DayBars';
 import { GroupDrawer } from '../../components/groups/GroupDrawer';
 import { GroupMembers, type RowMotion } from '../../components/groups/GroupMembers';
-import { usePopover } from '../../shell/usePopover';
+import { MoreActionsMenu } from '../../components/MoreActionsMenu';
 import {
   INVERSE_VERB,
   barMode,
@@ -453,11 +453,6 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
 /** Edit and Add from outside; on a phone they fold into a "⋯" menu (21A). */
 function HeaderActions({ onAdd, onEdit }: { onAdd: () => void; onEdit: () => void }) {
   const { t } = useLanguage();
-  const { open, close, toggle, buttonRef, panelRef } = usePopover();
-  const choose = (action: () => void) => () => {
-    close(false);
-    action();
-  };
   return (
     <div className="hp-group-actions">
       <div className="hp-group-actions-wide">
@@ -469,19 +464,15 @@ function HeaderActions({ onAdd, onEdit }: { onAdd: () => void; onEdit: () => voi
         </Button>
       </div>
       <div className="hp-group-actions-narrow">
-        <button ref={buttonRef} type="button" className="btn btn-secondary btn-sm press" aria-haspopup="menu" aria-expanded={open} aria-label={t('hosted.groups.detail.moreActions')} onClick={toggle}>
-          ⋯
-        </button>
-        {open && (
-          <div ref={panelRef} className="hp-popover hp-grow-from-end hp-group-menu" role="menu" aria-label={t('hosted.groups.detail.moreActions')}>
-            <button type="button" role="menuitem" className="hp-menu-item press" onClick={choose(onAdd)}>
-              {t('hosted.groups.detail.addOutside')}
-            </button>
-            <button type="button" role="menuitem" className="hp-menu-item press" onClick={choose(onEdit)}>
-              {t('hosted.groups.detail.edit')}
-            </button>
-          </div>
-        )}
+        <MoreActionsMenu
+          label={t('hosted.groups.detail.moreActions')}
+          buttonClassName="btn btn-secondary btn-sm"
+          panelClassName="hp-group-menu"
+          actions={[
+            { label: t('hosted.groups.detail.addOutside'), onSelect: onAdd },
+            { label: t('hosted.groups.detail.edit'), onSelect: onEdit },
+          ]}
+        />
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/shell/YouIsland.tsx': { auto: 1 }, // MUT-426: the open profile's name on the island (D)
   'src/hosted/pages/you/YouProfiles.tsx': { auto: 1 }, // MUT-425: each profile's name (D)
   'src/hosted/components/ProfilesManageDrawer.tsx': { ltr: 1, auto: 1 }, // currency code; the profile name (D)
+  'src/hosted/components/MoveReceiptDrawer.tsx': { auto: 1 }, // MUT-503: each profile's name in the Move drawer (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)

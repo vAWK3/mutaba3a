@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.90.0-mut483
+  version: 1.91.0-mut503
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9283,6 +9283,28 @@ components:
             - description: What the reader suggested, when it read at review time; fills only the fields the stored suggestion lacks (since 1.84.0-mut441, MUT-441 R7)
       required:
         - expenseId
+      additionalProperties: false
+    MoveReceiptResponse:
+      type: object
+      properties:
+        receipt:
+          $ref: "#/components/schemas/ExpenseReceipt"
+        fromProfileId:
+          type: string
+          format: uuid
+      required:
+        - receipt
+        - fromProfileId
+      description: The receipt on its new profile (same id), and the profile it left (since 1.91.0-mut503, MUT-503)
+    MoveReceiptRequest:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          description: Another profile of the person's, which they may write now
+      required:
+        - profileId
       additionalProperties: false
     PublicFxRatesResponse:
       type: object
@@ -20757,6 +20779,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FileReceiptResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/receipts/{receiptId}/move:
+    post:
+      tags:
+        - Receipts
+      summary: Move a To-review receipt to another of your profiles (MUT-503)
+      description: The receipt keeps its id, upload day, suggestion and reading state; its file is copied inside the bucket to the other profile and removed from this one. An approval left by a deleted expense is cleared, since its category belongs to this profile. 422 SAME_PROFILE for this profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when that profile is read-only or locked; 404 RECEIPT_NOT_FOUND; 409 CONFLICT RECEIPT_ALREADY_FILED (details.expenseId) for a filed receipt; 409 CONFLICT RECEIPT_FILE_MISSING when its file is gone; 422 ATTACHMENT_NOT_READY before the upload completes. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receiptId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveReceiptRequest"
+      responses:
+        "200":
+          description: Moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoveReceiptResponse"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

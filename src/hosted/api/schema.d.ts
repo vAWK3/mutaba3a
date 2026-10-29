@@ -13972,6 +13972,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/receipts/{receiptId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a To-review receipt to another of your profiles (MUT-503)
+         * @description The receipt keeps its id, upload day, suggestion and reading state; its file is copied inside the bucket to the other profile and removed from this one. An approval left by a deleted expense is cleared, since its category belongs to this profile. 422 SAME_PROFILE for this profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when that profile is read-only or locked; 404 RECEIPT_NOT_FOUND; 409 CONFLICT RECEIPT_ALREADY_FILED (details.expenseId) for a filed receipt; 409 CONFLICT RECEIPT_FILE_MISSING when its file is gone; 422 ATTACHMENT_NOT_READY before the upload completes. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    receiptId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MoveReceiptRequest"];
+                };
+            };
+            responses: {
+                /** @description Moved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MoveReceiptResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/public/fx-rates": {
         parameters: {
             query?: never;
@@ -22074,6 +22185,19 @@ export interface components {
             /** Format: uuid */
             expenseId: string;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
+        };
+        /** @description The receipt on its new profile (same id), and the profile it left (since 1.91.0-mut503, MUT-503) */
+        MoveReceiptResponse: {
+            receipt: components["schemas"]["ExpenseReceipt"];
+            /** Format: uuid */
+            fromProfileId: string;
+        };
+        MoveReceiptRequest: {
+            /**
+             * Format: uuid
+             * @description Another profile of the person's, which they may write now
+             */
+            profileId: string;
         };
         PublicFxRatesResponse: {
             /**

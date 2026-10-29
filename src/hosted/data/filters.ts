@@ -207,8 +207,16 @@ export type ReceiptStatusFilter = (typeof RECEIPT_STATUSES)[number];
 export const DEFAULT_RECEIPT_STATUS: ReceiptStatusFilter = 'to_review';
 export interface ReceiptsPageSearch {
   status?: Exclude<ReceiptStatusFilter, 'to_review'>;
+  /** MUT-503: the receipt whose Move drawer is open. */
+  move?: string;
 }
-export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch => compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined });
+export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch => compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined, move: id(raw.move) });
+
+/** MUT-503: a receipt's review page; `move` opens its Move drawer. */
+export interface ReceiptReviewSearch {
+  move?: true;
+}
+export const parseReceiptReview = (raw: Raw): ReceiptReviewSearch => compact({ move: raw.move === true || raw.move === 'true' ? true : undefined });
 
 export const INCOME_KINDS = ['received', 'owed'] as const;
 

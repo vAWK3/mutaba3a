@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, open, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -102,6 +102,12 @@ export class LocalAttachmentStorage implements AttachmentStorage {
 
   async removePrefix(prefix: string): Promise<void> {
     await rm(this.pathOf(prefix), { recursive: true, force: true });
+  }
+
+  async copy(from: string, to: string): Promise<void> {
+    const target = this.pathOf(to);
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(this.pathOf(from), target);
   }
 
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {

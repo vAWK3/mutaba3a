@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query';
-import { ApiError, api, type ApproveReceiptRequest, type ExpenseDetail, type ExpenseReceipt, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
+import { ApiError, api, apiErrorReason, type ApproveReceiptRequest, type ExpenseDetail, type ExpenseReceipt, type ReceiptDisposition, type ReceiptListItem } from '../api/client';
 import { profileKey } from '../session/me';
 import { useCursorList } from './queries';
 import { expenseKey, invalidateExpenses } from './expenseQueries';
@@ -243,7 +243,58 @@ export function useApproveReceipt(profileId: string) {
   });
 }
 
-export type UploadErrorKey = 'tooManyPending' | 'rateLimited' | 'storage' | 'uploadFailed';
+/** MUT-503: what a refused move tells the person, in the drawer's banner. */
+export type MoveErrorKey = 'lapsed' | 'noAccess' | 'alreadyFiled' | 'fileMissing' | 'notReady' | 'gone' | 'failed';
+
+export function moveErrorOf(error: unknown): MoveErrorKey {
+  if (!(error instanceof ApiError)) return 'failed';
+  const reason = apiErrorReason(error);
+  if (error.code === 'SUBSCRIPTION_LAPSED') return 'lapsed';
+  if (reason === 'PROFILE_NOT_FOUND') return 'noAccess';
+  if (reason === 'RECEIPT_ALREADY_FILED') return 'alreadyFiled';
+  if (reason === 'RECEIPT_FILE_MISSING') return 'fileMissing';
+  if (reason === 'ATTACHMENT_NOT_READY') return 'notReady';
+  if (error.status === 404) return 'gone';
+  return 'failed';
+}
+
+/**
+ * D8: an answer that can't say whether the move happened — the receipt is no longer here (404), or a first attempt
+ * whose answer was lost is still running (409 OPERATION_IN_PROGRESS). The receipt's other profile settles it.
+ */
+function maybeMoved(error: unknown): boolean {
+  return error instanceof ApiError && (apiErrorReason(error) === 'RECEIPT_NOT_FOUND' || error.code === 'OPERATION_IN_PROGRESS');
+}
+
+export interface MoveReceiptInput {
+  receiptId: string;
+  targetProfileId: string;
+  idempotencyKey: string;
+}
+
+/** MUT-503: move a To-review receipt to another profile; both profiles' receipts refresh, and its cached page goes. */
+export function useMoveReceipt(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ receiptId, targetProfileId, idempotencyKey }: MoveReceiptInput) => {
+      try {
+        return await api.moveReceipt(profileId, receiptId, targetProfileId, idempotencyKey);
+      } catch (error) {
+        if (!maybeMoved(error)) throw error;
+        const there = await api.getReceipt(targetProfileId, receiptId).catch(() => null);
+        if (!there) throw error;
+        return { receipt: there, fromProfileId: profileId };
+      }
+    },
+    onSuccess: (_result, { receiptId, targetProfileId }) => {
+      queryClient.removeQueries({ queryKey: receiptKey(profileId, receiptId) });
+      invalidateReceipts(queryClient, profileId);
+      invalidateReceipts(queryClient, targetProfileId);
+    },
+  });
+}
+
+export type UploadErrorKey ='tooManyPending' | 'rateLimited' | 'storage' | 'uploadFailed';
 
 /** What a failed library upload tells the person (D9, A4): two different 429s, the bucket down, anything else. */
 export function uploadErrorOf(error: unknown): { key: UploadErrorKey; seconds?: number } {

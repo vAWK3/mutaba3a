@@ -2723,6 +2723,13 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.expReceipts.get(id);
       if (r && r.readStatus === 'PENDING') r.readLeaseUntil = null;
     },
+    releaseMovedRead: async (id, claimedKey) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.readStatus !== 'PENDING' || r.storageKey === claimedKey) return false;
+      r.readLeaseUntil = null;
+      r.readAttempts = Math.max(0, (r.readAttempts ?? 0) - 1);
+      return true;
+    },
     finishRead: async (id, expectedVersion, outcome) => {
       const r = this.expReceipts.get(id);
       if (!r) return { kind: 'not_found' };
@@ -2840,6 +2847,15 @@ export class MemoryLedgerStore implements LedgerStore {
       if (params.suggested && !r.approved) r.suggested = fillAbsent(r.suggested, params.suggested).merged;
       r.version += 1;
       return { kind: 'filed', expense, receipt: { ...r } };
+    },
+    moveToProfile: async (params) => {
+      const r = this.expReceipts.get(params.receiptId);
+      const refused = toReviewRefusal(r, params.organizationId);
+      if (refused || !r) return refused ?? { kind: 'not_found' };
+      const previousStorageKey = r.storageKey;
+      Object.assign(r, { organizationId: params.targetOrganizationId, storageKey: params.storageKey, approved: null, approvedAt: null, approvedByUserId: null });
+      r.version += 1;
+      return { kind: 'moved', receipt: { ...r }, previousStorageKey };
     },
     completeOnExpense: async (params, at) => {
       // Same order as Prisma: the expense first, so a deleted expense answers expense_not_found even when the delete

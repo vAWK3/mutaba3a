@@ -221,6 +221,8 @@ export interface StubLibraryReceipt {
   uploadedByUserId: string | null;
   createdAt: string;
   completedAt: string | null;
+  /** MUT-503: the profile it is on; absent = every profile sees it (the fixtures before moves existed). */
+  profileId?: string;
 }
 
 export function libraryReceipt(n: number, r: Partial<StubLibraryReceipt> = {}): StubLibraryReceipt {
@@ -917,7 +919,10 @@ export class FakeApi {
     const library = this.libraryReceipts;
     if (!library) return notFound();
     const q = (key: string) => e.query.get(key) ?? undefined;
-    const ready = library.filter((r) => r.status === 'READY');
+    // MUT-503: a receipt with a profile is that profile's only, so a move takes it from one list to the other.
+    const here = e.headers['x-mutaba3a-profile'];
+    const mine = (r: StubLibraryReceipt) => !r.profileId || r.profileId === here;
+    const ready = library.filter((r) => r.status === 'READY' && mine(r));
     if (e.method === 'GET' && !id) {
       const status = q('filingStatus');
       const rows = ready.filter((r) => !status || r.filingStatus === status).map((r) => this.libraryItem(r));
@@ -930,9 +935,10 @@ export class FakeApi {
       library.unshift(made);
       return json({ receipt: made, upload: { url: `${STORAGE}/upload/${made.id}`, method: 'PUT', headers: { 'Content-Type': b.mimeType }, expiresAt: '2099-01-01T00:00:00Z' } }, 201);
     }
-    const found = library.find((r) => r.id === id);
+    const found = library.find((r) => r.id === id && mine(r));
     if (!found) return notFound();
     if (e.method === 'GET' && !sub) return json(found);
+    if (e.method === 'POST' && sub === 'move') return this.moveAnswer(found, here, (e.body as { profileId: string }).profileId);
     if (e.method === 'DELETE' && !sub) {
       library.splice(library.indexOf(found), 1);
       return { status: 204, body: '' };
@@ -961,6 +967,17 @@ export class FakeApi {
       return json({ expense: listed(made), receipt: found }, 201);
     }
     return undefined;
+  }
+
+  /** MUT-503: POST /v1/receipts/{id}/move, as the server answers it: filed 409, a lapsed target 402, else moved. */
+  private moveAnswer(found: StubLibraryReceipt, from: string | undefined, to: string) {
+    if (found.filingStatus === 'FILED') return json({ error: { code: 'CONFLICT', message: 'Already filed', details: { reason: 'RECEIPT_ALREADY_FILED', expenseId: found.expenseId } } }, 409);
+    const target = this.profiles.find((p) => p.stub.id === to)?.stub;
+    if (!target || to === from) return json({ error: { code: 'NOT_FOUND', message: 'No such profile', details: { reason: 'PROFILE_NOT_FOUND' } } }, 404);
+    const state = target.billing?.state;
+    if (state === 'READ_ONLY' || state === 'LOCKED') return json({ error: { code: 'SUBSCRIPTION_LAPSED', message: 'Lapsed', details: { profileId: to, state, source: target.billing?.source ?? 'NONE', until: null } } }, 402);
+    Object.assign(found, { profileId: to, version: found.version + 1, approved: null, approvedAt: null });
+    return json({ receipt: found, fromProfileId: from });
   }
 
   /** A list row: the receipt and, when filed on an expense that still exists, that expense's summary (MUT-258). */

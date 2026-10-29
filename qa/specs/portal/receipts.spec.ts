@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { OFFICE_A, office } from '../../support/portal';
+import { OFFICE_A, OFFICE_B, office } from '../../support/portal';
 import { FakeApi, STORAGE, category, expense, libraryReceipt } from '../../support/portalApi';
 
 /**
@@ -197,5 +197,153 @@ test('With the receipts library off there is no Receipts tab, and its link says 
   await step('Open the Receipts link directly: it is not available', async () => {
     await page.goto(`${BASE}/receipts`);
     await expect(page.getByRole('heading', { name: "Receipts aren't available here" })).toBeVisible();
+  });
+});
+
+/** MUT-503: two profiles of Nour's, a third that is read-only; three receipts on Nour Studio. */
+function moveWorld(opts: { othersLapsed?: boolean } = {}) {
+  const lapsed = { state: 'READ_ONLY' as const, source: 'TRIAL' as const, tier: 'FREELANCER' as const, until: null };
+  return new FakeApi({
+    profiles: [
+      office(OFFICE_A, 'Nour Studio'),
+      { ...office(OFFICE_B, 'Cedar Consulting'), ...(opts.othersLapsed ? { billing: lapsed } : {}) },
+      { ...office(OFFICE_C, 'Olive Translations'), billing: lapsed },
+    ],
+    billingStanding: 'open',
+    categories: [groceries],
+    receipts: [
+      libraryReceipt(1, { filename: 'taxi.pdf', mimeType: 'application/pdf', profileId: OFFICE_A }),
+      libraryReceipt(2, { filename: 'cafe.pdf', mimeType: 'application/pdf', profileId: OFFICE_A, receivedOn: '2026-10-23' }),
+      libraryReceipt(3, { filename: 'spinneys.pdf', mimeType: 'application/pdf', profileId: OFFICE_A, filingStatus: 'FILED', receivedOn: '2026-10-20' }),
+    ],
+  });
+}
+const OFFICE_C = '33333333-3333-4333-8333-333333333333';
+
+test('Move a To-review receipt to another profile from its card', { tag: '@portal.receipts.move' }, async ({ page, step }) => {
+  const api = moveWorld();
+  const grid = page.getByRole('list', { name: 'Receipts' });
+  const dialog = page.getByRole('dialog', { name: 'Move receipt' });
+
+  await step('Open Expenses › Receipts on Nour Studio: two to review', async () => {
+    await api.open(page, `${BASE}/receipts`);
+    await expect(grid.getByRole('listitem')).toHaveCount(2);
+  });
+
+  await step("Open taxi.pdf's ⋯ and choose Move to profile…", async () => {
+    await grid.getByRole('button', { name: 'More actions for taxi.pdf' }).click();
+    await page.getByRole('menuitem', { name: 'Move to profile…' }).click();
+    await expect(dialog).toBeVisible();
+  });
+
+  await step('Pick Cedar Consulting; the button names it', async () => {
+    await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled();
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await dialog.getByRole('button', { name: 'Move to Cedar Consulting' }).click();
+  });
+
+  await step('The card leaves Nour Studio, the count drops, and the toast says where it went', async () => {
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('Moved to Cedar Consulting')).toBeVisible();
+    await expect(grid.getByRole('listitem')).toHaveCount(1);
+    await expect(page.getByRole('tab', { name: /To review\s*1/ })).toBeVisible();
+    const move = api.last('POST', /^\/v1\/receipts\/[^/]+\/move$/);
+    expect(move?.body).toEqual({ profileId: OFFICE_B });
+    expect(move?.headers['idempotency-key']).toBeTruthy();
+  });
+
+  await step('Open shows the receipt on Cedar Consulting', async () => {
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/expenses/receipts/${libraryReceipt(1).id}$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Review receipt' })).toBeVisible();
+  });
+});
+
+test('Move from the review page goes on to the next receipt', { tag: '@portal.receipts.move-review' }, async ({ page, step }) => {
+  const api = moveWorld();
+
+  await step('Open taxi.pdf to review it', async () => {
+    await api.open(page, `${BASE}/receipts/${libraryReceipt(1).id}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Review receipt' })).toBeVisible();
+  });
+
+  await step('Press Move to profile… beside the title and move it to Cedar Consulting', async () => {
+    await page.getByRole('button', { name: 'Move to profile…' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Move receipt' });
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await dialog.getByRole('button', { name: 'Move to Cedar Consulting' }).click();
+  });
+
+  await step('The next receipt to review opens, and the toast names Cedar Consulting', async () => {
+    await expect(page.getByText('Moved to Cedar Consulting')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts/${libraryReceipt(2).id}$`));
+  });
+});
+
+test('A read-only profile is offered but can\'t be chosen; with every other profile lapsed, a note says so', { tag: '@portal.receipts.move-refused' }, async ({ page, step }) => {
+  const api = moveWorld({ othersLapsed: true });
+
+  await step('Open Move on taxi.pdf', async () => {
+    await api.open(page, `${BASE}/receipts?move=${libraryReceipt(1).id}`);
+    await expect(page.getByRole('dialog', { name: 'Move receipt' })).toBeVisible();
+  });
+
+  await step('Olive Translations and Cedar Consulting are listed, read-only, and can\'t be chosen', async () => {
+    const dialog = page.getByRole('dialog', { name: 'Move receipt' });
+    const olive = dialog.getByRole('radio', { name: /Olive Translations/ });
+    await expect(olive).toHaveAttribute('aria-disabled', 'true');
+    await expect(olive).toContainText("Read-only until it's paid");
+    // Playwright won't press a control marked disabled; force it, to show the press changes nothing.
+    await olive.click({ force: true });
+    await expect(olive).toHaveAttribute('aria-checked', 'false');
+    await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled();
+    await expect(dialog.getByText('No other profile can take it.')).toBeVisible();
+    expect(api.calls('POST', /^\/v1\/receipts\/[^/]+\/move$/)).toHaveLength(0);
+  });
+});
+
+test('A Filed receipt has no Move, on its card or its page', { tag: '@portal.receipts.filed-no-move' }, async ({ page, step }) => {
+  const api = moveWorld();
+
+  await step('Filed cards have no ⋯', async () => {
+    await api.open(page, `${BASE}/receipts?status=filed`);
+    const grid = page.getByRole('list', { name: 'Receipts' });
+    await expect(grid.getByRole('listitem')).toHaveCount(1);
+    await expect(grid.getByRole('button', { name: /More actions/ })).toHaveCount(0);
+  });
+
+  await step("A Filed receipt's page has no Move to profile…", async () => {
+    await page.goto(`${BASE}/receipts/${libraryReceipt(3).id}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Filed receipt' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Move to profile…' })).toHaveCount(0);
+  });
+});
+
+test('In Arabic on a 375 px phone, Move reads right to left and fills the screen', { tag: '@portal.receipts.move-arabic' }, async ({ page, step }) => {
+  const api = moveWorld();
+  const dialog = page.getByRole('dialog', { name: 'نقل الإيصال' });
+
+  await step('Open Receipts in Arabic on a 375 px wide screen and choose نقل إلى ملف آخر… on a card', async () => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await api.open(page, `${BASE}/receipts`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.getByRole('button', { name: 'إجراءات أخرى لـ taxi.pdf' }).click();
+    await page.getByRole('menuitem', { name: 'نقل إلى ملف آخر…' }).click();
+    await expect(dialog).toBeVisible();
+  });
+
+  await step('The drawer is Arabic, fills the screen, and the button names the profile chosen', async () => {
+    const box = await dialog.boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(374);
+    await expect(dialog.getByRole('button', { name: 'نقل', exact: true })).toBeDisabled();
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await expect(dialog.getByRole('button', { name: 'نقل إلى Cedar Consulting' })).toBeEnabled();
+    await expect(dialog.getByRole('radio', { name: /Olive Translations/ })).toContainText('للقراءة فقط حتى يُدفع');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  await step('Moving it says نُقل إلى Cedar Consulting', async () => {
+    await dialog.getByRole('button', { name: 'نقل إلى Cedar Consulting' }).click();
+    await expect(page.getByText('نُقل إلى Cedar Consulting').first()).toBeVisible();
   });
 });

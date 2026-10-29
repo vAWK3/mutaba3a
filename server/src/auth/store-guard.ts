@@ -295,12 +295,15 @@ export const STORE_ACCESS: StoreAccess = {
     fileOntoExpense: { write: 'expenses' },
     // MUT-397: the MUT-44 completion under the expense lock.
     completeOnExpense: { write: 'expenses' },
+    // MUT-503: to another of the person's profiles (the route checks they may write it).
+    moveToProfile: { write: 'expenses' },
     // The operator's edit-rate figure (/admin only): across every profile, counts only.
     editRates: 'operator',
     // MUT-441: the server's read job and its sweep, across every profile, run only from /jobs and the operator's
     // feature grant, on the unguarded store; no principal reaches them through a guard.
     claimRead: 'operator',
     releaseRead: 'operator',
+    releaseMovedRead: 'operator',
     finishRead: 'operator',
     listPendingForSweep: 'operator',
     markBacklogPending: 'operator',
