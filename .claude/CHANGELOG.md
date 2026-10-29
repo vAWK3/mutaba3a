@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-10-28 — MUT-443: correct a recorded payment in one atomic call (API 1.88.0-mut443, ADR-225)
+
+**Why:** a correction was two calls (reverse, then record with `replacesPaymentId`); a dropped connection in between left the payment reversed with nothing in its place and the client's balance wrong. Unblocks MAL-1367 (Money overhaul MAL-1410). Plan `.claude/designs/mut-443-correct-payment.md` (eng review R1–R12; Basel chose D1 B and the R10 rulings).
+
+### Added
+- `POST /v1/payments/{id}/correct/preview` (payments:read) and `POST /v1/payments/{id}/correct` (payments:write, idempotent `payments.correct`), API key only. One write reverses the original and records the corrected payment, or writes nothing. The preview answers the allocation preview's fields plus `reversal` and the `receiptNumber` the payment will carry; `balances` run from the ledger now to after. The response is `{ reversed, payment }`.
+- Refusals: 409 `PAYMENT_NOT_POSTED` (new in CONFLICT_REASONS, with `reversedAt` and `replacedByPaymentId`), 409 `PREVIEW_STALE`, 422 `REASON_REQUIRED`, `PAYMENT_NOT_CORRECTABLE` (a person's capture), `NOTHING_TO_CORRECT`, `CUSTOMER_ARCHIVED`, the allocation reasons with the receivable named, `RECEIPT_NUMBER_INVALID`, `DATE_INVALID`. `allocations` or `strategy` is required.
+- Pre-landing review: a 15 s transaction limit on the Prisma correction, and P2028 past it is 409 `PREVIEW_STALE`; a note equal to `capture_undo` is 422 `REASON_RESERVED`; tests for a lock conflict and a replacement in another year; TD-286.
+- `reversalReasonCode` on `Payment`, `IncomeResponse` (optional) and the statement's PAYMENT_REVERSAL line (`reasonCode`).
+- Audits `payment.corrected` (original), `payment.recorded` (replacement, with `replacesPaymentId`), `receivable.settled` only when a status changes.
+- `PaymentRepository.correct`; `payments/correct.ts` (`composeCorrection`, `assertCorrectable`); `releaseAllocations` and `resultingBalances(…, released)` in `payments/allocate.ts`; `allocationFailure` (`payments/allocation-error.ts`, shared with the allocation routes).
+- Release-QA `portal-selfservice.malafat-money-api.payment-correct` (written, not run here).
+
+### Technical
+- Migration `20261028210000_mut443_payment_reversal_reason_code` (one nullable column). Local snapshot format 13 (12 → 13 sets null). Prisma: `createPaymentTx` split into `assertPaymentRefsTx`, `nextPaymentNumberTx`, `insertPaymentTx`; `reverse`'s write split into `markReversedTx` and `releaseAllocationsTx`. Memory: `create`, `reverse` and `correct` share `insertPayment`, `reverseNow` and `assertCapacity(…, released)`. Records export carries the column. Portal types regenerated.
+
 ## [Unreleased] - 2026-10-28 — MUT-479: approve a fee proposal with the full agreement (API 1.87.0-mut479, ADR-224)
 
 **Why:** a partner proposes any real fee (a 30/70 split with a stage "on judgment", a monthly retainer, a contingency deal), and when the client agrees it becomes exactly that agreement, recorded as approved. Unblocks MAL-1426 (Money overhaul MAL-1410); Malafat can drop MAL-1094's separate contingency path. Plan `.claude/designs/mut-479-proposal-full-approve.md` (reviewed; Basel approved D3).

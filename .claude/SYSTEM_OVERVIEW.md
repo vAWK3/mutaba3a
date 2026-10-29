@@ -128,6 +128,7 @@ ESLint enforces it (MUT-47, ADR-071).
 3. **"All Converted" is optional** and must show FX source/date
 
 ### Receivable Logic
+- **Hosted API (MUT-443, ADR-225):** `POST /v1/payments/{id}/correct` (with a preview) corrects a recorded payment in one write: the original reversed with a reason code (`reversalReasonCode`) and the corrected payment recorded with `replacesPaymentId`, or nothing; idempotent, token-checked, API key only, only payments the key recorded.
 - **Hosted API (MUT-479, ADR-224):** a fee proposal may store a full draft agreement (FIXED with any schedule, CONTINGENCY, RETAINER); `approve/preview` and `approve` take the full body with a preview token, so a retainer or a 30/70 split is approved, not withdrawn and recreated. Retainer proposals stay out of the summary's `proposed` total.
 - **Hosted API (MUT-481, ADR-223):** payments carry the legal receipt's `receiptNumber` (set on create or later with `PUT /v1/payments/{id}/receipt-number`, kept through a correction, filterable, shown on statement lines).
 - **Hosted API (MUT-480, ADR-222):** `POST /v1/agreements/{id}/reduce` (with a preview) lowers a fixed fee in one write: unbilled installments first, then credits with a reason code on its open receivables; the agreement detail shows `credited` and `effectiveTotal`.

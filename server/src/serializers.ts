@@ -411,6 +411,7 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
     status: p.status,
     reversedAt: iso(p.reversedAt),
     reversalReason: p.reversalReason,
+    reversalReasonCode: p.reversalReasonCode as CreditReasonCode | null,
     replacesPaymentId: p.replacesPaymentId,
     replacedByPaymentId,
     allocations,
@@ -650,6 +651,7 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
       version: p.version,
       // MUT-453: why it was reversed (a person's or Malafat's reason), so a history can say so; null while POSTED.
       reversalReason: p.reversalReason,
+      reversalReasonCode: p.reversalReasonCode as CreditReasonCode | null,
       credited: null,
     };
   }
@@ -668,6 +670,7 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
     status: r.status === 'SETTLED' ? ('settled' as const) : ('open' as const),
     version: r.version,
     reversalReason: null,
+    reversalReasonCode: null,
     // MUT-453: what was credited off it (reduced or cancelled); fully credited with nothing paid reads "Cancelled".
     credited: amt(r.creditedMinor, r.currency),
   };

@@ -65,6 +65,7 @@ function payment(amount: bigint, receivedOn: string, o: Partial<PaymentRecord> =
     status: 'POSTED',
     reversedAt: null,
     reversalReason: null,
+    reversalReasonCode: null,
     replacesPaymentId: null,
     requestId: null,
     createdByUserId: null,

@@ -1027,6 +1027,8 @@ model Payment {
   status            PaymentStatus @default(POSTED)
   reversedAt        DateTime?
   reversalReason    String?
+  /// MUT-443 (ADR-225): why a correction reversed it (CREDIT_REASON_CODES); null on any other reversal and while POSTED.
+  reversalReasonCode String?      @db.VarChar(32)
   replacesPaymentId String?       @db.Uuid
   requestId         String?
   /// Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor.

@@ -1727,6 +1727,9 @@ export const CONFLICT_REASONS = [
   'PASSKEY_EXISTS',
   // MUT-480: the manual trigger on a line a reduction (or an outcome correction) voided; the agreement is still active.
   'INSTALLMENT_VOIDED',
+  // MUT-443 (D2, R12): correcting a payment that is already reversed (the same state as reverse's ALREADY_REVERSED; the
+  // allocation preview answers it as a 422). details carry reversedAt and replacedByPaymentId.
+  'PAYMENT_NOT_POSTED',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -1838,6 +1841,9 @@ export const VALIDATION_REASONS = [
   // MUT-479 (review): approving as another agreement type or pricing basis than proposed.
   'AGREEMENT_TYPE_MISMATCH',
   'PRICING_BASIS_MISMATCH',
+  // MUT-443: correcting a payment a person recorded (D4); a correction that changes nothing (R10).
+  'PAYMENT_NOT_CORRECTABLE',
+  'NOTHING_TO_CORRECT',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----
@@ -2458,7 +2464,15 @@ export const StatementLineSchema = z
       /** Project statement: the allocation shown; null on the whole-customer statement. */
       allocated: AmountSchema.nullable(),
     }),
-    z.object({ ...StatementLineBase, kind: z.literal('PAYMENT_REVERSAL'), paymentId: uuid, receiptNumber: z.string().nullable(), reason: z.string().nullable() }),
+    z.object({
+      ...StatementLineBase,
+      kind: z.literal('PAYMENT_REVERSAL'),
+      paymentId: uuid,
+      receiptNumber: z.string().nullable(),
+      reason: z.string().nullable(),
+      /** MUT-443: set when the reversal was a correction (POST /v1/payments/{id}/correct); null for a plain reverse. */
+      reasonCode: CreditReasonCodeSchema.nullable(),
+    }),
   ])
   .openapi('StatementLine');
 
@@ -2600,6 +2614,8 @@ export const PaymentSchema = z
     status: PaymentStatusSchema,
     reversedAt: z.string().datetime().nullable(),
     reversalReason: z.string().nullable(),
+    /** MUT-443: why a correction reversed it; null for a plain reverse and while POSTED. */
+    reversalReasonCode: CreditReasonCodeSchema.nullable().openapi({ description: 'MUT-443: why POST /v1/payments/{id}/correct reversed it (reversalReason then holds the note, or the code when there was none); null for a plain reverse and while POSTED.' }),
     replacesPaymentId: uuid.nullable(),
     replacedByPaymentId: uuid.nullable(),
     allocations: z.array(AllocationSchema),
@@ -2641,6 +2657,54 @@ export const AllocatePaymentRequestSchema = z
   .openapi('AllocatePaymentRequest');
 
 export const ReversePaymentRequestSchema = z.object({ reason: z.string().min(1).max(500) }).openapi('ReversePaymentRequest');
+
+// ---- MUT-443: correcting a recorded payment in one call ---------------------
+
+const carriedText = (max: number, what: string) =>
+  z.string().max(max).nullable().optional().openapi({ description: `${what} Left out, the corrected payment keeps the original's; null clears it; a value replaces it.` });
+
+const correctionBody = {
+  amount: AmountSchema,
+  receivedOn: IsoDateSchema.openapi({ description: `${BOUNDED_MONEY_DATE} The correction may keep the original's receivedOn, or a later one, below the floor (ADR-225).` }),
+  method: PaymentMethodSchema,
+  reference: carriedText(120, 'The bank or transfer reference.'),
+  notes: carriedText(2000, 'Free notes.'),
+  receiptNumber: carriedText(200, "MUT-481: the legal receipt's number; trimmed, 1–64 characters, no control characters (else 422 RECEIPT_NUMBER_INVALID)."),
+  /** Explicit set; wins over strategy. `[]` leaves the whole amount unallocated. */
+  allocations: z.array(AllocationRequestSchema).max(200).optional(),
+  strategy: AllocationStrategySchema.optional(),
+  /** Why (CREDIT_REASON_CODES). Optional on the preview and outside its token; required on correct (422 REASON_REQUIRED). */
+  reasonCode: CreditReasonCodeSchema.optional(),
+  /** Required when reasonCode is OTHER (422 REASON_REQUIRED); stored as the original's reversalReason. */
+  note: z.string().max(500).optional(),
+};
+
+/** R6: a correction always says where the money goes, so a date-only correction never silently unallocates. */
+const allocationsOrStrategy = (b: { allocations?: unknown; strategy?: unknown }) => b.allocations !== undefined || b.strategy !== undefined;
+const ALLOCATIONS_OR_STRATEGY = { message: 'Send allocations (an empty list leaves the amount unallocated) or a strategy', path: ['allocations'] };
+
+export const CorrectPaymentPreviewRequestSchema = z.object(correctionBody).refine(allocationsOrStrategy, ALLOCATIONS_OR_STRATEGY).openapi('CorrectPaymentPreviewRequest');
+
+export const CorrectPaymentRequestSchema = z
+  .object({ ...correctionBody, previewToken: z.string().length(64) })
+  .refine(allocationsOrStrategy, ALLOCATIONS_OR_STRATEGY)
+  .openapi('CorrectPaymentRequest');
+
+export const CorrectPaymentPreviewResponseSchema = AllocationPreviewResponseSchema.extend({
+  /** What the original's reversal undoes. */
+  reversal: z.object({
+    paymentId: uuid,
+    number: z.string(),
+    amount: AmountSchema,
+    receivedOn: IsoDateSchema,
+    receiptNumber: z.string().nullable(),
+    released: z.array(AllocationRequestSchema),
+  }),
+  /** The receipt number the corrected payment will carry (MUT-481 rule). */
+  receiptNumber: z.string().nullable(),
+}).openapi('CorrectPaymentPreviewResponse');
+
+export const CorrectPaymentResponseSchema = z.object({ reversed: PaymentSchema, payment: PaymentSchema }).openapi('CorrectPaymentResponse');
 
 export const CreditRequestSchema = z
   .object({
@@ -2717,6 +2781,8 @@ export const IncomeResponseSchema = z
     version: z.number().int().positive(),
     /** MUT-453: `received` only, once reversed (by a person or Malafat); null otherwise. Optional: an Idempotency-Key replay stored before 1.77.0 has none. */
     reversalReason: z.string().nullable().optional(),
+    /** MUT-443: `received` only, when a Malafat correction reversed it; null otherwise. Optional: a replay stored before 1.88.0 has none. */
+    reversalReasonCode: CreditReasonCodeSchema.nullable().optional(),
     /** MUT-453: `owed` only, what was credited off it ("0.00" when nothing); null for `received`. Optional: an Idempotency-Key replay stored before 1.77.0 has none. */
     credited: AmountSchema.nullable().optional(),
   })

@@ -47,6 +47,6 @@ function serializeLine(line: StatementLine, money: (minor: bigint) => string) {
       return { ...base, kind: 'PAYMENT' as const, paymentId: p.id, method: p.method, reference: p.reference, receiptNumber: p.receiptNumber, unallocated: line.unallocatedMinor === null ? null : money(line.unallocatedMinor), allocated: line.allocatedMinor === null ? null : money(line.allocatedMinor) };
     }
     case 'PAYMENT_REVERSAL':
-      return { ...base, kind: 'PAYMENT_REVERSAL' as const, paymentId: line.payment!.id, receiptNumber: line.payment!.receiptNumber, reason: line.payment!.reversalReason };
+      return { ...base, kind: 'PAYMENT_REVERSAL' as const, paymentId: line.payment!.id, receiptNumber: line.payment!.receiptNumber, reason: line.payment!.reversalReason, reasonCode: line.payment!.reversalReasonCode as CreditReasonCode | null };
   }
 }

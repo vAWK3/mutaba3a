@@ -124,6 +124,7 @@ export function payment(id: string, number: string): Payment {
     status: 'POSTED',
     reversedAt: null,
     reversalReason: null,
+    reversalReasonCode: null,
     replacesPaymentId: null,
     replacedByPaymentId: null,
     allocations: [

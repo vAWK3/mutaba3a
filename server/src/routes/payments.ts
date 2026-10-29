@@ -11,15 +11,21 @@ import { isOwnCapture, isOwnProfile, redateTo } from '../income/compose.js';
 import { notOwner } from '../personal-profile.js';
 import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
+import { allocationFailure } from '../payments/allocation-error.js';
+import { assertCorrectable, composeCorrection, paymentNotPosted, type CorrectionBody } from '../payments/correct.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { carriedReceiptNumber, normalizeReceiptNumber } from '../payments/receipt-number.js';
 import { verifyPreviewToken } from '../preview-token.js';
-import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
+import { InsufficientCapacity, LockConflict, StateConflict } from '../repositories/memory.js';
 import { CAPTURE_UNDO_REASON, type JsonObject, type LedgerStore, type Organization, type PaymentRecord, type ReceivableRecord } from '../repositories/ports.js';
 import {
   AllocatePaymentRequestSchema,
   AllocationPreviewRequestSchema,
   AllocationPreviewResponseSchema,
+  CorrectPaymentPreviewRequestSchema,
+  CorrectPaymentPreviewResponseSchema,
+  CorrectPaymentRequestSchema,
+  CorrectPaymentResponseSchema,
   CreatePaymentRequestSchema,
   ListPaymentsQuerySchema,
   PaymentIdParamSchema,
@@ -136,11 +142,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const pool = [...eligible, ...extra];
     const requested = explicit ?? (strategy ? suggestAllocations(strategy, src.amountMinor, eligibleFor(eligible, src.customerId, src.currency)) : []);
     const result = validateAllocations({ customerId: src.customerId, currency: src.currency, amountMinor: src.amountMinor, allocations: requested, receivables: pool });
-    if (!result.ok) {
-      const e = result.error;
-      const fmt = (m: bigint | undefined) => (m === undefined ? undefined : formatMoney({ minor: m, currency: src.currency }));
-      throw validationError(e.reason, allocationMessage(e.reason), { ...(e.receivableId ? { receivableId: e.receivableId } : {}), ...(e.outstandingMinor !== undefined ? { outstanding: fmt(e.outstandingMinor) } : {}), ...(e.excessMinor !== undefined ? { excess: fmt(e.excessMinor) } : {}) });
-    }
+    if (!result.ok) throw allocationFailure(result.error, src.currency);
     const balances = resultingBalances(result.value.allocations, eligible, today);
     const token = paymentPreviewToken(organization.id, tokenBody(src, result.value.allocations), eligible);
     return { eligible, value: result.value, balances, token };
@@ -475,28 +477,138 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
-  return app;
-}
+  // ---- MUT-443 (ADR-225): correct a recorded payment in one call ----
+  const CORRECT_RULES =
+    'The customer and currency are the original’s. reference, notes and receiptNumber left out keep the original’s; null clears them. Send allocations (`[]` leaves the amount unallocated) or a strategy (explicit allocations win); they may re-pay what the original paid, since its allocations are released first. Only a POSTED payment this key recorded (a person’s capture is 422 PAYMENT_NOT_CORRECTABLE; a reversed one is 409 PAYMENT_NOT_POSTED, the state reverse calls ALREADY_REVERSED and the allocation preview answers as a 422, with details.reversedAt and details.replacedByPaymentId). receivedOn may keep the original’s date or a later one below the ten-year floor (ADR-225). A correction that changes nothing is 422 NOTHING_TO_CORRECT; an archived customer is 422 CUSTOMER_ARCHIVED.';
 
-function allocationMessage(reason: string): string {
-  switch (reason) {
-    case 'ALLOCATION_EXCEEDS_PAYMENT':
-      return 'Allocations add up to more than the amount available';
-    case 'ALLOCATION_EXCEEDS_OUTSTANDING':
-      return 'An allocation exceeds what is outstanding on its receivable';
-    case 'ALLOCATION_DUPLICATE':
-      return 'A receivable appears twice in the allocations';
-    case 'RECEIVABLE_NOT_FOUND':
-      return 'An allocation names a receivable this organization does not have';
-    case 'RECEIVABLE_NOT_OPEN':
-      return 'An allocation names a receivable with nothing outstanding';
-    case 'RECEIVABLE_CUSTOMER_MISMATCH':
-      return 'An allocation names another customer’s receivable';
-    case 'CURRENCY_MISMATCH':
-      return 'An allocation names a receivable in another currency; money is never converted';
-    default:
-      return 'Allocations are invalid';
+  /** Both correction routes: the key's own posting, the original read and checked, the body composed. */
+  async function correction(c: Context<AppEnv>, body: CorrectionBody) {
+    const { organization } = keyAuth(c);
+    const now = c.get('now')();
+    const today = todayFor(organization, now);
+    // R10: due items are billed first, as record does; the key's own guarded store and actor (never lazyPostingOf).
+    await postDueItems(store, organization, today, now, postingActorOf(c));
+    const payment = await mustGetPayment(organization.id, c.req.param('paymentId')!);
+    await assertCorrectable(store, organization.id, payment);
+    const given = body.receiptNumber === undefined ? undefined : receiptNumberOf(body.receiptNumber);
+    const composed = await composeCorrection(store, organization.id, payment, { ...body, receiptNumber: given }, today);
+    return { organization, now, today, payment, composed };
   }
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/payments/{paymentId}/correct/preview',
+      tags: ['Payments'],
+      summary: 'Preview correcting a recorded payment: its reversal, the new allocations and the balances after',
+      description: `Writes nothing. The allocation preview's fields, plus \`reversal\` (what the original's reversal releases) and the receiptNumber the corrected payment will carry. \`balances\` run from the ledger now to the ledger after the correction; \`eligible\` lists the receivables as they would read once the original is reversed. reasonCode and note are optional here and not part of the token. The token covers the original and its version, the body, and the version of every receivable involved, so anything that moves in between is 409 PREVIEW_STALE at correct. ${CORRECT_RULES}`,
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('payments:read')] as const,
+      request: { params: PaymentIdParamSchema, body: jsonBody(CorrectPaymentPreviewRequestSchema) },
+      responses: { 200: { description: 'Preview', content: { 'application/json': { schema: CorrectPaymentPreviewResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { payment, composed, today } = await correction(c, c.req.valid('json'));
+      const fmt = (m: bigint) => formatMoney({ minor: m, currency: composed.currency });
+      const { value, balances, eligible } = composed;
+      return c.json(
+        {
+          customerId: composed.customerId,
+          currency: composed.currency,
+          amount: fmt(composed.amountMinor),
+          allocations: value.allocations.map((a) => ({ receivableId: a.receivableId, amount: fmt(a.amountMinor) })),
+          allocated: fmt(value.allocatedMinor),
+          unallocated: fmt(value.unallocatedMinor),
+          eligible: eligible.map((r) => ({ receivableId: r.id, projectId: r.projectId, agreementId: r.agreementId, origin: r.origin, dueDate: r.dueDate, gross: fmt(r.grossMinor), outstanding: fmt(outstandingMinor(r)), status: receivableStatus(r, today) })),
+          balances: {
+            receivables: balances.receivables.map((b) => ({ receivableId: b.receivableId, projectId: b.projectId, outstandingBefore: fmt(b.outstandingBefore), outstandingAfter: fmt(b.outstandingAfter), statusBefore: b.statusBefore, statusAfter: b.statusAfter })),
+            projects: balances.projects.map((p) => ({ projectId: p.projectId, before: { outstanding: fmt(p.before.outstandingMinor), overdue: fmt(p.before.overdueMinor) }, after: { outstanding: fmt(p.after.outstandingMinor), overdue: fmt(p.after.overdueMinor) } })),
+            customer: { before: { outstanding: fmt(balances.customer.before.outstandingMinor), overdue: fmt(balances.customer.before.overdueMinor) }, after: { outstanding: fmt(balances.customer.after.outstandingMinor), overdue: fmt(balances.customer.after.overdueMinor) } },
+          },
+          warnings: eligible.length === 0 ? ['NO_ELIGIBLE_RECEIVABLES' as const] : [],
+          previewToken: composed.token,
+          reversal: { paymentId: payment.id, number: payment.number, amount: fmt(payment.amountMinor), receivedOn: payment.receivedOn, receiptNumber: payment.receiptNumber, released: composed.released.map((a) => ({ receivableId: a.receivableId, amount: fmt(a.amountMinor) })) },
+          receiptNumber: composed.receipt.value,
+        },
+        200,
+      );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/payments/{paymentId}/correct',
+      tags: ['Payments'],
+      summary: 'Correct a recorded payment in one call: the original reversed and the corrected payment recorded, together',
+      description: `One transaction: the original is REVERSED (reversalReason the note, or the code; reversalReasonCode the code) and the corrected payment is recorded with replacesPaymentId, a new number and its allocations; or nothing is written. reasonCode is required, and OTHER needs a note (422 REASON_REQUIRED). The previewToken must match (409 PREVIEW_STALE otherwise, also when the original or a receivable changed while writing). A replay with the same Idempotency-Key returns the stored answer, a refusal included, so after a 409 send a new key. Answers both payments. Audits payment.corrected on the original, payment.recorded on the new one, and receivable.settled for each receivable it settles. ${CORRECT_RULES}`,
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('payments:write'), idempotent(store, 'payments.correct')] as const,
+      request: { params: PaymentIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(CorrectPaymentRequestSchema) },
+      responses: { 200: { description: 'Corrected', content: { 'application/json': { schema: CorrectPaymentResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const actor = keyActorOf(c);
+      const body = c.req.valid('json');
+      // R5: checked before composing, so a missing reason is never a generic schema failure.
+      const note = body.note?.trim() || null;
+      if (!body.reasonCode || (body.reasonCode === 'OTHER' && !note)) throw validationError('REASON_REQUIRED', 'Say why: a reasonCode, and a note when it is OTHER', { field: body.reasonCode ? 'note' : 'reasonCode' });
+      // Review 2: the statement and activity read this reason as a person's own undo and hide the payment.
+      if (note === CAPTURE_UNDO_REASON) throw validationError('REASON_RESERVED', `"${CAPTURE_UNDO_REASON}" is reserved for a person undoing their own capture`, { field: 'note' });
+      const reasonCode = body.reasonCode;
+      const { organization, now, today, payment, composed } = await correction(c, body);
+      if (!verifyPreviewToken(body.previewToken, composed.tokenParts)) throw stale('previewToken does not match this correction and the current balances; preview again');
+      const before = new Map(composed.scope.map((r) => [r.id, r.status]));
+      let result;
+      try {
+        result = await store.payments.correct(
+          organization.id,
+          payment.id,
+          {
+            expectedVersion: payment.version,
+            reason: note ?? reasonCode,
+            reasonCode,
+            replacement: { organizationId: organization.id, customerId: composed.customerId, projectId: null, currency: composed.currency, amountMinor: composed.amountMinor, receivedOn: composed.receivedOn, method: body.method, reference: composed.reference, receiptNumber: composed.receipt.value, notes: composed.notes, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: composed.value.allocations },
+          },
+          now,
+        );
+      } catch (err) {
+        // R4: reversed in between → PAYMENT_NOT_POSTED; still POSTED at another version → PREVIEW_STALE.
+        if (err instanceof StateConflict && err.reason === 'PAYMENT_NOT_POSTED') throw await paymentNotPosted(store, organization.id, await mustGetPayment(organization.id, payment.id));
+        if (err instanceof StateConflict) throw stale('The payment changed since the preview; preview again');
+        if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'A receivable changed while the correction was being recorded; nothing was written, preview again', { reason: 'PREVIEW_STALE', entityId: err.entityId });
+        if (err instanceof LockConflict) throw stale('A receivable was being changed at the same moment; nothing was written, preview again');
+        throw err;
+      }
+      if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
+      const money = (minor: bigint) => formatMoney({ minor, currency: composed.currency });
+      const replacement = result.payment;
+      await audit(actor, 'payment.corrected', 'payment', payment.id, {
+        replacementPaymentId: replacement.id,
+        number: payment.number,
+        replacementNumber: replacement.number,
+        reasonCode,
+        note,
+        amount: { from: money(payment.amountMinor), to: money(replacement.amountMinor) },
+        receivedOn: { from: payment.receivedOn, to: replacement.receivedOn },
+        method: { from: payment.method, to: replacement.method },
+        receiptNumber: replacement.receiptNumber,
+        receiptNumberCarried: composed.receipt.carried,
+        allocationsReleased: composed.released.length,
+        allocations: result.allocations.length,
+        unallocated: money(composed.value.unallocatedMinor),
+      });
+      // R9: the replacement has its own history, as POST /v1/payments writes it.
+      await audit(actor, 'payment.recorded', 'payment', replacement.id, { number: replacement.number, customerId: composed.customerId, amount: money(replacement.amountMinor), currency: composed.currency, allocations: result.allocations.length, unallocated: money(composed.value.unallocatedMinor), replacesPaymentId: payment.id, ...(replacement.receiptNumber ? { receiptNumber: replacement.receiptNumber } : {}), ...(composed.receipt.carried ? { receiptNumberCarried: true } : {}) });
+      // R9: only a receivable this correction settles (one the original had settled and the replacement pays again stays quiet).
+      for (const r of await store.receivables.getByIds(organization.id, result.allocations.map((a) => a.receivableId))) {
+        if (r.status === 'SETTLED' && before.get(r.id) !== 'SETTLED') await audit(actor, 'receivable.settled', 'receivable', r.id, { paymentId: replacement.id });
+      }
+      return c.json({ reversed: await viewOf(organization.id, result.reversed, today), payment: await viewOf(organization.id, replacement, today) }, 200);
+    },
+  );
+
+  return app;
 }
 
 /**
@@ -523,6 +635,10 @@ export async function redateOwnCapture(store: LedgerStore, c: Context<AppEnv>, p
     requestId: c.get('requestId'),
   });
   return result.record;
+}
+
+function stale(message: string): ApiError {
+  return new ApiError('CONFLICT', message, { reason: 'PREVIEW_STALE' });
 }
 
 function alreadyReversed(payment: PaymentRecord): ApiError {
