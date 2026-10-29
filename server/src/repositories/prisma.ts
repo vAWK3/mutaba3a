@@ -3657,7 +3657,8 @@ async function correctAgreementTx(tx: Tx, organizationId: string, agreementId: s
   for (const x of input.releases) net.set(x.paymentId, (net.get(x.paymentId) ?? 0n) - x.amountMinor);
   for (const pl of input.placements) {
     const r = posted.get(pl.installmentId);
-    if (!r) throw new StaleWrite();
+    // Review P3: only a payment locked and re-checked in step 2 may be placed (its total and version are set below).
+    if (!r || !input.payments.some((p) => p.id === pl.paymentId)) throw new StaleWrite();
     allocations.push(await allocateRowTx(tx, { organizationId, paymentId: pl.paymentId, receivableId: r.id, amountMinor: pl.amountMinor }, at));
     net.set(pl.paymentId, (net.get(pl.paymentId) ?? 0n) + pl.amountMinor);
   }

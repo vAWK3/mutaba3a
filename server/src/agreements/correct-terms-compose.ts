@@ -102,12 +102,17 @@ export async function composeCorrection(store: LedgerStore, organization: Organi
 }
 
 /**
- * Settled 2 (R9): the agreement's frozen rate. The one exception: it froze 0 (no rate existed at creation) and a
+ * Settled 2 (R9): the agreement's frozen rate. The one exception: it froze 0 because no rate existed at creation, and a
  * corrected line is STANDARD_RATED, so the rate in force on the agreement date is resolved, or 422 VAT_RATE_MISSING.
+ * A 0 % rate is a real rate (PUT /v1/settings/vat accepts 0): when one was in force on the agreement date when the
+ * agreement was created, its 0 is kept (pre-landing review P2).
  */
 async function frozenRate(store: LedgerStore, organization: Organization, agreement: AgreementRecord, treatment: VatTreatment, overrides: ReadonlyArray<VatTreatment | undefined>): Promise<number> {
   const needed = treatment === 'STANDARD_RATED' || overrides.includes('STANDARD_RATED');
   if (agreement.vatRateBasisPoints !== 0 || !needed) return agreement.vatRateBasisPoints;
+  const rates = await store.vatRates.list(organization.id);
+  const hadRate = rates.some((r) => r.effectiveFrom <= agreement.agreementDate && r.createdAt.getTime() <= agreement.createdAt.getTime());
+  if (hadRate) return agreement.vatRateBasisPoints;
   return resolveRate(store, organization.id, agreement.agreementDate, treatment, overrides);
 }
 

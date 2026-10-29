@@ -1960,7 +1960,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const net = new Map<string, bigint>();
     for (const x of input.releases) net.set(x.paymentId, (net.get(x.paymentId) ?? 0n) - x.amountMinor);
     for (const pl of input.placements) {
-      if (!lines.get(pl.installmentId)?.post || pl.amountMinor <= 0n) return false;
+      // Review P3: only a payment this write re-checked may be placed (its total and version move with it).
+      if (!lines.get(pl.installmentId)?.post || pl.amountMinor <= 0n || !input.payments.some((p) => p.id === pl.paymentId)) return false;
       placed.set(pl.installmentId, (placed.get(pl.installmentId) ?? 0n) + pl.amountMinor);
       net.set(pl.paymentId, (net.get(pl.paymentId) ?? 0n) + pl.amountMinor);
     }

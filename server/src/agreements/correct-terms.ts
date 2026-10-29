@@ -197,10 +197,10 @@ export function sameTrigger(o: Pick<OldLine, 'triggerType' | 'triggerDate'>, s: 
   return o.triggerType === s.trigger.type && (o.triggerType !== 'DATE' || o.triggerDate === (s.trigger.date ?? null));
 }
 
-/** Settled 5: the agreement's amount, basis, treatment and terms, and each live line's figures and terms, in order. */
+/** Settled 5: the agreement's amount, basis, treatment, terms and rate (review P2), and each live line's figures and terms, in order. */
 function unchanged(input: CorrectionInput, old: readonly OldLine[]): boolean {
   const { before: b, after: a } = input;
-  if (b.amountMinor !== a.amountMinor || b.pricingBasis !== a.pricingBasis || b.vatTreatment !== a.vatTreatment || b.paymentTerms !== a.paymentTerms) return false;
+  if (b.amountMinor !== a.amountMinor || b.pricingBasis !== a.pricingBasis || b.vatTreatment !== a.vatTreatment || b.paymentTerms !== a.paymentTerms || b.vatRateBasisPoints !== a.vatRateBasisPoints) return false;
   if (old.length !== input.scheduled.length) return false;
   return old.every((o, k) => {
     const s = input.scheduled[k]!;
