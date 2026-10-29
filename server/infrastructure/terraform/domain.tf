@@ -50,6 +50,12 @@ locals {
     local.hosts_config.legacy.portal
   )
   public_portal_host = trimprefix(local.public_portal_origin, "https://")
+
+  # Every origin the portal answers on (the legacy host keeps serving it), for the attachments bucket's
+  # CORS rule: the portal PUTs receipts straight to the bucket's signed URLs (main.tf). From the file
+  # only: Cloud Run's own URL would be a cycle (the service reads the bucket's name), and production's
+  # legacy portal is that URL. An environment the file doesn't name gets no rule, so no browser uploads.
+  portal_origins = local.hosts_config == null ? [] : compact([local.front_door_portal_origin, local.hosts_config.legacy.portal])
 }
 
 data "google_secret_manager_secret" "front_door_token" {

@@ -1039,6 +1039,19 @@ resource "google_storage_bucket" "attachments" {
     retention_duration_seconds = local.attachments_soft_delete_seconds
   }
 
+  # The portal PUTs a receipt's bytes from the browser to a signed URL here (receiptUpload.ts), a different
+  # origin, so the bucket must answer the CORS preflight for the portal's origins and the signed headers.
+  # Downloads open as images and frames, which need no CORS.
+  dynamic "cors" {
+    for_each = length(local.portal_origins) > 0 ? [local.portal_origins] : []
+    content {
+      origin          = cors.value
+      method          = ["PUT"]
+      response_header = ["Content-Type", "x-goog-content-length-range"]
+      max_age_seconds = 3600
+    }
+  }
+
   lifecycle_rule {
     action {
       type = "AbortIncompleteMultipartUpload"
