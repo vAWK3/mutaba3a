@@ -6015,3 +6015,28 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 6. **Clients (D8):** a retry answered 404 `RECEIPT_NOT_FOUND` or 409 `OPERATION_IN_PROGRESS` looks the receipt up on the target; found there, the move happened.
 
 **Consequences:** `AttachmentStorage` gains `copy` (GCS, memory, dev disk, the browser's two, which local mode never calls). A moved receipt's key no longer equals `receiptStorageKey(org, id)`; nothing derives it after creation. Bulk move and moving filed receipts stay out (follow-ups if needed). API 1.91.0-mut503.
+
+## ADR-229: Real Receipts Read Field by Field: Each Value at Its Own Box's Confidence, Hebrew Digits From RapidOCR, a Scanner's OCR Layer Re-Read, and Bills and Statements Left Empty Rather Than Guessed (MUT-504)
+
+**Status:** Accepted (2026-10-29, MUT-504; epic MUT-252; amends ADR-220's reader, still dark). Plan: `.claude/designs/mut-504-real-receipt-fixes.md`.
+
+**Context:** the first run over 16 of Basel's real scans (Adobe Scan PDFs, `~/Work/Barmajiyat/Mutaba3a/receipt-bench/`, out of every repo) read Hebrew amounts 2/10 and dates 2/11, and filled wrong values with confidence (a card-expiry date, a pre-VAT total, garbage from a PDF text layer). The synthetic set had shown none of this.
+
+**Decision:**
+1. **A field's confidence is its own box's** (`Row.parts`, `confOf`, `labelConf`): the value's box, and for a labelled rule the lower of the value's and the label's. One junk box on a line no longer sinks a date read at 0.99; a value under an unsure label stays out.
+2. **On a Hebrew page, digits come from RapidOCR when it is sure and Tesseract is not** (`merge._hebrew_line`, `SURE_DIGITS` 0.85), word by word: a Tesseract digit word under 0.85 gives way to a RapidOCR box covering it at 0.85 or more, Tesseract's other words stay. RapidOCR has no Hebrew model but reads bold totals and dates Tesseract garbles. Two complete amounts side by side are never joined.
+3. **An invisible PDF text layer (render mode 3) is another reader's OCR**, so the page is rasterised and read. A visible layer (a generated PDF) is still read as text.
+4. **Dates:** a billing period (a date range) and a validity date (`תוקף`, `valid`, `exp`, `صالح`) are never the receipt's date; a sure labelled date wins; otherwise a date is suggested only when every date on the receipt is the same day and it prints no billing period. Hebrew month abbreviations and a two-digit year after a month name are read.
+5. **Totals:** rules run strictest first and the first **sure** one wins (an unsure strict reading no longer blocks a sure loose one). New, after the existing ones: the largest amount that two printed amounts add up to (printed twice, or one of them the labelled subtotal), then the largest amount read three times or more. The vote counts each value once. Total-labelled rows with three different amounts are a statement: no single total (MUT-505 reads statements). The VAT on a row OCR joined with the total is the smaller amount. `מצ"מ` is folded to `מע"מ`; `סה"כ סכומים`, `סכומים ב`, `חייב במע"מ` are subtotal labels; `סכום עסקה`, `סכום חיוב`, `סה"כ לחיוב` total labels.
+6. **A top row longer than a name (60) is never the vendor**; it is refused, not truncated.
+
+**Result (bench, 2026-10-29):** real set, AC1 fields (amount, date, currency): 0 wrong. Hebrew amounts 7/10, dates 6/11; English and JOD amounts 4/4, dates 3/4. Synthetic set unchanged or better (one Arabic photo amount gained), wrong-and-confident 0; warm p95 3.9 s locally under load 13.
+
+**Consequences:** fewer fields are filled on documents that list many dates or totals (bills, statements); that is the intent. Still wrong outside AC1: a Kvish 6 bill's registration number can be a sister company's printed beside it, and a government document's vendor is its header (TD-294). The real-set truth is one person's eye-read of 16 receipts (TD-293).
+
+**Pre-landing review (2026-10-29, R1–R12):** two reviewers reproduced inputs where the first build filled a wrong field; each became a test and a fix. A sure looser total that disagrees with an unsure labelled or labelled-arithmetic one leaves the total empty (`firstSure`, binding rules). The largest-amount rules refuse on a discount, cash tendered, or readings on one row; a pre-discount total-labelled amount is skipped; a card-slip amount (`CARD_SLIP`) counts only when the receipt agrees. The VAT takes the smaller amount only on a row joined with the total. A price after a month abbreviation is never a year; due dates (`DUE`) are skipped and two sure labelled dates that differ give none. A 0% VAT line is neither subtotal nor VAT; discount lines are not totals. A too-long top row stops the vendor search. Pairwise rules cap at 500 amounts. Merge: a taken box replaces every digit word under it, kept digit words keep their own confidence. Decode: hidden text (modes 3 and 7) weighed by area, at most 5,000 objects, any failure rasterises. The bench was unchanged by these (Hebrew 7/10 and 6/11, AC1 fields 0 wrong).
+
+**Alternatives considered:**
+- Upscaling narrow scans (the ticket's first idea). Rejected after measuring: RapidOCR already read the digits; the merge dropped them.
+- Scoring a text layer's readability. Rejected: the render mode says exactly whose OCR it is.
+- Lowering `MIN_FIELD_CONFIDENCE` to reach AC2. Rejected: AC1 (nothing wrong) outranks AC2.

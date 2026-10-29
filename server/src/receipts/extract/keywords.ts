@@ -19,7 +19,7 @@ export function hasKeyword(folded: string, set: KeywordSet): boolean {
 }
 
 export const TOTAL = keywords(
-  'סה"כ', 'סהכ', 'סך הכל', 'סך הכול', 'לתשלום', 'המחיר', 'סכום לתשלום',
+  'סה"כ', 'סהכ', 'סך הכל', 'סך הכול', 'לתשלום', 'המחיר', 'סכום לתשלום', 'סה"כ לחיוב',
   'المجموع', 'الإجمالي', 'اجمالي', 'المبلغ الإجمالي', 'المبلغ المستحق', 'المطلوب', 'المجموع الكلي',
   'total', 'amount due', 'grand total', 'balance due', 'total due', 'to pay',
 );
@@ -27,12 +27,23 @@ export const TOTAL = keywords(
 /** The amount before VAT. */
 export const SUBTOTAL = keywords(
   'סכום ביניים', 'לפני מע"מ', 'ללא מע"מ', 'המחיר לפני מע"מ',
+  // MUT-504: an Israeli bill's "total of the amounts at 18% VAT", before the VAT is added.
+  'סה"כ סכומים', 'סכומים ב', 'חייב במע"מ', 'חייב מע"מ',
   'المجموع الفرعي', 'قبل الضريبة', 'غير شامل',
   'subtotal', 'sub total', 'sub-total', 'before vat', 'before tax', 'excl', 'excluding',
 );
 
+/**
+ * MUT-504: the card slip's amount on an Israeli till receipt. It is what was paid, but a split payment prints two, so
+ * it counts as the total only when the receipt agrees (`total.ts`).
+ */
+export const CARD_SLIP = keywords('סכום עסקה', 'סכום חיוב');
+
+/** MUT-504: a discount line. Its amount is never the total, and a discount makes the largest amount a pre-discount one. */
+export const DISCOUNT = keywords('הנחה', 'הנחות', 'חסכת', 'חיסכון', 'خصم', 'تخفيض', 'discount', 'savings', 'you saved');
+
 /** Lines that name a part of the total or a count, never the total itself. */
-export const NOT_TOTAL = [...SUBTOTAL, ...keywords('פריטים', 'כמות', 'عدد الأصناف', 'الكمية', 'total items', 'items', 'qty', 'quantity')];
+export const NOT_TOTAL = [...SUBTOTAL, ...DISCOUNT, ...keywords('פריטים', 'כמות', 'عدد الأصناف', 'الكمية', 'total items', 'items', 'qty', 'quantity')];
 
 /** A VAT line that is really the total including VAT. */
 export const INCLUSIVE = keywords('כולל', 'כולל מע"מ', 'شامل', 'شامل الضريبة', 'incl', 'including', 'inc. vat');
@@ -44,6 +55,12 @@ export const CASH = keywords('מזומן', 'שולם', 'نقدا', 'نقدي', '
 export const CHANGE = keywords('עודף', 'الباقي', 'المتبقي', 'الفكة', 'باقي', 'change');
 
 export const DATE_LABEL = keywords('תאריך', 'التاريخ', 'تاريخ', 'date');
+
+/** MUT-504: a card's or a contract's validity ("valid until 01/06/2029"): its date is never the receipt's. */
+export const VALIDITY = keywords('תוקף', 'בתוקף', 'صالح', 'صلاحية', 'انتهاء', 'valid', 'validity', 'expiry', 'expires', 'exp');
+
+/** MUT-504: a due date ("pay by"): an invoice's own date is its issue date, never when it falls due. */
+export const DUE = keywords('due', 'due date', 'payment due', 'תאריך פירעון', 'פירעון', 'מועד תשלום', 'לתשלום עד', 'تاريخ الاستحقاق', 'استحقاق');
 
 export const REGISTRATION = keywords(
   'ח.פ', 'ח"פ', 'חפ', 'ע.מ', 'ע"מ', 'עוסק מורשה', 'עוסק פטור', "מס' עוסק", 'מספר עוסק', 'מס עוסק', 'ח.צ', 'ע.ר',

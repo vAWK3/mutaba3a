@@ -92,8 +92,10 @@ function looksLikeName(row: Row): boolean {
 /** The first of the top rows that reads as a name (not a title, a number, a date or a contact line); surer with a company form. */
 export function readVendor(rows: readonly Row[]): Reading<string> | null {
   for (const row of rows.slice(0, VENDOR_ROWS)) {
+    // MUT-504: a top row longer than a name is two columns OCR joined; the rows under it are its address, not a name.
+    if (row.text.length > VENDOR_MAX_LENGTH) return null;
     if (!looksLikeName(row)) continue;
-    const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').slice(0, VENDOR_MAX_LENGTH).trim();
+    const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').trim();
     if (!value) continue;
     const company = hasKeyword(row.folded, COMPANY);
     return { value, rule: company ? RULE_VENDOR_COMPANY : RULE_VENDOR, conf: row.conf };

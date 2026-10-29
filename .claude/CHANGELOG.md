@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-10-29 — MUT-504: real Hebrew receipts read without wrong fields (ADR-229)
+
+**Why:** the first bench over 16 real scans read Hebrew amounts 2/10 and dates 2/11 and filled wrong values with confidence (a card-expiry date, a pre-VAT total, PDF text-layer garbage). Reading stays dark; this is what makes a pilot in Israel safe. Plan `.claude/designs/mut-504-real-receipt-fixes.md`.
+
+### Fixed
+- Extractor (`server/src/receipts/extract/`): a field takes its own box's confidence (`Row.parts`, `confOf`, `labelConf`); dates skip billing periods and validity dates, prefer a sure labelled date and stay empty when dates disagree or the document prints a billing period; Hebrew month abbreviations and `17-פבר-26`; totals run strictest rule first and the first sure one wins, with two new last rules (sum of two printed amounts, the largest read three times), a once-per-value vote, statements left without a total, and the smaller amount as the VAT on a joined row; `מצ"מ` folds to `מע"מ`; new subtotal and total labels; a long top row is never the vendor. The threshold moved to `confidence.ts` (re-exported).
+- Sidecar (`server/ocr/app/`): on a Hebrew page, RapidOCR's sure digits replace Tesseract's unsure ones word by word (`merge._hebrew_line`, `Segment.words`); two complete amounts side by side are never joined; a PDF whose text is mostly invisible (a scanner's OCR) is rasterised and read.
+
+### Technical
+- Test-first: `extract.test.ts` "real receipt patterns (MUT-504)" (synthetic rows, no real text); `server/ocr/tests/test_units.py` Hebrew merge cases; `test_caps.py` visible and invisible text layers from a hand-built PDF.
+- `server/ocr/bench/run.py --real-detail` writes per-receipt results into the real folder only. Bench: real AC1 fields 0 wrong, Hebrew amounts 7/10 and dates 6/11; synthetic unchanged or better (`.claude/designs/mut-441-bench.md`, MUT-504 section).
+- Pre-landing review fixes (ADR-229 R1–R12): disagreeing totals give none, discount/cash/one-row guards on the largest-amount rules, card-slip agreement, VAT only joined rows' smaller amount, no year from a price, due dates skipped, 0% VAT lines ignored, area-weighted and bounded hidden-text check that rasterises on failure; each reproduced input is a test.
+- TD-293 (the real set's truth), TD-294 (toll-bill registration number, government-document vendor). No API contract, schema or migration change.
+
 ## [Unreleased] - 2026-10-29 — MUT-503: move a To-review receipt to another profile (API 1.91.0-mut503, ADR-228)
 
 **Why:** a receipt landed on the profile it was uploaded from and could never leave it, so "drop it anywhere, sort it later" didn't work; a receipt on the wrong profile had to be deleted and uploaded again, losing its reading. Plan `.claude/designs/mut-503-move-receipt.md` (eng D1–D8, design DR1–DR9, all answered by Basel).
