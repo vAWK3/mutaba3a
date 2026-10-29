@@ -41,9 +41,12 @@ def pdf_with_pages(count: int, size: tuple[float, float] = (200, 200)) -> bytes:
     return buf.getvalue()
 
 
-def pdf_with_text(text: str, render_mode: int) -> bytes:
-    """A one-page PDF whose text is drawn with `render_mode` (0 visible, 3 invisible: what a scanner's OCR writes)."""
-    stream = f"BT /F1 12 Tf {render_mode} Tr 20 100 Td ({text}) Tj ET".encode()
+def pdf_with_text(text: str, render_mode: int, footer: str | None = None) -> bytes:
+    """A one-page PDF whose text is drawn with `render_mode` (0 visible, 3 invisible: what a scanner's OCR writes),
+    with an optional small visible footer drawn as its own text object (a scanner app's stamp)."""
+    body = f"BT /F1 12 Tf {render_mode} Tr 20 100 Td ({text}) Tj ET"
+    stamp = f" BT /F1 6 Tf 0 Tr 20 10 Td ({footer}) Tj ET" if footer else ""
+    stream = (body + stamp).encode()
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -75,6 +78,27 @@ def test_an_invisible_text_layer_is_another_readers_ocr_so_the_page_is_rasterise
     # MUT-504: Adobe Scan writes its OCR as invisible text over the scan; its Hebrew comes out as Latin junk.
     decoded = decode(pdf_with_text(RECEIPT_TEXT, 3), "application/pdf")
     assert decoded.pdf_text is None and len(decoded.pages) == 1 and decoded.flat
+
+
+def test_a_scan_with_a_visible_stamp_and_an_invisible_ocr_layer_is_rasterised():
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 3, footer="Scanned"), "application/pdf")
+    assert decoded.pdf_text is None and len(decoded.pages) == 1
+
+
+def test_clip_mode_invisible_text_is_also_another_readers_ocr():
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 7), "application/pdf")
+    assert decoded.pdf_text is None and len(decoded.pages) == 1
+
+
+def test_a_failure_in_the_visibility_check_rasterises_rather_than_refusing(monkeypatch):
+    import pypdfium2.raw as pdfium_c
+
+    def boom(*_args):
+        raise RuntimeError("pdfium")
+
+    monkeypatch.setattr(pdfium_c, "FPDFTextObj_GetTextRenderMode", boom)
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 0), "application/pdf")
+    assert decoded.pdf_text is None and len(decoded.pages) == 1
 
 
 @pytest.fixture(scope="module")

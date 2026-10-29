@@ -123,13 +123,29 @@ def test_on_a_hebrew_page_a_tesseract_digit_word_no_rapid_box_covers_is_kept():
     rapid = [seg("14:24", 0.97, 150, 50, 200, 70)]
     tess = [tess_line([("תאריך", 0.9, 300, 360), ("07/05/2025", 0.5, 40, 140), ("14:2A", 0.5, 150, 200)])]
     out = merge(rapid, tess, "hebr")
-    assert [s.text for s in out] == ["תאריך 07/05/2025", "14:24"]
+    # Its own segment, at its own confidence (not averaged with the label).
+    assert [s.text for s in out] == ["תאריך", "07/05/2025", "14:24"]
 
 
 def test_on_a_hebrew_page_one_unsure_rapid_box_does_not_keep_out_a_sure_one():
     rapid = [seg("88", 0.4, 200, 50, 230, 70), seg("61.83", 0.99, 0, 50, 60, 70)]
     tess = [tess_line([("תיז", 0.2, 300, 340), ("88", 0.3, 200, 230)])]
-    assert [s.text for s in merge(rapid, tess, "hebr")] == ["תיז 88", "61.83"]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["תיז", "88", "61.83"]
+
+
+def test_on_a_hebrew_page_a_taken_rapid_box_does_not_duplicate_a_sure_digit_word_under_it():
+    rapid = [seg("61.83 1", 0.95, 0, 50, 72, 70)]
+    tess = [tess_line([("61.83", 0.9, 0, 50), ("₪1", 0.4, 52, 70), ("לתשלום", 0.9, 200, 300)])]
+    texts = " ".join(s.text for s in merge(rapid, tess, "hebr"))
+    assert texts.count("61.83") == 1
+
+
+def test_on_a_hebrew_page_an_unsure_digit_word_kept_keeps_its_own_confidence():
+    rapid = [seg("14:24", 0.97, 150, 50, 200, 70)]
+    tess = [tess_line([("תאריך", 0.95, 300, 360), ("07/05/2025", 0.3, 40, 140), ("14:2A", 0.5, 150, 200)])]
+    out = merge(rapid, tess, "hebr")
+    date = next(s for s in out if "07/05/2025" in s.text)
+    assert date.text == "07/05/2025" and date.conf == pytest.approx(0.3)
 
 
 def test_off_a_hebrew_page_the_merge_is_unchanged_by_tesseract_words():

@@ -107,19 +107,36 @@ def _text_layer(pdf, count: int) -> str:
     return "\n".join(parts).replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _invisible_text(pdf, count: int) -> bool:
-    """Whether most of the text is drawn invisibly (render mode 3): another reader's OCR over a scanned image, as a
-    scanner app writes it (MUT-504). Adobe Scan's Hebrew comes out as Latin junk, so the page is read as an image."""
-    import pypdfium2.raw as pdfium_c
+#: Text drawn without paint: invisible (3), or only added to the clip path (7). Both are another reader's OCR layer.
+_HIDDEN_RENDER_MODES = (3, 7)
+#: The visibility check looks at no more text objects than this, so a crafted PDF can't stall the reader.
+MAX_TEXT_OBJECTS = 5_000
 
-    invisible = visible = 0
-    for i in range(count):
-        for obj in pdf[i].get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_TEXT,), max_depth=3):
-            if pdfium_c.FPDFTextObj_GetTextRenderMode(obj.raw) == pdfium_c.FPDF_TEXTRENDERMODE_INVISIBLE:
-                invisible += 1
-            else:
-                visible += 1
-    return invisible > visible
+
+def _invisible_text(pdf, count: int) -> bool:
+    """Whether most of the text, by area, is drawn without paint: another reader's OCR over a scanned image, as a
+    scanner app writes it (MUT-504). Adobe Scan's Hebrew comes out as Latin junk, so the page is read as an image.
+    Weighed by area, a small visible stamp ("Scanned with …") doesn't outvote the hidden layer. Any failure here reads
+    the page as an image too: the safe way, never a refusal."""
+    try:
+        import pypdfium2.raw as pdfium_c
+
+        hidden = shown = 0.0
+        seen = 0
+        for i in range(count):
+            for obj in pdf[i].get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_TEXT,), max_depth=3):
+                seen += 1
+                if seen > MAX_TEXT_OBJECTS:
+                    return hidden > shown
+                left, bottom, right, top = obj.get_bounds()
+                area = max(0.0, right - left) * max(0.0, top - bottom)
+                if pdfium_c.FPDFTextObj_GetTextRenderMode(obj.raw) in _HIDDEN_RENDER_MODES:
+                    hidden += area
+                else:
+                    shown += area
+        return hidden > shown
+    except Exception:
+        return True
 
 
 def _rasterise(page) -> np.ndarray:

@@ -1,5 +1,5 @@
 import { isConfident } from './confidence.js';
-import { DATE_LABEL, hasKeyword, VALIDITY } from './keywords.js';
+import { DATE_LABEL, DUE, hasKeyword, VALIDITY } from './keywords.js';
 import { foldForMatch } from './normalize.js';
 import { confOf } from './rows.js';
 import type { Row } from './types.js';
@@ -31,9 +31,10 @@ const YMD = /(?<!\d)(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/;
 const DMY = /(?<!\d)(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)/;
 /**
  * `28 October 2026`, `5 בנובמבר 2026` (Hebrew's ב "in"), `3 تشرين الأول 2026`, and with an abbreviated month and a
- * two-digit year, `17-פבר-26`, `5 נוב' 2026`, `17-Feb-26` (MUT-504). A two-digit year is never the start of a time.
+ * two-digit year, `17-פבר-26`, `5 נוב' 2026`, `17-Feb-26` (MUT-504). A two-digit year is never the start of a time or
+ * of a price (`2 may 12.50`).
  */
-const DAY_NAME_YEAR = new RegExp(`(?<!\\d)(\\d{1,2})\\s*(?:ב|-)?\\s*(${MONTH_ALTERNATION})(?![\\p{L}])[.']?[\\s,-]*(\\d{4}|\\d{2})(?![\\d:])`, 'u');
+const DAY_NAME_YEAR = new RegExp(`(?<!\\d)(\\d{1,2})\\s*(?:ב|-)?\\s*(${MONTH_ALTERNATION})(?![\\p{L}])[.']?[\\s,-]*(\\d{4}|\\d{2})(?![\\d:]|[.,]\\d)`, 'u');
 /** `Oct 28, 2026`. */
 const NAME_DAY_YEAR = new RegExp(`(?<![\\p{L}])(${MONTH_ALTERNATION})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?!\\d)`, 'u');
 
@@ -60,6 +61,7 @@ function iso(year: number, month: number, day: number): string | null {
 
 /** A range of two dates (`20/07/26-19/08/26`, `2026-09-01 – 2026-09-30`): a billing period, never the receipt's date. */
 const DATE_RANGE = /(?<!\d)(?:\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4})\s*[-–—]\s*(?:\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4})(?!\d)/g;
+const HAS_DATE_RANGE = new RegExp(DATE_RANGE.source);
 
 interface Found {
   iso: string;
@@ -101,8 +103,8 @@ interface Candidate extends DateReading {
 }
 
 function candidateOn(row: Row): Candidate | null {
-  // MUT-504: a card's or a contract's validity date is never the receipt's.
-  if (hasKeyword(row.folded, VALIDITY)) return null;
+  // MUT-504: a card's or a contract's validity date, and an invoice's due date, are never the receipt's.
+  if (hasKeyword(row.folded, VALIDITY) || hasKeyword(row.folded, DUE)) return null;
   const found = dateIn(row.text.replace(DATE_RANGE, ' '), row.folded.replace(DATE_RANGE, ' '));
   if (!found) return null;
   const labelled = hasKeyword(row.folded, DATE_LABEL);
@@ -115,16 +117,16 @@ const score = (c: DateReading) => c.rule * c.conf;
 const surest = (candidates: readonly Candidate[]) => candidates.reduce<Candidate | null>((best, c) => (!best || score(c) > score(best) ? c : best), null);
 
 /**
- * The receipt's date. A sure date after a date label wins (an invoice's issue date over the dates it lists). With
- * none, the surest date, but only when every date on the receipt is the same day and the receipt prints no billing
- * period: a bill or a statement lists many dates (trips, earlier payments), and picking one would suggest a wrong
- * date (MUT-504). The first wins a tie.
+ * The receipt's date. A sure date after a date label wins (an invoice's issue date over the dates it lists), unless
+ * two sure labelled dates differ. With none, the surest date, but only when every date on the receipt is the same day
+ * and the receipt prints no billing period: a bill or a statement lists many dates (trips, earlier payments), and
+ * picking one would suggest a wrong date (MUT-504). The first wins a tie.
  */
 export function readDate(rows: readonly Row[]): DateReading | null {
   const candidates = rows.flatMap((row) => candidateOn(row) ?? []);
-  const labelled = surest(candidates.filter((c) => c.labelled));
-  if (labelled && isConfident(score(labelled))) return strip(labelled);
-  const bill = rows.some((row) => new RegExp(DATE_RANGE.source).test(row.text));
+  const sureLabelled = candidates.filter((c) => c.labelled && isConfident(score(c)));
+  if (sureLabelled.length) return new Set(sureLabelled.map((c) => c.iso)).size > 1 ? null : strip(surest(sureLabelled)!);
+  const bill = rows.some((row) => HAS_DATE_RANGE.test(row.text));
   if (bill || new Set(candidates.map((c) => c.iso)).size > 1) return null;
   const best = surest(candidates);
   return best ? strip(best) : null;

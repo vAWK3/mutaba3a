@@ -139,8 +139,10 @@ def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
 
     Tesseract reads the Hebrew; RapidOCR, which has no Hebrew model, reads the digits better (bold totals and dates
     Tesseract garbles). Word by word: a digit word Tesseract is unsure of gives way to a sure RapidOCR box covering
-    it, and a sure RapidOCR box Tesseract has no word under is added. Tesseract's other words stay, as one segment at
-    their own confidence. With nothing replaced or added, the line stays as it is.
+    it, and a sure RapidOCR box Tesseract has no word under is added. A taken box replaces every digit word under it,
+    so no amount appears twice. Tesseract's letter words stay as one segment at their own confidence; its digit words
+    that stay keep their own, so an unsure amount is never averaged up by sure words. With nothing replaced or added,
+    the line stays as it is.
     """
     words = list(line.words) or [line]
     sure = [r for r in rapid_digits if r.conf >= SURE_DIGITS]
@@ -155,10 +157,13 @@ def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
     taken.extend(r for r in sure if r not in taken and not any(_x_overlap(word, r) for word in words))
     if not taken:
         return [line]
+    letters = [w for w in kept if not _has_digit(w.text)]
+    digits = [w for w in kept if _has_digit(w.text) and not any(_x_overlap(w, r) for r in taken)]
     out = sorted(taken, key=lambda r: r.box[0])
-    if kept:
-        box = (min(w.box[0] for w in kept), line.box[1], max(w.box[2] for w in kept), line.box[3])
-        out.insert(0, Segment(" ".join(w.text for w in kept), _mean_conf(kept), box))
+    out[:0] = [Segment(w.text, w.conf, (w.box[0], line.box[1], w.box[2], line.box[3])) for w in digits]
+    if letters:
+        box = (min(w.box[0] for w in letters), line.box[1], max(w.box[2] for w in letters), line.box[3])
+        out.insert(0, Segment(" ".join(w.text for w in letters), _mean_conf(letters), box))
     return out
 
 
