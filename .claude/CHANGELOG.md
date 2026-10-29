@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-10-29 — MUT-483: firm period totals readable with an API key (API 1.90.0-mut483, ADR-227)
+
+**Why:** at month end a partner checks billed, received and credited with the accountant, and an API key could read no figure over time; Malafat may not add them up itself. Unblocks MAL-1428 "Month summary". Plan `.claude/designs/mut-483-period-totals.md` (D1–D5 answered by Basel; eng review R1–R12; build notes B1–B6).
+
+### Added
+- `GET /v1/summaries/period?from&to&currency` (`summaries:read`; API key, session or device session): per currency `openingBalance`, `billed`, `credited`, `received` (= `payments` − `reversals`), `payments`, `reversals`, `change` and `closingBalance`, plus `from`, `to`, `asOf` and `timezone`. The statement's lines summed across clients plus payments with no client, so `change = billed − received − credited` exactly and the closing balance meets the organization summary's outstanding − unallocated. Reports range rule (this month by default, `to` its last day); lazy posting first (a key as itself, a session as SYSTEM); `?currency=` gives one block, zeros if nothing. Local mode serves it. Files: `server/src/routes/summaries.ts`, `server/src/statements/period.ts`, `server/src/statements/serialize.ts`, `server/src/schemas.ts`.
+- `receivables.periodSources(organizationId, currency | null)` on both stores: three narrow selects in one REPEATABLE READ (`server/src/repositories/{ports,memory,prisma}.ts`, store guard `read`).
+- One structured log line per request, `summaries.period`, with row counts and posting/read/sum times (TD-291's trigger). `summaryRoutes` takes an optional logger (`PortalRouteDependencies.logger`).
+
+### Changed
+- `server/src/statements/lines.ts` (new) holds the statement's line rule (`isStatementCharge`, `isStatementPayment`, `reversalInstantOf`, `reversalDateOf`, `ledgerEntries`); `statements/build.ts` decorates and pages its entries. Behaviour unchanged, proven against a frozen copy of the old builder over 500 organizations.
+- API 1.89.0-mut444 → 1.90.0-mut483 with a description bullet; `server/openapi/openapi.yaml` and `src/hosted/api/schema.d.ts` regenerated.
+
+### Technical
+- Test-first: `statements/__tests__/legacy-build.ts` (the frozen builder), `legacy-equivalence.test.ts`, `ledger-driver.ts` (organizations from real writes, seeded), `lines.test.ts`, `period.test.ts`, build edge cases; `__tests__/period-summary.route.test.ts`; `repositories/__tests__/store-{contract,memory,prisma}-mut483*`; a local-mode test; pins in `writability-routes` and `route-security` and the version literals. Release-QA feature `portal-selfservice.malafat-money-api.period-totals`.
+- TD-291 (the period read loads the organization's whole history per request). No migration, no new index, no snapshot format change.
+
 ## [Unreleased] - 2026-10-29 — MUT-444: correct an agreement's terms after posting (API 1.89.0-mut444, ADR-226)
 
 **Why:** a fee saved with the wrong VAT basis, treatment or amount could not be fixed once anything posted (cancel refuses, supplements can't reach posted charges, reduce only lowers). Unblocks MAL-1368. Plan `.claude/designs/mut-444-correct-agreement-terms.md` (D1–D7 answered by Basel; eng review R1–R16).

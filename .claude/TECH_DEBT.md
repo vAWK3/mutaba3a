@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-291: The period read loads the organization's whole ledger history per request
+**Status**: Open (MUT-483, 2026-10-29; ADR-227)
+- **What:** `GET /v1/summaries/period` reads every live receivable, credit and payment of the organization (three narrow selects in one snapshot) and sums them in one pass, because the opening balance needs every line before `from`. The range doesn't change the cost. Rows are Prisma objects with BigInt fields (~0.5–1 KB of heap each): roughly 20–50 ms at ~1k lines, 100–250 ms and 10–20 MB at ~10k, 1–2.5 s and 100–200 MB at ~100k, where a few concurrent requests on a 512 Mi Cloud Run instance are the limit, not CPU.
+- **Trigger:** the `summaries.period` log line (rows per organization, `readMs`, `sumMs`; a log-based metric): p95 of `readMs + sumMs` over 500 ms, or `rows` totalling over 50k for any organization. (No Sentry span: the API's Sentry is errors only, ADR-091; plan build note B2.)
+- **Fix:** one Postgres aggregate per currency: `SUM(...) FILTER (WHERE date < $from)` for the opening and, per kind, `FILTER (WHERE date BETWEEN $from AND $to)`. Both rules are plain SQL: `countsOn` is `origin <> 'ADJUSTMENT' OR "postingDate" <= $asOf OR "paidMinor" > 0 OR "creditedMinor" > 0`, and a reversal's day is `(COALESCE("reversedAt", "updatedAt") AT TIME ZONE $tz)::date`. Prove it equal to the JS path with `statements/__tests__/period.test.ts`'s property test; the JS path stays for local mode. Alternative: a cached opening balance per (organization, currency, month) keyed on a ledger version.
+
 ### TD-287: The records file drops released allocation rows
 **Status**: Accepted (MUT-444, 2026-10-29; ADR-226)
 - **What:** the hosted records export (Prisma and memory) leaves out `payment_allocations` rows a terms correction released, and never carries `releasedAt`. A restored file holds the live ledger only: the history of where a moved payment's money sat before the correction is not in it (the audit's `agreement.corrected` keeps it on the server).

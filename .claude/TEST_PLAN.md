@@ -4183,6 +4183,21 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Local mode | `migrations.test.ts` (11 → 12), `format-fingerprint.test.ts` (everyRecord: a retainer proposal with a draft) | |
 | Release-QA | `@portal-selfservice.malafat-money-api.proposal-any-schedule` | 30/70 proposal, preview, approve; retainer proposal left out of `proposed`, then approved with the previewed charges |
 
+## MUT-483 — firm period totals (ADR-227)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Equivalence (R1) | `server/src/statements/__tests__/legacy-equivalence.test.ts` + `legacy-build.ts` | the extracted `buildStatement` returns exactly what the frozen pre-extraction copy returns (lines with all fields, ids, atMs, rank; opening, totals, closing; every encoded cursor), over 500 driven organizations, every customer × currency × project view, random periods and page sizes walked to the end; every kind of driver write happened |
+| Driver (R2) | `server/src/statements/__tests__/ledger-driver.ts` | organizations from real writes: HTTP routes with a key (fixed DATE/IMMEDIATE/MANUAL, retainer, contingency, outcome and its correction, payments explicit or by strategy, allocate later, reverse, credits with any effectiveDate, reduce, MUT-443, MUT-444, manual trigger) and a person's session-only writes through their store methods (Owed incl. ahead, captures with and without a client, undo, redates, void); seeded mulberry32; clock near local midnight |
+| Unit (R10) | `server/src/statements/__tests__/lines.test.ts` | the four predicates (incl. the `updatedAt` fallback and a 22:30 UTC reversal dated next day in Asia/Jerusalem); entry ids, dates, atMs, ranks; `${paymentId}:reversal` and `${allocationId}:reversal`; the cursor's literal base64url |
+| Unit (R1) | `server/src/statements/__tests__/build.test.ts` ("line edges (MUT-483)") | reversal near midnight, `reversedAt` null, project reversal ids, a soft-deleted receivable |
+| Unit | `server/src/statements/__tests__/period.test.ts` | one row per §3.3 event (unallocated, reversal within and across periods, capture undo and redate, MUT-443, MUT-444, MUT-100 outcome correction, MUT-480 and back-dated credits, credit before its charge, Owed redate/undo/ahead/paid early, IMMEDIATE ahead, DATE and retainer dates, timezone change, clientless) and the block rule; over 500 driven organizations: AC2 with both ends computed from the lines, AC1 against the frozen builder summed over customers plus clientless lines, continuity, the anchor to outstanding − unallocated |
+| Store contract | `server/src/repositories/__tests__/store-contract-mut483.ts` (memory + Postgres) | live receivables, their credits, payments of every status incl. clientless and undone; exact narrow field sets; the currency filter; no other organization; lines = statements' + clientless, same in both stores; a MUT-444 released allocation makes no line |
+| Route | `server/src/__tests__/period-summary.route.test.ts` | AC1 month by month over a year of real writes against Σ statements (+ the clientless payment); exact November, February, May and the midnight bounce; AC2 + continuity + the anchor; AC3 403 scope, key = session = device session, another organization; AC4 version and security; defaults (to = month end), DATE_INVALID, END_BEFORE_START, RANGE_TOO_LONG, unknown currency, zero block; lazy posting in its own month as API_KEY or SYSTEM; a refused request posts nothing; the log line |
+| Pins | `writability-routes.test.ts`, `route-security.test.ts`, version literals | lazyPostingOf call sites, LAZY table, session-read inventory 39, SESSION_OPERATIONS, 1.90.0-mut483 |
+| Local mode | `src/hosted/local/__tests__/createLocalApp.test.ts` | the route answers signed out over the memory store |
+| Release-QA | `@portal-selfservice.malafat-money-api.period-totals` | the §10 scenario, each AC its own step: this month 600 / 2,680 / 1,050 / 720 / 300 / 420 / 1,210 / 1,810, last month 0 / 1,000 / 400 / 0 / 600; re-run `statement` and `agreement-correct` (refactor and version pin) |
+
 ## MUT-444 — correct an agreement's terms after posting (ADR-226)
 
 | Level | Where | What it proves |

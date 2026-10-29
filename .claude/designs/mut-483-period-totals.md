@@ -1,8 +1,8 @@
-Status: APPROVED (Basel 2026-10-29) — ready to build
+Status: BUILT (2026-10-29) on `feature/mut-483-period-totals`, not merged; plan APPROVED by Basel 2026-10-29. Build notes B1–B6 at the end.
 
 # MUT-483 — Hosted API: firm period totals (billed, received, credited) readable with an API key
 
-Plan 2026-10-29. Basel answered D1–D5 on 2026-10-29. An independent eng review the same day found no CRITICAL or HIGH issues; its R1–R12 are folded into the body below, and where they differ, §14 wins. Not built yet.
+Plan 2026-10-29. Basel answered D1–D5 on 2026-10-29. An independent eng review the same day found no CRITICAL or HIGH issues; its R1–R12 are folded into the body below, and where they differ, §14 wins. Built the same day; where the build differs from the body, §15 records it.
 Branch `feature/mut-483-period-totals` (worktree `.claude/worktrees/mut-483`). API `1.90.0-mut483` (now `1.89.0-mut444`), ADR-227, TD-291.
 
 ## 1. Problem and acceptance criteria
@@ -459,3 +459,16 @@ Not included:
 | R10 | Nothing pinned the line identity the cursor relies on. | **Accepted.** `lines.test.ts` pins the cursor encoding (date, atMs, rank, id), `${id}:reversal` ids and the atMs rules (§6, §9). |
 | R11 | The default closing could be read as today. | **Accepted.** The contract says `to` defaults to the last day of this month, so the default closing includes lines dated later this month (S3, §8). |
 | R12 | Two silent differences from neighbours. | **Accepted, kept and documented** in S11 and the ADR: `END_BEFORE_START` here vs `PERIOD_INVALID` on the statement; `?currency=` with no data returns one zero block here vs an empty list on `/summaries/organization`. |
+
+## 15. Build notes (2026-10-29)
+
+None of these changes what Malafat sees: the route, its query, its response and its errors are exactly §8.
+
+| # | Where | What and why |
+|---|---|---|
+| B1 | R2 driver (`statements/__tests__/ledger-driver.ts`) | Malafat's writes go through the real HTTP routes with an integration key. A person's writes (Owed, captures with and without a client, undo, redates, voiding an Owed) are session-only routes, and one profile can't take both a key and a session write (an owned profile refuses keys; a Malafat-fed one refuses Owed and clientless captures). So the driver calls the very store methods those routes call, with the routes' guards (`dueDateAfterRedate`, nothing allocated before a capture redate, nothing paid or credited before a void). Rows still come only from real write methods. A test asserts every kind of write happened across the 500 seeds. |
+| B2 | Observability (R5) | The structured `summaries.period` log line is built (rows, `postingMs`, `readMs`, `sumMs`, currencies; no amounts). The Sentry span is not: the API's Sentry is errors only (`tracesSampleRate: 0`, ADR-091), and `routes/summaries.ts` also runs in the portal's browser bundle, which must never import the SDK (ADR-024). A span would record nothing. TD-291's trigger is read off the log line (a log-based metric in Cloud Logging). `summaryRoutes` takes an optional logger (`PortalRouteDependencies.logger`); local mode passes none. |
+| B3 | Frozen copy (R1) | `legacyBuildStatement` lives in `statements/__tests__/legacy-build.ts`, imported by both `legacy-equivalence.test.ts` and `period.test.ts` (AC1 compares against it), rather than copied into each test. It is the verbatim pre-extraction builder from a80d998a. |
+| B4 | `lines.ts` | `LedgerEntry` also carries `customerId` (null for a clientless payment) and, on a CREDIT, its `receivable`, so the statement decorates without a lookup and AC1's per-customer split needs no join. `LINE_RANK` and `StatementLineKind` moved there; `build.ts` re-exports the type. The narrow row types are `Ledger{Receivable,Credit,Payment}Row` in `ports.ts`. |
+| B5 | `build.ts` project statement | Its charges and credits come from `ledgerEntries` over the project's receivables (no payments); payments stay allocation lines built with `isStatementPayment` and `reversalDateOf`. The whole-customer statement decorates every entry. Proven identical to the frozen copy over 500 seeds; a mutation of the classifier fails the test. |
+| B6 | Pins | `writability-routes.test.ts` also counts the session reads (38 → 39). The store contract additionally pins the exact field set of each narrow row, and that a MUT-444 correction's released allocation leaves the payment lines unchanged while the balance still equals outstanding − unallocated. |
