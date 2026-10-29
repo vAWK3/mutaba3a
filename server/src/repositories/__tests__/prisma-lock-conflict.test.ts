@@ -44,4 +44,18 @@ describe('agreements.correct and P2028', () => {
     const input = { expectedVersion: 1 } as unknown as CorrectAgreementInput;
     expect(await new PrismaLedgerStore(client).agreements.correct('org', 'agreement', input, new Date())).toEqual({ kind: 'stale' });
   });
+
+  it.each([
+    ['P2034 (a transaction conflict)', new Prisma.PrismaClientKnownRequestError('Transaction failed due to a write conflict or a deadlock', { code: 'P2034', clientVersion: 'test' })],
+    ['40P01 (a deadlock)', new Prisma.PrismaClientKnownRequestError('deadlock detected', { code: 'P2010', clientVersion: 'test', meta: { code: '40P01' } })],
+  ])('P4 (review): answers stale on %s, nothing written', async (_name, conflict) => {
+    const agreement = { id: 'agreement', organizationId: 'org', version: 1 };
+    const client = {
+      $transaction: async () => Promise.reject(conflict),
+      agreement: { findFirstOrThrow: async () => agreement },
+      installment: { findMany: async () => [] },
+    } as unknown as PrismaClient;
+    const input = { expectedVersion: 1 } as unknown as CorrectAgreementInput;
+    expect(await new PrismaLedgerStore(client).agreements.correct('org', 'agreement', input, new Date())).toEqual({ kind: 'stale' });
+  });
 });

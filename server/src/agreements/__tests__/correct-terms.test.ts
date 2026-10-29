@@ -252,6 +252,16 @@ describe('planCorrection: due dates and no-ops', () => {
     expect(planCorrection(input({ old, scheduled: relabelled })).ok).toBe(true);
     expect(planCorrection(input({ old, after: terms({ paymentTerms: 'EOM_15' }), scheduled: same })).ok).toBe(true);
   });
+
+  it('P2 (review): a different frozen rate is a correction, even with every other figure the same', () => {
+    const zero = terms({ vatRateBasisPoints: 0 });
+    const old = [line(zero, 1, 50_000n, { type: 'IMMEDIATE' }, { postingDate: '2026-10-01' }), line(zero, 2, 50_000n, { type: 'MANUAL' })];
+    const same = schedule(zero, [{ label: 'L1', amount: 50_000n, trigger: { type: 'IMMEDIATE' } }, { label: 'L2', amount: 50_000n, trigger: { type: 'MANUAL' } }]);
+    expect(planCorrection(input({ before: zero, after: zero, old, scheduled: same }))).toEqual({ ok: false, reason: 'NOTHING_TO_CORRECT' });
+    const rated = terms();
+    const resolved = schedule(rated, [{ label: 'L1', amount: 50_000n, trigger: { type: 'IMMEDIATE' } }, { label: 'L2', amount: 50_000n, trigger: { type: 'MANUAL' } }]);
+    expect(planCorrection(input({ before: zero, after: rated, old, scheduled: resolved })).ok).toBe(true);
+  });
 });
 
 /** A seeded PRNG (mulberry32), so a failing case is reproducible. */

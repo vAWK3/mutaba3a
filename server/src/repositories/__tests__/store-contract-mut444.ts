@@ -180,6 +180,16 @@ export function describeLedgerStoreMut444Contract(name: string, makeStore: () =>
         await expectStale(store, f, { ...again, releases: [...again.releases, first.releases[0]!] });
       });
 
+      it('P3 (review): a placement for a payment the write does not lock and re-check', async () => {
+        const store = await makeStore();
+        const f = await firm(store);
+        const Q = (await store.payments.create(f.payment(5_000n, []), at(5))).payment;
+        const input = await compose(store, f);
+        const repost = input.newInstallments.find((i) => i.post)!;
+        await expectStale(store, f, { ...input, placements: [...input.placements, { paymentId: Q.id, installmentId: repost.id, amountMinor: 1_000n }] });
+        expect(await store.payments.getById(f.o.id, Q.id)).toMatchObject({ allocatedMinor: 0n, version: Q.version });
+      });
+
       it('is not_found for another organization', async () => {
         const store = await makeStore();
         const f = await firm(store);

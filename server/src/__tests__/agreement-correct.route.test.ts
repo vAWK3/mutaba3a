@@ -374,9 +374,73 @@ describe('POST /v1/agreements/{id}/correct', () => {
       expect((await detail(h, f, a.id)).agreement.vatRateBasisPoints).toBe(0);
       const standard = { ...exclusive, vatTreatment: 'STANDARD_RATED' };
       expect(await reason(await preview(h, f, a.id, standard))).toBe('VAT_RATE_MISSING');
+      h.clock.now = new Date(h.clock.now.getTime() + 60_000);
       expect((await h.app.request('/v1/settings/vat', json({ rateBasisPoints: 1800, effectiveFrom: '2025-01-01' }, f.auth, 'PUT'))).status).toBe(201);
       const { result } = await correct(h, f, a.id, standard);
       expect(result.agreement).toMatchObject({ vatRateBasisPoints: 1800, vatTreatment: 'STANDARD_RATED', gross: '1180.00' });
+    });
+  });
+
+    it('P2 (review): a real 0 % rate frozen at creation stays 0, even after a rate is set later for that date', async () => {
+      const h = harness();
+      const f = await firm(h, { vat: false });
+      expect((await h.app.request('/v1/settings/vat', json({ rateBasisPoints: 0, effectiveFrom: '2025-01-01' }, f.auth, 'PUT'))).status).toBe(201);
+      const a = await agreement(h, f, halves('500.00'));
+      expect((await detail(h, f, a.id)).agreement).toMatchObject({ vatRateBasisPoints: 0, vatTreatment: 'STANDARD_RATED' });
+      h.clock.now = new Date(h.clock.now.getTime() + 60_000);
+      expect((await h.app.request('/v1/settings/vat', json({ rateBasisPoints: 1800, effectiveFrom: '2026-09-01' }, f.auth, 'PUT'))).status).toBe(201);
+      const { plan, result } = await correct(h, f, a.id, exclusive);
+      expect(plan.terms.after).toMatchObject({ vatRateBasisPoints: 0, net: '1000.00', vat: '0.00', gross: '1000.00' });
+      expect(result.agreement).toMatchObject({ vatRateBasisPoints: 0, gross: '1000.00' });
+    });
+  });
+
+  describe('pre-landing review 2026-10-29 (P4)', () => {
+    it('AC1 with other charges and unallocated money on the client: the preview\'s balance after is the summary after the commit', async () => {
+      const h = harness();
+      const { f, a } = await paidFee(h);
+      const otherProject = await read(await h.app.request('/v1/projects', json({ customerId: f.customer.id, name: 'Lease', currency: 'ILS' }, { ...f.auth, ...idem() })));
+      const other = await agreement(h, { ...f, project: otherProject }, [{ label: 'Retainer fee', amount: '250.00', trigger: { type: 'IMMEDIATE' } }]);
+      await pay(h, f, '40.00', [{ receivableId: other.installments[0].receivableId, amount: '40.00' }], '2026-10-20');
+      await pay(h, f, '75.00', [], '2026-10-21');
+      const before = await balanceOf(h, f);
+      const { plan } = await correct(h, f, a.id, exclusive);
+      expect(plan.customer).toEqual({
+        outstanding: { before: before.outstanding, after: (Number(before.outstanding) + 90).toFixed(2) },
+        unallocated: { before: before.unallocated, after: before.unallocated },
+        balance: { before: before.balance, after: (Number(before.balance) + 90).toFixed(2) },
+      });
+      const after = await balanceOf(h, f);
+      expect(after).toEqual({ outstanding: plan.customer.outstanding.after, unallocated: plan.customer.unallocated.after, balance: plan.customer.balance.after });
+    });
+
+    it('AC2 with D3: an old charge with an earlier credit and a payment on it: the remainder is credited and the payment moves', async () => {
+      const h = harness();
+      const { f, a, signing, payment } = await paidFee(h);
+      expect((await h.app.request(`/v1/receivables/${signing}/credits`, json({ amount: '50.00', reason: 'Discount', reasonCode: 'DISCOUNT' }, { ...f.auth, ...idem() }))).status).toBe(201);
+      const { plan, result } = await correct(h, f, a.id, exclusive);
+      expect(plan.credits).toEqual([expect.objectContaining({ receivableId: signing, amount: '450.00', priorCredited: '50.00' })]);
+      expect(plan.allocations).toEqual([expect.objectContaining({ paymentId: payment.id, released: [expect.objectContaining({ amount: '300.00' })], placed: [expect.objectContaining({ amount: '300.00' })], unallocated: '0.00' })]);
+      expect(plan).toMatchObject({ balanceChange: '140.00', priorCredited: '50.00', agreement: { effectiveTotal: { before: '950.00', after: '1180.00' }, outstanding: { before: '150.00', after: '290.00' } } });
+      expect(await read(await h.app.request(`/v1/receivables/${signing}`, { headers: f.auth }))).toMatchObject({ paid: '0.00', credited: '500.00', outstanding: '0.00' });
+      expect(result.receivables[0]).toMatchObject({ gross: '590.00', paid: '300.00' });
+    });
+
+    it('AC5: an old charge already paid in full emits no receivable.settled from the correction (its status did not change)', async () => {
+      const h = harness();
+      const f = await firm(h);
+      h.clock.now = new Date('2026-10-01T10:00:00Z');
+      const a = await agreement(h, f);
+      h.clock.now = new Date('2026-10-29T10:00:00Z');
+      const signing = a.installments[0].receivableId as string;
+      await pay(h, f, '500.00', [{ receivableId: signing, amount: '500.00' }]);
+      const { result } = await correct(h, f, a.id, exclusive);
+      const settled = (await read(await h.app.request(`/v1/audit?entityType=receivable&entityId=${signing}`, { headers: f.auth }))).items.filter((e: Loose) => e.action === 'receivable.settled');
+      // One, from the payment that settled it; none from the correction, which left it settled.
+      expect(settled).toHaveLength(1);
+      expect(settled.filter((e: Loose) => e.metadata.source === 'CORRECTION')).toEqual([]);
+      // The repost (₪590, ₪500 paid) stays open: no event for it either.
+      expect((await read(await h.app.request(`/v1/audit?entityType=receivable&entityId=${result.receivables[0].id}`, { headers: f.auth }))).items.filter((e: Loose) => e.action === 'receivable.settled')).toEqual([]);
     });
   });
 
