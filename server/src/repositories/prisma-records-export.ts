@@ -78,7 +78,8 @@ const PAYMENT = cols<PaymentRecord>()({
   method: true, reference: true, receiptNumber: true, notes: true, origin: true, status: true, replacesPaymentId: true, reversedAt: true, reversalReason: true, reversalReasonCode: true, captureSource: true,
   createdByUserId: true, requestId: true, version: true, createdAt: true, updatedAt: true,
 });
-const ALLOCATION = cols<AllocationRecord>()({ id: true, organizationId: true, paymentId: true, receivableId: true, amountMinor: true, createdAt: true });
+// MUT-444 (R14, TD-287): the records file holds the live ledger; `releasedAt` is server-only and released rows stay out.
+const ALLOCATION = cols<Omit<AllocationRecord, 'releasedAt'>>()({ id: true, organizationId: true, paymentId: true, receivableId: true, amountMinor: true, createdAt: true });
 const CREDIT = cols<CreditRecord>()({ id: true, organizationId: true, receivableId: true, amountMinor: true, netMinor: true, vatMinor: true, effectiveDate: true, reason: true, reasonCode: true, requestId: true, createdAt: true });
 const FEE_PROPOSAL = cols<FeeProposalRecord>()({
   id: true, organizationId: true, projectId: true, customerId: true, currency: true, status: true, pricingBasis: true, proposedAmountMinor: true, agreedAmountMinor: true,
@@ -197,7 +198,7 @@ export function prismaRecordsExport(client: () => PrismaClient): RecordsExportRe
       if (field === 'counters') return (await counterPage(organizationId, afterKey, limit)) as ExportPage<ProfileExportRecords[F]>;
       if (field === 'groupMarks') return (await groupMarkPage(organizationId, afterKey, limit)) as ExportPage<ProfileExportRecords[F]>;
       const { delegate, select } = idKeyed(client())[field as Exclude<ProfileExportField, 'counters' | 'groupMarks'>];
-      return idPage(delegate, select, { organizationId }, afterKey, limit);
+      return idPage(delegate, select, field === 'allocs' ? { organizationId, releasedAt: null } : { organizationId }, afterKey, limit);
     },
     inboxPage: (userId, afterKey, limit) => idPage(client().inboxEntry as unknown as IdKeyedDelegate, INBOX_ENTRY, { userId }, afterKey, limit),
     findExportableReceipt: async (organizationId, id) => {

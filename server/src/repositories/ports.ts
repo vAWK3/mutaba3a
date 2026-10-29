@@ -603,7 +603,7 @@ export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
 export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
 export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
-export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION';
+export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION' | 'CORRECTION';
 
 export interface AgreementRecord {
   id: string;
@@ -837,6 +837,63 @@ export type ReduceAgreementResult =
   | { kind: 'stale' }
   | { kind: 'updated'; record: { agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[]; credits: CreditRecord[] } };
 
+// ---- MUT-444: correcting an agreement's terms after posting ----------------
+
+/** A new line of a correction: its id is planned, so the batched insert needs no read-back (R10); `post` = bill it now. */
+export type CorrectionInstallmentInput = CreateInstallmentInput & { id: string; post: { postingDate: IsoDate; dueDate: IsoDate } | null };
+
+/**
+ * One terms correction (ADR-226), written atomically or not at all. Every row the plan read is re-checked under its
+ * lock in the order agreement → payments → old receivables → CHG counter → installments: the agreement's version,
+ * each payment still POSTED with the `allocatedMinor` read, each old receivable's version, each void's version and
+ * receivable, each release still live. Any miss is `stale` with nothing written.
+ */
+export interface CorrectAgreementInput {
+  expectedVersion: number;
+  /** The agreement's corrected columns. */
+  terms: { amountMinor: bigint; netMinor: bigint; vatMinor: bigint; grossMinor: bigint; pricingBasis: PricingBasis; vatTreatment: VatTreatment; paymentTerms: PaymentTerms; vatRateBasisPoints: number };
+  /** Every live line, voided on the version and receivable read. */
+  voids: ReadonlyArray<{ id: string; expectedVersion: number; receivableId: string | null }>;
+  /** Every old posted receivable, at the version read. */
+  receivables: ReadonlyArray<{ id: string; version: number }>;
+  /** The payments whose rows are released, at the `allocatedMinor` read (R8). */
+  payments: ReadonlyArray<{ id: string; allocatedMinor: bigint }>;
+  releases: ReadonlyArray<{ allocationId: string; paymentId: string; receivableId: string; amountMinor: bigint }>;
+  /** D5 B: each dated its receivable's posting date. */
+  credits: ReadonlyArray<{ receivableId: string; amountMinor: bigint; netMinor: bigint; vatMinor: bigint; effectiveDate: IsoDate }>;
+  credit: { reason: string; reasonCode: CreditReasonCode; requestId: string | null };
+  newInstallments: readonly CorrectionInstallmentInput[];
+  placements: ReadonlyArray<{ paymentId: string; installmentId: string; amountMinor: bigint }>;
+  supplement: SupplementInput;
+}
+
+export type CorrectAgreementResult =
+  | { kind: 'not_found' }
+  | { kind: 'stale' }
+  | {
+      kind: 'updated';
+      record: {
+        agreement: AgreementRecord;
+        supplement: SupplementRecord;
+        installments: InstallmentRecord[];
+        credits: CreditRecord[];
+        /** The reposts and every other line posted by the write. */
+        receivables: ReceivableRecord[];
+        /** The new allocation rows. */
+        allocations: AllocationRecord[];
+        /** The moved payments, as they now read. */
+        payments: PaymentRecord[];
+        /** Receivables whose status became SETTLED in this write (R13). */
+        settled: string[];
+      };
+    };
+
+/** A live allocation row with the fields of its POSTED payment a correction orders and tokens by (MUT-444). */
+export interface LiveAllocationOn {
+  allocation: AllocationRecord;
+  payment: Pick<PaymentRecord, 'id' | 'number' | 'receivedOn' | 'createdAt' | 'allocatedMinor' | 'status'>;
+}
+
 export interface ApplySupplementInput {
   supplement: SupplementInput;
   installmentUpdates: InstallmentAmountUpdate[];
@@ -955,9 +1012,11 @@ export interface AgreementRepository {
   applySupplement(organizationId: string, agreementId: string, input: ApplySupplementInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; supplement: SupplementRecord; installments: InstallmentRecord[] }>>;
   /** MUT-480: installments lowered or voided, credits on the open receivables, totals, version and a REDUCTION supplement row, atomically. */
   reduce(organizationId: string, agreementId: string, input: ReduceAgreementInput, at: Date): Promise<ReduceAgreementResult>;
+  /** MUT-444 (ADR-226): every live line voided, posted charges credited on their own dates, the new lines posted, payments moved, a CORRECTION row, atomically. */
+  correct(organizationId: string, agreementId: string, input: CorrectAgreementInput, at: Date): Promise<CorrectAgreementResult>;
   listSupplements(organizationId: string, agreementId: string): Promise<SupplementRecord[]>;
   /** FIXED / CONTINGENCY: status CANCELLED, unposted installments voided — never once a contingency outcome is recorded (returned unchanged). RECURRING: cancel month + final month recorded, status CANCELLED. Idempotent. */
-  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null }, at: Date): Promise<AgreementRecord | null>;
+  cancel(organizationId: string, agreementId: string, input: { cancelEffectiveMonth: IsoMonth | null; cancelEffectiveDate?: IsoDate | null; finalMonth: FinalMonth | null; /** MUT-444 (R11): the version read; another version cancels nothing (returned unchanged). */ expectedVersion?: number }, at: Date): Promise<AgreementRecord | null>;
   /** M5: appends a terms version (unique per agreement + version) and bumps the agreement version atomically; `conflict` when the agreement moved. */
   appendVersion(input: AppendVersionInput, at: Date): Promise<UpdateResult<{ agreement: AgreementRecord; version: RetainerVersionRecord }>>;
   /** MUT-100: the commission rate and/or upfront treatment, under the version; `stale` also once an outcome exists. */
@@ -1119,6 +1178,11 @@ export interface AllocationRecord {
   receivableId: string;
   amountMinor: bigint;
   createdAt: Date;
+  /**
+   * MUT-444 (ADR-226): set once when a terms correction moved this row's money to the corrected charges. Every reader
+   * counts live rows only (`releasedAt` null). Server-only: absent on rows a device makes (R14).
+   */
+  releasedAt?: Date | null;
 }
 
 export interface AllocationInput {
@@ -1250,6 +1314,8 @@ export interface PaymentRepository {
   listAllocations(organizationId: string, paymentId: string): Promise<AllocationRecord[]>;
   /** MUT-175: the allocations of many payments in one read (oldest first); ids of another organization match nothing. */
   listAllocationsFor(organizationId: string, paymentIds: readonly string[]): Promise<AllocationRecord[]>;
+  /** MUT-444: the live allocation rows of POSTED payments on these receivables, with their payments' fields, in one read. */
+  listLiveAllocationsOn(organizationId: string, receivableIds: readonly string[]): Promise<LiveAllocationOn[]>;
   /** Appends allocations to a POSTED payment within its unallocated funds; same guarantees as create. Null when no such payment. */
   allocate(organizationId: string, paymentId: string, allocations: AllocationInput[], at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
   /** Undoes every allocation, zeroes allocated_minor, marks REVERSED. `changed` is false when it already was. */
@@ -3349,7 +3415,8 @@ export interface ProfileExportRecords {
   supps: SupplementRecord;
   versions: RetainerVersionRecord;
   pays: PaymentRecord;
-  allocs: AllocationRecord;
+  /** MUT-444 (R14, TD-287): live rows only, without the server-only `releasedAt`. */
+  allocs: Omit<AllocationRecord, 'releasedAt'>;
   credits: CreditRecord;
   /** The last payment number used in a year; keyed `${organizationId}:${year}`. */
   counters: number;

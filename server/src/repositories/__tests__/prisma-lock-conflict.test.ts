@@ -1,6 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { isLockConflict, isTransactionTimeout } from '../prisma.js';
+import type { CorrectAgreementInput } from '../ports.js';
+import { isLockConflict, isTransactionTimeout, PrismaLedgerStore } from '../prisma.js';
 
 /** MUT-100 review: a deadlock or serialization failure in an outcome write is retryable `stale`, not a 500. */
 describe('isLockConflict', () => {
@@ -32,5 +33,15 @@ describe('isTransactionTimeout', () => {
     expect(isTransactionTimeout(known('P2034'))).toBe(false);
     expect(isTransactionTimeout(new Error('Transaction already closed'))).toBe(false);
     expect(isTransactionTimeout(undefined)).toBe(false);
+  });
+});
+
+/** MUT-444: a terms correction that outlasts its 15 s limit rolled back whole; the caller previews again (409), not a 500. */
+describe('agreements.correct and P2028', () => {
+  it('answers stale when the transaction times out', async () => {
+    const timeout = new Prisma.PrismaClientKnownRequestError('Transaction already closed', { code: 'P2028', clientVersion: 'test' });
+    const client = { $transaction: async () => Promise.reject(timeout) } as unknown as PrismaClient;
+    const input = { expectedVersion: 1 } as unknown as CorrectAgreementInput;
+    expect(await new PrismaLedgerStore(client).agreements.correct('org', 'agreement', input, new Date())).toEqual({ kind: 'stale' });
   });
 });

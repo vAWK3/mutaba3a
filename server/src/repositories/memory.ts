@@ -49,6 +49,9 @@ import type {
   ApiKeyRepository,
   ApplySupplementInput,
   ReduceAgreementInput,
+  CorrectAgreementInput,
+  CorrectAgreementResult,
+  LiveAllocationOn,
   SupplementInput,
   CreateAgreementInput,
   CreateChargeInput,
@@ -182,7 +185,7 @@ import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { isFeature } from '../features.js';
 import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
-import { todayIn } from '../dates.js';
+import { todayIn, type IsoDate } from '../dates.js';
 import { createdAtCursorOf, isBeforeCursor, isBeforeMoneyDateCursor, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf, moneyDateOf } from '../entries/merge.js';
 import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
@@ -1720,11 +1723,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.expectedVersion !== undefined && i.version !== input.expectedVersion) return null;
       const a = this.agrs.get(i.agreementId);
       if (!a) return null;
-      const receivable = this.newReceivable({ organizationId, customerId: a.customerId, projectId: a.projectId, agreementId: a.id, origin: 'INSTALLMENT', originId: i.id, currency: a.currency, netMinor: i.netMinor, vatMinor: i.vatMinor, grossMinor: i.grossMinor, vatTreatment: i.vatTreatment, vatRateBasisPoints: i.rateBasisPoints, dueDate: input.dueDate, postingDate: input.postingDate, postedAt: input.at });
-      i.postedAt = input.at;
-      i.postingDate = input.postingDate;
-      i.receivableId = receivable.id;
-      i.version += 1;
+      const receivable = this.postNow(i, a, input);
       return { installment: { ...i }, receivable: { ...receivable }, created: true };
     },
     listUnpostedDue: async (organizationId, today) =>
@@ -1774,12 +1773,71 @@ export class MemoryLedgerStore implements LedgerStore {
       this.supps.set(supplement.id, supplement);
       return { kind: 'updated', record: { agreement: { ...a }, supplement: { ...supplement }, installments: await this.agreements.listInstallments(organizationId, agreementId), credits } };
     },
+    // MUT-444 (MUT-443 R7): synchronous from the first check to the last write, so nothing interleaves (as Postgres's
+    // one transaction); every check runs before anything is touched, so `stale` leaves the ledger exactly as it was.
+    correct: async (organizationId, agreementId, input: CorrectAgreementInput, at): Promise<CorrectAgreementResult> => {
+      const a = this.agrs.get(agreementId);
+      if (!a || a.organizationId !== organizationId) return { kind: 'not_found' };
+      if (!this.correctable(a, input)) return { kind: 'stale' };
+      const before = new Map(input.receivables.map((r) => [r.id, this.recs.get(r.id)!.status]));
+      // New lines, then their posts in posting-date order (the counter before any old line is touched), a millisecond
+      // after the credits so the statement reads old charge, credit, repost on the shared date (D5 B).
+      const created = input.newInstallments.map(({ post, ...spec }) => {
+        const record: InstallmentRecord = { ...spec, organizationId, agreementId, isCommission: false, postedAt: null, postingDate: null, receivableId: null, voidedAt: null, version: 1 };
+        this.insts.set(record.id, record);
+        return { record, post };
+      });
+      const posted = new Map<string, ReceivableRecord>();
+      for (const { record, post } of [...created].filter((x) => x.post).sort((x, y) => (x.post!.postingDate < y.post!.postingDate ? -1 : x.post!.postingDate > y.post!.postingDate ? 1 : x.record.position - y.record.position))) {
+        posted.set(record.id, this.postNow(record, a, { ...post!, at: new Date(at.getTime() + 1) }));
+      }
+      for (const v of input.voids) Object.assign(this.insts.get(v.id)!, { voidedAt: at, version: v.expectedVersion + 1 });
+      const allocatedDelta = new Map<string, bigint>();
+      for (const x of input.releases) {
+        this.allocs.get(x.allocationId)!.releasedAt = at;
+        const r = this.recs.get(x.receivableId)!;
+        r.paidMinor -= x.amountMinor;
+        settle(r);
+        allocatedDelta.set(x.paymentId, (allocatedDelta.get(x.paymentId) ?? 0n) - x.amountMinor);
+      }
+      const credits = input.credits.map((c) => {
+        const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: c.receivableId, amountMinor: c.amountMinor, netMinor: c.netMinor, vatMinor: c.vatMinor, effectiveDate: c.effectiveDate, ...input.credit, createdAt: at };
+        this.credits.set(credit.id, credit);
+        const r = this.recs.get(c.receivableId)!;
+        r.creditedMinor += c.amountMinor;
+        settle(r);
+        return { ...credit };
+      });
+      const allocations = input.placements.map((pl) => {
+        const r = posted.get(pl.installmentId)!;
+        const record: AllocationRecord = { id: randomUUID(), organizationId, paymentId: pl.paymentId, receivableId: r.id, amountMinor: pl.amountMinor, createdAt: at };
+        this.allocs.set(record.id, record);
+        r.paidMinor += pl.amountMinor;
+        settle(r);
+        allocatedDelta.set(pl.paymentId, (allocatedDelta.get(pl.paymentId) ?? 0n) + pl.amountMinor);
+        return { ...record };
+      });
+      const payments = input.payments.map((x) => {
+        const p = this.pays.get(x.id)!;
+        Object.assign(p, { allocatedMinor: p.allocatedMinor + (allocatedDelta.get(x.id) ?? 0n), version: p.version + 1, updatedAt: at });
+        return { ...p };
+      });
+      Object.assign(a, { ...input.terms, version: a.version + 1, updatedAt: at });
+      const supplement = supplementRow(organizationId, agreementId, input.supplement, input.terms.amountMinor, at);
+      this.supps.set(supplement.id, supplement);
+      const settled = [...input.receivables.map((r) => this.recs.get(r.id)!).filter((r) => r.status === 'SETTLED' && before.get(r.id) !== 'SETTLED'), ...[...posted.values()].filter((r) => r.status === 'SETTLED')].map((r) => r.id);
+      return {
+        kind: 'updated',
+        record: { agreement: { ...a }, supplement: { ...supplement }, installments: await this.agreements.listInstallments(organizationId, agreementId), credits, receivables: [...posted.values()].map((r) => ({ ...r })), allocations, payments, settled },
+      };
+    },
     listSupplements: async (organizationId, agreementId) =>
       [...this.supps.values()].filter((x) => x.organizationId === organizationId && x.agreementId === agreementId).sort((x, y) => x.createdAt.getTime() - y.createdAt.getTime()).map((x) => ({ ...x })),
     cancel: async (organizationId, agreementId, input, at) => {
       const a = this.agrs.get(agreementId);
       if (!a || a.organizationId !== organizationId) return null;
-      if (a.status === 'ACTIVE' && a.outcome === null) {
+      // MUT-444 (R11): only on the version read, so a cancel never lands on an agreement a correction just reposted.
+      if (a.status === 'ACTIVE' && a.outcome === null && (input.expectedVersion === undefined || a.version === input.expectedVersion)) {
         a.status = 'CANCELLED';
         a.cancelledAt = at;
         a.cancelEffectiveMonth = input.cancelEffectiveMonth;
@@ -1864,6 +1922,64 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  /**
+   * MUT-444: every row a terms correction planned from is as it was read: the agreement (version, ACTIVE, no outcome),
+   * its old receivables, each void (version and receivable), each payment (POSTED, the `allocatedMinor` read), each
+   * release (live, as read), and every capacity after the releases. Pure reads, no writes.
+   */
+  private correctable(a: AgreementRecord, input: CorrectAgreementInput): boolean {
+    const org = a.organizationId;
+    if (a.version !== input.expectedVersion || a.status !== 'ACTIVE' || a.outcome !== null) return false;
+    if (this.receivablesMoved(org, input.receivables)) return false;
+    const voidOk = input.voids.every((v) => {
+      const i = this.insts.get(v.id);
+      return !!i && i.agreementId === a.id && i.voidedAt === null && i.version === v.expectedVersion && i.receivableId === v.receivableId;
+    });
+    if (!voidOk) return false;
+    const payOk = input.payments.every((x) => {
+      const p = this.pays.get(x.id);
+      return !!p && p.organizationId === org && p.status === 'POSTED' && p.allocatedMinor === x.allocatedMinor;
+    });
+    if (!payOk) return false;
+    const released = new Map<string, bigint>();
+    for (const x of input.releases) {
+      const row = this.allocs.get(x.allocationId);
+      if (!row || row.releasedAt || row.organizationId !== org || row.paymentId !== x.paymentId || row.receivableId !== x.receivableId || row.amountMinor !== x.amountMinor) return false;
+      if (!input.payments.some((p) => p.id === x.paymentId)) return false;
+      released.set(x.receivableId, (released.get(x.receivableId) ?? 0n) + x.amountMinor);
+    }
+    // Credits: each the remainder, once the releases leave nothing paid (D3).
+    const creditOk = input.credits.every((c) => {
+      const r = this.recs.get(c.receivableId);
+      return !!r && r.paidMinor - (released.get(r.id) ?? 0n) === 0n && c.amountMinor === r.grossMinor - r.creditedMinor && c.amountMinor > 0n;
+    });
+    if (!creditOk) return false;
+    // Placements fit their new lines and their payments.
+    const lines = new Map(input.newInstallments.map((i) => [i.id, i]));
+    const placed = new Map<string, bigint>();
+    const net = new Map<string, bigint>();
+    for (const x of input.releases) net.set(x.paymentId, (net.get(x.paymentId) ?? 0n) - x.amountMinor);
+    for (const pl of input.placements) {
+      if (!lines.get(pl.installmentId)?.post || pl.amountMinor <= 0n) return false;
+      placed.set(pl.installmentId, (placed.get(pl.installmentId) ?? 0n) + pl.amountMinor);
+      net.set(pl.paymentId, (net.get(pl.paymentId) ?? 0n) + pl.amountMinor);
+    }
+    if ([...placed].some(([id, amount]) => amount > lines.get(id)!.grossMinor)) return false;
+    if (input.payments.some((x) => { const p = this.pays.get(x.id)!; const after = p.allocatedMinor + (net.get(x.id) ?? 0n); return after < 0n || after > p.amountMinor; })) return false;
+    const positions = new Set([...this.insts.values()].filter((i) => i.agreementId === a.id).map((i) => i.position));
+    return input.newInstallments.every((i) => !positions.has(i.position) && !this.insts.has(i.id));
+  }
+
+  /** Bills a line now: its receivable, numbered in its posting year, and the line marked posted (postInstallment and MUT-444's correct). */
+  private postNow(i: InstallmentRecord, a: AgreementRecord, input: { postingDate: IsoDate; dueDate: IsoDate; at: Date }): ReceivableRecord {
+    const receivable = this.newReceivable({ organizationId: i.organizationId, customerId: a.customerId, projectId: a.projectId, agreementId: a.id, origin: 'INSTALLMENT', originId: i.id, currency: a.currency, netMinor: i.netMinor, vatMinor: i.vatMinor, grossMinor: i.grossMinor, vatTreatment: i.vatTreatment, vatRateBasisPoints: i.rateBasisPoints, dueDate: input.dueDate, postingDate: input.postingDate, postedAt: input.at });
+    i.postedAt = input.at;
+    i.postingDate = input.postingDate;
+    i.receivableId = receivable.id;
+    i.version += 1;
+    return receivable;
+  }
+
   /** True when any receivable a write was planned from is gone or has moved since (MUT-100 review D2; MUT-480 R3). */
   private receivablesMoved(organizationId: string, seen: ReadonlyArray<{ id: string; version: number }>): boolean {
     return seen.some((s) => {
@@ -1932,7 +2048,7 @@ export class MemoryLedgerStore implements LedgerStore {
         receivables: receivables.map((r) => ({ ...r })),
         credits: [...this.credits.values()].filter((c) => receivableIds.has(c.receivableId)).map((c) => ({ ...c })),
         payments: payments.map((p) => ({ ...p })),
-        allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId)).map((a) => ({ ...a })),
+        allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId) && !a.releasedAt).map((a) => ({ ...a })),
         installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
         charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
       };
@@ -2007,7 +2123,7 @@ export class MemoryLedgerStore implements LedgerStore {
       return p && p.organizationId === organizationId ? { ...p } : null;
     },
     list: async (organizationId, filter: PaymentFilter, page) => {
-      const onProject = filter.projectId ? new Set([...this.allocs.values()].filter((a) => this.recs.get(a.receivableId)?.projectId === filter.projectId).map((a) => a.paymentId)) : null;
+      const onProject = filter.projectId ? new Set([...this.allocs.values()].filter((a) => !a.releasedAt && this.recs.get(a.receivableId)?.projectId === filter.projectId).map((a) => a.paymentId)) : null;
       return paginate(
         [...this.pays.values()].filter(
           (p) =>
@@ -2025,13 +2141,23 @@ export class MemoryLedgerStore implements LedgerStore {
       );
     },
     listAllocations: async (organizationId, paymentId) =>
-      [...this.allocs.values()].filter((a) => a.organizationId === organizationId && a.paymentId === paymentId).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map((a) => ({ ...a })),
+      [...this.allocs.values()].filter((a) => a.organizationId === organizationId && a.paymentId === paymentId && !a.releasedAt).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).map((a) => ({ ...a })),
     listAllocationsFor: async (organizationId, paymentIds) => {
       const wanted = new Set(paymentIds);
       return [...this.allocs.values()]
-        .filter((a) => a.organizationId === organizationId && wanted.has(a.paymentId))
+        .filter((a) => a.organizationId === organizationId && wanted.has(a.paymentId) && !a.releasedAt)
         .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1))
         .map((a) => ({ ...a }));
+    },
+    listLiveAllocationsOn: async (organizationId, receivableIds): Promise<LiveAllocationOn[]> => {
+      const wanted = new Set(receivableIds);
+      return [...this.allocs.values()]
+        .filter((a) => a.organizationId === organizationId && wanted.has(a.receivableId) && !a.releasedAt && this.pays.get(a.paymentId)?.status === 'POSTED')
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1))
+        .map((a) => {
+          const p = this.pays.get(a.paymentId)!;
+          return { allocation: { ...a }, payment: { id: p.id, number: p.number, receivedOn: p.receivedOn, createdAt: p.createdAt, allocatedMinor: p.allocatedMinor, status: p.status } };
+        });
     },
     allocate: async (organizationId, paymentId, requested: AllocationInput[], at) => {
       const payment = this.pays.get(paymentId);
@@ -2101,7 +2227,7 @@ export class MemoryLedgerStore implements LedgerStore {
   };
 
   private hasAllocations(paymentId: string): boolean {
-    for (const a of this.allocs.values()) if (a.paymentId === paymentId) return true;
+    for (const a of this.allocs.values()) if (a.paymentId === paymentId && !a.releasedAt) return true;
     return false;
   }
 
@@ -2144,14 +2270,14 @@ export class MemoryLedgerStore implements LedgerStore {
   /** What reversing this payment gives back, per receivable. */
   private releasedBy(paymentId: string): Map<string, bigint> {
     const released = new Map<string, bigint>();
-    for (const a of this.allocs.values()) if (a.paymentId === paymentId) released.set(a.receivableId, (released.get(a.receivableId) ?? 0n) + a.amountMinor);
+    for (const a of this.allocs.values()) if (a.paymentId === paymentId && !a.releasedAt) released.set(a.receivableId, (released.get(a.receivableId) ?? 0n) + a.amountMinor);
     return released;
   }
 
   /** Undoes every allocation of a POSTED payment and marks it REVERSED (the reverse and correct writes). */
   private reverseNow(payment: PaymentRecord, reason: string, reasonCode: string | null, at: Date): void {
     for (const a of this.allocs.values()) {
-      if (a.paymentId !== payment.id) continue;
+      if (a.paymentId !== payment.id || a.releasedAt) continue;
       const r = this.recs.get(a.receivableId);
       if (!r) continue;
       r.paidMinor -= a.amountMinor;
@@ -3176,7 +3302,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const m = this.snapshot().maps;
     return {
       custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
-      pays: m.pays, allocs: m.allocs, credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
+      pays: m.pays, allocs: liveAllocations(m.allocs), credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
       convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames,
     };
   }
@@ -3215,7 +3341,7 @@ export class MemoryLedgerStore implements LedgerStore {
     settledOwedIds: async (organizationIds, paymentIds) => {
       const byPayment = new Map<string, AllocationRecord[]>();
       for (const a of this.allocs.values()) {
-        if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId)) continue;
+        if (!organizationIds.includes(a.organizationId) || !paymentIds.includes(a.paymentId) || a.releasedAt) continue;
         // MUT-453 (review D3): a reversal keeps its allocation rows as history; a reversed payment settles nothing.
         if (this.pays.get(a.paymentId)?.status !== 'POSTED') continue;
         byPayment.set(a.paymentId, [...(byPayment.get(a.paymentId) ?? []), a]);
@@ -3554,6 +3680,13 @@ function outstanding(r: ReceivableRecord): bigint {
 /** A supplement row with the MUT-480 columns defaulted, as Postgres does for rows that don't set them. */
 function supplementRow(organizationId: string, agreementId: string, input: SupplementInput, resultingAmountMinor: bigint, at: Date): SupplementRecord {
   return { id: randomUUID(), organizationId, agreementId, ...input, reasonCode: input.reasonCode ?? null, appliedGrossMinor: input.appliedGrossMinor ?? null, creditedMinor: input.creditedMinor ?? 0n, resultingAmountMinor, createdAt: at };
+}
+
+/** MUT-444 (R14, TD-287): the records file holds the live ledger: released rows left out, and no server-only field. */
+function liveAllocations(rows: ReadonlyMap<string, AllocationRecord>): Map<string, Omit<AllocationRecord, 'releasedAt'>> {
+  const live = new Map<string, Omit<AllocationRecord, 'releasedAt'>>();
+  for (const [key, { releasedAt, ...row }] of rows) if (!releasedAt) live.set(key, row);
+  return live;
 }
 
 function settle(r: ReceivableRecord): void {

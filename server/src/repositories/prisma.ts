@@ -71,6 +71,9 @@ import type {
   ApiKeyRepository,
   ApplySupplementInput,
   ReduceAgreementInput,
+  CorrectAgreementInput,
+  CorrectAgreementResult,
+  LiveAllocationOn,
   CorrectOutcomeInput,
   OutcomeWriteInput,
   AuditRepository,
@@ -1440,38 +1443,7 @@ export class PrismaLedgerStore implements LedgerStore {
       const agreement = await this.prisma.agreement.findFirst({ where: { id: current.agreementId, organizationId } });
       if (!agreement) return null;
       try {
-        return await this.prisma.$transaction(async (tx) => {
-          const receivable = await tx.receivable.create({
-            data: {
-              organizationId,
-              number: await nextReceivableNumberTx(tx, organizationId, input.postingDate),
-              customerId: agreement.customerId,
-              projectId: agreement.projectId,
-              agreementId: agreement.id,
-              origin: 'INSTALLMENT',
-              originId: current.id,
-              currency: agreement.currency,
-              netMinor: current.netMinor,
-              vatMinor: current.vatMinor,
-              grossMinor: current.grossMinor,
-              vatTreatment: current.vatTreatment,
-              vatRateBasisPoints: current.rateBasisPoints,
-              dueDate: input.dueDate,
-              postingDate: input.postingDate,
-              postedAt: input.at,
-              createdAt: input.at,
-            },
-          });
-          // Only the first poster wins, never on a voided line (a correction or cancel voiding it concurrently), and never
-          // on a line whose amount changed since it was read (MUT-480 E1).
-          const { count } = await tx.installment.updateMany({
-            where: { id: current.id, receivableId: null, voidedAt: null, version: expectedVersion },
-            data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
-          });
-          if (count !== 1) throw new AlreadyPosted();
-          const installment = await tx.installment.findUniqueOrThrow({ where: { id: current.id } });
-          return { installment, receivable, created: true };
-        });
+        return await this.prisma.$transaction(async (tx) => ({ ...(await postInstallmentTx(tx, agreement, current, { ...input, expectedVersion })), created: true }));
       } catch (err) {
         if (!(err instanceof AlreadyPosted)) throw err;
         const installment = await this.prisma.installment.findFirstOrThrow({ where: { id: installmentId } });
@@ -1543,6 +1515,18 @@ export class PrismaLedgerStore implements LedgerStore {
         );
       } catch (err) {
         if (err instanceof StaleWrite) return { kind: 'stale' };
+        throw err;
+      }
+    },
+    // MUT-444 (ADR-226): one transaction in the lock order agreement → payments → old receivables → CHG counter →
+    // installments, the order every writer of these rows already follows, so none can deadlock with it. Any stale read,
+    // a lost lock race, or a transaction that outlasts its limit (P2028) rolls back whole and answers `stale`.
+    correct: async (organizationId, agreementId, input: CorrectAgreementInput, at): Promise<CorrectAgreementResult> => {
+      try {
+        const result = await this.asStaleOnLockConflict(organizationId, agreementId, () => translate(() => this.prisma.$transaction((tx) => correctAgreementTx(tx, organizationId, agreementId, input, at), CORRECT_TX_OPTIONS)));
+        return result.kind === 'stale' ? { kind: 'stale' } : result;
+      } catch (err) {
+        if (err instanceof StaleWrite || err instanceof AlreadyPosted || err instanceof InsufficientCapacity || isTransactionTimeout(err)) return { kind: 'stale' };
         throw err;
       }
     },
@@ -1636,7 +1620,8 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.agreement.updateMany({
           // outcome: null — a contingency agreement whose outcome is recorded is never cancelled, even by a cancel racing the record.
-          where: { id: agreementId, organizationId, status: 'ACTIVE', outcome: null },
+          // MUT-444 (R11): and only on the version read, so a cancel never lands on an agreement a correction just reposted.
+          where: { id: agreementId, organizationId, status: 'ACTIVE', outcome: null, ...(input.expectedVersion !== undefined ? { version: input.expectedVersion } : {}) },
           data: { status: 'CANCELLED', cancelledAt: at, cancelEffectiveMonth: input.cancelEffectiveMonth, cancelEffectiveDate: input.cancelEffectiveDate ?? null, finalMonth: input.finalMonth, version: { increment: 1 }, updatedAt: at },
         });
         if (count === 1) await tx.installment.updateMany({ where: { agreementId, receivableId: null, voidedAt: null }, data: { voidedAt: at } });
@@ -1748,7 +1733,7 @@ export class PrismaLedgerStore implements LedgerStore {
           this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
           this.prisma.payment.findMany({ where: { organizationId, customerId, currency } }),
-          this.prisma.paymentAllocation.findMany({ where: { organizationId, payment: { customerId, currency } } }),
+          this.prisma.paymentAllocation.findMany({ where: { organizationId, releasedAt: null, payment: { customerId, currency } } }),
           this.prisma.installment.findMany({ where: { organizationId, agreement } }),
           this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
         ],
@@ -1826,7 +1811,8 @@ export class PrismaLedgerStore implements LedgerStore {
           AND: [
             // MUT-65: a payment whose own projectId names it, OR one with an allocation on it. MUT-61 D2: the own
             // projectId is a capture-time hint, so it counts only while the payment has no allocations at all.
-            ...(filter.projectId ? [{ OR: [{ projectId: filter.projectId, allocations: { none: { organizationId } } }, { allocations: { some: { organizationId, receivable: { projectId: filter.projectId } } } }] }] : []),
+            // MUT-444 (R2): only live rows count; a row a correction released says nothing about where the money is.
+            ...(filter.projectId ? [{ OR: [{ projectId: filter.projectId, allocations: { none: { organizationId, releasedAt: null } } }, { allocations: { some: { organizationId, releasedAt: null, receivable: { projectId: filter.projectId } } } }] }] : []),
             ...(filter.allocationState ? [this.allocationStateWhere(filter.allocationState)] : []),
             cursorWhere(page),
           ],
@@ -1836,9 +1822,18 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return toPage(rows, page);
     },
-    listAllocations: (organizationId, paymentId) => this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    listAllocations: (organizationId, paymentId) => this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId, releasedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     listAllocationsFor: async (organizationId, paymentIds) =>
-      paymentIds.length === 0 ? [] : this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId: { in: [...paymentIds] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+      paymentIds.length === 0 ? [] : this.prisma.paymentAllocation.findMany({ where: { organizationId, paymentId: { in: [...paymentIds] }, releasedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    listLiveAllocationsOn: async (organizationId, receivableIds): Promise<LiveAllocationOn[]> => {
+      if (receivableIds.length === 0) return [];
+      const rows = await this.prisma.paymentAllocation.findMany({
+        where: { organizationId, receivableId: { in: [...receivableIds] }, releasedAt: null, payment: { status: 'POSTED' } },
+        include: { payment: { select: { id: true, number: true, receivedOn: true, createdAt: true, allocatedMinor: true, status: true } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map(({ payment, ...allocation }) => ({ allocation, payment }));
+    },
     allocate: async (organizationId, paymentId, requested, at) => {
       const exists = await this.prisma.payment.findFirst({ where: { id: paymentId, organizationId }, select: { id: true } });
       if (!exists) return null;
@@ -1859,7 +1854,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         if (!(await markReversedTx(tx, paymentId, null, reason, null, at))) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
-        const allocations = await tx.paymentAllocation.findMany({ where: { paymentId } });
+        const allocations = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
         await lockReceivablesInIdOrder(tx, allocations.map((a) => a.receivableId));
         await releaseAllocationsTx(tx, allocations);
         return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: true };
@@ -1881,7 +1876,7 @@ export class PrismaLedgerStore implements LedgerStore {
           }
           await assertPaymentRefsTx(tx, input);
           const number = await nextPaymentNumberTx(tx, input.organizationId, input.receivedOn);
-          const released = await tx.paymentAllocation.findMany({ where: { paymentId } });
+          const released = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
           await lockReceivablesInIdOrder(tx, [...released.map((a) => a.receivableId), ...input.allocations.map((a) => a.receivableId)]);
           await releaseAllocationsTx(tx, released);
           // R8: a millisecond after the reversal, so the replacement's statement line sorts after it on the same day.
@@ -2915,7 +2910,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (paymentIds.length === 0) return new Map();
       const allocations = await this.prisma.paymentAllocation.findMany({
         // MUT-453 (review D3): a reversal keeps its allocation rows as history; a reversed payment settles nothing.
-        where: { organizationId: { in: [...organizationIds] }, paymentId: { in: [...paymentIds] }, payment: { status: 'POSTED' } },
+        where: { organizationId: { in: [...organizationIds] }, paymentId: { in: [...paymentIds] }, releasedAt: null, payment: { status: 'POSTED' } },
         select: { paymentId: true, receivableId: true, receivable: { select: { origin: true } } },
       });
       const count = new Map<string, number>();
@@ -3499,7 +3494,7 @@ async function markReversedTx(tx: Tx, paymentId: string, expectedVersion: number
 }
 
 /** Gives back what a reversed payment's allocations paid. The caller already holds the receivables' locks. */
-async function releaseAllocationsTx(tx: Tx, allocations: readonly AllocationRecord[]): Promise<void> {
+async function releaseAllocationsTx(tx: Tx, allocations: ReadonlyArray<Pick<AllocationRecord, 'receivableId' | 'amountMinor'>>): Promise<void> {
   for (const a of allocations) await settleReceivable(tx, a.receivableId, { paidMinor: { decrement: a.amountMinor } });
 }
 
@@ -3546,15 +3541,154 @@ async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: reado
   let total = 0n;
   await lockReceivablesInIdOrder(tx, requested.map((a) => a.receivableId));
   for (const a of requested) {
-    // Already held: this re-read sees the sums an earlier allocation in this loop moved.
-    const r = await lockReceivable(tx, a.receivableId);
-    if (r.status !== 'OPEN' || a.amountMinor <= 0n || a.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new InsufficientCapacity(a.receivableId);
-    created.push(await tx.paymentAllocation.create({ data: { organizationId: payment.organizationId, paymentId: payment.id, receivableId: a.receivableId, amountMinor: a.amountMinor, createdAt: at } }));
-    await settleReceivable(tx, a.receivableId, { paidMinor: { increment: a.amountMinor } });
+    created.push(await allocateRowTx(tx, { organizationId: payment.organizationId, paymentId: payment.id, ...a }, at));
     total += a.amountMinor;
   }
   if (created.length > 0) await tx.payment.update({ where: { id: payment.id }, data: { allocatedMinor: { increment: total }, version: { increment: 1 }, updatedAt: at } });
   return created;
+}
+
+/**
+ * One allocation row and its receivable's sums (`applyAllocations` and MUT-444's placements). Already held, or locked
+ * here: the re-read sees the sums an earlier row in the same write moved, and the capacity is checked against them.
+ */
+async function allocateRowTx(tx: Tx, row: { organizationId: string; paymentId: string; receivableId: string; amountMinor: bigint }, at: Date): Promise<AllocationRecord> {
+  const r = await lockReceivable(tx, row.receivableId);
+  if (r.status !== 'OPEN' || row.amountMinor <= 0n || row.amountMinor > r.grossMinor - r.paidMinor - r.creditedMinor) throw new InsufficientCapacity(row.receivableId);
+  const created = await tx.paymentAllocation.create({ data: { ...row, createdAt: at } });
+  await settleReceivable(tx, row.receivableId, { paidMinor: { increment: row.amountMinor } });
+  return created;
+}
+
+/**
+ * Bills a line inside the caller's transaction (MUT-444: `postInstallment` and the terms correction share it): the CHG
+ * number from its posting year's counter (taken first, posting's own order), the receivable, and the claim. The claim
+ * wins only on a live, unposted line at the version read (MUT-480 E1); otherwise AlreadyPosted rolls the receivable back.
+ */
+async function postInstallmentTx(tx: Tx, agreement: AgreementRecord, line: InstallmentRecord, input: { postingDate: string; dueDate: string; at: Date; expectedVersion: number }): Promise<{ installment: InstallmentRecord; receivable: ReceivableRecord }> {
+  const receivable = await tx.receivable.create({
+    data: {
+      organizationId: agreement.organizationId,
+      number: await nextReceivableNumberTx(tx, agreement.organizationId, input.postingDate),
+      customerId: agreement.customerId,
+      projectId: agreement.projectId,
+      agreementId: agreement.id,
+      origin: 'INSTALLMENT',
+      originId: line.id,
+      currency: agreement.currency,
+      netMinor: line.netMinor,
+      vatMinor: line.vatMinor,
+      grossMinor: line.grossMinor,
+      vatTreatment: line.vatTreatment,
+      vatRateBasisPoints: line.rateBasisPoints,
+      dueDate: input.dueDate,
+      postingDate: input.postingDate,
+      postedAt: input.at,
+      createdAt: input.at,
+    },
+  });
+  // Only the first poster wins, never on a voided line (a correction or cancel voiding it concurrently), and never
+  // on a line whose amount changed since it was read (MUT-480 E1).
+  const { count } = await tx.installment.updateMany({
+    where: { id: line.id, receivableId: null, voidedAt: null, version: input.expectedVersion },
+    data: { receivableId: receivable.id, postedAt: input.at, postingDate: input.postingDate, version: { increment: 1 } },
+  });
+  if (count !== 1) throw new AlreadyPosted();
+  return { installment: await tx.installment.findUniqueOrThrow({ where: { id: line.id } }), receivable };
+}
+
+/**
+ * MUT-444 (ADR-226): the terms correction's transaction body. Every check runs under the lock it needs, in the order
+ * agreement → payments → old receivables → CHG counter → installments; a check that fails after the first write
+ * throws StaleWrite so the whole transaction rolls back.
+ */
+async function correctAgreementTx(tx: Tx, organizationId: string, agreementId: string, input: CorrectAgreementInput, at: Date): Promise<CorrectAgreementResult> {
+  // 1. The agreement row: serializes this against every other agreement write (reduce, outcomes, cancel, a second correction).
+  const lockedAgreement = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "agreements" WHERE "id" = ${agreementId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+  if (lockedAgreement.length === 0) return { kind: 'not_found' };
+  const agreement = await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } });
+  if (agreement.version !== input.expectedVersion || agreement.status !== 'ACTIVE' || agreement.outcome !== null) return { kind: 'stale' };
+  // 2. The moved payments, in id order: still POSTED with the allocated total read (R8). A payment write takes its row before receivables too.
+  if (input.payments.length > 0) {
+    const ids = input.payments.map((p) => p.id).sort();
+    const rows = await tx.$queryRaw<Array<{ id: string; status: string; allocatedMinor: bigint }>>`SELECT "id"::text AS "id", "status"::text AS "status", "allocatedMinor" FROM "payments" WHERE "id" = ANY(${ids}::uuid[]) AND "organizationId" = ${organizationId}::uuid ORDER BY "id" FOR UPDATE`;
+    const now = new Map(rows.map((r) => [r.id, r]));
+    if (input.payments.some((p) => now.get(p.id)?.status !== 'POSTED' || now.get(p.id)?.allocatedMinor !== p.allocatedMinor)) return { kind: 'stale' };
+  }
+  // 3. The old receivables, in id order, at the versions read.
+  if (await receivablesMoved(tx, organizationId, input.receivables)) return { kind: 'stale' };
+  const before = new Map((await tx.receivable.findMany({ where: { id: { in: input.receivables.map((r) => r.id) } }, select: { id: true, status: true } })).map((r) => [r.id, r.status]));
+
+  // 4. The new lines (planned ids, one insert), then their posts: the CHG counter is taken here, before any old line
+  //    row is touched (posting's own order). Created a millisecond after the credits, so the statement reads old charge,
+  //    credit, repost on the shared date (D5 B).
+  if (input.newInstallments.length > 0) await tx.installment.createMany({ data: input.newInstallments.map(({ post: _post, ...spec }) => ({ ...spec, organizationId, agreementId })) });
+  const posted = new Map<string, ReceivableRecord>();
+  const posts = input.newInstallments.filter((i) => i.post).sort((x, y) => (x.post!.postingDate < y.post!.postingDate ? -1 : x.post!.postingDate > y.post!.postingDate ? 1 : x.position - y.position));
+  for (const line of posts) {
+    const fresh = await tx.installment.findUniqueOrThrow({ where: { id: line.id } });
+    posted.set(line.id, (await postInstallmentTx(tx, agreement, fresh, { ...line.post!, at: new Date(at.getTime() + 1), expectedVersion: fresh.version })).receivable);
+  }
+  // 5. Every live line voided, each on the version and receivable it was read with (per row, so a miss is attributable).
+  for (const v of input.voids) {
+    const { count } = await tx.installment.updateMany({ where: { id: v.id, agreementId, voidedAt: null, receivableId: v.receivableId, version: v.expectedVersion }, data: { voidedAt: at, version: { increment: 1 } } });
+    if (count !== 1) throw new StaleWrite();
+  }
+  // 6. The releases: one statement, then the old receivables' sums (their locks are held).
+  if (input.releases.length > 0) {
+    const ids = input.releases.map((x) => x.allocationId);
+    const { count } = await tx.paymentAllocation.updateMany({ where: { id: { in: ids }, organizationId, releasedAt: null }, data: { releasedAt: at } });
+    if (count !== input.releases.length) throw new StaleWrite();
+    const rows = new Map((await tx.paymentAllocation.findMany({ where: { id: { in: ids } } })).map((a) => [a.id, a]));
+    if (input.releases.some((x) => { const a = rows.get(x.allocationId); return !a || a.paymentId !== x.paymentId || a.receivableId !== x.receivableId || a.amountMinor !== x.amountMinor || !input.payments.some((p) => p.id === x.paymentId); })) throw new StaleWrite();
+    await releaseAllocationsTx(tx, input.releases);
+  }
+  // 7. The credits: each the remainder, with nothing paid left on it (D3), dated its own posting date (D5 B).
+  const credits: CreditRecord[] = [];
+  for (const c of input.credits) {
+    const r = await tx.receivable.findUniqueOrThrow({ where: { id: c.receivableId } });
+    if (r.paidMinor !== 0n || c.amountMinor <= 0n || c.amountMinor !== r.grossMinor - r.creditedMinor) throw new StaleWrite();
+    credits.push(await tx.receivableCredit.create({ data: { organizationId, receivableId: c.receivableId, amountMinor: c.amountMinor, netMinor: c.netMinor, vatMinor: c.vatMinor, effectiveDate: c.effectiveDate, ...input.credit, createdAt: at } }));
+    await settleReceivable(tx, c.receivableId, { creditedMinor: { increment: c.amountMinor } });
+  }
+  // 8. The placements on the new charges, then each payment's allocated total (net of what it released) and version.
+  const allocations: AllocationRecord[] = [];
+  const net = new Map<string, bigint>();
+  for (const x of input.releases) net.set(x.paymentId, (net.get(x.paymentId) ?? 0n) - x.amountMinor);
+  for (const pl of input.placements) {
+    const r = posted.get(pl.installmentId);
+    if (!r) throw new StaleWrite();
+    allocations.push(await allocateRowTx(tx, { organizationId, paymentId: pl.paymentId, receivableId: r.id, amountMinor: pl.amountMinor }, at));
+    net.set(pl.paymentId, (net.get(pl.paymentId) ?? 0n) + pl.amountMinor);
+  }
+  const payments: PaymentRecord[] = [];
+  for (const p of input.payments) {
+    const current = await tx.payment.findUniqueOrThrow({ where: { id: p.id } });
+    const allocatedMinor = p.allocatedMinor + (net.get(p.id) ?? 0n);
+    if (allocatedMinor < 0n || allocatedMinor > current.amountMinor) throw new StaleWrite();
+    payments.push(await tx.payment.update({ where: { id: p.id }, data: { allocatedMinor, version: { increment: 1 }, updatedAt: at } }));
+  }
+  // 9. The agreement's terms, totals and version (cannot miss under its lock; kept conditional so the invariant stays local), and the CORRECTION row.
+  const { count } = await tx.agreement.updateMany({ where: { id: agreementId, version: input.expectedVersion }, data: { ...input.terms, version: { increment: 1 }, updatedAt: at } });
+  if (count !== 1) throw new Error('correct: agreement moved under its row lock');
+  const supplement = await tx.agreementSupplement.create({ data: { organizationId, agreementId, ...input.supplement, resultingAmountMinor: input.terms.amountMinor, createdAt: at } });
+  // 10. Fresh rows; `settled` names every receivable this write moved to SETTLED (R13).
+  const after = await tx.receivable.findMany({ where: { id: { in: [...input.receivables.map((r) => r.id), ...[...posted.values()].map((r) => r.id)] } } });
+  const settled = after.filter((r) => r.status === 'SETTLED' && before.get(r.id) !== 'SETTLED').map((r) => r.id);
+  const byId = new Map(after.map((r) => [r.id, r]));
+  return {
+    kind: 'updated',
+    record: {
+      agreement: await tx.agreement.findUniqueOrThrow({ where: { id: agreementId } }),
+      supplement,
+      installments: await tx.installment.findMany({ where: { agreementId }, orderBy: { position: 'asc' } }),
+      credits,
+      receivables: [...posted.values()].map((r) => byId.get(r.id)!),
+      allocations,
+      payments,
+      settled,
+    },
+  };
 }
 
 /** Thrown inside the posting transaction to roll back a receivable another poster beat us to. */
