@@ -45,6 +45,17 @@
 - Test-first: `statements/__tests__/legacy-build.ts` (the frozen builder), `legacy-equivalence.test.ts`, `ledger-driver.ts` (organizations from real writes, seeded), `lines.test.ts`, `period.test.ts`, build edge cases; `__tests__/period-summary.route.test.ts`; `repositories/__tests__/store-{contract,memory,prisma}-mut483*`; a local-mode test; pins in `writability-routes` and `route-security` and the version literals. Release-QA feature `portal-selfservice.malafat-money-api.period-totals`.
 - TD-291 (the period read loads the organization's whole history per request). No migration, no new index, no snapshot format change.
 
+## [Unreleased] - 2026-10-29 — Portal receipt uploads: CORS on the attachments bucket
+
+**Why:** every receipt upload from the web portal failed with "تعذّر رفع … حاول مجددًا". The API logs showed `POST /v1/receipts/uploads` 201, then the portal's cleanup `DELETE` half a second later, with no complete: the browser's PUT to the signed URL never left. The bucket had no CORS configuration, so its preflight answered without `Access-Control-Allow-Origin` and the browser refused the PUT. The phone uploads outside a browser and was unaffected.
+
+### Fixed
+- `google_storage_bucket.attachments` gets a CORS rule: `PUT` from the portal's origins (`local.portal_origins` in `domain.tf`: `app.<domain>` and the legacy portal host from `config/hosts.json`), allowing the `Content-Type` and `x-goog-content-length-range` headers the signed URL carries, cached an hour. An environment the hosts file doesn't name gets no rule (Cloud Run's own URL would be a dependency cycle).
+- `tests/attachments_bucket.tftest.hcl` covers the rule with a domain, without one, and for an unnamed environment.
+
+### Operator
+- Takes effect at the next `terraform apply` (`make release server`), an in-place update of the bucket. No portal release needed. Listed in `docs/operations/before-release.md`.
+
 ## [Unreleased] - 2026-10-29 — MUT-444: correct an agreement's terms after posting (API 1.89.0-mut444, ADR-226)
 
 **Why:** a fee saved with the wrong VAT basis, treatment or amount could not be fixed once anything posted (cancel refuses, supplements can't reach posted charges, reduce only lowers). Unblocks MAL-1368. Plan `.claude/designs/mut-444-correct-agreement-terms.md` (D1–D7 answered by Basel; eng review R1–R16).
