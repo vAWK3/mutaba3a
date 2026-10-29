@@ -24,7 +24,10 @@ import { DecimalAmount } from '../../format/DecimalAmount';
 import { HOSTED_CURRENCIES } from '../../format/currencies';
 import { formatDay } from '../../format/dates';
 import { LOW_CONFIDENCE, suggestionToFormValues, type SuggestedField, type SuggestionPrefill } from '../../lib/receiptSuggestion';
-import { useProfile, useWriteGate } from '../../session/me';
+import { useMe, useProfile, useWriteGate } from '../../session/me';
+import { MoveReceiptDrawerHost } from '../../components/MoveReceiptDrawer';
+import { hasOtherProfiles, useMovedToast } from '../../components/useMovedToast';
+import type { ReceiptReviewSearch } from '../../data/filters';
 import { ReceiptsUnavailable } from './ReceiptsGallery';
 import { PageHeader } from './shared';
 
@@ -37,11 +40,13 @@ import { PageHeader } from './shared';
  */
 export interface ReceiptReviewPageProps {
   receiptId: string;
+  search?: ReceiptReviewSearch;
+  setSearch?: (next: ReceiptReviewSearch) => void;
 }
 
 const FORM_ID = 'hosted-receipt-form';
 
-export function ReceiptReviewPage({ receiptId }: ReceiptReviewPageProps) {
+export function ReceiptReviewPage({ receiptId, search = {}, setSearch = () => {} }: ReceiptReviewPageProps) {
   const profile = useProfile();
   const { t } = useLanguage();
   const { availability } = useReceiptsAvailability(profile.id);
@@ -64,12 +69,25 @@ export function ReceiptReviewPage({ receiptId }: ReceiptReviewPageProps) {
       </>
     );
   }
-  return <ReceiptReviewBody receiptId={receiptId} profile={profile} back={back} />;
+  return <ReceiptReviewBody receiptId={receiptId} profile={profile} back={back} search={search} setSearch={setSearch} />;
 }
 
-function ReceiptReviewBody({ receiptId, profile, back }: { receiptId: string; profile: HostedProfile; back: ReactNode }) {
+function ReceiptReviewBody({ receiptId, profile, back, search, setSearch }: { receiptId: string; profile: HostedProfile; back: ReactNode; search: ReceiptReviewSearch; setSearch: (next: ReceiptReviewSearch) => void }) {
   const { t } = useLanguage();
   const receipt = useReceipt(profile.id, receiptId);
+  const me = useMe();
+  const navigate = useNavigate();
+  const { writable } = useWriteGate();
+  const queue = useReceipts(profile.id, 'to_review');
+  const movedToast = useMovedToast();
+  // MUT-503 (DR2): Move only where there is somewhere to move to and this profile may be written.
+  const canMove = writable && hasOtherProfiles(me, profile.id);
+  /** DR4: on to the next receipt to review, as Approve does, with the toast naming where this one went. */
+  const onMoved = (target: HostedProfile) => {
+    const next = nextReceiptId(queue.data, receiptId);
+    movedToast(target, receiptId);
+    void navigate({ to: next ? `/p/${profile.id}/expenses/receipts/${next}` : `/p/${profile.id}/expenses/receipts` });
+  };
 
   if (receipt.isError) {
     const gone = receipt.error instanceof ApiError && receipt.error.status === 404;
@@ -100,7 +118,15 @@ function ReceiptReviewBody({ receiptId, profile, back }: { receiptId: string; pr
   return (
     <>
       {back}
-      <PageHeader title={t(filed ? 'hosted.receipts.review.filedTitle' : 'hosted.receipts.review.title')} />
+      <PageHeader title={t(filed ? 'hosted.receipts.review.filedTitle' : 'hosted.receipts.review.title')}>
+        {/* DR1: beside the title, away from Approve: where the receipt belongs is decided before its fields. */}
+        {!filed && canMove && (
+          <Button variant="secondary" size="sm" onClick={() => setSearch({ ...search, move: true })}>
+            {t('hosted.receipts.move.action')}
+          </Button>
+        )}
+      </PageHeader>
+      {search.move && canMove && <MoveReceiptDrawerHost profile={profile} receiptId={receiptId} onClose={() => setSearch({ ...search, move: undefined })} onMoved={onMoved} />}
       <div className="hp-receipt-review" data-filing-status={receipt.data.filingStatus}>
         <section className="hp-receipt-review-preview">
           <ReceiptPreview profileId={profile.id} receipt={receipt.data} />

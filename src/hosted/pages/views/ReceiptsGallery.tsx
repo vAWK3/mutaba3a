@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
@@ -11,7 +12,10 @@ import { useToast } from '../../components/Toast';
 import { DEFAULT_RECEIPT_STATUS, type ReceiptStatusFilter, type ReceiptsPageSearch } from '../../data/filters';
 import { RECEIPT_MIME_TYPES, checkReceiptFile } from '../../data/receiptFileRules';
 import { uploadErrorOf, useReceiptCounts, useReceipts, useReceiptsAvailability, useUploadReceipts, type PendingUpload } from '../../data/receiptQueries';
-import { useProfile, useWriteGate } from '../../session/me';
+import { useMe, useProfile, useWriteGate } from '../../session/me';
+import type { HostedProfile } from '../../api/client';
+import { MoveReceiptDrawerHost } from '../../components/MoveReceiptDrawer';
+import { hasOtherProfiles, useMovedToast } from '../../components/useMovedToast';
 import { useExpensesTabs } from './ExpenseGroupsList';
 import { PageHeader, ShowMore } from './shared';
 
@@ -22,6 +26,8 @@ import { PageHeader, ShowMore } from './shared';
  * and opens originals, with nothing to upload (D11).
  */
 const SKELETON_ROWS = 3;
+/** DR4: how long a moved card takes to leave (--duration-toggle) before focus moves on. */
+const LEAVE_MS = 260;
 
 export interface ReceiptsGalleryProps {
   search: ReceiptsPageSearch;
@@ -61,6 +67,29 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   const list = useReceipts(profile.id, status);
   const counts = useReceiptCounts(profile.id);
   const uploads = useUploadReceipts(profile.id);
+  const me = useMe();
+  const navigate = useNavigate();
+  const movedToast = useMovedToast();
+  // MUT-503 (DR2): no Move where there is nowhere to move to, or nothing may be written here.
+  const canMove = writable && hasOtherProfiles(me, profile.id);
+  const [leavingId, setLeavingId] = useState<string | null>(null);
+  const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
+  const closeMove = () => setSearch({ ...search, move: undefined });
+  /** DR4: the card leaves, focus goes to its neighbour (or the tabs when it was the last), the toast names where it went. */
+  const onMoved = (target: HostedProfile) => {
+    const id = search.move;
+    if (!id) return;
+    const ids = list.data?.map((item) => item.id) ?? [];
+    const at = ids.indexOf(id);
+    const neighbour = ids[at + 1] ?? ids[at - 1] ?? null;
+    setLeavingId(id);
+    closeMove();
+    movedToast(target, id);
+    window.setTimeout(() => {
+      const next = neighbour ? document.querySelector<HTMLElement>(`[data-receipt-id="${neighbour}"] .hp-receipt-card-link`) : null;
+      (next ?? document.querySelector<HTMLElement>('.hp-receipts-bar [role="tab"][aria-selected="true"], .hp-receipts-bar button'))?.focus();
+    }, LEAVE_MS);
+  };
   // The search as it is when an upload finishes, not as it was when it started (the person may have switched tabs).
   const latestSearch = useRef(search);
   useEffect(() => {
@@ -140,13 +169,28 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
             <ul className="hp-receipts-grid" aria-label={t('hosted.receipts.listLabel')}>
               {status !== 'filed' && uploads.pending.map((p) => <UploadingCard key={p.key} pending={p} />)}
               {items.map((item) => (
-                <ReceiptCard key={item.id} profileId={profile.id} item={item} to={`/p/${profile.id}/expenses/receipts/${item.id}`} />
+                <ReceiptCard
+                  key={item.id}
+                  profileId={profile.id}
+                  item={item}
+                  to={reviewPath(item.id)}
+                  leaving={item.id === leavingId}
+                  actions={
+                    canMove && item.filingStatus === 'TO_REVIEW'
+                      ? [
+                          { label: t('hosted.receipts.move.open'), onSelect: () => void navigate({ to: reviewPath(item.id) }) },
+                          { label: t('hosted.receipts.move.action'), onSelect: () => setSearch({ ...search, move: item.id }) },
+                        ]
+                      : undefined
+                  }
+                />
               ))}
             </ul>
             <ShowMore hasMore={Boolean(list.hasNextPage)} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      {search.move && canMove && <MoveReceiptDrawerHost profile={profile} receiptId={search.move} onClose={closeMove} onMoved={onMoved} />}
     </>
   );
 }

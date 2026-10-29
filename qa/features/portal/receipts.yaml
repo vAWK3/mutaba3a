@@ -72,3 +72,45 @@ features:
     expect:
       - The Expenses tabs are Expenses and Groups only
       - The page says "Receipts aren't available here"
+  - id: move
+    title: Move a To-review receipt to another profile from its card's ⋯ menu (MUT-503)
+    tier: secondary
+    tickets: [MUT-503]
+    paths:
+      - src/hosted/components/MoveReceiptDrawer.tsx
+      - src/hosted/components/MoreActionsMenu.tsx
+      - src/hosted/components/useMovedToast.ts
+    steps:
+      - On Receipts › To review, open a card's ⋯ and choose Move to profile…
+      - Pick another profile and press Move to <name>
+      - Press Open on the toast
+    expect:
+      - The drawer lists the person's other profiles; Move is off until one is picked, then names it
+      - The card leaves this profile's To review and the count drops; POST …/move carries the profile and an Idempotency-Key
+      - The toast says "Moved to <name>"; Open shows the receipt on that profile
+  - id: move-review
+    title: Move from a receipt's review page, then go on to the next receipt (MUT-503 DR1)
+    tier: secondary
+    tickets: [MUT-503]
+    steps:
+      - Open a To-review receipt and press Move to profile… beside the title
+      - Move it to another profile
+    expect:
+      - The next receipt to review opens, and the toast names the other profile
+  - id: move-refused
+    title: A read-only profile is listed but can't take the receipt; with none open, a note says so (MUT-503 AC2)
+    tier: secondary
+    tickets: [MUT-503]
+    steps:
+      - Open Move on a receipt when the other profiles are read-only
+    expect:
+      - Each is listed with "Read-only until it's paid" and can't be chosen; Move stays off
+      - A note says no other profile can take it, with Billing; nothing is sent
+  - id: filed-no-move
+    title: A Filed receipt has no Move, on its card or its page (MUT-503 AC3)
+    tier: secondary
+    tickets: [MUT-503]
+    steps:
+      - Open Receipts › Filed, then open a Filed receipt
+    expect:
+      - Filed cards have no ⋯, and the Filed receipt's page has no Move to profile…

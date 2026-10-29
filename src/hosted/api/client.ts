@@ -67,6 +67,7 @@ export type ReceiptFilingStatus = Schemas['ReceiptFilingStatus'];
 export type ReceiptDisposition = 'attachment' | 'inline';
 export type ApproveReceiptRequest = Schemas['ApproveReceiptRequest'];
 export type ApproveReceiptResponse = Schemas['ApproveReceiptResponse'];
+export type MoveReceiptResponse = Schemas['MoveReceiptResponse'];
 export type CreateLibraryReceiptUploadRequest = Schemas['CreateLibraryReceiptUploadRequest'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
@@ -692,6 +693,9 @@ export const api = {
     request<void>('DELETE', `/v1/receipts/${encodeURIComponent(receiptId)}`, { profileId }),
   approveReceipt: (profileId: string, receiptId: string, body: ApproveReceiptRequest, idempotencyKey: string) =>
     request<ApproveReceiptResponse>('POST', `/v1/receipts/${encodeURIComponent(receiptId)}/approve`, { profileId, body, idempotencyKey }),
+  /** MUT-503: to another of the person's profiles; the attempt's Idempotency-Key, as approve. */
+  moveReceipt: (profileId: string, receiptId: string, targetProfileId: string, idempotencyKey: string) =>
+    request<MoveReceiptResponse>('POST', `/v1/receipts/${encodeURIComponent(receiptId)}/move`, { profileId, body: { profileId: targetProfileId }, idempotencyKey }),
 
   // Income (MUT-133) — personal profiles only (data/incomeAffordances.ts). Both writes carry an
   // attempt-scoped Idempotency-Key (data/attemptKey.ts), never one minted per click.
