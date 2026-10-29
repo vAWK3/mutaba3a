@@ -50,6 +50,9 @@
 - Migrations `20261029100000_mut444_supplement_correction` and `20261029100100_mut444_allocation_released_at` (additive). Local snapshot format stays 13. `postInstallmentTx` and `allocateRowTx` extracted in Prisma, `postNow` in memory; `loadAgreementParties` and `composeSchedule` extracted (behaviour unchanged). Records export drops released rows (TD-287). Portal types regenerated.
 - The worktree gets its own `server/node_modules/.prisma` and `@prisma` copies, so `prisma generate` for the new schema never touches the main checkout's client.
 
+### Fixed (pre-landing review P1–P4)
+- A frozen real 0 % rate stays frozen; only a 0 frozen for want of any rate is re-resolved, and a rate change is never `NOTHING_TO_CORRECT` (P2). Both stores refuse a placement for a payment the write didn't lock (P3). The QA spec's retainer gets its own client and matter (P1). Added tests for AC1 with other client activity, AC2 with an earlier credit, AC5 settled events, P2034/40P01 (P4).
+
 ## [Unreleased] - 2026-10-28 — MUT-443: correct a recorded payment in one atomic call (API 1.88.0-mut443, ADR-225)
 
 **Why:** a correction was two calls (reverse, then record with `replacesPaymentId`); a dropped connection in between left the payment reversed with nothing in its place and the client's balance wrong. Unblocks MAL-1367 (Money overhaul MAL-1410). Plan `.claude/designs/mut-443-correct-payment.md` (eng review R1–R12; Basel chose D1 B and the R10 rulings).

@@ -731,3 +731,14 @@ Built to the plan and the review above. Where the code made the plan's wording c
 | B9 | QA | Each refusal is its own recorded step (stale, OTHER, same terms, trigger, cancelled, contingency outcome, retainer) | Every error code maps to a step. |
 | B10 | Worktree only | `server/node_modules` is a real directory linking to main's entries, with its own `.prisma` and `@prisma` copies | `prisma generate` for the new schema must not overwrite the main checkout's client (its typecheck would fail on `CORRECTION`). |
 
+## Pre-landing review 2026-10-29
+
+An independent pre-landing review found no CRITICAL or HIGH issues. Its four findings, all applied test-first (the tests were committed before the fixes; red/green proven once the machine's hold lifts):
+
+| # | Finding | Disposition |
+|---|---|---|
+| P1 | The QA spec's retainer (start 2027-01, on the fee's own client and matter) would bill from 2027-01-01 and break the final closing-balance and `posted` checks | **Applied.** The retainer refusal step creates its own client and matter; the NOT_FIXED step is unchanged. |
+| P2 | `frozenRate` read a frozen 0 as "no rate" and re-resolved on `agreementDate`; `unchanged()` never compared the rate | **Applied.** A 0 % rate is a real rate (`PUT /v1/settings/vat` accepts 0). The rate is re-resolved only when no rate row was in force on the agreement date when the agreement was created (a row with `effectiveFrom ≤ agreementDate` and `createdAt ≤ agreement.createdAt`); otherwise the frozen 0 is kept. `NOTHING_TO_CORRECT` also compares `vatRateBasisPoints`. Tests: the route (a frozen real 0 % stays 0 after an 18 % rate is set later for that date; the existing "no rate at creation" case still resolves) and the planner. ADR-226 §5 amended. |
+| P3 | A placement whose payment isn't in `input.payments` would be written without its payment being locked, re-checked or updated | **Applied.** Both stores answer `stale` (memory `correctable`, Prisma `correctAgreementTx` step 8). The composer never sends one; this is defence in depth. Contract test on both stores. |
+| P4 | Test gaps | **Applied.** Route: AC1 with other charges and unallocated money on the client (the preview's `customer.*.after` equals the summary after the commit); AC2 with an earlier credit and a payment on the same old charge (D3 and the release together: credit ₪450 with ₪50 prior, ₪300 moved, Δ ₪140); AC5: an old charge already paid in full emits no `receivable.settled` from the correction (its status didn't change; only the payment's original event exists), and the still-open repost emits none. Unit: P2034 and 40P01 answer `stale`, like P2028. |
+
