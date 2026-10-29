@@ -44,6 +44,24 @@ describe('hazardsRolledPast', () => {
     expect(ROLLBACK_HAZARDS.map((h) => h.ticket)).toEqual(expect.arrayContaining(['MUT-100', 'MUT-235', 'MUT-255', 'MUT-182', 'MUT-333', 'MUT-115', 'MUT-367']));
   });
 
+  it('MUT-480 and MUT-444 (R1): rolling back past their migrations runs their counts', () => {
+    const mut480 = ['20261028170000_mut480_supplement_reduction', '20261028170100_mut480_reduction_columns'];
+    const mut444 = ['20261029100000_mut444_supplement_correction', '20261029100100_mut444_allocation_released_at'];
+    expect(hazardsRolledPast(mut444).map((h) => h.ticket)).toEqual(['MUT-444']);
+    expect(hazardsRolledPast([...mut480, ...mut444]).map((h) => h.ticket)).toEqual(['MUT-480', 'MUT-444']);
+    const byTicket = new Map(ROLLBACK_HAZARDS.map((h) => [h.ticket, h]));
+    expect(byTicket.get('MUT-480')!.count).toBe(`SELECT count(*) FROM agreement_supplements WHERE distribution = 'REDUCTION'`);
+    expect(byTicket.get('MUT-444')!.count).toBe(`SELECT (SELECT count(*) FROM payment_allocations WHERE "releasedAt" IS NOT NULL) + (SELECT count(*) FROM agreement_supplements WHERE distribution = 'CORRECTION')`);
+  });
+
+  it('MUT-444 refuses a rollback once a correction released a row or wrote a CORRECTION row', async () => {
+    const lines: string[] = [];
+    const applied = [...AT, '20261029100000_mut444_supplement_correction', '20261029100100_mut444_allocation_released_at'];
+    const code = await rollbackCheck({ commit: 'abc1234', applied, atCommit: AT, count: async (sql) => (sql.includes('releasedAt') ? 2 : 0), log: (s) => lines.push(s) });
+    expect(code).toBe(1);
+    expect(lines.join('\n')).toMatch(/MUT-444: 2 .*a reversal releases twice/);
+  });
+
   it('every hazard’s migration name matches a real migration, so a typo can’t silently skip its check', () => {
     const migrations = readdirSync(resolve(process.cwd(), 'prisma/migrations'));
     for (const hazard of ROLLBACK_HAZARDS) expect(migrations.some((m) => m.includes(hazard.migration)), hazard.ticket).toBe(true);

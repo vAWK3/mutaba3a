@@ -67,6 +67,18 @@ export const ROLLBACK_HAZARDS: readonly RollbackHazard[] = [
     count: `SELECT count(*) FROM users WHERE status = 'PENDING_REVIEW'`,
     consequence: "an older revision's Prisma client has no PENDING_REVIEW status, so every read that returns such a person fails",
   },
+  {
+    ticket: 'MUT-480',
+    migration: '_mut480_',
+    count: `SELECT count(*) FROM agreement_supplements WHERE distribution = 'REDUCTION'`,
+    consequence: "an older revision's Prisma client has no REDUCTION distribution, so reading those agreements' supplements (agreement details) fails",
+  },
+  {
+    ticket: 'MUT-444',
+    migration: '_mut444_',
+    count: `SELECT (SELECT count(*) FROM payment_allocations WHERE "releasedAt" IS NOT NULL) + (SELECT count(*) FROM agreement_supplements WHERE distribution = 'CORRECTION')`,
+    consequence: "an older revision counts released allocation rows, so a reversal releases twice and payment lists and statements double them; its Prisma client also has no CORRECTION distribution, so those agreements' details fail",
+  },
 ];
 
 const MIGRATIONS_DIR = 'server/prisma/migrations/';
