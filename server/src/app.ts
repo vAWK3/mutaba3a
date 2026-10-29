@@ -281,7 +281,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.89.0-mut444';
+export const API_VERSION = '1.90.0-mut483';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -424,6 +424,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     terms,
     billing: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
+    logger: deps.logger,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
@@ -635,6 +636,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         'Category names (MUT-464): GET, POST and PATCH /v1/expense-categories show a category the profile was seeded with in the request language — the first ar or en tag of Accept-Language, else the signed-in person\'s language (Content-Language says which; Vary: Accept-Language). A name a person typed shows as typed. Each category carries `presetKey`, the preset entry it is (`other` for the automatic Other) or null, worked out from the stored name. Adding or renaming to a seeded category\'s other-language name answers 409 CATEGORY_NAME_TAKEN.',
         '',
         'Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are MTB3A\'s. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.',
+        'Period totals (MUT-483, ADR-227): GET /v1/summaries/period?from&to&currency (summaries:read; API key, session or device session) returns per currency billed, credited, payments, reversals, received = payments − reversals, and the balance at the start and end (openingBalance, closingBalance, change = closing − opening = billed − received − credited). They are the customer statement\'s lines summed across clients, plus payments with no client; the ledger as it stands at asOf, so anything dated into a closed month changes it.',
       ].join('\n'),
     },
     tags: [

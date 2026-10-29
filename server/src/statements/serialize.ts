@@ -1,6 +1,8 @@
 import { formatMoney, type Currency } from '../money.js';
+import type { IsoDate } from '../dates.js';
 import type { CreditReasonCode } from '../payments/credit.js';
 import { encodeStatementCursor, type StatementLine, type StatementPage, type StatementView } from './build.js';
+import type { PeriodTotals } from './period.js';
 
 /** MUT-478: the wire shape of a statement page (`CustomerStatementSchema`); every amount gross, in the statement's currency. */
 export function serializeStatement(input: { customerId: string; currency: Currency; view: StatementView; page: StatementPage }) {
@@ -49,4 +51,28 @@ function serializeLine(line: StatementLine, money: (minor: bigint) => string) {
     case 'PAYMENT_REVERSAL':
       return { ...base, kind: 'PAYMENT_REVERSAL' as const, paymentId: line.payment!.id, receiptNumber: line.payment!.receiptNumber, reason: line.payment!.reversalReason, reasonCode: line.payment!.reversalReasonCode as CreditReasonCode | null };
   }
+}
+
+/** MUT-483: the wire shape of a period's figures (`PeriodSummarySchema`); every amount gross, each block in its own currency. */
+export function serializePeriodSummary(input: { from: IsoDate; to: IsoDate; asOf: IsoDate; timezone: string; totals: readonly PeriodTotals[] }) {
+  return {
+    from: input.from,
+    to: input.to,
+    asOf: input.asOf,
+    timezone: input.timezone,
+    currencies: input.totals.map((t) => {
+      const money = (minor: bigint) => formatMoney({ minor, currency: t.currency as Currency });
+      return {
+        currency: t.currency as Currency,
+        openingBalance: money(t.openingMinor),
+        billed: money(t.billedMinor),
+        credited: money(t.creditedMinor),
+        received: money(t.paymentsMinor - t.reversalsMinor),
+        payments: money(t.paymentsMinor),
+        reversals: money(t.reversalsMinor),
+        change: money(t.closingMinor - t.openingMinor),
+        closingBalance: money(t.closingMinor),
+      };
+    }),
+  };
 }

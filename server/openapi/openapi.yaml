@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.89.0-mut444
+  version: 1.90.0-mut483
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -51,6 +51,7 @@ info:
     Category names (MUT-464): GET, POST and PATCH /v1/expense-categories show a category the profile was seeded with in the request language — the first ar or en tag of Accept-Language, else the signed-in person's language (Content-Language says which; Vary: Accept-Language). A name a person typed shows as typed. Each category carries `presetKey`, the preset entry it is (`other` for the automatic Other) or null, worked out from the stored name. Adding or renaming to a seeded category's other-language name answers 409 CATEGORY_NAME_TAKEN.
 
     Summaries (M6) are computed on read: outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date, or from its first payment or credit if that comes first, and adds no customer row or currency block until then (MUT-392); statuses are MTB3A's. Attachments are reached only through short-lived signed URLs; 503 ATTACHMENTS_NOT_CONFIGURED when the deployment has no bucket.
+    Period totals (MUT-483, ADR-227): GET /v1/summaries/period?from&to&currency (summaries:read; API key, session or device session) returns per currency billed, credited, payments, reversals, received = payments − reversals, and the balance at the start and end (openingBalance, closingBalance, change = closing − opening = billed − received − credited). They are the customer statement's lines summed across clients, plus payments with no client; the ledger as it stands at asOf, so anything dated into a closed month changes it.
 tags:
   - name: Operations
     description: Liveness and readiness
@@ -6571,6 +6572,81 @@ components:
         - proposedOn
         - contingency
         - agreementType
+    PeriodSummary:
+      type: object
+      properties:
+        from:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "Today in the organization timezone: what an Owed dated ahead is measured against, and when the figures were read."
+        timezone:
+          type: string
+          description: The organization timezone the day boundaries are in.
+        currencies:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeriodCurrencyTotals"
+      required:
+        - from
+        - to
+        - asOf
+        - timezone
+        - currencies
+    PeriodCurrencyTotals:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        openingBalance:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "What clients owed at the start of `from`, net of money received and not yet applied: the statement balance of every client, plus payments with no client. May be negative."
+        billed:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Gross of the CHARGE lines dated in the period (postingDate).
+        credited:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: CREDIT lines dated in the period (effectiveDate).
+        received:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: payments − reversals; may be negative when an earlier payment was reversed in the period.
+        payments:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: PAYMENT lines dated in the period (receivedOn).
+        reversals:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment."
+        change:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: closingBalance − openingBalance = billed − received − credited.
+        closingBalance:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: What clients owed at the end of `to`, on the same terms as openingBalance.
+      required:
+        - currency
+        - openingBalance
+        - billed
+        - credited
+        - received
+        - payments
+        - reversals
+        - change
+        - closingBalance
     CustomerSummary:
       type: object
       properties:
@@ -16749,6 +16825,72 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrganizationSummary"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/summaries/period:
+    get:
+      tags:
+        - Summaries
+      summary: Billed, received and credited over a period per currency, with the balance at its start and end
+      description: "MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies."
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID)
+          required: false
+          description: Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID)
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Inclusive; defaults to the last day of this month (not today, so lines dated later this month count). A real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG)
+          required: false
+          description: Inclusive; defaults to the last day of this month (not today, so lines dated later this month count). A real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG)
+          name: to
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Currency"
+              - description: "One block for this currency, all zeros if it has nothing. Omitted: a block per currency with a line in the period or a balance at either end."
+          required: false
+          description: "One block for this currency, all zeros if it has nothing. Omitted: a block per currency with a line in the period or a balance at either end."
+          name: currency
+          in: query
+      responses:
+        "200":
+          description: Period figures
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodSummary"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

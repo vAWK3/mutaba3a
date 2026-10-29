@@ -13,7 +13,11 @@ import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
 import type { AgreementRecord, ExpenseCursor, ExpenseRecord, FeeProposalRecord, PageCursor, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
-import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, VerdictQuerySchema, VerdictSchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
+import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, VerdictQuerySchema, VerdictSchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, PeriodSummaryQuerySchema, PeriodSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
+import type { Logger } from '../logger.js';
+import { ledgerEntries } from '../statements/lines.js';
+import { summarizePeriod } from '../statements/period.js';
+import { serializePeriodSummary } from '../statements/serialize.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
 import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, oldestOverdueDueDate, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
@@ -28,8 +32,20 @@ const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
  */
 export const SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/summaries/verdict']);
 
+/**
+ * MUT-483 (ADR-227, D5, R4): the rule that closed months can move, said once for the contract and the ADR. A month-close
+ * snapshot is a separate decision (D5 B), not this route.
+ */
+const PERIOD_DESCRIPTION =
+  'MUT-483 (ADR-227). Per currency, the customer statement\'s lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. ' +
+  'billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal\'s day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person\'s own undone capture counts nowhere; a payment with no client counts. ' +
+  'openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. ' +
+  '`to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. ' +
+  'Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. ' +
+  'With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.';
+
 /** /v1/summaries — the figures Malafat renders (M6 brief §2). Computed on read; nothing is materialized. */
-export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null = null): OpenAPIHono<AppEnv> {
+export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null = null, logger: Logger | null = null): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -89,6 +105,43 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
         };
       });
       return c.json({ asOf: today, currencies: blocks }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/summaries/period',
+      tags: ['Summaries'],
+      summary: 'Billed, received and credited over a period per currency, with the balance at its start and end',
+      description: PERIOD_DESCRIPTION,
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      middleware: [requireScope('summaries:read')] as const,
+      request: { query: PeriodSummaryQuerySchema },
+      responses: { 200: { description: 'Period figures', content: { 'application/json': { schema: PeriodSummarySchema } } }, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = c.get('auth');
+      const now = c.get('now')();
+      const today = todayFor(organization, now);
+      const q = c.req.valid('query');
+      // Validated before anything is posted, so a refused request writes nothing.
+      const { from, to } = reportRange(q, today);
+      const currency = q.currency ?? null;
+      const started = performance.now();
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, today, now, posting.actor);
+      const posted = performance.now();
+      const rows = await store.receivables.periodSources(organization.id, currency);
+      const read = performance.now();
+      const totals = summarizePeriod(ledgerEntries(rows, { asOf: today, timezone: organization.timezone }), { from, to }, currency);
+      const summed = performance.now();
+      // R5: TD-291's trigger is read off this line (rows per organization, read and sum time). No amounts, no other ids.
+      logger?.info(
+        { requestId: c.get('requestId'), organizationId: organization.id, rows: { receivables: rows.receivables.length, credits: rows.credits.length, payments: rows.payments.length }, currencies: totals.length, postingMs: ms(posted - started), readMs: ms(read - posted), sumMs: ms(summed - read) },
+        'summaries.period',
+      );
+      return c.json(serializePeriodSummary({ from, to, asOf: today, timezone: organization.timezone, totals }), 200);
     },
   );
 
@@ -316,6 +369,9 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
 
   return app;
 }
+
+/** A duration for a log line: milliseconds to the tenth. */
+const ms = (value: number) => Math.round(value * 10) / 10;
 
 function bucketsWire(b: Buckets, fmt: (m: bigint) => string) {
   return { outstanding: fmt(b.outstanding), overdue: fmt(b.overdue), dueToday: fmt(b.dueToday), notYetDue: fmt(b.notYetDue) };

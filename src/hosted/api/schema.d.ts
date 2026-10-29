@@ -8367,6 +8367,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/summaries/period": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Billed, received and credited over a period per currency, with the balance at its start and end
+         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Inclusive; defaults to the first of this month in the organization timezone. A real calendar date no more than about eleven years back (422 DATE_INVALID) */
+                    from?: string;
+                    /** @description Inclusive; defaults to the last day of this month (not today, so lines dated later this month count). A real date at most ten years ahead (422 DATE_INVALID); not before from (422 END_BEFORE_START) and within the 13 calendar months starting with from's month (422 RANGE_TOO_LONG) */
+                    to?: string;
+                    /** @description One block for this currency, all zeros if it has nothing. Omitted: a block per currency with a line in the period or a balance at either end. */
+                    currency?: components["schemas"]["Currency"] & unknown;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Period figures */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PeriodSummary"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/summaries/customers/{customerId}": {
         parameters: {
             query?: never;
@@ -20946,6 +21028,36 @@ export interface components {
             proposedOn: string;
             contingency: components["schemas"]["ContingencyTerms"];
             agreementType: components["schemas"]["AgreementType"];
+        };
+        PeriodSummary: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            from: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            to: string;
+            /** @description Today in the organization timezone: what an Owed dated ahead is measured against, and when the figures were read. */
+            asOf: string;
+            /** @description The organization timezone the day boundaries are in. */
+            timezone: string;
+            currencies: components["schemas"]["PeriodCurrencyTotals"][];
+        };
+        PeriodCurrencyTotals: {
+            currency: components["schemas"]["Currency"];
+            /** @description What clients owed at the start of `from`, net of money received and not yet applied: the statement balance of every client, plus payments with no client. May be negative. */
+            openingBalance: string;
+            /** @description Gross of the CHARGE lines dated in the period (postingDate). */
+            billed: string;
+            /** @description CREDIT lines dated in the period (effectiveDate). */
+            credited: string;
+            /** @description payments − reversals; may be negative when an earlier payment was reversed in the period. */
+            received: string;
+            /** @description PAYMENT lines dated in the period (receivedOn). */
+            payments: string;
+            /** @description PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment. */
+            reversals: string;
+            /** @description closingBalance − openingBalance = billed − received − credited. */
+            change: string;
+            /** @description What clients owed at the end of `to`, on the same terms as openingBalance. */
+            closingBalance: string;
         };
         CustomerSummary: {
             /** Format: uuid */

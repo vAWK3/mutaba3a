@@ -177,8 +177,8 @@ describe('every route sits inside the matrix', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
-    // and the customer statement (MUT-478).
-    expect(SESSION_READS.length).toBe(38);
+    // the customer statement (MUT-478) and the period totals (MUT-483).
+    expect(SESSION_READS.length).toBe(39);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -324,6 +324,8 @@ describe('the escape hatch', () => {
       'routes/summaries.ts',
       'routes/summaries.ts',
       'routes/summaries.ts',
+      // MUT-483: GET /v1/summaries/period.
+      'routes/summaries.ts',
     ]);
   });
 });
@@ -342,6 +344,7 @@ describe('lazy posting on a person-level read (MUT-447 review)', () => {
 describe('lazy posting during a session read is a system act (ADR-037 decision 8)', () => {
   const LAZY: Array<[route: string, path: (f: Awaited<ReturnType<typeof firm>>) => string, posts: { installment: number; charge: number }]> = [
     ['GET /v1/summaries/organization', () => '/v1/summaries/organization', { installment: 1, charge: 1 }],
+    ['GET /v1/summaries/period', () => '/v1/summaries/period', { installment: 1, charge: 1 }],
     ['GET /v1/summaries/customers/{customerId}', (f) => `/v1/summaries/customers/${f.customer.id}`, { installment: 1, charge: 1 }],
     ['GET /v1/customers/{customerId}/statement', (f) => `/v1/customers/${f.customer.id}/statement?currency=ILS`, { installment: 1, charge: 1 }],
     ['GET /v1/summaries/projects/{projectId}', (f) => `/v1/summaries/projects/${f.project.id}`, { installment: 1, charge: 1 }],
