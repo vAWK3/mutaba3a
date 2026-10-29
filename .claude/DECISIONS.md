@@ -5995,3 +5995,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - A stored month-close snapshot (D5 B). Deferred to its own ticket and Malafat UI.
 - Reuse `summaries/activity.ts`. Rejected: its received is the Reports definition (POSTED only).
 - A per-customer loop over `statementSources`. Rejected: N × 6 queries where 3 suffice.
+
+**Pre-landing review notes (2026-10-29):**
+- A ledger row in a retired currency (AED, SAR, QAR, BHD, OMR; `RETIRED_EXPONENT`) still yields its own block when `currency` is omitted, as `/v1/summaries/organization` does; its code is outside the published `Currency` enum and `?currency=` refuses it (422). Kept consistent with the organization summary; TD-292.
+- `from` and `to` go through the shared `reportRange`: a bound left out defaults to this month's, so `?to=` in the past alone answers 422 `END_BEFORE_START` and an old `?from=` alone 422 `RANGE_TOO_LONG`. Malafat sends both bounds.

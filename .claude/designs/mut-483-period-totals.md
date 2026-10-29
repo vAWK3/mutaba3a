@@ -207,7 +207,7 @@ export function ledgerEntries<R extends ChargeRow, C extends CreditRow, P extend
 - **Not read:** allocations and installments.
 - **Guard:** `store-guard.ts` gets `periodSources: 'read'`.
 
-**Observability (R5).** The route logs one structured line, `summaries.period`, with `rows: { receivables, credits, payments }`, `postingMs`, `readMs`, `sumMs` and `currencies`, plus a Sentry span of the same name with those attributes. TD-291's trigger is read off these. No amounts and no ids beyond the organization's.
+**Observability (R5).** The route logs one structured line, `summaries.period`, with `rows: { receivables, credits, payments }`, `postingMs`, `readMs`, `sumMs` and `currencies`, (no Sentry span: build note B2). TD-291's trigger is read off these. No amounts and no ids beyond the organization's.
 
 ## 7. Cost (R5)
 
@@ -224,7 +224,7 @@ export function ledgerEntries<R extends ChargeRow, C extends CreditRow, P extend
   At ~100k lines, a few concurrent requests on a 512 Mi instance are the real limit, not CPU time.
 - **Compared with TD-271:** the statement reads one customer × currency, sorts and pages, and runs per page. This read covers the whole organization unsorted and runs once per month-summary view. The range doesn't change the cost, because the opening balance needs every earlier line.
 - **TD-291 (new, Open): the period read loads the organization's whole history per request.**
-  - Trigger: p95 of the `summaries.period` span over 500 ms, or `rows` total over 50k for any organization.
+  - Trigger: p95 of `readMs + sumMs` on the `summaries.period` log line over 500 ms, or `rows` total over 50k for any organization.
   - Upgrade path: one Postgres aggregate per currency (`SUM(...) FILTER (WHERE date < $from)`, and for each kind `FILTER (WHERE date BETWEEN $from AND $to)`). Both rules are plain SQL expressions:
     - `countsOn` is `origin <> 'ADJUSTMENT' OR "postingDate" <= $asOf OR "paidMinor" > 0 OR "creditedMinor" > 0`.
     - The reversal's local day is `(COALESCE("reversedAt", "updatedAt") AT TIME ZONE $tz)::date`.
@@ -399,7 +399,7 @@ Run `release-qa run --attach --only period-totals` until it passes, re-run `stat
 - `repositories/memory.ts`, `repositories/prisma.ts`.
 - `auth/store-guard.ts`.
 - `schemas.ts`: three schemas.
-- `routes/summaries.ts`: the route, log line and span.
+- `routes/summaries.ts`: the route and its log line (no span, B2).
 - `app.ts`: version and bullet.
 - `openapi/openapi.yaml`: regenerated.
 
@@ -472,3 +472,16 @@ None of these changes what Malafat sees: the route, its query, its response and 
 | B4 | `lines.ts` | `LedgerEntry` also carries `customerId` (null for a clientless payment) and, on a CREDIT, its `receivable`, so the statement decorates without a lookup and AC1's per-customer split needs no join. `LINE_RANK` and `StatementLineKind` moved there; `build.ts` re-exports the type. The narrow row types are `Ledger{Receivable,Credit,Payment}Row` in `ports.ts`. |
 | B5 | `build.ts` project statement | Its charges and credits come from `ledgerEntries` over the project's receivables (no payments); payments stay allocation lines built with `isStatementPayment` and `reversalDateOf`. The whole-customer statement decorates every entry. Proven identical to the frozen copy over 500 seeds; a mutation of the classifier fails the test. |
 | B6 | Pins | `writability-routes.test.ts` also counts the session reads (38 → 39). The store contract additionally pins the exact field set of each narrow row, and that a MUT-444 correction's released allocation leaves the payment lines unchanged while the balance still equals outstanding − unallocated. |
+
+## 16. Pre-landing review 2026-10-29
+
+No CRITICAL or HIGH. The build.ts refactor was compared line by line with a80d998a (no behaviour change), `legacy-build.ts` is verbatim, and the QA numbers were recomputed and hold.
+
+| # | Finding | Disposition |
+|---|---|---|
+| P1 | Prisma `periodSources` is checked by one DB-gated fixture only | Accepted: the full server suite ran with `MUTABA3A_TEST_DATABASE_URL` on `mutaba3a_test_mut483` (5,947/5,947), and CI `test:db` runs it before release. |
+| P2 | A retired currency (AED, SAR, QAR, BHD, OMR) can appear as a block outside the published `Currency` enum | Same as `/v1/summaries/organization` today; kept consistent, recorded in ADR-227 §Consequences and TD-292. |
+| P3 | One bound alone defaults the other to this month (`?to=` in the past → 422 END_BEFORE_START; an old `?from=` → 422 RANGE_TOO_LONG) | `reportRange` is shared with Reports; kept, documented in ADR-227 for Malafat (send both bounds). |
+| P4 | Every call reads the whole history | TD-291 (accepted). |
+| P5 | Plan still named a Sentry span | Fixed above (B2). |
+| P6 | A QA run crossing midnight on a month's last day dates the reversals into the next month | Accepted; the spec runs well inside a month. |

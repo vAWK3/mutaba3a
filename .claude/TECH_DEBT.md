@@ -18,6 +18,11 @@
 
 ## Open Debt
 
+### TD-292: A summary block can name a retired currency
+**Status**: Open (MUT-483 pre-landing review, 2026-10-29; ADR-227)
+- **What:** `/v1/summaries/period` and `/v1/summaries/organization`, called without `currency`, return a block for every currency with rows, including a retired one (AED, SAR, QAR, BHD, OMR), whose code is outside the published `Currency` enum. A strict generated client could reject the response.
+- **Fix:** widen the response's currency to every code the ledger can hold, or drop retired-currency blocks from both summaries together.
+
 ### TD-291: The period read loads the organization's whole ledger history per request
 **Status**: Open (MUT-483, 2026-10-29; ADR-227)
 - **What:** `GET /v1/summaries/period` reads every live receivable, credit and payment of the organization (three narrow selects in one snapshot) and sums them in one pass, because the opening balance needs every line before `from`. The range doesn't change the cost. Rows are Prisma objects with BigInt fields (~0.5–1 KB of heap each): roughly 20–50 ms at ~1k lines, 100–250 ms and 10–20 MB at ~10k, 1–2.5 s and 100–200 MB at ~100k, where a few concurrent requests on a 512 Mi Cloud Run instance are the limit, not CPU.
