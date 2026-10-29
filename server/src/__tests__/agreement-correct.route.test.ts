@@ -393,7 +393,6 @@ describe('POST /v1/agreements/{id}/correct', () => {
       expect(plan.terms.after).toMatchObject({ vatRateBasisPoints: 0, net: '1000.00', vat: '0.00', gross: '1000.00' });
       expect(result.agreement).toMatchObject({ vatRateBasisPoints: 0, gross: '1000.00' });
     });
-  });
 
   describe('pre-landing review 2026-10-29 (P4)', () => {
     it('AC1 with other charges and unallocated money on the client: the preview\'s balance after is the summary after the commit', async () => {

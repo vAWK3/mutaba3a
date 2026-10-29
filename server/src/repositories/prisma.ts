@@ -72,6 +72,7 @@ import type {
   ApplySupplementInput,
   ReduceAgreementInput,
   CorrectAgreementInput,
+  CorrectionInstallmentInput,
   CorrectAgreementResult,
   LiveAllocationOn,
   CorrectOutcomeInput,
@@ -3597,6 +3598,13 @@ async function postInstallmentTx(tx: Tx, agreement: AgreementRecord, line: Insta
   return { installment: await tx.installment.findUniqueOrThrow({ where: { id: line.id } }), receivable };
 }
 
+/** A planned correction line as its installment row: everything but where it posts. */
+function installmentRowOf(line: CorrectionInstallmentInput): Omit<CorrectionInstallmentInput, 'post'> {
+  const row: Partial<CorrectionInstallmentInput> = { ...line };
+  delete row.post;
+  return row as Omit<CorrectionInstallmentInput, 'post'>;
+}
+
 /**
  * MUT-444 (ADR-226): the terms correction's transaction body. Every check runs under the lock it needs, in the order
  * agreement → payments → old receivables → CHG counter → installments; a check that fails after the first write
@@ -3622,7 +3630,7 @@ async function correctAgreementTx(tx: Tx, organizationId: string, agreementId: s
   // 4. The new lines (planned ids, one insert), then their posts: the CHG counter is taken here, before any old line
   //    row is touched (posting's own order). Created a millisecond after the credits, so the statement reads old charge,
   //    credit, repost on the shared date (D5 B).
-  if (input.newInstallments.length > 0) await tx.installment.createMany({ data: input.newInstallments.map(({ post: _post, ...spec }) => ({ ...spec, organizationId, agreementId })) });
+  if (input.newInstallments.length > 0) await tx.installment.createMany({ data: input.newInstallments.map(installmentRowOf).map((row) => ({ ...row, organizationId, agreementId })) });
   const posted = new Map<string, ReceivableRecord>();
   const posts = input.newInstallments.filter((i) => i.post).sort((x, y) => (x.post!.postingDate < y.post!.postingDate ? -1 : x.post!.postingDate > y.post!.postingDate ? 1 : x.position - y.position));
   for (const line of posts) {
