@@ -506,20 +506,20 @@ have it.
 
 From the MUT-487 move, `mutaba3a-pg` in `mtb3a-production` runs in **one zone** (ZONAL `db-f1-micro`). If that zone
 goes down, the database goes with it until Google brings the zone back; nothing fails over by itself. Backups and
-the PITR logs are kept in the region (`me-west1`), not the zone, so they survive. You know it from the uptime alert
+the PITR logs are kept in the region (`europe-west1`, MUT-523), not the zone, so they survive. You know it from the uptime alert
 on `/ready` and the Cloud SQL console showing the instance unavailable. Treat it as S1 (§5).
 
 Wait or restore? If Google's status page gives the zone back within about 30 minutes, wait. Otherwise restore the
 newest point in time into a new instance in another zone, then point the service at it:
 
 ```bash
-NEW=mtb3a-production
-gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --ingress=internal   # stop writes reaching a half-moved state
-gcloud sql instances describe mutaba3a-pg --project=$NEW --format='value(gceZone)'          # the zone that is down, e.g. me-west1-a
+NEW=mtb3a-production R=europe-west1   # MUT-523: the new project's region (config/gcp.json); its zones are b, c and d
+gcloud run services update mutaba3a-api --region=$R --project=$NEW --ingress=internal   # stop writes reaching a half-moved state
+gcloud sql instances describe mutaba3a-pg --project=$NEW --format='value(gceZone)'          # the zone that is down, e.g. europe-west1-b
 # The latest point in time (PITR, down to the second); pick another zone than the one that is down:
-gcloud sql instances clone mutaba3a-pg mutaba3a-pg-z2 --project=$NEW --point-in-time="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --preferred-zone=me-west1-b
+gcloud sql instances clone mutaba3a-pg mutaba3a-pg-z2 --project=$NEW --point-in-time="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --preferred-zone=europe-west1-c
 # If the clone is refused while the source zone is down, restore last night's backup instead:
-#   gcloud sql instances create mutaba3a-pg-z2 … (the flags in scripts/restore-drill.sh, --zone=me-west1-b),
+#   gcloud sql instances create mutaba3a-pg-z2 … (the flags in scripts/restore-drill.sh, --zone=europe-west1-c),
 #   then gcloud sql backups restore <id> --restore-instance=mutaba3a-pg-z2 --backup-instance=mutaba3a-pg --project=$NEW
 ```
 
@@ -528,10 +528,10 @@ take an on-demand backup of `mutaba3a-pg-z2` and restore it into `mutaba3a-pg` (
 While the zone is still down, point the service at the copy by hand:
 
 ```bash
-gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --set-cloudsql-instances=$NEW:me-west1:mutaba3a-pg-z2
-# and a new DATABASE_URL version naming /cloudsql/$NEW:me-west1:mutaba3a-pg-z2 (the password is the same: the clone copies the user)
+gcloud run services update mutaba3a-api --region=$R --project=$NEW --set-cloudsql-instances=$NEW:$R:mutaba3a-pg-z2
+# and a new DATABASE_URL version naming /cloudsql/$NEW:$R:mutaba3a-pg-z2 (the password is the same: the clone copies the user)
 gcloud secrets versions access latest --secret=mutaba3a-api-database-url --project=$NEW | sed 's#:mutaba3a-pg&#:mutaba3a-pg-z2\&#' | gcloud secrets versions add mutaba3a-api-database-url --project=$NEW --data-file=-
-gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --ingress=all
+gcloud run services update mutaba3a-api --region=$R --project=$NEW --ingress=all
 ```
 
 Releases are refused meanwhile in effect (Terraform would mount `mutaba3a-pg` again): move back to `mutaba3a-pg` as

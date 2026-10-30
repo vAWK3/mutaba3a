@@ -18,6 +18,16 @@
 
 ## Open Debt
 
+### TD-296: The credentials-file check and the cross-region copy are unproven against real GCP
+**Status**: Open (MUT-523, 2026-10-30; ADR-232 amendment)
+- **What:** preflight reads which account `GCP_ADC_FILE` signs in as by running `gcloud auth application-default print-access-token` with `GOOGLE_APPLICATION_CREDENTIALS` pointing at it, then Google's tokeninfo (`lib/gcp-identity.sh`). The tests fake both. That gcloud honours the variable for this command, and that `gcloud container images add-tag` copies between registries in different regions, are expected but not yet seen; the cross-region Cloud SQL restore is MUT-523 AC5.
+- **Fix:** the first `make doctor` with the pair set (it must name barmajiyatltd@gmail.com, and fail on purpose with another account's file), and C1 step 6 / the C2 rehearsal. If add-tag can't cross regions, copy with `gcrane cp` or a pull and push. Close this when C2 is recorded.
+
+### TD-295: barmajiyatltd@gmail.com holds broad roles on malafat-production until MUT-521
+**Status**: Open (MUT-523, 2026-10-30; ADR-232 amendment)
+- **What:** so one account runs the legacy releases, the move, a rollback and the teardown, `bsader@gmail.com` grants it `editor`, `secretmanager.admin`, `resourcemanager.projectIamAdmin`, `run.admin`, `iam.serviceAccountAdmin` and `storage.admin` on Malafat's production project (DEPLOYMENT.md §6d C0). That is more than MTB3A's resources need, in a project that also holds Malafat's.
+- **Fix:** remove all six bindings when MUT-521 retires the forwarder and the project holds nothing of MTB3A's (`gcloud projects remove-iam-policy-binding malafat-production --member=user:barmajiyatltd@gmail.com --role=… --account=bsader@gmail.com`).
+
 ### TD-294: A Kvish 6 bill's registration number and a government document's vendor can be wrong
 **Status**: Open (MUT-504, 2026-10-29; ADR-229)
 - **What:** an Israeli toll bill prints its issuer's ח"פ (512475203) beside a sister company's (513927285); the reader takes the first valid one after a label, which can be the sister's. A Jordanian eVisa's vendor is read as its header ("The Hashemite Kingdom of Jordan") rather than the issuing directorate. Neither is an AC1 field, and the reader is still dark.
