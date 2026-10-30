@@ -2910,3 +2910,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 **Where**: `ROLLBACK_HAZARDS` in `server/src/scripts/rollback-check.ts`, `server/DEPLOYMENT.md` §6 "Roll back past" rows, `rollback-check.test.ts`.
 **Rule**: when a migration adds an enum value an older Prisma client can't read, or a column whose rows an older revision would misread (a released allocation counted as live), add a hazard with a count query over exactly those rows and the matching DEPLOYMENT row (the test holds the two together). Add it in the same ticket as the migration.
 
+
+## Pattern: one money rule, previewed by clients, held together by a shared case table (MUT-302)
+**Where**: `server/src/__tests__/fixtures/expense-vat-cases.json`, read by `server/src/expenses/__tests__/vat.test.ts` and `src/hosted/lib/__tests__/expenseVat.test.ts`; the phone pins golden rows from it inline.
+**Rule**: when a client must show a figure the server computes (and the portal can't import server code), the server stays the only writer and the client's preview is a port held to it by a case table generated from the server's own function. Regenerate the table from that function, never by hand, and have every port's test read it (or pin rows from it).

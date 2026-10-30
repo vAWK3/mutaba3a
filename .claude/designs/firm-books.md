@@ -216,6 +216,7 @@ The extraction rules are written in Dart on the phone and **ported** to TypeScri
 ## 7. VAT on expenses and bills (B9, D9, DR14)
 
 - `Expense` and `Bill` mirror the receivable columns: `vatTreatment`, `vatRateBasisPoints`, `netMinor`, `vatMinor`, `grossMinor`. They're all nullable; null means "No VAT recorded", never a guessed split.
+  - **Amended by MUT-302 (ADR-231, 2026-10-30):** an expense has no `grossMinor`; its gross is `amountMinor`, and the server splits net and VAT out of it (`VAT_INCLUSIVE`). The largest-remainder split helper below is built with MUT-308, its only caller (D10).
 - Rounding uses `computeVat` / `roundHalfUpDiv`. `amountMinor` stays the gross (the total paid).
 - **VAT summary basis: invoice (D9).** Input VAT is VAT on bills, dated by the bill's issue date, plus VAT on APPROVED expenses that **don't** carry a `billPaymentId`.
 - Posted expenses show their VAT share but are left out of the summary.
