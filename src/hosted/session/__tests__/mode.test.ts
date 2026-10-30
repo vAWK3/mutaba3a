@@ -48,6 +48,18 @@ describe('portal mode', () => {
     expect(currentMode()).toBe('local');
   });
 
+  // MUT-513: the server said nobody is signed in and this browser hasn't chosen. Never stored, never "local".
+  it('undecided is held for this page only, is not local, and any saved choice wins over it', () => {
+    setUnhintedMode('undecided');
+    expect(currentMode()).toBe('undecided');
+    expect(isLocalMode()).toBe(false);
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
+
+    setMode('local');
+
+    expect(currentMode()).toBe('local');
+  });
+
   it('re-renders a reader when the mode changes in this tab', () => {
     setMode('remote');
     const { result } = renderHook(() => useIsLocalMode());

@@ -9,14 +9,18 @@ import { useSyncExternalStore } from 'react';
  *
  * With no hint at all (first visit, or someone signed in before local mode
  * shipped), `client.ts` asks the server once: 200 means a live session, so
- * `remote`; 401 means nobody, so `local`. Only that answer is saved: a network
- * failure saves nothing, so an offline first visit never strands a signed-in
- * person in an empty local app.
+ * `remote`, saved. 401 means nobody is signed in, but this browser hasn't
+ * chosen yet: `undecided`, held for this page only, and the welcome asks
+ * (MUT-513, ADR-230). A network failure saves nothing either, so an offline
+ * first visit never strands a signed-in person in an empty local app.
  */
 
 export type PortalMode = 'local' | 'remote';
-/** What a missing hint means: ask the server once (`probe`), or a fixed mode (tests pin `remote`, src/test/setup.ts). */
-export type UnhintedMode = PortalMode | 'probe';
+/**
+ * What a missing hint means: ask the server once (`probe`), nobody signed in and no choice made yet (`undecided`), or
+ * a fixed mode (tests pin `remote`, src/test/setup.ts; Try after an unreachable server holds `local` for this page).
+ */
+export type UnhintedMode = PortalMode | 'probe' | 'undecided';
 
 export const MODE_KEY = 'mut-mode';
 

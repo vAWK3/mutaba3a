@@ -105,6 +105,16 @@
      so the old 160/120 made room for a bar that no longer floats over the page */
   --landing-page-top: var(--space-16);
   --landing-page-top-compact: var(--space-10);
+  /* The portal welcome's type (MUT-513, Claude Design WELCOME-SPEC.md): a Present surface between the app's scale and
+     the landing's. Phone sizes, then the two-column (>= 900px) ones. */
+  --welcome-title: 2.125rem;
+  --welcome-title-wide: 3.25rem;
+  --welcome-lede: 1.0625rem;
+  --welcome-lede-wide: 1.1875rem;
+  --welcome-action: 1.0625rem;
+  --welcome-point: 0.9375rem;
+  --welcome-caption: 0.875rem;
+  --welcome-door-gap: 14px;
 }
 
 /* ============================================

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
-import { renderPortal, stubApi } from '../../../__tests__/harness';
+import { fail, me, ok, renderPortal, stubApi } from '../../../__tests__/harness';
 import { LocalRecordsFileRefused, type CarryOverSummary, type PendingRestore } from '../../../session/localBackendContract';
-import { MODE_KEY, setMode } from '../../../session/mode';
+import { MODE_KEY, currentMode, setMode, setUnhintedMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 
 /**
@@ -103,6 +103,73 @@ describe('the new address: /carry-over/receive', () => {
     await user.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
     expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.done', v: 1, counts: SUMMARY.counts, totals: SUMMARY.totals } });
+  });
+
+  // MUT-513: the new address is a first visit with no hint (undecided). Saving the records here is the person choosing
+  // this device, so Open lands on them, not on the welcome.
+  it('a save on a browser that hasn\'t chosen yet chooses this device', async () => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('undecided');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe('local');
+  });
+
+  // Review: opened straight on the new address, nobody has asked the server yet ('probe'). The save asks first, so a live
+  // session keeps the account, nobody signed in chooses this device, and an unreachable server decides nothing.
+  it.each([
+    ['a live session keeps the account', () => ok(me()), 'remote'],
+    ['nobody signed in chooses this device', () => fail(401, 'UNAUTHENTICATED'), 'local'],
+  ] as const)('a save before anyone asked the server: %s', async (_name, answer, saved) => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('probe');
+    stubApi({ 'GET /v1/me': answer });
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe(saved);
+  });
+
+  it('a save before anyone asked, while the server is unreachable, saves no mode but shows this device for this visit', async () => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('probe');
+    const server = stubApi({});
+    server.fetchMock.mockRejectedValue(new TypeError('offline'));
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
+    // Re-review: Open must reach the records just saved, as the welcome's offline Try does (D7)
+    expect(currentMode()).toBe('local');
+  });
+
+  it('a save while signed in keeps the account: the records go to this browser, the mode stays remote', async () => {
+    setMode('remote');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
   });
 
   it('opens in Arabic, right to left, for anyone who hasn\'t chosen a language (ADR-077)', async () => {

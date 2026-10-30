@@ -42,7 +42,7 @@ const FEATURES_OFF: Partial<PostHogConfig> = {
  * storage on every check, so once the opt-out deletes that record, every open
  * tab is silent and writes nothing back.
  */
-const SURFACE_OPTIONS: Record<'landing' | 'portal', Partial<PostHogConfig>> = {
+const SURFACE_OPTIONS: Record<'landing' | 'portal' | 'portal-welcome', Partial<PostHogConfig>> = {
   landing: { cookieless_mode: 'always', capture_pageview: true, save_referrer: true },
   portal: {
     persistence: 'localStorage',
@@ -52,6 +52,10 @@ const SURFACE_OPTIONS: Record<'landing' | 'portal', Partial<PostHogConfig>> = {
     opt_out_capturing_by_default: true,
     opt_out_persistence_by_default: true,
   },
+  // MUT-513: the welcome's doors, before anyone signs in: cookieless like the landing, but no pageview or referrer
+  // persistence 'memory' under its own name: nothing reaches storage even if cookieless mode ever stopped implying it,
+  // and nothing is shared with the consented instance, whose storage is keyed by the same token (review)
+  'portal-welcome': { cookieless_mode: 'always', persistence: 'memory', persistence_name: 'mtb3a_welcome', capture_pageview: false, save_referrer: false, request_batching: false },
 };
 
 /**
@@ -64,7 +68,7 @@ export function posthogInitOptions(context: () => GuardContext): Partial<PostHog
   return {
     api_host: POSTHOG_HOST,
     ...FEATURES_OFF,
-    ...SURFACE_OPTIONS[surface],
+    ...SURFACE_OPTIONS[context().cookieless ? 'portal-welcome' : surface],
     before_send: (capture) => guardEvent(capture as AnalyticsCapture | null, context()) as typeof capture,
   };
 }

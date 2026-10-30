@@ -13,7 +13,7 @@ paths:
   - src/hosted/api/client.ts
 features:
   - id: first-visit
-    title: A first visit opens the app on this device in Arabic, with no sign-in and nothing sent but one check
+    title: A first visit chooses this device on the welcome and opens the app in Arabic, with nothing sent but one check
     tier: core # the portal's front door for everyone without an account
     paths:
       - src/hosted/session/AuthGate.tsx
@@ -21,11 +21,11 @@ features:
       - src/hosted/shell/HostedShell.tsx
       - src/hosted/pages/you/YouProfiles.tsx
     steps:
-      - Open the portal for the first time, with nobody signed in
+      - Open the portal for the first time, with nobody signed in, and choose Try it on this device on the welcome (MUT-513)
       - Open You › Account, then You › App
     expect:
       - The Personal profile's Owed (المستحق) opens in Arabic, right to left, with no sign-in form
-      - The account reads "على هذا الجهاز" (On this device); You › Account offers Sign in and Your data, You › App Language and the terms, and no sign-out, password, Malafat or store link
+      - The account reads "على هذا الجهاز" (On this device); You › Account offers Sign in, Your data and What is MTB3A?, You › App Language and the terms, and no sign-out, password, Malafat or store link
       - The nav has the same four destinations as signed in: المستحق، المدفوع، المصروف، العملاء (MUT-424)
       - Exactly one request reached the server, the first-visit check of /v1/me
   - id: received-persists
@@ -39,7 +39,7 @@ features:
       - Reload the page
     expect:
       - The payment is listed after saving and again after the reload, on the same profile
-      - No request reached the server after the first-visit check
+      - No request reached the server (the browser has already chosen this device, MUT-513)
   - id: owed-part-paid
     title: Signed out, add a client from the picker, record money owed and part of it paid, reload, and both are there
     tier: core # the brief's local.income-persists: the free app's everyday loop
@@ -57,7 +57,7 @@ features:
       - The new client is picked in the drawer, and the entry is listed under it
       - After the payment the entry is Partly paid with 500.00 still owed
       - After the reload it is still Partly paid with 500.00 owed, and Clients lists Ramallah Bakery
-      - No request reached the server after the first-visit check
+      - No request reached the server (the browser has already chosen this device, MUT-513)
   - id: matter-owed
     title: Signed out, add a client and a matter from the pickers, record money owed on the matter, reload, and both are there
     tier: secondary
@@ -72,7 +72,7 @@ features:
     expect:
       - The new matter is picked in the drawer and the keyboard stays on the field
       - The entry is listed under Ramallah Bakery and Menu design, before and after the reload
-      - No request reached the server after the first-visit check
+      - No request reached the server (the browser has already chosen this device, MUT-513)
   - id: two-tabs
     title: Two tabs on this device see each other's saves
     tier: secondary
@@ -133,7 +133,7 @@ features:
     expect:
       - The receipt is listed on the expense before and after the reload
       - The download is taxi-receipt.pdf with the same bytes that were attached
-      - No request reached the server after the first-visit check
+      - No request reached the server (the browser has already chosen this device, MUT-513)
   - id: fx-line
     title: Signed out and online, a trip group in two currencies shows the ≈ line; offline it hides
     tier: secondary
@@ -148,7 +148,7 @@ features:
       - The headline keeps $40.00 and ₪120.00 apart, and the ≈ line names today's ECB rate date
       - Offline after a reload the ≈ line stays, from the rates this device remembers for an hour (review D8)
       - With no saved rates offline, the ≈ line is gone and the totals stay
-      - The only requests to the server are the first-visit check and GET /v1/public/fx-rates (D3)
+      - The only request to the server is GET /v1/public/fx-rates (D3)
   - id: conversion
     title: Signed out, log a conversion, reload, and edit it
     tier: secondary
@@ -159,7 +159,7 @@ features:
       - Reload, open it, change the to amount to 3650 and save
     expect:
       - The conversion is listed before and after the reload, and the edit saves
-      - No request reached the server after the first-visit check
+      - No request reached the server (the browser has already chosen this device, MUT-513)
   - id: documents-empty
     title: Signed out, Documents opens on its empty state, not an error
     tier: secondary

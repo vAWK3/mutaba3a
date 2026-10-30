@@ -8,7 +8,7 @@ Started in MUT-417, seeded from `docs/brand/README.md`, the portal components (`
 
 ## Surface
 
-- **Mode:** Operate for the portal. People come to it to record and check money, so scanning comes before expression: tables, rows and drawers, one accent, no decoration that doesn't carry meaning. The website is Present: it's allowed the display face, the hero rhythm (`--landing-section-pad*`) and the mock-ups.
+- **Mode:** Operate for the portal. People come to it to record and check money, so scanning comes before expression: tables, rows and drawers, one accent, no decoration that doesn't carry meaning. The website is Present: it's allowed the display face, the hero rhythm (`--landing-section-pad*`) and the mock-ups. The portal's first-visit welcome (`WelcomePage`, MUT-513) is the one Present surface inside the portal: the display face for its headline and the brand illustration (Claude Design "Portal Welcome"), and its own type sizes (`--welcome-*`), including the 15px explainer points.
 - **Shell (MUT-426, ADR-195):** a floating chrome over `<main>` (`src/hosted/shell/HostedShell.tsx`): the Reports corner icon, a pill of four destinations (`shell/destinations.ts`) and the You island (`shell/YouIsland.tsx`). The page reserves the chrome's room (`--hp-chrome-top`), so at rest nothing sits under it. Account and profile settings live on the You page (`pages/you/`), never in a menu.
 - **Light and dark:** both, following the OS. ThemeToggle can force either with `<html data-theme>`. Every semantic token resolves in all four states; `brand.test.ts` checks this.
 - **Drawer-first:** creating and editing happen in a drawer opened by a URL key (`?newIncome=`, `?changePassword=`, …), never on a "create page".
@@ -40,7 +40,7 @@ One colour, one meaning:
 - Text on a lavender ground is `lavenderInk`, never purple (5.52:1).
 - Rose means an error or money going the wrong way. On Reports (MUT-448, `.hp-glance-*`) "below your usual" and a negative business net are rose ink, always with words and the minus sign so colour never carries the meaning alone.
 - Don't use mint for a warning or butter for an error.
-- Peach is the phone's Malafat role and has no role on the web, so the portal doesn't use it. A group member's "kept" pill (`.hp-kept`) is the neutral badge pair (`--badge-neutral-bg` / `--badge-neutral-text`): it states a fact about the row and isn't a warning.
+- Peach is the phone's Malafat role and has no role on the web, so the portal doesn't use it as a UI colour. An illustration may use the brand palette as art: the welcome's nuqta (and its bullets) are peach, as on the phone (MUT-513). A group member's "kept" pill (`.hp-kept`) is the neutral badge pair (`--badge-neutral-bg` / `--badge-neutral-text`): it states a fact about the row and isn't a warning.
 - Lavender means Personal on the phone, so a shared profile is never marked with a lavender pill. On Reports the shared cue is plain caption text (`.hp-glance-shared`: `--text-label`, `--muted`), as on the phone.
 
 Status chips use `Badge` (`src/components/ui/Badge.tsx`, `.badge-paid` / `-unpaid` / `-overdue` / `-neutral` / `-success` / `-warning` / `-error` / `-info` / `-accent`), or a portal chip class that pairs one ground with its own ink (`.hp-receipt-chip-*`, `.hp-group-chip-*`).

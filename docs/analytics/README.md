@@ -10,6 +10,7 @@ Epic: MUT-152. The event list, with each event's emitters and meaning, is
 |---|---|---|
 | Landing pages (`/`, `/hosted`, `/privacy`, `/download`) | None needed: cookieless, nothing stored on the device | MUT-154 |
 | Hosted portal | Off until the signed-in person turns it on | MUT-155 |
+| Portal welcome, before sign-in (`/` and `/welcome`) | None needed: cookieless like the landing, its own SDK instance, nothing stored; only `portal_welcome_choice` | MUT-513 |
 | Phone app (iOS, Android) | Off until the signed-in person turns it on | MUT-157 |
 | The free local app (`/app` in the browser, desktop) | **Never sends** (ADR-024) | — |
 | Hosted API server | **Never sends** (MUT-156 closed) | — |
@@ -64,6 +65,11 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
 4. **Off by default, and the SDK doesn't start before consent.** On the portal and the phone,
    the SDK isn't initialised until the person opts in, so not even feature-flag or
    remote-config requests are made. Feature flags and remote config stay off afterwards too.
+   - **One exception (MUT-513, ADR-230):** the portal's first-visit welcome counts which door was
+     chosen (`portal_welcome_choice`) before anyone signs in. It uses its own posthog-js instance
+     (`welcome`), loaded on the click, with the landing's cookieless options and the guard's
+     cookieless allowance: no storage, no ID, no consent record read, and no other event. The
+     consented instance above is never started or touched by it.
 5. **Opting out sends one last note, in this order:**
    1. capture `analytics_opted_out`;
    2. flush, which sends that note together with anything still queued from while they were

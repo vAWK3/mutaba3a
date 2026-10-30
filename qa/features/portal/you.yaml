@@ -37,7 +37,7 @@ features:
       - Open You › Account, then You › App, then You › Profiles
     expect:
       - The header reads On this device, with no email
-      - Account has Sign in and Your data only; App has Language and Terms only
+      - Account has Sign in, Your data and What is MTB3A? (MUT-513) only; App has Language and Terms only
       - Profiles shows no Hosted chip and no note about the local app
       - No Billing, Change password, Sign out, usage switch, Malafat or store link anywhere on the page
   - id: phone-rtl

@@ -30,6 +30,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
       <RowGroup>
         <RowButton tone="action" label={t('hosted.local.signIn')} onClick={() => void navigate({ to: '/sign-in' })} />
         <RowButton label={t('hosted.local.yourData')} sub={t('hosted.local.data.download')} onClick={drawers.openYourData} />
+        {/* MUT-513: the welcome again, with Continue on this device */}
+        <RowButton label={t('hosted.welcome.whatIs')} onClick={() => void navigate({ to: '/welcome' })} />
       </RowGroup>
     );
   }
