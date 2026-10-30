@@ -605,3 +605,60 @@ test('In Arabic the new-expense drawer offers إضافة إيصال, right to le
     expect(api.calls('POST', /\/receipts$/)).toHaveLength(0);
   });
 });
+
+test('A firm records an expense with VAT: Standard 17 % on 117 previews and saves net 100.00 and VAT 17.00 (MUT-302)', { tag: '@portal.expenses.vat' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], categories: [office_, travel] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+  const vat = drawer.getByTestId('expense-vat');
+
+  await step('Open Record expense on a firm profile: the VAT row reads "No VAT recorded"', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Amount').fill('117');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await expect(vat.getByTestId('expense-vat-summary')).toHaveText('No VAT recorded');
+  });
+
+  await step('Open VAT, choose Standard and type 17: net 100.00 and VAT 17.00 show', async () => {
+    await vat.getByRole('button', { name: /VAT/ }).click();
+    await vat.getByLabel('Treatment').selectOption('STANDARD_RATED');
+    await vat.getByLabel('Rate').fill('17');
+    await expect(vat.getByTestId('expense-vat-split')).toContainText('100.00');
+    await expect(vat.getByTestId('expense-vat-split')).toContainText('17.00');
+  });
+
+  await step('Save: the server gets the treatment and rate, never net or VAT', async () => {
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/expenses$/)?.body).toMatchObject({ amount: '117', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+  });
+
+  await step('Reopen it: the row reads VAT 17% with 17.00, and net 100.00 when opened', async () => {
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row').nth(1).click();
+    const edit = page.getByRole('dialog', { name: 'Edit expense' }).getByTestId('expense-vat');
+    await expect(edit.getByTestId('expense-vat-summary')).toContainText('VAT 17%');
+    await expect(edit.getByTestId('expense-vat-summary')).toContainText('17.00');
+    await edit.getByRole('button', { name: /VAT/ }).click();
+    await expect(edit.getByTestId('expense-vat-split')).toContainText('100.00');
+  });
+});
+
+test('A profile without firm features has no VAT row on its expense form (MUT-302 AC3)', { tag: '@portal.expenses.vat-none-personal' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [office_, travel] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+
+  await step('Open Record expense on a profile without firm features', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(drawer.getByLabel('Amount')).toBeVisible();
+  });
+
+  await step('There is no VAT row, and a save sends no vat', async () => {
+    await expect(drawer.getByTestId('expense-vat')).toHaveCount(0);
+    await drawer.getByLabel('Amount').fill('50');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/expenses$/)?.body).not.toHaveProperty('vat');
+  });
+});

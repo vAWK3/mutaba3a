@@ -124,3 +124,16 @@ features:
     expect:
       - The page is right to left; the drawer is in Arabic, fills the screen with no sideways scroll, and a read-only profile says للقراءة فقط حتى يُدفع
       - The button reads نقل إلى <name>, and after the move the toast says نُقل إلى <name>
+  - id: vat-from-receipt
+    title: On a firm, a receipt read with a VAT rate opens the VAT row prefilled and marked, and Approve sends it (MUT-302)
+    tier: secondary
+    tickets: [MUT-302]
+    paths:
+      - src/hosted/lib/receiptSuggestion.ts
+      - src/hosted/pages/views/ReceiptReview.tsx
+    steps:
+      - On a firm profile, open a To-review receipt the reader read at 117.00 with a 17 % rate
+      - Choose a category and Approve and file
+    expect:
+      - The VAT row reads "VAT 17%" with 17.00, marked "From the receipt"
+      - POST /v1/receipts/{id}/approve gets vat with STANDARD_RATED and 1700 basis points

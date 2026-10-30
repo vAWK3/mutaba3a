@@ -347,3 +347,33 @@ test('In Arabic on a 375 px phone, Move reads right to left and fills the screen
     await expect(page.getByText('نُقل إلى Cedar Consulting').first()).toBeVisible();
   });
 });
+
+test('On a firm, a receipt read with a 17 % rate opens the VAT row prefilled, and Approve sends it (MUT-302)', { tag: '@portal.receipts.vat-from-receipt' }, async ({ page, step }) => {
+  const read17 = { ...phoneRead, totalMinor: { value: '11700', source: 'qr', confidence: 0.98 }, vatRateBasisPoints: { value: 1700, source: 'qr', confidence: 0.98 }, vatMinor: { value: '1700', source: 'qr', confidence: 0.98 } };
+  const api = new FakeApi({
+    profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }],
+    categories: [groceries, travel],
+    receipts: [libraryReceipt(1, { filename: 'shufersal.jpg', mimeType: 'image/jpeg', suggested: read17 })],
+  });
+  const first = libraryReceipt(1).id;
+  const vat = page.getByTestId('expense-vat');
+
+  await step('Open the receipt the reader read at 17 %', async () => {
+    await api.open(page, `${BASE}/receipts`);
+    await page.getByRole('link', { name: 'Open shufersal.jpg' }).click();
+    await expect(page.getByLabel('Amount')).toHaveValue('117.00');
+  });
+
+  await step('The VAT row reads 17% with 17.00, marked "From the receipt"', async () => {
+    await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 17%');
+    await expect(vat.getByTestId('expense-vat-summary')).toContainText('17.00');
+    await expect(page.locator('[data-hint-for="vat"]')).toHaveText('From the receipt');
+  });
+
+  await step('Approve and file sends the treatment and rate', async () => {
+    await page.getByLabel('Category').selectOption({ label: 'Groceries' });
+    await page.getByRole('button', { name: 'Approve and file' }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts$`));
+    expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+  });
+});
