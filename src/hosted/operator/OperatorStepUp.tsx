@@ -23,6 +23,14 @@ export function OperatorStepUpProvider({ children }: { children: ReactNode }) {
   return <StepUpContext.Provider value={{ until, note: setUntil }}>{children}</StepUpContext.Provider>;
 }
 
+/**
+ * MUT-527: when this session's step-up window ends, as best this page knows: what it learned since the list was read
+ * (its own step-up, or a 403) is newer than the read's `stepUpUntil`.
+ */
+export function useStepUpUntil(serverUntil: string | null): string | null {
+  return useContext(StepUpContext).until ?? serverUntil;
+}
+
 /** The window as the server last answered on this page: lapsed after a 403. */
 const LAPSED = new Date(0).toISOString();
 
@@ -35,7 +43,7 @@ export function useOperatorRun(serverUntil: string | null) {
   const [failure, setFailure] = useState<RunFailure | null>(null);
   // Read at render, as the billing row reads today: a window that lapses while the confirm is open meets the 403 path.
   // What this page learned since the list was read (its own step-up, or a 403) is newer than the list's `stepUpUntil`.
-  const fresh = isStepUpFresh(stepUp.until ?? serverUntil, new Date());
+  const fresh = isStepUpFresh(useStepUpUntil(serverUntil), new Date());
 
   /** Runs `action`; resolves with its value, or null when it didn't run (the row already shows why). Other refusals throw. */
   const run = useCallback(

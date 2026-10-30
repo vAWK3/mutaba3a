@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useLanguage, useT, type Translator } from '../../../lib/i18n/core';
+import { useT } from '../../../lib/i18n/core';
 import { api, ApiError, apiErrorReason, type OperatorAccount } from '../../api/client';
 import { AlertIcon } from '../../components/Icons';
 import { RowGroup, RowSwitch } from '../../components/YouRows';
 import { patchOperatorAccount } from '../../data/operatorQueries';
+import { useFeatureText } from '../../operator/featureNames';
 import { OperatorConfirm, StepUpFailureBanner, useOperatorRun } from '../../operator/OperatorStepUp';
 import { isolated } from '../../operator/text';
 import { ME_KEY } from '../../session/me';
@@ -12,37 +13,30 @@ import { ME_KEY } from '../../session/me';
 /**
  * MUT-462 (design 15A): the person's feature flags, one switch per flag the server has (`availableFeatures`). Turning
  * one on acts straight away (busy while saving; a failure turns it back with the reason in the row). Turning one off
- * takes something away, so it confirms in the row first. Both go through the operator step-up; the operator's own
- * account shows the switches inert (E10).
+ * takes something away, so it confirms in the row first. Both go through the operator step-up.
+ *
+ * MUT-527: the operator's own account switches too (the E10 amendment), here and on the console's You panel; a flag
+ * the portal has no words for shows a humanised name, never its key.
  */
-export function OperatorFeaturesSection({ account, stepUpUntil, own }: { account: OperatorAccount; stepUpUntil: string | null; own: boolean }) {
+export function OperatorFeaturesSection({ account, stepUpUntil, label }: { account: OperatorAccount; stepUpUntil: string | null; label?: string }) {
   const t = useT();
   return (
-    <RowGroup label={t('hosted.operator.features.title')}>
+    <RowGroup label={label ?? t('hosted.operator.features.title')}>
       {account.availableFeatures.map((feature) => (
-        <FeatureRow key={feature} account={account} feature={feature} stepUpUntil={stepUpUntil} own={own} />
+        <FeatureRow key={feature} account={account} feature={feature} stepUpUntil={stepUpUntil} />
       ))}
     </RowGroup>
   );
 }
 
-/** Whether the portal has words for a key (the translator's `has`, as plural.ts reads it; a test double may lack it). */
-function useHasKey(): (key: string) => boolean {
-  const { t } = useLanguage();
-  return (key) => (t as Partial<Translator>).has?.(key) ?? true;
-}
-
-function FeatureRow({ account, feature, stepUpUntil, own }: { account: OperatorAccount; feature: string; stepUpUntil: string | null; own: boolean }) {
+function FeatureRow({ account, feature, stepUpUntil }: { account: OperatorAccount; feature: string; stepUpUntil: string | null }) {
   const t = useT();
-  const hasKey = useHasKey();
+  const text = useFeatureText()(feature);
   const queryClient = useQueryClient();
   const run = useOperatorRun(stepUpUntil);
   const [confirmingOff, setConfirmingOff] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const on = account.features.includes(feature);
-  // A flag the portal has no words for yet still shows, by its code.
-  const named = hasKey(`hosted.operator.features.${feature}.label`);
-  const label = named ? t(`hosted.operator.features.${feature}.label`) : feature;
 
   async function set(next: boolean) {
     setRefusal(null);
@@ -58,6 +52,7 @@ function FeatureRow({ account, feature, stepUpUntil, own }: { account: OperatorA
       }
       const reason = error instanceof ApiError ? apiErrorReason(error) : undefined;
       if (reason === 'USER_PENDING_REVIEW') setRefusal(t('hosted.operator.features.pendingRefused'));
+      // An API from before MUT-527 still refuses the operator's own flags.
       else if (reason === 'OWN_ACCOUNT') setRefusal(t('hosted.operator.accounts.ownRefused'));
       else run.setFailure('failed');
     }
@@ -67,7 +62,7 @@ function FeatureRow({ account, feature, stepUpUntil, own }: { account: OperatorA
     return (
       <div className="hp-operator-confirm">
         <OperatorConfirm
-          text={t(named ? `hosted.operator.features.${feature}.confirmOff` : 'hosted.operator.features.confirmOff', { email: isolated(account.email), feature })}
+          text={text.confirmOff(isolated(account.email))}
           labels={{ plain: t('hosted.operator.features.turnOff'), passkey: t('hosted.operator.features.turnOffWithPasskey') }}
           variant="danger"
           run={run}
@@ -85,14 +80,7 @@ function FeatureRow({ account, feature, stepUpUntil, own }: { account: OperatorA
 
   return (
     <div data-feature-row={feature}>
-      <RowSwitch
-        label={label}
-        sub={own ? t('hosted.operator.accounts.own') : named ? t(`hosted.operator.features.${feature}.sub`) : undefined}
-        on={on}
-        busy={run.busy}
-        inert={own}
-        onToggle={() => (on ? setConfirmingOff(true) : void set(true))}
-      />
+      <RowSwitch label={text.label} sub={text.sub} on={on} busy={run.busy} onToggle={() => (on ? setConfirmingOff(true) : void set(true))} />
       {run.failure && <StepUpFailureBanner failure={run.failure} />}
       {run.label === 'confirm' && !on && <p className="hp-you-row hp-you-row--note">{t('hosted.operator.features.tapAgain')}</p>}
       {refusal && <Refusal text={refusal} />}

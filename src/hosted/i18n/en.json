@@ -1816,7 +1816,8 @@
         "signupsCount": "Signups · {count}",
         "accounts": "Accounts",
         "firms": "Firms",
-        "firmsCount": "Firms · {count}"
+        "firmsCount": "Firms · {count}",
+        "you": "Your settings"
       },
       "signups": {
         "listLabel": "Signups waiting for review",
@@ -1872,11 +1873,9 @@
         "addPasskey": "Add one in Account › Passkeys"
       },
       "accounts": {
-        "searchLabel": "Email address",
-        "search": "Search",
-        "searchHint": "The exact address they signed up with.",
-        "noMatch": "No account with this address",
-        "resultsLabel": "Account found",
+        "searchLabel": "Search accounts",
+        "searchHint": "Any part of the email or name.",
+        "noMatch": "No account matches “{q}”",
         "status": {
           "ACTIVE": "Active",
           "DISABLED": "Disabled",
@@ -1909,7 +1908,6 @@
         "enableSub": "They can sign in again",
         "reset": "Send reset link",
         "resetSub": "A one-time link to set a new password, for 24 hours",
-        "own": "This is your account: change it from You › Account.",
         "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected. Their password still works.",
         "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and they can't sign in until you enable the account.",
         "confirmEnable": "{email} can sign in again.",
@@ -1961,7 +1959,14 @@
           "NONE": "No plan"
         },
         "billingUntil": "until {date}",
-        "noProfiles": "No profiles."
+        "noProfiles": "No profiles.",
+        "listLabel": "Accounts",
+        "empty": "No accounts yet",
+        "noMatchBody": "Try part of the email or the name.",
+        "loadMore": "Load more",
+        "featuresOn": "On: {features}",
+        "ownNote": "This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.",
+        "ownLink": "Open You › Account"
       },
       "billing": {
         "title": "Billing",
@@ -2009,6 +2014,11 @@
           "label": "Connect Claude",
           "sub": "They can connect their own Claude to log receipts and statements",
           "confirmOff": "{email} loses Claude access, and any Claude they connected is disconnected now."
+        },
+        "receipt_reading": {
+          "label": "Receipt reading",
+          "sub": "Reads new receipts on our servers and fills in the date, total and vendor.",
+          "confirmOff": "{email} loses receipt reading; receipts they add from now on aren't read."
         }
       },
       "firms": {
@@ -2036,6 +2046,32 @@
           "DISABLED": "Disabled: can't be an owner",
           "PENDING_REVIEW": "Waiting for review: can't be an owner"
         }
+      },
+      "you": {
+        "title": "Your operator settings",
+        "operator": "Operator",
+        "operatorSince": "Operator since {date}",
+        "operatorSub": "You can review signups, accounts and firm requests here.",
+        "passkeys": "Passkeys",
+        "passkeyCount": {
+          "one": "{count} passkey",
+          "other": "{count} passkeys"
+        },
+        "noPasskeys": "No passkey",
+        "lastUsed": "Last used {time}",
+        "neverUsed": "Not used yet",
+        "managePasskeys": "Manage passkeys",
+        "managePasskeysSub": "In You › Account › Passkeys",
+        "confirmation": "Confirmation",
+        "confirmedUntil": "Confirmed with your passkey until {time}",
+        "confirmedSub": "Changes go through without asking again until then.",
+        "notConfirmed": "Not confirmed",
+        "notConfirmedSub": "Changes will ask for your passkey.",
+        "yourFeatures": "Your features"
+      },
+      "noPasskey": {
+        "banner": "Operator changes need a passkey. Add one in You › Account › Passkeys, then come back.",
+        "link": "Add a passkey"
       }
     },
     "welcome": {

@@ -20,7 +20,8 @@ import { dayText } from '../../operator/time';
  * MUT-462 (design 5A, 14A): the account's billing grants, newest first, each with where it stands; an active one revokes
  * with the in-row danger confirm. "Grant coverage" opens the drawer (`?grant=new`): tier, a reason, and an expiry with
  * 30 / 90 day and no-end presets. A grant covers the profiles the person created, as `billing:grant` does. Every write
- * goes through the operator step-up; the operator's own account shows the rows inert (E10).
+ * goes through the operator step-up; the operator's own account lists its grants read-only, with no Grant or Revoke
+ * (E10; MUT-527: the page's one note explains it).
  */
 type Tier = EntitlementGrant['tier'];
 
@@ -75,9 +76,12 @@ export function OperatorBillingSection({ account, stepUpUntil: viewStepUpUntil, 
           </div>
         ),
       )}
-      <div ref={openerRef}>
-        <RowButton label={t('hosted.operator.billing.grant')} sub={own ? t('hosted.operator.accounts.own') : t('hosted.operator.billing.grantSub')} inert={own} onClick={() => onGrantOpen(true)} />
-      </div>
+      {/* MUT-527: the page's own-account note says why; no row repeats it. */}
+      {!own && (
+        <div ref={openerRef}>
+          <RowButton label={t('hosted.operator.billing.grant')} sub={t('hosted.operator.billing.grantSub')} onClick={() => onGrantOpen(true)} />
+        </div>
+      )}
       {grantOpen && !own && <GrantDrawer account={account} stepUpUntil={stepUpUntil} onClose={closeDrawer} />}
     </RowGroup>
   );

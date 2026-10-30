@@ -1,4 +1,4 @@
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery, type QueryClient } from '@tanstack/react-query';
 import { api, type OperatorAccountView, type OperatorFirmRequestList, type OperatorSignupReviewList } from '../api/client';
 
 /**
@@ -21,15 +21,21 @@ export function dropSignup(queryClient: QueryClient, userId: string): void {
   void queryClient.invalidateQueries({ queryKey: OPERATOR_SIGNUPS_KEY });
 }
 
-/** MUT-461: the account search (exact email) and one account. Never the setup link: that lives in the mutation only (12A). */
-export const operatorAccountSearchKey = (email: string) => ['operator', 'accounts', 'search', email] as const;
+/**
+ * MUT-527: every account, a page at a time ("Load more"), filtered by `q`; MUT-461: one account. Never the setup link:
+ * that lives in the mutation only (12A). The list keeps the previous answer on screen while a new `q` loads.
+ */
+export const operatorAccountListKey = (q: string) => ['operator', 'accounts', 'list', q] as const;
 export const operatorAccountKey = (userId: string) => ['operator', 'accounts', userId] as const;
 
-export function useOperatorAccountSearch(email: string) {
-  return useQuery({
-    queryKey: operatorAccountSearchKey(email),
-    queryFn: ({ signal }) => api.operatorAccountSearch(email, signal),
-    enabled: email.length > 0,
+export function useOperatorAccountList(q: string) {
+  return useInfiniteQuery({
+    queryKey: operatorAccountListKey(q),
+    queryFn: ({ pageParam, signal }) => api.operatorAccounts({ q, cursor: pageParam }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -41,6 +47,8 @@ export function useOperatorAccount(userId: string) {
 export function patchOperatorAccount(queryClient: QueryClient, userId: string, patch: Partial<OperatorAccountView['account']>): void {
   queryClient.setQueryData<OperatorAccountView>(operatorAccountKey(userId), (view) => view && { ...view, account: { ...view.account, ...patch } });
   void queryClient.invalidateQueries({ queryKey: operatorAccountKey(userId) });
+  // MUT-527: the list shows status and features too.
+  void queryClient.invalidateQueries({ queryKey: ['operator', 'accounts', 'list'] });
 }
 
 /** MUT-462 (14A): an account's billing grants, newest first. */
