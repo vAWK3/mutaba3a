@@ -71,8 +71,11 @@ moves production to its own project, **`mtb3a-production`**, named in
 - **Malafat's project** (`malafat-production`): fewer moving parts; every
   resource name is prefixed `mutaba3a-` so nothing collides.
 
-Either way the region is **`me-west1`** so firm data stays beside the CRM
-(ADR-024 residency guarantee). Billing must be enabled on the project.
+The region was **`me-west1`** (ADR-024's residency line, beside the CRM). **MUT-523 (ADR-232 amendment, Basel
+2026-10-30):** MTB3A's own project, `mtb3a-production`, is in **`europe-west1`**, chosen for cost; the old project
+stays in `me-west1` until MUT-520/MUT-521. `config/gcp.json` names each project's region and the scripts read it;
+commands below that say `me-west1` describe the old project and become `europe-west1` (`$GCP_REGION`) from the
+cutover (§6d C3). The user-facing policy wording is MUT-524. Billing must be enabled on the project.
 
 ### 1.2 Tools on your machine
 
@@ -850,7 +853,7 @@ app (native assertions carry `https://<apex>`).
 | Roll back the service | `make rollback-server SHA=<sha\|api-vX.Y.Z>` (or `ROLLBACK_TO=<…> ./scripts/deploy.sh`) from a clean checkout of the commit that deployed what serves now: the service goes back to the image that commit already has in Artifact Registry, with no build and no migration. Its gates, in order: a clean tree and no `IMAGE_TAG`; the commit is older than what serves (a rollback only goes back); the commit's own terms are live; its image exists (labelled with that commit, not dirty); **infra drift**: `terraform plan -detailed-exitcode` at the deployed tag must show no change, or the rollback would also ship this checkout's infrastructure; the five release guards; **migrations**: the database keeps every migration (forward-only), so `rollback:check` lists what it rolls back past, runs each "Roll back past" count below (any above 0 refuses), and asks you to type the commit's short sha. Then `terraform apply -var image_tag=<its tag>` and smoke (error reporting checked only from MUT-148 on). Skipped: the bundle, the build and push, migrate, pre-roll, the Turnstile key check, and post-roll (HEAD's repairs; the next forward deploy runs them). The portal rolls back with the image; a phone build that calls a newer endpoint gets 404s until you roll forward. A schema revert is a new migration, rolled forward. `IMAGE_TAG` now only names a fresh build (a dirty tree's, labelled `dirty=true`); `deploy.sh` never pushes over a tag, and reuses an image only when it holds this clean commit built with the same portal settings (`portal-config` label: `ENVIRONMENT` and deploy.env's `MUTABA3A_*`); an image from before MUT-347 has no labels and is never reused (MUT-347) |
 | Raise the minimum app build (MUT-293, MUT-457) | Add the floor to `production.tfvars`, e.g. `android_min_build = 12` (Android versionCode) or `ios_min_build = 8` (iPhone build number, CFBundleVersion); optionally `android_recommended_build` / `ios_recommended_build` for the softer "update available" nudge, which needs that platform's floor and must be `>=` it (Terraform refuses it otherwise; without a floor the server ignores it). Then release as usual, naming each value you change: `ALLOW_MIN_BUILD_CHANGE=ANDROID_MIN_BUILD make release-server` (comma-separate several). `production.tfvars` is git-ignored, so `deploy.sh` refuses a release whose checkout would change any of the five values (the two floors, the two recommended builds, `min_build_check_disabled`) from what the service has, unless `ALLOW_MIN_BUILD_CHANGE` names it (`guard_min_build_release`, `lib/release-guard.sh`, MUT-471). That catches a copy that never got the floor lines, one that would re-raise a floor an incident lowered, and one that would drop the kill switch; its message lists each change and the exact override. A raise is named too, because a stale raise is how phones get locked out. `SKIP_MIN_BUILD_GUARD=1` skips it, only when the guard itself can't read Terraform or Cloud Run. **Only raise a floor to a build already live in the store for that platform** — the server can't retroactively reach a phone that predates the floor-check mechanism itself (MUT-293), so "raise the floor" only ever excludes builds that are MUT-293-or-newer and below it, never the whole installed base. **iOS:** before MUT-457 each iOS version started again at build 1, so builds 1–7 repeat across versions (0.1.14 is build 1; App Store Connect's highest is 7, from 0.1.0). The first build made after MUT-457 is 8, so the first iOS floor is `ios_min_build = 8`, and it makes every iPhone on an older build update: set it only once build 8 is live in the App Store. `make ios-build-number-check` in mutaba3a-flutter lists every upload. Since MUT-457 each iOS release takes the highest build ever uploaded + 1, like Android's versionCode, so later floors cut off only older builds |
 | Undo a bad floor (incident) | Add `min_build_check_disabled = true` to `production.tfvars`. If the next release can't wait, apply only that change to what serves now: from a clean checkout of the serving release (`git worktree add ../serving api-vX.Y.Z`, the tag whose sha is `SERVICE_VERSION` on `gcloud run services describe mutaba3a-api --region=me-west1`) with the same `production.tfvars`, run `terraform plan -var-file=production.tfvars -var image_tag=<that sha>` and go on only if its sole change is the `env` of `google_cloud_run_v2_service.api`; then `terraform apply` with the same arguments. Never from a checkout ahead of what serves: that ships its unreleased infrastructure and skips the release guards. It's a **one-variable** change, not an edit to the floor values themselves, so it's the fastest way back if a floor locks out more of the install base than intended. Once the floor is fixed, delete the line (don't set it to `false`; absent is off) and release with `ALLOW_MIN_BUILD_CHANGE` naming `MIN_BUILD_CHECK_DISABLED` and every floor or recommended build you changed, e.g. `ALLOW_MIN_BUILD_CHANGE=MIN_BUILD_CHECK_DISABLED,IOS_MIN_BUILD,IOS_RECOMMENDED_BUILD`: removing a floor removes that platform's recommended build too (Terraform refuses one without the other), so both are named. The release guard lists anything you missed. A floor-triggered 426 is logged per request (`platform`, `build`, `minimumBuild`); a spike there is the signal, before support tickets arrive |
-| Logs | `gcloud run services logs read mutaba3a-api --region=me-west1 --limit=200` (pino JSON; `requestId` matches the error envelope Malafat shows) |
+| Logs | `gcloud run services logs read mutaba3a-api --region=$GCP_REGION --limit=200` (me-west1 until the MUT-487 cutover, europe-west1 after) (pino JSON; `requestId` matches the error envelope Malafat shows) |
 | Rotate the admin token | `cd infrastructure/terraform && terraform apply -var-file=production.tfvars -var image_tag=<current sha> -replace=random_password.admin_token`, then `./scripts/deploy.sh` so the new revision reads the new version |
 | Sign every portal user out | `terraform apply … -replace=random_password.session_pepper`, then `./scripts/deploy.sh` (the pepper keys every session digest; a new one voids them all). It also voids every open setup link (MUT-235 digests them with the same pepper): reissue links with `rotate:password` for anyone still without a password |
 | Rotate the DB password | same with `-replace=random_password.db` (Cloud SQL user and the URL secret update together), then redeploy |
@@ -883,7 +886,7 @@ app (native assertions carry `https://<apex>`).
 | Uptime alerts: apply, verify SMS, drill (MUT-328) | §6b |
 | Stripe webhook and nightly reconcile: apply, turn on, rotate (MUT-360) | §6e |
 | Pilot counts (MUT-330) | Entries per profile and per pilot user, read-only, never sent anywhere: §6a |
-| Backups | Cloud SQL automated daily at 03:00 (14 kept, stored in me-west1: `location = var.region`, MUT-382) + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg`, and **delete it within 14 days** (`gcloud sql backups delete <id>`), because the privacy policy says backups clear within 14 days and on-demand ones never expire by themselves. Receipt files aren't in them: the bucket's 14-day soft delete covers them (§6c) |
+| Backups | Cloud SQL automated daily at 03:00 (14 kept, stored in the service's region: `location = var.region`, MUT-382; me-west1 in the old project, europe-west1 in `mtb3a-production`) + PITR 7 days; on-demand: `gcloud sql backups create --instance=mutaba3a-pg`, and **delete it within 14 days** (`gcloud sql backups delete <id>`), because the privacy policy says backups clear within 14 days and on-demand ones never expire by themselves. Receipt files aren't in them: the bucket's 14-day soft delete covers them (§6c) |
 | Pilot operator runbook and restore drill (MUT-327) | [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md): onboard, reset, restore one profile or the whole database, incidents, support, offboard; `scripts/restore-drill.sh` (Basel runs it, results in its §10) |
 | Scale beyond one instance | blocked by Terraform validation until TD-017; do not raise `max_instances` by hand |
 | Add staging later | `ENVIRONMENT=staging ./scripts/deploy.sh` with a `staging.tfvars` (`environment = "staging"`, ZONAL, no backups, `deletion_protection = false`); it would issue `test` keys and need its own Malafat URL secret. Not planned for now |
@@ -1072,7 +1075,7 @@ There is no staging to scale to zero, so the drill adds a fourth check against a
 
 #### When an alert fires
 
-- **`/health` down:** the service is down or unreachable. Check `gcloud run services describe mutaba3a-api --region=me-west1` (latest revision ready?) and the logs (§6). Roll back with `make rollback-server SHA=<the previous api-v tag>` if a release caused it (§6 "Roll back the service").
+- **`/health` down:** the service is down or unreachable. Check `gcloud run services describe mutaba3a-api --region=$GCP_REGION` (me-west1 until the MUT-487 cutover, europe-west1 after; latest revision ready?) and the logs (§6). Roll back with `make rollback-server SHA=<the previous api-v tag>` if a release caused it (§6 "Roll back the service").
 - **`/ready` down while `/health` is up:** the database. Check the `mutaba3a-pg` status in Cloud SQL (maintenance window: Sunday 03:00), and run `npm run db:psql`.
 - **Portal down while `/health` is up:** the image shipped without `dist-hosted/`, or the domain (after MUT-112) points somewhere else. `curl -s "$URL/" | head` shows what is being served.
 - **Cloud SQL disk or CPU:** not urgent. Query Insights in the console shows the heavy query. Disk grows by itself (`disk_autoresize`), and so does the bill.
@@ -1117,6 +1120,16 @@ MTB3A moves from `malafat-production` to its own project, `mtb3a-production`, so
 holds any role over MTB3A's data (TD-195, ADR-232). The new database runs ZONAL `db-f1-micro` (MUT-511, ADR-233).
 The plan and its eng review: `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md` (R1–R9, AM1–AM16).
 
+**Region, billing and owner (MUT-523, Basel 2026-10-30).** `mtb3a-production` is in **europe-west1** (Belgium);
+`malafat-production` stays in **me-west1** until MUT-520 and MUT-521 empty it. `config/gcp.json` names each project's
+region (`region`, `legacyRegion`), and `deploy.sh`, `make`, preflight and `project-move.sh` use the right one for each
+project; a `GCP_REGION` or a tfvars `region` that disagrees is refused (Terraform has no default region any more). The
+new project is created and owned by **`barmajiyatltd@gmail.com`** and billed to its billing account
+**`01E433-999491-75ECBD` (GBP)**, with a **£25** monthly budget. That account runs the whole move; `bsader@gmail.com`
+gives it temporary roles on `malafat-production` (C0) until MUT-521. Nothing below changes gcloud or ADC machine-wide:
+the account and its credentials file are set per checkout (`deploy.env`) or per terminal. The user-facing privacy
+wording about the region is MUT-524, which must ship before C3.
+
 **How it works.** Terraform applies the same stack to the new project (`project_id`), with fresh state in
 `gs://mtb3a-production-terraform-state`. The old stack keeps its state in `gs://malafat-production-terraform-state` and
 is applied only with `LEGACY_STACK=1` and `legacy.tfvars`. `server/scripts/project-move.sh` does the data steps; each
@@ -1137,30 +1150,86 @@ other's):
 
 ```bash
 NEW=mtb3a-production OLD=malafat-production
+NEW_REGION=europe-west1 OLD_REGION=me-west1          # config/gcp.json's region and legacyRegion
+# MUT-523: this terminal acts as barmajiyatltd@gmail.com (the file comes from C0 step 3). Per terminal, never
+# machine-wide; `make` reads the same two from deploy.env.
+export GCP_ACCOUNT=barmajiyatltd@gmail.com GCP_ADC_FILE=$HOME/.config/gcloud/adc-barmajiyatltd.json
+export CLOUDSDK_CORE_ACCOUNT=$GCP_ACCOUNT GOOGLE_APPLICATION_CREDENTIALS=$GCP_ADC_FILE   # for the raw gcloud/terraform lines
 TF() { (cd infrastructure/terraform && TF_DATA_DIR=.terraform-$NEW terraform "$@"); }
 TF init -reconfigure -backend-config="bucket=$NEW-terraform-state" -backend-config="prefix=mutaba3a-api/production"
 ```
 
-#### C0. The project (Basel's account only)
+#### C0. The project, the identity and the old project's roles
 
-```bash
-gcloud projects create mtb3a-production --name="MTB3A production"
-gcloud billing projects link mtb3a-production --billing-account=017FB9-BD0756-27576C
-gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com secretmanager.googleapis.com cloudbilling.googleapis.com billingbudgets.googleapis.com --project=mtb3a-production
-gcloud storage buckets create gs://mtb3a-production-terraform-state --project=mtb3a-production --location=me-west1 --uniform-bucket-level-access
-gcloud storage buckets update gs://mtb3a-production-terraform-state --versioning
-gcloud auth application-default set-quota-project mtb3a-production   # the budget API takes its quota from a project (budget.tf)
-gcloud projects get-iam-policy mtb3a-production --format=json > /tmp/mtb3a-iam-c0.json   # evidence: only you
-```
+None of these steps changes the machine's gcloud account, its configuration or its default Application Default
+Credentials: no `gcloud auth login`, no `gcloud config set`, no `application-default set-quota-project` (the budget's
+own provider names its quota project, `budget.tf`).
 
-No Malafat service account gets any role here, now or later. Check the policy file names only your user.
+1. **The project, as `barmajiyatltd@gmail.com`** (its own billing account bills in GBP). The account must already be
+   in `gcloud auth list`; if it isn't, run this step in Cloud Shell signed in as it instead of logging in here.
+
+   ```bash
+   B=barmajiyatltd@gmail.com
+   gcloud auth list --filter="account=$B" --format='value(account)'   # must print it
+   gcloud projects create mtb3a-production --name="MTB3A production" --account=$B
+   gcloud billing projects link mtb3a-production --billing-account=01E433-999491-75ECBD --account=$B
+   gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com secretmanager.googleapis.com cloudbilling.googleapis.com billingbudgets.googleapis.com bigquery.googleapis.com --project=mtb3a-production --account=$B
+   gcloud storage buckets create gs://mtb3a-production-terraform-state --project=mtb3a-production --location=europe-west1 --uniform-bucket-level-access --account=$B
+   gcloud storage buckets update gs://mtb3a-production-terraform-state --versioning --account=$B
+   gcloud projects get-iam-policy mtb3a-production --format=json --account=$B > /tmp/mtb3a-iam-c0.json   # evidence: only $B
+   ```
+
+   No Malafat service account and no other person gets any role here, now or later. Check the policy file names only
+   `barmajiyatltd@gmail.com`.
+2. **The billing export (the cost evidence for C5, MUT-511 AC6).** In the Console as `barmajiyatltd@gmail.com`:
+   Billing › account `01E433-999491-75ECBD` › Billing export › BigQuery export › Standard usage cost › Edit settings:
+   project `mtb3a-production`, a new dataset `mtb3a_billing_export` in the **EU** multi-region. Data starts the day
+   it is turned on (no backfill), so do it now.
+3. **The credentials file for Terraform and cloud-sql-proxy**, made once without touching the default ADC
+   (`~/.config/gcloud/application_default_credentials.json` stays as it is). `CLOUDSDK_CONFIG` points gcloud at a
+   throwaway configuration directory, so the login writes its `application_default_credentials.json` there; the file
+   is then copied out and the directory deleted:
+
+   ```bash
+   T=$(mktemp -d)
+   CLOUDSDK_CONFIG=$T gcloud auth application-default login barmajiyatltd@gmail.com --disable-quota-project   # browser: sign in as barmajiyatltd@gmail.com
+   install -m 600 "$T/application_default_credentials.json" ~/.config/gcloud/adc-barmajiyatltd.json
+   rm -rf "$T"
+   ```
+
+   Then in this checkout's `deploy.env`: `GCP_ACCOUNT=barmajiyatltd@gmail.com` and
+   `GCP_ADC_FILE=~/.config/gcloud/adc-barmajiyatltd.json` (`deploy.env.example`). `make`, `deploy.sh`,
+   `project-move.sh`, `restore-drill.sh` and preflight turn them into `CLOUDSDK_CORE_ACCOUNT` and
+   `GOOGLE_APPLICATION_CREDENTIALS` for their own process only (`server/scripts/lib/gcp-identity.sh`); other
+   checkouts and sessions are unaffected. `make doctor` prints who a run acts as and fails if the file signs in as
+   anyone else.
+4. **The old project's roles, granted by `bsader@gmail.com`** (an owner of `malafat-production`), so the one account
+   runs the legacy releases, the move, a rollback and the teardown. Temporary: MUT-521 removes them with the project's
+   last MTB3A resources.
+
+   ```bash
+   for role in roles/editor roles/secretmanager.admin roles/resourcemanager.projectIamAdmin \
+               roles/run.admin roles/iam.serviceAccountAdmin roles/storage.admin; do
+     gcloud projects add-iam-policy-binding malafat-production --member=user:barmajiyatltd@gmail.com --role=$role --condition=None --account=bsader@gmail.com
+   done
+   ```
+
+   Why each: `editor` covers what the stack and `project-move.sh` create, read and delete (Cloud Run, Cloud SQL and
+   its backups, the registry, Scheduler, monitoring, service accounts, the state bucket's objects);
+   `secretmanager.admin` reads and adds secret versions (Editor can't read a secret's value) and sets the per-secret
+   grants; `resourcemanager.projectIamAdmin` the project-level grant (`api_sql_client`). Editor holds no
+   `setIamPolicy` on individual resources, so three more: `run.admin` for the service's invoker binding
+   (`google_cloud_run_v2_service_iam_member.public`; destroyed at the teardown), `iam.serviceAccountAdmin` for the
+   binding on the API's own service account (`api_signs_as_itself`), and `storage.admin` for the attachments
+   bucket's binding (`api_objects`). A rollback's `verify` signs a receipt URL as `mutaba3a-api@malafat-production`
+   (`--impersonate-service-account`); if that step says it can't, add `roles/iam.serviceAccountTokenCreator` too.
 
 #### C1. Build the new stack beside the old one
 
 1. **The old stack's tfvars.** Usually already done: while `config/gcp.json` says `"cutover": "pending"`, the first
    `make release server` (or `deploy.sh`) after the merge makes `legacy.tfvars` from `production.tfvars` with
-   `legacy_stack = true` (`server/scripts/lib/legacy-stack.sh`). Check it exists; if not: in `infrastructure/terraform/`
-   `cp production.tfvars legacy.tfvars`, then add `legacy_stack = true`. Either way, check it pins what it runs (`db_tier = "db-g1-small"`, `db_availability = "REGIONAL"`,
+   `legacy_stack = true`, and `region = "me-west1"` when `production.tfvars` set none (`server/scripts/lib/legacy-stack.sh`). Check it exists; if not: in `infrastructure/terraform/`
+   `cp production.tfvars legacy.tfvars`, then add `legacy_stack = true`. Either way, check it pins what it runs (`region = "me-west1"`, `db_tier = "db-g1-small"`, `db_availability = "REGIONAL"`,
    `min_instances = 1`, `db_pool_size = 10`, `db_max_connections = 50`, `sentry_state_bucket =
    "malafat-production-terraform-state"`): `legacy.tfvars.example` lists them.
 2. **Release this branch to the old project (AM12)**, so its image carries the forwarder:
@@ -1173,12 +1242,15 @@ No Malafat service account gets any role here, now or later. Check the policy fi
    secret (no version), the `mutaba3a-forwarder` account and its one grant; the registry cleanup policy (dry run);
    the Cloud SQL CPU alert at 80% and a new memory alert; the `allUsers` binding moved to `public[0]` (no change).
    Nothing on the instance, the secrets' versions or the jobs. Anything else: stop.
-3. **The new stack's tfvars.** Edit `production.tfvars` from `production.tfvars.example`: `project_id = "mtb3a-production"`, `db_tier = "db-f1-micro"`,
+3. **The new stack's tfvars.** Edit `production.tfvars` from `production.tfvars.example`: `project_id = "mtb3a-production"`,
+   `region = "europe-west1"`, `db_tier = "db-f1-micro"`,
    `db_availability = "ZONAL"`, `min_instances = 0`, `db_pool_size = 5`, `db_max_connections = 25`,
    `scheduler_paused = true`, `api_public = false`, `live_label = false`, `sentry_state_bucket =
-   "mtb3a-production-terraform-state"`, `billing_account_id = "017FB9-BD0756-27576C"` (₪100, ILS: the account
-   bills in ILS), and every other line as it was (`stripe_enabled`, `mailer`, `sentry_enabled`, the floors, the
-   alerts). In `deploy.env`: `GCP_PROJECT_ID=mtb3a-production`, `TF_STATE_BUCKET=mtb3a-production-terraform-state`.
+   "mtb3a-production-terraform-state"`, `billing_account_id = "01E433-999491-75ECBD"`, `budget_amount = 25`,
+   `budget_currency = "GBP"` (MUT-523: Barmajiyat Ltd's account bills in GBP), and every other line as it was
+   (`stripe_enabled`, `mailer`, `sentry_enabled`, the floors, the alerts). In `deploy.env`:
+   `GCP_PROJECT_ID=mtb3a-production`, `TF_STATE_BUCKET=mtb3a-production-terraform-state`, and the C0 step 3 pair
+   (`GCP_ACCOUNT`, `GCP_ADC_FILE`). Leave `GCP_REGION` unset: it comes from `config/gcp.json`.
 4. **The Sentry and front-door state (AM15)**, into the new bucket, before the first apply:
 
    ```bash
@@ -1186,8 +1258,8 @@ No Malafat service account gets any role here, now or later. Check the policy fi
    cd ../frontdoor && terraform init -migrate-state -backend-config="bucket=$NEW-terraform-state" -backend-config="prefix=mutaba3a-frontdoor/production"
    # The token secret has prevent_destroy: forget the old one (it stays in $OLD for the old API), create it in $NEW with the same value.
    terraform state rm 'google_secret_manager_secret_version.front_door_token[0]' 'google_secret_manager_secret.front_door_token[0]'
-   # production.tfvars: project_id = "mtb3a-production"
-   terraform plan -var-file=production.tfvars    # only the secret and its version, in $NEW; the Worker unchanged
+   # production.tfvars: project_id = "mtb3a-production", region = "europe-west1" (MUT-523: no default region)
+   terraform plan -var-file=production.tfvars    # only the secret (replica europe-west1) and its version, in $NEW; the Worker unchanged
    terraform apply -var-file=production.tfvars
    cd ../../
    ```
@@ -1236,14 +1308,20 @@ No Malafat service account gets any role here, now or later. Check the policy fi
 #### C2. Rehearse (measures the downtime)
 
 ```bash
-scripts/project-move.sh rehearse --from $OLD --to $NEW
-gcloud run services proxy mutaba3a-api --region=me-west1 --project=$NEW --port=8788   # second terminal
+scripts/project-move.sh rehearse --from $OLD --to $NEW   # prints "regions: malafat-production in me-west1, mtb3a-production in europe-west1"
+gcloud run services proxy mutaba3a-api --region=$NEW_REGION --project=$NEW --port=8788   # second terminal
 curl -fsS http://localhost:8788/ready                                                   # then sign in on http://localhost:8788, open a receipt
 TF_STATE_BUCKET=$NEW-terraform-state scripts/restore-drill.sh --project $NEW            # the drill on the zonal instance (MUT-511 AC3)
 ```
 
 - `rehearse` copies with `$OLD` still open, so a count difference is reported, not fatal. Record its table in
   pilot runbook §10 "Project move": the backup + restore + rsync seconds are the window.
+- **MUT-523 AC5, the cross-region restore:** the backup is taken in me-west1 and restored into the europe-west1
+  instance (`Restore into mtb3a-production (me-west1 → europe-west1)` in the table). Record that row's seconds
+  separately in §10; it is the one step a same-region move never measured. If Cloud SQL refuses the cross-region
+  restore, stop: the fallback is a `pg_dump`/`pg_restore` through both proxies, timed the same way, and the window
+  grows with the database. The receipts rsync and the image copy cross regions too (inter-region egress, cents at
+  pilot size).
 - MUT-511 AC2: through the proxy, time the portal overview and `GET /v1/entries` for the largest pilot account
   against today's p95 + 50%.
 - **AM13:** record Malafat's VPC egress:
@@ -1319,10 +1397,13 @@ results on MUT-487, MUT-511 and MAL-1465.
 - **What changes for customers:** nothing they see, except a short window with the API closed: the C2 rehearsal
   measures it (minutes at pilot size). Nobody is signed out: the session pepper and OAuth key carry over (AM16);
   the API's machine keys and the provider keys are new.
-- **Cost:** about ₪204 a month before (billing export); about ₪33 after MUT-520 deletes the old copies (the
-  database ₪184 → ₪26 on ZONAL `db-f1-micro`, Cloud Run about ₪19 → ₪2 at min 0). The 14-day overlap costs about
-  ₪6 a day. The ₪100 budget alerts at 50%, 90% and 100%.
-- **Risks:** a cross-project restore refused (the dump/restore fallback, found at C2); Malafat's writes reaching a
+- **Cost (MUT-523: GBP, on Barmajiyat Ltd's own billing account):** about ₪204 (≈ £51) a month before (billing
+  export, `malafat-production`); about **£8–10 a month** after, in europe-west1 (estimate, INFRA.md §3: the
+  database ≈ £7 on ZONAL `db-f1-micro`, Cloud Run ≈ £0 at min 0 within the new account's own free tier). The 14-day
+  overlap, about ₪6 a day, stays on Malafat's billing account until MUT-520. The £25 budget alerts at 50%, 90% and
+  100%.
+- **Risks:** a cross-project, cross-region restore (me-west1 → europe-west1) refused (the dump/restore fallback,
+  found and timed at C2); Malafat's writes reaching a
   frozen service through VPC egress (AM13, checked at C2); old phone builds on run.app (the forwarder); a single
   zone (ADR-233: a zone outage is a restore into another zone, pilot runbook §4.5, about 15–30 minutes).
 - **Rollback:** the same script, reversed (above), until MUT-520 deletes the old copies 14 days later.
@@ -1369,7 +1450,7 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
    terraform plan -var-file=production.tfvars -var image_tag="$TAG"
    ```
    Expect `google_cloud_run_v2_service.api` updated in place (`STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` added), `google_cloud_scheduler_job.stripe_reconcile[0]` added, and the 3 alert policies `google_monitoring_alert_policy.stripe["sync"]`, `["reconcile"]` and `["scheduler"]` added (production has `alert_email`, §6b): **`Plan: 4 to add, 1 to change, 0 to destroy`**. Anything else means stop and ask. Apply the same command with `apply`. A secret without a version stops the new revision starting; the old one keeps serving, so add the version and apply again.
-5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` shows `state: ENABLED`, and Monitoring → Alerting lists "Stripe sync needs the operator", "Stripe reconcile needs the operator" and "Stripe reconcile job failed". Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.7 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
+5. Check: `gcloud scheduler jobs describe mutaba3a-stripe-reconcile --location=$GCP_REGION --project=$GCP_PROJECT_ID` shows `state: ENABLED`, and Monitoring → Alerting lists "Stripe sync needs the operator", "Stripe reconcile needs the operator" and "Stripe reconcile job failed". Then walk the cutover checklist in [`docs/operations/pilot-runbook.md`](../docs/operations/pilot-runbook.md) §1.7 (run the reconcile once, verify, then revoke grants). Delete the MUT-360 line from `docs/operations/before-release.md` and record the date in §7.
 
 **Releases once it's on.** `deploy.sh` refuses a release whose checkout's `production.tfvars` has `stripe_enabled = false`, or no such line, while production runs Stripe (`guard_stripe_release`, `lib/release-guard.sh`). The tfvars is git-ignored, so a checkout that never got the line would release with the default, false: its full apply would delete the job and the alerts and unmount the Stripe secrets. "Runs Stripe" means the Scheduler job exists or the service mounts `STRIPE_SECRET_KEY`. Fix the tfvars and release again. It's on by default, checks at the same three points as the ingress guard (`guard_ingress_release`), and stops the release if it can't read the job or the service. It also warns, without refusing, while the job is paused. `SKIP_STRIPE_GUARD=1` skips it: only for a release meant to switch Stripe off.
 
@@ -1379,7 +1460,7 @@ Stripe tells the API about subscriptions through `POST /v1/billing/stripe/webhoo
 |---|---|---|
 | Stripe sync needs the operator (WARNING) | The API logs `stripe sync needs the operator`, `stripe refused a re-fetch` or `stripe event failed; Stripe will redeliver` | Read the log line's codes (pilot runbook §1.7 step 5). A refused re-fetch got a 200 and won't come back; the nightly run retries it. "Will redeliver" is transient: act only if the same event id keeps failing |
 | Stripe reconcile needs the operator (WARNING) | The API logs `stripe reconcile needs the operator` (one line per subscription it couldn't mirror) or `stripe reconcile could not list` | `npm run billing:reconcile -- --url "$URL"` and read `errors` (pilot runbook §1.7 step 5). `TIME_BUDGET`: the run stopped early; run it again |
-| Stripe reconcile job failed (ERROR) | Cloud Scheduler logs a failed attempt of `mutaba3a-stripe-reconcile` (no 2xx, or the 280 s deadline) | Read the attempt in Scheduler's logs. 502 `RECONCILE_FAILED`: the key is wrong or lacks a read permission (§6e step 2). 409 `RECONCILE_RUNNING`: someone ran `billing:reconcile` at 03:30; nothing to do. 401: the job token was rotated and the revision not rolled. 503: Stripe isn't configured. Fix, then `gcloud scheduler jobs run mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID` |
+| Stripe reconcile job failed (ERROR) | Cloud Scheduler logs a failed attempt of `mutaba3a-stripe-reconcile` (no 2xx, or the 280 s deadline) | Read the attempt in Scheduler's logs. 502 `RECONCILE_FAILED`: the key is wrong or lacks a read permission (§6e step 2). 409 `RECONCILE_RUNNING`: someone ran `billing:reconcile` at 03:30; nothing to do. 401: the job token was rotated and the revision not rolled. 503: Stripe isn't configured. Fix, then `gcloud scheduler jobs run mutaba3a-stripe-reconcile --location=$GCP_REGION --project=$GCP_PROJECT_ID` |
 
 The filters are unproven against live entries until each first fires: note the date in §7 when one does.
 

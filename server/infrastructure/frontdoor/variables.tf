@@ -4,9 +4,8 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Secret Manager replica location; the API stack's region."
+  description = "Secret Manager replica location; the API stack's region (config/gcp.json). No default (MUT-523): the region config/gcp.json gives project_id (production.tfvars.example)."
   type        = string
-  default     = "me-west1"
 }
 
 variable "environment" {

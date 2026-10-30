@@ -13,10 +13,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * new plan keeps them (R1); no secret value ever reaches the output (AM10); images are copied tag by tag and never over
  * a tag (AM1); a live target is refused (AM7); copy refuses an open or still-written source; a mismatch stops with the
  * source closed; each step is a safe re-run; and --from/--to swapped is the rollback.
+ *
+ * MUT-523: the two projects are in different regions (config/gcp.json: mtb3a-production in europe-west1,
+ * malafat-production in me-west1). The fake gcloud refuses any Cloud Run, Scheduler or SQL call whose --region or
+ * --location isn't that project's, and each project's registry and connection name carry its own region, so every
+ * step below, in both directions, proves it uses the right region for each project.
  */
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../scripts/project-move.sh');
 const OLD = 'malafat-production';
 const NEW = 'mtb3a-production';
+const OLD_REGION = 'me-west1';
+const NEW_REGION = 'europe-west1';
 const bin = mkdtempSync(join(tmpdir(), 'project-move-'));
 const tfDir = join(bin, 'tf');
 const calls = join(bin, 'calls.log');
@@ -28,11 +35,14 @@ const fakes: Record<string, string> = {
   gcloud: `#!/bin/bash
 echo "gcloud $*" >> "${calls}"
 args="$*"
-proj=""; for a in "$@"; do case "$a" in --project=*) proj="\${a#--project=}" ;; esac; done
+proj=""; reg=""; for a in "$@"; do case "$a" in --project=*) proj="\${a#--project=}" ;; --region=*|--location=*) reg="\${a#--*=}" ;; esac; done
+want="${OLD_REGION}"; [[ "$proj" == "${NEW}" ]] && want="${NEW_REGION}"
+if [[ -n "$reg" && "$reg" != "$want" ]]; then echo "wrong region: $proj is in $want, not $reg" >&2; exit 95; fi
 case "$args" in
   "run services describe"*)
     if [[ "$proj" == "${NEW}" ]]; then
-      printf 'https://new.example.run\\t%s\\t%s\\t%s\\t%s\\n' "\${FAKE_NEW_IMAGE:-me-west1-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:abc1234}" "\${FAKE_NEW_LABEL-false}" "\${FAKE_NEW_ARGS:-}" "\${FAKE_NEW_INGRESS:-all}"
+      ing=all; grep -q -- "--project=${NEW} --ingress=internal" "${calls}" && ing=internal; [[ -n "$FAKE_NEW_INGRESS" ]] && ing="$FAKE_NEW_INGRESS"
+      printf 'https://new.example.run\\t%s\\t%s\\t%s\\t%s\\n' "\${FAKE_NEW_IMAGE:-${NEW_REGION}-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:abc1234}" "\${FAKE_NEW_LABEL-false}" "\${FAKE_NEW_ARGS:-}" "$ing"
     else
       ing=all; grep -q -- "--project=${OLD} --ingress=internal" "${calls}" && ing=internal; [[ -n "$FAKE_OLD_INGRESS" ]] && ing="$FAKE_OLD_INGRESS"
       printf 'https://old.example.run\\t%s\\t%s\\t%s\\t%s\\n' "me-west1-docker.pkg.dev/${OLD}/mutaba3a/mutaba3a-api:abc1234" "\${FAKE_OLD_LABEL-}" "\${FAKE_OLD_ARGS:-}" "$ing"
@@ -40,7 +50,7 @@ case "$args" in
   "run services update"*) ;;
   "scheduler jobs list"*) if [[ -n "$FAKE_JOBS_PAUSED" ]]; then printf 'mutaba3a-account-purge,PAUSED\\n'; else printf 'mutaba3a-account-purge,ENABLED\\nmutaba3a-stripe-reconcile,PAUSED\\n'; fi ;;
   "scheduler jobs pause"*) ;;
-  "sql instances describe"*) echo "$proj:me-west1:mutaba3a-pg" ;;
+  "sql instances describe"*) echo "$proj:$want:mutaba3a-pg" ;;
   "sql backups create"*) ;;
   "sql backups list"*) echo "1700000000000" ;;
   "sql backups restore"*) ;;
@@ -57,8 +67,8 @@ case "$args" in
     esac ;;
   "secrets versions add"*) n=$(wc -c | tr -d ' '); echo "added-bytes $n" >> "${calls}" ;;
   "artifacts docker images list"*) printf 'aaa1111\\nbbb2222,latest\\nccc3333\\nddd4444\\n' ;;
-  "artifacts docker images describe me-west1-docker.pkg.dev/${OLD}"*) [[ "$args" == *":$FAKE_MISSING_TAG "* ]] && exit 1; echo "sha256:src" ;;
-  "artifacts docker images describe me-west1-docker.pkg.dev/${NEW}"*) [[ -n "$FAKE_DST_TAG" && "$args" == *":$FAKE_DST_TAG "* ]] && { echo "\${FAKE_DST_DIGEST:-sha256:src}"; exit 0; }; exit 1 ;;
+  "artifacts docker images describe ${OLD_REGION}-docker.pkg.dev/${OLD}"*) [[ "$args" == *":$FAKE_MISSING_TAG "* ]] && exit 1; echo "sha256:src" ;;
+  "artifacts docker images describe ${NEW_REGION}-docker.pkg.dev/${NEW}"*) [[ -n "$FAKE_DST_TAG" && "$args" == *":$FAKE_DST_TAG "* ]] && { echo "\${FAKE_DST_DIGEST:-sha256:src}"; exit 0; }; exit 1 ;;
   "container images add-tag"*) ;;
   *) echo "unexpected gcloud call: $args" >&2; exit 98 ;;
 esac
@@ -110,8 +120,11 @@ for (const [tool, body] of Object.entries(fakes)) {
   chmodSync(join(bin, tool), 0o755);
 }
 mkdirSync(tfDir);
-writeFileSync(join(tfDir, 'production.tfvars'), `project_id = "${NEW}"\n`);
-writeFileSync(join(tfDir, 'legacy.tfvars'), `project_id = "${OLD}"\nlegacy_stack = true\n`);
+const writeTfvars = (newRegion = NEW_REGION, oldRegion = OLD_REGION) => {
+  writeFileSync(join(tfDir, 'production.tfvars'), `project_id = "${NEW}"\nregion     = "${newRegion}"\n`);
+  writeFileSync(join(tfDir, 'legacy.tfvars'), `project_id = "${OLD}"\nregion = "${oldRegion}"\nlegacy_stack = true\n`);
+};
+writeTfvars();
 
 const ports: number[] = [];
 beforeAll(async () => {
@@ -213,7 +226,9 @@ describe('project-move.sh (MUT-487)', { timeout: 60_000 }, () => {
       const r = forward('images');
       expect(r.status, r.err).toBe(0);
       const added = r.calls.filter((l) => l.startsWith('gcloud container images add-tag'));
-      expect(added).toEqual(['aaa1111', 'bbb2222', 'latest'].map((t) => `gcloud container images add-tag me-west1-docker.pkg.dev/${OLD}/mutaba3a/mutaba3a-api:${t} me-west1-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:${t} --quiet`));
+      // MUT-523: from the old project's me-west1 registry into the new project's europe-west1 one.
+      expect(added).toEqual(['aaa1111', 'bbb2222', 'latest'].map((t) => `gcloud container images add-tag ${OLD_REGION}-docker.pkg.dev/${OLD}/mutaba3a/mutaba3a-api:${t} ${NEW_REGION}-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:${t} --quiet`));
+      expect(r.out).toMatch(new RegExp(`gcloud artifacts docker images list '${OLD_REGION}-docker.pkg.dev/${OLD}/`));
     });
 
     it('skips a tag the target already holds with the same image, and refuses one that holds another', () => {
@@ -252,7 +267,17 @@ describe('project-move.sh (MUT-487)', { timeout: 60_000 }, () => {
       expect(has(r.calls, /--ingress/)).toBe(false);
       expect(r.out).toMatch(/every table matches: 2 tables/);
       expect(r.out).toMatch(/a receipt downloads through a signed URL/);
-      expect(r.out).toContain('gcloud run services proxy mutaba3a-api');
+      expect(r.out).toContain(`gcloud run services proxy mutaba3a-api --region=${NEW_REGION} --project=${NEW}`);
+      // MUT-523: the restore goes from an instance in me-west1 into one in europe-west1; each proxy uses its own region.
+      // The exact connection name, nothing else on the line (the gcloud trace once leaked into it).
+      expect(r.out).toMatch(new RegExp(`^\\+ cloud-sql-proxy ${OLD}:${OLD_REGION}:mutaba3a-pg --port \\d+ --quiet &$`, 'm'));
+      expect(r.out).toMatch(new RegExp(`^\\+ cloud-sql-proxy ${NEW}:${NEW_REGION}:mutaba3a-pg --port \\d+ --quiet &$`, 'm'));
+      expect(r.calls.filter((l) => l.startsWith('cloud-sql-proxy '))).toEqual([
+        expect.stringMatching(new RegExp(`^cloud-sql-proxy ${OLD}:${OLD_REGION}:mutaba3a-pg --port \\d+ --quiet$`)),
+        expect.stringMatching(new RegExp(`^cloud-sql-proxy ${NEW}:${NEW_REGION}:mutaba3a-pg --port \\d+ --quiet$`)),
+      ]);
+      expect(has(r.calls, new RegExp(`^gcloud run services describe mutaba3a-api --region=${NEW_REGION} --project=${NEW} `))).toBe(true);
+      expect(r.out).toMatch(/Restore into mtb3a-production \(me-west1 → europe-west1\)/);
       noSecretIn(r.out + r.err + r.calls.join('\n'));
     });
 
@@ -291,8 +316,8 @@ describe('project-move.sh (MUT-487)', { timeout: 60_000 }, () => {
     it('closes the source, pauses only the jobs that run, then checks the writes hold still', () => {
       const r = forward('freeze');
       expect(r.status, r.err).toBe(0);
-      expect(has(r.calls, new RegExp(`^gcloud run services update mutaba3a-api --region=me-west1 --project=${OLD} --ingress=internal`))).toBe(true);
-      expect(r.calls.filter((l) => l.startsWith('gcloud scheduler jobs pause'))).toEqual([`gcloud scheduler jobs pause mutaba3a-account-purge --location=me-west1 --project=${OLD} --quiet`]);
+      expect(has(r.calls, new RegExp(`^gcloud run services update mutaba3a-api --region=${OLD_REGION} --project=${OLD} --ingress=internal`))).toBe(true);
+      expect(r.calls.filter((l) => l.startsWith('gcloud scheduler jobs pause'))).toEqual([`gcloud scheduler jobs pause mutaba3a-account-purge --location=${OLD_REGION} --project=${OLD} --quiet`]);
       expect(r.out).toMatch(/holds still \(10,5,0\)/);
     });
 
@@ -358,6 +383,58 @@ describe('project-move.sh (MUT-487)', { timeout: 60_000 }, () => {
       const r = backward('open', env, '--rollback');
       expect(r.status, r.err).toBe(0);
       expect(r.calls.find((l) => l.startsWith(`terraform[${OLD}] apply`))).toBe(`terraform[${OLD}] apply -input=false -var-file=legacy.tfvars -var image_tag=abc1234 -var legacy_forwarder=false -var api_ingress=INGRESS_TRAFFIC_ALL -var scheduler_paused=false -auto-approve`);
+    });
+  });
+
+  describe('regions (MUT-523)', () => {
+    it('the rollback freezes the new project in europe-west1', () => {
+      const r = backward('freeze', { FAKE_JOBS_PAUSED: '1' });
+      expect(r.status, r.err).toBe(0);
+      expect(has(r.calls, new RegExp(`^gcloud run services update mutaba3a-api --region=${NEW_REGION} --project=${NEW} --ingress=internal`))).toBe(true);
+      expect(has(r.calls, new RegExp(`^gcloud scheduler jobs list --location=${NEW_REGION} --project=${NEW} `))).toBe(true);
+    });
+
+    it('the rollback copies images back from europe-west1 into me-west1', () => {
+      const r = backward('images', {}, '--tags', 'aaa1111', '--dry-run');
+      expect(r.status, r.err).toBe(0);
+      expect(r.out).toContain(`+ gcloud artifacts docker images describe ${NEW_REGION}-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:aaa1111 `);
+      expect(r.out).toContain(`+ gcloud container images add-tag ${NEW_REGION}-docker.pkg.dev/${NEW}/mutaba3a/mutaba3a-api:aaa1111 ${OLD_REGION}-docker.pkg.dev/${OLD}/mutaba3a/mutaba3a-api:aaa1111 --quiet`);
+    });
+
+    it('forward reads each service in its own region', () => {
+      const r = forward('forward', {}, '--dry-run');
+      expect(r.status, r.err).toBe(0);
+      expect(r.out).toMatch(new RegExp(`gcloud run services describe mutaba3a-api --region=${NEW_REGION} --project=${NEW} `));
+      expect(r.out).toMatch(new RegExp(`gcloud run services describe mutaba3a-api --region=${OLD_REGION} --project=${OLD} `));
+    });
+
+    it('--from-region and --to-region may restate config/gcp.json, never contradict it', () => {
+      const same = forward('freeze', { FAKE_OLD_INGRESS: 'internal', FAKE_JOBS_PAUSED: '1' }, '--from-region', OLD_REGION, '--to-region', NEW_REGION);
+      expect(same.status, same.err).toBe(0);
+      const wrong = forward('freeze', {}, '--to-region', OLD_REGION);
+      expect(wrong.status).not.toBe(0);
+      expect(wrong.err).toMatch(/--to-region me-west1, but config\/gcp.json puts mtb3a-production in europe-west1/);
+      expect(wrong.calls).toEqual([]);
+    });
+
+    it('refuses a stack whose tfvars region disagrees with config/gcp.json, before touching anything', () => {
+      writeTfvars(OLD_REGION);
+      try {
+        const r = forward('verify');
+        expect(r.status).not.toBe(0);
+        expect(r.err).toMatch(/production.tfvars sets region = "me-west1", but config\/gcp.json puts mtb3a-production in europe-west1/);
+        expect(r.calls).toEqual([]);
+      } finally {
+        writeTfvars();
+      }
+    });
+
+    it('refuses a project config/gcp.json gives no region', () => {
+      const cfg = join(bin, 'no-region.json');
+      writeFileSync(cfg, JSON.stringify({ production: { project: NEW, legacyProject: OLD, legacyRegion: OLD_REGION } }));
+      const r = forward('freeze', { GCP_CONFIG: cfg });
+      expect(r.status).not.toBe(0);
+      expect(r.err).toMatch(/config\/gcp.json names no region for mtb3a-production/);
     });
   });
 });

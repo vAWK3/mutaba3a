@@ -211,8 +211,23 @@ MUT-462 (billing grants, feature flags, firm requests, server + portal):
 | Unit | `server/src/auth/__tests__/front-door.test.ts`, `server/src/__tests__/legacy-redirect.test.ts` | R5/D9: a relayed throttle key is the caller's IP; the forwarder token never passes `isViaFrontDoor`; a relayed legacy page visit still goes through the carry-over |
 | Script | `server/src/scripts/__tests__/release-guard.test.ts` | T15: `guard_project_release` (config project, the old one only with `LEGACY_STACK=1`, a third refused); `guard_ingress_release`; deploy.sh checks the project before a rollback and init, keeps `.terraform-<project>`, reads `legacy.tfvars` with `LEGACY_STACK=1` |
 | Terraform | `server/infrastructure/terraform/tests/project_move.tftest.hcl` | T12–T14: `scheduler_paused`, `api_public`, `live_label`, the forwarder token, `legacy_forwarder` (no DB, only its env, own SA, jobs paused, preconditions); MUT-511 sizing and connection budget, min 0, registry cleanup, budget |
-| Terraform | `tests/monitoring.tftest.hcl`, `tests/database_pool.tftest.hcl`, `frontdoor/tests/frontdoor.tftest.hcl` | CPU 80% and memory 90% alerts; backups stay in me-west1 (moved from cmek.tftest); the Worker follows `legacy.portalUpstream` |
+| Terraform | `tests/monitoring.tftest.hcl`, `tests/database_pool.tftest.hcl`, `frontdoor/tests/frontdoor.tftest.hcl` | CPU 80% and memory 90% alerts; backups stay in the stack's own region, var.region (moved from cmek.tftest; MUT-523: no longer pinned to me-west1); the Worker follows `legacy.portalUpstream` |
 | Manual | DEPLOYMENT.md §6d C2/C3, pilot runbook §10 | the rehearsal, the cutover, the downtime, the IAM policy, MUT-511 AC2/AC3 timings (Basel, real GCP) |
+
+**MUT-523 (2026-10-30): two regions, one owner account, a GBP budget.** `mtb3a-production` in europe-west1, `malafat-production` in me-west1 (config/gcp.json).
+
+| Level | File | What it proves |
+|---|---|---|
+| Script | `server/src/scripts/__tests__/project-move.test.ts` | AC1: the fake gcloud refuses any Cloud Run, Scheduler or SQL call in the wrong region for its project, and registries and connection names carry each project's region, so every existing step (both directions) runs region-checked; plus the rollback's freeze and image copy, forward's two describes, `--from-region`/`--to-region` restating only, a tfvars region mismatch refused before any call, a project with no region refused |
+| Script | `server/src/scripts/__tests__/legacy-stack.test.ts` | AC2: `gcp_region_of`; legacy.tfvars gets `region = "me-west1"`; deploy.sh to the old project while pending targets me-west1, to the new one after the cutover europe-west1; a wrong GCP_REGION or tfvars region refused; the identity line |
+| Script | `server/src/scripts/__tests__/release-guard.test.ts` | `guard_region_release`: both projects in their regions, mismatches either way, a tfvars without `region`, a config without one; deploy.sh calls it before a rollback and init |
+| Script | `server/src/scripts/__tests__/gcp-identity.test.ts` | GCP_ACCOUNT → CLOUDSDK_CORE_ACCOUNT, GCP_ADC_FILE → GOOGLE_APPLICATION_CREDENTIALS (exported to children, `~/` expanded); neither = the machine's defaults, no calls; one without the other refused; a missing file refused; the file's account read through tokeninfo with the token never on argv; preflight's mismatch message; deploy.sh, project-move.sh and restore-drill.sh call it before their first gcloud |
+| Script | `server/src/scripts/__tests__/infra-region.test.ts` | AC3: no `.tf` in either stack names a GCP region; `var.region` has no default in either; the tfvars examples (europe-west1, `01E433-999491-75ECBD`, 25, GBP; legacy me-west1) |
+| Script | `scripts/__tests__/makefile-gcp.test.ts` | the Makefile's GCP_REGION per project, an explicit one passed on, the identity mapping, nothing set without deploy.env's pair |
+| Unit | `scripts/__tests__/hosts.test.ts` | run.app hosts in any region (`-zf`, `-ew`, `<n>.<region>.run.app`) as legacy.portal and portalUpstream |
+| Terraform | `tests/project_move.tftest.hcl` | AC3: £25 GBP on `01E433-…`; the currency and amount follow the variables; a budget without its currency refused; every location (SQL, backups, Cloud Run, registry, bucket, jobs, secret replicas) follows var.region; the old stack stays in me-west1 |
+| Terraform | `frontdoor/tests/frontdoor.tftest.hcl` | the Worker forwards to a run.app host in another region; the token secret's replica is var.region |
+| Manual | DEPLOYMENT.md §6d C0, C2 | AC4: C0 runs with `--account=` and a throwaway `CLOUDSDK_CONFIG`, no machine-wide change; AC5: the cross-region restore (me-west1 → europe-west1) in the rehearsal, its time in pilot runbook §10 (Basel, real GCP) |
 
 ## Current Test Coverage
 

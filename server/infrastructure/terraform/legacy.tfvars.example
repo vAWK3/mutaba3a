@@ -4,6 +4,7 @@
 # teardown (MUT-520). Its state stays where it always was: gs://malafat-production-terraform-state,
 # prefix mutaba3a-api/production.
 project_id          = "malafat-production"
+# MUT-523: the old project stays where it always was (config/gcp.json legacyRegion) until MUT-520/MUT-521 empty it.
 region              = "me-west1"
 environment         = "production"
 # What it ran before the move: keep these, or the apply restarts or resizes the old instance.

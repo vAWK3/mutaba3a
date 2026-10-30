@@ -20,6 +20,7 @@ mock_provider "random" {}
 
 variables {
   project_id     = "test-project"
+  region         = "europe-west1"
   image_tag      = "test"
   hosts_file     = "../../../config/fixtures/hosts.placeholder.json"
   mail_reply_to  = "help@example.com"

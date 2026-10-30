@@ -174,7 +174,8 @@ resource "google_sql_database_instance" "postgres" {
       point_in_time_recovery_enabled = var.db_backup_enabled
       start_time                     = "03:00"
       transaction_log_retention_days = 7
-      # MUT-382 (B4): keep backups in Tel Aviv, as the privacy policy says; without it Cloud SQL picks a multi-region.
+      # MUT-382 (B4): keep backups in the service's own region, as the privacy policy says; without it Cloud SQL picks a
+      # multi-region. MUT-523: var.region, each project's own (config/gcp.json).
       location = var.region
 
       backup_retention_settings {

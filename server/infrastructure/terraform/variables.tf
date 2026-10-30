@@ -4,9 +4,8 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Region for every resource. Must match the connecting firm's CRM region (ADR-024: data residency)."
+  description = "Region for every resource (the database and its backups, Cloud Run, the registry, the bucket, the secrets' replicas, Scheduler and Cloud Tasks). No default (MUT-523): each project's tfvars names its own, the one config/gcp.json gives it, and deploy.sh refuses a mismatch. ADR-024 as amended by ADR-232: data residency follows the project's region."
   type        = string
-  default     = "me-west1"
 }
 
 variable "environment" {
@@ -403,13 +402,17 @@ variable "billing_account_id" {
 }
 
 variable "budget_amount" {
-  description = "MUT-511: the monthly budget, in budget_currency, alerting at 50%, 90% and 100%."
+  description = "MUT-511: the monthly budget, in budget_currency, alerting at 50%, 90% and 100%. Required with billing_account_id. MUT-523: 25 (GBP) for mtb3a-production."
   type        = number
-  default     = 100
+  default     = null
 }
 
 variable "budget_currency" {
-  description = "MUT-511: the budget's currency. Google requires the billing account's own currency: ILS for ₪100, or set budget_amount in USD (about 27) if the account bills in USD."
+  description = "MUT-511, MUT-523: the budget's currency, an ISO 4217 code. Google refuses any but the billing account's own: Barmajiyat Ltd's account 01E433-999491-75ECBD bills in GBP. Required with billing_account_id; nothing in the code names one."
   type        = string
-  default     = "ILS"
+  default     = null
+  validation {
+    condition     = var.budget_currency == null || can(regex("^[A-Z]{3}$", var.budget_currency))
+    error_message = "budget_currency is a three-letter ISO 4217 code, such as GBP."
+  }
 }

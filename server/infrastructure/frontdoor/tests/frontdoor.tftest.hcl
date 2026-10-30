@@ -9,6 +9,7 @@ mock_provider "random" {}
 
 variables {
   project_id            = "test-project"
+  region                = "europe-west1"
   cloudflare_account_id = "test-account"
   netlify_site_id       = "test-site"
 }
@@ -241,5 +242,25 @@ run "the_worker_follows_legacy_portal_upstream" {
   assert {
     condition     = one([for b in cloudflare_workers_script.front_door[0].bindings : b.text if b.name == "UPSTREAM_ORIGIN" && b.type == "plain_text"]) == "https://portal-new.example.test"
     error_message = "With legacy.portalUpstream set, the Worker's UPSTREAM_ORIGIN is it, not legacy.portal."
+  }
+}
+
+# MUT-523: the new service is in europe-west1, so its run.app host has another region code (-ew) than the old one
+# (-zf). The Worker forwards to whichever host the config names, and the token secret lives in the stack's own region.
+run "the_worker_forwards_to_a_run_app_host_in_another_region" {
+  command = plan
+
+  variables {
+    hosts_file = "../../../config/fixtures/hosts.cross-region.json"
+  }
+
+  assert {
+    condition     = one([for b in cloudflare_workers_script.front_door[0].bindings : b.text if b.name == "UPSTREAM_ORIGIN" && b.type == "plain_text"]) == "https://api-k7xq2mz4pa-ew.a.run.app"
+    error_message = "The Worker's UPSTREAM_ORIGIN is the europe-west1 host the config names, whatever its region code."
+  }
+
+  assert {
+    condition     = one(google_secret_manager_secret.front_door_token[0].replication[0].user_managed[0].replicas[*].location) == "europe-west1"
+    error_message = "The front-door token secret is replicated in the stack's own region (var.region), not a fixed one."
   }
 }

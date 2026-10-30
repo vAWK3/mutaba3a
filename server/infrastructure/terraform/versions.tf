@@ -22,3 +22,14 @@ provider "google" {
   project = var.project_id
   region  = var.region
 }
+
+# MUT-523: the Billing Budget API (budget.tf) needs a quota project. This provider names this stack's own project for
+# it, so the operator's Application Default Credentials need no machine-wide quota project
+# (`gcloud auth application-default set-quota-project` would change it for every session on the machine).
+provider "google" {
+  alias                 = "billing"
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
+}

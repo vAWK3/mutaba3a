@@ -2,6 +2,9 @@
 # config/hosts.json (MUT-326). Tokens come from the shell: CLOUDFLARE_API_TOKEN, NETLIFY_API_TOKEN.
 # MUT-487 (ADR-232): the token secret lives beside the API, in mtb3a-production since the move (DEPLOYMENT.md §6d C1).
 project_id            = "mtb3a-production"
+# MUT-523: the token secret's replica, in the API's region. No default: until C1 step 4 moves this stack, a
+# production.tfvars that still names malafat-production needs region = "me-west1" (a new region would replace the secret).
+region                = "europe-west1"
 cloudflare_account_id = "<Cloudflare account id: decide which account on purpose, its Workers free tier is shared>"
 netlify_site_id       = "<Netlify site id of the landing>"
 

@@ -288,6 +288,11 @@ if [[ "$MODE" == "server" ]]; then
   fi
 
   head_ "Credentials"
+  # MUT-523: deploy.env's GCP_ACCOUNT / GCP_ADC_FILE for this run only, as the Makefile and deploy.sh map them; the
+  # Identity section below checks the pair and the file.
+  if [[ -n "${GCP_ACCOUNT:-}" && -n "${GCP_ADC_FILE:-}" ]]; then
+    export CLOUDSDK_CORE_ACCOUNT="${GCP_ACCOUNT}" GOOGLE_APPLICATION_CREDENTIALS="${GCP_ADC_FILE/#\~/$HOME}"
+  fi
   if have gcloud; then
     ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
     if [[ -n "$ACCOUNT" ]]; then
@@ -402,6 +407,36 @@ if [[ "$MODE" == "server" ]]; then
   else
     bad "${GUARD_OUT:-GCP_PROJECT_ID is not set}"
     hint "config/gcp.json names the project; the old one only with LEGACY_STACK=1 (server/DEPLOYMENT.md §6d)"
+  fi
+  # MUT-523: each project's own region (config/gcp.json), in GCP_REGION and in the tfvars, as deploy.sh checks it.
+  if [[ -z "${GCP_REGION:-}" && -n "${GCP_PROJECT_ID:-}" ]]; then
+    GCP_REGION="$( (source server/scripts/lib/legacy-stack.sh && gcp_region_of config/gcp.json "$ENVIRONMENT" "$GCP_PROJECT_ID") 2>/dev/null || true)"
+  fi
+  # shellcheck disable=SC2329,SC2034,SC1091 # die/warn/SERVER_DIR are read by the sourced guard
+  if [[ -n "${GCP_PROJECT_ID:-}" ]] && GUARD_OUT="$( (die() { echo "$*"; exit 1; }; warn() { echo "$*"; }; SERVER_DIR=server; source server/scripts/lib/release-guard.sh && guard_region_release "$GCP_PROJECT_ID" "${GCP_REGION:-}" "$TFVARS") 2>&1)"; then
+    ok "region ${GCP_REGION} for ${GCP_PROJECT_ID}, in GCP_REGION and $TFVARS"
+  else
+    bad "${GUARD_OUT:-GCP_PROJECT_ID is not set, so the region is unknown}"
+    hint "config/gcp.json names each project's region (europe-west1 for mtb3a-production, me-west1 for malafat-production); the tfvars must set the same region (MUT-523)"
+  fi
+
+  # MUT-523: who this release acts as. deploy.env's GCP_ACCOUNT / GCP_ADC_FILE, for this checkout's runs only.
+  head_ "Identity"
+  # shellcheck disable=SC1091
+  if ID_OUT="$( (die() { echo "$*"; exit 1; }; source server/scripts/lib/gcp-identity.sh && use_gcp_identity && gcp_identity_summary) 2>&1)"; then
+    ok "acting as ${ID_OUT}"
+    if [[ -n "${GCP_ACCOUNT:-}" && "${SKIP_REMOTE:-0}" != "1" ]] && have gcloud; then
+      # shellcheck disable=SC1091
+      if ID_PROBLEM="$( (die() { echo "$*"; exit 1; }; source server/scripts/lib/gcp-identity.sh && use_gcp_identity && gcp_identity_problems) 2>&1)"; then
+        ok "the credentials file signs in as ${GCP_ACCOUNT}"
+      else
+        bad "${ID_PROBLEM}"
+        hint "make it again: server/DEPLOYMENT.md §6d C0 (application-default login into a temporary CLOUDSDK_CONFIG)"
+      fi
+    fi
+  else
+    bad "${ID_OUT}"
+    hint "deploy.env: set GCP_ACCOUNT and GCP_ADC_FILE together, and make the file (server/DEPLOYMENT.md §6d C0)"
   fi
 
   head_ "Ingress release guard"

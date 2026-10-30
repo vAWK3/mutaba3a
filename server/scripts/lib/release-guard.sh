@@ -3,6 +3,7 @@
 # production relies on as a side effect, because the git-ignored production.tfvars of this checkout says so
 # (a stale copy, a missing line) or because an operator procedure is in the middle of something:
 #   * guard_project_release: the GCP project this release goes to (MUT-487, ADR-232);
+#   * guard_region_release: that project's region, in GCP_REGION and in its tfvars (MUT-523);
 #   * guard_ingress_release: a service a restore or a project move holds closed;
 #   * guard_stripe_release, guard_sentry_release, guard_mailer_release: Stripe, error reports, mail;
 #   * guard_turnstile_site_key: a test Turnstile key in a portal that mails real links;
@@ -11,6 +12,10 @@
 # full apply (each a few minutes apart). Tested by src/scripts/__tests__/release-guard.test.ts through a fake
 # `terraform` and `gcloud`. The caller defines die and warn and runs the terraform-reading guards inside the
 # terraform dir, after `terraform init`. They fail closed: anything they cannot read stops the release.
+
+# MUT-523: gcp_region_of, each project's region from config/gcp.json.
+# shellcheck source=legacy-stack.sh
+source "$(dirname "${BASH_SOURCE[0]}")/legacy-stack.sh"
 
 # guard_var_args <terraform args…>: keeps only -var and -var-file in GUARD_VAR_ARGS, so `terraform console`
 # sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
@@ -89,6 +94,24 @@ guard_project_release() {
     die "GCP_PROJECT_ID=${project} is MTB3A's old project; production runs in ${want} (config/gcp.json, ADR-232). Point deploy.env or production.tfvars at ${want}. Only the forwarder, a rollback or the teardown act on ${project}, with LEGACY_STACK=1 and legacy.tfvars (DEPLOYMENT.md §6d)."
   fi
   die "GCP_PROJECT_ID=${project} is not MTB3A's ${env} project (${want}, config/gcp.json); refusing to release there"
+}
+
+# guard_region_release <project> <region> <tfvars file> (MUT-523, ADR-232 amendment): the two projects are in
+# different regions (mtb3a-production in europe-west1, malafat-production in me-west1 until MUT-520/MUT-521), and
+# config/gcp.json names each one's. The region this release pushes images to and calls gcloud in (GCP_REGION) and the
+# region Terraform applies in (the tfvars' `region`; the variable has no default) must both be that one. Runs after
+# guard_project_release, so the project is already one config/gcp.json names. GCP_CONFIG overrides the file (tests).
+guard_region_release() {
+  local project="$1" region="$2" tfvars="$3" file="${GCP_CONFIG:-${SERVER_DIR:-.}/../config/gcp.json}" env="${ENVIRONMENT:-production}" want named
+  want="$(gcp_region_of "${file}" "${env}" "${project}")"
+  [[ -n "${want}" ]] || die "config/gcp.json names no region for ${project} (${file}); refusing to release on a guess"
+  [[ "${region}" == "${want}" ]] \
+    || die "GCP_REGION=${region:-(unset)} but config/gcp.json puts ${project} in ${want}; unset GCP_REGION (deploy.env) or fix config/gcp.json"
+  [[ -f "${tfvars}" ]] || die "missing ${tfvars}: it must set region = \"${want}\""
+  named="$(sed -n 's/^[[:space:]]*region[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${tfvars}" | head -1)"
+  [[ -n "${named}" ]] || die "${tfvars} sets no region: add region = \"${want}\" (Terraform has no default region; MUT-523)"
+  [[ "${named}" == "${want}" ]] \
+    || die "${tfvars} sets region = \"${named}\", but config/gcp.json puts ${project} in ${want}; refusing to apply the stack in the wrong region"
 }
 
 # MUT-360 (ADR-165): refuse a release whose checkout says stripe_enabled = false (or doesn't set it) while

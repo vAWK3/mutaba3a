@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
+
+**Why:** Basel decided on 2026-10-30 that `mtb3a-production` runs in europe-west1 (cost), created, owned and billed by `barmajiyatltd@gmail.com` on its GBP billing account `01E433-999491-75ECBD`, while `malafat-production` stays in me-west1 until MUT-520/MUT-521. The MUT-487 code (`2451a0ef`) assumed one region for both projects, an ILS budget and a machine-wide ADC quota project. Nothing was run against GCP.
+
+### Changed
+- `config/gcp.json`: `region` (europe-west1) and `legacyRegion` (me-west1).
+- `server/scripts/lib/legacy-stack.sh`: `gcp_region_of`; `ensure_legacy_tfvars` adds `region = "<legacyRegion>"` when `production.tfvars` set none.
+- `server/scripts/lib/release-guard.sh`: `guard_region_release` (GCP_REGION and the tfvars `region` must be config/gcp.json's for the project).
+- `server/scripts/deploy.sh`: `GCP_REGION` from config/gcp.json for `GCP_PROJECT_ID` (no me-west1 default); the region guard right after the project guard (before a rollback or any terraform) and in `guard_release`; the stack line prints the region and who the run acts as. `DEPLOY_TF_DIR` (tests only).
+- `server/scripts/project-move.sh`: each project's region from config/gcp.json on every gcloud call, registry and connection name; `--from-region`/`--to-region` may only restate it; both stacks' tfvars must set the same `region`; the restore row reads `Restore into <to> (<from region> → <to region>)`.
+- `Makefile`: `GCP_REGION` from config/gcp.json; exports `GCP_ACCOUNT`/`GCP_ADC_FILE`, and maps them to `CLOUDSDK_CORE_ACCOUNT`/`GOOGLE_APPLICATION_CREDENTIALS` for its recipes; the release summary prints the region and the account.
+- `scripts/preflight.sh`: the region check, and an Identity section (who the run acts as; fails if the credentials file is missing or signs in as another account).
+- Terraform: `var.region` has no default in either stack; `budget_amount`/`budget_currency` have no default (a precondition requires both with a billing account); the budget uses a `google.billing` provider with `user_project_override`/`billing_project`, so no `set-quota-project`. `production.tfvars.example`: europe-west1, `01E433-999491-75ECBD`, £25 GBP; frontdoor example: `region`.
+- `server/DEPLOYMENT.md` §6d: regions, the new C0 (project as barmajiyatltd@gmail.com, the EU billing export, the credentials file through a throwaway `CLOUDSDK_CONFIG`, bsader's grants on malafat-production), C1/C2 values, the cross-region restore to time; costs in GBP. `deploy.env.example`: `GCP_ACCOUNT`, `GCP_ADC_FILE`, `GCP_REGION` left unset.
+
+### Fixed
+- `project-move.sh` `connection_of`: called as `$(connection_of …)`, it captured run_capture's `+ gcloud sql instances describe …` trace with the name, so `freeze`, `copy` and `verify` would have started cloud-sql-proxy with a two-line, invalid connection name against real GCP. The trace now goes to stderr; the test checks the exact proxy argument (the old fake proxy ignored it).
+
+### Added
+- `server/scripts/lib/gcp-identity.sh`: `use_gcp_identity`, `gcp_identity_summary`, `adc_account_of`, `gcp_identity_problems`; used by deploy.sh, project-move.sh, restore-drill.sh and preflight.
+- `config/fixtures/hosts.cross-region.json` (old `-zf` and new `-ew` run.app hosts).
+
+### Technical
+- Tests first: `gcp-identity.test.ts` (new), `infra-region.test.ts` (new: no region in any `.tf`, no default region, the tfvars examples), `legacy-stack.test.ts` (gcp_region_of, the region line, deploy.sh: old project me-west1 while pending, new project europe-west1, mismatches refused, the identity line), `release-guard.test.ts` (`guard_region_release`), `project-move.test.ts` (the fake gcloud refuses a wrong region for each project, so every step proves its region; rollback direction; flags; tfvars), `scripts/__tests__/makefile-gcp.test.ts`, `scripts/__tests__/hosts.test.ts`; Terraform `project_move.tftest.hcl` (£25 GBP, currency from the variable, a budget without its currency refused, every location follows var.region, the old stack in me-west1), `frontdoor.tftest.hcl` (a run.app upstream in another region; the token secret's replica), every test file sets `region`.
+- Not changed: the user-facing privacy and terms wording (MUT-524), `config/hosts.json` (the new host exists only after C1).
+
 ## [Unreleased] - 2026-10-30 — MUT-302: VAT on expenses (ADR-231)
 
 **Why:** firms reclaim the VAT they pay, but an expense held one amount. Plan `.claude/designs/mut-302-expense-vat-plan.md` (APPROVED 2026-10-29). Web half; the phone half is a Flutter branch after this API is on local main.

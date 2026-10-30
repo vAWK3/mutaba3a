@@ -2,7 +2,9 @@
 # MUT-487 (ADR-232): production runs in mtb3a-production (config/gcp.json). The old project, malafat-production,
 # has its own legacy.tfvars (legacy.tfvars.example), used only with LEGACY_STACK=1.
 project_id          = "mtb3a-production"
-region              = "me-west1"
+# MUT-523 (Basel, 2026-10-30): Belgium. Must be config/gcp.json's region for the project (deploy.sh refuses others);
+# Terraform has no default region.
+region              = "europe-west1"
 environment         = "production"
 # MUT-511 (ADR-233): one zone, the smallest tier, until MUT-512's triggers (the CPU and memory alerts).
 db_tier             = "db-f1-micro"
@@ -16,10 +18,11 @@ min_instances       = 0
 db_pool_size        = 5
 db_max_connections  = 25
 log_level           = "info"
-# MUT-511: the monthly budget (budget.tf), alerting at 50/90/100%. The amount is in the billing account's currency.
-# billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
-# budget_amount       = 100
-# budget_currency     = "ILS"
+# MUT-511, MUT-523: the monthly budget (budget.tf), alerting at 50/90/100%, on Barmajiyat Ltd's own billing account
+# (barmajiyatltd@gmail.com's), which bills in GBP. The amount is in that currency; Google refuses any other.
+billing_account_id  = "01E433-999491-75ECBD"
+budget_amount       = 25
+budget_currency     = "GBP"
 # MUT-511: the registry cleanup runs as a dry run until you have read what it would delete (DEPLOYMENT.md §6d).
 # registry_cleanup_dry_run = false
 # MUT-487 (R2, R3, AM7): while the new project is rehearsed, before the cutover's open step. project-move.sh open

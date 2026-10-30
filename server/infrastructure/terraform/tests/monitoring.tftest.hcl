@@ -20,6 +20,7 @@ mock_provider "random" {}
 
 variables {
   project_id = "test-project"
+  region     = "europe-west1"
   image_tag  = "test"
   # MUT-326: the default host is the config's portal host; this fixture's is portal.example.test.
   hosts_file = "../../../config/fixtures/hosts.no-domain.json"

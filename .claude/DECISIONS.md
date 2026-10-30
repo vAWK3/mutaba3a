@@ -794,6 +794,13 @@ than an architecture rule:
   *(Note 2026-10-21: "encrypted at rest" with our own key was ADR-164, MUT-381.
   Note 2026-10-30: ADR-164 is superseded by ADR-232; at rest it is Google's default
   encryption, in MTB3A's own project, which no other product's account can reach.)*
+  *(Amendment 2026-10-30, MUT-523, Basel: "me-west1, matching Malafat" no longer
+  holds. From the MUT-487 cutover MTB3A's data lives in its own project in GCP
+  **europe-west1** (Belgium), chosen for cost; the old copy stays in me-west1 for
+  the 14-day overlap until MUT-520 deletes it. Residency now means "in the
+  project's one named region", which `config/gcp.json` records (ADR-232
+  amendment). The user-facing privacy policy is updated in MUT-524, before the
+  cutover.)*
 
 **What replaces it**: ADR-025 below.
 
@@ -6111,6 +6118,12 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Alternatives considered:** CMEK (ADR-164, dropped); asking Malafat to scope its roles (it would still share a project and a blast radius); `terraform import` of the generated secrets (replaces them, R1); a resumable cutover state machine (R8, cut); trusting two proxy hops instead of a forwarder token (lets anyone fake an IP, R5).
 
+**Amendment (MUT-523, Basel 2026-10-30): europe-west1, Barmajiyat Ltd's own billing account and owner.** Override log: replaces decision 1's "on the same billing account, me-west1"; reason: cost (europe-west1 is among Google's lowest-priced regions, and the new account has its own free tier), and MTB3A's bill belongs to Barmajiyat Ltd.
+1. **Region.** `mtb3a-production` is in **europe-west1** (Belgium). `malafat-production` stays in **me-west1** until MUT-520/MUT-521 empty it. `config/gcp.json` names both (`region`, `legacyRegion`); the Makefile, `deploy.sh`, preflight and `project-move.sh` take each project's region from it (`gcp_region_of`), and `guard_region_release` refuses a `GCP_REGION` or a tfvars `region` that disagrees. Neither Terraform stack names a region in code and `var.region` has no default, so a tfvars without one stops instead of landing in a default. Until the cutover, releases still go to `malafat-production` in me-west1 (`"cutover": "pending"`, unchanged). The database moves by a cross-region, cross-project backup restore (me-west1 → europe-west1), verified and timed in the C2 rehearsal; receipts and images are copied across regions.
+2. **Billing.** Billing account **`01E433-999491-75ECBD`** (`barmajiyatltd@gmail.com`'s, bills in **GBP**). The budget is **£25 a month** (50/90/100%); its amount and currency come from tfvars (`budget_amount`, `budget_currency`, no defaults, a precondition requires both). The budget's own provider (`google.billing`) sets `user_project_override` and `billing_project`, so no machine-wide `gcloud auth application-default set-quota-project`. The new account's BigQuery billing export goes to an EU dataset in `mtb3a-production` (C0), which is C5's cost evidence.
+3. **Owner and identity.** `barmajiyatltd@gmail.com` creates and owns `mtb3a-production` and runs the whole move; nobody else is a member (bsader@gmail.com is not, Basel's second decision of the day). `bsader@gmail.com` grants it temporary roles on `malafat-production` (`editor`, `secretmanager.admin`, `resourcemanager.projectIamAdmin`, plus `run.admin`, `iam.serviceAccountAdmin`, `storage.admin` for the per-resource `setIamPolicy` Editor lacks) until MUT-521. Nothing machine-wide changes: `deploy.env` (per checkout) may set `GCP_ACCOUNT` and `GCP_ADC_FILE`, which `make`, `deploy.sh`, `project-move.sh`, `restore-drill.sh` and preflight map to `CLOUDSDK_CORE_ACCOUNT` and `GOOGLE_APPLICATION_CREDENTIALS` for that process only (`lib/gcp-identity.sh`); the credentials file is made once through a throwaway `CLOUDSDK_CONFIG`, never over the default ADC. Preflight fails when the file signs in as anyone else.
+4. **Residency.** ADR-024's residency line is amended below; the user-facing privacy policy follows in MUT-524, which ships before C3.
+
 ## ADR-233: MTB3A's Database Runs in One Zone on db-f1-micro Until MUT-512's Triggers; Cloud Run Scales to Zero (MUT-511)
 
 **Status:** Accepted (Basel, 2026-10-29 and 2026-10-30; built with MUT-487, applied at its C1). Ticket MUT-511; scaling back up is MUT-512.
@@ -6129,3 +6142,5 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Result:** MTB3A's monthly cost goes from about ₪204 to about ₪50 with min 1 (the ticket's estimate), about ₪33 with min 0, once MUT-520 deletes the old copies. Next month's billing export is the proof.
 
 **Alternatives considered:** REGIONAL `db-g1-small` (today; twice the price of zonal, for a failover the pilot doesn't need); ZONAL `db-g1-small` (about ₪92, the earlier recommendation); Cloud Run min 0 was out of MUT-511's scope and decided separately the next day.
+
+**Amendment (MUT-523, 2026-10-30):** the instance is in europe-west1, so decision 4's zone outage restores into another europe-west1 zone (pilot runbook §4.5; the region's zones are b, c and d), and decision 5's budget is **£25** on Barmajiyat Ltd's GBP billing account `01E433-999491-75ECBD`, its amount and currency from tfvars (ADR-232 amendment). The "Result" costs are re-estimated in GBP in INFRA.md §3; the billing export is still the proof.

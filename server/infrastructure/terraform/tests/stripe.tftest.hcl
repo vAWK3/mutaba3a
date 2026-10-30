@@ -21,6 +21,7 @@ mock_provider "random" {}
 
 variables {
   project_id = "test-project"
+  region     = "europe-west1"
   image_tag  = "test"
   hosts_file = "../../../config/fixtures/hosts.no-domain.json"
 }
@@ -134,7 +135,7 @@ run "stripe_enabled_mounts_both_secrets_and_schedules_the_reconcile" {
   assert {
     condition = (
       google_cloud_scheduler_job.stripe_reconcile[0].name == "mutaba3a-stripe-reconcile"
-      && google_cloud_scheduler_job.stripe_reconcile[0].region == "me-west1"
+      && google_cloud_scheduler_job.stripe_reconcile[0].region == "europe-west1"
       && google_cloud_scheduler_job.stripe_reconcile[0].schedule == "30 3 * * *"
       && google_cloud_scheduler_job.stripe_reconcile[0].time_zone == "Asia/Jerusalem"
       && google_cloud_scheduler_job.stripe_reconcile[0].attempt_deadline == "280s"
