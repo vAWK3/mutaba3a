@@ -9,7 +9,7 @@ import { localBackend } from '../../api/client';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 import { recordsFileName, saveBlobAs } from '../../data/download';
 import { isRecordsFileRefused, type CarryOverPrepareOptions, type PendingRestore } from '../../session/localBackendContract';
-import { currentMode } from '../../session/mode';
+import { currentMode, setMode } from '../../session/mode';
 import { useRestoredHome } from '../../session/restoredHome';
 import { AuthLayout } from '../auth/AuthLayout';
 import { CarryOverDetails } from './CarryOverDetails';
@@ -96,6 +96,9 @@ export function ReceivePage() {
       setPhase({ kind: 'file', reason: 'save-failed' });
       return;
     }
+    // MUT-513: on a browser that hasn't chosen yet, saving the records here is choosing this device, so Open lands on
+    // them, not on the welcome. Signed in, the account stays the mode (E3).
+    if (currentMode() !== 'remote') setMode('local');
     if (reply && pending.carryOver) reply.done({ counts: pending.carryOver.counts, totals: pending.carryOver.totals });
     setPhase({ kind: 'done' });
   }

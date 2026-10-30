@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import { renderPortal, stubApi } from '../../../__tests__/harness';
 import { LocalRecordsFileRefused, type CarryOverSummary, type PendingRestore } from '../../../session/localBackendContract';
-import { MODE_KEY, setMode } from '../../../session/mode';
+import { MODE_KEY, setMode, setUnhintedMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 
 /**
@@ -103,6 +103,35 @@ describe('the new address: /carry-over/receive', () => {
     await user.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
     expect(opener.posted.at(-1)).toEqual({ targetOrigin: OLD_PORTAL, data: { type: 'mtb3a.carry-over.done', v: 1, counts: SUMMARY.counts, totals: SUMMARY.totals } });
+  });
+
+  // MUT-513: the new address is a first visit with no hint (undecided). Saving the records here is the person choosing
+  // this device, so Open lands on them, not on the welcome.
+  it('a save on a browser that hasn\'t chosen yet chooses this device', async () => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('undecided');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe('local');
+  });
+
+  it('a save while signed in keeps the account: the records go to this browser, the mode stays remote', async () => {
+    setMode('remote');
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
   });
 
   it('opens in Arabic, right to left, for anyone who hasn\'t chosen a language (ADR-077)', async () => {
