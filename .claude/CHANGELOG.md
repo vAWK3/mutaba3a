@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — MUT-527: the operator console lists every account, switches your own features, and has Your settings (ADR-234, E10 amended)
+
+**Why:** Basel's screenshot of his own account: every row greyed out with the same line pointing to You › Account, which has no feature switches; `receipt_reading` showed its raw key; accounts could only be found by exact email.
+
+### Added
+- Server: `GET /v1/operator/accounts` without `email` lists every account (newest sign-in first; `limit`, `cursor`, `q`); `OperatorAccountListQuery`, `OperatorAccountList`, `OperatorAccountListItem`; `server/src/operator/account-list.ts` (order, cursor, query); `users.listForOperator` in the port, memory and Prisma stores (store guard `operator`); `operatorSince` and `passkeyLastUsedAt` on `OperatorAccount`. API 1.93.0-mut527. No migration.
+- Portal: `OperatorYouPage` (`/operator/you`, the Your settings tab); `src/hosted/operator/featureNames.ts` (`humanizeFeature`, `useFeatureText`); `useStepUpUntil`; `clockText`; `useOperatorAccountList`; `api.operatorAccounts`; the no-passkey note in `OperatorLayout`; i18n `hosted.operator.{tabs.you, you.*, noPasskey.*, features.receipt_reading.*}` and the list's `accounts.*` strings (ar + en).
+
+### Changed
+- `PUT`/`DELETE /v1/operator/accounts/{userId}/features/{feature}` allow the operator's own account (step-up and audit as for anyone); disable, enable, sign out everywhere, the setup link and billing grants on your own account stay 409 `OWN_ACCOUNT`.
+- `OperatorAccountsPage`: the list with search as you type and Load more, replacing the exact-email search (`?q=`; `?email=` links still land). `OperatorAccountPage`: one own-account note, Access hidden; `OperatorBillingSection`: no Grant row on your own account; `OperatorFeaturesSection`: no `own` prop, switches live on your own account, humanised names for unnamed flags, optional group `label`.
+- `RowNavLink` takes `search` (deep links such as `{ passkeys: true }`).
+- Removed i18n `hosted.operator.accounts.{search, resultsLabel, own}`.
+
+### Fixed
+- `routes-receipt-reading.test.ts` flake: the "1540" checks could match a random UUID or pino's `time`/`pid`; `scrubIds` blanks them first.
+
+### Technical
+- Tests: `routes-operator-account-list.test.ts` (new), the store contract's account list block (memory and Postgres, run against the test database), `store-guard.test.ts`, `routes-operator-{accounts,billing-firms}.test.ts` updated for the amendment; portal `OperatorConsoleMut527.test.tsx` (new), `featureNames.test.ts` (new), `OperatorAccountPage.test.tsx` updated. Release-QA: `qa/features/portal-selfservice/operator.yaml` (`account-find` rewritten; `account-search-arabic`, `own-feature`, `feature-name-arabic`, `you-panel`), specs in `qa/specs/portal-selfservice/operator.spec.ts`; `operatorAccount()` takes a display name.
+- TD-297 (the list scans `users`; accepted at this size).
+
 ## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
 
 **Why:** Basel decided on 2026-10-30 that `mtb3a-production` runs in europe-west1 (cost), created, owned and billed by `barmajiyatltd@gmail.com` on its GBP billing account `01E433-999491-75ECBD`, while `malafat-production` stays in me-west1 until MUT-520/MUT-521. The MUT-487 code (`2451a0ef`) assumed one region for both projects, an ILS budget and a machine-wide ADC quota project. Nothing was run against GCP.
