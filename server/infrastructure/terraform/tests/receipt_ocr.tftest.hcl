@@ -172,7 +172,7 @@ run "on_the_sidecar_holds_nothing_and_only_the_api_calls_it" {
       google_service_account_iam_member.api_acts_as_read_invoker[*].member,
       google_cloud_tasks_queue_iam_member.api_enqueues_reads[*].member,
       [for m in google_cloud_run_v2_service_iam_member.read_jobs_invoke_api : m.member],
-      [google_cloud_run_v2_service_iam_member.public.member],
+      google_cloud_run_v2_service_iam_member.public[*].member,
       google_cloud_run_v2_service_iam_binding.api_invokes_ocr[0].members,
     ]), "serviceAccount:receipt-ocr@test-project.iam.gserviceaccount.com")
     error_message = "The sidecar's service account holds no role anywhere."
