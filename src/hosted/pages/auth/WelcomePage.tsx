@@ -4,6 +4,7 @@ import { useT } from '../../../lib/i18n/core';
 import { Button } from '../../../components/ui/Button';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { localBackend } from '../../api/client';
+import { countWelcomeChoice } from '../../analytics/portalAnalytics';
 import { useContinueOnThisDevice } from '../../session/continueOnThisDevice';
 import { LocalUnavailable } from './BootScreens';
 
@@ -36,6 +37,7 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
       void navigate({ to: '/' });
       return;
     }
+    countWelcomeChoice('local');
     setOpening(true);
     try {
       await localBackend();
@@ -80,10 +82,10 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
               <p>{t('hosted.welcome.account.line')}</p>
             </div>
             <div className="hp-welcome-actions">
-              <Link to="/sign-in" className="btn btn-primary btn-md">
+              <Link to="/sign-in" className="btn btn-primary btn-md" onClick={() => countWelcomeChoice('sign_in')}>
                 {t('hosted.welcome.account.signIn')}
               </Link>
-              <Link to="/signup" className="btn btn-md hp-welcome-tonal">
+              <Link to="/signup" className="btn btn-md hp-welcome-tonal" onClick={() => countWelcomeChoice('signup')}>
                 {t('hosted.welcome.account.create')}
               </Link>
             </div>

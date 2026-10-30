@@ -27,6 +27,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.2.0': '8a050a2241c72c64415dd213e9ac367f2ab7be8d8f8eef920c872d3beb44615a',
   // MUT-448: report_viewed gains layer (glance | profile).
   '2.3.0': '6c6d5fd1fb03bd9e921047533f2cafb4c6bfca3e746e815452f4f7d3c26ac563',
+  // MUT-513: portal_welcome_choice (portal only, cookieless, before sign-in).
+  '2.4.0': 'b1053f7170dc14fdaa5bf66ab891a6dd2932c3c10f588c2187cc3f638754124d',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -213,6 +215,7 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       trial_card_prompt_accepted: ['portal'],
       trial_card_prompt_skipped: ['portal'],
       report_viewed: ['portal'],
+      portal_welcome_choice: ['portal'],
     });
   });
 
