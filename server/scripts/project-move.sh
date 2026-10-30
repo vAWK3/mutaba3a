@@ -563,7 +563,7 @@ step_verify() {
     local first signed
     first="$(head -1 "${WORK}/to.objects")"
     if [[ -n "${first}" ]]; then
-      signed="$(gcloud storage sign-url "gs://$(attachments_of "${TO}")/${first}" --duration=10m \
+      signed="$(gcloud storage sign-url "gs://$(attachments_of "${TO}")/${first}" --duration=10m --region="$(region_of "${TO}")" \
         --impersonate-service-account="${SERVICE}@${TO}.iam.gserviceaccount.com" --format='value(signed_url)' 2>"${WORK}/sign.err")" \
         || { cat "${WORK}/sign.err" >&2; die "could not sign a URL as ${SERVICE}@${TO} (you need roles/iam.serviceAccountTokenCreator on it)"; }
       curl -fsS -o /dev/null --max-time 30 "${signed}" || die "the signed URL for ${first} did not download"
