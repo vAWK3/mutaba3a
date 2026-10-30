@@ -558,6 +558,27 @@
         "dateTooFar": "The date can't be more than ten years ahead",
         "conflict": "This expense changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
+      },
+      "vat": {
+        "row": "VAT",
+        "none": "No VAT recorded",
+        "summary": "VAT {rate}%",
+        "treatment": "Treatment",
+        "noVat": "No VAT",
+        "rate": "Rate",
+        "net": "Net",
+        "vat": "VAT",
+        "remove": "Remove VAT",
+        "treatments": {
+          "STANDARD_RATED": "Standard rate",
+          "ZERO_RATED": "Zero-rated",
+          "EXEMPT": "Exempt",
+          "OUT_OF_SCOPE": "Out of scope"
+        },
+        "errors": {
+          "rateRequired": "Enter the VAT rate",
+          "rateInvalid": "Enter a rate above 0 and up to 100, with at most 2 decimals"
+        }
       }
     },
     "conversions": {
@@ -1075,7 +1096,8 @@
         "notFound": {
           "title": "This receipt isn't here",
           "body": "It may have been deleted, or it belongs to another profile."
-        }
+        },
+        "vatRead": "The receipt shows VAT of {amount}"
       },
       "preview": {
         "label": "Receipt {name}",

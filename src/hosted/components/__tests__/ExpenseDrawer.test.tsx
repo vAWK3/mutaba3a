@@ -818,3 +818,130 @@ describe('ExpenseDrawer receipts on a new expense (MUT-491)', () => {
     expect(screen.queryByRole('button', { name: 'Add receipt' })).not.toBeInTheDocument();
   });
 });
+
+describe('ExpenseDrawer VAT row (MUT-302)', () => {
+  const EXISTING = {
+    id: 'e1', occurredOn: '2026-09-01', amount: '117.00', currency: 'ILS', title: 'Printer', vendor: null, vendorId: null,
+    categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', captureSource: null, version: 3,
+    createdAt: '', updatedAt: '', receipts: [],
+  };
+  const WITH_VAT = { ...EXISTING, vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '100.00', vat: '17.00', gross: '117.00' } };
+  let sent: unknown;
+  const typeAmount = async (user: ReturnType<typeof userEvent.setup>, amount: string) => {
+    await user.type(await screen.findByPlaceholderText('0.00'), amount);
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+  };
+  const capture = (extra: Record<string, () => Response> = {}) => {
+    sent = undefined;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': () => ok({ ...EXISTING, vat: null }, 201),
+      ...extra,
+    });
+    const handler = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (init.method === 'POST' || init.method === 'PATCH') sent = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+      return handler(input, init);
+    });
+  };
+
+  it('AC3: a non-firm profile has no VAT row, and its body sends no vat', async () => {
+    const user = userEvent.setup();
+    capture();
+    const { onClose } = renderDrawer();
+    await typeAmount(user, '117');
+    expect(screen.queryByTestId('expense-vat')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('vat');
+  });
+
+  it('a firm profile reads "No VAT recorded"; Standard 17 % on 117 previews 100.00 + 17.00 and saves the rate', async () => {
+    const user = userEvent.setup();
+    capture();
+    const { onClose } = renderDrawer({ firm: true });
+    await typeAmount(user, '117');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    await user.click(screen.getByRole('button', { name: /VAT/ }));
+    await user.selectOptions(screen.getByLabelText('Treatment'), 'STANDARD_RATED');
+    await user.type(screen.getByLabelText('Rate'), '17');
+    const split = screen.getByTestId('expense-vat-split');
+    expect(split).toHaveTextContent('100.00');
+    expect(split).toHaveTextContent('17.00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).toMatchObject({ amount: '117', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+  });
+
+  it('a firm expense with no VAT chosen sends no vat', async () => {
+    const user = userEvent.setup();
+    capture();
+    const { onClose } = renderDrawer({ firm: true });
+    await typeAmount(user, '50');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('vat');
+  });
+
+  it('Standard with no rate stops at the field, opened, and sends nothing', async () => {
+    const user = userEvent.setup();
+    capture();
+    renderDrawer({ firm: true });
+    await typeAmount(user, '117');
+    await user.click(screen.getByRole('button', { name: /VAT/ }));
+    await user.selectOptions(screen.getByLabelText('Treatment'), 'STANDARD_RATED');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Enter the VAT rate')).toBeInTheDocument();
+    expect(sent).toBeUndefined();
+  });
+
+  it('D4: an untouched edit leaves vat off the PATCH; the closed row reads the stored VAT', async () => {
+    const user = userEvent.setup();
+    capture({ 'GET /v1/expenses/e1': () => ok(WITH_VAT), 'PATCH /v1/expenses/e1': () => ok(WITH_VAT) });
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Printer');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 17%');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('17.00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('vat');
+  });
+
+  it('D4: Remove VAT sends vat null; a changed rate sends the new one', async () => {
+    const user = userEvent.setup();
+    capture({ 'GET /v1/expenses/e1': () => ok(WITH_VAT), 'PATCH /v1/expenses/e1': () => ok(WITH_VAT) });
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Printer');
+    await user.click(screen.getByRole('button', { name: /VAT/ }));
+    await user.click(screen.getByRole('button', { name: 'Remove VAT' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).toMatchObject({ vat: null });
+  });
+
+  it('OV10: retyping the same rate as "17.00" is no change', async () => {
+    const user = userEvent.setup();
+    capture({ 'GET /v1/expenses/e1': () => ok(WITH_VAT), 'PATCH /v1/expenses/e1': () => ok(WITH_VAT) });
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Printer');
+    await user.click(screen.getByRole('button', { name: /VAT/ }));
+    const rate = screen.getByLabelText('Rate');
+    await user.clear(rate);
+    await user.type(rate, '17.00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('vat');
+  });
+
+  it('in Arabic, the summary’s amount sits in a <bdi> (ADR-101)', async () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    capture({ 'GET /v1/expenses/e1': () => ok(WITH_VAT) });
+    renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Printer');
+    const summary = screen.getByTestId('expense-vat-summary');
+    expect(summary).toHaveTextContent(ar.hosted.expenses.vat.summary.replace('{rate}', '17'));
+    expect(summary.querySelector('bdi')).not.toBeNull();
+  });
+});

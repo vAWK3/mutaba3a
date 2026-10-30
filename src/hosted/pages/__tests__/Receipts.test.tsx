@@ -54,10 +54,10 @@ const plain = (item: ReceiptListItem): ExpenseReceipt => {
 
 const categories = { items: [{ id: GROCERIES, name: 'Groceries', color: null, archived: false, version: 1, createdAt: '', updatedAt: '' }] };
 
-function portal(path: string, world: { receipts?: ReceiptListItem[]; counts?: Handler; routes?: Record<string, Handler>; writable?: boolean } = {}) {
+function portal(path: string, world: { receipts?: ReceiptListItem[]; counts?: Handler; routes?: Record<string, Handler>; writable?: boolean; firm?: boolean } = {}) {
   const items = world.receipts ?? [];
   const routes: Record<string, Handler> = {
-    'GET /v1/me': () => ok(me([profile({ access: { payments: 'read', expenses: 'read-write', capture: 'read-write' } })])),
+    'GET /v1/me': () => ok(me([profile({ access: { payments: 'read', expenses: 'read-write', capture: 'read-write' }, firm: world.firm ?? false })])),
     ...emptyProfileRoutes(),
     'GET /v1/expense-categories': () => ok(categories),
     'GET /v1/vendors': () => ok({ items: [] }),
@@ -331,6 +331,47 @@ describe('the review page (AC3, D7, D8)', () => {
   it('a receipt that is not there says so', async () => {
     portal(`${BASE}/${R2}`, { receipts: [receipt(R1)] });
     expect(await screen.findByText("This receipt isn't here")).toBeInTheDocument();
+  });
+});
+
+describe('VAT read from the receipt (MUT-302)', () => {
+  const withRate = { ...suggested, totalMinor: { value: '11700', source: 'qr' as const, confidence: 0.95 }, vatRateBasisPoints: { value: 1700, source: 'qr' as const, confidence: 0.9 }, vatMinor: { value: '1700', source: 'qr' as const, confidence: 0.9 } };
+  const approveRoute = (seen: { body?: unknown }) => ({
+    [`POST /v1/receipts/${R1}/approve`]: ({ body }: { body: unknown }) => {
+      seen.body = body;
+      return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '117.00', currency: 'ILS', title: null, vendor: 'Shufersal', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+    },
+  });
+
+  it('OV1/AC3: on a personal profile a read rate shows no VAT row and approving sends no vat', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: withRate })], routes: approveRoute(seen) });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.queryByTestId('expense-vat')).toBeNull();
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).not.toHaveProperty('vat');
+  });
+
+  it('on a firm, the VAT row opens prefilled at the read rate, hinted, and approving sends it', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: withRate })], routes: approveRoute(seen), firm: true });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 17%');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From the receipt');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).toMatchObject({ amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+  });
+
+  it('D6: a VAT amount with no rate prefills nothing and says what the receipt showed', async () => {
+    const noRate = { ...suggested, totalMinor: { value: '11700', source: 'ocr' as const, confidence: 0.9 }, vatMinor: { value: '1700', source: 'ocr' as const, confidence: 0.9 } };
+    portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: noRate })], firm: true });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('The receipt shows VAT of 17.00');
   });
 });
 
