@@ -85,6 +85,8 @@ export const STORE_ACCESS: StoreAccess = {
     cancelClosure: { write: 'identity' },
     // MUT-324 T1: the operator's "who is behind on the terms" list.
     listLatestTermsVersions: 'operator',
+    // MUT-527: the operator console's account list (the console runs on the unguarded store, behind the operator gate).
+    listForOperator: 'operator',
   },
   // MUT-373: co-owners are added by the operator; a co-owner leaves, or the creator removes one, from their session (the
   // checks run inside removeOwner's transaction). The owners list is read on /v1/me.

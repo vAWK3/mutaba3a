@@ -170,6 +170,8 @@ describe('STORE_ACCESS', () => {
       'signupReviews.list',
       'signupReviews.markNotified',
       'users.create',
+      // MUT-527: the operator console's account list.
+      'users.listForOperator',
       // MUT-324 T1: the operator's terms report.
       'users.listLatestTermsVersions',
       // MUT-459: only the admin token marks an operator.

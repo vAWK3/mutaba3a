@@ -408,6 +408,14 @@ describe('the read (claim, lease, end states)', () => {
   });
 });
 
+/**
+ * MUT-527 (flake fix): blanks what holds digits by chance — UUIDs (request and receipt ids) and pino's `time`, `pid`
+ * and `durationMs` — so a search for a receipt number such as 1540 meets only receipt text, never a random id.
+ */
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const NOISY_NUMBERS = /(\\?"(?:time|pid|durationMs)\\?"\s*:\s*)-?\d+(?:\.\d+)?/g;
+const scrubIds = (text: string) => text.replace(UUID_PATTERN, '<id>').replace(NOISY_NUMBERS, '$10');
+
 describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
   const sidecar = (body: string, status = 200) => new HttpOcrClient({ baseUrl: 'http://localhost:8790', fetch: async () => new Response(body, { status, headers: { 'content-type': 'application/json' } }) });
   const leak = `{"engine":"x","lines":[{"text":"${SECRET_WORDS[0]} ${SECRET_WORDS[1]}","conf":2,"box":[0,0,1,1]}],"pages":1}`;
@@ -443,7 +451,7 @@ describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
       const res = await job(h, { receiptId: done.id });
       expect(res.status).toBe(503);
       expect(await stored(h, orgId, done.id)).toMatchObject({ readStatus: 'PENDING', readAttempts: 1, readLeaseUntil: null });
-      const seen = JSON.stringify([h.logs.lines, h.logs.reports]);
+      const seen = scrubIds(JSON.stringify([h.logs.lines, h.logs.reports]));
       for (const word of [...SECRET_WORDS, '1540']) expect(seen).not.toContain(word);
       expect(h.logs.lines.some((l) => l.includes('"code":"store_failed"'))).toBe(true);
     });
@@ -455,7 +463,7 @@ describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
     h.store.expenseReceipts.claimRead = async () => { throw echo(); };
     const res = await job(h, { receiptId: done.id });
     expect(res.status).toBe(500);
-    const seen = JSON.stringify([h.logs.lines, h.logs.reports, await res.text()]);
+    const seen = scrubIds(JSON.stringify([h.logs.lines, h.logs.reports, await res.text()]));
     for (const word of [...SECRET_WORDS, '1540']) expect(seen).not.toContain(word);
     expect(h.logs.reports).toEqual(expect.arrayContaining([expect.objectContaining({ err: expect.objectContaining({ name: 'OcrReadError', message: 'Saving the reading failed', cause: undefined }) })]));
   });
@@ -464,7 +472,7 @@ describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
     const { h, as } = await setup({ dispatcher: 'recording' });
     const done = await upload(h, as);
     await job(h, { receiptId: done.id });
-    const seen = JSON.stringify([h.logs.lines, h.logs.reports]);
+    const seen = scrubIds(JSON.stringify([h.logs.lines, h.logs.reports]));
     for (const word of [...SECRET_WORDS, '15.40', REG_VALID_COMPANY]) expect(seen).not.toContain(word);
     expect(h.logs.lines.some((l) => l.includes('"status":"done"') && l.includes('"lines":8'))).toBe(true);
   });
