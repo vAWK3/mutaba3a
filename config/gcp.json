@@ -5,6 +5,6 @@
     "region": "europe-west1",
     "legacyProject": "malafat-production",
     "legacyRegion": "me-west1",
-    "cutover": "pending"
+    "cutover": "done"
   }
 }
