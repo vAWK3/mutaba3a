@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import { fail, me, ok, renderPortal, stubApi } from '../../../__tests__/harness';
 import { LocalRecordsFileRefused, type CarryOverSummary, type PendingRestore } from '../../../session/localBackendContract';
-import { MODE_KEY, setMode, setUnhintedMode } from '../../../session/mode';
+import { MODE_KEY, currentMode, setMode, setUnhintedMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 
 /**
@@ -141,7 +141,7 @@ describe('the new address: /carry-over/receive', () => {
     expect(localStorage.getItem(MODE_KEY)).toBe(saved);
   });
 
-  it('a save before anyone asked, while the server is unreachable, saves no mode', async () => {
+  it('a save before anyone asked, while the server is unreachable, saves no mode but shows this device for this visit', async () => {
     localStorage.removeItem(MODE_KEY);
     setUnhintedMode('probe');
     const server = stubApi({});
@@ -155,6 +155,8 @@ describe('the new address: /carry-over/receive', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
     expect(localStorage.getItem(MODE_KEY)).toBeNull();
+    // Re-review: Open must reach the records just saved, as the welcome's offline Try does (D7)
+    expect(currentMode()).toBe('local');
   });
 
   it('a save while signed in keeps the account: the records go to this browser, the mode stays remote', async () => {
