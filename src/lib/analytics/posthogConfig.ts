@@ -53,7 +53,9 @@ const SURFACE_OPTIONS: Record<'landing' | 'portal' | 'portal-welcome', Partial<P
     opt_out_persistence_by_default: true,
   },
   // MUT-513: the welcome's doors, before anyone signs in: cookieless like the landing, but no pageview or referrer
-  'portal-welcome': { cookieless_mode: 'always', capture_pageview: false, save_referrer: false, request_batching: false },
+  // persistence 'memory' under its own name: nothing reaches storage even if cookieless mode ever stopped implying it,
+  // and nothing is shared with the consented instance, whose storage is keyed by the same token (review)
+  'portal-welcome': { cookieless_mode: 'always', persistence: 'memory', persistence_name: 'mtb3a_welcome', capture_pageview: false, save_referrer: false, request_batching: false },
 };
 
 /**

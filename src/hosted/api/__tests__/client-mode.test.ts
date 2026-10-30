@@ -158,6 +158,25 @@ describe('request() by mode', () => {
       expect(fetchSpy).toHaveBeenLastCalledWith('/v1/sessions', expect.anything());
     });
 
+    // Review (red team): a Retry still in flight must not overwrite a choice made meanwhile (Try, this visit only)
+    it.each([
+      [401, 'local'],
+      [200, 'local'],
+    ] as const)('a %s that lands after the person chose this device leaves the choice alone', async (status, chosen) => {
+      const { api } = await freshClient();
+      const mode = await import('../../session/mode');
+      let answer: (response: Response) => void = () => {};
+      fetchSpy.mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
+      const pending = api.me().catch(() => undefined);
+
+      mode.setUnhintedMode(chosen);
+      answer(status === 200 ? json(200, ME) : json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
+      await pending;
+
+      expect(mode.currentMode()).toBe(chosen);
+      expect(localStorage.getItem(MODE_KEY)).toBeNull();
+    });
+
     it('undecided, then Try: the chosen mode wins and the local backend answers', async () => {
       const { api } = await freshClient();
       fetchSpy.mockResolvedValue(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));

@@ -49,8 +49,7 @@ describe('posthogInitOptions', () => {
   // MUT-513: the welcome's own instance counts its doors cookieless, with nothing stored and no consent record to read
   it('counts the portal welcome cookieless: no storage, no pageview, no referrer, never opted out by a consent record', () => {
     const options = posthogInitOptions(() => ({ ...ctx('portal')(), cookieless: true }));
-    expect(options).toMatchObject({ cookieless_mode: 'always', capture_pageview: false, save_referrer: false, request_batching: false });
-    expect(options).not.toHaveProperty('persistence');
+    expect(options).toMatchObject({ cookieless_mode: 'always', persistence: 'memory', persistence_name: 'mtb3a_welcome', capture_pageview: false, save_referrer: false, request_batching: false });
     expect(options).not.toHaveProperty('opt_out_capturing_by_default');
   });
 

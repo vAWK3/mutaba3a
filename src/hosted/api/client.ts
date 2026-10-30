@@ -357,9 +357,12 @@ function probeRemote(): Promise<Route> {
     .then((response) => {
       // Only the request in flight is shared; once answered, the saved hint (or the undecided mode) is the answer.
       unhintedProbe = null;
-      if (response.status === 200) setMode('remote');
+      // A late answer never overwrites a choice made meanwhile (Try while a Retry was in flight, review): it settles the
+      // mode only while the page is still asking.
+      const stillAsking = currentMode() === 'probe';
+      if (response.status === 200 && stillAsking) setMode('remote');
       if (response.status !== 401) return 'remote';
-      setUnhintedMode('undecided');
+      if (stillAsking) setUnhintedMode('undecided');
       return 'undecided';
     })
     .catch((error: unknown) => {

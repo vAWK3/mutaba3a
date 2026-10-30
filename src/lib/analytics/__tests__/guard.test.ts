@@ -190,6 +190,11 @@ describe('guardEvent: the portal welcome (MUT-513)', () => {
     for (const field of ['$referrer', 'utm_source', '$browser', '$os', '$session_id', '$pathname']) expect(guarded?.properties).not.toHaveProperty(field);
   });
 
+  it('keeps the page address without its query or fragment', () => {
+    const guarded = guardEvent(capture('portal_welcome_choice', { choice: 'sign_in', $current_url: 'https://portal.example/sign-in?next=%2Fp%2F1#x' }), WELCOME);
+    expect(guarded?.properties.$current_url).toBe('https://portal.example/sign-in');
+  });
+
   it('sends nothing but the door count from the welcome, not even another portal event', () => {
     expect(guardEvent(capture('income_recorded', { currency: 'USD' }), WELCOME)).toBeNull();
     expect(guardEvent(capture('portal_opened'), WELCOME)).toBeNull();

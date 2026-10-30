@@ -95,10 +95,11 @@ function FrameCrash() {
 /** A page inside a profile crashed: the card takes the page's place; the shell and its navigation stay. */
 const PAGE_CRASH = { errorComponent: CrashCard } as const;
 
-/** `/welcome` (MUT-513): "Continue on this device" when this device is already chosen; signed in, back to the app. */
+/** `/welcome` (MUT-513): "Continue on this device" when this device is already chosen; otherwise `/` decides. */
 function WelcomeRoute() {
   const mode = useMode();
-  if (mode === 'remote') return <Navigate to="/" replace />;
+  // Signed in, or not asked yet: `/` asks the server, and shows the welcome there only if nobody is signed in (review)
+  if (mode === 'remote' || mode === 'probe') return <Navigate to="/" replace />;
   return <WelcomePage variant={mode === 'local' ? 'reopened' : 'first'} />;
 }
 

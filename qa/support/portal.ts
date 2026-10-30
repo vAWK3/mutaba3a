@@ -7,7 +7,7 @@ import type { Page, Request, Route } from '@playwright/test';
  */
 
 /** PORTAL_LANGUAGE_KEY in src/hosted/i18n/HostedLanguageProvider.tsx */
-const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
+export const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 /** MODE_KEY in src/hosted/session/mode.ts (MUT-286): `remote` once this browser has used an account, `local` signed out. */
 export const MODE_KEY = 'mut-mode';
 

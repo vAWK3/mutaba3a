@@ -77,12 +77,24 @@ function isLocalAppReferrer(referrer: unknown, origin: string | undefined): bool
   }
 }
 
+/** `url` with its query and fragment dropped; unparseable, nothing. */
+function withoutQuery(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function keptSdkFields(properties: Record<string, unknown>, ctx: GuardContext): Record<string, unknown> {
   const kept: Record<string, unknown> = {};
   const surfaceFields = ctx.cookieless ? COOKIELESS_FIELDS : SURFACE_FIELDS[ctx.surface];
   for (const key of [...ROUTING_FIELDS, ...CONTROL_FIELDS, ...surfaceFields]) {
     if (Object.hasOwn(properties, key)) kept[key] = properties[key];
   }
+  // The welcome's count keeps the page, never its query or fragment (campaign ids, a `next=` address)
+  if (ctx.cookieless && typeof kept.$current_url === 'string') kept.$current_url = withoutQuery(kept.$current_url);
   if (ctx.surface === 'landing' && isLocalAppReferrer(kept.$referrer, ctx.origin)) {
     delete kept.$referrer;
     delete kept.$referring_domain;

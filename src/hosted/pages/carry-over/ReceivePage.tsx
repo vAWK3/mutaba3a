@@ -5,7 +5,7 @@ import { carryOverBuild } from '../../../lib/carryOver/build';
 import { awaitCarryOverPayload, type CarryOverReply, type CarryOverWindow } from '../../../lib/carryOver/protocol';
 import { useLanguage } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
-import { localBackend } from '../../api/client';
+import { api, localBackend } from '../../api/client';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 import { recordsFileName, saveBlobAs } from '../../data/download';
 import { isRecordsFileRefused, type CarryOverPrepareOptions, type PendingRestore } from '../../session/localBackendContract';
@@ -34,6 +34,23 @@ type Phase =
   | { kind: 'saving' }
   | { kind: 'done' }
   | { kind: 'file'; reason: FileReason };
+
+/**
+ * MUT-513: on a browser where nobody is signed in, saving the records here is choosing this device, so Open lands on
+ * them, not on the welcome. Opened straight on this address, nobody has asked the server yet, so ask first (review): a
+ * live session keeps the account (E3), and a server that can't be reached decides nothing.
+ */
+async function chooseThisDeviceIfSignedOut(): Promise<void> {
+  if (currentMode() === 'probe') {
+    try {
+      await api.me();
+    } catch {
+      // A 401 left the browser undecided, or the server couldn't be reached: read below
+    }
+  }
+  const mode = currentMode();
+  if (mode === 'undecided' || mode === 'local') setMode('local');
+}
 
 export function ReceivePage() {
   const { t, language } = useLanguage();
@@ -96,9 +113,7 @@ export function ReceivePage() {
       setPhase({ kind: 'file', reason: 'save-failed' });
       return;
     }
-    // MUT-513: on a browser that hasn't chosen yet, saving the records here is choosing this device, so Open lands on
-    // them, not on the welcome. Signed in, the account stays the mode (E3).
-    if (currentMode() !== 'remote') setMode('local');
+    await chooseThisDeviceIfSignedOut();
     if (reply && pending.carryOver) reply.done({ counts: pending.carryOver.counts, totals: pending.carryOver.totals });
     setPhase({ kind: 'done' });
   }

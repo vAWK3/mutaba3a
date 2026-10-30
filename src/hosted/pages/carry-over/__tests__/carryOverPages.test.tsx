@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
-import { renderPortal, stubApi } from '../../../__tests__/harness';
+import { fail, me, ok, renderPortal, stubApi } from '../../../__tests__/harness';
 import { LocalRecordsFileRefused, type CarryOverSummary, type PendingRestore } from '../../../session/localBackendContract';
 import { MODE_KEY, setMode, setUnhintedMode } from '../../../session/mode';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
@@ -119,6 +119,42 @@ describe('the new address: /carry-over/receive', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
     expect(localStorage.getItem(MODE_KEY)).toBe('local');
+  });
+
+  // Review: opened straight on the new address, nobody has asked the server yet ('probe'). The save asks first, so a live
+  // session keeps the account, nobody signed in chooses this device, and an unreachable server decides nothing.
+  it.each([
+    ['a live session keeps the account', () => ok(me()), 'remote'],
+    ['nobody signed in chooses this device', () => fail(401, 'UNAUTHENTICATED'), 'local'],
+  ] as const)('a save before anyone asked the server: %s', async (_name, answer, saved) => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('probe');
+    stubApi({ 'GET /v1/me': answer });
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe(saved);
+  });
+
+  it('a save before anyone asked, while the server is unreachable, saves no mode', async () => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('probe');
+    const server = stubApi({});
+    server.fetchMock.mockRejectedValue(new TypeError('offline'));
+    backend.readRecordsFile.mockResolvedValue(pending());
+    const { opener, user } = openFrom('portal');
+    await waitFor(() => expect(opener.posted[0]).toBeDefined());
+    deliver(payload('records-file', new Blob(['{}'])), OLD_PORTAL, opener);
+
+    await user.click(await screen.findByRole('button', { name: 'Save on this device' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your records are here.' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
   });
 
   it('a save while signed in keeps the account: the records go to this browser, the mode stays remote', async () => {

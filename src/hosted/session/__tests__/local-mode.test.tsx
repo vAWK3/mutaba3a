@@ -227,6 +227,16 @@ describe('the welcome, reopened (MUT-513)', () => {
     expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
   });
 
+  // Review: opened with no saved mode, /welcome asks the server first instead of offering Try over a live account
+  it('with no saved mode, /welcome asks the server first: signed in, the app; nobody, the welcome at /', async () => {
+    setUnhintedMode('probe');
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+    const { router } = renderPortal('/welcome');
+
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
+  });
+
   it('signed in, /welcome is not for you: it goes to the app', async () => {
     setMode('remote');
     stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });

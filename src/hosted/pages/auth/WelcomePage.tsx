@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useT } from '../../../lib/i18n/core';
 import { Button } from '../../../components/ui/Button';
 import { LanguageSwitch, Wordmark } from '../../components/Brand';
 import { localBackend } from '../../api/client';
-import { countWelcomeChoice } from '../../analytics/portalAnalytics';
+import { countWelcomeChoice, type WelcomeChoice } from '../../analytics/portalAnalytics';
 import { useContinueOnThisDevice } from '../../session/continueOnThisDevice';
 import { LocalUnavailable } from './BootScreens';
 
@@ -30,6 +30,12 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
   const continueOnThisDevice = useContinueOnThisDevice();
   const [opening, setOpening] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
+  // One count per visit: a Retry from the can't-save screen is the same choice
+  const countedLocal = useRef(false);
+  /** The count is what new visitors choose: someone already on this device who reopens the welcome isn't counted. */
+  const count = (choice: WelcomeChoice) => {
+    if (variant !== 'reopened') countWelcomeChoice(choice);
+  };
 
   /** This device's records must open before the choice is saved: a browser that blocks storage saves nothing. */
   async function tryHere() {
@@ -37,7 +43,10 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
       void navigate({ to: '/' });
       return;
     }
-    countWelcomeChoice('local');
+    if (!countedLocal.current) {
+      countedLocal.current = true;
+      count('local');
+    }
     setOpening(true);
     try {
       await localBackend();
@@ -82,10 +91,10 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
               <p>{t('hosted.welcome.account.line')}</p>
             </div>
             <div className="hp-welcome-actions">
-              <Link to="/sign-in" className="btn btn-primary btn-md" onClick={() => countWelcomeChoice('sign_in')}>
+              <Link to="/sign-in" className="btn btn-primary btn-md" onClick={() => count('sign_in')}>
                 {t('hosted.welcome.account.signIn')}
               </Link>
-              <Link to="/signup" className="btn btn-md hp-welcome-tonal" onClick={() => countWelcomeChoice('signup')}>
+              <Link to="/signup" className="btn btn-md hp-welcome-tonal" onClick={() => count('signup')}>
                 {t('hosted.welcome.account.create')}
               </Link>
             </div>
@@ -104,14 +113,24 @@ export function WelcomePage({ variant, onRetry, retrying = false }: WelcomePageP
               {t('hosted.welcome.local.eyebrow')}
             </h2>
             <ul className="hp-welcome-points">
-              <li>{t('hosted.welcome.local.point1')}</li>
-              <li>{t('hosted.welcome.local.point2')}</li>
+              {/* Each point's text is one span: the li is a flex row with the nuqta bullet, and loose text beside the
+                  <strong> would split into flex items and lose its spaces */}
               <li>
-                {t('hosted.welcome.local.point3Lead')}
-                <strong>{t('hosted.welcome.local.point3Path')}</strong>
-                {t('hosted.welcome.local.point3End')}
+                <span>{t('hosted.welcome.local.point1')}</span>
               </li>
-              <li>{t('hosted.welcome.local.point4')}</li>
+              <li>
+                <span>{t('hosted.welcome.local.point2')}</span>
+              </li>
+              <li>
+                <span>
+                  {t('hosted.welcome.local.point3Lead')}
+                  <strong>{t('hosted.welcome.local.point3Path')}</strong>
+                  {t('hosted.welcome.local.point3End')}
+                </span>
+              </li>
+              <li>
+                <span>{t('hosted.welcome.local.point4')}</span>
+              </li>
             </ul>
             <Button variant="secondary" className="hp-block" isLoading={opening} keepLabelWhileLoading onClick={() => void tryHere()}>
               {variant === 'reopened' ? t('hosted.welcome.local.continue') : t('hosted.welcome.local.try')}
