@@ -36,6 +36,8 @@ const fakes: Record<string, string> = {
 echo "gcloud $*" >> "${calls}"
 args="$*"
 proj=""; reg=""; for a in "$@"; do case "$a" in --project=*) proj="\${a#--project=}" ;; --region=*|--location=*) reg="\${a#--*=}" ;; esac; done
+# sign-url names a bucket, not a project: the project is the bucket's prefix (gs://<project>-mutaba3a-attachments/…).
+[[ -z "$proj" && "$args" == *"gs://${NEW}-"* ]] && proj="${NEW}"
 want="${OLD_REGION}"; [[ "$proj" == "${NEW}" ]] && want="${NEW_REGION}"
 if [[ -n "$reg" && "$reg" != "$want" ]]; then echo "wrong region: $proj is in $want, not $reg" >&2; exit 95; fi
 case "$args" in
@@ -262,6 +264,8 @@ describe('project-move.sh (MUT-487)', { timeout: 60_000 }, () => {
     it('rehearse copies into a target that isn\'t live, with the source open: backup, cross-project restore, password, rsync, verify', () => {
       const r = forward('rehearse');
       expect(r.status, r.err).toBe(0);
+      // MUT-523: the API's account may not read the bucket, so sign-url is told the bucket's region.
+      expect(has(r.calls, new RegExp(`^gcloud storage sign-url gs://${NEW}-mutaba3a-attachments/.* --region=europe-west1`))).toBe(true);
       expect(has(r.calls, new RegExp(`^gcloud sql backups restore 1700000000000 --restore-instance=mutaba3a-pg --backup-instance=mutaba3a-pg --backup-project=${OLD} --project=${NEW} `))).toBe(true);
       expect(has(r.calls, new RegExp(`^curl -fsS -X PUT .*sqladmin.googleapis.com/v1/projects/${NEW}/instances/mutaba3a-pg/users\\?name=mutaba3a_api`))).toBe(true);
       expect(has(r.calls, new RegExp(`^gcloud storage rsync gs://${OLD}-mutaba3a-attachments gs://${NEW}-mutaba3a-attachments --recursive --delete-unmatched-destination-objects`))).toBe(true);
