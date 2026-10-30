@@ -28,6 +28,11 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — MUT-524: the privacy policy names europe-west1 (Belgium)
+
+- MTB3A moved from me-west1 to Google Cloud's europe-west1 region (Belgium) on 2026-10-30 (MUT-487, MUT-523, ADR-232). The privacy policy's hosted-accounts section now says records and daily backups are in europe-west1 (Belgium), and that technical logs may be stored outside europe-west1; "Last updated" is October 31, 2026, in English and Arabic (`src/lib/i18n/translations/{en,ar}/landing.json`). The old copy in me-west1 was deleted the same night, so no overlap wording is needed.
+- Tests: `PrivacyPolicyPage.test.tsx`, `qa/specs/web/legal.spec.ts` and `qa/features/web/legal.yaml` name europe-west1.
+
 ## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
 
 **Why:** Basel decided on 2026-10-30 that `mtb3a-production` runs in europe-west1 (cost), created, owned and billed by `barmajiyatltd@gmail.com` on its GBP billing account `01E433-999491-75ECBD`, while `malafat-production` stays in me-west1 until MUT-520/MUT-521. The MUT-487 code (`2451a0ef`) assumed one region for both projects, an ILS budget and a machine-wide ADC quota project. Nothing was run against GCP.
