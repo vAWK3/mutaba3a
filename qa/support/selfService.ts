@@ -70,13 +70,16 @@ export function setupLinkIn(mail: Mail): string {
   return link!;
 }
 
-/** An operator-created account (the pilot path): its setup link is NOT redeemed unless `password` is given. */
-export async function operatorAccount(email: string, locale: 'en' | 'ar', password?: string): Promise<{ id: string; setupUrl: string }> {
+/**
+ * An operator-created account (the pilot path): its setup link is NOT redeemed unless `password` is given.
+ * MUT-527: `displayName` names the person (the account list's search matches it).
+ */
+export async function operatorAccount(email: string, locale: 'en' | 'ar', password?: string, displayName = 'Nour Haddad'): Promise<{ id: string; setupUrl: string }> {
   const { origin } = liveState();
   const res = await fetch(`${origin}/admin/v1/users`, {
     method: 'POST',
     headers: admin(),
-    body: JSON.stringify({ email, displayName: 'Nour Haddad', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale }),
+    body: JSON.stringify({ email, displayName, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale }),
   });
   expect(res.status, `create user ${await res.clone().text()}`).toBe(201);
   const created = (await res.json()) as { user: { id: string }; setupLink: { url: string } };
