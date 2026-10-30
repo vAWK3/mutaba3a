@@ -63,6 +63,16 @@ features:
     expect:
       - The welcome opens with "Can't reach MTB3A right now · Retry" under the account door
       - Retry asks the server again and the line goes away; nothing is saved
+  - id: blocked-storage
+    title: With this site's storage blocked, the welcome still opens and Try still opens the app for this visit
+    paths:
+      - src/hosted/session/mode.ts
+    steps:
+      - Open the portal for the first time in a browser that refuses to save anything for this site
+      - Choose Try it on this device
+    expect:
+      - The welcome opens as usual
+      - Try opens the app on this device for this visit, though nothing could be saved
   - id: reopen
     title: You › Account › What is MTB3A? reopens the welcome, and Continue on this device goes back to the app
     paths:

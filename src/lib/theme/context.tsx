@@ -82,8 +82,13 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     }
     syncThemeColorMeta(theme);
 
-    // Persist to localStorage
-    localStorage.setItem(STORAGE_KEY, theme);
+    // Persist to localStorage; blocked storage (private mode, a site setting) keeps the theme for this visit only and
+    // must never crash the page (MUT-513 AC8: the welcome works there)
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      // Applied above for this visit
+    }
   }, [theme]);
 
   // Listen for system theme changes when in 'system' mode

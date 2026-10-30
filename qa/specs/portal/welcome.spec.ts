@@ -141,6 +141,27 @@ test("When the server can't be reached, the welcome still opens with a Retry, an
   });
 });
 
+test("With this site's storage blocked, the welcome still opens and Try still opens the app for this visit", { tag: '@portal.welcome.blocked-storage' }, async ({ page, step }) => {
+  await signedOutServer(page, 'en', null);
+  // A browser that refuses to save anything for this site: every localStorage write throws
+  await page.addInitScript(() => {
+    Storage.prototype.setItem = () => {
+      throw new DOMException('Storage is blocked', 'SecurityError');
+    };
+  });
+
+  await step('Open the portal for the first time in a browser that refuses to save anything for this site', async () => {
+    await page.goto('/');
+    await expect(welcomeHeading(page, WELCOME_EN)).toBeVisible();
+  });
+
+  await step('Choose Try it on this device: the app opens for this visit, though nothing could be saved', async () => {
+    await page.getByRole('button', { name: 'Try it on this device' }).click();
+    await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible();
+    expect(await modeHint(page)).toBeNull();
+  });
+});
+
 test('You › Account › What is MTB3A? reopens the welcome, and Continue on this device goes back to the app', { tag: '@portal.welcome.reopen' }, async ({ page, step }) => {
   await signedOutServer(page);
 
