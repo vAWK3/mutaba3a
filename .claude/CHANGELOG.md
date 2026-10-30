@@ -52,6 +52,7 @@
 - Privacy wording draft in `docs/operations/before-release.md` (Basel approves; web release before the server release). No API, schema or migration change.
 - Pre-landing review (qa-reconcile, 2026-10-30): a late first-visit answer never overwrites a choice; `/welcome` and the carry-over save ask the server before choosing this device (an unreachable or slow server holds it for the visit only, at most 5 s); explainer points render as one line each; the welcome instance keeps PostHog state in memory and the count drops the URL's query; the reopened welcome counts nothing.
 - Fixed: `ThemeProvider` (`src/lib/theme/context.tsx`) crashed every page when the browser blocks site storage (found by `@portal.welcome.blocked-storage`; AC8).
+- Privacy policy (Basel approved 2026-10-30): Anonymous usage counts now describes the welcome's cookieless door count (en/ar), Last updated October 30, 2026. Publish with `make release web` before the server release that carries MUT-513.
 
 ## [Unreleased] - 2026-10-29 — MUT-504: real Hebrew receipts read without wrong fields (ADR-229)
 
