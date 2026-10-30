@@ -945,3 +945,17 @@ describe('ExpenseDrawer VAT row (MUT-302)', () => {
     expect(summary.querySelector('bdi')).not.toBeNull();
   });
 });
+
+describe('ExpenseDrawer VAT row summary (MUT-302 review)', () => {
+  it('reads the rate as a clean percent, whatever was typed', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ firm: true });
+    await user.type(await screen.findByPlaceholderText('0.00'), '117');
+    const toggle = screen.getByRole('button', { name: /VAT/ });
+    await user.click(toggle);
+    await user.selectOptions(screen.getByLabelText('Treatment'), 'STANDARD_RATED');
+    await user.type(screen.getByLabelText('Rate'), '17.50%');
+    await user.click(toggle);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent(/^VAT 17\.5%/);
+  });
+});

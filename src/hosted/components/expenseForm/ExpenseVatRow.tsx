@@ -3,7 +3,7 @@ import { Controller, useWatch } from 'react-hook-form';
 import { Select } from '../../../components/ui/Input';
 import { useLanguage } from '../../../lib/i18n/core';
 import { formatDecimal } from '../../format/DecimalAmount';
-import { percentToBasisPoints, vatPreview, VAT_TREATMENTS } from '../../lib/expenseVat';
+import { basisPointsToPercent, percentToBasisPoints, vatPreview, VAT_TREATMENTS } from '../../lib/expenseVat';
 import { VAT_RATE_INVALID, type HostedExpenseForm } from './useHostedExpenseForm';
 
 /**
@@ -29,14 +29,16 @@ export function ExpenseVatRow({ form, idPrefix, readOnly = false, hint }: Expens
   const open = toggled || Boolean(rateError);
   const detailsId = `${idPrefix}-vat-details`;
 
-  const preview = treatment ? vatPreview(amount, currency, treatment, treatment === 'STANDARD_RATED' ? percentToBasisPoints(rate) : null) : null;
+  const basisPoints = treatment === 'STANDARD_RATED' ? percentToBasisPoints(rate) : null;
+  const preview = treatment ? vatPreview(amount, currency, treatment, basisPoints) : null;
   const money = (value: string) => <bdi>{formatDecimal(value, currency, language)}</bdi>;
 
   const summary = !treatment ? (
     t('hosted.expenses.vat.none')
   ) : treatment === 'STANDARD_RATED' ? (
     <>
-      {t('hosted.expenses.vat.summary', { rate: rate || '—' })}
+      {/* The rate as one clean percent (review: never the raw typed text, "17%%" or "١٧٫٥"). */}
+      {t('hosted.expenses.vat.summary', { rate: basisPoints === null ? '—' : basisPointsToPercent(basisPoints) })}
       {preview && <> · {money(preview.vat)}</>}
     </>
   ) : (

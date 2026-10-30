@@ -277,11 +277,12 @@ export type StubExpense = ReturnType<typeof expense>;
 export interface StubExpenseVat { treatment: string; rateBasisPoints: number; net: string; vat: string; gross: string }
 
 /** MUT-302: the server's split (computeVat, VAT_INCLUSIVE, half-up) of a gross, so the stub answers what the API would. */
-export function splitExpenseVat(amount: string, input: { treatment: string; rateBasisPoints: number } | null): StubExpenseVat | null {
+export function splitExpenseVat(amount: string, currency: Currency, input: { treatment: string; rateBasisPoints: number } | null): StubExpenseVat | null {
   if (!input) return null;
+  // In the currency's own digits, as the server parses it (review: "100" in ILS is 10000 minor units, not 100).
+  const exponent = currency === 'JOD' ? 3 : 2;
   const [whole = '0', fraction = ''] = amount.split('.');
-  const exponent = fraction.length;
-  const gross = BigInt(whole + fraction);
+  const gross = BigInt(whole + fraction.padEnd(exponent, '0'));
   const rate = input.treatment === 'STANDARD_RATED' ? input.rateBasisPoints : 0;
   const divisor = 10000n + BigInt(rate);
   const net = rate ? (gross * 10000n + divisor / 2n) / divisor : gross;
@@ -290,7 +291,7 @@ export function splitExpenseVat(amount: string, input: { treatment: string; rate
     const digits = minor.toString().padStart(exponent + 1, '0');
     return `${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`;
   };
-  return { treatment: input.treatment, rateBasisPoints: rate, net: text(net), vat: text(gross - net), gross: amount };
+  return { treatment: input.treatment, rateBasisPoints: rate, net: text(net), vat: text(gross - net), gross: text(gross) };
 }
 
 export function conversion(n: number, c: { amount: string; currency: Currency; toAmount: string; toCurrency: Currency; occurredOn?: string; notes?: string | null }) {
@@ -1270,7 +1271,7 @@ export class FakeApi {
         const b = e.body as Json;
         const made = { ...expense(this.serial++, { amount: String(b.amount), currency: b.currency as Currency }), ...b, id: this.nextId(0x9), receipts: [] as StubReceipt[] } as StubExpense;
         delete (made as { vendorDetails?: unknown }).vendorDetails;
-        made.vat = splitExpenseVat(made.amount, (b.vat as { treatment: string; rateBasisPoints: number } | null | undefined) ?? null);
+        made.vat = splitExpenseVat(made.amount, made.currency as Currency, (b.vat as { treatment: string; rateBasisPoints: number } | null | undefined) ?? null);
         made.vendorId = this.linkVendor(made.vendor, made.categoryId);
         this.expenses.unshift(made);
         return json(listed(made), 201);
@@ -1287,7 +1288,7 @@ export class FakeApi {
         const sentVat = (e.body as { vat?: { treatment: string; rateBasisPoints: number } | null }).vat;
         const keptVat = found.vat ? { treatment: found.vat.treatment, rateBasisPoints: found.vat.rateBasisPoints } : null;
         Object.assign(found, e.body, { version: found.version + 1 });
-        found.vat = splitExpenseVat(found.amount, sentVat === undefined ? keptVat : sentVat);
+        found.vat = splitExpenseVat(found.amount, found.currency as Currency, sentVat === undefined ? keptVat : sentVat);
         const patch = e.body as { vendor?: string | null; categoryId?: string | null };
         if (patch.vendor !== undefined || patch.categoryId !== undefined) found.vendorId = this.linkVendor(found.vendor, found.categoryId);
         return json(listed(found));
