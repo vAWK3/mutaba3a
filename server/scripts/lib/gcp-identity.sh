@@ -10,6 +10,23 @@
 # default ADC. Sourced by scripts/deploy.sh, scripts/project-move.sh, scripts/restore-drill.sh and
 # ../../scripts/preflight.sh. Tested by src/scripts/__tests__/gcp-identity.test.ts. The caller defines die.
 
+# deploy_env_value <deploy.env> <KEY>: that key's value (the last line setting it), empty when absent. The file is
+# read, never sourced: plain KEY=value lines, as the Makefile's include takes them.
+deploy_env_value() {
+  [[ -f "$1" ]] || return 0
+  awk -v key="$2" 'index($0, key "=") == 1 { value = substr($0, length(key) + 2) }
+    END { sub(/[ \t\r]+$/, "", value); print value }' "$1"
+}
+
+# load_deploy_env_identity <deploy.env>: for a script run by hand rather than by make (the restore drill), the
+# GCP_ACCOUNT / GCP_ADC_FILE pair from deploy.env. The shell wins, as a make command line does: either one set there
+# leaves the file unread. Call before use_gcp_identity.
+load_deploy_env_identity() {
+  [[ -z "${GCP_ACCOUNT:-}" && -z "${GCP_ADC_FILE:-}" ]] || return 0
+  GCP_ACCOUNT="$(deploy_env_value "$1" GCP_ACCOUNT)"
+  GCP_ADC_FILE="$(deploy_env_value "$1" GCP_ADC_FILE)"
+}
+
 # use_gcp_identity: exports the mapping above. Both or neither: gcloud and Terraform must act as the same person.
 use_gcp_identity() {
   if [[ -z "${GCP_ACCOUNT:-}" && -z "${GCP_ADC_FILE:-}" ]]; then return 0; fi

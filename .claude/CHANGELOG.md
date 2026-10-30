@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — The restore drill and pilot runbook follow the move to mtb3a-production (MUT-327, MUT-487/523)
+
+**Why:** after the move, production is `mtb3a-production` in `europe-west1`, owned by the company account in
+`deploy.env`. The drill is run by hand, not by make, so it acted as the machine's own gcloud account. And the
+runbook's setup still exported `malafat-production`, whose state bucket also lingers in `server/.env.prod` and in old
+shells, so a drill could have read the old project's state. Its first production run was never repeated after the
+2026-10-23 `--labels` stop.
+
+### Changed
+- `server/scripts/lib/gcp-identity.sh`: `deploy_env_value` (reads one key, never sources the file) and
+  `load_deploy_env_identity` (GCP_ACCOUNT / GCP_ADC_FILE from deploy.env when the shell sets neither).
+- `server/scripts/restore-drill.sh` loads them before `use_gcp_identity`. Its state bucket comes from the shell, else
+  deploy.env, else this checkout's `.terraform-<project>` state (the Makefile's order). It refuses
+  `<other project>-terraform-state`, and refuses `--project` = config/gcp.json's `legacyProject` after the cutover
+  (`LEGACY_STACK=1` overrides it; teardown is always allowed). `DEPLOY_ENV_FILE`, `GCP_CONFIG` and
+  `RESTORE_DRILL_TF_DIR` override the files for tests.
+- Pilot runbook: §0 exports `mtb3a-production`, `europe-west1`, its state bucket and the deploy.env identity; §4.1/§4.3
+  use `$GCP_REGION`, not `me-west1`; §8 says how the drill finds its account and state, and its run lines paste
+  cleanly (no `<placeholder>`). §5.2 gets a ⚠ for Basel and counsel: the Israel residency point predates the move.
+
+### Technical
+- 10 tests in `server/src/scripts/__tests__/restore-drill.test.ts` (fake gcloud logs the account, fake terraform the
+  bucket).
+
 ## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
 
 **Why:** Basel decided on 2026-10-30 that `mtb3a-production` runs in europe-west1 (cost), created, owned and billed by `barmajiyatltd@gmail.com` on its GBP billing account `01E433-999491-75ECBD`, while `malafat-production` stays in me-west1 until MUT-520/MUT-521. The MUT-487 code (`2451a0ef`) assumed one region for both projects, an ILS budget and a machine-wide ADC quota project. Nothing was run against GCP.
