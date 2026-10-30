@@ -56,9 +56,17 @@ die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
 # MUT-523: deploy.env's GCP_ACCOUNT / GCP_ADC_FILE (mtb3a-production is barmajiyatltd@gmail.com's), for this run only.
+# The drill is run by hand, not by make, so it reads them (and TF_STATE_BUCKET) from deploy.env itself; the shell wins.
 # shellcheck source-path=SCRIPTDIR source=lib/gcp-identity.sh
 . "${SERVER_DIR}/scripts/lib/gcp-identity.sh"
+DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-${SERVER_DIR}/../deploy.env}"
+load_deploy_env_identity "${DEPLOY_ENV_FILE}"
 use_gcp_identity
+# MUT-487 (ADR-232): config/gcp.json names the live project and the one MTB3A moved out of.
+# shellcheck source-path=SCRIPTDIR source=lib/legacy-stack.sh
+. "${SERVER_DIR}/scripts/lib/legacy-stack.sh"
+GCP_CONFIG="${GCP_CONFIG:-${SERVER_DIR}/../config/gcp.json}"
+TF_DIR="${RESTORE_DRILL_TF_DIR:-${SERVER_DIR}/infrastructure/terraform}"
 
 usage() {
   cat >&2 <<EOF
@@ -104,6 +112,33 @@ done
 [[ -n "${RECEIPT_ID}" && ! "${RECEIPT_ID}" =~ ^[0-9a-fA-F-]{36}$ ]] && die "--receipt-id must be a uuid"
 [[ "${SOURCE}" =~ ^mutaba3a-pg-drill- ]] && die "refusing: --instance ${SOURCE} is a drill scratch instance; the source is the instance you back up (the one the API serves from)"
 BUCKET="${BUCKET:-${PROJECT}-mutaba3a-attachments}"
+
+# Drilling the frozen old project after the move would prove nothing about today's backups. The overlap's own
+# checks set LEGACY_STACK=1; teardown always may, to clean up drill instances left there.
+refuse_legacy_project() {
+  local live legacy
+  live="$(gcp_config_value "${GCP_CONFIG}" "${ENVIRONMENT:-production}" project)"
+  legacy="$(gcp_config_value "${GCP_CONFIG}" "${ENVIRONMENT:-production}" legacyProject)"
+  [[ -n "${legacy}" && "${PROJECT}" == "${legacy}" && "${LEGACY_STACK:-0}" != 1 ]] || return 0
+  cutover_pending "${GCP_CONFIG}" "${ENVIRONMENT:-production}" && return 0
+  die "${PROJECT} is MTB3A's old project; production runs in ${live} (config/gcp.json, ADR-232). Drill ${live}, or set LEGACY_STACK=1 to drill the old one during the overlap."
+}
+[[ "${SUBCOMMAND}" == "teardown" ]] || refuse_legacy_project
+
+# state_bucket: TF_STATE_BUCKET from the shell, else deploy.env, else the bucket this checkout's `terraform init` for
+# PROJECT recorded (the Makefile's order). Refuses `<other project>-terraform-state`: another project's state names
+# another project's instance (MUT-487 left malafat-production-terraform-state in old shells and server/.env.prod).
+state_bucket() {
+  local bucket="${TF_STATE_BUCKET:-}"
+  [[ -n "${bucket}" ]] || bucket="$(deploy_env_value "${DEPLOY_ENV_FILE}" TF_STATE_BUCKET)"
+  if [[ -z "${bucket}" && -f "${TF_DIR}/.terraform-${PROJECT}/terraform.tfstate" ]]; then
+    bucket="$(sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${TF_DIR}/.terraform-${PROJECT}/terraform.tfstate" | head -1)"
+  fi
+  if [[ "${bucket}" =~ ^(.+)-terraform-state$ && "${BASH_REMATCH[1]}" != "${PROJECT}" ]]; then
+    die "TF_STATE_BUCKET=${bucket} is ${BASH_REMATCH[1]}'s state, but --project is ${PROJECT}. Unset it (the drill finds ${PROJECT}'s), or export ${PROJECT}-terraform-state."
+  fi
+  printf '%s' "${bucket}"
+}
 
 # ---------------------------------------------------------------------------
 # Command helpers
@@ -175,7 +210,9 @@ if [[ -z "${SOURCE}" ]]; then
     SOURCE="<active-instance>"
   else
     need terraform "brew install terraform"
-    SOURCE="$(tf_active_instance "${SERVER_DIR}/infrastructure/terraform" "${ENVIRONMENT:-production}")"
+    TF_STATE_BUCKET="$(state_bucket)" || exit 1
+    export TF_STATE_BUCKET
+    SOURCE="$(tf_active_instance "${TF_DIR}" "${ENVIRONMENT:-production}")"
   fi
 fi
 
