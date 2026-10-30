@@ -365,7 +365,7 @@ release-server: preflight-server
 	printf '  image tag   %s\n' "$$([ $$bumped = yes ] && echo 'the version commit' || git rev-parse --short HEAD)"; \
 	printf '  project     %s\n' "$${GCP_PROJECT_ID}"; \
 	printf '  region      %s\n' "$${GCP_REGION:-unset}"; \
-	printf '  acting as   %s\n' "$${GCP_ACCOUNT:-the machine'\''s default gcloud account and ADC}"; \
+	printf '  acting as   %s\n' "$${GCP_ACCOUNT:-the default gcloud account and ADC on this machine}"; \
 	printf '  environment %s\n' '$(ENVIRONMENT)'; \
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \
