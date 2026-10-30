@@ -11,8 +11,6 @@ min_instances       = 1
 # db_pool_size        = 10
 # db_max_connections  = 50
 log_level           = "info"
-# MUT-381: our own KMS key. Walk off → prepared → active only as server/DEPLOYMENT.md §6d says.
-# cmek_stage          = "off"
 # MUT-360: Stripe webhook and nightly reconcile. Set true only after both Stripe secrets hold a version (server/DEPLOYMENT.md §6e).
 # stripe_enabled      = false
 # MUT-148: error reports to Sentry. Set true only after server/DEPLOYMENT.md §1.5 has applied the Sentry stack.

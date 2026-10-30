@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# Read-only database helpers shared by scripts/restore-drill.sh (MUT-327) and scripts/cmek-cutover.sh
-# (MUT-381). Sourced, never run. Bash 3.2 compatible (macOS /bin/bash).
+# Read-only database helpers shared by scripts/restore-drill.sh (MUT-327) and scripts/project-move.sh
+# (MUT-487). Sourced, never run. Bash 3.2 compatible (macOS /bin/bash).
 #
 # The caller defines die and warn, and sets PG* (PGHOST, PGPORT, PGUSER, PGDATABASE, PGPASSWORD) before
 # db_sql or db_table_counts.
@@ -82,16 +82,15 @@ tf_output() {
   die "could not read $2 from terraform state (above); stopping rather than guess"
 }
 
-# tf_active_instance <terraform dir> <environment>: the Cloud SQL instance the API serves from (MUT-381:
-# mutaba3a-pg, or mutaba3a-pg2 once cmek_stage is active). A state last applied before MUT-381 has no such
-# output; pg2 can't be active then, so that alone means mutaba3a-pg.
+# tf_active_instance <terraform dir> <environment>: the Cloud SQL instance the API serves from, as terraform
+# state names it. A state last applied before the output existed (MUT-381) has none; that means mutaba3a-pg.
 tf_active_instance() {
   local name rc=0
   tf_init "$1" "$2"
   name="$(tf_output "$1" cloud_sql_instance_name)" || rc=$?
   case "${rc}" in
     0) printf '%s\n' "${name}" ;;
-    3) warn "terraform state has no cloud_sql_instance_name output yet (no apply since MUT-381); using mutaba3a-pg"
+    3) warn "terraform state has no cloud_sql_instance_name output yet (an old state); using mutaba3a-pg"
        printf 'mutaba3a-pg\n' ;;
     *) exit 1 ;;
   esac

@@ -21,7 +21,6 @@ mock_provider "google" {
     }
   }
 }
-mock_provider "google-beta" {}
 mock_provider "random" {}
 
 # Each service account and the sidecar get their own values, so the assertions can tell them apart.

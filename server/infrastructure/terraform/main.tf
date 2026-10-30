@@ -16,15 +16,7 @@ locals {
   instance_id  = "mutaba3a-pg${local.suffix}"
   db_name      = "mutaba3a"
 
-  # MUT-381 (ADR-164): mutaba3a-pg2 is encrypted with our key (kms.tf). Cloud SQL can't add a key to an
-  # existing instance, so pg2 is filled from a backup of mutaba3a-pg (scripts/cmek-cutover.sh) and
-  # cmek_stage = active moves every consumer below to it at once.
-  cmek_enabled        = var.cmek_stage != "off"
-  cmek_active         = var.cmek_stage == "active"
-  cmek_instance_id    = "mutaba3a-pg2${local.suffix}"
-  active_instance_id  = local.cmek_active ? local.cmek_instance_id : local.instance_id
-  active_sql_instance = local.cmek_active ? one(google_sql_database_instance.postgres_cmek[*].connection_name) : google_sql_database_instance.postgres.connection_name
-  db_user             = "mutaba3a_api"
+  db_user = "mutaba3a_api"
 
   registry  = "${var.region}-docker.pkg.dev/${var.project_id}/${var.artifact_repository}"
   api_image = "${local.registry}/mutaba3a-api:${var.image_tag}"
@@ -103,7 +95,6 @@ resource "google_project_service" "apis" {
     "iamcredentials.googleapis.com",
     "cloudscheduler.googleapis.com",
     ],
-    local.cmek_enabled ? ["cloudkms.googleapis.com"] : [],
     # MUT-441: the read queue, and the sidecar's locked network (receipt_ocr.tf).
     local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
   ))
@@ -205,80 +196,6 @@ resource "google_sql_user" "api" {
   password = random_password.db.result
 }
 
-# MUT-381 (ADR-164): the same instance, encrypted with our key, from cmek_stage = prepared on. Its settings
-# are written out in full rather than shared: a for_each over both would rename google_sql_user.api and
-# google_sql_database.mutaba3a, which deploy.sh's bootstrap names (ADR-161). tests/cmek.tftest.hcl pins
-# the two to the same settings. MUT-383 removes mutaba3a-pg 14 days after the cutover.
-resource "google_sql_database_instance" "postgres_cmek" {
-  count = local.cmek_enabled ? 1 : 0
-
-  project             = var.project_id
-  name                = local.cmek_instance_id
-  database_version    = "POSTGRES_16"
-  region              = var.region
-  encryption_key_name = google_kms_crypto_key.data[0].id
-
-  settings {
-    tier              = var.db_tier
-    availability_type = var.db_availability
-    disk_autoresize   = true
-    disk_size         = 10
-    user_labels       = local.labels
-
-    backup_configuration {
-      enabled                        = var.db_backup_enabled
-      point_in_time_recovery_enabled = var.db_backup_enabled
-      start_time                     = "03:00"
-      transaction_log_retention_days = 7
-      # MUT-382 (B4): keep backups in Tel Aviv, as the privacy policy says; without it Cloud SQL picks a multi-region.
-      location = var.region
-
-      backup_retention_settings {
-        retained_backups = local.db_retained_backups
-      }
-    }
-
-    ip_configuration {
-      ipv4_enabled = true
-      ssl_mode     = "ENCRYPTED_ONLY"
-    }
-
-    maintenance_window {
-      day          = 7
-      hour         = 3
-      update_track = "stable"
-    }
-
-    database_flags {
-      name  = "max_connections"
-      value = tostring(var.db_max_connections)
-    }
-  }
-
-  deletion_protection = var.deletion_protection
-
-  # The Cloud SQL service agent must hold the key before the instance can be created with it.
-  depends_on = [google_project_service.apis, google_kms_crypto_key_iam_member.cloud_sql_uses_key]
-}
-
-resource "google_sql_database" "mutaba3a_cmek" {
-  count = local.cmek_enabled ? 1 : 0
-
-  project  = var.project_id
-  name     = local.db_name
-  instance = google_sql_database_instance.postgres_cmek[0].name
-}
-
-# Same user and password as on mutaba3a-pg: the cutover restores a backup of mutaba3a-pg here, users included.
-resource "google_sql_user" "api_cmek" {
-  count = local.cmek_enabled ? 1 : 0
-
-  project  = var.project_id
-  name     = local.db_user
-  instance = google_sql_database_instance.postgres_cmek[0].name
-  password = random_password.db.result
-}
-
 # ============================================================================
 # Secret Manager (regional replication keeps the data in-region)
 # ============================================================================
@@ -303,7 +220,7 @@ resource "google_secret_manager_secret_version" "database_url" {
   secret = google_secret_manager_secret.database_url.id
   # MUT-270: connection_limit sizes Prisma's pool per instance. Its default is derived from the CPU count it sees,
   # which in a container can be the host's; GET /v1/entries runs 4 queries per profile in parallel.
-  secret_data = "postgresql://${local.db_user}:${random_password.db.result}@localhost/${local.db_name}?host=/cloudsql/${local.active_sql_instance}&connection_limit=${var.db_pool_size}"
+  secret_data = "postgresql://${local.db_user}:${random_password.db.result}@localhost/${local.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}&connection_limit=${var.db_pool_size}"
 
   lifecycle {
     # No create_before_destroy: Terraform would propagate it to the instance and the secret, whose fixed names would
@@ -804,7 +721,7 @@ resource "google_cloud_run_v2_service" "api" {
     volumes {
       name = "cloudsql"
       cloud_sql_instance {
-        instances = [local.active_sql_instance]
+        instances = [google_sql_database_instance.postgres.connection_name]
       }
     }
   }
@@ -1060,17 +977,6 @@ resource "google_storage_bucket" "attachments" {
       age = 1
     }
   }
-
-  # MUT-381: from cmek_stage = prepared on, new objects are encrypted with our key. Signed URLs keep working:
-  # the Cloud Storage service agent does the encryption. Existing objects are rewritten by hand (DEPLOYMENT.md §6d).
-  dynamic "encryption" {
-    for_each = google_kms_crypto_key.data[*].id
-    content {
-      default_kms_key_name = encryption.value
-    }
-  }
-
-  depends_on = [google_kms_crypto_key_iam_member.gcs_uses_key]
 }
 
 # Read/write/delete objects in the bucket, nothing else in the project.

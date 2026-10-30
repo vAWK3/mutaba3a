@@ -20,7 +20,6 @@
 #   ALLOW_NODE_MAJOR   a node major other than the supported one
 #   SKIP_REMOTE        do not contact origin (offline)
 #   SKIP_TERMS_CHECK   server: do not check the terms are live (an emergency fix that keeps the version)
-#   SKIP_CMEK_GUARD    server: 0 runs deploy.sh's MUT-381 release guard; off by default until MUT-385
 #   SKIP_STRIPE_GUARD  server: 1 skips deploy.sh's MUT-360 guard (a release that would switch Stripe off)
 #
 # Other knobs:
@@ -309,7 +308,9 @@ if [[ "$MODE" == "server" ]]; then
   head_ "Configuration"
 
   TF_DIR="server/infrastructure/terraform"
+  # MUT-487 (AM5, AM8): the old project runs from legacy.tfvars with LEGACY_STACK=1; each project has its own data dir.
   TFVARS="${TF_DIR}/${ENVIRONMENT}.tfvars"
+  [[ "${LEGACY_STACK:-0}" == "1" ]] && TFVARS="${TF_DIR}/legacy.tfvars"
   if [[ -f "$TFVARS" ]]; then
     ok "$TFVARS present"
   else
@@ -344,7 +345,7 @@ if [[ "$MODE" == "server" ]]; then
   # Terraform records the backend it was last initialised against. Pointing at
   # a different bucket means a different state file — a fresh apply that does
   # not know the service, the database or the secrets already exist.
-  TFSTATE="${TF_DIR}/.terraform/terraform.tfstate"
+  TFSTATE="${TF_DIR}/.terraform-${GCP_PROJECT_ID:-unset}/terraform.tfstate"
   if [[ -f "$TFSTATE" && -n "${TF_STATE_BUCKET:-}" ]]; then
     LAST_BUCKET="$(sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TFSTATE" | head -1)"
     if [[ -z "$LAST_BUCKET" || "$LAST_BUCKET" == "$TF_STATE_BUCKET" ]]; then
@@ -385,13 +386,23 @@ if [[ "$MODE" == "server" ]]; then
     hint "if the version isn't listed yet: make release web, wait for Netlify, then release the server"
   fi
 
-  # MUT-381: deploy.sh can check a release won't move the database or reopen a closed service. Off by default
-  # until MUT-385 (lib/release-guard.sh); shown here so a cutover never starts with it still off.
-  head_ "CMEK release guard"
-  if [[ "${SKIP_CMEK_GUARD:-1}" == "0" ]]; then
-    ok "on (SKIP_CMEK_GUARD=0)"
+  # MUT-487 (ADR-230, AM5): which stack this release acts on, before anything is built or applied. deploy.sh
+  # refuses any project but config/gcp.json's, and the old one unless LEGACY_STACK=1 (lib/release-guard.sh).
+  head_ "Project"
+  printf '  stack: project=%s bucket=%s LEGACY_STACK=%s tfvars=%s\n' "${GCP_PROJECT_ID:-unset}" "${TF_STATE_BUCKET:-unset}" "${LEGACY_STACK:-0}" "$TFVARS"
+  # shellcheck disable=SC2329,SC2034,SC1091 # die/warn/SERVER_DIR are read by the sourced guard
+  if [[ -n "${GCP_PROJECT_ID:-}" ]] && GUARD_OUT="$( (die() { echo "$*"; exit 1; }; warn() { echo "$*"; }; SERVER_DIR=server; source server/scripts/lib/release-guard.sh && guard_project_release "$GCP_PROJECT_ID") 2>&1)"; then
+    ok "GCP_PROJECT_ID=${GCP_PROJECT_ID} is allowed${GUARD_OUT:+ ${DIM}(${GUARD_OUT})${NC}}"
   else
-    ok "off, the default until MUT-385 ${DIM}(SKIP_CMEK_GUARD=0 turns it on; it must be on before any CMEK cutover)${NC}"
+    bad "${GUARD_OUT:-GCP_PROJECT_ID is not set}"
+    hint "config/gcp.json names the project; the old one only with LEGACY_STACK=1 (server/DEPLOYMENT.md §6d)"
+  fi
+
+  head_ "Ingress release guard"
+  if [[ "${SKIP_INGRESS_GUARD:-0}" == "1" ]]; then
+    warn "skipped (SKIP_INGRESS_GUARD=1): this release may reopen a service a restore or a project move holds closed"
+  else
+    ok "on ${DIM}(a release never reopens a closed service; SKIP_INGRESS_GUARD=1 skips it)${NC}"
   fi
 
   # MUT-360: deploy.sh refuses a release that would switch Stripe off (this checkout's production.tfvars

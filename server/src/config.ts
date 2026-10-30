@@ -382,7 +382,7 @@ const SERVER_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * MUT-396: the storage refusals. The local driver serves files to anyone holding a URL from a server whose secret
- * is the session pepper, with no CMEK or lifecycle rules: never on a deployed service.
+ * is the session pepper, with no lifecycle rules: never on a deployed service.
  */
 function attachmentsConfig(config: z.infer<typeof envSchema>): { ATTACHMENTS_DIR: string } {
   const refuse = (why: string): never => {

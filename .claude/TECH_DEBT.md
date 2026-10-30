@@ -937,10 +937,11 @@
 
 ### TD-195: Malafat's runtime service account has project-wide roles over Mutaba3a's data in the shared project
 
-**Introduced**: 2026-10-21 (MUT-381, ADR-164)
+**Status**: Open until the MUT-487 cutover (ADR-230); closes at its C5, when `mtb3a-production`'s IAM policy is recorded with no Malafat account in it. The tooling is built (`project-move.sh`); the move itself is Basel's operator run.
+**Introduced**: 2026-10-21 (MUT-381)
 **Where**: `malafat-production` IAM. Malafat's `infrastructure/terraform/modules/regional-stack/main.tf` grants its Cloud Run service account `run-<region>` project-level `roles/cloudkms.cryptoKeyEncrypterDecrypter`, `roles/storage.objectAdmin`, `roles/cloudsql.client` and `roles/secretmanager.secretAccessor`.
-**Problem**: Mutaba3a's attachments bucket, its KMS key (ADR-164) and its Cloud SQL instances live in the same project. Malafat's runtime can therefore read and write every receipt object and use Mutaba3a's key, so CMEK adds no isolation from it. It can also read every Mutaba3a secret: `mutaba3a-api-database-url` (the database user and password, which with `cloudsql.client` reaches `mutaba3a-pg` and `mutaba3a-pg2`), `mutaba3a-api-admin-token` (operator access) and `mutaba3a-api-session-pepper` (forging portal sessions).
-**Fix when**: before a pilot firm that isn't a Malafat tenant asks who can read its data, or at GA. Either move Mutaba3a to its own project (INFRA.md §2: a re-apply with a new `project_id` plus a data move), or have Malafat scope those roles to its own key ring, buckets and instances.
+**Problem**: Mutaba3a's attachments bucket and its Cloud SQL instance live in the same project. Malafat's runtime can therefore read and write every receipt object. It can also read every Mutaba3a secret: `mutaba3a-api-database-url` (the database user and password, which with `cloudsql.client` reaches `mutaba3a-pg`), `mutaba3a-api-admin-token` (operator access) and `mutaba3a-api-session-pepper` (forging portal sessions). CMEK (MUT-381) never fixed this and was removed (ADR-164, superseded by ADR-230).
+**Fix**: MUT-487 (ADR-230) moves MTB3A to `mtb3a-production`, where Malafat holds no role, and rotates the machine secrets Malafat could read (ADR-230 §4). MUT-520 deletes the old copies 14 days later.
 **Severity**: High (another product's runtime can read and write every customer's data; the privacy policy must not claim isolation, MUT-382).
 
 ### TD-194: The creator of a co-owned profile can't leave it; there is no ownership transfer

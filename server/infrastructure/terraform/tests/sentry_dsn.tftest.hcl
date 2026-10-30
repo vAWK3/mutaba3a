@@ -15,7 +15,6 @@ mock_provider "google" {
     }
   }
 }
-mock_provider "google-beta" {}
 mock_provider "random" {}
 
 override_data {

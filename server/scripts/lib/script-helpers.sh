@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Command helpers shared by scripts/restore-drill.sh (MUT-327) and scripts/cmek-cutover.sh (MUT-381).
+# Command helpers shared by scripts/restore-drill.sh (MUT-327) and scripts/project-move.sh (MUT-487).
 # Sourced, never run. Bash 3.2 compatible. The caller defines die and sets DRY_RUN (and YES, to skip prompts).
 
 # run <command...>: print it, then run it unless this is a dry run.

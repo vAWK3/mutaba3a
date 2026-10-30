@@ -108,13 +108,14 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     expect(r.out).toMatch(/\+ gcloud sql backups list --instance=mutaba3a-pg --project=demo-project /);
   });
 
-  it('creates the backup scratch instance under the source\'s key when it has one (MUT-381)', () => {
+  it('creates the backup scratch instance without a KMS key: CMEK is gone (MUT-487)', () => {
     const r = drill('--project', 'demo-project', '--dry-run');
-    expect(r.out).toMatch(/\+ gcloud sql instances create mutaba3a-pg-drill-\d{8}t\d{6}-b .* --disk-encryption-key=<source-kms-key> --quiet/);
-    expect(r.out).toContain('diskEncryptionConfiguration.kmsKeyName');
+    expect(r.out).toMatch(/\+ gcloud sql instances create mutaba3a-pg-drill-\d{8}t\d{6}-b .* --no-deletion-protection --quiet/);
+    expect(r.out).not.toContain('kmsKeyName');
+    expect(r.out).not.toContain('--disk-encryption-key');
   });
 
-  it('without --instance, drills the instance terraform says the API serves from (MUT-381)', () => {
+  it('without --instance, drills the instance terraform says the API serves from', () => {
     const r = drillFromState({ FAKE_TF_INSTANCE: 'mutaba3a-pg2' }, '--project', 'demo-project');
     expect(r.out).toContain('source mutaba3a-pg2 (read-only)');
   });
@@ -148,7 +149,7 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
         '#!/bin/bash',
         'case "$*" in',
         '  "config get-value account"*) echo ops@example.com ;;',
-        '  "sql instances describe"*) echo "me-west1,db-custom-1-3840,,10,POSTGRES_16,True," ;;',
+        '  "sql instances describe"*) echo "me-west1,db-custom-1-3840,,10,POSTGRES_16,True" ;;',
         '  *) exit 99 ;;',
         'esac',
       ].join('\n') + '\n',
@@ -174,7 +175,7 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
         `echo "gcloud $*" >> "${log}"`,
         'case "$*" in',
         '  "config get-value account"*) echo ops@example.com ;;',
-        '  "sql instances describe"*) echo "me-west1,db-g1-small,ENTERPRISE,10,POSTGRES_16,True," ;;',
+        '  "sql instances describe"*) echo "me-west1,db-f1-micro,ENTERPRISE,10,POSTGRES_16,True" ;;',
         '  "sql backups list"*) printf "123\\t2026-10-21T03:00:00Z\\n" ;;',
         '  *) exit 99 ;;',
         'esac',

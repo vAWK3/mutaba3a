@@ -315,8 +315,7 @@ What you have:
 - 7 days of point-in-time recovery (PITR), down to the second.
 - The backups hold rows, not receipt files. A deleted receipt's file stays restorable for 14 days,
   as long as the oldest backup (§4.4).
-- **Which instance:** `mutaba3a-pg` until the MUT-381 cutover, `mutaba3a-pg2` after it
-  (DEPLOYMENT.md §6d). Set it once before the commands below:
+- **Which instance:** the one terraform state names (`mutaba3a-pg`). Set it once before the commands below:
 
   ```bash
   (cd server/infrastructure/terraform && terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production" >/dev/null)
@@ -354,10 +353,7 @@ export SOURCE_DATABASE_URL="postgresql://mutaba3a_api:$PW@127.0.0.1:5452/mutaba3
 
 - `gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID` to pick the backup;
 - `gcloud sql instances create "$COPY" …` with the flags in `scripts/restore-drill.sh`, `restore_backup`;
-- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID`. Once the
-  source is `mutaba3a-pg2`, create `$COPY` with
-  `--disk-encryption-key=projects/$GCP_PROJECT_ID/locations/me-west1/keyRings/mutaba3a/cryptoKeys/mutaba3a-data`
-  so the copy stays under the key.
+- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID`.
 
 Check the copy before using it:
 
@@ -560,19 +556,9 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 1. **Acknowledge.** Note the time you knew.
 2. **Contain:**
    - a release caused it: roll back with `make rollback-server SHA=<the previous api-v tag>` (DEPLOYMENT.md §6
-     "Roll back the service": no build, no migration; it refuses when a "Roll back past" count is above 0). After the MUT-381
-     cutover never shift Cloud Run traffic to a revision from before it: those mount only `mutaba3a-pg`
-     and fail every request (DEPLOYMENT.md §6d);
+     "Roll back the service": no build, no migration; it refuses when a "Roll back past" count is above 0);
    - access is at risk: lock or rotate (above);
    - writes are corrupting data: close ingress (§4.3);
-   - after the MUT-381 cutover, the database or receipts fail with a KMS or "key" error: a version of
-     `mutaba3a-data` was disabled or scheduled for destruction. Re-enable it, or cancel the destroy,
-     which is possible for 30 days (`gcloud kms keys versions list --key=mutaba3a-data --keyring=mutaba3a --location=me-west1`).
-     Never disable a version yourself: Cloud SQL doesn't re-encrypt on rotation (ADR-164). The same goes
-     for the Cloud SQL and Cloud Storage agents' grants on the key (`terraform apply` restores them). The
-     `mutaba3a-data key version changed` alert pages on any of these; its log filter has not been tried
-     against a live audit entry yet, so test it once in a scratch project (disable and re-enable a
-     non-primary version) before relying on it.
 3. **Restore** if data was lost (§4).
 4. **Tell** people (§5.2, §5.3).
 5. **Record** it (§5.5) within 2 days, with the cause and the fix (a ticket).
@@ -744,9 +730,8 @@ run it:
     `mutaba3a-pg-drill-<stamp>-b|p`.
   - The scratch copies get their own throwaway password, so the drill never reads production's.
   - `--dry-run` prints the whole sequence and calls nothing.
-- **Which instance (MUT-381):** without `--instance` it drills the one the API serves from, read from
-  terraform state (`TF_STATE_BUCKET`): `mutaba3a-pg2` after the CMEK cutover. A copy of a CMEK
-  instance is created under the same key.
+- **Which instance:** without `--instance` it drills the one the API serves from, read from
+  terraform state (`TF_STATE_BUCKET`).
 
 **Run it (Basel):**
 

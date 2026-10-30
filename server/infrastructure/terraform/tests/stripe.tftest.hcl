@@ -17,8 +17,6 @@ mock_provider "google" {
     }
   }
 }
-# MUT-381: versions.tf configures google-beta too; unmocked, it would load real credentials.
-mock_provider "google-beta" {}
 mock_provider "random" {}
 
 variables {

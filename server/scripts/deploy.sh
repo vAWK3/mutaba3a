@@ -3,6 +3,11 @@
 #
 #   GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh
 #
+# MUT-487 (ADR-230): config/gcp.json names the one project production releases go to (guard_project_release).
+# The old project (the legacy forwarder, a rollback of the move, the teardown) needs LEGACY_STACK=1, which also
+# reads legacy.tfvars instead of production.tfvars. Each project keeps its own terraform dir state
+# (TF_DATA_DIR=.terraform-<project>), so switching between the two never re-inits one onto the other's bucket.
+#
 # Everything that can run on this machine does (ADR-026), the same way
 # Malafat's `pnpm release` works:
 #   1. npm run build:hosted at the repo root (MUT-45): the hosted-portal
@@ -42,10 +47,15 @@ GCP_REGION="${GCP_REGION:-me-west1}"
 ARTIFACT_REPO="${ARTIFACT_REPO:-mutaba3a}"
 AUTO_APPROVE="${AUTO_APPROVE:-0}"
 PROXY_PORT="${PROXY_PORT:-5440}"
+LEGACY_STACK="${LEGACY_STACK:-0}"
+TFVARS_FILE="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}"
+[[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "${ENVIRONMENT}.tfvars" ]] && TFVARS_FILE="legacy.tfvars"
 
 SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "${SERVER_DIR}/.." && pwd)"
 TF_DIR="${SERVER_DIR}/infrastructure/terraform"
+# MUT-487 (AM8): one terraform data dir per project, so the old and the new stack never share an init.
+export TF_DATA_DIR="${TF_DATA_DIR:-${TF_DIR}/.terraform-${GCP_PROJECT_ID}}"
 SHORT_SHA="${IMAGE_TAG:-$(git -C "${SERVER_DIR}" rev-parse --short HEAD)}"
 REGISTRY="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}"
 IMAGE="${REGISTRY}/mutaba3a-api:${SHORT_SHA}"
@@ -70,9 +80,10 @@ source "${SERVER_DIR}/scripts/lib/db-checks.sh"
 source "${SERVER_DIR}/scripts/lib/receipt-ocr.sh"
 # shellcheck source=lib/rollback.sh
 source "${SERVER_DIR}/scripts/lib/rollback.sh"
-# MUT-381 / MUT-360 / MUT-148 / MUT-359 / MUT-471: the release guards with this release's own terraform arguments; run inside TF_DIR.
+# MUT-487 / MUT-360 / MUT-148 / MUT-359 / MUT-471: the release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
-  (cd "${TF_DIR}" && guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
+  guard_project_release "${GCP_PROJECT_ID}"
+  (cd "${TF_DIR}" && guard_ingress_release "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_mailer_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
@@ -126,6 +137,10 @@ smoke_release() {
   popd >/dev/null
 }
 
+# MUT-487 (ADR-230): only config/gcp.json's project, or the old one with LEGACY_STACK=1. Before anything else.
+guard_project_release "${GCP_PROJECT_ID}"
+info "stack: project=${GCP_PROJECT_ID} bucket=${TF_STATE_BUCKET} LEGACY_STACK=${LEGACY_STACK} tfvars=${TFVARS_FILE} TF_DATA_DIR=${TF_DATA_DIR}"
+
 # MUT-347: a rollback builds nothing and migrates nothing; lib/rollback.sh runs it end to end.
 if [[ -n "${ROLLBACK_TO}" ]]; then
   rollback_main
@@ -138,7 +153,7 @@ need cloud-sql-proxy "brew install cloud-sql-proxy"
 need terraform "brew install terraform"
 need node "node 22"
 docker info >/dev/null 2>&1 || die "the docker daemon is not running"
-[[ -f "${TF_DIR}/${ENVIRONMENT}.tfvars" ]] || die "missing ${TF_DIR}/${ENVIRONMENT}.tfvars (copy ${ENVIRONMENT}.tfvars.example)"
+[[ -f "${TF_DIR}/${TFVARS_FILE}" ]] || die "missing ${TF_DIR}/${TFVARS_FILE} (copy ${TFVARS_FILE}.example)"
 # The image now bundles the hosted-portal build (MUT-45) alongside server/, so
 # the whole repo must be clean for the tag to name everything that went in.
 TREE_DIRTY="false"; [[ -n "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" ]] && TREE_DIRTY="true"
@@ -166,12 +181,11 @@ pushd "${TF_DIR}" >/dev/null
 terraform init -reconfigure -input=false \
   -backend-config="bucket=${TF_STATE_BUCKET}" \
   -backend-config="prefix=mutaba3a-api/${ENVIRONMENT}" >/dev/null
-TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${SHORT_SHA}")
+TF_ARGS=(-input=false -var-file="${TFVARS_FILE}" -var "image_tag=${SHORT_SHA}")
 APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
-# MUT-381: never move the database or reopen a closed service as a side effect of a release. Checked here,
-# before the bootstrap apply (it writes the DATABASE_URL secret), and again before steps 3 and 4.
-# Off by default until MUT-385; SKIP_CMEK_GUARD=0 turns all three on (lib/release-guard.sh).
-guard_cmek_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
+# Never reopen a service a restore or a project move holds closed as a side effect of a release. Checked here,
+# before the bootstrap apply, and again before steps 3 and 4. SKIP_INGRESS_GUARD=1 skips it (lib/release-guard.sh).
+guard_ingress_release "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"
 # MUT-360: never switch Stripe off as a side effect of a release (a checkout whose production.tfvars lacks
 # stripe_enabled = true). On by default; SKIP_STRIPE_GUARD=1 skips it (lib/release-guard.sh).
 guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}"

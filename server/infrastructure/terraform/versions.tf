@@ -6,12 +6,6 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
-    # MUT-381: only for google_project_service_identity, the documented way to create the Cloud SQL
-    # service agent that encrypts with our key (kms.tf).
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = "~> 5.0"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -25,11 +19,6 @@ terraform {
 }
 
 provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-
-provider "google-beta" {
   project = var.project_id
   region  = var.region
 }

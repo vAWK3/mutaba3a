@@ -11,8 +11,6 @@ mock_provider "google" {
     }
   }
 }
-# MUT-381: versions.tf configures google-beta too; unmocked, it would load real credentials.
-mock_provider "google-beta" {}
 mock_provider "random" {}
 
 variables {
@@ -31,6 +29,13 @@ run "pool_size_reaches_the_database_url_and_max_connections_is_explicit" {
   assert {
     condition     = one([for flag in google_sql_database_instance.postgres.settings[0].database_flags : flag.value if flag.name == "max_connections"]) == "50"
     error_message = "Cloud SQL max_connections must be set explicitly from db_max_connections."
+  }
+
+  # MUT-382 (B4): the privacy policy says backups stay in Tel Aviv; Cloud SQL picks a multi-region without this.
+  # Moved here from tests/cmek.tftest.hcl when MUT-487 removed CMEK.
+  assert {
+    condition     = google_sql_database_instance.postgres.settings[0].backup_configuration[0].location == var.region && var.region == "me-west1"
+    error_message = "The instance keeps its backups in the service's region (me-west1), as the privacy policy promises."
   }
 }
 

@@ -5,12 +5,11 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
- * MUT-381 (ADR-164): deploy.sh refuses a release that would move the database or reopen a closed service.
- * deploy.sh runs a full terraform apply, so a release whose effective cmek_stage disagrees with what serves
- * would switch to an empty or unmigrated mutaba3a-pg2, or silently back to a frozen mutaba3a-pg (a stale
- * git-ignored tfvars in another checkout), and a release during a cutover would reopen ingress mid-copy.
- * Driven through a fake terraform (output, state list, console) and gcloud on PATH, the way
- * deploy-bootstrap.test.ts drives ensure_bootstrap.
+ * deploy.sh's release guards (lib/release-guard.sh), driven through a fake terraform (console) and gcloud on PATH,
+ * the way deploy-bootstrap.test.ts drives ensure_bootstrap. This part: MUT-487 (ADR-230) removed MUT-381's CMEK
+ * guard but kept its closed-service half, guard_ingress_release (a release must never reopen a service a restore
+ * or a project move holds closed), and added guard_project_release (only config/gcp.json's project; the old one
+ * only with LEGACY_STACK=1).
  */
 const LIB = resolve(process.cwd(), 'scripts/lib/release-guard.sh');
 const DEPLOY = resolve(process.cwd(), 'scripts/deploy.sh');
@@ -24,45 +23,28 @@ afterEach(() => {
 });
 
 type Opts = {
-  stage?: string; // what `terraform console` evaluates var.cmek_stage to
-  ingress?: string; // ... and var.api_ingress
-  consoleAnswer?: string; // raw console answer instead of "<stage> <ingress>"
+  ingress?: string; // what `terraform console` evaluates var.api_ingress to
   consoleFails?: boolean;
-  serving?: string | null; // terraform output cloud_sql_instance_name; null = no such output
-  outputError?: boolean;
-  outputEmpty?: boolean;
-  keyInState?: boolean;
   live?: string; // ingress-status of the live service
   serviceMissing?: boolean;
   gcloudError?: boolean;
-  mounts?: string; // what every serving revision mounts
-  env?: Record<string, string | undefined>; // undefined = unset; SKIP_CMEK_GUARD defaults to 0 (guard on)
+  skip?: string; // SKIP_INGRESS_GUARD
 };
 
 function guard(o: Opts) {
   const bin = join(dir, 'bin');
   const log = join(dir, 'calls.log');
   spawnSync('mkdir', ['-p', bin]);
-  const output = o.outputError
-    ? 'echo "Error: Failed to load state: 503" >&2; exit 1'
-    : o.outputEmpty
-      ? 'exit 0'
-      : o.serving === null || o.serving === undefined
-        ? 'echo "Error: Output \\"cloud_sql_instance_name\\" not found" >&2; exit 1'
-        : `printf '%s' '${o.serving}'`;
   writeFileSync(
     join(bin, 'terraform'),
     [
       '#!/bin/bash',
       `echo "terraform $*" >> "${log}"`,
       'case "$1" in',
-      `  output) ${output} ;;`,
-      `  state) ${o.keyInState ? "printf 'google_kms_crypto_key.data[0]\\ngoogle_sql_database_instance.postgres\\n'" : "printf 'google_sql_database_instance.postgres\\n'"} ;;`,
-      // Like Terraform 1.15's console (MUT-475): several lines on stdin answer only the last one.
       '  console)',
       '    last=""; while IFS= read -r line || [[ -n "$line" ]]; do [[ -n "$line" ]] && last="$line"; done',
       `    echo "console> $last" >> "${log}"`,
-      `    ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `if [[ "$last" == *var.cmek_stage*var.api_ingress* ]]; then printf '"%s"\\n' '${o.consoleAnswer ?? `${o.stage ?? 'off'} ${o.ingress ?? 'INGRESS_TRAFFIC_ALL'}`}'; else echo '"something else"'; fi`} ;;`,
+      `    ${o.consoleFails ? 'echo "Error: boom" >&2; exit 1' : `if [[ "$last" == "var.api_ingress" ]]; then printf '"%s"\\n' '${o.ingress ?? 'INGRESS_TRAFFIC_ALL'}'; else echo '"something else"'; fi`} ;;`,
       'esac',
       'exit 0',
     ].join('\n') + '\n',
@@ -74,144 +56,108 @@ function guard(o: Opts) {
       : `echo "${o.live ?? 'all'}"`;
   writeFileSync(
     join(bin, 'gcloud'),
-    [
-      '#!/bin/bash',
-      `echo "gcloud $*" >> "${log}"`,
-      'case "$*" in',
-      `  *"run services describe"*"ingress-status"*) ${describe} ;;`,
-      '  *"run services describe"*"traffic"*) echo "mutaba3a-api-00042-xyz;mutaba3a-api-00043-new" ;;',
-      `  *"run revisions describe"*) echo "${o.mounts ?? `demo-project:me-west1:${o.serving ?? 'mutaba3a-pg'}`}" ;;`,
-      'esac',
-    ].join('\n') + '\n',
+    ['#!/bin/bash', `echo "gcloud $*" >> "${log}"`, 'case "$*" in', `  *"run services describe"*"ingress-status"*) ${describe} ;;`, 'esac'].join('\n') + '\n',
   );
   chmodSync(join(bin, 'terraform'), 0o755);
   chmodSync(join(bin, 'gcloud'), 0o755);
-  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_cmek_release "" mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
-  const env: NodeJS.ProcessEnv = { ...process.env, SKIP_CMEK_GUARD: '0', ...o.env, PATH: `${bin}:${process.env.PATH}` };
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_ingress_release mutaba3a-api me-west1 demo-project -input=false -var-file=production.tfvars -var image_tag=abc`;
+  const env: NodeJS.ProcessEnv = { ...process.env, SKIP_INGRESS_GUARD: o.skip, PATH: `${bin}:${process.env.PATH}` };
   for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
   const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env });
   return { status: r.status, err: r.stderr, calls: existsSync(log) ? readFileSync(log, 'utf-8') : '' };
 }
 
 // Each case spawns bash and fake CLIs; under the full suite's parallel load one can pass 5 s.
-describe('guard_cmek_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
-  it('lets a release through before MUT-381 was ever applied (no output, stage off)', () => {
-    expect(guard({ serving: null }).status).toBe(0);
+describe('guard_ingress_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000 }, () => {
+  it('lets a release through while the service is open', () => {
+    expect(guard({}).status).toBe(0);
   });
 
-  it('lets a release through at prepared while mutaba3a-pg serves', () => {
-    expect(guard({ stage: 'prepared', serving: 'mutaba3a-pg', keyInState: true }).status).toBe(0);
-  });
-
-  it('lets a release through at active once mutaba3a-pg2 serves', () => {
-    expect(guard({ stage: 'active', serving: 'mutaba3a-pg2', keyInState: true }).status).toBe(0);
-  });
-
-  it('evaluates the stage the apply will use (terraform console with the same var files), not a grep of one file', () => {
-    const r = guard({ stage: 'prepared', serving: 'mutaba3a-pg' });
-    expect(r.calls).toMatch(/terraform console -var-file=production.tfvars -var image_tag=abc/);
-    expect(r.calls).not.toContain('console -input');
-  });
-
-  it('reads cmek_stage and api_ingress with one expression: the console answers only the last line (MUT-475)', () => {
-    const r = guard({ stage: 'prepared', ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY', serving: 'mutaba3a-pg', keyInState: true, live: 'internal' });
-    expect(r.status).toBe(0);
-    expect(r.calls.match(/^console> /gm)).toHaveLength(1);
-    expect(r.calls).toMatch(/console> .*var\.cmek_stage.*var\.api_ingress/);
-  });
-
-  it('refuses rather than guess when terraform console fails or gives anything but a stage and an ingress', () => {
-    expect(guard({ consoleFails: true, serving: 'mutaba3a-pg' }).err).toMatch(/could not evaluate cmek_stage and api_ingress/);
-    for (const answer of ['INGRESS_TRAFFIC_ALL', 'something else', 'off', 'tonumber(null) INGRESS_TRAFFIC_ALL', 'off INGRESS_TRAFFIC_ALL extra', 'active INGRESS_TRAFFIC_NONE']) {
-      const r = guard({ consoleAnswer: answer, serving: 'mutaba3a-pg' });
-      expect(r.status, answer).not.toBe(0);
-      expect(r.err, answer).toMatch(/terraform console gave '.*' for cmek_stage and api_ingress/);
-    }
-  });
-
-  it('refuses a release that would switch to mutaba3a-pg2 (off → active, or tfvars edited before the switch)', () => {
-    const r = guard({ stage: 'active', serving: 'mutaba3a-pg' });
+  it('refuses to reopen a service a restore or a project move has closed', () => {
+    const r = guard({ live: 'internal' });
     expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/serves mutaba3a-pg2, but production serves mutaba3a-pg/);
-  });
-
-  it('refuses a stale tfvars that would move the API back to the frozen mutaba3a-pg', () => {
-    const r = guard({ stage: 'prepared', serving: 'mutaba3a-pg2', keyInState: true });
-    expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/serves mutaba3a-pg, but production serves mutaba3a-pg2/);
-  });
-
-  it('refuses stage off once the key exists, rather than plan its destroy after migrating', () => {
-    const r = guard({ stage: 'off', serving: 'mutaba3a-pg', keyInState: true });
-    expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/cmek_stage = "off" but the KMS key exists/);
-  });
-
-  it('refuses when the state cannot be read, or is empty, rather than guess', () => {
-    const unreadable = guard({ stage: 'active', outputError: true });
-    expect(unreadable.status).not.toBe(0);
-    expect(unreadable.err).toMatch(/could not read cloud_sql_instance_name/);
-    const empty = guard({ stage: 'prepared', outputEmpty: true });
-    expect(empty.status).not.toBe(0);
-    expect(empty.err).toMatch(/cloud_sql_instance_name is empty/);
-  });
-
-  it('refuses when a serving revision mounts another instance than the one terraform names', () => {
-    const r = guard({ stage: 'prepared', serving: 'mutaba3a-pg', keyInState: true, mounts: 'demo-project:me-west1:mutaba3a-pg2' });
-    expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/mutaba3a-api-00042-xyz mounts demo-project:me-west1:mutaba3a-pg2/);
-  });
-
-  it('refuses to reopen a service a cutover or restore has closed', () => {
-    const cases: Array<[string, string]> = [
-      ['prepared', 'mutaba3a-pg'],
-      ['active', 'mutaba3a-pg2'], // between the tfvars edit (4.4) and the reopen (4.5)
-    ];
-    for (const [stage, serving] of cases) {
-      const r = guard({ stage, serving, keyInState: true, live: 'internal' });
-      expect(r.status, stage).not.toBe(0);
-      expect(r.err).toMatch(/closed to outside traffic/);
-    }
+    expect(r.err).toMatch(/closed to outside traffic: a whole-database restore .* or a project move/);
   });
 
   it('lets a deliberately closed release through when api_ingress keeps it internal', () => {
-    const r = guard({ stage: 'prepared', ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY', serving: 'mutaba3a-pg', keyInState: true, live: 'internal' });
-    expect(r.status).toBe(0);
+    expect(guard({ ingress: 'INGRESS_TRAFFIC_INTERNAL_ONLY', live: 'internal' }).status).toBe(0);
   });
 
-  it('refuses when gcloud cannot say whether the service is closed', () => {
-    const r = guard({ stage: 'prepared', serving: 'mutaba3a-pg', keyInState: true, gcloudError: true });
-    expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/could not read mutaba3a-api's ingress/);
+  it('evaluates api_ingress with the release\'s own var files', () => {
+    const r = guard({});
+    expect(r.calls).toMatch(/terraform console -var-file=production.tfvars -var image_tag=abc/);
+    expect(r.calls).toMatch(/console> var\.api_ingress/);
+  });
+
+  it('refuses rather than guess when terraform console fails or gives anything else, or gcloud fails', () => {
+    expect(guard({ consoleFails: true }).err).toMatch(/could not evaluate api_ingress/);
+    expect(guard({ ingress: 'INGRESS_TRAFFIC_NONE' }).err).toMatch(/gave 'INGRESS_TRAFFIC_NONE' for api_ingress/);
+    expect(guard({ gcloudError: true }).err).toMatch(/could not read mutaba3a-api's ingress/);
   });
 
   it('lets a first deploy through when the service does not exist yet', () => {
-    expect(guard({ serving: null, serviceMissing: true }).status).toBe(0);
+    expect(guard({ serviceMissing: true }).status).toBe(0);
   });
 
-  it('is off by default (until MUT-385): says so, and touches neither terraform nor gcloud', () => {
-    // The worst case: a release the guard would refuse, with state unreadable and gcloud failing.
-    for (const value of [undefined, '', '1']) {
-      const r = guard({ stage: 'active', outputError: true, gcloudError: true, env: { SKIP_CMEK_GUARD: value } });
-      expect(r.status, String(value)).toBe(0);
-      expect(r.err).toMatch(/CMEK release guard off \(the default until MUT-385; SKIP_CMEK_GUARD=0 turns it on\)/);
-      expect(r.calls).toBe('');
-    }
+  it('SKIP_INGRESS_GUARD=1 skips it: says so, and touches neither terraform nor gcloud', () => {
+    const r = guard({ live: 'internal', gcloudError: true, skip: '1' });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/ingress release guard skipped \(SKIP_INGRESS_GUARD=1\)/);
+    expect(r.calls).toBe('');
+  });
+});
+
+/** MUT-487 (ADR-230, AM5 corrected, T15): the old-project guard is keyed on GCP_PROJECT_ID plus LEGACY_STACK. */
+function projectGuard(project: string, env: Record<string, string | undefined> = {}, config?: string) {
+  const file = join(dir, 'gcp.json');
+  writeFileSync(file, config ?? JSON.stringify({ production: { project: 'mtb3a-production', legacyProject: 'malafat-production' } }));
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_project_release "${project}"`;
+  const e: NodeJS.ProcessEnv = { ...process.env, GCP_CONFIG: file, LEGACY_STACK: undefined, ENVIRONMENT: undefined, ...env };
+  for (const [k, v] of Object.entries(e)) if (v === undefined) delete e[k];
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, err: r.stderr };
+}
+
+describe('guard_project_release (MUT-487)', { timeout: 30_000 }, () => {
+  it('lets a release to config/gcp.json\'s project through', () => {
+    expect(projectGuard('mtb3a-production').status).toBe(0);
   });
 
-  it('SKIP_CMEK_GUARD=0 turns it on', () => {
-    const r = guard({ stage: 'active', serving: 'mutaba3a-pg', env: { SKIP_CMEK_GUARD: '0' } });
+  it('refuses the old project without LEGACY_STACK=1 and names the new one', () => {
+    const r = projectGuard('malafat-production');
     expect(r.status).not.toBe(0);
-    expect(r.err).toMatch(/production serves mutaba3a-pg/);
+    expect(r.err).toMatch(/malafat-production is MTB3A's old project; production runs in mtb3a-production/);
+  });
+
+  it('allows the old project with LEGACY_STACK=1 (forwarder, rollback, teardown) and warns which stack it acts on', () => {
+    const r = projectGuard('malafat-production', { LEGACY_STACK: '1' });
+    expect(r.status).toBe(0);
+    expect(r.err).toMatch(/LEGACY_STACK=1: acting on the OLD project malafat-production/);
+  });
+
+  it('refuses LEGACY_STACK=1 aimed at the live project, and any third project', () => {
+    expect(projectGuard('mtb3a-production', { LEGACY_STACK: '1' }).err).toMatch(/LEGACY_STACK=1 is for the old project/);
+    expect(projectGuard('someone-else').err).toMatch(/someone-else is not MTB3A's production project \(mtb3a-production/);
+    expect(projectGuard('someone-else', { LEGACY_STACK: '1' }).status).not.toBe(0);
+  });
+
+  it('refuses rather than guess when the config is missing, unreadable or names no project', () => {
+    expect(projectGuard('mtb3a-production', {}, '{').err).toMatch(/could not read/);
+    expect(projectGuard('mtb3a-production', {}, '{"production":{}}').err).toMatch(/names no project for production/);
+  });
+
+  it('the repo\'s config/gcp.json names mtb3a-production, with malafat-production as the legacy project', () => {
+    const config = JSON.parse(readFileSync(resolve(process.cwd(), '../config/gcp.json'), 'utf-8'));
+    expect(config.production).toMatchObject({ project: 'mtb3a-production', legacyProject: 'malafat-production' });
   });
 });
 
 describe('deploy.sh calls the guard before every step that can move or reopen anything', () => {
   it('guards before the bootstrap apply, before the migration and before the full apply', () => {
     const src = readFileSync(DEPLOY, 'utf-8');
-    // Calls only: `guard_cmek_release "…` at step 0, and the `guard_release` wrapper (not its definition).
+    // Calls only: `guard_ingress_release "…` at step 0, and the `guard_release` wrapper (not its definition).
     // MUT-347: step 4 is `apply_release`, shared with the rollback, which runs `guard_release` before its apply.
-    const guardAt = [...src.matchAll(/^(?:guard_cmek_release "|guard_release(?!\(\))|apply_release$)/gm)].map((m) => m.index ?? -1);
+    const guardAt = [...src.matchAll(/^(?:guard_ingress_release "|guard_release(?!\(\))|apply_release$)/gm)].map((m) => m.index ?? -1);
     const bootstrap = src.indexOf('ensure_bootstrap "');
     const migrate = src.indexOf('npx prisma migrate deploy');
     const applyRelease = /^apply_release\(\) \{\n[\s\S]*?\n\}/m.exec(src)?.[0] ?? '';
@@ -221,6 +167,31 @@ describe('deploy.sh calls the guard before every step that can move or reopen an
     expect(guardAt.some((g) => g < bootstrap)).toBe(true);
     expect(guardAt.some((g) => g > bootstrap && g < migrate)).toBe(true);
     expect(guardAt.some((g) => g > migrate)).toBe(true); // the top-level apply_release
+  });
+
+  it('checks the project first (before a rollback too), prints the stack, and keeps one terraform data dir per project (MUT-487)', () => {
+    const src = readFileSync(DEPLOY, 'utf-8');
+    const projectAt = src.search(/^guard_project_release "\$\{GCP_PROJECT_ID\}"$/m);
+    expect(projectAt).toBeGreaterThan(-1);
+    expect(projectAt).toBeLessThan(src.indexOf('if [[ -n "${ROLLBACK_TO}" ]]; then'));
+    expect(projectAt).toBeLessThan(src.indexOf('terraform init -reconfigure'));
+    expect(src).toMatch(/info "stack: project=\$\{GCP_PROJECT_ID\} bucket=\$\{TF_STATE_BUCKET\} LEGACY_STACK=/);
+    expect(src).toContain('export TF_DATA_DIR="${TF_DATA_DIR:-${TF_DIR}/.terraform-${GCP_PROJECT_ID}}"');
+    const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(src)?.[0] ?? '';
+    expect(wrapper).toMatch(/guard_project_release/);
+    expect(src).not.toMatch(/cmek/i);
+  });
+
+  it('LEGACY_STACK=1 reads legacy.tfvars and the new project production.tfvars, never the other way round (AM8)', () => {
+    const resolveTfvars = (env: Record<string, string>) =>
+      spawnSync('bash', ['-c', `ENVIRONMENT=production; ${/^LEGACY_STACK=.*\nTFVARS_FILE=.*\n.*legacy\.tfvars.*$/m.exec(readFileSync(DEPLOY, 'utf-8'))?.[0]}
+echo "$TFVARS_FILE"`], {
+        encoding: 'utf-8',
+        env: { PATH: process.env.PATH, ...env },
+      }).stdout.trim();
+    expect(resolveTfvars({})).toBe('production.tfvars');
+    expect(resolveTfvars({ LEGACY_STACK: '1' })).toBe('legacy.tfvars');
+    expect(resolveTfvars({ LEGACY_STACK: '1', TFVARS_FILE: 'other.tfvars' })).toBe('other.tfvars');
   });
 });
 
@@ -324,7 +295,7 @@ describe('deploy.sh wires the Stripe guard (MUT-360 review)', () => {
     expect(deploy.indexOf('guard_stripe_release "')).toBeGreaterThan(-1);
     expect(deploy.indexOf('guard_stripe_release "')).toBeLessThan(deploy.indexOf('ensure_bootstrap "'));
     const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(deploy)?.[0] ?? '';
-    expect(wrapper).toMatch(/guard_cmek_release/);
+    expect(wrapper).toMatch(/guard_ingress_release/);
     expect(wrapper).toMatch(/guard_stripe_release/);
   });
 });

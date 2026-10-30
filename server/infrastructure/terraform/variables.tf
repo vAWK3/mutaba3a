@@ -52,16 +52,6 @@ variable "db_backup_enabled" {
   default     = true
 }
 
-variable "cmek_stage" {
-  description = "MUT-381 (ADR-164): our own KMS key for Cloud SQL and the attachments bucket. off (default) = nothing new exists, so a release changes nothing; prepared = the key, its grants, mutaba3a-pg2 and the bucket's default key exist while the API still serves from mutaba3a-pg; active = the API, its secret, the outputs and the alerts follow mutaba3a-pg2. Walk it forward only (DEPLOYMENT.md §6d): the key can't be destroyed."
-  type        = string
-  default     = "off"
-  validation {
-    condition     = contains(["off", "prepared", "active"], var.cmek_stage)
-    error_message = "cmek_stage must be off, prepared or active."
-  }
-}
-
 variable "oauth_enabled" {
   description = "MUT-434 (ADR-197): mounts OAUTH_DERIVE_KEY (generated here) into Cloud Run, turning on OAuth for MCP agents (/oauth/*, the OAuth discovery documents, /mcp), and creates the nightly OAuth cleanup job. false (default) = those routes answer 503. Agents still need the per-user agent_access flag (MUT-433)."
   type        = bool
@@ -189,7 +179,7 @@ variable "sentry_state_bucket" {
 }
 
 variable "api_ingress" {
-  description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for the CMEK switch apply (DEPLOYMENT.md §6d) and a whole-database restore (pilot runbook §4.3)."
+  description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for a whole-database restore (pilot runbook §4.3) and the source side of the MUT-487 project move (project-move.sh freeze, DEPLOYMENT.md §6d)."
   type        = string
   default     = "INGRESS_TRAFFIC_ALL"
   validation {
