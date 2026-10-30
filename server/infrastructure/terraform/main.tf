@@ -73,6 +73,10 @@ locals {
     var.min_build_check_disabled ? { MIN_BUILD_CHECK_DISABLED = "true" } : {},
   )
 
+  # MUT-487 (R2): the new project keeps its jobs paused until the cutover; behind the forwarder the old ones would
+  # reach the new service a second time, so they stay paused whatever scheduler_paused says.
+  scheduler_paused = var.scheduler_paused || var.legacy_forwarder
+
   labels = {
     app         = "mutaba3a-api"
     environment = var.environment
@@ -97,6 +101,8 @@ resource "google_project_service" "apis" {
     ],
     # MUT-441: the read queue, and the sidecar's locked network (receipt_ocr.tf).
     local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
+    # MUT-511: the budget (budget.tf) takes its quota from this project.
+    var.billing_account_id == null ? [] : ["billingbudgets.googleapis.com"],
   ))
   project            = var.project_id
   service            = each.key
@@ -107,9 +113,10 @@ resource "google_project_service" "apis" {
 # Artifact Registry (images are built and pushed from the operator's machine)
 # ============================================================================
 
-# MUT-347: tags are never pushed over (deploy.sh) and no image is ever deleted, because a rollback
-# (make rollback-server) deploys a commit's existing image. A cleanup policy added here must keep every tag
-# a release deployed (the short shas the api-v* tags point at).
+# MUT-347: tags are never pushed over (deploy.sh), because a rollback (make rollback-server) deploys a commit's
+# existing image. MUT-511: the cleanup policy deletes only untagged images older than 7 days and always keeps the
+# 3 newest of each image, so every release tag survives. It starts as a dry run (registry_cleanup_dry_run):
+# Basel reads what it would delete (DEPLOYMENT.md §6d) before turning it on.
 resource "google_artifact_registry_repository" "images" {
   project       = var.project_id
   location      = var.region
@@ -117,6 +124,25 @@ resource "google_artifact_registry_repository" "images" {
   format        = "DOCKER"
   description   = "Mutaba3a API service image"
   labels        = local.labels
+
+  cleanup_policy_dry_run = var.registry_cleanup_dry_run
+
+  cleanup_policies {
+    id     = "keep-3-newest"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 3
+    }
+  }
+
+  cleanup_policies {
+    id     = "delete-untagged-after-7-days"
+    action = "DELETE"
+    condition {
+      tag_state  = "UNTAGGED"
+      older_than = "604800s"
+    }
+  }
 
   depends_on = [google_project_service.apis]
 }
@@ -454,274 +480,341 @@ resource "google_cloud_run_v2_service" "api" {
   name     = local.service_name
   location = var.region
   ingress  = var.api_ingress
-  labels   = local.labels
+  # MUT-487 (AM7): mtb3a-live is the live signal project-move.sh reads; Terraform owns it, so a release can't strip it.
+  labels = merge(local.labels, { "mtb3a-live" = tostring(var.live_label) })
 
   template {
-    service_account = google_service_account.api.email
+    # MUT-487 (D6, AM4): the legacy forwarder runs as its own account, which may read only the forwarder token.
+    service_account = var.legacy_forwarder ? one(google_service_account.forwarder[*].email) : google_service_account.api.email
 
     scaling {
       min_instance_count = var.min_instances
       max_instance_count = var.max_instances
     }
 
-    containers {
-      image = local.api_image
+    # The API, unless this is the old project's forwarder (forwarder.tf).
+    dynamic "containers" {
+      for_each = var.legacy_forwarder ? [] : [local.api_image]
+      content {
+        image = containers.value
 
-      # Cloud Run injects PORT=<container_port> itself and rejects a PORT env
-      # entry ("reserved env names were provided: PORT"), so it is not set
-      # below; config.PORT reads the injected value (default 8787 locally).
-      ports {
-        container_port = 8787
-      }
+        # Cloud Run injects PORT=<container_port> itself and rejects a PORT env
+        # entry ("reserved env names were provided: PORT"), so it is not set
+        # below; config.PORT reads the injected value (default 8787 locally).
+        ports {
+          container_port = 8787
+        }
 
-      resources {
-        limits = {
-          cpu    = "1000m"
-          memory = "512Mi"
+        resources {
+          limits = {
+            cpu    = "1000m"
+            memory = "512Mi"
+          }
+          cpu_idle = true
         }
-        cpu_idle = true
-      }
 
-      env {
-        name  = "NODE_ENV"
-        value = "production"
-      }
-      env {
-        name  = "LOG_LEVEL"
-        value = var.log_level
-      }
-      env {
-        name  = "API_KEY_ENVIRONMENT"
-        value = local.key_environment
-      }
-      env {
-        name  = "RATE_LIMIT_PER_MINUTE"
-        value = tostring(var.rate_limit_per_minute)
-      }
-      env {
-        name  = "SERVICE_VERSION"
-        value = var.image_tag
-      }
-      env {
-        name  = "ATTACHMENTS_BUCKET"
-        value = google_storage_bucket.attachments.name
-      }
-      env {
-        name  = "ATTACHMENTS_URL_TTL_SECONDS"
-        value = tostring(var.attachments_url_ttl_seconds)
-      }
-      env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.database_url.secret_id
-            version = "latest"
-          }
+        env {
+          name  = "NODE_ENV"
+          value = "production"
         }
-      }
-      env {
-        name = "MUTABA3A_ADMIN_TOKEN"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.admin_token.secret_id
-            version = "latest"
-          }
+        env {
+          name  = "LOG_LEVEL"
+          value = var.log_level
         }
-      }
-      env {
-        name = "SESSION_TOKEN_PEPPER"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.session_pepper.secret_id
-            version = "latest"
-          }
+        env {
+          name  = "API_KEY_ENVIRONMENT"
+          value = local.key_environment
         }
-      }
-      # MUT-360: always set, so /jobs/* answers the Scheduler job once stripe_enabled creates it.
-      env {
-        name = "MUTABA3A_JOB_TOKEN"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.job_token.secret_id
-            version = "latest"
-          }
+        env {
+          name  = "RATE_LIMIT_PER_MINUTE"
+          value = tostring(var.rate_limit_per_minute)
         }
-      }
-
-      # MUT-434: OAuth for MCP agents stays off (503) until oauth_enabled; the key always holds a version.
-      dynamic "env" {
-        for_each = var.oauth_enabled ? toset(["OAUTH_DERIVE_KEY"]) : toset([])
-        content {
-          name = env.value
+        env {
+          name  = "SERVICE_VERSION"
+          value = var.image_tag
+        }
+        env {
+          name  = "ATTACHMENTS_BUCKET"
+          value = google_storage_bucket.attachments.name
+        }
+        env {
+          name  = "ATTACHMENTS_URL_TTL_SECONDS"
+          value = tostring(var.attachments_url_ttl_seconds)
+        }
+        env {
+          name = "DATABASE_URL"
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.oauth_derive_key.secret_id
+              secret  = google_secret_manager_secret.database_url.secret_id
               version = "latest"
             }
           }
         }
-      }
-
-      # MUT-360: Stripe stays off (routes answer 503) until stripe_enabled. The secrets must hold a version
-      # by then, or the new revision fails to start.
-      dynamic "env" {
-        for_each = var.stripe_enabled ? {
-          STRIPE_SECRET_KEY     = google_secret_manager_secret.stripe_secret_key.secret_id
-          STRIPE_WEBHOOK_SECRET = google_secret_manager_secret.stripe_webhook_secret.secret_id
-        } : {}
-        content {
-          name = env.key
+        env {
+          name = "MUTABA3A_ADMIN_TOKEN"
           value_source {
             secret_key_ref {
-              secret  = env.value
+              secret  = google_secret_manager_secret.admin_token.secret_id
               version = "latest"
             }
           }
         }
-      }
-
-      # MUT-359: mail (email.tf). MAILER always; the sender, reply-to, cap and Resend secrets only with mailer = "resend".
-      dynamic "env" {
-        for_each = local.mail_env
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-      dynamic "env" {
-        for_each = local.mail_secret_env
-        content {
-          name = env.key
+        env {
+          name = "SESSION_TOKEN_PEPPER"
           value_source {
             secret_key_ref {
-              secret  = env.value
+              secret  = google_secret_manager_secret.session_pepper.secret_id
               version = "latest"
             }
           }
         }
-      }
-
-      # MUT-148 (ADR-091): error reports, once sentry_enabled (sentry.tf).
-      dynamic "env" {
-        for_each = var.sentry_enabled ? [google_secret_manager_secret.sentry_dsn[0].secret_id] : []
-        content {
-          name = "SENTRY_DSN"
+        # MUT-360: always set, so /jobs/* answers the Scheduler job once stripe_enabled creates it.
+        env {
+          name = "MUTABA3A_JOB_TOKEN"
           value_source {
             secret_key_ref {
-              secret  = env.value
+              secret  = google_secret_manager_secret.job_token.secret_id
               version = "latest"
             }
           }
         }
-      }
-      dynamic "env" {
-        for_each = var.sentry_enabled ? { SENTRY_ENVIRONMENT = var.environment } : {}
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
 
-      # MUT-361: the lapse gate is on unless billing_gate_enabled = false (the kill switch).
-      dynamic "env" {
-        for_each = var.billing_gate_enabled ? {} : { BILLING_GATE = "false" }
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
-      dynamic "env" {
-        for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      # MUT-441: the server reads receipts (receipt_ocr.tf); SERVER_OCR=false and nothing else until server_ocr_enabled.
-      dynamic "env" {
-        for_each = local.ocr_api_env
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      # MUT-436 (review D3/D5): agents may add to the inbox only once the phone decodes 'mcp' (its minimum build raised).
-      dynamic "env" {
-        for_each = var.mcp_inbox_writes_enabled ? { MCP_INBOX_WRITES = "true" } : {}
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      # MUT-457: the phone floor (MUT-293), set in production.tfvars (DEPLOYMENT.md "Raise the minimum app build").
-      dynamic "env" {
-        for_each = local.min_build_env
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      dynamic "env" {
-        for_each = local.app_association_env
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-
-      # MUT-326: the custom domain's front door (domain.tf); empty while config/hosts.json names no domain.
-      dynamic "env" {
-        for_each = local.front_door_env
-        content {
-          name  = env.key
-          value = env.value
-        }
-      }
-      dynamic "env" {
-        for_each = local.front_door_enabled ? [local.front_door_token_secret] : []
-        content {
-          name = "FRONT_DOOR_TOKEN"
-          value_source {
-            secret_key_ref {
-              secret  = env.value
-              version = "latest"
+        # MUT-434: OAuth for MCP agents stays off (503) until oauth_enabled; the key always holds a version.
+        dynamic "env" {
+          for_each = var.oauth_enabled ? toset(["OAUTH_DERIVE_KEY"]) : toset([])
+          content {
+            name = env.value
+            value_source {
+              secret_key_ref {
+                secret  = google_secret_manager_secret.oauth_derive_key.secret_id
+                version = "latest"
+              }
             }
           }
         }
-      }
 
-      startup_probe {
-        http_get {
-          path = "/health"
+        # MUT-360: Stripe stays off (routes answer 503) until stripe_enabled. The secrets must hold a version
+        # by then, or the new revision fails to start.
+        dynamic "env" {
+          for_each = var.stripe_enabled ? {
+            STRIPE_SECRET_KEY     = google_secret_manager_secret.stripe_secret_key.secret_id
+            STRIPE_WEBHOOK_SECRET = google_secret_manager_secret.stripe_webhook_secret.secret_id
+          } : {}
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
         }
-        initial_delay_seconds = 2
-        period_seconds        = 3
-        failure_threshold     = 10
-      }
 
-      liveness_probe {
-        http_get {
-          path = "/health"
+        # MUT-359: mail (email.tf). MAILER always; the sender, reply-to, cap and Resend secrets only with mailer = "resend".
+        dynamic "env" {
+          for_each = local.mail_env
+          content {
+            name  = env.key
+            value = env.value
+          }
         }
-        period_seconds = 30
-      }
+        dynamic "env" {
+          for_each = local.mail_secret_env
+          content {
+            name = env.key
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
+        }
 
-      volume_mounts {
-        name       = "cloudsql"
-        mount_path = "/cloudsql"
+        # MUT-148 (ADR-091): error reports, once sentry_enabled (sentry.tf).
+        dynamic "env" {
+          for_each = var.sentry_enabled ? [google_secret_manager_secret.sentry_dsn[0].secret_id] : []
+          content {
+            name = "SENTRY_DSN"
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
+        }
+        dynamic "env" {
+          for_each = var.sentry_enabled ? { SENTRY_ENVIRONMENT = var.environment } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-361: the lapse gate is on unless billing_gate_enabled = false (the kill switch).
+        dynamic "env" {
+          for_each = var.billing_gate_enabled ? {} : { BILLING_GATE = "false" }
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
+        dynamic "env" {
+          for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-441: the server reads receipts (receipt_ocr.tf); SERVER_OCR=false and nothing else until server_ocr_enabled.
+        dynamic "env" {
+          for_each = local.ocr_api_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-436 (review D3/D5): agents may add to the inbox only once the phone decodes 'mcp' (its minimum build raised).
+        dynamic "env" {
+          for_each = var.mcp_inbox_writes_enabled ? { MCP_INBOX_WRITES = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-457: the phone floor (MUT-293), set in production.tfvars (DEPLOYMENT.md "Raise the minimum app build").
+        dynamic "env" {
+          for_each = local.min_build_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        dynamic "env" {
+          for_each = local.app_association_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-326: the custom domain's front door (domain.tf); empty while config/hosts.json names no domain.
+        dynamic "env" {
+          for_each = local.front_door_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+        # MUT-487 (R5, D9): the forwarder's token, trusted only for the caller's IP. The new project generates it.
+        dynamic "env" {
+          for_each = var.legacy_stack ? [] : [google_secret_manager_secret.forwarder_token.secret_id]
+          content {
+            name = "FORWARDER_TOKEN"
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
+        }
+        dynamic "env" {
+          for_each = local.front_door_enabled ? [local.front_door_token_secret] : []
+          content {
+            name = "FRONT_DOOR_TOKEN"
+            value_source {
+              secret_key_ref {
+                secret  = env.value
+                version = "latest"
+              }
+            }
+          }
+        }
+
+        startup_probe {
+          http_get {
+            path = "/health"
+          }
+          initial_delay_seconds = 2
+          period_seconds        = 3
+          failure_threshold     = 10
+        }
+
+        liveness_probe {
+          http_get {
+            path = "/health"
+          }
+          period_seconds = 30
+        }
+
+        volume_mounts {
+          name       = "cloudsql"
+          mount_path = "/cloudsql"
+        }
       }
     }
 
-    volumes {
-      name = "cloudsql"
-      cloud_sql_instance {
-        instances = [google_sql_database_instance.postgres.connection_name]
+    # MUT-487 (D6, AM4, R5): the same image's forwarder entrypoint. No database, no secrets but its own token.
+    dynamic "containers" {
+      for_each = var.legacy_forwarder ? [local.api_image] : []
+      content {
+        image   = containers.value
+        command = ["node"]
+        args    = ["dist/forwarder.js"]
+
+        ports {
+          container_port = 8787
+        }
+
+        resources {
+          limits = {
+            cpu    = "1000m"
+            memory = "256Mi"
+          }
+          cpu_idle = true
+        }
+
+        env {
+          name  = "FORWARD_TO"
+          value = coalesce(var.forward_to, "unset")
+        }
+        env {
+          name = "FORWARDER_TOKEN"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.forwarder_token.secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        startup_probe {
+          http_get {
+            path = local.forwarder_health_path
+          }
+          initial_delay_seconds = 1
+          period_seconds        = 3
+          failure_threshold     = 10
+        }
+      }
+    }
+
+    dynamic "volumes" {
+      for_each = var.legacy_forwarder ? [] : [google_sql_database_instance.postgres.connection_name]
+      content {
+        name = "cloudsql"
+        cloud_sql_instance {
+          instances = [volumes.value]
+        }
       }
     }
   }
@@ -768,6 +861,12 @@ resource "google_cloud_run_v2_service" "api" {
       ] : p.recommended == null || try(p.min != null && p.recommended >= p.min, false)])
       error_message = "ios_recommended_build / android_recommended_build each need that platform's min build, and must be at least it: without a floor the server ignores them (MUT-457, DEPLOYMENT.md \"Raise the minimum app build\")."
     }
+
+    precondition {
+      # MUT-487 (D6): the forwarder exists only on the old project's stack, and needs the new service's https URL.
+      condition     = !var.legacy_forwarder || (var.legacy_stack && can(regex("^https://[^/]+$", coalesce(var.forward_to, "-"))))
+      error_message = "legacy_forwarder needs legacy_stack = true (legacy.tfvars) and forward_to = the new service's https://… origin, no path (MUT-487, DEPLOYMENT.md §6d)."
+    }
   }
 
   depends_on = [
@@ -789,17 +888,29 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_iam_member.api_reads_resend_api_key,
     google_secret_manager_secret_iam_member.api_reads_resend_webhook_secret,
     google_secret_manager_secret_iam_member.api_reads_turnstile,
+    google_secret_manager_secret_version.forwarder_token,
+    google_secret_manager_secret_iam_member.api_reads_forwarder_token,
+    google_secret_manager_secret_iam_member.forwarder_reads_token,
   ]
 }
 
 # Unauthenticated at the edge: every request is authenticated by the service
 # itself (organization API key or operator admin token), never by Cloud Run IAM.
+# MUT-487 (R3, D4): api_public = false while the new project is rehearsed: then only a caller with run.invoker
+# (Basel, through `gcloud run services proxy`) reaches it. The cutover's open step sets it true.
 resource "google_cloud_run_v2_service_iam_member" "public" {
+  count = var.api_public ? 1 : 0
+
   project  = var.project_id
   name     = google_cloud_run_v2_service.api.name
   location = var.region
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+moved {
+  from = google_cloud_run_v2_service_iam_member.public
+  to   = google_cloud_run_v2_service_iam_member.public[0]
 }
 
 # Uptime checks and alerts: monitoring.tf (MUT-328).
@@ -823,6 +934,8 @@ resource "google_cloud_scheduler_job" "stripe_reconcile" {
   schedule         = "30 3 * * *"
   time_zone        = "Asia/Jerusalem"
   attempt_deadline = "280s"
+  # MUT-487 (R2, D3): paused in the new project until the cutover, and on the old one once it forwards.
+  paused = local.scheduler_paused
 
   retry_config {
     retry_count = 3
@@ -855,6 +968,8 @@ resource "google_cloud_scheduler_job" "trial_mail" {
   schedule         = "0 10 * * *"
   time_zone        = "Asia/Jerusalem"
   attempt_deadline = "280s"
+  # MUT-487 (R2, D3): paused in the new project until the cutover, and on the old one once it forwards.
+  paused = local.scheduler_paused
 
   retry_config {
     retry_count = 3
@@ -885,6 +1000,8 @@ resource "google_cloud_scheduler_job" "account_purge" {
   schedule         = "15 * * * *"
   time_zone        = "Asia/Jerusalem"
   attempt_deadline = "280s"
+  # MUT-487 (R2, D3): paused in the new project until the cutover, and on the old one once it forwards.
+  paused = local.scheduler_paused
 
   retry_config {
     retry_count = 2
@@ -913,6 +1030,8 @@ resource "google_cloud_scheduler_job" "oauth_cleanup" {
   schedule         = "40 3 * * *"
   time_zone        = "Asia/Jerusalem"
   attempt_deadline = "120s"
+  # MUT-487 (R2, D3): see stripe_reconcile.
+  paused = local.scheduler_paused
 
   retry_config {
     retry_count = 2

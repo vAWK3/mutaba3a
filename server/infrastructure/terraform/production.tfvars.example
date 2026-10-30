@@ -1,16 +1,34 @@
 # Copy to production.tfvars (git-ignored). image_tag is passed by scripts/deploy.sh.
-project_id          = "your-gcp-project"
+# MUT-487 (ADR-230): production runs in mtb3a-production (config/gcp.json). The old project, malafat-production,
+# has its own legacy.tfvars (legacy.tfvars.example), used only with LEGACY_STACK=1.
+project_id          = "mtb3a-production"
 region              = "me-west1"
 environment         = "production"
-db_tier             = "db-g1-small"
-db_availability     = "REGIONAL"
+# MUT-511 (ADR-231): one zone, the smallest tier, until MUT-512's triggers (the CPU and memory alerts).
+db_tier             = "db-f1-micro"
+db_availability     = "ZONAL"
 db_backup_enabled   = true
 deletion_protection = true
-min_instances       = 1
-# MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (see the precondition on the DATABASE_URL secret in main.tf).
-# db_pool_size        = 10
-# db_max_connections  = 50
+# Basel, 2026-10-30 (ADR-231): the uptime checks keep an instance warm; max stays 1 (TD-017).
+min_instances       = 0
+# MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (see the precondition on the DATABASE_URL
+# secret in main.tf): 2 x 5 x 1 + 10 = 20 <= 25, db-f1-micro's default.
+db_pool_size        = 5
+db_max_connections  = 25
 log_level           = "info"
+# MUT-511: the monthly budget (budget.tf), alerting at 50/90/100%. The amount is in the billing account's currency.
+# billing_account_id  = "XXXXXX-XXXXXX-XXXXXX"
+# budget_amount       = 100
+# budget_currency     = "ILS"
+# MUT-511: the registry cleanup runs as a dry run until you have read what it would delete (DEPLOYMENT.md §6d).
+# registry_cleanup_dry_run = false
+# MUT-487 (R2, R3, AM7): while the new project is rehearsed, before the cutover's open step. project-move.sh open
+# applies the opposite; then set all three to their defaults here (delete the lines).
+scheduler_paused    = true
+api_public          = false
+live_label          = false
+# Sentry's state bucket, set explicitly (AM15): the default follows project_id.
+# sentry_state_bucket = "malafat-production-terraform-state"
 # MUT-360: Stripe webhook and nightly reconcile. Set true only after both Stripe secrets hold a version (server/DEPLOYMENT.md §6e).
 # stripe_enabled      = false
 # MUT-148: error reports to Sentry. Set true only after server/DEPLOYMENT.md §1.5 has applied the Sentry stack.
