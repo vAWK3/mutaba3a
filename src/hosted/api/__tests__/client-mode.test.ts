@@ -108,17 +108,67 @@ describe('request() by mode', () => {
   // setup's pinned `remote`: with localStorage cleared, these calls really have no hint.
   describe('no hint', () => {
 
-    it('a 401 from the probe means nobody is signed in: local, and remembered', async () => {
+    // MUT-513 (ADR-230): a 401 means nobody is signed in, but this browser hasn't chosen yet. Nothing is saved, the
+    // local chunk isn't loaded (no IndexedDB before a choice), and every later call is answered 401 without a request.
+    it('a 401 from the probe leaves the browser undecided: nothing saved, nothing local, no second request', async () => {
+      const { api, ApiError } = await freshClient();
+      const { currentMode } = await import('../../session/mode');
+      fetchSpy.mockResolvedValue(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
+
+      await expect(api.me()).rejects.toMatchObject({ status: 401, code: 'UNAUTHENTICATED' });
+      await expect(api.customers('p')).rejects.toBeInstanceOf(ApiError);
+
+      expect(currentMode()).toBe('undecided');
+      expect(localStorage.getItem(MODE_KEY)).toBeNull();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(boot).not.toHaveBeenCalled();
+    });
+
+    it('every call waiting on the same probe gets the 401 too, never the local backend', async () => {
+      const { api } = await freshClient();
+      fetchSpy.mockResolvedValue(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
+
+      const results = await Promise.allSettled([api.me(), api.customers('p')]);
+
+      expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected']);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(boot).not.toHaveBeenCalled();
+    });
+
+    it('undecided: a 401 is not an ended session, so the session layer is never told', async () => {
+      const { api, setUnauthorisedHandler } = await freshClient();
+      const onUnauthorised = vi.fn();
+      setUnauthorisedHandler(onUnauthorised);
+      fetchSpy.mockResolvedValue(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
+
+      await expect(api.me()).rejects.toMatchObject({ status: 401 });
+      await expect(api.me()).rejects.toMatchObject({ status: 401 });
+
+      expect(onUnauthorised).not.toHaveBeenCalled();
+    });
+
+    it('undecided: sign-in, signup and the doors still go to the server', async () => {
+      const { api } = await freshClient();
+      fetchSpy.mockResolvedValueOnce(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
+      await expect(api.me()).rejects.toMatchObject({ status: 401 });
+      fetchSpy.mockResolvedValue(json(201, ME));
+
+      await api.signIn({ email: 'a@b.ps', password: 'secret-password' });
+
+      expect(fetchSpy).toHaveBeenLastCalledWith('/v1/sessions', expect.anything());
+    });
+
+    it('undecided, then Try: the chosen mode wins and the local backend answers', async () => {
       const { api } = await freshClient();
       fetchSpy.mockResolvedValue(json(401, { error: { code: 'UNAUTHENTICATED', message: 'x' } }));
       localFetch.mockImplementation(() => Promise.resolve(json(200, ME)));
+      await expect(api.me()).rejects.toMatchObject({ status: 401 });
 
-      await api.me();
-      await api.me();
+      const mode = await import('../../session/mode');
+      mode.setMode('local');
 
+      await expect(api.me()).resolves.toEqual(ME);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(localFetch).toHaveBeenCalledTimes(2);
-      expect(localStorage.getItem(MODE_KEY)).toBe('local');
     });
 
     it('a 200 from the probe means a live session from before local mode: remote, and remembered', async () => {

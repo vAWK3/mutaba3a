@@ -43,8 +43,14 @@ let unsubscribe: (() => void) | null = null;
 
 const loadChunk = SENTRY_ENABLED ? () => import('./portalSentry') : null;
 
+/** Nothing signed-out is ever reported (ADR-097 §10): this device's records, or nobody signed in and no choice yet (MUT-513). */
+function signedOut(): boolean {
+  const mode = currentMode();
+  return mode === 'local' || mode === 'undecided';
+}
+
 function hold(entry: Held) {
-  if (currentMode() === 'local' || held.length >= EARLY_QUEUE_LIMIT) return;
+  if (signedOut() || held.length >= EARLY_QUEUE_LIMIT) return;
   held.push(entry);
 }
 
@@ -91,8 +97,7 @@ function load(current: ErrorReportingOptions) {
 function sync() {
   const current = options;
   if (!current) return;
-  const mode = currentMode();
-  if (mode === 'local') {
+  if (signedOut()) {
     held = [];
     user = null;
     failed = false;
@@ -100,7 +105,7 @@ function sync() {
     reporter = null;
     return;
   }
-  if (mode === 'remote' && !reporter && !loading && !failed) load(current);
+  if (currentMode() === 'remote' && !reporter && !loading && !failed) load(current);
 }
 
 /** Called once by `main.tsx`, before React renders. */
