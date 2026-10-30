@@ -152,6 +152,71 @@ describe('guard_project_release (MUT-487)', { timeout: 30_000 }, () => {
   });
 });
 
+/**
+ * MUT-523 (ADR-232 amendment): the two projects live in different regions, mtb3a-production in europe-west1 and
+ * malafat-production in me-west1 until MUT-520/MUT-521 empty it. config/gcp.json names each project's region; a
+ * release whose GCP_REGION or tfvars `region` disagrees with it is refused before anything is built or applied.
+ */
+const REGIONS = { project: 'mtb3a-production', region: 'europe-west1', legacyProject: 'malafat-production', legacyRegion: 'me-west1' };
+function regionGuard(project: string, region: string, tfvars: string | null, production: Record<string, string> = REGIONS) {
+  const file = join(dir, 'gcp.json');
+  writeFileSync(file, JSON.stringify({ production }));
+  const vars = join(dir, 'stack.tfvars');
+  if (tfvars !== null) writeFileSync(vars, tfvars);
+  else rmSync(vars, { force: true });
+  const cmd = `die() { echo "$*" >&2; exit 1; }; warn() { echo "$*" >&2; }; source "${LIB}" && guard_region_release "${project}" "${region}" "${vars}" && echo PASSED`;
+  const e: NodeJS.ProcessEnv = { ...process.env, GCP_CONFIG: file, ENVIRONMENT: undefined };
+  delete e.ENVIRONMENT;
+  const r = spawnSync('bash', ['-euo', 'pipefail', '-c', cmd], { cwd: dir, encoding: 'utf-8', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr };
+}
+
+describe('guard_region_release (MUT-523)', { timeout: 30_000 }, () => {
+  it('lets the new project through in europe-west1 and the old one in me-west1', () => {
+    expect(regionGuard('mtb3a-production', 'europe-west1', 'project_id = "mtb3a-production"\nregion     = "europe-west1"\n').out).toContain('PASSED');
+    expect(regionGuard('malafat-production', 'me-west1', 'project_id = "malafat-production"\nregion = "me-west1"\n').out).toContain('PASSED');
+  });
+
+  it('refuses a GCP_REGION that isn\'t the project\'s region in config/gcp.json, either way round', () => {
+    const toNew = regionGuard('mtb3a-production', 'me-west1', 'region = "me-west1"\n');
+    expect(toNew.status).not.toBe(0);
+    expect(toNew.err).toMatch(/GCP_REGION=me-west1 but config\/gcp.json puts mtb3a-production in europe-west1/);
+    const toOld = regionGuard('malafat-production', 'europe-west1', 'region = "europe-west1"\n');
+    expect(toOld.status).not.toBe(0);
+    expect(toOld.err).toMatch(/config\/gcp.json puts malafat-production in me-west1/);
+  });
+
+  it('refuses tfvars whose region disagrees, or that set none (Terraform has no default region any more)', () => {
+    const wrong = regionGuard('mtb3a-production', 'europe-west1', 'region = "me-west1"\n');
+    expect(wrong.status).not.toBe(0);
+    expect(wrong.err).toMatch(/stack.tfvars sets region = "me-west1", but config\/gcp.json puts mtb3a-production in europe-west1/);
+    const none = regionGuard('malafat-production', 'me-west1', 'project_id = "malafat-production"\n');
+    expect(none.status).not.toBe(0);
+    expect(none.err).toMatch(/stack.tfvars sets no region: add region = "me-west1"/);
+    expect(regionGuard('mtb3a-production', 'europe-west1', null).err).toMatch(/missing .*stack.tfvars/);
+  });
+
+  it('refuses rather than guess when config/gcp.json names no region for the project', () => {
+    const r = regionGuard('malafat-production', 'me-west1', 'region = "me-west1"\n', { project: 'mtb3a-production', legacyProject: 'malafat-production' });
+    expect(r.status).not.toBe(0);
+    expect(r.err).toMatch(/config\/gcp.json names no region for malafat-production/);
+  });
+
+  it('the repo\'s config/gcp.json puts mtb3a-production in europe-west1 and malafat-production in me-west1 (Basel, 2026-10-30)', () => {
+    const config = JSON.parse(readFileSync(resolve(process.cwd(), '../config/gcp.json'), 'utf-8'));
+    expect(config.production).toMatchObject(REGIONS);
+  });
+
+  it('deploy.sh checks the region right after the project, before a rollback or any terraform', () => {
+    const src = readFileSync(DEPLOY, 'utf-8');
+    const regionAt = src.search(/^guard_region_release "\$\{GCP_PROJECT_ID\}" "\$\{GCP_REGION\}" "\$\{TF_DIR\}\/\$\{TFVARS_FILE\}"$/m);
+    expect(regionAt).toBeGreaterThan(src.search(/^guard_project_release "\$\{GCP_PROJECT_ID\}"$/m));
+    expect(regionAt).toBeLessThan(src.indexOf('if [[ -n "${ROLLBACK_TO}" ]]; then'));
+    expect(regionAt).toBeLessThan(src.indexOf('terraform init -reconfigure'));
+    expect(src).not.toMatch(/GCP_REGION:-me-west1/);
+  });
+});
+
 describe('deploy.sh calls the guard before every step that can move or reopen anything', () => {
   it('guards before the bootstrap apply, before the migration and before the full apply', () => {
     const src = readFileSync(DEPLOY, 'utf-8');
@@ -175,7 +240,7 @@ describe('deploy.sh calls the guard before every step that can move or reopen an
     expect(projectAt).toBeGreaterThan(-1);
     expect(projectAt).toBeLessThan(src.indexOf('if [[ -n "${ROLLBACK_TO}" ]]; then'));
     expect(projectAt).toBeLessThan(src.indexOf('terraform init -reconfigure'));
-    expect(src).toMatch(/info "stack: project=\$\{GCP_PROJECT_ID\} bucket=\$\{TF_STATE_BUCKET\} LEGACY_STACK=/);
+    expect(src).toMatch(/info "stack: project=\$\{GCP_PROJECT_ID\} region=\$\{GCP_REGION\} bucket=\$\{TF_STATE_BUCKET\} LEGACY_STACK=/);
     expect(src).toContain('export TF_DATA_DIR="${TF_DATA_DIR:-${TF_DIR}/.terraform-${GCP_PROJECT_ID}}"');
     const wrapper = /guard_release\(\)\s*\{[\s\S]*?\n\}/.exec(src)?.[0] ?? '';
     expect(wrapper).toMatch(/guard_project_release/);

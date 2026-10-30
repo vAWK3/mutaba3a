@@ -7,6 +7,10 @@
 # The old project (the legacy forwarder, a rollback of the move, the teardown) needs LEGACY_STACK=1, which also
 # reads legacy.tfvars instead of production.tfvars. Each project keeps its own terraform dir state
 # (TF_DATA_DIR=.terraform-<project>), so switching between the two never re-inits one onto the other's bucket.
+# MUT-523: the two projects are in different regions; GCP_REGION comes from config/gcp.json for GCP_PROJECT_ID
+# (europe-west1 for mtb3a-production, me-west1 for malafat-production), and guard_region_release refuses a
+# GCP_REGION or a tfvars `region` that disagrees. GCP_ACCOUNT and GCP_ADC_FILE (deploy.env) make this run act as
+# that account, for this process only (lib/gcp-identity.sh).
 #
 # Everything that can run on this machine does (ADR-026), the same way
 # Malafat's `pnpm release` works:
@@ -43,13 +47,12 @@ set -euo pipefail
 ENVIRONMENT="${ENVIRONMENT:-production}"   # staging is not used for now; see DEPLOYMENT.md
 : "${GCP_PROJECT_ID:?set GCP_PROJECT_ID}"
 : "${TF_STATE_BUCKET:?set TF_STATE_BUCKET (GCS bucket holding terraform state)}"
-GCP_REGION="${GCP_REGION:-me-west1}"
 ARTIFACT_REPO="${ARTIFACT_REPO:-mutaba3a}"
 AUTO_APPROVE="${AUTO_APPROVE:-0}"
 PROXY_PORT="${PROXY_PORT:-5440}"
 SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "${SERVER_DIR}/.." && pwd)"
-TF_DIR="${SERVER_DIR}/infrastructure/terraform"
+TF_DIR="${DEPLOY_TF_DIR:-${SERVER_DIR}/infrastructure/terraform}"   # DEPLOY_TF_DIR: tests only
 # MUT-487 (ADR-232): until the cutover (config/gcp.json `"cutover": "pending"`) a release acts on the old project on
 # its own, as LEGACY_STACK=1; an explicit LEGACY_STACK=0 or 1 wins.
 # shellcheck source=lib/legacy-stack.sh
@@ -58,6 +61,8 @@ GCP_CONFIG_FILE="${GCP_CONFIG:-${REPO_ROOT}/config/gcp.json}"   # GCP_CONFIG ove
 LEGACY_STACK="${LEGACY_STACK:-$(default_legacy_stack "${GCP_CONFIG_FILE}" "${ENVIRONMENT}")}"
 TFVARS_FILE="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}"
 [[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "${ENVIRONMENT}.tfvars" ]] && TFVARS_FILE="legacy.tfvars"
+# MUT-523: each project's own region (config/gcp.json); an explicit GCP_REGION must agree (guard_region_release).
+GCP_REGION="${GCP_REGION:-$(gcp_region_of "${GCP_CONFIG_FILE}" "${ENVIRONMENT}" "${GCP_PROJECT_ID}")}"
 # MUT-487 (AM8): one terraform data dir per project, so the old and the new stack never share an init.
 export TF_DATA_DIR="${TF_DATA_DIR:-${TF_DIR}/.terraform-${GCP_PROJECT_ID}}"
 SHORT_SHA="${IMAGE_TAG:-$(git -C "${SERVER_DIR}" rev-parse --short HEAD)}"
@@ -74,6 +79,10 @@ warn() { printf '\033[0;33m[deploy] %s\033[0m\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing tool: $1 ($2)"; }
 cleanup() { if [[ -n "${PROXY_PID}" ]]; then kill "${PROXY_PID}" 2>/dev/null || true; fi; }
 trap cleanup EXIT
+# MUT-523: deploy.env's GCP_ACCOUNT / GCP_ADC_FILE, for this run only.
+# shellcheck source=lib/gcp-identity.sh
+source "${SERVER_DIR}/scripts/lib/gcp-identity.sh"
+use_gcp_identity
 # shellcheck source=lib/tf-bootstrap.sh
 source "${SERVER_DIR}/scripts/lib/tf-bootstrap.sh"
 # shellcheck source=lib/release-guard.sh
@@ -87,6 +96,7 @@ source "${SERVER_DIR}/scripts/lib/rollback.sh"
 # MUT-487 / MUT-360 / MUT-148 / MUT-359 / MUT-471: the release guards with this release's own terraform arguments; run inside TF_DIR.
 guard_release() {
   guard_project_release "${GCP_PROJECT_ID}"
+  guard_region_release "${GCP_PROJECT_ID}" "${GCP_REGION}" "${TF_DIR}/${TFVARS_FILE}"
   (cd "${TF_DIR}" && guard_ingress_release "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_stripe_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
     && guard_sentry_release "${SUFFIX}" "${SERVICE_NAME}" "${GCP_REGION}" "${GCP_PROJECT_ID}" "${TF_ARGS[@]}" \
@@ -147,7 +157,10 @@ guard_project_release "${GCP_PROJECT_ID}"
 if [[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "legacy.tfvars" ]]; then
   ensure_legacy_tfvars "${TF_DIR}" "${ENVIRONMENT}" "${GCP_CONFIG_FILE}"
 fi
-info "stack: project=${GCP_PROJECT_ID} bucket=${TF_STATE_BUCKET} LEGACY_STACK=${LEGACY_STACK} tfvars=${TFVARS_FILE} TF_DATA_DIR=${TF_DATA_DIR}"
+# MUT-523: that project's region, in GCP_REGION and in the tfvars, before a rollback or any terraform.
+guard_region_release "${GCP_PROJECT_ID}" "${GCP_REGION}" "${TF_DIR}/${TFVARS_FILE}"
+info "stack: project=${GCP_PROJECT_ID} region=${GCP_REGION} bucket=${TF_STATE_BUCKET} LEGACY_STACK=${LEGACY_STACK} tfvars=${TFVARS_FILE} TF_DATA_DIR=${TF_DATA_DIR}"
+info "identity: $(gcp_identity_summary)"
 
 # MUT-347: a rollback builds nothing and migrates nothing; lib/rollback.sh runs it end to end.
 if [[ -n "${ROLLBACK_TO}" ]]; then

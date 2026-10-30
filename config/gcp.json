@@ -1,8 +1,10 @@
 {
-  "$comment": "MUT-487 (ADR-232): the GCP project each environment's API stack runs in. server/scripts/deploy.sh (guard_project_release in server/scripts/lib/release-guard.sh) and scripts/preflight.sh refuse a release to any other project. `legacyProject` is the project MTB3A moved out of: only the legacy forwarder, a rollback of the move and the teardown (MUT-520, MUT-521) act on it, with LEGACY_STACK=1 and legacy.tfvars (server/DEPLOYMENT.md §6d). `cutover` is \"pending\" until the move's C3 step sets it to \"done\": while pending, make, deploy.sh and preflight act on `legacyProject` as if LEGACY_STACK=1 were set (server/scripts/lib/legacy-stack.sh). Drop `legacyProject` once MUT-520 and MUT-521 have emptied it.",
+  "$comment": "MUT-487 (ADR-232): the GCP project each environment's API stack runs in. server/scripts/deploy.sh (guard_project_release in server/scripts/lib/release-guard.sh) and scripts/preflight.sh refuse a release to any other project. `legacyProject` is the project MTB3A moved out of: only the legacy forwarder, a rollback of the move and the teardown (MUT-520, MUT-521) act on it, with LEGACY_STACK=1 and legacy.tfvars (server/DEPLOYMENT.md §6d). `cutover` is \"pending\" until the move's C3 step sets it to \"done\": while pending, make, deploy.sh and preflight act on `legacyProject` as if LEGACY_STACK=1 were set (server/scripts/lib/legacy-stack.sh). MUT-523: `region` is `project`'s region and `legacyRegion` is `legacyProject`'s; the Makefile, deploy.sh, preflight and project-move.sh take each project's region from here (gcp_region_of), and guard_region_release refuses a GCP_REGION or a tfvars `region` that disagrees. Drop `legacyProject` and `legacyRegion` once MUT-520 and MUT-521 have emptied it.",
   "production": {
     "project": "mtb3a-production",
+    "region": "europe-west1",
     "legacyProject": "malafat-production",
+    "legacyRegion": "me-west1",
     "cutover": "pending"
   }
 }

@@ -22,10 +22,15 @@ mock_provider "google" {
     }
   }
 }
+# MUT-523: the budget's own provider (user_project_override, billing_project), so the plan needs no ADC quota project.
+mock_provider "google" {
+  alias = "billing"
+}
 mock_provider "random" {}
 
 variables {
   project_id = "test-project"
+  region     = "europe-west1"
   image_tag  = "test"
 }
 
@@ -292,26 +297,104 @@ run "no_budget_without_a_billing_account" {
   }
 }
 
-run "a_100_ils_budget_alerting_at_50_90_and_100_percent" {
+# MUT-523 (ADR-232 amendment): Barmajiyat Ltd's own billing account bills in GBP. The amount and its currency both come
+# from tfvars (production.tfvars.example: £25), never from the code.
+run "a_25_gbp_budget_alerting_at_50_90_and_100_percent" {
   command = plan
 
   variables {
-    billing_account_id = "000000-AAAAAA-BBBBBB"
+    billing_account_id = "01E433-999491-75ECBD"
+    budget_amount      = 25
+    budget_currency    = "GBP"
     alert_email        = "ops@example.com"
   }
 
   assert {
     condition = (
-      google_billing_budget.project[0].amount[0].specified_amount[0].currency_code == "ILS"
-      && google_billing_budget.project[0].amount[0].specified_amount[0].units == "100"
+      google_billing_budget.project[0].billing_account == "01E433-999491-75ECBD"
+      && google_billing_budget.project[0].amount[0].specified_amount[0].currency_code == "GBP"
+      && google_billing_budget.project[0].amount[0].specified_amount[0].units == "25"
       && [for r in google_billing_budget.project[0].threshold_rules : r.threshold_percent] == [0.5, 0.9, 1.0]
       && google_billing_budget.project[0].budget_filter[0].projects == toset(["projects/123456789012"])
     )
-    error_message = "₪100 a month on this project, alerting at 50%, 90% and 100%."
+    error_message = "£25 a month on this project, alerting at 50%, 90% and 100%."
   }
 
   assert {
     condition     = contains(keys(google_project_service.apis), "billingbudgets.googleapis.com")
     error_message = "The budget API is enabled with the budget."
+  }
+}
+
+run "the_budget_currency_is_whatever_the_variable_says" {
+  command = plan
+
+  variables {
+    billing_account_id = "01E433-999491-75ECBD"
+    budget_amount      = 30
+    budget_currency    = "EUR"
+  }
+
+  assert {
+    condition = (
+      google_billing_budget.project[0].amount[0].specified_amount[0].currency_code == "EUR"
+      && google_billing_budget.project[0].amount[0].specified_amount[0].units == "30"
+    )
+    error_message = "The currency and amount follow the variables; nothing in budget.tf names one."
+  }
+}
+
+run "a_budget_needs_its_amount_and_currency_set" {
+  command = plan
+
+  variables {
+    billing_account_id = "01E433-999491-75ECBD"
+    budget_amount      = 25
+  }
+
+  expect_failures = [google_billing_budget.project]
+}
+
+# --- MUT-523: every location follows var.region ------------------------------------------------------------
+
+run "the_new_stack_lands_in_europe_west1" {
+  command = plan
+
+  variables {
+    stripe_enabled = true
+  }
+
+  assert {
+    condition = (
+      google_sql_database_instance.postgres.region == "europe-west1"
+      && google_sql_database_instance.postgres.settings[0].backup_configuration[0].location == "europe-west1"
+      && google_cloud_run_v2_service.api.location == "europe-west1"
+      && google_artifact_registry_repository.images.location == "europe-west1"
+      && upper(google_storage_bucket.attachments.location) == "EUROPE-WEST1"
+      && google_cloud_scheduler_job.account_purge.region == "europe-west1"
+      && google_cloud_scheduler_job.stripe_reconcile[0].region == "europe-west1"
+      && one(google_secret_manager_secret.database_url.replication[0].user_managed[0].replicas[*].location) == "europe-west1"
+    )
+    error_message = "The database, its backups, the service, the registry, the bucket, the jobs and the secrets all follow var.region."
+  }
+}
+
+run "the_old_stack_stays_in_me_west1" {
+  command = plan
+
+  variables {
+    region       = "me-west1"
+    legacy_stack = true
+  }
+
+  assert {
+    condition = (
+      google_sql_database_instance.postgres.region == "me-west1"
+      && google_cloud_run_v2_service.api.location == "me-west1"
+      && google_artifact_registry_repository.images.location == "me-west1"
+      && google_cloud_scheduler_job.account_purge.region == "me-west1"
+      && one(google_secret_manager_secret.database_url.replication[0].user_managed[0].replicas[*].location) == "me-west1"
+    )
+    error_message = "legacy.tfvars' region = \"me-west1\" keeps the old stack where it is."
   }
 }

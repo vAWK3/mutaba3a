@@ -15,6 +15,7 @@ mock_provider "random" {}
 
 variables {
   project_id = "test-project"
+  region     = "europe-west1"
   image_tag  = "test"
 }
 
@@ -31,11 +32,12 @@ run "pool_size_reaches_the_database_url_and_max_connections_is_explicit" {
     error_message = "Cloud SQL max_connections must be set explicitly from db_max_connections."
   }
 
-  # MUT-382 (B4): the privacy policy says backups stay in Tel Aviv; Cloud SQL picks a multi-region without this.
-  # Moved here from tests/cmek.tftest.hcl when MUT-487 removed CMEK.
+  # MUT-382 (B4): the privacy policy names the region the backups stay in; Cloud SQL picks a multi-region without this.
+  # Moved here from tests/cmek.tftest.hcl when MUT-487 removed CMEK. MUT-523: the region is the stack's own
+  # (europe-west1 for mtb3a-production, me-west1 for the old stack), never a fixed one.
   assert {
-    condition     = google_sql_database_instance.postgres.settings[0].backup_configuration[0].location == var.region && var.region == "me-west1"
-    error_message = "The instance keeps its backups in the service's region (me-west1), as the privacy policy promises."
+    condition     = google_sql_database_instance.postgres.settings[0].backup_configuration[0].location == var.region && var.region == "europe-west1"
+    error_message = "The instance keeps its backups in the service's own region, as the privacy policy promises."
   }
 }
 

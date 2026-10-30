@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import raw from '../../config/hosts.json';
 import noDomain from '../../config/fixtures/hosts.no-domain.json';
 import placeholder from '../../config/fixtures/hosts.placeholder.json';
+import crossRegion from '../../config/fixtures/hosts.cross-region.json';
 import { HOSTS, parseHostsConfig, resolveHosts } from '../../config/hosts';
 
 const LEGACY = { landing: 'https://landing.netlify.example', portal: 'https://portal-abc-zf.run.example' };
@@ -30,6 +31,20 @@ describe('config/hosts (MUT-326)', () => {
       expect(hosts.legacy).toEqual({ landingOrigin: LEGACY.landing, portalOrigin: LEGACY.portal });
       expect(hosts.allOrigins).toContain(LEGACY.portal);
       expect(hosts.allOrigins).not.toContain('https://portal-new-zf.run.example');
+    });
+
+    // MUT-523: the new service is in europe-west1, so its run.app host carries another region code than the old one
+    // (-ew, not -zf), or the region itself in the deterministic <service>-<project number>.<region>.run.app form.
+    it('accepts run.app hosts in any region, old and new apart', () => {
+      expect(() => parseHostsConfig(crossRegion)).not.toThrow();
+      const legacy = parseHostsConfig(crossRegion).production?.legacy;
+      expect(legacy?.portal).toMatch(/-zf\.a\.run\.app$/);
+      expect(legacy?.portalUpstream).toMatch(/-ew\.a\.run\.app$/);
+      for (const portalUpstream of ['https://api-k7xq2mz4pa-ew.a.run.app', 'https://api-123456789012.europe-west1.run.app', 'https://api-123456789012.me-west1.run.app']) {
+        expect(parseHostsConfig(config({ legacy: { ...LEGACY, portalUpstream } })).production?.legacy.portalUpstream).toBe(portalUpstream);
+      }
+      // Only the Terraform front door reads portalUpstream (frontdoor.tftest.hcl, the same fixture); the old host stays allowed.
+      expect(resolveHosts(parseHostsConfig(crossRegion)).allOrigins).toContain('https://api-t5bzsudmja-zf.a.run.app');
     });
 
     it('ignores $-prefixed keys such as $comment', () => {

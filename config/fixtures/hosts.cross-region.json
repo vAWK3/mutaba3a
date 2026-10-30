@@ -1,0 +1,13 @@
+{
+  "$comment": "MUT-523: run.app hosts carry their region's code, and the move puts the new service in another region (me-west1 '-zf' to europe-west1 '-ew'). The Terraform frontdoor test and scripts/__tests__/hosts.test.ts read this fixture. Not named mutaba3a-…, so no-hardcoded-hosts doesn't treat it as one of ours.",
+  "production": {
+    "domain": "placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": {
+      "landing": "https://landing.example.test",
+      "portal": "https://api-t5bzsudmja-zf.a.run.app",
+      "portalUpstream": "https://api-k7xq2mz4pa-ew.a.run.app"
+    }
+  }
+}

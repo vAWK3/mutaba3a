@@ -27,9 +27,13 @@
 #   scripts/project-move.sh forward       --from <old> --to <new>
 #       The old project's apply as the legacy forwarder to the new service (D7: this is what brings users back).
 #
-# Options: --yes (no prompts), --dry-run (print every command, call nothing).
+# Options: --yes (no prompts), --dry-run (print every command, call nothing), --from-region / --to-region (MUT-523:
+# optional, they may only restate config/gcp.json).
 # Projects and their files come from config/gcp.json: its `project` uses production.tfvars, its `legacyProject`
-# legacy.tfvars. State buckets default to <project>-terraform-state; FROM_STATE_BUCKET / TO_STATE_BUCKET override.
+# legacy.tfvars. MUT-523: so do their regions (`region`, `legacyRegion`): mtb3a-production is in europe-west1 and
+# malafat-production in me-west1, and every gcloud call, registry and connection name uses its own project's region.
+# Each stack's tfvars must set the same `region`. GCP_ACCOUNT / GCP_ADC_FILE (deploy.env) set who this run acts as,
+# for this process only (lib/gcp-identity.sh). State buckets default to <project>-terraform-state; FROM_STATE_BUCKET / TO_STATE_BUCKET override.
 # Secret values never reach argv or the terminal: they go through pipes and files in a private work dir.
 #
 # Bash 3.2 compatible (macOS /bin/bash): no associative arrays, no mapfile.
@@ -38,7 +42,6 @@ set -euo pipefail
 SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${MOVE_TF_DIR:-${SERVER_DIR}/infrastructure/terraform}"
 GCP_CONFIG="${GCP_CONFIG:-${SERVER_DIR}/../config/gcp.json}"
-REGION="${GCP_REGION:-me-west1}"
 SERVICE="mutaba3a-api"
 INSTANCE="mutaba3a-pg"
 DB_USER="mutaba3a_api"
@@ -63,6 +66,8 @@ ROLLBACK=0
 ROTATE=0
 IMAGE_COUNT=3
 IMAGE_TAGS=""
+FROM_REGION_FLAG=""
+TO_REGION_FLAG=""
 
 info() { printf '\033[0;36m[move]\033[0m %s\n' "$*"; }
 warn() { printf '\033[0;33m[move] %s\033[0m\n' "$*" >&2; }
@@ -72,14 +77,19 @@ die()  { printf '\033[0;31m[move] %s\033[0m\n' "$*" >&2; exit 1; }
 . "${SERVER_DIR}/scripts/lib/script-helpers.sh"
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
+# shellcheck source-path=SCRIPTDIR source=lib/legacy-stack.sh
+. "${SERVER_DIR}/scripts/lib/legacy-stack.sh"
+# shellcheck source-path=SCRIPTDIR source=lib/gcp-identity.sh
+. "${SERVER_DIR}/scripts/lib/gcp-identity.sh"
 
 usage() {
   cat >&2 <<EOF
-usage: scripts/project-move.sh <step> --from <project> --to <project> [--yes] [--dry-run]
+usage: scripts/project-move.sh <step> --from <project> --to <project> [--from-region R] [--to-region R] [--yes] [--dry-run]
 
   steps (DEPLOYMENT.md §6d gives the order): secrets, secret-values [--rotate], images [--count N | --tags a,b],
          rehearse, freeze, copy [--rollback], verify, open [--rollback], forward
   --rollback  copy/open may target the old project's forwarder (the move run backwards)
+  --from-region, --to-region  restate config/gcp.json's region for each project; a different one is refused
 EOF
 }
 
@@ -90,6 +100,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --from) FROM="${2:-}"; shift 2 ;;
     --to) TO="${2:-}"; shift 2 ;;
+    --from-region) FROM_REGION_FLAG="${2:-}"; shift 2 ;;
+    --to-region) TO_REGION_FLAG="${2:-}"; shift 2 ;;
     --yes) YES=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --rollback) ROLLBACK=1; shift ;;
@@ -105,6 +117,7 @@ done
 [[ "${IMAGE_COUNT}" =~ ^[1-9][0-9]*$ ]] || die "--count takes a number of images"
 [[ "${PORT_FROM}" != "${PORT_TO}" ]] || die "PROXY_PORT_SOURCE and PROXY_PORT_TARGET must differ"
 
+use_gcp_identity
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/project-move-XXXX")"
 chmod 700 "${WORK}"
 PROXY_PIDS=()
@@ -136,9 +149,31 @@ done
 
 # tfvars_of <project>: the git-ignored tfvars that stack is applied with.
 tfvars_of() { if [[ "$1" == "${LIVE_PROJECT}" ]]; then printf 'production.tfvars'; else printf 'legacy.tfvars'; fi; }
+
+# MUT-523: each project's region, from config/gcp.json. A --from-region/--to-region may restate it, never change it,
+# and each stack's tfvars must set the same `region` (Terraform has no default): checked here, before any call.
+FROM_REGION="$(gcp_region_of "${GCP_CONFIG}" production "${FROM}")"
+TO_REGION="$(gcp_region_of "${GCP_CONFIG}" production "${TO}")"
+[[ -n "${FROM_REGION}" ]] || die "config/gcp.json names no region for ${FROM} (${GCP_CONFIG})"
+[[ -n "${TO_REGION}" ]] || die "config/gcp.json names no region for ${TO} (${GCP_CONFIG})"
+[[ -z "${FROM_REGION_FLAG}" || "${FROM_REGION_FLAG}" == "${FROM_REGION}" ]] \
+  || die "--from-region ${FROM_REGION_FLAG}, but config/gcp.json puts ${FROM} in ${FROM_REGION}"
+[[ -z "${TO_REGION_FLAG}" || "${TO_REGION_FLAG}" == "${TO_REGION}" ]] \
+  || die "--to-region ${TO_REGION_FLAG}, but config/gcp.json puts ${TO} in ${TO_REGION}"
+# region_of <project>: FROM's or TO's region.
+region_of() { if [[ "$1" == "${FROM}" ]]; then printf '%s' "${FROM_REGION}"; else printf '%s' "${TO_REGION}"; fi; }
+for p in "${FROM}" "${TO}"; do
+  vars="${TF_DIR}/$(tfvars_of "${p}")"
+  [[ -f "${vars}" ]] || continue
+  named="$(sed -n 's/^[[:space:]]*region[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${vars}" | head -1)"
+  [[ -n "${named}" ]] || die "$(tfvars_of "${p}") sets no region: add region = \"$(region_of "${p}")\" (Terraform has no default region; MUT-523)"
+  [[ "${named}" == "$(region_of "${p}")" ]] \
+    || die "$(tfvars_of "${p}") sets region = \"${named}\", but config/gcp.json puts ${p} in $(region_of "${p}"); nothing done"
+done
+info "regions: ${FROM} in ${FROM_REGION}, ${TO} in ${TO_REGION}; identity: $(gcp_identity_summary)"
 bucket_of() { if [[ "$1" == "${FROM}" ]]; then printf '%s' "${FROM_STATE_BUCKET:-$1-terraform-state}"; else printf '%s' "${TO_STATE_BUCKET:-$1-terraform-state}"; fi; }
 attachments_of() { printf '%s-mutaba3a-attachments' "$1"; }
-registry_of() { printf '%s-docker.pkg.dev/%s/mutaba3a/mutaba3a-api' "${REGION}" "$1"; }
+registry_of() { printf '%s-docker.pkg.dev/%s/mutaba3a/mutaba3a-api' "$(region_of "$1")" "$1"; }
 
 # tf <project> <terraform args…>: terraform in that project's own data dir (AM8), never the other's.
 tf() {
@@ -168,7 +203,7 @@ tf_ready() {
 describe_service() {
   local described
   run_capture described $'https://<service>.a.run.app\t<registry>/mutaba3a-api:<tag>\t<label>\t<args>\tall' \
-    gcloud run services describe "${SERVICE}" --region="${REGION}" --project="$1" \
+    gcloud run services describe "${SERVICE}" --region="$(region_of "$1")" --project="$1" \
     --format="value(status.url,spec.template.spec.containers[0].image,metadata.labels.${LIVE_LABEL},spec.template.spec.containers[0].args.list(),metadata.annotations.\"run.googleapis.com/ingress-status\")" \
     || die "could not read ${SERVICE} in $1"
   # A tab IFS collapses empty fields (no label, no args): read on a separator that isn't whitespace.
@@ -219,9 +254,11 @@ db_url() {
 }
 
 # connection_of <project>: the instance's connection name.
+# Called as $(connection_of …): run_capture's "+ gcloud …" trace goes to stderr, or it would become part of the
+# connection name handed to cloud-sql-proxy (MUT-523 found it: the name was "+ gcloud sql …\n<project>:<region>:…").
 connection_of() {
   local conn
-  run_capture conn "$1:${REGION}:${INSTANCE}" gcloud sql instances describe "${INSTANCE}" --project="$1" --format='value(connectionName)' \
+  run_capture conn "$1:$(region_of "$1"):${INSTANCE}" gcloud sql instances describe "${INSTANCE}" --project="$1" --format='value(connectionName)' >&2 \
     || die "could not read ${INSTANCE} in $1"
   printf '%s' "${conn}"
 }
@@ -439,15 +476,15 @@ step_freeze() {
     info "${FROM}'s ${SERVICE} is already closed"
   else
     confirm "Close ${FROM}'s ${SERVICE} to outside traffic (portal, phones, Malafat) and pause its Scheduler jobs?" || die "stopped before closing anything"
-    run gcloud run services update "${SERVICE}" --region="${REGION}" --project="${FROM}" --ingress=internal --quiet \
+    run gcloud run services update "${SERVICE}" --region="${FROM_REGION}" --project="${FROM}" --ingress=internal --quiet \
       || die "could not close ${FROM}'s ${SERVICE}"
   fi
   local jobs name state
-  run_capture jobs $'mutaba3a-account-purge,ENABLED' gcloud scheduler jobs list --location="${REGION}" --project="${FROM}" \
+  run_capture jobs $'mutaba3a-account-purge,ENABLED' gcloud scheduler jobs list --location="${FROM_REGION}" --project="${FROM}" \
     --format='csv[no-heading](name.basename(),state)' || die "could not list ${FROM}'s Scheduler jobs"
   while IFS=, read -r name state; do
     [[ -n "${name}" && "${state}" == "ENABLED" ]] || continue
-    run gcloud scheduler jobs pause "${name}" --location="${REGION}" --project="${FROM}" --quiet || die "could not pause ${name}"
+    run gcloud scheduler jobs pause "${name}" --location="${FROM_REGION}" --project="${FROM}" --quiet || die "could not pause ${name}"
   done <<<"${jobs}"
   [[ "${DRY_RUN}" == 1 ]] || sleep "${DRAIN_SECONDS}"
   expect_closed "${FROM}"
@@ -477,7 +514,9 @@ step_copy() {
   run_capture backup "<backup-id>" gcloud sql backups list --instance="${INSTANCE}" --project="${FROM}" \
     --filter="description=mut-487-${SUBCOMMAND}-${stamp}" --limit=1 --format='value(id)'
   [[ -n "${backup}" ]] || die "could not find the backup just taken (mut-487-${SUBCOMMAND}-${stamp})"
-  timed "Restore into ${TO}" run gcloud sql backups restore "${backup}" --restore-instance="${INSTANCE}" \
+  # MUT-523: a cross-region restore when the regions differ (the backup is in FROM's region, the instance in TO's);
+  # the rehearsal times it (DEPLOYMENT.md §6d C2).
+  timed "Restore into ${TO} (${FROM_REGION} → ${TO_REGION})" run gcloud sql backups restore "${backup}" --restore-instance="${INSTANCE}" \
     --backup-instance="${INSTANCE}" --backup-project="${FROM}" --project="${TO}" --quiet
   timed "Set ${DB_USER}'s password on ${TO}" set_db_password "${TO}"
   timed "Receipts rsync" run gcloud storage rsync "gs://$(attachments_of "${FROM}")" "gs://$(attachments_of "${TO}")" \
@@ -622,7 +661,7 @@ case "${SUBCOMMAND}" in
   images) step_images ;;
   rehearse) step_copy 1; cat <<EOF
 
-Rehearsal done. Smoke-test ${TO} from your machine (R3): gcloud run services proxy ${SERVICE} --region=${REGION} --project=${TO} --port=8788
+Rehearsal done. Smoke-test ${TO} from your machine (R3): gcloud run services proxy ${SERVICE} --region=${TO_REGION} --project=${TO} --port=8788
 then curl http://localhost:8788/ready, sign in on http://localhost:8788, open a receipt. Run the restore drill against ${TO}.
 EOF
     ;;

@@ -5,8 +5,8 @@ organization = "barmajiyat-ltd"
 # Origins each browser DSN accepts events from (R2) come from config/hosts.json
 # (MUT-326): its portal and landing origins, new and legacy. Re-apply after the domain
 # is set there, or the new hosts' errors are dropped. Extras only: Cloud Run also
-# serves the service at https://<service>-<project-number>.me-west1.run.app; list it
-# here if anyone reaches the portal through it.
+# serves the service at https://<service>-<project-number>.<region>.run.app (europe-west1 for mtb3a-production,
+# me-west1 for the old project; MUT-523); list it here if anyone reaches the portal through it.
 # portal_origins  = []
 # landing_origins = []
 

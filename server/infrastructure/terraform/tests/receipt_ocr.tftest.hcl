@@ -54,6 +54,7 @@ override_resource {
 
 variables {
   project_id = "test-project"
+  region     = "europe-west1"
   image_tag  = "abc1234"
   hosts_file = "../../../config/fixtures/hosts.no-domain.json"
 }
@@ -125,8 +126,8 @@ run "on_wires_the_api" {
       ) } == {
       SERVER_OCR       = "true"
       OCR_URL          = "https://receipt-ocr-test.a.run.example"
-      READ_QUEUE       = "projects/test-project/locations/me-west1/queues/receipt-reads"
-      API_ORIGIN       = "https://mutaba3a-api-123456789012.me-west1.run.app"
+      READ_QUEUE       = "projects/test-project/locations/europe-west1/queues/receipt-reads"
+      API_ORIGIN       = "https://mutaba3a-api-123456789012.europe-west1.run.app"
       READ_INVOKER_SA  = "receipt-read-invoker@test-project.iam.gserviceaccount.com"
       SWEEP_INVOKER_SA = "receipt-sweep-invoker@test-project.iam.gserviceaccount.com"
     }
@@ -284,7 +285,7 @@ run "on_the_sidecar_sleeps_boosts_and_reads_one_at_a_time" {
   assert {
     condition = (
       google_cloud_run_v2_service.receipt_ocr[0].ingress == "INGRESS_TRAFFIC_ALL"
-      && google_cloud_run_v2_service.receipt_ocr[0].template[0].containers[0].image == "me-west1-docker.pkg.dev/test-project/mutaba3a/receipt-ocr:abc1234"
+      && google_cloud_run_v2_service.receipt_ocr[0].template[0].containers[0].image == "europe-west1-docker.pkg.dev/test-project/mutaba3a/receipt-ocr:abc1234"
       && google_cloud_run_v2_service.receipt_ocr[0].template[0].containers[0].startup_probe[0].http_get[0].path == "/healthz"
     )
     error_message = "The sidecar runs the same commit's receipt-ocr image, and starts serving once /healthz says the models are loaded."
@@ -300,7 +301,7 @@ run "on_a_rollback_can_pin_another_ocr_image" {
   }
 
   assert {
-    condition     = google_cloud_run_v2_service.receipt_ocr[0].template[0].containers[0].image == "me-west1-docker.pkg.dev/test-project/mutaba3a/receipt-ocr:0ld0ld0"
+    condition     = google_cloud_run_v2_service.receipt_ocr[0].template[0].containers[0].image == "europe-west1-docker.pkg.dev/test-project/mutaba3a/receipt-ocr:0ld0ld0"
     error_message = "F6: ocr_image_tag pins the sidecar's image apart from the API's (a rollback to a commit without one keeps the running image)."
   }
 }
@@ -314,7 +315,7 @@ run "on_the_queue_matches_the_sidecar" {
 
   assert {
     condition = (
-      google_cloud_tasks_queue.receipt_reads[0].location == "me-west1"
+      google_cloud_tasks_queue.receipt_reads[0].location == "europe-west1"
       && google_cloud_tasks_queue.receipt_reads[0].rate_limits[0].max_concurrent_dispatches == 3
       && google_cloud_tasks_queue.receipt_reads[0].rate_limits[0].max_dispatches_per_second == 2
       && google_cloud_tasks_queue.receipt_reads[0].retry_config[0].max_attempts == 3
@@ -334,7 +335,7 @@ run "on_the_sweep_posts_no_body_with_oidc" {
     condition = (
       google_cloud_scheduler_job.receipt_read_sweep[0].schedule == "*/5 * * * *"
       && google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].http_method == "POST"
-      && google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].uri == "https://mutaba3a-api-123456789012.me-west1.run.app/jobs/v1/receipts/read"
+      && google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].uri == "https://mutaba3a-api-123456789012.europe-west1.run.app/jobs/v1/receipts/read"
     )
     error_message = "The sweep POSTs to the API's read job every 5 minutes."
   }
@@ -350,7 +351,7 @@ run "on_the_sweep_posts_no_body_with_oidc" {
   assert {
     condition = (
       google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].oidc_token[0].service_account_email == "receipt-sweep-invoker@test-project.iam.gserviceaccount.com"
-      && google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].oidc_token[0].audience == "https://mutaba3a-api-123456789012.me-west1.run.app"
+      && google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].oidc_token[0].audience == "https://mutaba3a-api-123456789012.europe-west1.run.app"
       && length(google_cloud_scheduler_job.receipt_read_sweep[0].http_target[0].oauth_token) == 0
     )
     error_message = "R8: the sweep carries an OIDC token for the sweep service account, audience = the API's origin (its API_ORIGIN)."

@@ -76,7 +76,20 @@ endif
 TF_STATE_BUCKET ?= $(shell sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' $(TFSTATE_FILE) 2>/dev/null | head -1)
 
 export RELEASE_BRANCH ENVIRONMENT NODE_MAJOR_REQUIRED
-export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO LEGACY_STACK
+# MUT-523: each project's region from config/gcp.json (europe-west1 for mtb3a-production, me-west1 for
+# malafat-production while LEGACY_STACK=1); deploy.sh and preflight refuse a GCP_REGION or tfvars region that disagrees.
+GCP_REGION ?= $(shell bash -c 'source server/scripts/lib/legacy-stack.sh && gcp_region_of config/gcp.json "$$1" "$$2"' _ '$(ENVIRONMENT)' '$(GCP_PROJECT_ID)' 2>/dev/null)
+# MUT-523: who server commands act as, per checkout (deploy.env), never machine-wide. Both or neither; deploy.sh,
+# project-move.sh, restore-drill.sh and preflight check them (server/scripts/lib/gcp-identity.sh). Exported here as
+# gcloud's and the client libraries' own variables too, so every recipe below (db:migrate:status, provision) agrees.
+ifneq ($(strip $(GCP_ACCOUNT)),)
+export CLOUDSDK_CORE_ACCOUNT := $(GCP_ACCOUNT)
+endif
+ifneq ($(strip $(GCP_ADC_FILE)),)
+export GOOGLE_APPLICATION_CREDENTIALS := $(patsubst ~/%,$(HOME)/%,$(GCP_ADC_FILE))
+endif
+
+export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO LEGACY_STACK GCP_ACCOUNT GCP_ADC_FILE
 export IMAGE_TAG PROXY_PORT AUTO_APPROVE
 # MUT-155: the portal's PostHog key reaches `npm run build:hosted` inside deploy.sh
 export MUTABA3A_POSTHOG_KEY
@@ -351,7 +364,8 @@ release-server: preflight-server
 	printf '  version     %s%s\n' "$$version" "$$([ $$bumped = yes ] && echo ' (new — will be committed)' || true)"; \
 	printf '  image tag   %s\n' "$$([ $$bumped = yes ] && echo 'the version commit' || git rev-parse --short HEAD)"; \
 	printf '  project     %s\n' "$${GCP_PROJECT_ID}"; \
-	printf '  region      %s\n' "$${GCP_REGION:-me-west1}"; \
+	printf '  region      %s\n' "$${GCP_REGION:-unset}"; \
+	printf '  acting as   %s\n' "$${GCP_ACCOUNT:-the machine'\''s default gcloud account and ADC}"; \
 	printf '  environment %s\n' '$(ENVIRONMENT)'; \
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \

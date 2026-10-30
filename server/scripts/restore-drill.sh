@@ -55,6 +55,10 @@ die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 . "${SERVER_DIR}/scripts/lib/script-helpers.sh"
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
+# MUT-523: deploy.env's GCP_ACCOUNT / GCP_ADC_FILE (mtb3a-production is barmajiyatltd@gmail.com's), for this run only.
+# shellcheck source-path=SCRIPTDIR source=lib/gcp-identity.sh
+. "${SERVER_DIR}/scripts/lib/gcp-identity.sh"
+use_gcp_identity
 
 usage() {
   cat >&2 <<EOF
