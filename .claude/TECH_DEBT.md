@@ -606,6 +606,7 @@
 **Priority**: Low
 **Impact**: The digest goes out on a pending redeem (inside the request) and again from a timer five minutes past each hour. Cloud Run throttles CPU between requests, so the timer can be late. A review that arrived after its hour's digest may then wait until the next request-time sweep or a later timer tick.
 **Fix**: if that matters, add `/jobs/signup-review-digest` to the existing Cloud Scheduler (MUT-360's `/jobs` pattern).
+**Note (2026-10-30, ADR-231)**: `mtb3a-production` runs Cloud Run at `min_instances = 0`. While scaled to zero the in-process timers (this digest, the hourly prunes) don't run at all, not just late. The digest's request-time nudge (a pending redeem) and the prune on the next start cover it; the uptime checks every 300 s usually keep an instance up anyway.
 
 ### TD-208: A suppressed mail address can't be lifted without SQL
 **Status**: Open

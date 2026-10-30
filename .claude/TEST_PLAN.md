@@ -202,6 +202,18 @@ MUT-462 (billing grants, feature flags, firm requests, server + portal):
 - `OperatorFirmsPage.test.tsx` (9): list oldest first with asker, age and kind, "Firms · 2"; empty state; operator firm owners (requester ticked, disabled member inert with reason), body `ownerUserIds`; none ticked refused; owned profile keeps its owners, sends `[]`; stale "Enable with passkey"; a 404 leaves the list; decline confirm, Cancel focus, decline; Arabic RTL.
 - Release-QA: `portal-selfservice.operator` `billing-grant-revoke`, `feature-grant-revoke`, `firm-request-enable`, `firm-request-decline` (Arabic, 375 px).
 
+## MUT-487 + MUT-511 — the project move and the new project's sizing (ADR-230, ADR-231)
+
+| Level | File | What it proves |
+|---|---|---|
+| Script | `server/src/scripts/__tests__/project-move.test.ts` | T1–T9: the five generated secrets move into the new state only and the new plan must keep them; no secret value in output or argv; images copied by tag, never over one, a missing tag stops; a live or unlabelled target refused; copy refuses an open or still-written source; a count, checksum or object mismatch stops with the source closed; freeze/secrets/secret-values are safe re-runs; open verifies first; forward only legacy → live; the rollback needs `--rollback` and only reaches the forwarder |
+| Unit | `server/src/__tests__/forwarder.test.ts` | T10/T11: method, path, body, headers and status relayed unchanged; no redirect followed; the caller's IP and the token set (a forged one overwritten); Worker requests unchanged; own health check; 502 when unreachable; env validation |
+| Unit | `server/src/auth/__tests__/front-door.test.ts`, `server/src/__tests__/legacy-redirect.test.ts` | R5/D9: a relayed throttle key is the caller's IP; the forwarder token never passes `isViaFrontDoor`; a relayed legacy page visit still goes through the carry-over |
+| Script | `server/src/scripts/__tests__/release-guard.test.ts` | T15: `guard_project_release` (config project, the old one only with `LEGACY_STACK=1`, a third refused); `guard_ingress_release`; deploy.sh checks the project before a rollback and init, keeps `.terraform-<project>`, reads `legacy.tfvars` with `LEGACY_STACK=1` |
+| Terraform | `server/infrastructure/terraform/tests/project_move.tftest.hcl` | T12–T14: `scheduler_paused`, `api_public`, `live_label`, the forwarder token, `legacy_forwarder` (no DB, only its env, own SA, jobs paused, preconditions); MUT-511 sizing and connection budget, min 0, registry cleanup, budget |
+| Terraform | `tests/monitoring.tftest.hcl`, `tests/database_pool.tftest.hcl`, `frontdoor/tests/frontdoor.tftest.hcl` | CPU 80% and memory 90% alerts; backups stay in me-west1 (moved from cmek.tftest); the Worker follows `legacy.portalUpstream` |
+| Manual | DEPLOYMENT.md §6d C2/C3, pilot runbook §10 | the rehearsal, the cutover, the downtime, the IAM policy, MUT-511 AC2/AC3 timings (Basel, real GCP) |
+
 ## Current Test Coverage
 
 ### MTB3A name (MUT-402, added 2026-10-23)

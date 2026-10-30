@@ -1,6 +1,7 @@
 # Copy to production.tfvars (git-ignored). The domain itself is not here: it comes from
 # config/hosts.json (MUT-326). Tokens come from the shell: CLOUDFLARE_API_TOKEN, NETLIFY_API_TOKEN.
-project_id            = "malafat-production"
+# MUT-487 (ADR-230): the token secret lives beside the API, in mtb3a-production since the move (DEPLOYMENT.md §6d C1).
+project_id            = "mtb3a-production"
 cloudflare_account_id = "<Cloudflare account id: decide which account on purpose, its Workers free tier is shared>"
 netlify_site_id       = "<Netlify site id of the landing>"
 

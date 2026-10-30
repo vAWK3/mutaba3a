@@ -60,9 +60,10 @@ Terraform) until TD-017 lands a shared rate-limit store. That is deliberate.
 
 ### 1.1 Decide the GCP project
 
-Two valid choices. Pick one and record it in `.claude/INFRA.md` (the first
-production run on 2026-10-08 chose **`malafat-production`**; the resources
-below exist there now):
+Two valid choices. Pick one and record it in `.claude/INFRA.md`. The first
+production run on 2026-10-08 chose **`malafat-production`**; MUT-487 (ADR-230)
+moves production to its own project, **`mtb3a-production`**, named in
+`config/gcp.json` (§6d is the move):
 
 - **Dedicated project** (recommended, e.g. `mutaba3a-prod`): clean ownership
   and billing for a product that will serve customers other than Malafat
@@ -1111,7 +1112,215 @@ The restore drill prints the same line (runbook §8).
 
 ### 6d. Move to a dedicated project (MUT-487, ADR-230)
 
-<!-- MOVE-RUNBOOK -->
+MTB3A moves from `malafat-production` to its own project, `mtb3a-production`, so Malafat's runtime account no longer
+holds any role over MTB3A's data (TD-195, ADR-230). The new database runs ZONAL `db-f1-micro` (MUT-511, ADR-231).
+The plan and its eng review: `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md` (R1–R9, AM1–AM16).
+
+**How it works.** Terraform applies the same stack to the new project (`project_id`), with fresh state in
+`gs://mtb3a-production-terraform-state`. The old stack keeps its state in `gs://malafat-production-terraform-state` and
+is applied only with `LEGACY_STACK=1` and `legacy.tfvars`. `server/scripts/project-move.sh` does the data steps; each
+step checks its own preconditions and can be run again. The same steps with `--from` and `--to` swapped are the
+rollback. `config/gcp.json` names the project releases go to: from this merge on, `deploy.sh` refuses
+`malafat-production` unless `LEGACY_STACK=1` (so releases before the cutover need it; see
+`docs/operations/before-release.md`).
+
+**Switches** (Terraform, `variables.tf`). The new project starts with `api_public = false` (only callers with
+`run.invoker` get in, through `gcloud run services proxy`), `scheduler_paused = true` (its jobs never act on a copy)
+and `live_label = false` (the `mtb3a-live` label `project-move.sh` reads; it refuses to copy over a live service).
+`project-move.sh open` turns all three on. On the old project, `legacy_forwarder = true` turns the service into the
+run.app forwarder (`src/forwarder.ts`): no database mount, no secrets but `FORWARDER_TOKEN`, its own service account,
+jobs paused.
+
+Below, commands run from `server/` unless they `cd`, after (each project has its own terraform data dir, never the
+other's):
+
+```bash
+NEW=mtb3a-production OLD=malafat-production
+TF() { (cd infrastructure/terraform && TF_DATA_DIR=.terraform-$NEW terraform "$@"); }
+TF init -reconfigure -backend-config="bucket=$NEW-terraform-state" -backend-config="prefix=mutaba3a-api/production"
+```
+
+#### C0. The project (Basel's account only)
+
+```bash
+gcloud projects create mtb3a-production --name="MTB3A production"
+gcloud billing projects link mtb3a-production --billing-account=017FB9-BD0756-27576C
+gcloud services enable serviceusage.googleapis.com cloudresourcemanager.googleapis.com secretmanager.googleapis.com cloudbilling.googleapis.com billingbudgets.googleapis.com --project=mtb3a-production
+gcloud storage buckets create gs://mtb3a-production-terraform-state --project=mtb3a-production --location=me-west1 --uniform-bucket-level-access
+gcloud storage buckets update gs://mtb3a-production-terraform-state --versioning
+gcloud auth application-default set-quota-project mtb3a-production   # the budget API takes its quota from a project (budget.tf)
+gcloud projects get-iam-policy mtb3a-production --format=json > /tmp/mtb3a-iam-c0.json   # evidence: only you
+```
+
+No Malafat service account gets any role here, now or later. Check the policy file names only your user.
+
+#### C1. Build the new stack beside the old one
+
+1. **The old stack's tfvars.** In `infrastructure/terraform/`: `cp production.tfvars legacy.tfvars`, then add
+   `legacy_stack = true` and pin what it runs (`db_tier = "db-g1-small"`, `db_availability = "REGIONAL"`,
+   `min_instances = 1`, `db_pool_size = 10`, `db_max_connections = 50`, `sentry_state_bucket =
+   "malafat-production-terraform-state"`): `legacy.tfvars.example` lists them.
+2. **Release this branch to the old project (AM12)**, so its image carries the forwarder:
+
+   ```bash
+   LEGACY_STACK=1 GCP_PROJECT_ID=$OLD TF_STATE_BUCKET=$OLD-terraform-state ./scripts/deploy.sh
+   ```
+
+   Read the plan before you type yes. Expected: the image tag; the `mtb3a-live = "true"` label; the forwarder token
+   secret (no version), the `mutaba3a-forwarder` account and its one grant; the registry cleanup policy (dry run);
+   the Cloud SQL CPU alert at 80% and a new memory alert; the `allUsers` binding moved to `public[0]` (no change).
+   Nothing on the instance, the secrets' versions or the jobs. Anything else: stop.
+3. **The new stack's tfvars.** Edit `production.tfvars` from `production.tfvars.example`: `project_id = "mtb3a-production"`, `db_tier = "db-f1-micro"`,
+   `db_availability = "ZONAL"`, `min_instances = 0`, `db_pool_size = 5`, `db_max_connections = 25`,
+   `scheduler_paused = true`, `api_public = false`, `live_label = false`, `sentry_state_bucket =
+   "mtb3a-production-terraform-state"`, `billing_account_id = "017FB9-BD0756-27576C"` (₪100, ILS: the account
+   bills in ILS), and every other line as it was (`stripe_enabled`, `mailer`, `sentry_enabled`, the floors, the
+   alerts). In `deploy.env`: `GCP_PROJECT_ID=mtb3a-production`, `TF_STATE_BUCKET=mtb3a-production-terraform-state`.
+4. **The Sentry and front-door state (AM15)**, into the new bucket, before the first apply:
+
+   ```bash
+   cd infrastructure/sentry && terraform init -migrate-state -backend-config="bucket=$NEW-terraform-state" -backend-config="prefix=mutaba3a-sentry/production"   # skip if it was never applied (no state)
+   cd ../frontdoor && terraform init -migrate-state -backend-config="bucket=$NEW-terraform-state" -backend-config="prefix=mutaba3a-frontdoor/production"
+   # The token secret has prevent_destroy: forget the old one (it stays in $OLD for the old API), create it in $NEW with the same value.
+   terraform state rm 'google_secret_manager_secret_version.front_door_token[0]' 'google_secret_manager_secret.front_door_token[0]'
+   # production.tfvars: project_id = "mtb3a-production"
+   terraform plan -var-file=production.tfvars    # only the secret and its version, in $NEW; the Worker unchanged
+   terraform apply -var-file=production.tfvars
+   cd ../../
+   ```
+
+5. **The generated secrets (R1).** Moves the five `random_password`s into the new state; the old state is untouched.
+   It stops unless the new plan keeps all five:
+
+   ```bash
+   scripts/project-move.sh secrets --from $OLD --to $NEW
+   ```
+
+6. **The registry, then the images (AM1):**
+
+   ```bash
+   TF apply -var-file=production.tfvars -var image_tag=plan -target=google_artifact_registry_repository.images
+   scripts/project-move.sh images --from $OLD --to $NEW            # the 3 newest tags; add --tags <serving tag> if it isn't among them
+   ```
+
+7. **The provider secrets, rotated (R7, AM10).** Create their empty containers, then type the new values (Stripe:
+   a new restricted key, and the webhook signing secret is rolled at C3; Resend: a new sending key and webhook
+   secret; Turnstile: rotate the secret):
+
+   ```bash
+   TF apply -var-file=production.tfvars -var image_tag=plan -target=google_secret_manager_secret.stripe_secret_key -target=google_secret_manager_secret.stripe_webhook_secret -target=google_secret_manager_secret.resend_api_key -target=google_secret_manager_secret.resend_webhook_secret -target=google_secret_manager_secret.turnstile
+   scripts/project-move.sh secret-values --from $OLD --to $NEW --rotate
+   ```
+
+   Without `--rotate` it copies the old values through a pipe instead (B in R7, not chosen). The forwarder token is
+   copied after step 8 creates it: run `secret-values` again without `--rotate` then (it skips what is already there).
+8. **The whole stack, rotating the three machine secrets Malafat could read (R7):**
+
+   ```bash
+   TF apply -var-file=production.tfvars -var image_tag=<the old service's tag> -replace=random_password.db -replace=random_password.admin_token -replace=random_password.job_token
+   scripts/project-move.sh secret-values --from $OLD --to $NEW     # now copies the forwarder token into $OLD
+   ```
+
+   `session_pepper` and `oauth_derive_key` are not rotated (AM16): that would sign everyone out. The new service
+   starts on an empty database (its migrations run at C2 with the copy), so `/ready` fails until then; that's
+   expected. Check every secret the service mounts has an enabled version:
+   `gcloud secrets list --project=$NEW --format='value(name)' | xargs -n1 -I{} gcloud secrets versions list {} --project=$NEW --filter=state=ENABLED --limit=1 --format='value(name)'`.
+9. **The registry cleanup, read first (MUT-511).** After a day, read what the dry run would delete:
+   `gcloud logging read 'protoPayload.methodName="google.devtools.artifactregistry.v1.ArtifactRegistry.BatchDeleteVersions"' --project=$NEW --freshness=2d`.
+   The three newest images must not be in it. Then set `registry_cleanup_dry_run = false` in `production.tfvars`; the
+   next release turns it on.
+
+#### C2. Rehearse (measures the downtime)
+
+```bash
+scripts/project-move.sh rehearse --from $OLD --to $NEW
+gcloud run services proxy mutaba3a-api --region=me-west1 --project=$NEW --port=8788   # second terminal
+curl -fsS http://localhost:8788/ready                                                   # then sign in on http://localhost:8788, open a receipt
+TF_STATE_BUCKET=$NEW-terraform-state scripts/restore-drill.sh --project $NEW            # the drill on the zonal instance (MUT-511 AC3)
+```
+
+- `rehearse` copies with `$OLD` still open, so a count difference is reported, not fatal. Record its table in
+  pilot runbook §10 "Project move": the backup + restore + rsync seconds are the window.
+- MUT-511 AC2: through the proxy, time the portal overview and `GET /v1/entries` for the largest pilot account
+  against today's p95 + 50%.
+- **AM13:** record Malafat's VPC egress:
+  `gcloud run services describe malafat-tenant-app --region=me-west1 --project=$OLD --format='value(spec.template.metadata.annotations)'`
+  (and `malafat-cron-worker`). If it says `all-traffic`, Malafat's calls count as internal and get through a frozen
+  service: pause its MTB3A-calling crons for the window, or `freeze` stops on moving writes.
+- **The rollback** is the same script reversed. It can't be rehearsed onto `$OLD` while `$OLD` serves (a live
+  target is refused); read its plan with `--dry-run` (`scripts/project-move.sh copy --from $NEW --to $OLD --rollback
+  --dry-run` and `open … --rollback --dry-run`), and `rehearse` again just before C3 to re-time the window.
+
+#### C3. The cutover (after Basel approves the summary below)
+
+Check first: the Stripe dashboard's webhook URL. If it names the run.app host, change it to
+`https://app.mtb3a.com/v1/billing/stripe/webhook` and roll its signing secret into `$NEW`
+(`secret-values --rotate` for that one). Then, timing from step 1 to step 4:
+
+```bash
+scripts/project-move.sh freeze  --from $OLD --to $NEW     # 1. closes $OLD, pauses its jobs, waits for its writes to stop
+scripts/project-move.sh copy    --from $OLD --to $NEW     # 2. backup → restore → password → rsync → verify (counts, checksums, objects, a signed URL)
+DATABASE_URL=… npx prisma migrate status                  #    through `TF_STATE_BUCKET=$NEW-terraform-state npm run db:proxy`: nothing pending
+scripts/project-move.sh open    --from $OLD --to $NEW     # 3. verify again, then api_public, jobs and the live label on; /ready
+scripts/project-move.sh forward --from $OLD --to $NEW     # 4. $OLD becomes the forwarder: every old-address caller is back (D7)
+```
+
+Then, the same day, with the service already up (D7, off the critical path):
+
+- In `production.tfvars` delete `scheduler_paused`, `api_public` and `live_label`. In `legacy.tfvars` set
+  `legacy_forwarder = true`, `forward_to = "<new service URL>"`, `min_instances = 0`, `enable_uptime_check = false`.
+- **The front door (AM11):** in `config/hosts.json` add `"portalUpstream": "<new service URL>"` under `legacy` (keep
+  `portal` as it is: the forwarder still serves it), commit, then `cd infrastructure/frontdoor && terraform apply -var-file=production.tfvars`.
+- **Malafat (R9):** set `malafat-web-mutaba3a-api-url` to `https://app.mtb3a.com`
+  (`printf 'https://app.mtb3a.com' | gcloud secrets versions add malafat-web-mutaba3a-api-url --project=$OLD --data-file=-`),
+  then roll `malafat-tenant-app` and `malafat-cron-worker` (Malafat's release), and make one Malafat call.
+- **Smoke:** the phone (the current build and the oldest one in use), the portal on `app.mtb3a.com`, a Malafat
+  call, a receipt download. `npm run smoke -- --url <new service URL>` and `--url https://app.mtb3a.com`.
+- The first release to `$NEW`: `make release server` (preflight prints `project=mtb3a-production`).
+
+#### C4. The old project after the cutover
+
+`forward` already did C4: the old service mounts no database and runs as `mutaba3a-forwarder`, which may read only
+its token; the old jobs stay paused (`legacy_forwarder` pauses them). The old instance, bucket, secrets and the
+`mutaba3a-api` account stay 14 days as the safety net, then MUT-520 deletes them; the forwarder stays until MUT-521
+(the min-build floor above the last run.app build, and 30 days without forwarder traffic).
+
+#### C5. Record
+
+In pilot runbook §10 "Project move": `gcloud projects get-iam-policy mtb3a-production --format=json` (no Malafat
+account), the `copy` output (counts, checksums, objects, the signed URL), the measured downtime (freeze start to
+forward done), the cost before and after (INFRA.md §3; next month's billing export). Revoke the old provider keys
+(Stripe restricted key, Resend key, the old webhook secrets, the old Turnstile secret). Close TD-195. Comment the
+results on MUT-487, MUT-511 and MAL-1465.
+
+#### Rollback
+
+- **Before `open`:** nothing has moved. `gcloud run services update mutaba3a-api --region=me-west1 --project=$OLD
+  --ingress=all` and `gcloud scheduler jobs resume <each paused job> --location=me-west1 --project=$OLD`.
+- **After `open`, before the front door and Malafat repoint:** writes may have reached `$NEW`. Run the move backwards:
+
+  ```bash
+  scripts/project-move.sh freeze --from $NEW --to $OLD
+  scripts/project-move.sh copy   --from $NEW --to $OLD --rollback   # into the forwarder's project; nothing else may be the target
+  scripts/project-move.sh open   --from $NEW --to $OLD --rollback   # legacy_forwarder off, ingress all, jobs on
+  ```
+
+  Then in `legacy.tfvars` set `legacy_forwarder = false`, and releases go back to `$OLD` with `LEGACY_STACK=1`
+  until the move is tried again.
+- **After the repoint:** also revert `legacy.portalUpstream` (frontdoor apply) and Malafat's secret.
+
+#### The summary Basel approves before C3 (D9)
+
+- **What changes for customers:** nothing they see, except a short window with the API closed: the C2 rehearsal
+  measures it (minutes at pilot size). Nobody is signed out: the session pepper and OAuth key carry over (AM16);
+  the API's machine keys and the provider keys are new.
+- **Cost:** about ₪204 a month before (billing export); about ₪33 after MUT-520 deletes the old copies (the
+  database ₪184 → ₪26 on ZONAL `db-f1-micro`, Cloud Run about ₪19 → ₪2 at min 0). The 14-day overlap costs about
+  ₪6 a day. The ₪100 budget alerts at 50%, 90% and 100%.
+- **Risks:** a cross-project restore refused (the dump/restore fallback, found at C2); Malafat's writes reaching a
+  frozen service through VPC egress (AM13, checked at C2); old phone builds on run.app (the forwarder); a single
+  zone (ADR-231: a zone outage is a restore into another zone, pilot runbook §4.5, about 15–30 minutes).
+- **Rollback:** the same script, reversed (above), until MUT-520 deletes the old copies 14 days later.
 
 ### 6e. Stripe webhook and nightly reconcile (MUT-360)
 

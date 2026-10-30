@@ -1,4 +1,5 @@
 # For `terraform init -backend-config=backend.production.hcl` (server/DEPLOYMENT.md §5a).
 # Same private bucket as the API stack, its own prefix: the state holds the front-door token.
-bucket = "malafat-production-terraform-state"
+# MUT-487: moved with -migrate-state to the new project's bucket (DEPLOYMENT.md §6d C1).
+bucket = "mtb3a-production-terraform-state"
 prefix = "mutaba3a-frontdoor/production"
