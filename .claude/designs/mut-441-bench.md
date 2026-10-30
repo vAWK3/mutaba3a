@@ -139,3 +139,17 @@ A logical layer is unchanged. Tests are in `tests/test_units.py`. Result: vendor
 
 - **JOD inference (fix 4): resolved, kept as built.** Basel confirmed the rule on 2026-10-28; the coordinator relayed his decision. A receipt that names no currency at all, with three or more amounts that all have three decimals, is read as JOD (rule 0.8). On this set it fills five Arabic photos whose dinar word or sign OCR mangled, at confidence 0.65–0.76; without it, Arabic amounts would be 7/14 (50%). A receipt that names any currency, supported or not, is never guessed.
 - **The reversed vendor name from an Arabic text-layer PDF: resolved, fixed** (section above).
+
+## MUT-504: the first real receipts (2026-10-29)
+
+16 of Basel's Adobe Scan PDFs (11 Hebrew, 4 English or JOD, 1 Arabic), in `~/Work/Barmajiyat/Mutaba3a/receipt-bench/`, out of every repo; truth read off the scans (TD-293). Aggregates only.
+
+| Real set | Before (MUT-441) | After (MUT-504) |
+|---|---|---|
+| Hebrew amount | 2/10 | 7/10 |
+| Hebrew date | 2/11 | 6/11 |
+| English / JOD amount | 3/4 | 4/4 |
+| English / JOD date | 3/4 | 3/4 |
+| Wrong and confident, amount + date + currency (AC1) | 5 | 0 |
+
+The causes, measured engine by engine, and the fixes are ADR-229. Synthetic set after MUT-504: photos ar 13/14 amount, 12/14 date; he 11/12, 11/12; en 6/6, 6/6; wrong-and-confident 0 (one Arabic photo amount gained, nothing lost). Warm p95 3.9 s at a 1-minute load of 13.5 (shared machine).

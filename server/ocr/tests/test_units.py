@@ -58,6 +58,12 @@ def test_split_number_boxes_join_left_to_right():
     assert joined[0].conf == 0.98 and joined[0].box == (20, 0, 90, 20)
 
 
+def test_two_complete_amounts_side_by_side_stay_apart():
+    # MUT-504: two readings of a till receipt's total were glued into "61.8361.83".
+    joined = join_number_fragments([seg("61.83", 0.99, 0, 0, 50, 20), seg("61.83", 0.99, 52, 0, 102, 20)])
+    assert [s.text for s in joined] == ["61.83", "61.83"]
+
+
 def test_number_boxes_far_apart_stay_apart():
     joined = join_number_fragments([seg("079", 1, 0, 0, 30, 20), seg("8452064", 1, 200, 0, 300, 20)])
     assert [s.text for s in joined] == ["079", "8452064"]
@@ -82,6 +88,70 @@ def test_on_a_hebrew_page_tesseract_reads_and_rapid_only_adds_digit_lines_it_mis
     tess = [seg('סה"כ לתשלום (₪) 240.82', 0.92, 0, 50, 300, 70)]
     out = merge(rapid, tess, "hebr")
     assert [s.text for s in out] == ['סה"כ לתשלום (₪) 240.82', "04-9675428"]
+
+
+def tess_line(words, y0=50, y1=70):
+    """A Tesseract line with its words (text, conf, x0, x1), as TesseractReader returns it."""
+    segs = [seg(text, conf, x0, y0, x1, y1) for text, conf, x0, x1 in words]
+    return Segment(" ".join(w.text for w in segs), sum(w.conf for w in segs) / len(segs), (min(w.box[0] for w in segs), y0, max(w.box[2] for w in segs), y1), tuple(segs))
+
+
+def test_on_a_hebrew_page_rapid_digits_replace_tesseracts_unsure_ones_and_its_words_stay():
+    # MUT-504: Tesseract garbles bold digits ("2025 12:49" for "11/12/2025 12:49") that RapidOCR reads at 0.99.
+    rapid = [seg("11/12/2025", 0.99, 40, 50, 140, 70), seg("12:49:52", 0.98, 150, 50, 230, 70), seg("RRSEEERR", 0.7, 0, 200, 300, 220)]
+    tess = [tess_line([("12:49", 0.55, 150, 200), ("2025", 0.4, 90, 140), ("תאריך", 0.82, 300, 360)])]
+    out = merge(rapid, tess, "hebr")
+    # The two digit boxes sit side by side, so they join into one (join_number_fragments).
+    assert [s.text for s in out] == ["תאריך", "11/12/2025 12:49:52"]
+    assert out[0].conf == pytest.approx(0.82) and out[0].box == (300, 50, 360, 70)
+
+
+def test_on_a_hebrew_page_sure_tesseract_digits_are_kept():
+    rapid = [seg("61.83", 0.99, 0, 50, 60, 70)]
+    tess = [tess_line([("61.83", 0.9, 0, 60), ("לתשלום", 0.9, 200, 300)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["61.83 לתשלום"]
+
+
+def test_on_a_hebrew_page_unsure_rapid_digits_do_not_replace_tesseracts():
+    rapid = [seg("61.88", 0.6, 0, 50, 60, 70)]
+    tess = [tess_line([("61.83", 0.7, 0, 60), ("לתשלום", 0.9, 200, 300)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["61.83 לתשלום"]
+
+
+def test_on_a_hebrew_page_a_tesseract_digit_word_no_rapid_box_covers_is_kept():
+    # RapidOCR read only the time; Tesseract's date, however unsure, is all the line has.
+    rapid = [seg("14:24", 0.97, 150, 50, 200, 70)]
+    tess = [tess_line([("תאריך", 0.9, 300, 360), ("07/05/2025", 0.5, 40, 140), ("14:2A", 0.5, 150, 200)])]
+    out = merge(rapid, tess, "hebr")
+    # Its own segment, at its own confidence (not averaged with the label).
+    assert [s.text for s in out] == ["תאריך", "07/05/2025", "14:24"]
+
+
+def test_on_a_hebrew_page_one_unsure_rapid_box_does_not_keep_out_a_sure_one():
+    rapid = [seg("88", 0.4, 200, 50, 230, 70), seg("61.83", 0.99, 0, 50, 60, 70)]
+    tess = [tess_line([("תיז", 0.2, 300, 340), ("88", 0.3, 200, 230)])]
+    assert [s.text for s in merge(rapid, tess, "hebr")] == ["תיז", "88", "61.83"]
+
+
+def test_on_a_hebrew_page_a_taken_rapid_box_does_not_duplicate_a_sure_digit_word_under_it():
+    rapid = [seg("61.83 1", 0.95, 0, 50, 72, 70)]
+    tess = [tess_line([("61.83", 0.9, 0, 50), ("₪1", 0.4, 52, 70), ("לתשלום", 0.9, 200, 300)])]
+    texts = " ".join(s.text for s in merge(rapid, tess, "hebr"))
+    assert texts.count("61.83") == 1
+
+
+def test_on_a_hebrew_page_an_unsure_digit_word_kept_keeps_its_own_confidence():
+    rapid = [seg("14:24", 0.97, 150, 50, 200, 70)]
+    tess = [tess_line([("תאריך", 0.95, 300, 360), ("07/05/2025", 0.3, 40, 140), ("14:2A", 0.5, 150, 200)])]
+    out = merge(rapid, tess, "hebr")
+    date = next(s for s in out if "07/05/2025" in s.text)
+    assert date.text == "07/05/2025" and date.conf == pytest.approx(0.3)
+
+
+def test_off_a_hebrew_page_the_merge_is_unchanged_by_tesseract_words():
+    rapid = [seg("Total", 0.99, 0, 100, 50, 120), seg("52.470", 0.99, 300, 100, 360, 120)]
+    tess = [tess_line([("Tota1", 0.6, 0, 50), ("52.47O", 0.5, 300, 360)], 101, 121)]
+    assert [s.text for s in merge(rapid, tess, "latn")] == ["Total", "52.470"]
 
 
 @pytest.mark.parametrize(("text", "noise"), [("RRREEERRSRSR", True), ("ERRBREERSRSRESHEER", True), ("Notebook", False), ("University", False), ("Bookshop12345678", False)])

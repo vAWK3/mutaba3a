@@ -8,6 +8,7 @@ import { ME_KEY, meQuery } from '../../session/me';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { safeNext } from '../../session/safeNext';
 import { setMode, useMode } from '../../session/mode';
+import { useContinueOnThisDevice } from '../../session/continueOnThisDevice';
 import { termsHref } from '../../terms';
 import { useSelfServiceDoors } from '../../session/selfServiceDoors';
 import { AuthLayout } from './AuthLayout';
@@ -90,6 +91,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [underReview, setUnderReview] = useState(false);
   const doors = useSelfServiceDoors();
+  const continueOnThisDevice = useContinueOnThisDevice();
 
   /** One success path for the password and the passkey (MUT-115 §11.11): remote mode, the account's language, `next`. */
   function onSignedIn(me: Me) {
@@ -145,12 +147,6 @@ function SignInForm({ next, reason }: SignInPageProps) {
     setBanner(null);
     passkey.pause();
     signIn.mutate({ email: email.trim(), password });
-  }
-
-  function continueOnThisDevice() {
-    setMode('local');
-    queryClient.clear();
-    void navigate({ to: '/', replace: true });
   }
 
   /** Leaving the under-review screen: nobody is signed in, so an empty form is a fresh start (D16). */
@@ -322,7 +318,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
       )}
       <p className="hp-help">
         {t('hosted.local.continueLead')}{' '}
-        <button type="button" className="hp-link-button press" onClick={continueOnThisDevice}>
+        <button type="button" className="hp-link-button press" onClick={() => continueOnThisDevice()}>
           {t('hosted.local.continue')}
         </button>
       </p>

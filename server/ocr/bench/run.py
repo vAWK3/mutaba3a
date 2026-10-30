@@ -14,7 +14,8 @@
 Real receipts (--real, default ~/Work/Barmajiyat/Mutaba3a/receipt-bench): read when the folder exists. With a
 `manifest.json` there ({"receipts": [{"file", "lang", "kind"?, "truth": {totalMinor, date, currency, vendorName?}}]})
 they are scored and only aggregates are printed; without one, `manifest.draft.json` is written there with what the
-pipeline read, for a person to correct. Everything that holds a real receipt's text stays in that folder.
+pipeline read, for a person to correct. `--real-detail` also writes `real-detail.json` there: each receipt's fields,
+what was read against the truth (MUT-504). Everything that holds a real receipt's text stays in that folder.
 
 Outputs go to --out (default server/ocr/bench/out, git-ignored): reads.json and suggestions.json hold synthetic
 receipt text and are never committed; summary.md and summary.json hold aggregates only.
@@ -257,6 +258,22 @@ def extract(reads: list[dict], work: Path) -> dict[str, dict]:
     return {r["id"]: r["suggestion"] for r in json.loads(out.stdout)}
 
 
+def write_real_detail(folder: Path, real: list[dict], suggestions: dict[str, dict]) -> None:
+    """Per receipt and field: what was read, the truth, and the verdict (hit, miss = left empty, WRONG = filled wrong)."""
+    detail = []
+    for item in real:
+        sug = suggestions.get(item["id"], {})
+        fields = {}
+        for name, score in score_one(sug, item["truth"]).items():
+            got = (sug.get(name) or {}).get("value") if isinstance(sug.get(name), dict) else None
+            if got is None and item["truth"].get(name) is None:
+                continue
+            verdict = "WRONG" if score["wrong"] else "hit" if score["hit"] else "miss"
+            fields[name] = {"got": got, "want": item["truth"].get(name), "verdict": verdict}
+        detail.append({"file": item["id"], "lang": item["lang"], "fields": fields})
+    (folder / "real-detail.json").write_text(json.dumps(detail, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 # ── report ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
 
@@ -312,6 +329,7 @@ def main() -> int:
     ap.add_argument("--env", action="append", default=[], help="KEY=VALUE for the sidecar, e.g. OCR_THREADS=4")
     ap.add_argument("--only", default="", help="comma-separated fixture ids")
     ap.add_argument("--no-real", action="store_true")
+    ap.add_argument("--real-detail", action="store_true", help="write per-receipt field results into the real folder (never into --out)")
     ap.add_argument("--rescore", type=Path, help="an earlier run's output folder: re-run only the extractor over its reads.json")
     args = ap.parse_args()
     if args.rescore:
@@ -400,6 +418,8 @@ def main() -> int:
             if t["item"] in real
         ]
         real_summary["aggregate"] = aggregate(real_rows)
+        if args.real_detail:
+            write_real_detail(real_dir, real, real_suggestions)
 
     failures = [{"id": t["item"]["id"], "status": t["status"]} for t in timed if t["status"] != 200 and t["item"] in items]
     summary = {"label": args.label, "synthetic": agg, "timing": timing, "real": real_summary, "failedRequests": failures, "perFixture": [{k: r[k] for k in ("id", "lang", "kind", "ms", "load1", "scores")} for r in rows]}

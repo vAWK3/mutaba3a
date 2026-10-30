@@ -114,3 +114,13 @@ features:
       - Open Receipts › Filed, then open a Filed receipt
     expect:
       - Filed cards have no ⋯, and the Filed receipt's page has no Move to profile…
+  - id: move-arabic
+    title: In Arabic on a 375 px phone, Move reads right to left and its drawer fills the screen (MUT-503 AC9)
+    tier: secondary
+    tickets: [MUT-503]
+    steps:
+      - Open Receipts in Arabic on a 375 px wide screen, open a card's ⋯ and choose نقل إلى ملف آخر…
+      - Pick a profile and move the receipt
+    expect:
+      - The page is right to left; the drawer is in Arabic, fills the screen with no sideways scroll, and a read-only profile says للقراءة فقط حتى يُدفع
+      - The button reads نقل إلى <name>, and after the move the toast says نُقل إلى <name>

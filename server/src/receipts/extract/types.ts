@@ -12,10 +12,19 @@ export interface ExtractInput {
   pdfText?: string | null | undefined;
 }
 
+/** One box of a row, normalised, with the reader's confidence in it (MUT-504). */
+export interface RowPart {
+  text: string;
+  folded: string;
+  conf: number;
+}
+
 /** One row of the receipt in reading order, normalised, with the least confidence among its segments. */
 export interface Row {
   text: string;
   /** `text` folded for keyword matching (lower case, Arabic letter variants folded). */
   folded: string;
   conf: number;
+  /** Its boxes in reading order (MUT-504): a field takes the confidence of the box it was read from, not the row's worst. */
+  parts: readonly RowPart[];
 }

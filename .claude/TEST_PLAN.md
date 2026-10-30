@@ -4138,6 +4138,16 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Benchmark | `server/ocr/bench/run.py` (manual) | AC1 per language on the synthetic set, AC6 warm p95 and cold start; `.claude/designs/mut-441-bench.md` |
 | Browser | `qa/specs/portal-selfservice/receipts.spec.ts` `@portal-selfservice.receipts.server-reading` | on the live dev API with the real sidecar: upload a photo, the card says "Reading…", the review page says "Reading the receipt…", then 52.470 JOD and 2026-06-25 fill in, marked from the receipt |
 
+## MUT-504 — real Hebrew receipts (ADR-229)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/receipts/extract/__tests__/extract.test.ts` "real receipt patterns (MUT-504)" | a sure date beside a junk box; a labelled amount needs a sure label; a toll bill's issue date over a billing period, a validity date and an older payment, subtotal + VAT with `מצ"מ`; disagreeing dates and a billing period leave the date empty; a till total whose label OCR lost (read three times, or two printed amounts adding up to it); one amount printed many times can't out-vote; the card slip's `סכום עסקה`; the VAT on a joined row; a statement has no total; an unsure strict rule doesn't block a sure loose one; `17-פבר-26`, `5 נוב' 2026`, `17-Feb-26`; the `מצ"מ` fold leaves `בע"מ`; a long top row isn't the vendor |
+| Python | `server/ocr/tests/test_units.py` | on a Hebrew page RapidOCR's sure digits replace Tesseract's unsure words, uncovered words stay, sure Tesseract digits stay, unsure RapidOCR digits don't replace; other scripts unchanged; two complete amounts aren't joined |
+| Python | `server/ocr/tests/test_caps.py` | a visible text layer is read as text; an invisible one (render mode 3) is rasterised |
+| Unit | `extract.test.ts` "pre-landing review: never a wrong total or date" | each reviewer-reproduced input: disagreeing totals, discount, cash tendered, one-row repeats, VAT rate as VAT, price as year, split card slips, due dates, two labelled dates, 0% VAT line, discount total, long top row, 3,000 amounts under a second |
+| Python | `test_units.py`, `test_caps.py` (review) | no duplicated digits under a taken box; kept digit words keep their confidence; a visible stamp over hidden OCR, clip-mode text, and a failing check all rasterise |
+| Benchmark | `server/ocr/bench/run.py --real-detail` (manual, port 8197) | real set: AC1 fields 0 wrong, Hebrew amount ≥ 6/10 and date ≥ 6/10 (AC2); synthetic not worse (AC3); warm p95 < 5 s (AC5) |
+
 ## MUT-491 — receipts on a new expense (ADR-221)
 | Level | Where | What it proves |
 |---|---|---|
@@ -4233,3 +4243,8 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Store (Postgres) | `server/src/repositories/__tests__/store-prisma-receipt-move.test.ts` | re-home under the lock, JSON-null approval; two moves → one wins; move vs approve → one wins; filed/unfinished refused; `releaseMovedRead` only when the key moved |
 | Portal | `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/receiptHooks.test.tsx` | ⋯ menu items and keys; Filed and solo have no Move (DR2, AC3); radio rows, named primary, Idempotency-Key, both profiles refreshed, toast with Open (DR4); read-only/locked disabled with reasons and the none-open note (AC2); reading note (DR9); 402 banner; D8 recovery; focus to the neighbour; review page button and next receipt (DR1); `moveErrorOf` table |
 | Release-QA | `@portal.receipts.move`, `@portal.receipts.move-review`, `@portal.receipts.move-refused`, `@portal.receipts.filed-no-move` | the four portal flows on the FakeApi's per-profile receipts |
+
+## MUT-513 — the portal's first-visit welcome (ADR-230)
+- **Unit/integration (Vitest):** `client-mode.test.ts` — an unhinted 401 leaves the browser undecided (nothing stored, no local import, one request), waiting calls share it, no ended session, ALWAYS_REMOTE still goes out, a later Try wins; `mode.test.ts` — undecided is memory-only and never local; `errorReporting.test.ts` — undecided holds nothing for Sentry; `carryOverPages.test.tsx` — a receive on an undecided browser chooses this device, signed in stays remote; `local-mode.test.tsx` — the welcome on `/`, Arabic default, the explainer, Try, Sign in and Back, Create an account, deep links to sign-in, 200 straight in, a saved choice skips it, network failure with Retry and this-visit Try, 5xx keeps the can't-connect screen, `/welcome` reopened and signed in; `WelcomePage.test.tsx` — a browser that blocks storage saves nothing, each door counted once; `portalAnalytics.welcome.test.ts`, `guard.test.ts`, `posthogConfig.test.ts`, `analytics-taxonomy.test.ts` (contract 2.4.0).
+- **Release-QA:** `qa/features/portal/welcome.yaml` (first-visit core, try-local, sign-in-door, signup-door, deep-link-skips, offline, reopen, phone-fit, reduced-motion); `@portal.local.first-visit` now passes the welcome; `signedOutServer` seeds `local` unless a spec passes `null`.
+

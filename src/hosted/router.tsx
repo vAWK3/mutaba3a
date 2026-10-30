@@ -9,7 +9,8 @@ import { RecoverPage } from './pages/auth/RecoverPage';
 import { CarryOverPage } from './pages/carry-over/CarryOverPage';
 import { ReceivePage } from './pages/carry-over/ReceivePage';
 import { AuthGate, CaptureRedirect, HomeRedirect, ProfileLayout, RedirectToSignIn } from './session/AuthGate';
-import { useIsLocalMode } from './session/mode';
+import { useIsLocalMode, useMode } from './session/mode';
+import { WelcomePage } from './pages/auth/WelcomePage';
 import { SessionBridge } from './session/SessionBridge';
 import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
@@ -94,6 +95,14 @@ function FrameCrash() {
 /** A page inside a profile crashed: the card takes the page's place; the shell and its navigation stay. */
 const PAGE_CRASH = { errorComponent: CrashCard } as const;
 
+/** `/welcome` (MUT-513): "Continue on this device" when this device is already chosen; otherwise `/` decides. */
+function WelcomeRoute() {
+  const mode = useMode();
+  // Signed in, or not asked yet: `/` asks the server, and shows the welcome there only if nobody is signed in (review)
+  if (mode === 'remote' || mode === 'probe') return <Navigate to="/" replace />;
+  return <WelcomePage variant={mode === 'local' ? 'reopened' : 'first'} />;
+}
+
 export function createPortalRouter(queryClient: QueryClient, history?: RouterHistory) {
   const rootRoute = createRootRoute({ component: RootLayout, notFoundComponent: () => <Navigate to="/" replace /> });
 
@@ -117,6 +126,9 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   /** MUT-291: public like sign-in. The old address's carry-over page, and the new address's receiver. */
   const carryOverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/carry-over', component: CarryOverPage });
   const carryOverReceiveRoute = createRoute({ getParentRoute: () => rootRoute, path: '/carry-over/receive', component: ReceivePage });
+
+  /** MUT-513: the welcome, reopened from You › Account on this device. Signed in, there's nothing to choose. */
+  const welcomeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/welcome', component: WelcomeRoute });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -410,6 +422,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     recoverRoute,
     carryOverRoute,
     carryOverReceiveRoute,
+    welcomeRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,

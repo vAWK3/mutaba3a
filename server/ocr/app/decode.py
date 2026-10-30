@@ -2,7 +2,8 @@
 
 Images: the size is read from the header (Pillow opens lazily) and checked against MAX_PIXELS before a single pixel is
 decoded. PDFs: refused past MAX_PDF_PAGES, at most PDF_PAGES_READ pages read, each rasterised at PDF_DPI or lower so the
-raster stays under MAX_PIXELS. Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
+raster stays under MAX_PIXELS. A text layer is used instead of OCR only when its text is drawn visibly: an invisible
+layer is a scanner's own OCR (MUT-504). Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ def _decode_pdf(body: bytes) -> Decoded:
             raise Refusal("too_large")
         count = min(total, config.PDF_PAGES_READ)
         text = _text_layer(pdf, count)
-        if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS:
+        if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS and not _invisible_text(pdf, count):
             return Decoded(pdf_text=text, page_count=count, flat=True)
         return Decoded(pages=[_rasterise(pdf[i]) for i in range(count)], page_count=count, flat=True)
     except Refusal:
@@ -104,6 +105,38 @@ def _text_layer(pdf, count: int) -> str:
         finally:
             textpage.close()
     return "\n".join(parts).replace("\r\n", "\n").replace("\r", "\n")
+
+
+#: Text drawn without paint: invisible (3), or only added to the clip path (7). Both are another reader's OCR layer.
+_HIDDEN_RENDER_MODES = (3, 7)
+#: The visibility check looks at no more text objects than this, so a crafted PDF can't stall the reader.
+MAX_TEXT_OBJECTS = 5_000
+
+
+def _invisible_text(pdf, count: int) -> bool:
+    """Whether most of the text, by area, is drawn without paint: another reader's OCR over a scanned image, as a
+    scanner app writes it (MUT-504). Adobe Scan's Hebrew comes out as Latin junk, so the page is read as an image.
+    Weighed by area, a small visible stamp ("Scanned with …") doesn't outvote the hidden layer. Any failure here reads
+    the page as an image too: the safe way, never a refusal."""
+    try:
+        import pypdfium2.raw as pdfium_c
+
+        hidden = shown = 0.0
+        seen = 0
+        for i in range(count):
+            for obj in pdf[i].get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_TEXT,), max_depth=3):
+                seen += 1
+                if seen > MAX_TEXT_OBJECTS:
+                    return hidden > shown
+                left, bottom, right, top = obj.get_bounds()
+                area = max(0.0, right - left) * max(0.0, top - bottom)
+                if pdfium_c.FPDFTextObj_GetTextRenderMode(obj.raw) in _HIDDEN_RENDER_MODES:
+                    hidden += area
+                else:
+                    shown += area
+        return hidden > shown
+    except Exception:
+        return True
 
 
 def _rasterise(page) -> np.ndarray:

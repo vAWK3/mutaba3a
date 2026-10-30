@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
+import { Navigate, Outlet, useLocation, useMatches, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
@@ -13,12 +13,16 @@ import { isYouPath } from '../shell/youRoutes';
 import { useProfileDrawers } from '../shell/ProfileDrawers';
 import { MeProvider, ProfileProvider, meQuery, useMe } from './me';
 import { useLostAccess } from './lostAccess';
-import { useIsLocalMode } from './mode';
+import { useIsLocalMode, useMode } from './mode';
+import { WelcomePage } from '../pages/auth/WelcomePage';
 import { ProfileBanner } from '../components/ProfileBanner';
 import { LapseBanner, LockedScreen } from '../components/LapseGate';
 import { billingGateOf } from '../data/trialPrompt';
 import { pickShellOverlay } from '../data/filters';
 import { useSignOut } from './useSignOut';
+
+/** `/` under the gate: the route the welcome answers for (router.tsx `homeRoute`). */
+const HOME_ROUTE_ID = '/authed/';
 
 /**
  * Everything behind sign-in (mut-43-auth-states.md S1, S2, S11, S12). Once the
@@ -26,7 +30,12 @@ import { useSignOut } from './useSignOut';
  * not a figure, and each view guards its own figures.
  */
 export function AuthGate() {
-  const me = useQuery(meQuery);
+  const mode = useMode();
+  // The matched route, not the address: while the router moves on (to /signup, say), the address changes before this
+  // gate unmounts, and reading it would send the move to sign-in (MUT-513 QA).
+  const atHome = useMatches({ select: (matches) => matches.at(-1)?.routeId === HOME_ROUTE_ID });
+  // MUT-513: undecided (nobody signed in, nothing chosen) asks nothing more; the welcome or sign-in answers instead.
+  const me = useQuery({ ...meQuery, enabled: mode !== 'undecided' });
   const navigate = useNavigate();
   const adoptAccountLocale = useAdoptAccountLocale();
   // Signed out there is no account to take a language from: a choice here, else Arabic (MUT-286 AC1)
@@ -45,6 +54,10 @@ export function AuthGate() {
   if (!me.data && shownFor !== null) setShownFor(null);
   if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && shownFor !== userId) setShownFor(userId);
   const shellShown = userId !== null && shownFor === userId;
+
+  // MUT-513 (ADR-230): nobody is signed in and this browser hasn't chosen. `/` is the front door; any other page here
+  // is a deep link into an account, so it signs in first, as /connect/approve already did.
+  if (mode === 'undecided') return atHome ? <WelcomePage variant="first" /> : <RedirectToSignIn />;
 
   // MUT-333: a closing account sees only the closing page (the server refuses everything else); before the terms,
   // since a person leaving needn't accept new ones to keep or leave.
@@ -68,6 +81,11 @@ export function AuthGate() {
   }
   if (me.error instanceof ApiError && me.error.code === 'LOCAL_UNAVAILABLE') {
     return <LocalUnavailable onRetry={() => void me.refetch()} onSignIn={() => void navigate({ to: '/sign-in' })} />;
+  }
+  // D7: a first visit that couldn't reach the server still gets the welcome, with a Retry. Only a network failure: a
+  // server error keeps the can't-connect screen, and a page someone was headed to keeps it too.
+  if (me.error instanceof ApiError && me.error.code === 'NETWORK' && mode === 'probe' && atHome) {
+    return <WelcomePage variant="offline" onRetry={() => void me.refetch()} retrying={me.isFetching} />;
   }
   return <BootUnreachable onRetry={() => void me.refetch()} retrying={me.isFetching} />;
 }

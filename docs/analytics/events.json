@@ -1,5 +1,5 @@
 {
-  "version": "2.3.0",
+  "version": "2.4.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -111,6 +111,13 @@
         "period": { "type": "enum", "values": ["week", "month", "year"], "description": "The period shown." },
         "scope": { "type": "enum", "values": ["profile", "all"], "description": "One profile, or All profiles combined. Sent with layer profile only." },
         "stage": { "type": "enum", "values": ["stage_1", "stage_2", "stage_3"], "description": "How much history the report had: stage_1 = no complete month, stage_2 = one, stage_3 = two or more. Sent with layer profile only." }
+      }
+    },
+    "portal_welcome_choice": {
+      "emitters": ["portal"],
+      "description": "MUT-513: a door on the portal's first-visit welcome was chosen. Sent before anyone signs in, cookieless like the landing (its own instance, nothing stored, ADR-230): the only portal event sent without consent, and nothing else about the visitor.",
+      "properties": {
+        "choice": { "type": "enum", "values": ["sign_in", "signup", "local"], "description": "sign_in = Sign in; signup = Create an account; local = Try it on this device." }
       }
     }
   }

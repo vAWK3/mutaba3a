@@ -72,21 +72,181 @@ async function openAccount(user: ReturnType<typeof renderPortal>['user']) {
 
 const youRows = (page: HTMLElement) => [...page.querySelectorAll('.hp-you-row')].map((row) => row.textContent);
 
-describe('first visit (AC1)', () => {
-  it('asks the server once, then opens the app on this device: no sign-in, no further requests', async () => {
-    setUnhintedMode('probe');
-    const server = stubApi({ 'GET /v1/me': () => fail(401, 'UNAUTHENTICATED') });
+const WELCOME = 'Every amount, accounted for.';
+const nobody = () => fail(401, 'UNAUTHENTICATED');
+
+describe('first visit: the welcome (MUT-513)', () => {
+  beforeEach(() => setUnhintedMode('probe'));
+
+  it('asks the server once and shows the welcome, not the app: nothing saved, nothing opened on this device', async () => {
+    const server = stubApi({ 'GET /v1/me': nobody });
 
     const { router } = renderPortal('/');
 
-    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
-    expect(locationOf(router)).toBe(`/p/${ORG_A}`);
-    expect(server.count('GET /v1/me')).toBe(1);
+    expect(await screen.findByRole('heading', { level: 1, name: WELCOME })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
+    expect(locationOf(router)).toBe('/');
     expect(server.calls).toHaveLength(1);
-    expect(localStorage.getItem(MODE_KEY)).toBe('local');
-    expect(screen.queryByLabelText('Email')).toBeNull();
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
+    expect(boot).not.toHaveBeenCalled();
   });
 
+  it('opens in Arabic, right to left, when nobody chose a language', async () => {
+    localStorage.removeItem(PORTAL_LANGUAGE_KEY);
+    stubApi({ 'GET /v1/me': nobody });
+
+    renderPortal('/');
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'كل مبلغ في مكانه.' })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('says plainly what this device keeps, and promises no phone', async () => {
+    stubApi({ 'GET /v1/me': nobody });
+    renderPortal('/');
+
+    const device = await screen.findByRole('region', { name: 'On this device only' });
+    expect(device).toHaveTextContent('Stays in this browser only. No account, and nothing is sent to us.');
+    expect(device).toHaveTextContent("Clearing this site's data erases it.");
+    expect(device).toHaveTextContent('Back it up from Your data › Download my records.');
+    expect(device).toHaveTextContent("It doesn't move into an account later.");
+    expect(device).not.toHaveTextContent(/phone|sync/i);
+  });
+
+  it('Try it on this device opens the app in one tap and remembers the choice', async () => {
+    const server = stubApi({ 'GET /v1/me': nobody });
+    const { user, router } = renderPortal('/');
+
+    await user.click(await screen.findByRole('button', { name: 'Try it on this device' }));
+
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+    expect(locationOf(router)).toBe(`/p/${ORG_A}`);
+    expect(localStorage.getItem(MODE_KEY)).toBe('local');
+    expect(server.calls).toHaveLength(1);
+  });
+
+  it('Sign in goes to sign-in; coming back without signing in returns to the welcome, still undecided', async () => {
+    stubApi({ 'GET /v1/me': nobody, 'GET /v1/self-service': () => ok({ signup: true, recovery: true }) });
+    const { user, router } = renderPortal('/');
+
+    await user.click(await screen.findByRole('link', { name: 'Sign in' }));
+    expect(await screen.findByLabelText('Email')).toBeInTheDocument();
+    act(() => router.history.back());
+
+    expect(await screen.findByRole('heading', { level: 1, name: WELCOME })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
+    expect(boot).not.toHaveBeenCalled();
+  });
+
+  // QA found it: while the router moves to /signup, the welcome's gate must not read the new address and send it to
+  // sign-in before the signup page mounts.
+  it('Create an account goes to the signup page, not to sign-in', async () => {
+    stubApi({ 'GET /v1/me': nobody, 'GET /v1/self-service': () => ok({ signup: true, recovery: true }) });
+    const { user, router } = renderPortal('/');
+
+    await user.click(await screen.findByRole('link', { name: 'Create an account' }));
+
+    await waitFor(() => expect(locationOf(router)).toBe('/signup'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(locationOf(router)).toBe('/signup');
+  });
+
+  it('a deep link while undecided goes to sign-in, keeping where it was headed', async () => {
+    stubApi({ 'GET /v1/me': nobody });
+    const { router } = renderPortal(`/p/${ORG_A}/receivables`);
+
+    await waitFor(() => expect(locationOf(router)).toBe(`/sign-in?next=${encodeURIComponent(`/p/${ORG_A}/receivables`)}`));
+    expect(screen.queryByRole('heading', { level: 1, name: WELCOME })).toBeNull();
+  });
+
+  it('a session from before local mode is kept: the probe answers 200 and the account opens', async () => {
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+
+    renderPortal('/');
+
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
+    expect(boot).not.toHaveBeenCalled();
+  });
+
+  it('a saved choice never shows the welcome again', async () => {
+    setMode('local');
+    const server = stubApi({});
+
+    renderPortal('/');
+
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: WELCOME })).toBeNull();
+    expect(server.calls).toHaveLength(0);
+  });
+
+  it("when the server can't be reached: the welcome, a Retry, and Try lasts for this visit only (D7)", async () => {
+    const server = stubApi({});
+    server.fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+    const { user } = renderPortal('/');
+
+    expect(await screen.findByText("Can't reach MTB3A right now")).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try it on this device' }));
+
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+    expect(localStorage.getItem(MODE_KEY)).toBeNull();
+  });
+
+  it("Retry asks the server again: nobody signed in leaves the plain welcome", async () => {
+    const server = stubApi({ 'GET /v1/me': nobody });
+    server.fetchMock.mockRejectedValueOnce(new TypeError('offline'));
+    const { user } = renderPortal('/');
+
+    await user.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.queryByText("Can't reach MTB3A right now")).toBeNull());
+    expect(screen.getByRole('heading', { level: 1, name: WELCOME })).toBeInTheDocument();
+  });
+
+  it('a server error is not "unreachable": it keeps the can\'t-connect screen', async () => {
+    stubApi({ 'GET /v1/me': () => fail(503, 'INTERNAL') });
+    renderPortal('/');
+
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: WELCOME })).toBeNull();
+  });
+});
+
+describe('the welcome, reopened (MUT-513)', () => {
+  it('You › Account › What is MTB3A? shows it, and Continue on this device goes back', async () => {
+    setMode('local');
+    stubApi({});
+    const { user, router } = renderPortal(`/p/${ORG_A}`);
+    const page = await openAccount(user);
+
+    await user.click(within(page).getByRole('button', { name: 'What is MTB3A?' }));
+    expect(await screen.findByRole('heading', { level: 1, name: WELCOME })).toBeInTheDocument();
+    expect(locationOf(router)).toBe('/welcome');
+
+    await user.click(screen.getByRole('button', { name: 'Continue on this device' }));
+    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
+  });
+
+  // Review: opened with no saved mode, /welcome asks the server first instead of offering Try over a live account
+  it('with no saved mode, /welcome asks the server first: signed in, the app; nobody, the welcome at /', async () => {
+    setUnhintedMode('probe');
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+    const { router } = renderPortal('/welcome');
+
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
+  });
+
+  it('signed in, /welcome is not for you: it goes to the app', async () => {
+    setMode('remote');
+    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
+    const { router } = renderPortal('/welcome');
+
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+  });
+});
+
+describe('first visit (AC1)', () => {
   it('opens in Arabic when nobody chose a language', async () => {
     localStorage.removeItem(PORTAL_LANGUAGE_KEY);
     setMode('local');
@@ -98,16 +258,6 @@ describe('first visit (AC1)', () => {
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
   });
 
-  it('a session from before local mode is kept: the probe answers 200 and the account opens', async () => {
-    setUnhintedMode('probe');
-    stubApi({ ...emptyProfileRoutes(), 'GET /v1/me': () => ok(me()) });
-
-    renderPortal('/');
-
-    expect(await screen.findByRole('navigation', { name: 'Sections' })).toBeInTheDocument();
-    expect(localStorage.getItem(MODE_KEY)).toBe('remote');
-    expect(boot).not.toHaveBeenCalled();
-  });
 });
 
 describe('the shell signed out', () => {
@@ -126,7 +276,7 @@ describe('the shell signed out', () => {
     stubApi({});
     const { user } = renderPortal(`/p/${ORG_A}`);
     const page = await openAccount(user);
-    expect(youRows(page)).toEqual(['Sign in', 'Your dataDownload my records']);
+    expect(youRows(page)).toEqual(['Sign in', 'Your dataDownload my records', 'What is MTB3A?']);
     expect(within(page).getByRole('heading', { level: 1 })).toHaveTextContent('On this device');
     expect(within(page).queryByText(/Sign out|Change password|Billing|iPhone|Android|Malafat|local@device.invalid/)).toBeNull();
   });

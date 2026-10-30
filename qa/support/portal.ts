@@ -7,7 +7,7 @@ import type { Page, Request, Route } from '@playwright/test';
  */
 
 /** PORTAL_LANGUAGE_KEY in src/hosted/i18n/HostedLanguageProvider.tsx */
-const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
+export const PORTAL_LANGUAGE_KEY = 'mutaba3a-portal-language';
 /** MODE_KEY in src/hosted/session/mode.ts (MUT-286): `remote` once this browser has used an account, `local` signed out. */
 export const MODE_KEY = 'mut-mode';
 
@@ -230,8 +230,12 @@ export interface SignedOutServer {
   requests: string[];
 }
 
-/** A browser with nobody signed in: the server answers 401 to everything and counts what it was asked (MUT-286; shared since MUT-425). */
-export async function signedOutServer(page: Page, language: 'en' | 'ar' | null = 'en'): Promise<SignedOutServer> {
+/**
+ * A browser with nobody signed in: the server answers 401 to everything and counts what it was asked (MUT-286; shared
+ * since MUT-425). MUT-513: a 401 alone no longer chooses this device (the welcome asks), so this browser has already
+ * chosen it (`mode: 'local'`) unless a spec passes `null` to open the first visit itself.
+ */
+export async function signedOutServer(page: Page, language: 'en' | 'ar' | null = 'en', mode: 'local' | null = 'local'): Promise<SignedOutServer> {
   const server: SignedOutServer = { requests: [] };
   await page.context().route('**/v1/**', async (route) => {
     const request = route.request();
@@ -239,5 +243,6 @@ export async function signedOutServer(page: Page, language: 'en' | 'ar' | null =
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   if (language) await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, language] as const);
+  if (mode) await page.context().addInitScript(([key, value]) => localStorage.getItem(key) === null && localStorage.setItem(key, value), [MODE_KEY, mode] as const);
   return server;
 }

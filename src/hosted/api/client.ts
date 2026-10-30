@@ -1,6 +1,6 @@
 import type { components, paths } from './schema';
 import type { LocalBackend } from '../session/localBackendContract';
-import { currentMode, setMode } from '../session/mode';
+import { currentMode, setMode, setUnhintedMode } from '../session/mode';
 
 /**
  * The portal's only door to data (hosted-portal.md §7.1): same-origin `fetch`
@@ -9,7 +9,7 @@ import { currentMode, setMode } from '../session/mode';
  * hosted profile travels as `X-Mutaba3a-Profile`; the identity routes carry none.
  *
  * Signed out (MUT-286, ADR-097), the same requests go to the local backend, the
- * server's own routes running in this page: see `goesRemote()` and `sendLocal()` below.
+ * server's own routes running in this page: see `routeOf()` and `sendLocal()` below.
  */
 
 export type Schemas = components['schemas'];
@@ -339,23 +339,31 @@ export async function localRecordCount(): Promise<number> {
   return (await import('@mut/local-backend')).countRecordsOnThisDevice();
 }
 
-let unhintedProbe: Promise<boolean> | null = null;
+/** Where a request goes: the server, this page's backend, or nowhere yet (`undecided`: nobody signed in, no choice). */
+type Route = 'remote' | 'local' | 'undecided';
+
+let unhintedProbe: Promise<Route> | null = null;
 
 /**
  * No mode hint (first visit, or a session from before local mode): ask the
- * server once whether this browser is signed in. Only a 200 or a 401 is an
- * answer, and only an answer is saved; anything else uses the server for this
- * request and asks again next time, so an outage never sends a signed-in
- * person to an empty local app. Resolves true when the server should answer.
+ * server once whether this browser is signed in. A 200 saves `remote`. A 401
+ * saves nothing: the browser is undecided until the welcome's doors choose
+ * (MUT-513, ADR-230), so no local database opens before a choice. Anything
+ * else uses the server for this request and asks again next time, so an
+ * outage never sends a signed-in person to an empty local app.
  */
-function probeRemote(): Promise<boolean> {
+function probeRemote(): Promise<Route> {
   unhintedProbe ??= fetch('/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then((response) => {
-      // Only the request in flight is shared; once answered, the saved hint is the answer.
+      // Only the request in flight is shared; once answered, the saved hint (or the undecided mode) is the answer.
       unhintedProbe = null;
-      if (response.status === 200) setMode('remote');
-      else if (response.status === 401) setMode('local');
-      return response.status !== 401;
+      // A late answer never overwrites a choice made meanwhile (Try while a Retry was in flight, review): it settles the
+      // mode only while the page is still asking.
+      const stillAsking = currentMode() === 'probe';
+      if (response.status === 200 && stillAsking) setMode('remote');
+      if (response.status !== 401) return 'remote';
+      if (stillAsking) setUnhintedMode('undecided');
+      return 'undecided';
     })
     .catch((error: unknown) => {
       unhintedProbe = null;
@@ -365,14 +373,14 @@ function probeRemote(): Promise<boolean> {
 }
 
 /**
- * Whether a request goes to the server (cookie) or to the local backend (this page), by mode. Decided at once
- * whenever the mode is known, so a request starts in the same tick it always did; a promise only during the
- * first-visit check, which rejects when that check can't reach the server.
+ * Where a request goes, by mode. Decided at once whenever the mode is known, so a request starts in the same tick it
+ * always did; a promise only during the first-visit check, which rejects when that check can't reach the server.
  */
-function goesRemote(url: string): boolean | Promise<boolean> {
+function routeOf(url: string): Route | Promise<Route> {
   const mode = currentMode();
-  if (ALWAYS_REMOTE.test(url) || mode === 'remote') return true;
-  return mode === 'probe' ? probeRemote() : false;
+  if (ALWAYS_REMOTE.test(url) || mode === 'remote') return 'remote';
+  if (mode === 'probe') return probeRemote();
+  return mode;
 }
 
 async function sendLocal(url: string, init: RequestInit): Promise<Response> {
@@ -446,18 +454,21 @@ export async function send(method: Method, path: string, options: RequestOptions
   const isAbort = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
   const unreachable = () => new ApiError(0, 'NETWORK', 'The request did not reach the server');
 
-  const decided = goesRemote(url);
-  let wentRemote: boolean;
-  if (typeof decided === 'boolean') {
-    wentRemote = decided;
+  const decided = routeOf(url);
+  let route: Route;
+  if (typeof decided === 'string') {
+    route = decided;
   } else {
     try {
-      wentRemote = await decided;
+      route = await decided;
     } catch (cause) {
       if (isAbort(cause)) throw cause;
       throw unreachable();
     }
   }
+  // Nobody signed in and nothing chosen: answered here, like the server would, with no request and no session ended.
+  if (route === 'undecided') throw new ApiError(401, 'UNAUTHENTICATED', 'Nobody is signed in on this device yet');
+  const wentRemote = route === 'remote';
 
   let response: Response;
   try {

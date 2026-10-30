@@ -38,16 +38,21 @@ export function normalizeText(text: string): string {
     .trim();
 }
 
+/** MUT-504: Tesseract reads the ע of מע"מ (VAT) as צ on Israeli bills. No Hebrew word is spelled מצ"מ. */
+const VAT_MISREAD = /(^|[^\p{L}])מצ"מ(?![\p{L}])/gu;
+
 /**
- * For keyword matching only: lower case, Arabic diacritics out, alef variants (آ أ إ) to ا, and the lam-meem order a
- * PDF text layer can produce (`املشتغل` for `المشتغل`, MUT-253 spike) put back at a word start.
+ * For keyword matching only: lower case, Arabic diacritics out, alef variants (آ أ إ) to ا, the lam-meem order a
+ * PDF text layer can produce (`املشتغل` for `المشتغل`, MUT-253 spike) put back at a word start, and VAT's common
+ * misread `מצ"מ` put back as `מע"מ` (MUT-504).
  */
 export function foldForMatch(text: string): string {
   return text
     .toLowerCase()
     .replace(ARABIC_DIACRITICS, '')
     .replace(/[آأإ]/g, 'ا')
-    .replace(/(^|[^\p{L}])امل/gu, '$1الم');
+    .replace(/(^|[^\p{L}])امل/gu, '$1الم')
+    .replace(VAT_MISREAD, '$1מע"מ');
 }
 
 /** Letters of right-to-left scripts (Hebrew, Arabic). */
