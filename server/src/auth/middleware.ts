@@ -145,6 +145,8 @@ export interface SessionSettings {
   trustedProxyHops: number;
   /** MUT-326: the front door's shared secret; with it, requests that carry it are judged by PORTAL_ORIGIN and the IP it hands over. */
   frontDoorToken?: string;
+  /** MUT-487 (R5/D9): the legacy forwarder's secret; requests that carry it are judged by the client IP it hands over, nothing else. */
+  forwarderToken?: string;
   /** MUT-326 stage "redirect": portal page visits that bypass the front door go to the carry-over page, then the new host. */
   legacyRedirect?: boolean;
   /** MUT-64 device-session lifetime (native app bearer tokens). Defaults to 30/180 days when absent. */

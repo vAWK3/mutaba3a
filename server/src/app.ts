@@ -469,7 +469,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     );
   }
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
-  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) }));
+  app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
@@ -491,7 +491,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       stripe,
       ipLimiter: deps.stripeWebhookIpLimiter ?? new SlidingWindowRateLimiter(STRIPE_WEBHOOK_POLICY.ipPerMinute),
       trustedProxyHops: sessions.trustedProxyHops,
-      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
+      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}),
     }),
   );
   // MUT-419: the daily trial reminders (job + operator), on the unguarded store like the Stripe sync.
@@ -517,7 +517,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       store: deps.store,
       ipLimiter: deps.emailWebhookIpLimiter ?? new SlidingWindowRateLimiter(EMAIL_WEBHOOK_POLICY.ipPerMinute),
       trustedProxyHops: sessions.trustedProxyHops,
-      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}),
+      ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}),
       logger: deps.logger,
     }),
   );
@@ -537,7 +537,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
           auditFor: agentAuditFor(deps.store),
         })
       : null;
-  const requestPaths = { trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}) };
+  const requestPaths = { trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) };
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
   app.route('/', oauthCleanupRoutes(deps.store));

@@ -29,6 +29,8 @@ export interface EmailWebhookRouteOptions {
   ipLimiter: RateLimiter;
   trustedProxyHops: number;
   frontDoorToken?: string;
+  /** MUT-487: the legacy forwarder's secret, trusted for the client IP only. */
+  forwarderToken?: string;
   logger: Logger;
 }
 

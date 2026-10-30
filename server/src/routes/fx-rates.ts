@@ -74,6 +74,8 @@ export interface PublicFxRateRouteOptions {
   trustedProxyHops: number;
   /** MUT-326: requests through the front door are keyed by the address it hands over. */
   frontDoorToken?: string;
+  /** MUT-487: the legacy forwarder's secret, trusted for the client IP only. */
+  forwarderToken?: string;
 }
 
 /**

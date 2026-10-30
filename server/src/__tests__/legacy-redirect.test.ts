@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp } from '../app.js';
-import { FRONT_DOOR_HEADER, LEGACY_CARRY_OVER_PATH } from '../auth/sessions.js';
+import { FORWARDER_HEADER, FRONT_DOOR_HEADER, LEGACY_CARRY_OVER_PATH } from '../auth/sessions.js';
 import type { SessionSettings } from '../auth/middleware.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
@@ -25,6 +25,7 @@ const SESSIONS: SessionSettings = {
   trustedProxyHops: 1,
   portalOrigin: 'https://app.placeholder.example',
   frontDoorToken: TOKEN,
+  forwarderToken: 'f'.repeat(64),
   legacyRedirect: true,
 };
 
@@ -79,6 +80,14 @@ describe('legacy-host redirect (MUT-326)', () => {
   it('never redirects through the front door', async () => {
     const res = await app.request(`${OLD}/sign-in`, { headers: { [FRONT_DOOR_HEADER]: TOKEN } });
     expect(res.status).toBe(200);
+  });
+
+  // MUT-487 (R5/D9): the forwarder's token vouches for the caller's IP only, so an old-host page visit it relays
+  // still goes through the carry-over.
+  it('still sends a visit relayed by the legacy forwarder through the carry-over page', async () => {
+    const res = await app.request(`${OLD}/sign-in`, { headers: { [FORWARDER_HEADER]: 'f'.repeat(64) }, redirect: 'manual' });
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(`${LEGACY_CARRY_OVER_PATH}?next=${encodeURIComponent('/sign-in')}`);
   });
 
   it('treats a wrong front-door token as a direct visit', async () => {

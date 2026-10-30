@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import {
+  FORWARDER_HEADER,
   FRONT_DOOR_CLIENT_IP_HEADER,
   FRONT_DOOR_HEADER,
   isSamePortalOrigin,
@@ -63,6 +64,46 @@ describe('requestClientIp', () => {
   it('with no token configured: exactly today\'s rule', () => {
     const h = viaDoor({ [FRONT_DOOR_CLIENT_IP_HEADER]: '9.9.9.9', 'x-forwarded-for': 'forged, 198.51.100.4' });
     expect(requestClientIp(h, { trustedProxyHops: 1 })).toBe('198.51.100.4');
+  });
+});
+
+/**
+ * MUT-487 (ADR-230, R5/D9): the legacy run.app forwarder relays old phone builds to the new project. Through it every
+ * caller would share the forwarder's egress IP in the sign-in throttle, so it vouches for the caller's IP with its own
+ * token. That token is trusted for the IP only: it never counts as the front door (carry-over, portal origin).
+ */
+describe('the forwarder token (MUT-487)', () => {
+  const FORWARDER = 'f'.repeat(64);
+  const settings = { trustedProxyHops: 1, frontDoorToken: TOKEN, forwarderToken: FORWARDER };
+  const relayed = (extra: Record<string, string> = {}) => headers({ [FORWARDER_HEADER]: FORWARDER, ...extra });
+
+  it('a relayed request\'s throttle key is the caller\'s IP, not the forwarder\'s', () => {
+    const h = relayed({ [FRONT_DOOR_CLIENT_IP_HEADER]: '203.0.113.9', 'x-forwarded-for': '203.0.113.9, 34.0.0.1' });
+    expect(requestClientIp(h, settings)).toBe('203.0.113.9');
+  });
+
+  it('a relayed request without a usable IP is "unknown", never the forwarder\'s address', () => {
+    expect(requestClientIp(relayed({ 'x-forwarded-for': '34.0.0.1' }), settings)).toBe('unknown');
+    expect(requestClientIp(relayed({ [FRONT_DOOR_CLIENT_IP_HEADER]: 'nope' }), settings)).toBe('unknown');
+  });
+
+  it('a wrong or absent forwarder token is a direct request: X-Forwarded-For with the configured hops', () => {
+    const forged = headers({ [FORWARDER_HEADER]: 'guess', [FRONT_DOOR_CLIENT_IP_HEADER]: '9.9.9.9', 'x-forwarded-for': 'x, 198.51.100.4' });
+    expect(requestClientIp(forged, settings)).toBe('198.51.100.4');
+    const unconfigured = relayed({ [FRONT_DOOR_CLIENT_IP_HEADER]: '9.9.9.9', 'x-forwarded-for': 'x, 198.51.100.4' });
+    expect(requestClientIp(unconfigured, { trustedProxyHops: 1, frontDoorToken: TOKEN })).toBe('198.51.100.4');
+  });
+
+  it('the forwarder token never passes isViaFrontDoor, in either header', () => {
+    expect(isViaFrontDoor(relayed(), TOKEN)).toBe(false);
+    expect(isViaFrontDoor(headers({ [FRONT_DOOR_HEADER]: FORWARDER }), TOKEN)).toBe(false);
+  });
+
+  it('a relayed portal write is judged by its own origin, not PORTAL_ORIGIN (the forwarder is not the front door)', () => {
+    const req = { url: `${RUN_APP}/v1/sessions`, header: relayed({ origin: RUN_APP }) };
+    expect(isSamePortalOrigin(req, { portalOrigin: PORTAL, frontDoorToken: TOKEN })).toBe(true);
+    const viaPortal = { url: `${RUN_APP}/v1/sessions`, header: relayed({ origin: PORTAL }) };
+    expect(isSamePortalOrigin(viaPortal, { portalOrigin: PORTAL, frontDoorToken: TOKEN })).toBe(false);
   });
 });
 
