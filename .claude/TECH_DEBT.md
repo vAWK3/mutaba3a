@@ -606,7 +606,7 @@
 **Priority**: Low
 **Impact**: The digest goes out on a pending redeem (inside the request) and again from a timer five minutes past each hour. Cloud Run throttles CPU between requests, so the timer can be late. A review that arrived after its hour's digest may then wait until the next request-time sweep or a later timer tick.
 **Fix**: if that matters, add `/jobs/signup-review-digest` to the existing Cloud Scheduler (MUT-360's `/jobs` pattern).
-**Note (2026-10-30, ADR-231)**: `mtb3a-production` runs Cloud Run at `min_instances = 0`. While scaled to zero the in-process timers (this digest, the hourly prunes) don't run at all, not just late. The digest's request-time nudge (a pending redeem) and the prune on the next start cover it; the uptime checks every 300 s usually keep an instance up anyway.
+**Note (2026-10-30, ADR-233)**: `mtb3a-production` runs Cloud Run at `min_instances = 0`. While scaled to zero the in-process timers (this digest, the hourly prunes) don't run at all, not just late. The digest's request-time nudge (a pending redeem) and the prune on the next start cover it; the uptime checks every 300 s usually keep an instance up anyway.
 
 ### TD-208: A suppressed mail address can't be lifted without SQL
 **Status**: Open
@@ -938,11 +938,11 @@
 
 ### TD-195: Malafat's runtime service account has project-wide roles over Mutaba3a's data in the shared project
 
-**Status**: Open until the MUT-487 cutover (ADR-230); closes at its C5, when `mtb3a-production`'s IAM policy is recorded with no Malafat account in it. The tooling is built (`project-move.sh`); the move itself is Basel's operator run.
+**Status**: Open until the MUT-487 cutover (ADR-232); closes at its C5, when `mtb3a-production`'s IAM policy is recorded with no Malafat account in it. The tooling is built (`project-move.sh`); the move itself is Basel's operator run.
 **Introduced**: 2026-10-21 (MUT-381)
 **Where**: `malafat-production` IAM. Malafat's `infrastructure/terraform/modules/regional-stack/main.tf` grants its Cloud Run service account `run-<region>` project-level `roles/cloudkms.cryptoKeyEncrypterDecrypter`, `roles/storage.objectAdmin`, `roles/cloudsql.client` and `roles/secretmanager.secretAccessor`.
-**Problem**: Mutaba3a's attachments bucket and its Cloud SQL instance live in the same project. Malafat's runtime can therefore read and write every receipt object. It can also read every Mutaba3a secret: `mutaba3a-api-database-url` (the database user and password, which with `cloudsql.client` reaches `mutaba3a-pg`), `mutaba3a-api-admin-token` (operator access) and `mutaba3a-api-session-pepper` (forging portal sessions). CMEK (MUT-381) never fixed this and was removed (ADR-164, superseded by ADR-230).
-**Fix**: MUT-487 (ADR-230) moves MTB3A to `mtb3a-production`, where Malafat holds no role, and rotates the machine secrets Malafat could read (ADR-230 §4). MUT-520 deletes the old copies 14 days later.
+**Problem**: Mutaba3a's attachments bucket and its Cloud SQL instance live in the same project. Malafat's runtime can therefore read and write every receipt object. It can also read every Mutaba3a secret: `mutaba3a-api-database-url` (the database user and password, which with `cloudsql.client` reaches `mutaba3a-pg`), `mutaba3a-api-admin-token` (operator access) and `mutaba3a-api-session-pepper` (forging portal sessions). CMEK (MUT-381) never fixed this and was removed (ADR-164, superseded by ADR-232).
+**Fix**: MUT-487 (ADR-232) moves MTB3A to `mtb3a-production`, where Malafat holds no role, and rotates the machine secrets Malafat could read (ADR-232 §4). MUT-520 deletes the old copies 14 days later.
 **Severity**: High (another product's runtime can read and write every customer's data; the privacy policy must not claim isolation, MUT-382).
 
 ### TD-194: The creator of a co-owned profile can't leave it; there is no ownership transfer

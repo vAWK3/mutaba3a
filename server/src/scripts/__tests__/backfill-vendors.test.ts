@@ -33,7 +33,7 @@ if (!url) {
     const otherCategory = await store.expenseCategories.create(org.id, { name: 'Other', color: null }, t(0));
     // What the old revision wrote: vendor text, no link.
     const expense = (organizationId: string, vendor: string | null, categoryId: string | null, minute: number) =>
-      store.expenses.create({ organizationId, occurredOn: '2026-10-01', amountMinor: 1_000n, currency: 'ILS', title: null, vendor, categoryId, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, t(minute));
+      store.expenses.create({ organizationId, occurredOn: '2026-10-01', amountMinor: 1_000n, currency: 'ILS', title: null, vendor, categoryId, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, t(minute));
     const first = await expense(org.id, 'Cafe Nour', food.id, 1);
     const second = await expense(org.id, 'cafe  nour', otherCategory.id, 2);
     const blank = await expense(org.id, '...', null, 3);
@@ -118,7 +118,7 @@ if (!url) {
       await backfillVendors(db);
       const linked = (await reread(w.first.id)).vendorId;
       await db.expense.update({ where: { id: w.first.id }, data: { vendor: 'Bakery Salam', updatedAt: t(1) } });
-      const fresh = await store.expenses.create({ organizationId: w.org.id, occurredOn: '2026-10-01', amountMinor: 500n, currency: 'ILS', title: null, vendor: 'Kiosk Amal', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.first.createdByUserId! }, t(9));
+      const fresh = await store.expenses.create({ organizationId: w.org.id, occurredOn: '2026-10-01', amountMinor: 500n, currency: 'ILS', title: null, vendor: 'Kiosk Amal', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.first.createdByUserId! }, t(9));
 
       await backfillVendors(db, { relinkSince: t(5) });
 

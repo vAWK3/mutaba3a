@@ -28,12 +28,61 @@
 
 ---
 
-## [Unreleased] - 2026-10-30 — MUT-487 + MUT-511: MTB3A's own GCP project, sized for cost (ADR-230, ADR-231; built, not run)
+## [Unreleased] - 2026-10-30 — MUT-302: VAT on expenses (ADR-231)
+
+**Why:** firms reclaim the VAT they pay, but an expense held one amount. Plan `.claude/designs/mut-302-expense-vat-plan.md` (APPROVED 2026-10-29). Web half; the phone half is a Flutter branch after this API is on local main.
+
+### Added
+- Server: `server/src/expenses/vat.ts` (`expenseVat`, `storedExpenseVat`, `assertExpenseVatColumns`, `NO_EXPENSE_VAT`); migration `20261030120000_mut302_expense_vat` (four nullable columns, four CHECKs); `vat` on Create/Update expense and receipt approve requests and on `Expense` responses (`ExpenseVatInput`, `ExpenseVat`). API 1.92.0-mut302.
+- Shared case table `server/src/__tests__/fixtures/expense-vat-cases.json` (30 rows from `computeVat`), read by the server and portal tests.
+- Portal: `ExpenseVatRow` (firm profiles only), `src/hosted/lib/expenseVat.ts` (`vatPreview`, `percentToBasisPoints`, `basisPointsToPercent`); i18n `hosted.expenses.vat.*`, `hosted.receipts.review.vatRead` (ar + en).
+- Rollback hazard MUT-302 (`rollback-check.ts`, DEPLOYMENT.md §6).
+
+### Changed
+- `CreateExpenseInput` requires the four VAT fields (`| null`), so every writer states its VAT (inbox filing and the MCP tool record none).
+- Expense PATCH re-splits a VAT expense's new amount in the same write; `null` clears.
+- Receipt Review prefills a read VAT rate on a firm; `suggestionToFormValues` takes `{ firm }` and returns `vatRead`.
+- `createExpenseBody(values, { firm })`; the drawer's edit sends `vat` only when it changed (`updateExpenseVat`).
+- Local snapshot format 13 → 14 (`addExpenseVat`).
+- Brief `firm-books.md` §7 amended: no `grossMinor`; the split helper moves to MUT-308.
+
+### Technical
+- Tests first: `expenses/__tests__/vat.test.ts` (case table, property test), `compose.test.ts` (D4), `routes-expenses.test.ts` (AC1/AC2/AC4, D2, D4, OV10, review finding 3), `routes-receipts.test.ts`, `mcp-write-tools.test.ts`, `rollback-check.test.ts`, expenses store contract (CHECKs on memory and Postgres); local `migrations.test.ts`, `format-fingerprint.test.ts`, `parity.test.ts`; portal `expenseVat.test.ts`, `receiptSuggestion.test.ts`, `ExpenseDrawer.test.tsx`, `Receipts.test.tsx`, `expenseApiErrors.test.ts`.
+- Release-QA: `@portal.expenses.vat`, `@portal.expenses.vat-none-personal`, `@portal.receipts.vat-from-receipt`; the QA fake API splits VAT as the server does (`splitExpenseVat`).
+- Merging this restarts :8787 (a Prisma migration): warn the orchestrator first.
+
+## [Unreleased] - 2026-10-30 — MUT-513: the portal's first-visit welcome (ADR-230)
+
+**Why:** a newcomer from the landing landed in an empty local app with no word on what MTB3A is or where their records would live. Plan `.claude/designs/mut-513-portal-welcome-plan.md`; design: Claude Design "Portal Welcome".
+
+### Added
+- `WelcomePage` (`src/hosted/pages/auth/WelcomePage.tsx`): what MTB3A is, an account door (Sign in, Create an account) and a this-device door with an honest explainer; Arabic first, 375px, light and dark. Illustration and motion from WELCOME-SPEC.md in `hosted.css` (`.hp-welcome-*`), with a reduced-motion fade.
+- `/welcome` (reopened from You › Account › What is MTB3A? on this device: "Continue on this device").
+- `useContinueOnThisDevice` (`src/hosted/session/continueOnThisDevice.ts`), shared by the sign-in page and the welcome.
+- `portal_welcome_choice` (analytics contract 2.4.0), counted cookieless through a separate `welcome` posthog-js instance (`countWelcomeChoice`); guard `cookieless` allowance; `posthogConfig` `'portal-welcome'` options.
+- `--welcome-*` type tokens (`src/styles/theme.css`).
+
+### Changed
+- An unhinted 401 now leaves the browser `undecided` (memory only) instead of saving `local`; `client.ts` answers later calls with its own 401 and never loads the local chunk before a choice. Undecided deep links go to sign-in.
+- A network failure on a first visit to `/` shows the welcome with Retry; Try then lasts for this visit only.
+- Carry-over: saving the received records on an undecided browser chooses this device.
+- Error reporting treats `undecided` as signed out.
+- DESIGN.md: the welcome is a Present surface; illustrations may use the brand palette as art.
+
+### Technical
+- Tests first: `client-mode.test.ts` (undecided rows), `mode.test.ts`, `errorReporting.test.ts`, `carryOverPages.test.tsx`, `local-mode.test.tsx` (welcome flows), `WelcomePage.test.tsx`, `portalAnalytics.welcome.test.ts`, `guard.test.ts`, `posthogConfig.test.ts`, `analytics-taxonomy.test.ts`.
+- Release-QA: `qa/features/portal/welcome.yaml` + `qa/specs/portal/welcome.spec.ts`; `signedOutServer` seeds `local` unless a spec passes `null`; `@portal.local.first-visit` passes the welcome via Try.
+- Privacy wording draft in `docs/operations/before-release.md` (Basel approves; web release before the server release). No API, schema or migration change.
+- Pre-landing review (qa-reconcile, 2026-10-30): a late first-visit answer never overwrites a choice; `/welcome` and the carry-over save ask the server before choosing this device (an unreachable or slow server holds it for the visit only, at most 5 s); explainer points render as one line each; the welcome instance keeps PostHog state in memory and the count drops the URL's query; the reopened welcome counts nothing.
+- Fixed: `ThemeProvider` (`src/lib/theme/context.tsx`) crashed every page when the browser blocks site storage (found by `@portal.welcome.blocked-storage`; AC8).
+- Privacy policy (Basel approved 2026-10-30): Anonymous usage counts now describes the welcome's cookieless door count (en/ar), Last updated October 30, 2026. Publish with `make release web` before the server release that carries MUT-513.
+
+## [Unreleased] - 2026-10-30 — MUT-487 + MUT-511: MTB3A's own GCP project, sized for cost (ADR-232, ADR-233; built, not run)
 
 **Why:** MTB3A's data lived in `malafat-production`, where Malafat's runtime account can read every customer's books (TD-195); CMEK didn't fix it and was dropped. The move creates a new database, so it is also the moment to size it: REGIONAL `db-g1-small` was ₪184 of MTB3A's ₪204 a month. Plan `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md` (eng review R1–R9, AM1–AM16).
 
 ### Removed
-- The dormant CMEK code (MUT-381): `kms.tf`, `mutaba3a-pg2`, `cmek_stage`, the KMS alert, google-beta, `tests/cmek.tftest.hcl` (its MUT-382 backup-location assert moved to `database_pool`), `scripts/cmek-cutover.sh` and its test, the drill's scratch key, `guard_cmek_release` and `SKIP_CMEK_GUARD`. ADR-164 superseded by ADR-230.
+- The dormant CMEK code (MUT-381): `kms.tf`, `mutaba3a-pg2`, `cmek_stage`, the KMS alert, google-beta, `tests/cmek.tftest.hcl` (its MUT-382 backup-location assert moved to `database_pool`), `scripts/cmek-cutover.sh` and its test, the drill's scratch key, `guard_cmek_release` and `SKIP_CMEK_GUARD`. ADR-164 superseded by ADR-232.
 
 ### Added
 - `server/scripts/project-move.sh`: idempotent steps `secrets` (state mv of the five generated secrets, R1), `secret-values` (pipe copy or `--rotate`, AM10/R7), `images` (add-tag, never over a tag), `rehearse`, `freeze`, `copy` (cross-project restore, the target's own DB password via the Admin API, rsync with deletions), `verify` (counts, per-table checksums, objects, a signed URL), `open`, `forward`; `--from/--to` swapped is the rollback.

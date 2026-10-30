@@ -68,7 +68,7 @@ describe('requestClientIp', () => {
 });
 
 /**
- * MUT-487 (ADR-230, R5/D9): the legacy run.app forwarder relays old phone builds to the new project. Through it every
+ * MUT-487 (ADR-232, R5/D9): the legacy run.app forwarder relays old phone builds to the new project. Through it every
  * caller would share the forwarder's egress IP in the sign-in throttle, so it vouches for the caller's IP with its own
  * token. That token is trusted for the IP only: it never counts as the front door (carry-over, portal origin).
  */

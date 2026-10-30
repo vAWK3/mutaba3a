@@ -1,15 +1,15 @@
 # Copy to production.tfvars (git-ignored). image_tag is passed by scripts/deploy.sh.
-# MUT-487 (ADR-230): production runs in mtb3a-production (config/gcp.json). The old project, malafat-production,
+# MUT-487 (ADR-232): production runs in mtb3a-production (config/gcp.json). The old project, malafat-production,
 # has its own legacy.tfvars (legacy.tfvars.example), used only with LEGACY_STACK=1.
 project_id          = "mtb3a-production"
 region              = "me-west1"
 environment         = "production"
-# MUT-511 (ADR-231): one zone, the smallest tier, until MUT-512's triggers (the CPU and memory alerts).
+# MUT-511 (ADR-233): one zone, the smallest tier, until MUT-512's triggers (the CPU and memory alerts).
 db_tier             = "db-f1-micro"
 db_availability     = "ZONAL"
 db_backup_enabled   = true
 deletion_protection = true
-# Basel, 2026-10-30 (ADR-231): the uptime checks keep an instance warm; max stays 1 (TD-017).
+# Basel, 2026-10-30 (ADR-233): the uptime checks keep an instance warm; max stays 1 (TD-017).
 min_instances       = 0
 # MUT-270: Prisma pool per instance, and Cloud SQL's max_connections (see the precondition on the DATABASE_URL
 # secret in main.tf): 2 x 5 x 1 + 10 = 20 <= 25, db-f1-micro's default.

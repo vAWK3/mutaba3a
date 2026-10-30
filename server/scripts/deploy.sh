@@ -3,7 +3,7 @@
 #
 #   GCP_PROJECT_ID=<project> TF_STATE_BUCKET=<bucket> ./scripts/deploy.sh
 #
-# MUT-487 (ADR-230): config/gcp.json names the one project production releases go to (guard_project_release).
+# MUT-487 (ADR-232): config/gcp.json names the one project production releases go to (guard_project_release).
 # The old project (the legacy forwarder, a rollback of the move, the teardown) needs LEGACY_STACK=1, which also
 # reads legacy.tfvars instead of production.tfvars. Each project keeps its own terraform dir state
 # (TF_DATA_DIR=.terraform-<project>), so switching between the two never re-inits one onto the other's bucket.
@@ -137,7 +137,7 @@ smoke_release() {
   popd >/dev/null
 }
 
-# MUT-487 (ADR-230): only config/gcp.json's project, or the old one with LEGACY_STACK=1. Before anything else.
+# MUT-487 (ADR-232): only config/gcp.json's project, or the old one with LEGACY_STACK=1. Before anything else.
 guard_project_release "${GCP_PROJECT_ID}"
 info "stack: project=${GCP_PROJECT_ID} bucket=${TF_STATE_BUCKET} LEGACY_STACK=${LEGACY_STACK} tfvars=${TFVARS_FILE} TF_DATA_DIR=${TF_DATA_DIR}"
 

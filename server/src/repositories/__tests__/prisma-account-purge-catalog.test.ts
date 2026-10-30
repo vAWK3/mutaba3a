@@ -72,7 +72,7 @@ if (!url) {
       });
       const session = await store.sessions.create({ userId: user.id, tokenDigest: randomUUID().replace(/-/g, '').padEnd(64, '0'), kind: 'cookie', at: T0, idleExpiresAt: DUE, absoluteExpiresAt: DUE, userAgent: 'catalog' });
       for (const organizationId of [personalOrganization.id, firm.id]) {
-        const expense = await store.expenses.create({ organizationId, occurredOn: '2026-10-20', amountMinor: 1_000n, currency: 'ILS', title: 'Paper', vendor: 'Kiosk', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, T0);
+        const expense = await store.expenses.create({ organizationId, occurredOn: '2026-10-20', amountMinor: 1_000n, currency: 'ILS', title: 'Paper', vendor: 'Kiosk', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, T0);
         await store.expenseReceipts.create({ organizationId, expenseId: expense.id, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-20', uploadedByUserId: user.id, requestId: null }, T0);
         await store.conversions.create({ organizationId, occurredOn: '2026-10-20', amountMinor: 100n, currency: 'USD', toAmountMinor: 360n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, T0);
         await store.expenseGroups.create({ organizationId, name: 'Trip', startOn: '2026-10-01', endOn: null, notes: null, createdByUserId: user.id }, T0);

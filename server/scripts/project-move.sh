@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MTB3A API: move production from one GCP project to another (MUT-487, ADR-230). The operator runs this; nothing in
+# MTB3A API: move production from one GCP project to another (MUT-487, ADR-232). The operator runs this; nothing in
 # CI does. DEPLOYMENT.md §6d is the whole procedure, in order; this is its tested core. Every subcommand checks its own
 # preconditions and is safe to run again; there is no hidden state between them. The same steps with --from and --to
 # swapped are the rollback.

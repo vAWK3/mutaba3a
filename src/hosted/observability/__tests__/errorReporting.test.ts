@@ -116,6 +116,21 @@ describe('the crash-reporting gate (MUT-149 D1, ADR-097 §10)', () => {
     expect(chunk.reporter.reportGlobal).not.toHaveBeenCalled();
   });
 
+  // MUT-513: undecided (nobody signed in, no choice yet) is signed out too. Errors from the welcome never reach Sentry,
+  // even when the person then signs in on the same page.
+  it('holds nothing while undecided, and drops what it held when the visit turns out undecided', async () => {
+    localStorage.removeItem(MODE_KEY);
+    setUnhintedMode('probe');
+    const chunk = fakeChunk();
+    startErrorReporting({ enabled: true, currentRouteId, load: chunk.load });
+    throwGlobally(new Error('before the probe answered'));
+    setUnhintedMode('undecided');
+    throwGlobally(new Error('on the welcome'));
+    setMode('remote');
+    await flush();
+    expect(chunk.reporter.reportGlobal).not.toHaveBeenCalled();
+  });
+
   it('lets the SDK own window errors once it has loaded, so nothing is sent twice', async () => {
     setMode('remote');
     const chunk = fakeChunk();

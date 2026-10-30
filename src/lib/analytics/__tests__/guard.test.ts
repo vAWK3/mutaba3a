@@ -176,3 +176,37 @@ describe('guardEvent: the portal allowance', () => {
     expect(props).toMatchObject({ $browser: 'Chrome', $os: 'Mac OS X', $os_version: '14.0', $device_type: 'Desktop' });
   });
 });
+
+// MUT-513 (ADR-230): the welcome counts its doors before anyone signs in, the landing's cookieless way: only the
+// fields PostHog's daily hash reads, and the choice. Nothing that tells one browser from another, and no other event.
+describe('guardEvent: the portal welcome (MUT-513)', () => {
+  const WELCOME: GuardContext = { ...PORTAL, cookieless: true };
+  const COOKIELESS = { $cookieless_mode: true, $raw_user_agent: 'Mozilla/5.0', $referrer: 'https://elsewhere.example/', utm_source: 'mail' };
+
+  it('keeps the cookieless routing fields and the choice, and drops the rest', () => {
+    const guarded = guardEvent(capture('portal_welcome_choice', { choice: 'local', ...COOKIELESS }), WELCOME);
+
+    expect(guarded?.properties).toMatchObject({ choice: 'local', surface: 'portal', $cookieless_mode: true, $raw_user_agent: 'Mozilla/5.0', $host: 'portal.example' });
+    for (const field of ['$referrer', 'utm_source', '$browser', '$os', '$session_id', '$pathname']) expect(guarded?.properties).not.toHaveProperty(field);
+  });
+
+  it('keeps the page address without its query or fragment', () => {
+    const guarded = guardEvent(capture('portal_welcome_choice', { choice: 'sign_in', $current_url: 'https://portal.example/sign-in?next=%2Fp%2F1#x' }), WELCOME);
+    expect(guarded?.properties.$current_url).toBe('https://portal.example/sign-in');
+  });
+
+  it('sends nothing but the door count from the welcome, not even another portal event', () => {
+    expect(guardEvent(capture('income_recorded', { currency: 'USD' }), WELCOME)).toBeNull();
+    expect(guardEvent(capture('portal_opened'), WELCOME)).toBeNull();
+  });
+
+  it('drops an unknown door', () => {
+    expect(guardEvent(capture('portal_welcome_choice', { choice: 'phone' }), WELCOME)?.properties).not.toHaveProperty('choice');
+  });
+
+  it('a signed-in portal event never carries the cookieless fields', () => {
+    const guarded = guardEvent(capture('portal_welcome_choice', { choice: 'sign_in', ...COOKIELESS }), PORTAL);
+    expect(guarded?.properties).not.toHaveProperty('$cookieless_mode');
+    expect(guarded?.properties).not.toHaveProperty('$raw_user_agent');
+  });
+});

@@ -176,7 +176,7 @@ export function describeLedgerStoreVendorsContract(name: string, makeStore: () =
       const w = await world(store);
       const here = (await store.vendors.resolve({ organizationId: w.a.id, name: 'Here' }, at(1)))!;
       const there = (await store.vendors.resolve({ organizationId: w.a.id, name: 'There' }, at(1)))!;
-      const base = { organizationId: w.a.id, occurredOn: '2026-10-24', amountMinor: 1_000n, currency: 'ILS', title: null, vendor: 'Here', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id };
+      const base = { organizationId: w.a.id, occurredOn: '2026-10-24', amountMinor: 1_000n, currency: 'ILS', title: null, vendor: 'Here', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id };
       const expense = await store.expenses.create({ ...base, vendorId: here.id }, at(2));
       expect(expense.vendorId).toBe(here.id);
       expect((await store.expenses.create(base, at(2))).vendorId).toBeNull();

@@ -29,6 +29,7 @@ describe('applyExpenseApiError', () => {
     ['PROJECT_CUSTOMER_MISMATCH', 'projectId', 'project-customer-mismatch'],
     ['AMOUNT_INVALID', 'amount', 'amount-invalid'],
     ['DATE_INVALID', 'occurredAt', 'date-invalid'],
+    ['VAT_RATE_INVALID', 'vatRate', 'vatRateInvalid'], // MUT-302: the VAT row words it from the code
   ] as const)('maps %s onto the %s field', (reason, field, message) => {
     const setError = vi.fn();
     const showToast = vi.fn();

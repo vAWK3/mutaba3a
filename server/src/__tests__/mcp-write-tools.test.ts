@@ -59,6 +59,10 @@ describe('add_expense to a profile (AC2)', () => {
     expect(out).toMatchObject({ outcome: 'created', expense: { where: 'profile', profileId: p.personalId, amount: '45.90', vendor: 'שופרסל דיל' }, replayed: false });
     const [expense] = await expensesOf(h, p, p.personalId);
     expect(expense).toMatchObject({ id: out.expense.id, captureSource: 'mcp', vendor: 'שופרסל דיל', vendorId: expect.any(String), title: 'Weekly shop' });
+    // MUT-302 (D8, OV8): the tool takes no VAT, so its expense records none.
+    expect(expense.vat).toBeNull();
+    const row = await h.store.expenses.getById(p.personalId, out.expense.id);
+    expect(row).toMatchObject({ vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null });
     const audit = await h.store.audit.list(p.personalId, { entityId: out.expense.id }, { limit: 10, cursor: null });
     expect(audit.items).toEqual([expect.objectContaining({ action: 'expense.created', actorType: 'USER', actorId: p.userId, metadata: expect.objectContaining({ captureSource: 'mcp', grantId: expect.any(String) }) })]);
   });

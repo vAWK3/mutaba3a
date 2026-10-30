@@ -2,7 +2,7 @@
 # deploy.sh's release guards: each refuses a release whose full `terraform apply` would change something
 # production relies on as a side effect, because the git-ignored production.tfvars of this checkout says so
 # (a stale copy, a missing line) or because an operator procedure is in the middle of something:
-#   * guard_project_release: the GCP project this release goes to (MUT-487, ADR-230);
+#   * guard_project_release: the GCP project this release goes to (MUT-487, ADR-232);
 #   * guard_ingress_release: a service a restore or a project move holds closed;
 #   * guard_stripe_release, guard_sentry_release, guard_mailer_release: Stripe, error reports, mail;
 #   * guard_turnstile_site_key: a test Turnstile key in a portal that mails real links;
@@ -63,7 +63,7 @@ guard_ingress_release() {
   fi
 }
 
-# guard_project_release <project> (MUT-487, ADR-230, AM5): config/gcp.json names the one project production
+# guard_project_release <project> (MUT-487, ADR-232, AM5): config/gcp.json names the one project production
 # releases go to, and the old one that still runs the legacy forwarder until MUT-520/MUT-521. A release to the
 # old project needs LEGACY_STACK=1 (the forwarder, a rollback, the teardown); any other project is refused.
 # Needs node (deploy.sh already does). GCP_CONFIG overrides the file (tests).
@@ -86,7 +86,7 @@ guard_project_release() {
       warn "LEGACY_STACK=1: acting on the OLD project ${project} (the forwarder, a rollback or the teardown), not ${want}"
       return 0
     fi
-    die "GCP_PROJECT_ID=${project} is MTB3A's old project; production runs in ${want} (config/gcp.json, ADR-230). Point deploy.env or production.tfvars at ${want}. Only the forwarder, a rollback or the teardown act on ${project}, with LEGACY_STACK=1 and legacy.tfvars (DEPLOYMENT.md §6d)."
+    die "GCP_PROJECT_ID=${project} is MTB3A's old project; production runs in ${want} (config/gcp.json, ADR-232). Point deploy.env or production.tfvars at ${want}. Only the forwarder, a rollback or the teardown act on ${project}, with LEGACY_STACK=1 and legacy.tfvars (DEPLOYMENT.md §6d)."
   fi
   die "GCP_PROJECT_ID=${project} is not MTB3A's ${env} project (${want}, config/gcp.json); refusing to release there"
 }

@@ -245,3 +245,35 @@ features:
       - On a personal profile, open Expenses and save a new expense
     expect:
       - The saved-flash notice's icon is full size from its first frame and never moves
+  - id: vat
+    title: A firm records an expense with VAT; the row previews net and VAT, the server stores the split, and reopening reads it (MUT-302)
+    tier: secondary
+    tickets: [MUT-302]
+    paths:
+      - src/hosted/components/expenseForm/ExpenseVatRow.tsx
+      - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+      - src/hosted/components/expenseForm/useHostedExpenseForm.ts
+      - src/hosted/lib/expenseVat.ts
+      - server/src/expenses/vat.ts
+    steps:
+      - On a firm profile, open an expense saved before VAT existed
+      - Record an expense of 117 and open VAT
+      - Choose Standard and type 17, then save
+      - Reopen the expense
+    expect:
+      - The old expense's VAT row reads "No VAT recorded" (MUT-302 AC2)
+      - Closed, the row reads "No VAT recorded"; open, it shows net 100.00 and VAT 17.00
+      - POST /v1/expenses gets vat with STANDARD_RATED and 1700 basis points, never net or VAT
+      - Reopened, the row reads "VAT 17%" with 17.00, and net 100.00 when opened
+  - id: vat-none-personal
+    title: A profile without firm features has no VAT row, and its expenses send no VAT (MUT-302 AC3)
+    tier: secondary
+    tickets: [MUT-302]
+    paths:
+      - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+    steps:
+      - On a profile without firm features, open Record expense
+      - Record an expense
+    expect:
+      - There is no VAT row on the form
+      - POST /v1/expenses has no vat

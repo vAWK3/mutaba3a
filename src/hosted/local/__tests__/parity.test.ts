@@ -139,6 +139,8 @@ async function expenseScript(s: Side): Promise<unknown[]> {
   const categories = (await record('GET', '/v1/expense-categories')) as { items: Array<{ id: string }> };
   const taxi = await record('POST', '/v1/expenses', { occurredOn: '2026-10-02', amount: '40.00', currency: 'USD', title: 'Taxi', categoryId: categories.items[0]!.id });
   await record('POST', '/v1/expenses', { occurredOn: '2026-10-03', amount: '120.00', currency: 'ILS', title: 'Hotel', vendor: 'Seaside' });
+  // MUT-302: a VAT split recorded on the device the same as on the server.
+  await record('POST', '/v1/expenses', { occurredOn: '2026-10-04', amount: '117.00', currency: 'ILS', title: 'Printer', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
   await record('POST', `/v1/expenses/${String(taxi.id)}/receipts`, { filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 16 }, undefined, (b) => ({ receipt: (b as { receipt: unknown }).receipt }));
   await record('GET', '/v1/expenses');
   await record('GET', '/v1/summaries/expenses');
@@ -224,7 +226,7 @@ describe('local/remote parity (AC3)', () => {
 
     expect(localTranscript).toEqual(remoteTranscript);
     const statuses = (localTranscript as Array<{ status: number }>).map((step) => step.status);
-    expect(statuses).toEqual([200, 201, 201, 201, 200, 200, 201, 200, 200, 200, 200, 201, 200, 200, 204, 200]);
+    expect(statuses).toEqual([200, 201, 201, 201, 201, 200, 200, 201, 200, 200, 200, 200, 201, 200, 200, 204, 200]);
   });
 });
 

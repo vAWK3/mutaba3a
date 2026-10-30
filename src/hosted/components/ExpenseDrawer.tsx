@@ -18,7 +18,7 @@ import { ApiError, type CreateExpenseRequest, type Expense, type ExpenseDetail, 
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { trackPortal } from '../analytics/portalAnalytics';
 import { InGroupsLine } from './groups/InGroupsLine';
-import { createExpenseBody, useHostedExpenseForm, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
+import { createExpenseBody, updateExpenseVat, useHostedExpenseForm, vatValuesOf, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
 import { HostedExpenseFields } from './expenseForm/HostedExpenseFields';
 
 export type { HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
@@ -54,9 +54,11 @@ export interface ExpenseDrawerProps {
    * same drawer uploads them there. Without it, the new-expense drawer offers no receipts.
    */
   onCreated?: (expenseId: string) => void;
+  /** MUT-302: the profile is a firm (`profile.firm`), so the form shows the VAT row and saves its VAT. */
+  firm?: boolean;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated, firm = false }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -136,11 +138,13 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
           customerId: values.clientId || null,
           projectId: values.projectId || null,
           notes: values.notes || null,
+          // MUT-302 (D4): only when the VAT changed; left out, the server keeps it and re-splits a new amount.
+          ...updateExpenseVat(existingExpense, values, { firm }),
         };
         await updateMutation.mutateAsync({ expenseId: existingExpense.id, body, version: String(existingExpense.version) });
         markSaved(existingExpense.id);
       } else {
-        const body: CreateExpenseRequest = createExpenseBody(values);
+        const body: CreateExpenseRequest = createExpenseBody(values, { firm });
         const created = await createMutation.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
         attempt.succeeded();
         // Opt-in usage counts (MUT-155): a new expense only, its currency and nothing else
@@ -238,7 +242,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {mode === 'edit' && existingExpense?.captureSource === 'mcp' && <AddedByClaude label={t('hosted.expenses.drawer.addedByClaude')} />}
       <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ReadOnlyFields readOnly={readOnly}>
-          <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} />
+          <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} firm={firm} />
         </ReadOnlyFields>
       </form>
       {mode === 'create' && onCreated && !readOnly && <QueuedReceipts files={queued} onChange={setQueued} />}
@@ -277,6 +281,7 @@ function valuesOf(expense: Expense): HostedExpenseFormValues {
     projectId: expense.projectId ?? '',
     categoryId: expense.categoryId ?? '',
     notes: expense.notes ?? '',
+    ...vatValuesOf(expense),
   };
 }
 

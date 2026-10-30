@@ -20428,12 +20428,24 @@ export interface components {
              */
             createdByUserId: string | null;
             captureSource: components["schemas"]["StoredCaptureSource"] & unknown;
+            vat: components["schemas"]["ExpenseVat"];
             version: number;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @description MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302. */
+        ExpenseVat: {
+            treatment: components["schemas"]["VatTreatment"];
+            rateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+        } | null;
         FileAsExpenseRequest: {
             /** Format: uuid */
             categoryId?: string;
@@ -21692,6 +21704,12 @@ export interface components {
              * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
              */
             capturedAt?: string;
+            /** @description MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302. */
+            vat?: {
+                treatment: components["schemas"]["VatTreatment"];
+                /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
+                rateBasisPoints: number;
+            } | null;
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date. */
@@ -21709,6 +21727,12 @@ export interface components {
             /** Format: uuid */
             projectId?: string | null;
             notes?: string | null;
+            /** @description MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row's own. Since 1.92.0-mut302. */
+            vat?: {
+                treatment: components["schemas"]["VatTreatment"];
+                /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
+                rateBasisPoints: number;
+            } | null;
         };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
@@ -22174,6 +22198,12 @@ export interface components {
              * @description When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
              */
             capturedAt?: string;
+            /** @description MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302. */
+            vat?: {
+                treatment: components["schemas"]["VatTreatment"];
+                /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
+                rateBasisPoints: number;
+            } | null;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         /** @description The expense with its READY receipts (the filed one among them), and the filed receipt */

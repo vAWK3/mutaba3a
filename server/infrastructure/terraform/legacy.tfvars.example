@@ -1,4 +1,4 @@
-# MUT-487 (ADR-230, AM5): the OLD project's stack, malafat-production. Copy to legacy.tfvars (git-ignored) from
+# MUT-487 (ADR-232, AM5): the OLD project's stack, malafat-production. Copy to legacy.tfvars (git-ignored) from
 # your current production.tfvars as it was before the move (every line), then set the lines below. Only ever used
 # with LEGACY_STACK=1 (deploy.sh, make, project-move.sh): for the forwarder, a rollback of the move, and the
 # teardown (MUT-520). Its state stays where it always was: gs://malafat-production-terraform-state,

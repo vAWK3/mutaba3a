@@ -54,6 +54,15 @@ describe('hazardsRolledPast', () => {
     expect(byTicket.get('MUT-444')!.count).toBe(`SELECT (SELECT count(*) FROM payment_allocations WHERE "releasedAt" IS NOT NULL) + (SELECT count(*) FROM agreement_supplements WHERE distribution = 'CORRECTION')`);
   });
 
+  it('MUT-302 (OV2): rolling back past the expense VAT migration counts the VAT expenses, and refuses once any exists', async () => {
+    const mut302 = ['20261030120000_mut302_expense_vat'];
+    expect(hazardsRolledPast(mut302).map((h) => h.ticket)).toEqual(['MUT-302']);
+    const lines: string[] = [];
+    const code = await rollbackCheck({ commit: 'abc1234', applied: [...AT, ...mut302], atCommit: AT, count: async (sql) => (sql.includes('"vatTreatment" IS NOT NULL') ? 3 : 0), log: (s) => lines.push(s) });
+    expect(code).toBe(1);
+    expect(lines.join('\n')).toMatch(/MUT-302: 3 .*expenses_vat_adds_up/);
+  });
+
   it('MUT-444 refuses a rollback once a correction released a row or wrote a CORRECTION row', async () => {
     const lines: string[] = [];
     const applied = [...AT, '20261029100000_mut444_supplement_correction', '20261029100100_mut444_allocation_released_at'];

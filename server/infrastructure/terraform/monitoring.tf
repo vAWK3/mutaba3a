@@ -46,18 +46,18 @@ locals {
       threshold    = 0.8
       doc          = "Cloud SQL `${local.instance_id}` has used more than 80% of its disk for 15 minutes. `disk_autoresize` grows it (and the bill) on its own; check what is growing before it does."
     }
-    # MUT-511 (ADR-231): on db-f1-micro these two are MUT-512's triggers to move up a tier.
+    # MUT-511 (ADR-233): on db-f1-micro these two are MUT-512's triggers to move up a tier.
     cpu = {
       display_name = "${local.instance_id} CPU above 80%"
       metric       = "cloudsql.googleapis.com/database/cpu/utilization"
       threshold    = 0.8
-      doc          = "Cloud SQL `${local.instance_id}` has run above 80% CPU for 15 minutes. Look for a slow query in Query Insights; if it is load, this is MUT-512's trigger to raise `db_tier` (a restart of a few minutes, ADR-231)."
+      doc          = "Cloud SQL `${local.instance_id}` has run above 80% CPU for 15 minutes. Look for a slow query in Query Insights; if it is load, this is MUT-512's trigger to raise `db_tier` (a restart of a few minutes, ADR-233)."
     }
     memory = {
       display_name = "${local.instance_id} memory above 90%"
       metric       = "cloudsql.googleapis.com/database/memory/utilization"
       threshold    = 0.9
-      doc          = "Cloud SQL `${local.instance_id}` has used more than 90% of its memory for 15 minutes. db-f1-micro has about 0.6 GB: this is MUT-512's trigger to raise `db_tier` (a restart of a few minutes, ADR-231)."
+      doc          = "Cloud SQL `${local.instance_id}` has used more than 90% of its memory for 15 minutes. db-f1-micro has about 0.6 GB: this is MUT-512's trigger to raise `db_tier` (a restart of a few minutes, ADR-233)."
     }
   }
 }

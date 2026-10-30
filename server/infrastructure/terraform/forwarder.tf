@@ -1,4 +1,4 @@
-# MUT-487 (ADR-230, D6/D7, AM4, R5/D9): the legacy run.app forwarder.
+# MUT-487 (ADR-232, D6/D7, AM4, R5/D9): the legacy run.app forwarder.
 #
 # A run.app hostname belongs to its project, so after the move the old service in malafat-production stays up as a
 # thin forwarder to the new one, for the phone builds that still call it (Dart doesn't follow redirects on POST).

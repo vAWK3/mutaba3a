@@ -1,5 +1,5 @@
 /**
- * MUT-487 (ADR-230, D6/D7, AM4, R5/D9): the legacy run.app forwarder.
+ * MUT-487 (ADR-232, D6/D7, AM4, R5/D9): the legacy run.app forwarder.
  *
  * A run.app hostname belongs to its GCP project, so after MTB3A moved to mtb3a-production the old service in
  * malafat-production runs this instead of the API: a streaming reverse proxy to the new service, for the phone builds

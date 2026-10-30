@@ -2433,3 +2433,16 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `MoveReceiptDrawer` / `MoveReceiptDrawerHost` — `src/hosted/components/MoveReceiptDrawer.tsx`, with `useMovedToast` / `hasOtherProfiles` in `useMovedToast.ts`: the Move drawer (radio `.hp-profile-row`s, disabled with a reason when `billingGateOf` isn't open, named primary, banners), its URL host that opens only for a READY To-review receipt, and the "Moved to <name> · Open" toast.
 - `useMoveReceipt` / `moveErrorOf` — `src/hosted/data/receiptQueries.ts`: the move with D8's look-up on the target after an ambiguous answer; refreshes both profiles.
 - Server: `moveLibraryReceipt` (`server/src/expenses/receipts-compose.ts`), `AttachmentStorage.copy`, `movedReceiptStorageKey` (`attachments/rules.ts`), `expenseReceipts.moveToProfile` / `releaseMovedRead`.
+
+
+### Portal welcome — MUT-513 (ADR-230)
+- `WelcomePage` (`src/hosted/pages/auth/WelcomePage.tsx`): `variant: 'first' | 'offline' | 'reopened'`, `onRetry`, `retrying`. Rendered by `AuthGate` on `/` when undecided or when the first-visit check can't reach the server, and by `/welcome` (`WelcomeRoute` in `router.tsx`). Its illustration (`WelcomeArt`) is inline; styles and motion are `.hp-welcome-*` in `hosted.css`, type in `--welcome-*`. Tests: `local-mode.test.tsx` (welcome flows), `pages/auth/__tests__/WelcomePage.test.tsx`; QA `@portal.welcome.*`.
+- `useContinueOnThisDevice()` (`src/hosted/session/continueOnThisDevice.ts`): `(options?: { remember?: boolean }) => void` — switches to this device's records (saved, or for this page only with `remember: false`), clears the query cache and opens `/`. Used by the sign-in page's "Continue on this device" and the welcome's Try.
+- `countWelcomeChoice(choice)` (`src/hosted/analytics/portalAnalytics.ts`): the welcome's cookieless door count through the separate `welcome` posthog-js instance; fire and forget.
+
+### Expense VAT — MUT-302 (ADR-231)
+- `ExpenseVatRow` — `src/hosted/components/expenseForm/ExpenseVatRow.tsx`: the firm-only collapsed VAT row (`.form-disclosure`) on the shared expense fields: "No VAT recorded" or the VAT inside the amount; open, treatment `Select`, Standard rate, net and VAT preview (`<bdi>`). Props `form`, `idPrefix`, `readOnly`, `hint`. Rendered by `HostedExpenseFields` when `firm`.
+- `vatPreview` / `percentToBasisPoints` / `basisPointsToPercent` / `VAT_TREATMENTS` — `src/hosted/lib/expenseVat.ts`: display-only port of the server split, held by the shared case table.
+- `vatInputOf` / `vatValuesOf` / `updateExpenseVat` — `useHostedExpenseForm.ts`: the form's VAT to and from the API; `createExpenseBody(values, { firm })`.
+- Server: `expenseVat` / `storedExpenseVat` / `assertExpenseVatColumns` / `NO_EXPENSE_VAT` (`server/src/expenses/vat.ts`).
+

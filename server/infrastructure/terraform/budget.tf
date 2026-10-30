@@ -1,4 +1,4 @@
-# MUT-511 (ADR-231): a monthly budget on MTB3A's own project, with alerts at 50%, 90% and 100% of it.
+# MUT-511 (ADR-233): a monthly budget on MTB3A's own project, with alerts at 50%, 90% and 100% of it.
 #
 # Only once billing_account_id is set (the new project's tfvars): the old, shared project's bill is Malafat's too.
 # Budgets live on the billing account, so the operator applying this needs roles/billing.costsManager (or billing

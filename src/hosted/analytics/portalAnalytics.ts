@@ -36,7 +36,7 @@ export const usePortalUsage = create<UsageState>(() => ({ choice: null, owner: n
 
 /** The slice of posthog-js the portal uses. */
 interface PostHogLike {
-  init: (key: string, options: Partial<PostHogConfig>) => unknown;
+  init: (key: string, options: Partial<PostHogConfig>, name?: string) => unknown;
   capture: (event: string, properties?: Record<string, unknown>) => unknown;
   opt_out_capturing: () => void;
   opt_in_capturing: (options?: { captureEventName?: false | null }) => void;
@@ -69,6 +69,44 @@ function loadSdk(): Promise<PostHogLike | null> {
     }
   })();
   return loading;
+}
+
+/** MUT-513: the doors of the portal's first-visit welcome, as the contract names them. */
+export type WelcomeChoice = 'sign_in' | 'signup' | 'local';
+
+/** posthog-js's name for the welcome's own instance: never the consented default one, whatever happens on this page. */
+const WELCOME_INSTANCE = 'welcome';
+let welcomeLoading: Promise<PostHogLike | null> | null = null;
+
+/** The welcome's instance, once per page: cookieless (the landing's way), so it stores nothing and needs no consent. */
+function loadWelcomeInstance(): Promise<PostHogLike | null> {
+  welcomeLoading ??= (async () => {
+    try {
+      const [sdkModule, { documentLocale, posthogInitOptions }] = await Promise.all([import('posthog-js'), import('../../lib/analytics/posthogConfig')]);
+      const posthog = sdkModule.default as unknown as PostHogLike;
+      const options = posthogInitOptions(() => ({ surface: 'portal', appVersion: APP_VERSION, locale: documentLocale(), cookieless: true }));
+      return (posthog.init(POSTHOG_KEY, options, WELCOME_INSTANCE) as PostHogLike | undefined) ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  return welcomeLoading;
+}
+
+/**
+ * Counts a door on the welcome (MUT-513, ADR-230): the one portal event sent before anyone signs in, and so before any
+ * consent, the landing's cookieless way and nothing else about the visitor. Fire and forget: the door never waits on
+ * it, and an ad blocker or a failed load sends nothing and breaks nothing.
+ */
+export function countWelcomeChoice(choice: WelcomeChoice): void {
+  if (!POSTHOG_KEY) return;
+  void loadWelcomeInstance().then((instance) => {
+    try {
+      instance?.capture('portal_welcome_choice', { choice });
+    } catch {
+      // Counting must never break a door
+    }
+  });
 }
 
 function readRecord(): { owner: string; choice: UsageChoice } | null {
@@ -244,6 +282,7 @@ export async function trackPortal(event: PortalEvent, properties: Record<string,
 export function resetPortalUsageForTests() {
   sdk = null;
   loading = null;
+  welcomeLoading = null;
   openedCounted = false;
   silencedInThisPage = false;
   if (listening) window.removeEventListener('storage', onStorage);

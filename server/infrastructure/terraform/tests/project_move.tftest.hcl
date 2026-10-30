@@ -1,4 +1,4 @@
-# MUT-487 (ADR-230) and MUT-511 (ADR-231): the switches the project move turns, and the new project's sizing,
+# MUT-487 (ADR-232) and MUT-511 (ADR-233): the switches the project move turns, and the new project's sizing,
 # budget and registry cleanup, checked offline. The Google and random providers are mocked, so this needs no
 # credentials, project or network:
 #   terraform init -backend=false && terraform test
@@ -212,7 +212,7 @@ run "legacy_forwarder_refuses_a_url_with_a_path" {
   expect_failures = [google_cloud_run_v2_service.api]
 }
 
-# --- MUT-511 (ADR-231): db-f1-micro, ZONAL, pool 5 of 25 ------------------------------------------------------
+# --- MUT-511 (ADR-233): db-f1-micro, ZONAL, pool 5 of 25 ------------------------------------------------------
 
 run "the_new_project_sizing_fits_the_connection_budget" {
   command = apply

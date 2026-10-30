@@ -792,7 +792,7 @@ than an architecture rule:
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
   *(Note 2026-10-21: "encrypted at rest" with our own key was ADR-164, MUT-381.
-  Note 2026-10-30: ADR-164 is superseded by ADR-230; at rest it is Google's default
+  Note 2026-10-30: ADR-164 is superseded by ADR-232; at rest it is Google's default
   encryption, in MTB3A's own project, which no other product's account can reach.)*
 
 **What replaces it**: ADR-025 below.
@@ -4501,7 +4501,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-164: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
 
-**Status**: Superseded by ADR-230 (2026-10-30, MUT-487). CMEK was dropped on 2026-10-27 (MUT-381, MUT-385 and MUT-383 closed) and its dormant code removed: it added no isolation from Malafat, which held project-wide KMS roles (TD-195). A key can be added when an instance is created, if it is ever wanted. Kept below as history.
+**Status**: Superseded by ADR-232 (2026-10-30, MUT-487). CMEK was dropped on 2026-10-27 (MUT-381, MUT-385 and MUT-383 closed) and its dormant code removed: it added no isolation from Malafat, which held project-wide KMS roles (TD-195). A key can be added when an instance is created, if it is ever wanted. Kept below as history.
 **Date**: 2026-10-21
 **Context**: ADR-024 requires firm data to be encrypted at rest. Until now Cloud SQL, the attachments bucket and Secret Manager used only Google's default encryption. The 2026-10-21 privacy review chose "harden + CMEK" and ruled out field-level and end-to-end encryption, which would break server totals, FX, Malafat and the accountant export. Cloud SQL can't add a customer-managed key to an existing instance. Plan and eng review: `.claude/designs/mut-381-cmek.md` (Basel's answers D1–D5).
 **Decision**:
@@ -6042,7 +6042,54 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Scoring a text layer's readability. Rejected: the render mode says exactly whose OCR it is.
 - Lowering `MIN_FIELD_CONFIDENCE` to reach AC2. Rejected: AC1 (nothing wrong) outranks AC2.
 
-## ADR-230: MTB3A Runs in Its Own GCP Project, Moved by a Restore-Based Cutover; the Old run.app Host Becomes a Forwarder (MUT-487)
+## ADR-230: A First Visit Is Undecided Until a Door Chooses: the Portal Welcome, a 401 That Saves Nothing, and a Cookieless Door Count (MUT-513)
+
+**Status:** Accepted (2026-10-30, MUT-513; epic MUT-284; amends ADR-100's first-visit probe rule and ADR-097 §2.6 as amended, and makes one exception to `docs/analytics/README.md` rule 4). Plan and eng review: `.claude/designs/mut-513-portal-welcome-plan.md` (D1–D7, O1–O9).
+
+**Context:** since MUT-286 the first-visit check saved `mut-mode=local` the moment the server answered 401, so a newcomer from the landing landed in an empty local app with no word on what MTB3A is, that they weren't signed in, or that their records would stay in this browser.
+
+**Decision:**
+1. **An unhinted 401 is `undecided`** (`UnhintedMode`), held in memory only. `client.ts` answers every later call with its own 401 (`UNAUTHENTICATED`): no request, no ended session, and the local chunk is never imported, so no IndexedDB opens before a choice. A 200 still saves `remote`; a network failure still saves nothing. Only a door saves a mode: Try saves `local`, a successful sign-in `remote`.
+2. **Where it shows:** `AuthGate` renders the welcome on `/` when undecided. Any other signed-in path while undecided goes to sign-in with `next` (as `/connect/approve` already did). The signed-out pages (`/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over*`) never pass through it. `/welcome` reopens it from You › Account on this device ("Continue on this device"); signed in, it goes to `/`.
+3. **A network failure on `/` with no hint shows the welcome too, with Retry (D7).** Try after a failure lasts for this page only (`setUnhintedMode('local')`), so an account holder caught in an outage gets their account back on the next load. A 5xx keeps the can't-connect screen. Try opens the local backend first; if this browser can't open it, nothing is saved and `LocalUnavailable` shows.
+4. **Leaving without choosing returns to the welcome**: nothing was saved, so Back from `/sign-in` or a reload asks again.
+5. **Carry-over:** a records file saved on `/carry-over/receive` while not signed in chooses this device (`setMode('local')`), so Open lands on the records, not the welcome (O4).
+6. **Error reports:** `undecided` counts as signed out (ADR-097 §10): nothing is held for Sentry, and what was held is dropped (O6).
+7. **The door count (D3, D6):** `portal_welcome_choice {choice: sign_in | signup | local}` (contract 2.4.0) is the one portal event sent before anyone signs in. It goes through its own posthog-js instance named `welcome`, loaded on the click, with the landing's cookieless options (`'portal-welcome'` in `posthogConfig`) and the guard's cookieless allowance (`GuardContext.cookieless`): only `$cookieless_mode`, `$raw_user_agent`, `$host`, `$current_url` and `choice`, and no other event. The consented MUT-155 instance is never started or touched. The door never waits on the count. The privacy policy's wording waits for Basel's approval in `docs/operations/before-release.md` and ships before the server release that carries this.
+8. **Design (Basel, 2026-10-30):** layout, copy, illustration and motion are the Claude Design "Portal Welcome" (WELCOME-SPEC.md), on theme tokens. The welcome is a Present surface (display face), and its illustration keeps the design's peach nuqta as art (DESIGN.md amended).
+
+**Consequences:** browsers that already saved `local` under the old rule never see the welcome on their own; You › Account › What is MTB3A? reaches it. Release-QA signed-out specs now seed `local` (`signedOutServer`), and first-visit specs pass `null`. A browser whose hint was lost but whose records remain sees the welcome; Try finds the records (O9).
+
+**Alternatives considered:**
+- Save `local` on 401 and show the welcome over the local app. Rejected: it opens IndexedDB before a choice and leaves no way back to "undecided".
+- Count the doors through MUT-155's consent (the ticket's first wording). Rejected: that consent belongs to a signed-in person, so it could never send (D2/D3).
+- A direct capture POST instead of a named SDK instance (D6). Rejected: we would own PostHog's cookieless wire format.
+
+## ADR-231: An Expense's VAT Is Split Out of Its Amount by the Server; No VAT Is Four Nulls, Never a Guess (MUT-302)
+
+**Status:** Accepted (2026-10-30, MUT-302; epic MUT-298, firm books v2; amends brief `firm-books.md` §7 and ADR-099's data-model row). Plan, eng review and Basel's decisions (D1–D11, OV1–OV12): `.claude/designs/mut-302-expense-vat-plan.md`.
+
+**Context:** firms reclaim the VAT they pay, but an expense held one amount. Receivables already carry a treatment, a frozen rate and net/VAT/gross.
+
+**Decision:**
+1. **The amount stays the gross.** An expense gains `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`, all nullable; all null = "No VAT recorded". There is no `grossMinor` column (D3, overrides brief §7): a second copy of the amount would be a second truth.
+2. **The server is the only writer of net and VAT (D1).** A client sends `vat: {treatment, rateBasisPoints}`; the server runs `computeVat` with `VAT_INCLUSIVE` (what was paid includes the VAT), half-up as receivables. A standard rate is 1..10000 basis points (`VAT_RATE_INVALID`); the other treatments store 0 and 0.
+3. **Four CHECKs** (`expenses_vat_all_or_none`, `_adds_up`, `_zero_unless_standard`, `_standard_rate`); the memory store asserts the same (`assertExpenseVatColumns`), so the portal's local mode holds them too.
+4. **PATCH (D4):** `vat` absent keeps the treatment and rate and re-splits a new amount in the same write; `null` clears; an object sets it, split from the amount sent (in its currency's digits) or the row's own.
+5. **Wire (D5):** `Expense.vat` is a nested, nullable object `{treatment, rateBasisPoints, net, vat, gross}`; absence is the main state, unlike receivables' flat fields.
+6. **Who may send it (D2):** any profile; only the UI is firm-gated (`profile.firm`). Refusing non-firm would break phone outbox replays queued before firm features were turned off. Receipt Review, create and edit send `vat` only on a firm (OV1).
+7. **Receipts (D6, OV5):** a read rate of 1..10000 prefills Standard at that rate; a VAT amount without a usable rate only hints; no rate is back-solved from amounts. `ApprovedReceiptFields` is unchanged (D7). The MCP write tool and inbox filing record none (D8).
+8. **Clients preview, never write.** The portal (`src/hosted/lib/expenseVat.ts`) and the phone carry a display-only preview held to the server by one case table, `server/src/__tests__/fixtures/expense-vat-cases.json`. The rate is typed or read, not taken from the profile's `vat_rates` (D11: input VAT is the vendor's rate).
+9. **Release order (OV4):** the API with 1.92.0-mut302 is deployed to production before any phone build that sends `vat` is submitted (request schemas are strict). Rolling back past the migration is a hazard once any VAT expense exists (OV2).
+
+**Consequences:** summaries, groups and the Glance total the gross per currency exactly as before (AC4). MUT-303 (vendor prefill), MUT-308 (bills; the largest-remainder split moves there, D10) and MUT-313 (VAT summary) build on these columns.
+
+**Alternatives considered:**
+- Accept a client's VAT amount within ±1 minor unit (the receipt's printed VAT). Rejected: MUT-313's totals must be reproducible from the rule.
+- A `grossMinor` column, as the brief listed. Rejected: the CHECK would chase two copies of one number.
+- Flat nullable fields on the wire, like receivables. Rejected: "no VAT" would be four nulls a client must agree on.
+
+## ADR-232: MTB3A Runs in Its Own GCP Project, Moved by a Restore-Based Cutover; the Old run.app Host Becomes a Forwarder (MUT-487)
 
 **Status:** Accepted (2026-10-27 plan and eng review, Basel's D1–D11; built 2026-10-30, not yet run). Supersedes ADR-164. Plan: `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md`. Procedure: `server/DEPLOYMENT.md` §6d.
 
@@ -6064,7 +6111,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Alternatives considered:** CMEK (ADR-164, dropped); asking Malafat to scope its roles (it would still share a project and a blast radius); `terraform import` of the generated secrets (replaces them, R1); a resumable cutover state machine (R8, cut); trusting two proxy hops instead of a forwarder token (lets anyone fake an IP, R5).
 
-## ADR-231: MTB3A's Database Runs in One Zone on db-f1-micro Until MUT-512's Triggers; Cloud Run Scales to Zero (MUT-511)
+## ADR-233: MTB3A's Database Runs in One Zone on db-f1-micro Until MUT-512's Triggers; Cloud Run Scales to Zero (MUT-511)
 
 **Status:** Accepted (Basel, 2026-10-29 and 2026-10-30; built with MUT-487, applied at its C1). Ticket MUT-511; scaling back up is MUT-512.
 

@@ -5,7 +5,8 @@ import type { ExpenseFormFieldsLabels } from '../../../components/expenses/Expen
 import { expenseFormFieldsSchema } from '../../../components/expenses/expenseFormSchema';
 import { useLanguage } from '../../../lib/i18n/core';
 import { currencyExponent } from '../../../lib/utils';
-import type { CreateExpenseRequest, ExpenseCategory } from '../../api/client';
+import type { CreateExpenseRequest, Expense, ExpenseCategory } from '../../api/client';
+import { basisPointsToPercent, percentToBasisPoints, VAT_TREATMENTS } from '../../lib/expenseVat';
 import { useExpenseCategories } from '../../data/expenseQueries';
 import { HOSTED_CURRENCIES } from '../../format/currencies';
 import { todayInZone, todayLocalISO } from '../../format/dates';
@@ -31,8 +32,14 @@ export const hostedExpenseSchema = expenseFormFieldsSchema
     vendor: z.string().optional(),
     clientId: z.string().optional(),
     projectId: z.string().optional(),
+    // MUT-302 (ADR-231): '' = no VAT recorded. The rate is a typed percent, required for Standard only.
+    vatTreatment: z.union([z.literal(''), z.enum(VAT_TREATMENTS)]),
+    vatRate: z.string(),
   })
   .superRefine((data, ctx) => {
+    if (data.vatTreatment === 'STANDARD_RATED' && percentToBasisPoints(data.vatRate) === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: data.vatRate.trim() ? VAT_RATE_INVALID : VAT_RATE_REQUIRED, path: ['vatRate'] });
+    }
     if (!data.amount) return;
     const exponent = currencyExponent(data.currency);
     const decimalAmount = new RegExp(`^\\d+(\\.\\d{1,${exponent}})?$`);
@@ -42,6 +49,12 @@ export const hostedExpenseSchema = expenseFormFieldsSchema
   });
 
 export type HostedExpenseFormValues = z.infer<typeof hostedExpenseSchema>;
+
+/** The VAT rate's schema messages: codes the VAT row turns into its own words. */
+export const VAT_RATE_REQUIRED = 'vatRateRequired';
+export const VAT_RATE_INVALID = 'vatRateInvalid';
+
+type ExpenseVatInput = NonNullable<CreateExpenseRequest['vat']>;
 
 export function emptyExpenseValues(timezone?: string): HostedExpenseFormValues {
   return {
@@ -55,11 +68,43 @@ export function emptyExpenseValues(timezone?: string): HostedExpenseFormValues {
     projectId: '',
     categoryId: '',
     notes: '',
+    vatTreatment: '',
+    vatRate: '',
   };
 }
 
-/** A new expense's body from the form: an empty optional field is left out (the drawer's create, the receipt's approve). */
-export function createExpenseBody(values: HostedExpenseFormValues): CreateExpenseRequest {
+/** The form's VAT as the API takes it (MUT-302): null for none; the other treatments send a 0 rate (stored as 0). */
+export function vatInputOf(values: Pick<HostedExpenseFormValues, 'vatTreatment' | 'vatRate'>): ExpenseVatInput | null {
+  if (!values.vatTreatment) return null;
+  return { treatment: values.vatTreatment, rateBasisPoints: values.vatTreatment === 'STANDARD_RATED' ? (percentToBasisPoints(values.vatRate) ?? 0) : 0 };
+}
+
+/** An expense's VAT as form values: the treatment, and a Standard rate as its shortest percent. */
+export function vatValuesOf(expense: Pick<Expense, 'vat'>): Pick<HostedExpenseFormValues, 'vatTreatment' | 'vatRate'> {
+  const vat = expense.vat;
+  if (!vat) return { vatTreatment: '', vatRate: '' };
+  return { vatTreatment: vat.treatment, vatRate: vat.treatment === 'STANDARD_RATED' ? basisPointsToPercent(vat.rateBasisPoints) : '' };
+}
+
+/**
+ * An edit's `vat` (MUT-302, D4): left out when unchanged, so the server keeps the treatment and rate (and re-splits a
+ * new amount); null when removed; the new choice otherwise. "Changed" compares treatment and basis points, never the
+ * typed text ("17.5" = "17.50", OV10). Only a firm profile's form shows VAT, so nothing else ever sends it.
+ */
+export function updateExpenseVat(existing: Pick<Expense, 'vat'>, values: HostedExpenseFormValues, options: { firm: boolean }): { vat?: ExpenseVatInput | null } {
+  if (!options.firm) return {};
+  const next = vatInputOf(values);
+  const before = existing.vat ? { treatment: existing.vat.treatment, rateBasisPoints: existing.vat.rateBasisPoints } : null;
+  const same = next === null ? before === null : before !== null && next.treatment === before.treatment && next.rateBasisPoints === before.rateBasisPoints;
+  return same ? {} : { vat: next };
+}
+
+/**
+ * A new expense's body from the form: an empty optional field is left out (the drawer's create, the receipt's approve).
+ * MUT-302 (OV1): `vat` only on a firm profile, so a suggestion's rate never saves hidden VAT on a personal one.
+ */
+export function createExpenseBody(values: HostedExpenseFormValues, options: { firm: boolean }): CreateExpenseRequest {
+  const vat = options.firm ? vatInputOf(values) : null;
   return {
     occurredOn: values.occurredAt,
     amount: values.amount,
@@ -70,6 +115,7 @@ export function createExpenseBody(values: HostedExpenseFormValues): CreateExpens
     customerId: values.clientId || undefined,
     projectId: values.projectId || undefined,
     notes: values.notes || undefined,
+    ...(vat ? { vat } : {}),
   };
 }
 

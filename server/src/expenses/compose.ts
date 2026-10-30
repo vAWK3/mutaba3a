@@ -5,6 +5,7 @@ import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
 import type { VendorDetails } from '../schemas.js';
+import { expenseVat, storedExpenseVat, type ExpenseVatInput } from './vat.js';
 
 /**
  * Expense rules shared by the routes (MUT-42 brief §3 D6, §10). Pure except
@@ -117,6 +118,8 @@ export interface ExpenseCreateBody {
   notes?: string | undefined;
   /** MUT-436: kept on the row (ADR-201) as well as in the audit metadata. */
   captureSource?: string | undefined;
+  /** MUT-302 (ADR-231): the VAT inside the amount; absent or null records none. */
+  vat?: ExpenseVatInput | null | undefined;
 }
 
 /**
@@ -128,8 +131,9 @@ export async function prepareExpenseCreate(store: LedgerStore, organizationId: s
   const occurredOn = expenseOccurredOn(body.occurredOn, today);
   const amountMinor = parseExpenseAmount(body.amount, body.currency);
   const links = await resolveLinks(store, organizationId, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
+  const vat = expenseVat(amountMinor, body.vat);
   if (body.categoryId) await assertCategoryChoosable(store, organizationId, body.categoryId);
-  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId, ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
+  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId, ...(body.captureSource ? { captureSource: body.captureSource } : {}), ...vat };
 }
 
 /**
@@ -143,8 +147,14 @@ export async function prepareExpenseCreate(store: LedgerStore, organizationId: s
  *
  * A currency never travels alone because the stored minor units depend on it: ILS → JOD without the amount
  * would silently rescale the money.
+ *
+ * MUT-302 (ADR-231, D4), the VAT:
+ *
+ *   vat absent ─▶ keeps the treatment and rate; a new amount is re-split in the same write (the CHECK never sees a stale split)
+ *   vat null ───▶ clears all four columns
+ *   vat object ─▶ split from the amount sent (in its currency's digits), else from the row's own
  */
-export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; currency?: Currency | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined }): UpdateExpensePatch {
+export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; currency?: Currency | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined; vat?: ExpenseVatInput | null | undefined }): UpdateExpensePatch {
   if (body.currency !== undefined && body.amount === undefined) {
     throw validationError('AMOUNT_REQUIRED', 'currency can only change together with amount', { field: 'amount' });
   }
@@ -157,6 +167,8 @@ export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { oc
   if (body.vendor !== undefined) patch.vendor = body.vendor;
   if (body.categoryId !== undefined) patch.categoryId = body.categoryId;
   if (body.notes !== undefined) patch.notes = body.notes;
+  const vat = body.vat !== undefined ? body.vat : patch.amountMinor !== undefined ? (storedExpenseVat(existing) ?? undefined) : undefined;
+  if (vat !== undefined) Object.assign(patch, expenseVat(patch.amountMinor ?? existing.amountMinor, vat));
   return patch;
 }
 

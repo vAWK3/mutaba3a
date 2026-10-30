@@ -386,7 +386,7 @@ if [[ "$MODE" == "server" ]]; then
     hint "if the version isn't listed yet: make release web, wait for Netlify, then release the server"
   fi
 
-  # MUT-487 (ADR-230, AM5): which stack this release acts on, before anything is built or applied. deploy.sh
+  # MUT-487 (ADR-232, AM5): which stack this release acts on, before anything is built or applied. deploy.sh
   # refuses any project but config/gcp.json's, and the old one unless LEGACY_STACK=1 (lib/release-guard.sh).
   head_ "Project"
   printf '  stack: project=%s bucket=%s LEGACY_STACK=%s tfvars=%s\n' "${GCP_PROJECT_ID:-unset}" "${TF_STATE_BUCKET:-unset}" "${LEGACY_STACK:-0}" "$TFVARS"

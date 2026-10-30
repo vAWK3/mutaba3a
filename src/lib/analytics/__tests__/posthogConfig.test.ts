@@ -46,6 +46,13 @@ describe('posthogInitOptions', () => {
     expect(posthogInitOptions(ctx('portal'))).not.toHaveProperty('cookieless_mode');
   });
 
+  // MUT-513: the welcome's own instance counts its doors cookieless, with nothing stored and no consent record to read
+  it('counts the portal welcome cookieless: no storage, no pageview, no referrer, never opted out by a consent record', () => {
+    const options = posthogInitOptions(() => ({ ...ctx('portal')(), cookieless: true }));
+    expect(options).toMatchObject({ cookieless_mode: 'always', persistence: 'memory', persistence_name: 'mtb3a_welcome', capture_pageview: false, save_referrer: false, request_batching: false });
+    expect(options).not.toHaveProperty('opt_out_capturing_by_default');
+  });
+
   it('makes a missing consent record mean "off" on the portal, so an opt-out in one tab silences every tab (MUT-155 review F1)', () => {
     expect(posthogInitOptions(ctx('portal'))).toMatchObject({ opt_out_capturing_by_default: true, opt_out_persistence_by_default: true });
     expect(posthogInitOptions(ctx('landing'))).not.toHaveProperty('opt_out_capturing_by_default');

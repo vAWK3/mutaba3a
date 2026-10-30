@@ -193,6 +193,7 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
+import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 
 /**
@@ -210,8 +211,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 11 (MUT-481): `pays` gained `receiptNumber`.
  * 12 (MUT-479): `props` gained `agreementType` and `draft`.
  * 13 (MUT-443): `pays` gained `reversalReasonCode`.
+ * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 13;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 14;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -2363,6 +2365,7 @@ export class MemoryLedgerStore implements LedgerStore {
       // Like Postgres' foreign key: existence only. The routes resolve or check the vendor inside the profile.
       if (input.vendorId && !this.vendorMap.has(input.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
       const record: ExpenseRecord = { id: randomUUID(), ...input, vendorId: input.vendorId ?? null, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
+      assertExpenseVatColumns(record);
       this.exps.set(record.id, record);
       return { ...record };
     },
@@ -2385,6 +2388,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (e.version !== expectedVersion) return { kind: 'stale', record: { ...e } };
       if (patch.categoryId && !this.expCats.has(patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
       if (patch.vendorId && !this.vendorMap.has(patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
+      assertExpenseVatColumns({ ...e, ...definedOnly(patch) });
       Object.assign(e, definedOnly(patch));
       e.version += 1;
       e.updatedAt = at;

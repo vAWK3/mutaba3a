@@ -46,7 +46,7 @@ export function describeLedgerStoreAccountClosureContract(name: string, makeStor
   }
 
   const expense = (store: LedgerStore, organizationId: string, createdByUserId: string) =>
-    store.expenses.create({ organizationId, occurredOn: '2026-10-20', amountMinor: 1_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId }, T0);
+    store.expenses.create({ organizationId, occurredOn: '2026-10-20', amountMinor: 1_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId }, T0);
 
   describe(`${name} LedgerStore account-closure contract (MUT-333)`, () => {
     it('closes: sets the closure, revokes every other session (web and device), keeps this one, writes the audit', async () => {

@@ -175,7 +175,7 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   await store.vendors.resolve({ organizationId: org, name: 'Yellow Taxi', registrationNo: '51-666-7276' }, AT);
   await store.vendors.resolve({ organizationId: org, name: 'Corner Shop' }, AT);
   const expense = await store.expenses.create(
-    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', vendorId: vendor.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id },
+    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', vendorId: vendor.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, vatTreatment: 'STANDARD_RATED', vatRateBasisPoints: 1700, netMinor: 3_846n, vatMinor: 654n, createdByUserId: user.id },
     AT,
   );
   await store.vendors.touch(org, vendor.id, { categoryId: category.id }, AT);
@@ -384,7 +384,7 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
 
   // exps, expReceipts: an expense with notes and a receipt with a request id, both deleted
   const expense = await store.expenses.create(
-    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 900n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: 'Duplicate', createdByUserId: userId },
+    { organizationId: org, occurredOn: '2026-10-02', amountMinor: 900n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: 'Duplicate', vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: userId },
     AT,
   );
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'dup.pdf', mimeType: 'application/pdf', sizeBytes: 100, receivedOn: '2026-10-02', uploadedByUserId: userId, requestId: 'req-receipt' }, AT);

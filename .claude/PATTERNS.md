@@ -2913,3 +2913,8 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: an operator procedure as idempotent, self-checking steps, not a resumable state machine (MUT-487)
 **Where**: `server/scripts/project-move.sh` (and its fake-CLI test, `project-move.test.ts`).
 **Rule**: a one-shot operator procedure is a set of subcommands, each of which reads the live state it needs (Cloud Run labels and ingress, Scheduler states, terraform state, write counters), refuses on a wrong precondition with the next step to take, and is safe to run again. No local state file. The reverse direction is the same steps with the arguments swapped. Safety signals the steps rely on (`mtb3a-live`) are owned by Terraform, so a release can't strip them. Secret values move only through pipes and private temp files, never argv or the terminal, and the test scans every output and argv for its fixture values.
+
+
+## Pattern: one money rule, previewed by clients, held together by a shared case table (MUT-302)
+**Where**: `server/src/__tests__/fixtures/expense-vat-cases.json`, read by `server/src/expenses/__tests__/vat.test.ts` and `src/hosted/lib/__tests__/expenseVat.test.ts`; the phone pins golden rows from it inline.
+**Rule**: when a client must show a figure the server computes (and the portal can't import server code), the server stays the only writer and the client's preview is a port held to it by a case table generated from the server's own function. Regenerate the table from that function, never by hand, and have every port's test read it (or pin rows from it).

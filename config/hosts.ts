@@ -23,7 +23,7 @@ export interface LegacyOrigins {
   landing: string;
   portal: string;
   /**
-   * MUT-487 (ADR-230, AM11): where the front door (the Cloudflare Worker) sends portal and API traffic, when it differs
+   * MUT-487 (ADR-232, AM11): where the front door (the Cloudflare Worker) sends portal and API traffic, when it differs
    * from `portal`: the new project's run.app service, while `portal` stays the old run.app host the legacy forwarder
    * still serves (so it stays in every allowlist). Read only by server/infrastructure/frontdoor. Absent = `portal`.
    */

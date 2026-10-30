@@ -558,6 +558,27 @@
         "dateTooFar": "The date can't be more than ten years ahead",
         "conflict": "This expense changed elsewhere — showing the latest version",
         "network": "Couldn't reach the server. Try again."
+      },
+      "vat": {
+        "row": "VAT",
+        "none": "No VAT recorded",
+        "summary": "VAT {rate}%",
+        "treatment": "Treatment",
+        "noVat": "No VAT",
+        "rate": "Rate",
+        "net": "Net",
+        "vat": "VAT",
+        "remove": "Remove VAT",
+        "treatments": {
+          "STANDARD_RATED": "Standard rate",
+          "ZERO_RATED": "Zero-rated",
+          "EXEMPT": "Exempt",
+          "OUT_OF_SCOPE": "Out of scope"
+        },
+        "errors": {
+          "rateRequired": "Enter the VAT rate",
+          "rateInvalid": "Enter a rate above 0 and up to 100, with at most 2 decimals"
+        }
       }
     },
     "conversions": {
@@ -1075,7 +1096,8 @@
         "notFound": {
           "title": "This receipt isn't here",
           "body": "It may have been deleted, or it belongs to another profile."
-        }
+        },
+        "vatRead": "The receipt shows VAT of {amount}"
       },
       "preview": {
         "label": "Receipt {name}",
@@ -2015,6 +2037,32 @@
           "PENDING_REVIEW": "Waiting for review: can't be an owner"
         }
       }
+    },
+    "welcome": {
+      "title": "Every amount, accounted for.",
+      "lede": "Who owes you, what came in, what went out, kept apart per currency.",
+      "illustration": "An open doorway with a dotted path leading in",
+      "account": {
+        "eyebrow": "With an account",
+        "line": "Your records on your phone and on any browser, kept safe on our servers.",
+        "signIn": "Sign in",
+        "create": "Create an account"
+      },
+      "offline": "Can't reach MTB3A right now",
+      "retry": "Retry",
+      "retrying": "Trying…",
+      "local": {
+        "eyebrow": "On this device only",
+        "point1": "Stays in this browser only. No account, and nothing is sent to us.",
+        "point2": "Clearing this site's data erases it.",
+        "point3Lead": "Back it up from ",
+        "point3Path": "Your data › Download my records",
+        "point3End": ".",
+        "point4": "It doesn't move into an account later.",
+        "try": "Try it on this device",
+        "continue": "Continue on this device"
+      },
+      "whatIs": "What is MTB3A?"
     }
   }
 }

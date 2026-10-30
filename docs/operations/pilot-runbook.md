@@ -502,7 +502,7 @@ After a §4.2 or §4.3 restore, do this for each restored receipt whose file is 
 **Past the window, the file is gone.** Tell the person, and ask them to upload it again if they still
 have it.
 
-### 4.5 A zone outage (MUT-511, ADR-231)
+### 4.5 A zone outage (MUT-511, ADR-233)
 
 From the MUT-487 move, `mutaba3a-pg` in `mtb3a-production` runs in **one zone** (ZONAL `db-f1-micro`). If that zone
 goes down, the database goes with it until Google brings the zone back; nothing fails over by itself. Backups and
@@ -874,7 +874,7 @@ Problems found and tickets opened:
 
 -
 
-### Project move (MUT-487, ADR-230)
+### Project move (MUT-487, ADR-232)
 
 Filled in by Basel at the C2 rehearsal and the C3 cutover (server/DEPLOYMENT.md §6d). One block per run.
 

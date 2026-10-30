@@ -87,11 +87,12 @@ async function recordExpense(page: Page, { amount, title, currency }: { amount: 
   await expect(page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: new RegExp(title) })).toBeVisible();
 }
 
-test('A first visit opens the app on this device in Arabic, with no sign-in and nothing sent but one check', { tag: '@portal.local.first-visit' }, async ({ page, step }) => {
-  const server = await signedOutServer(page, null);
+test('A first visit chooses this device on the welcome and opens the app in Arabic, with nothing sent but one check', { tag: '@portal.local.first-visit' }, async ({ page, step }) => {
+  const server = await signedOutServer(page, null, null);
 
-  await step('Open the portal for the first time, with nobody signed in', async () => {
+  await step('Open the portal for the first time, with nobody signed in, and choose this device on the welcome (MUT-513)', async () => {
     await page.goto('/');
+    await page.getByRole('button', { name: 'جرّبها على هذا الجهاز' }).click();
     await expect(page.getByRole('navigation', { name: 'الأقسام' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'المستحق' })).toBeVisible();
@@ -103,11 +104,11 @@ test('A first visit opens the app on this device in Arabic, with no sign-in and 
     await expect(links).toHaveText(['المستحق', 'المدفوع', 'المصروف', 'العملاء']);
   });
 
-  await step('You is this device\'s: Sign in and Your data, then Language and the terms, nothing that needs an account', async () => {
+  await step('You is this device\'s: Sign in, Your data and What is MTB3A?, then Language and the terms, nothing that needs an account', async () => {
     await openYou(page, 'account');
     await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('على هذا الجهاز');
     const rows = page.getByRole('main').locator('.hp-you-row');
-    await expect(rows).toHaveText(['تسجيل الدخول', /^بياناتك/]);
+    await expect(rows).toHaveText(['تسجيل الدخول', /^بياناتك/, 'ما هي متابعة؟']);
     // MUT-324: the terms are a link in either mode; MUT-425: on You › App, beside the language
     await openYou(page, 'app');
     await expect(rows).toHaveText([/^اللغة/, /^شروط الخدمة/]);
@@ -137,8 +138,8 @@ test('Money received signed out is still there after a reload, and nothing is se
     expect(page.url()).toBe(profileUrl);
   });
 
-  await step('Nothing reached the server after the first-visit check', async () => {
-    expect(server.requests).toEqual(['GET /v1/me']);
+  await step('Nothing reached the server (this browser chose this device already, MUT-513)', async () => {
+    expect(server.requests).toEqual([]);
   });
 });
 
@@ -187,8 +188,8 @@ test('Signed out, add a client from the picker, record money owed and part of it
     await expect(page.getByRole('main')).toContainText('Ramallah Bakery');
   });
 
-  await step('Nothing reached the server after the first-visit check', async () => {
-    expect(server.requests).toEqual(['GET /v1/me']);
+  await step('Nothing reached the server (this browser chose this device already, MUT-513)', async () => {
+    expect(server.requests).toEqual([]);
   });
 });
 
@@ -241,8 +242,8 @@ test('Signed out, add a client and a matter from the pickers, record money owed 
     await expect(row()).toContainText('900.00');
   });
 
-  await step('Nothing reached the server after the first-visit check', async () => {
-    expect(server.requests).toEqual(['GET /v1/me']);
+  await step('Nothing reached the server (this browser chose this device already, MUT-513)', async () => {
+    expect(server.requests).toEqual([]);
   });
 });
 
@@ -392,8 +393,8 @@ test('Signed out, record an expense, attach a PDF receipt, reload, and download 
     expect(fs.readFileSync(await download.path(), 'utf8')).toBe(receipt);
   });
 
-  await step('Nothing reached the server after the first-visit check', async () => {
-    expect(server.requests).toEqual(['GET /v1/me']);
+  await step('Nothing reached the server (this browser chose this device already, MUT-513)', async () => {
+    expect(server.requests).toEqual([]);
   });
 });
 
@@ -444,8 +445,8 @@ test('Signed out and online, a trip group in two currencies shows the ≈ line; 
     await expect(page.getByText(/at today's ECB rate/)).toHaveCount(0);
   });
 
-  await step('Only the first-visit check and the public rates reached the server', async () => {
-    expect([...new Set(server.requests)]).toEqual(['GET /v1/me', 'GET /v1/public/fx-rates']);
+  await step('Only the public rates reached the server', async () => {
+    expect([...new Set(server.requests)]).toEqual(['GET /v1/public/fx-rates']);
   });
 });
 
@@ -478,8 +479,8 @@ test('Signed out, log a conversion, reload, and edit it', { tag: '@portal.local.
     await expect(table.getByRole('row', { name: /Rent transfer/ })).toContainText('3,650.00');
   });
 
-  await step('Nothing reached the server after the first-visit check', async () => {
-    expect(server.requests).toEqual(['GET /v1/me']);
+  await step('Nothing reached the server (this browser chose this device already, MUT-513)', async () => {
+    expect(server.requests).toEqual([]);
   });
 });
 
@@ -494,7 +495,7 @@ test('Signed out, Documents opens on its empty state, not an error', { tag: '@po
   await step('It says there are no documents yet, with no error', async () => {
     await expect(page.getByRole('heading', { name: 'No documents on this profile yet' })).toBeVisible();
     await expect(page.getByRole('alert')).toHaveCount(0);
-    expect(server.requests).toEqual(['GET /v1/me']);
+    expect(server.requests).toEqual([]);
   });
 });
 

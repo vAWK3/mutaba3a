@@ -5,7 +5,7 @@ import { FORWARDER_HEADER, FRONT_DOOR_CLIENT_IP_HEADER, FRONT_DOOR_HEADER } from
 import { createForwarder, FORWARDER_HEALTH_PATH, readForwarderEnv } from '../forwarder.js';
 
 /**
- * MUT-487 (ADR-230, D6, AM4, R5/D9): after the move, the old run.app service is this forwarder. Old phone builds keep
+ * MUT-487 (ADR-232, D6, AM4, R5/D9): after the move, the old run.app service is this forwarder. Old phone builds keep
  * calling run.app, and Dart doesn't follow redirects on a POST, so it relays every request as it came (method, path,
  * body, headers, status) to the new service, and vouches for the caller's IP with its own token. A request that already
  * carries the front door's header (the Cloudflare Worker, before its repoint) passes through unchanged.

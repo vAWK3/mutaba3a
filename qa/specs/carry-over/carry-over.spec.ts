@@ -1,6 +1,7 @@
 import type { BrowserContext, Page } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
 import { test, expect } from '../../support/qa';
+import { MODE_KEY, PORTAL_LANGUAGE_KEY } from '../../support/portal';
 
 /**
  * MUT-291: records carried from the old address to the new address, across two real browser origins
@@ -14,13 +15,20 @@ import { test, expect } from '../../support/qa';
 const OLD_ADDRESS = 'http://127.0.0.1:5187';
 const NEW_ADDRESS = 'http://127.0.0.1:5188';
 
-/** PORTAL_LANGUAGE_KEY (src/hosted/i18n/HostedLanguageProvider.tsx). */
-const LANGUAGE_KEYS: Array<[string, string]> = [['mutaba3a-portal-language', 'en']];
-
-/** Nobody signed in, everywhere, in English. */
-async function signedOutInEnglish(context: BrowserContext) {
+/**
+ * Nobody signed in, everywhere, in English. MUT-513: a 401 alone no longer chooses this device, so the addresses in
+ * `chosen` have already chosen it (MODE_KEY, set only if absent); an address left out starts undecided, as a real first
+ * visit does, and only saving the carried records there chooses it.
+ */
+async function signedOutInEnglish(context: BrowserContext, chosen: string[] = [OLD_ADDRESS, NEW_ADDRESS]) {
   await context.route('**/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) }));
-  await context.addInitScript((keys) => keys.forEach(([key, value]) => localStorage.setItem(key, value)), LANGUAGE_KEYS);
+  await context.addInitScript(
+    ({ languageKey, modeKey, origins }) => {
+      localStorage.setItem(languageKey, 'en');
+      if (origins.includes(location.origin) && localStorage.getItem(modeKey) === null) localStorage.setItem(modeKey, 'local');
+    },
+    { languageKey: PORTAL_LANGUAGE_KEY, modeKey: MODE_KEY, origins: chosen },
+  );
 }
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -146,7 +154,8 @@ test('Carrying into a device that already has records warns, offers a download f
 });
 
 test('The old address\'s signed-out records go to the new address, and the old link\'s page opens there', { tag: '@carry-over.carry.portal-host' }, async ({ page, step }) => {
-  await signedOutInEnglish(page.context());
+  // The new address has never been opened in this browser: undecided until the save chooses this device (MUT-513)
+  await signedOutInEnglish(page.context(), [OLD_ADDRESS]);
 
   let paymentsPath = '';
   await step('Signed out on the old address, add money received', async () => {
@@ -170,6 +179,7 @@ test('The old address\'s signed-out records go to the new address, and the old l
   await step('Save on the new address: the old link\'s page opens there, with the money received', async () => {
     await receiver.getByRole('button', { name: 'Save on this device' }).click();
     await expect(receiver.getByRole('heading', { name: 'Your records are here.' })).toBeVisible();
+    expect(await receiver.evaluate((key) => localStorage.getItem(key), MODE_KEY)).toBe('local');
     await page.bringToFront();
     await page.waitForURL(`${NEW_ADDRESS}${paymentsPath}`);
     await expect(page.getByRole('table', { name: 'Payments' })).toContainText('321.00');

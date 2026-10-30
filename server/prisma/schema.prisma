@@ -1243,6 +1243,13 @@ model Expense {
   createdBy       User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   /// MUT-436 (ADR-201): where it was captured (app, siri, widget, quick_action, share; mcp = the person's own Claude).
   captureSource   String?          @db.VarChar(20)
+  /// MUT-302 (ADR-231): the VAT inside amountMinor (the gross). All four null = "No VAT recorded", never a guessed
+  /// split. CHECKs (raw SQL): all or none, net + vat = amount, 0/0 unless STANDARD_RATED, a standard rate is 1..10000.
+  vatTreatment       VatTreatment?
+  /// Frozen on the row: the receipt's rate for STANDARD_RATED, 0 for the other treatments.
+  vatRateBasisPoints Int?
+  netMinor           BigInt?
+  vatMinor           BigInt?
   version         Int              @default(1)
   createdAt       DateTime
   updatedAt       DateTime

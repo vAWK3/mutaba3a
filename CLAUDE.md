@@ -30,7 +30,7 @@ MTB3A (Arabic **متابعة**; English is always "MTB3A", ADR-173) tracks who o
 - **UI work** follows `DESIGN.md` (which component, colour role and type style each portal pattern uses).
 
 ### Portal routes (`src/hosted/router.tsx`)
-- Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`.
+- Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`, `/welcome` (MUT-513; a first visit to `/` shows the same welcome).
 - Under a profile, `/p/$profileId`: `/` (overview), `/receivables`, `/payments`, `/clients`, `/clients/$customerId`, `/expenses` (with `/groups` and `/receipts`), `/conversions`, `/documents`, `/reports`.
 - Also `/reports` (the Glance across profiles, ADR-204), `/capture`, `/connect/approve`.
 

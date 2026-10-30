@@ -118,7 +118,7 @@ export const FRONT_DOOR_HEADER = 'x-mutaba3a-front-door';
 export const FRONT_DOOR_CLIENT_IP_HEADER = 'x-mutaba3a-client-ip';
 
 /**
- * MUT-487 (ADR-230, R5/D9): the legacy run.app forwarder (src/forwarder.ts) relays old phone builds from the old
+ * MUT-487 (ADR-232, R5/D9): the legacy run.app forwarder (src/forwarder.ts) relays old phone builds from the old
  * project and vouches for the caller's IP with this header. Its token (FORWARDER_TOKEN) is trusted for the IP
  * alone: it never counts as the front door, so the carry-over and the portal-origin checks see a direct request.
  */

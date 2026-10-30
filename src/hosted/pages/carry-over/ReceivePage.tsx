@@ -5,11 +5,11 @@ import { carryOverBuild } from '../../../lib/carryOver/build';
 import { awaitCarryOverPayload, type CarryOverReply, type CarryOverWindow } from '../../../lib/carryOver/protocol';
 import { useLanguage } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
-import { localBackend } from '../../api/client';
+import { api, localBackend } from '../../api/client';
 import { AlertIcon, InfoIcon } from '../../components/Icons';
 import { recordsFileName, saveBlobAs } from '../../data/download';
 import { isRecordsFileRefused, type CarryOverPrepareOptions, type PendingRestore } from '../../session/localBackendContract';
-import { currentMode } from '../../session/mode';
+import { currentMode, setMode, setUnhintedMode } from '../../session/mode';
 import { useRestoredHome } from '../../session/restoredHome';
 import { AuthLayout } from '../auth/AuthLayout';
 import { CarryOverDetails } from './CarryOverDetails';
@@ -34,6 +34,25 @@ type Phase =
   | { kind: 'saving' }
   | { kind: 'done' }
   | { kind: 'file'; reason: FileReason };
+
+/** How long the save waits on the server's answer before treating it as unreachable (re-review: never hang on Saving). */
+const SERVER_CHECK_MS = 5_000;
+
+/**
+ * MUT-513: on a browser where nobody is signed in, saving the records here is choosing this device, so Open lands on
+ * them, not on the welcome. Opened straight on this address, nobody has asked the server yet, so ask first (review): a
+ * live session keeps the account (E3). A server that can't be reached in time decides nothing for good: this device
+ * holds for this page only, as the welcome's offline Try does (D7), so Open still shows the records just saved.
+ */
+async function chooseThisDeviceIfSignedOut(): Promise<void> {
+  if (currentMode() === 'probe') {
+    const answered = api.me().catch(() => undefined);
+    await Promise.race([answered, new Promise((resolve) => setTimeout(resolve, SERVER_CHECK_MS))]);
+  }
+  const mode = currentMode();
+  if (mode === 'undecided' || mode === 'local') setMode('local');
+  else if (mode === 'probe') setUnhintedMode('local');
+}
 
 export function ReceivePage() {
   const { t, language } = useLanguage();
@@ -96,6 +115,7 @@ export function ReceivePage() {
       setPhase({ kind: 'file', reason: 'save-failed' });
       return;
     }
+    await chooseThisDeviceIfSignedOut();
     if (reply && pending.carryOver) reply.done({ counts: pending.carryOver.counts, totals: pending.carryOver.totals });
     setPhase({ kind: 'done' });
   }

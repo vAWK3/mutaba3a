@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 /**
  * deploy.sh's release guards (lib/release-guard.sh), driven through a fake terraform (console) and gcloud on PATH,
- * the way deploy-bootstrap.test.ts drives ensure_bootstrap. This part: MUT-487 (ADR-230) removed MUT-381's CMEK
+ * the way deploy-bootstrap.test.ts drives ensure_bootstrap. This part: MUT-487 (ADR-232) removed MUT-381's CMEK
  * guard but kept its closed-service half, guard_ingress_release (a release must never reopen a service a restore
  * or a project move holds closed), and added guard_project_release (only config/gcp.json's project; the old one
  * only with LEGACY_STACK=1).
@@ -107,7 +107,7 @@ describe('guard_ingress_release (deploy.sh steps 0, 3 and 4)', { timeout: 30_000
   });
 });
 
-/** MUT-487 (ADR-230, AM5 corrected, T15): the old-project guard is keyed on GCP_PROJECT_ID plus LEGACY_STACK. */
+/** MUT-487 (ADR-232, AM5 corrected, T15): the old-project guard is keyed on GCP_PROJECT_ID plus LEGACY_STACK. */
 function projectGuard(project: string, env: Record<string, string | undefined> = {}, config?: string) {
   const file = join(dir, 'gcp.json');
   writeFileSync(file, config ?? JSON.stringify({ production: { project: 'mtb3a-production', legacyProject: 'malafat-production' } }));

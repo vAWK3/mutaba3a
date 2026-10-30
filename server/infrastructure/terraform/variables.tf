@@ -1,5 +1,5 @@
 variable "project_id" {
-  description = "GCP project that hosts the MTB3A API. Production: mtb3a-production from the MUT-487 move (config/gcp.json, ADR-230); malafat-production only in legacy.tfvars (the forwarder, a rollback of the move, the teardown)."
+  description = "GCP project that hosts the MTB3A API. Production: mtb3a-production from the MUT-487 move (config/gcp.json, ADR-232); malafat-production only in legacy.tfvars (the forwarder, a rollback of the move, the teardown)."
   type        = string
 }
 
@@ -31,13 +31,13 @@ variable "artifact_repository" {
 }
 
 variable "db_tier" {
-  description = "Cloud SQL machine tier. MUT-511 (ADR-231): mtb3a-production runs db-f1-micro (shared CPU, about 0.6 GB, no SLA) until MUT-512's triggers (the CPU and memory alerts in monitoring.tf); moving up a tier is a restart of a few minutes. The default, db-g1-small, is what malafat-production ran."
+  description = "Cloud SQL machine tier. MUT-511 (ADR-233): mtb3a-production runs db-f1-micro (shared CPU, about 0.6 GB, no SLA) until MUT-512's triggers (the CPU and memory alerts in monitoring.tf); moving up a tier is a restart of a few minutes. The default, db-g1-small, is what malafat-production ran."
   type        = string
   default     = "db-g1-small"
 }
 
 variable "db_availability" {
-  description = "REGIONAL (HA, two zones) or ZONAL. MUT-511 (ADR-231): mtb3a-production runs ZONAL; a zone outage is survived by restoring the latest backup or PITR into another zone (pilot runbook §4.5). malafat-production ran REGIONAL."
+  description = "REGIONAL (HA, two zones) or ZONAL. MUT-511 (ADR-233): mtb3a-production runs ZONAL; a zone outage is survived by restoring the latest backup or PITR into another zone (pilot runbook §4.5). malafat-production ran REGIONAL."
   type        = string
   default     = "REGIONAL"
   validation {
@@ -195,7 +195,7 @@ variable "deletion_protection" {
 }
 
 variable "min_instances" {
-  description = "Cloud Run minimum instances. mtb3a-production runs 0 (Basel, 2026-10-30, ADR-231): the uptime checks every 300 s keep an instance warm, and with cpu_idle a non-minimum idle instance isn't billed, so it saves about ₪17 a month; the worst case is a cold start of a few seconds after about 15 minutes with no traffic, checks included. In-process timers don't run while it is scaled to zero (TD-215). max_instances stays 1 (TD-017). The default, 1, is what malafat-production ran."
+  description = "Cloud Run minimum instances. mtb3a-production runs 0 (Basel, 2026-10-30, ADR-233): the uptime checks every 300 s keep an instance warm, and with cpu_idle a non-minimum idle instance isn't billed, so it saves about ₪17 a month; the worst case is a cold start of a few seconds after about 15 minutes with no traffic, checks included. In-process timers don't run while it is scaled to zero (TD-215). max_instances stays 1 (TD-017). The default, 1, is what malafat-production ran."
   type        = number
   default     = 1
 }
@@ -351,7 +351,7 @@ variable "ocr_subnet_cidr" {
 }
 
 # ============================================================================
-# MUT-487 (ADR-230): the move to mtb3a-production
+# MUT-487 (ADR-232): the move to mtb3a-production
 # ============================================================================
 
 variable "scheduler_paused" {

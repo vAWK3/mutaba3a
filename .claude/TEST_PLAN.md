@@ -202,7 +202,7 @@ MUT-462 (billing grants, feature flags, firm requests, server + portal):
 - `OperatorFirmsPage.test.tsx` (9): list oldest first with asker, age and kind, "Firms · 2"; empty state; operator firm owners (requester ticked, disabled member inert with reason), body `ownerUserIds`; none ticked refused; owned profile keeps its owners, sends `[]`; stale "Enable with passkey"; a 404 leaves the list; decline confirm, Cancel focus, decline; Arabic RTL.
 - Release-QA: `portal-selfservice.operator` `billing-grant-revoke`, `feature-grant-revoke`, `firm-request-enable`, `firm-request-decline` (Arabic, 375 px).
 
-## MUT-487 + MUT-511 — the project move and the new project's sizing (ADR-230, ADR-231)
+## MUT-487 + MUT-511 — the project move and the new project's sizing (ADR-232, ADR-233)
 
 | Level | File | What it proves |
 |---|---|---|
@@ -4255,3 +4255,15 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Store (Postgres) | `server/src/repositories/__tests__/store-prisma-receipt-move.test.ts` | re-home under the lock, JSON-null approval; two moves → one wins; move vs approve → one wins; filed/unfinished refused; `releaseMovedRead` only when the key moved |
 | Portal | `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/receiptHooks.test.tsx` | ⋯ menu items and keys; Filed and solo have no Move (DR2, AC3); radio rows, named primary, Idempotency-Key, both profiles refreshed, toast with Open (DR4); read-only/locked disabled with reasons and the none-open note (AC2); reading note (DR9); 402 banner; D8 recovery; focus to the neighbour; review page button and next receipt (DR1); `moveErrorOf` table |
 | Release-QA | `@portal.receipts.move`, `@portal.receipts.move-review`, `@portal.receipts.move-refused`, `@portal.receipts.filed-no-move` | the four portal flows on the FakeApi's per-profile receipts |
+
+## MUT-513 — the portal's first-visit welcome (ADR-230)
+- **Unit/integration (Vitest):** `client-mode.test.ts` — an unhinted 401 leaves the browser undecided (nothing stored, no local import, one request), waiting calls share it, no ended session, ALWAYS_REMOTE still goes out, a later Try wins; `mode.test.ts` — undecided is memory-only and never local; `errorReporting.test.ts` — undecided holds nothing for Sentry; `carryOverPages.test.tsx` — a receive on an undecided browser chooses this device, signed in stays remote; `local-mode.test.tsx` — the welcome on `/`, Arabic default, the explainer, Try, Sign in and Back, Create an account, deep links to sign-in, 200 straight in, a saved choice skips it, network failure with Retry and this-visit Try, 5xx keeps the can't-connect screen, `/welcome` reopened and signed in; `WelcomePage.test.tsx` — a browser that blocks storage saves nothing, each door counted once; `portalAnalytics.welcome.test.ts`, `guard.test.ts`, `posthogConfig.test.ts`, `analytics-taxonomy.test.ts` (contract 2.4.0).
+- **Release-QA:** `qa/features/portal/welcome.yaml` (first-visit core, try-local, sign-in-door, signup-door, deep-link-skips, offline, reopen, phone-fit, reduced-motion); `@portal.local.first-visit` now passes the welcome; `signedOutServer` seeds `local` unless a spec passes `null`.
+
+
+## MUT-302 — VAT on expenses (ADR-231)
+- **Server (Vitest):** `expenses/__tests__/vat.test.ts` — the shared case table against `computeVat`, a 2000-case property test (net + VAT = gross), non-standard treatments 0/0, rate refusals, the memory mirror of each CHECK; `compose.test.ts` — D4 (absent keeps, re-split on a new amount, null clears, object alone or with amount + currency, no columns for a no-VAT row); `routes-expenses.test.ts` — AC1 (117 @ 17 %, 0.01), JOD digits, other treatments, null, refusals, AC2 (a pre-existing row reads null), review finding 3, D2, D4, OV10, AC4 (summary of gross); `routes-receipts.test.ts` (approve with vat; approved record unchanged); `mcp-write-tools.test.ts` (OV8); `rollback-check.test.ts` (OV2).
+- **Postgres (`test:db`):** the expenses store contract on Prisma — a split round-trips, each CHECK refuses its row, an amount change that leaves the split behind is refused. The migration was applied over a database that already held an expense (it read four nulls).
+- **Local mode:** `migrations.test.ts` 13 → 14; `format-fingerprint.test.ts` (a VAT split in the fixture); `parity.test.ts` (a VAT create signed in and out).
+- **Portal:** `expenseVat.test.ts` (case table, Arabic-Indic digits, percent parsing); `receiptSuggestion.test.ts` (firm rate prefills, D6 hint, OV5, OV1); `ExpenseDrawer.test.tsx` (AC3, preview and body, no-VAT body, rate required, D4 untouched/removed, OV10, Arabic `<bdi>`); `Receipts.test.tsx` (OV1 personal, firm prefill + approve, D6 hint); `expenseApiErrors.test.ts` (VAT_RATE_INVALID).
+- **Release-QA:** `@portal.expenses.vat`, `@portal.expenses.vat-none-personal`, `@portal.receipts.vat-from-receipt`. Phone: `ios.capture.vat` with the Flutter half.

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 /**
- * MUT-487 (ADR-230): project-move.sh moves production from malafat-production to mtb3a-production, and back for a
+ * MUT-487 (ADR-232): project-move.sh moves production from malafat-production to mtb3a-production, and back for a
  * rollback. Only the operator runs it, against real GCP, so here every CLI is a fake on PATH (gcloud, terraform, psql,
  * cloud-sql-proxy, curl) and we prove the plan's T1–T9: the generated secrets move into the new state only, and the
  * new plan keeps them (R1); no secret value ever reaches the output (AM10); images are copied tag by tag and never over
