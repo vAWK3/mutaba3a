@@ -355,8 +355,8 @@ step_secrets() {
   done
   if (( moved > 0 )); then
     [[ "${moved}" == 5 ]] || die "${TO}'s state holds some of the generated secrets but not all: fix it by hand (terraform state list), nothing moved"
-    run tf "${FROM}" state pull >"${WORK}/from.tfstate" || die "could not pull ${FROM}'s state"
-    run tf "${TO}" state pull >"${WORK}/to.tfstate" || die "could not pull ${TO}'s state"
+    run_to "${WORK}/from.tfstate" tf "${FROM}" state pull || die "could not pull ${FROM}'s state"
+    run_to "${WORK}/to.tfstate" tf "${TO}" state pull || die "could not pull ${TO}'s state"
     [[ -s "${WORK}/to.tfstate" ]] || rm -f "${WORK}/to.tfstate"
     for r in ${GENERATED}; do
       # A copy of the old state is edited; the old state itself is never pushed, so it keeps all five.

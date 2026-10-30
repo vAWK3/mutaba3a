@@ -10,6 +10,14 @@ run() {
 }
 
 # run_capture <var> <placeholder> <command...>: run a read-only command and keep its stdout.
+# run_to <file> <cmd…>: like run, but only the command's own output goes to <file>; the trace stays on stdout
+# (MUT-523: `run … >file` wrote the "+ …" trace into a pulled terraform state, which then failed to parse).
+run_to() {
+  local file="$1"; shift
+  printf '+ %s > %s\n' "$*" "${file}"
+  [[ "${DRY_RUN}" == 1 ]] && return 0
+  "$@" >"${file}"
+}
 run_capture() {
   local var="$1" placeholder="$2"; shift 2
   printf '+ %s\n' "$*"
