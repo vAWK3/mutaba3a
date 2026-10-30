@@ -1157,8 +1157,10 @@ No Malafat service account gets any role here, now or later. Check the policy fi
 
 #### C1. Build the new stack beside the old one
 
-1. **The old stack's tfvars.** In `infrastructure/terraform/`: `cp production.tfvars legacy.tfvars`, then add
-   `legacy_stack = true` and pin what it runs (`db_tier = "db-g1-small"`, `db_availability = "REGIONAL"`,
+1. **The old stack's tfvars.** Usually already done: while `config/gcp.json` says `"cutover": "pending"`, the first
+   `make release server` (or `deploy.sh`) after the merge makes `legacy.tfvars` from `production.tfvars` with
+   `legacy_stack = true` (`server/scripts/lib/legacy-stack.sh`). Check it exists; if not: in `infrastructure/terraform/`
+   `cp production.tfvars legacy.tfvars`, then add `legacy_stack = true`. Either way, check it pins what it runs (`db_tier = "db-g1-small"`, `db_availability = "REGIONAL"`,
    `min_instances = 1`, `db_pool_size = 10`, `db_max_connections = 50`, `sentry_state_bucket =
    "malafat-production-terraform-state"`): `legacy.tfvars.example` lists them.
 2. **Release this branch to the old project (AM12)**, so its image carries the forwarder:
@@ -1268,6 +1270,8 @@ scripts/project-move.sh forward --from $OLD --to $NEW     # 4. $OLD becomes the 
 
 Then, the same day, with the service already up (D7, off the critical path):
 
+- **Releases go to the new project from now on:** in `config/gcp.json` set `"cutover": "done"` and commit it (the
+  merge lock applies). Until then `make` and `deploy.sh` still act on the old project as `LEGACY_STACK=1` on their own.
 - In `production.tfvars` delete `scheduler_paused`, `api_public` and `live_label`. In `legacy.tfvars` set
   `legacy_forwarder = true`, `forward_to = "<new service URL>"`, `min_instances = 0`, `enable_uptime_check = false`.
 - **The front door (AM11):** in `config/hosts.json` add `"portalUpstream": "<new service URL>"` under `legacy` (keep

@@ -79,6 +79,9 @@
 
 ## [Unreleased] - 2026-10-30 — MUT-487 + MUT-511: MTB3A's own GCP project, sized for cost (ADR-232, ADR-233; built, not run)
 
+- **Releases act on the old project on their own until the cutover** (Basel, 2026-10-30). `config/gcp.json` gains `"cutover": "pending"`; while it is pending the Makefile, `server/scripts/deploy.sh` and `scripts/preflight.sh` default `LEGACY_STACK` to 1 (an explicit `LEGACY_STACK=0` wins), and the first server command makes `legacy.tfvars` from `production.tfvars` with `legacy_stack = true`, only while `production.tfvars` still names the old project (`server/scripts/lib/legacy-stack.sh`, `server/scripts/legacy-tfvars.sh`, run first by `make preflight-server`). The Makefile reads the old project's state bucket from `.terraform` until `.terraform-malafat-production` exists. C3 sets `"cutover": "done"` (DEPLOYMENT.md §6d). Tests: `server/src/scripts/__tests__/legacy-stack.test.ts` (9).
+- ADR-230/231 were renumbered ADR-232/233 when main merged in (MUT-513 and MUT-302 took 230 and 231).
+
 **Why:** MTB3A's data lived in `malafat-production`, where Malafat's runtime account can read every customer's books (TD-195); CMEK didn't fix it and was dropped. The move creates a new database, so it is also the moment to size it: REGIONAL `db-g1-small` was ₪184 of MTB3A's ₪204 a month. Plan `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md` (eng review R1–R9, AM1–AM16).
 
 ### Removed

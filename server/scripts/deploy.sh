@@ -47,13 +47,17 @@ GCP_REGION="${GCP_REGION:-me-west1}"
 ARTIFACT_REPO="${ARTIFACT_REPO:-mutaba3a}"
 AUTO_APPROVE="${AUTO_APPROVE:-0}"
 PROXY_PORT="${PROXY_PORT:-5440}"
-LEGACY_STACK="${LEGACY_STACK:-0}"
-TFVARS_FILE="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}"
-[[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "${ENVIRONMENT}.tfvars" ]] && TFVARS_FILE="legacy.tfvars"
-
 SERVER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "${SERVER_DIR}/.." && pwd)"
 TF_DIR="${SERVER_DIR}/infrastructure/terraform"
+# MUT-487 (ADR-232): until the cutover (config/gcp.json `"cutover": "pending"`) a release acts on the old project on
+# its own, as LEGACY_STACK=1; an explicit LEGACY_STACK=0 or 1 wins.
+# shellcheck source=lib/legacy-stack.sh
+source "${SERVER_DIR}/scripts/lib/legacy-stack.sh"
+GCP_CONFIG_FILE="${GCP_CONFIG:-${REPO_ROOT}/config/gcp.json}"   # GCP_CONFIG overrides it (tests), as in lib/release-guard.sh
+LEGACY_STACK="${LEGACY_STACK:-$(default_legacy_stack "${GCP_CONFIG_FILE}" "${ENVIRONMENT}")}"
+TFVARS_FILE="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}"
+[[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "${ENVIRONMENT}.tfvars" ]] && TFVARS_FILE="legacy.tfvars"
 # MUT-487 (AM8): one terraform data dir per project, so the old and the new stack never share an init.
 export TF_DATA_DIR="${TF_DATA_DIR:-${TF_DIR}/.terraform-${GCP_PROJECT_ID}}"
 SHORT_SHA="${IMAGE_TAG:-$(git -C "${SERVER_DIR}" rev-parse --short HEAD)}"
@@ -139,6 +143,10 @@ smoke_release() {
 
 # MUT-487 (ADR-232): only config/gcp.json's project, or the old one with LEGACY_STACK=1. Before anything else.
 guard_project_release "${GCP_PROJECT_ID}"
+# Until the cutover the old stack's legacy.tfvars is made from production.tfvars the first time (lib/legacy-stack.sh).
+if [[ "${LEGACY_STACK}" == "1" && "${TFVARS_FILE}" == "legacy.tfvars" ]]; then
+  ensure_legacy_tfvars "${TF_DIR}" "${ENVIRONMENT}" "${GCP_CONFIG_FILE}"
+fi
 info "stack: project=${GCP_PROJECT_ID} bucket=${TF_STATE_BUCKET} LEGACY_STACK=${LEGACY_STACK} tfvars=${TFVARS_FILE} TF_DATA_DIR=${TF_DATA_DIR}"
 
 # MUT-347: a rollback builds nothing and migrates nothing; lib/rollback.sh runs it end to end.

@@ -310,6 +310,10 @@ if [[ "$MODE" == "server" ]]; then
   TF_DIR="server/infrastructure/terraform"
   # MUT-487 (AM5, AM8): the old project runs from legacy.tfvars with LEGACY_STACK=1; each project has its own data dir.
   TFVARS="${TF_DIR}/${ENVIRONMENT}.tfvars"
+  # Until the cutover (config/gcp.json "cutover": "pending") the old project is the default, as in deploy.sh.
+  if [[ -z "${LEGACY_STACK:-}" ]]; then
+    LEGACY_STACK="$( (source server/scripts/lib/legacy-stack.sh && default_legacy_stack config/gcp.json "$ENVIRONMENT") 2>/dev/null || echo 0)"
+  fi
   [[ "${LEGACY_STACK:-0}" == "1" ]] && TFVARS="${TF_DIR}/legacy.tfvars"
   if [[ -f "$TFVARS" ]]; then
     ok "$TFVARS present"
@@ -346,6 +350,8 @@ if [[ "$MODE" == "server" ]]; then
   # a different bucket means a different state file — a fresh apply that does
   # not know the service, the database or the secrets already exist.
   TFSTATE="${TF_DIR}/.terraform-${GCP_PROJECT_ID:-unset}/terraform.tfstate"
+  # Releases to the old project before the move initialised .terraform, the data dir every release used before it.
+  [[ "${LEGACY_STACK:-0}" == "1" && ! -f "$TFSTATE" ]] && TFSTATE="${TF_DIR}/.terraform/terraform.tfstate"
   if [[ -f "$TFSTATE" && -n "${TF_STATE_BUCKET:-}" ]]; then
     LAST_BUCKET="$(sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TFSTATE" | head -1)"
     if [[ -z "$LAST_BUCKET" || "$LAST_BUCKET" == "$TF_STATE_BUCKET" ]]; then
