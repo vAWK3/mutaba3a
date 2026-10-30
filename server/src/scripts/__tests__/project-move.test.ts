@@ -80,7 +80,8 @@ case "$1 $2" in
   "init "*) exit 0 ;;
   "state list") [[ "$proj" == "${NEW}" && -n "$FAKE_NEW_HAS_SECRETS" ]] && printf 'random_password.db\\nrandom_password.admin_token\\nrandom_password.session_pepper\\nrandom_password.job_token\\nrandom_password.oauth_derive_key\\n'; exit 0 ;;
   "state pull") [[ "$proj" == "${OLD}" ]] && printf '{"resources":[{"type":"random_password","name":"db","instances":[{"attributes":{"result":"${SECRETS.db}"}}]},{"name":"session_pepper","instances":[{"attributes":{"result":"${SECRETS.pepper}"}}]}]}'; exit 0 ;;
-  "state mv") for a in "$@"; do case "$a" in -state-out=*) touch "\${a#-state-out=}" ;; esac; done; exit 0 ;;
+  "state mv") for a in "$@"; do case "$a" in -state=*) f="\${a#-state=}"; [[ "$(head -c1 "$f")" == "{" ]] || { echo "Error: Unsupported state file format: syntax error at byte offset 1" >&2; exit 1; } ;; esac; done
+    for a in "$@"; do case "$a" in -state-out=*) touch "\${a#-state-out=}" ;; esac; done; exit 0 ;;
   "state push") exit 0 ;;
   "plan "*) for a in "$@"; do case "$a" in -out=*) touch "\${a#-out=}" ;; esac; done; exit 0 ;;
   "show "*)
