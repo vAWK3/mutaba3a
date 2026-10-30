@@ -14,10 +14,13 @@ import { test, expect } from '../../support/qa';
 const OLD_ADDRESS = 'http://127.0.0.1:5187';
 const NEW_ADDRESS = 'http://127.0.0.1:5188';
 
-/** PORTAL_LANGUAGE_KEY (src/hosted/i18n/HostedLanguageProvider.tsx). */
-const LANGUAGE_KEYS: Array<[string, string]> = [['mutaba3a-portal-language', 'en']];
+/**
+ * PORTAL_LANGUAGE_KEY (src/hosted/i18n/HostedLanguageProvider.tsx), and MODE_KEY (src/hosted/session/mode.ts): both
+ * addresses have already chosen this device, so a 401 opens the app rather than MUT-513's welcome.
+ */
+const LANGUAGE_KEYS: Array<[string, string]> = [['mutaba3a-portal-language', 'en'], ['mut-mode', 'local']];
 
-/** Nobody signed in, everywhere, in English. */
+/** Nobody signed in, everywhere, in English, on this device. */
 async function signedOutInEnglish(context: BrowserContext) {
   await context.route('**/v1/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) }));
   await context.addInitScript((keys) => keys.forEach(([key, value]) => localStorage.setItem(key, value)), LANGUAGE_KEYS);

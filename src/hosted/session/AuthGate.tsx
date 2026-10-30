@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
+import { Navigate, Outlet, useLocation, useMatches, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
@@ -21,6 +21,9 @@ import { billingGateOf } from '../data/trialPrompt';
 import { pickShellOverlay } from '../data/filters';
 import { useSignOut } from './useSignOut';
 
+/** `/` under the gate: the route the welcome answers for (router.tsx `homeRoute`). */
+const HOME_ROUTE_ID = '/authed/';
+
 /**
  * Everything behind sign-in (mut-43-auth-states.md S1, S2, S11, S12). Once the
  * person is known, a failed refetch of `/v1/me` keeps them in place: identity is
@@ -28,7 +31,9 @@ import { useSignOut } from './useSignOut';
  */
 export function AuthGate() {
   const mode = useMode();
-  const atHome = useLocation({ select: (location) => location.pathname === '/' });
+  // The matched route, not the address: while the router moves on (to /signup, say), the address changes before this
+  // gate unmounts, and reading it would send the move to sign-in (MUT-513 QA).
+  const atHome = useMatches({ select: (matches) => matches.at(-1)?.routeId === HOME_ROUTE_ID });
   // MUT-513: undecided (nobody signed in, nothing chosen) asks nothing more; the welcome or sign-in answers instead.
   const me = useQuery({ ...meQuery, enabled: mode !== 'undecided' });
   const navigate = useNavigate();

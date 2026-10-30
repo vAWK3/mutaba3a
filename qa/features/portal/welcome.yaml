@@ -1,0 +1,88 @@
+app: portal
+area: welcome
+title: The portal's first-visit welcome
+tier: secondary
+# MUT-513 (epic MUT-284, ADR-230): a first visit with nobody signed in is undecided, and / shows the welcome: what
+# MTB3A is, an account door and a this-device door. Layout, copy, art and motion are the Claude Design "Portal Welcome".
+paths:
+  - src/hosted/pages/auth/WelcomePage.tsx
+  - src/hosted/session/continueOnThisDevice.ts
+  - src/hosted/session/AuthGate.tsx
+  - src/hosted/router.tsx
+  - src/hosted/hosted.css
+  - src/hosted/analytics/portalAnalytics.ts
+  - src/lib/analytics/guard.ts
+  - src/lib/analytics/posthogConfig.ts
+features:
+  - id: first-visit
+    title: A first visit with nobody signed in shows the welcome in Arabic, not the app, and saves nothing
+    tier: core # the portal's front door for everyone without an account
+    steps:
+      - Open the portal for the first time, with nobody signed in
+    expect:
+      - The welcome opens in Arabic, right to left, headed «كل مبلغ في مكانه.», with the account door (تسجيل الدخول، أنشئ حسابًا) and the this-device door
+      - The this-device door says the records stay in this browser only, clearing site data erases them, back up from Your data › Download my records, and they don't move into an account; it mentions no phone
+      - No app navigation shows, no mode is saved, and exactly one request reached the server, the first-visit check of /v1/me
+  - id: try-local
+    title: Try it on this device opens the app in one tap, and the welcome never shows again
+    steps:
+      - Open the portal for the first time, in English
+      - Choose Try it on this device
+      - Reload the page
+    expect:
+      - The app opens on this device (the Sections navigation shows) and the choice is saved as local
+      - After the reload the app opens again, with no welcome
+  - id: sign-in-door
+    title: Sign in goes to sign-in, and coming back without signing in returns to the welcome
+    steps:
+      - Open the portal for the first time, in English
+      - Choose Sign in, then go back
+    expect:
+      - The sign-in form opens
+      - Back shows the welcome again, still with no mode saved
+  - id: signup-door
+    title: Create an account goes to the signup page
+    steps:
+      - Open the portal for the first time, in English, and choose Create an account
+    expect:
+      - The signup page opens at /signup
+  - id: deep-link-skips
+    title: Deep links never show the welcome
+    steps:
+      - With nobody signed in and no choice made, open /sign-in, then /signup, then a profile's page
+    expect:
+      - /sign-in and /signup open their own pages
+      - The profile's page goes to sign-in with next set to that page, never to the welcome
+  - id: offline
+    title: When the server can't be reached, the welcome still opens with a Retry, and Retry asks again
+    paths:
+      - src/hosted/api/client.ts
+    steps:
+      - Open the portal for the first time while the first-visit check can't reach the server
+      - Press Retry once the server answers
+    expect:
+      - The welcome opens with "Can't reach MTB3A right now · Retry" under the account door
+      - Retry asks the server again and the line goes away; nothing is saved
+  - id: reopen
+    title: You › Account › What is MTB3A? reopens the welcome, and Continue on this device goes back to the app
+    paths:
+      - src/hosted/pages/you/YouAccount.tsx
+    steps:
+      - Open the portal on this device, in English
+      - Open You › Account and choose What is MTB3A?
+      - Choose Continue on this device
+    expect:
+      - The welcome opens at /welcome, its this-device door reading Continue on this device
+      - Continue returns to the app
+  - id: phone-fit
+    title: The welcome fits a 375px phone in Arabic with no horizontal scroll
+    steps:
+      - Open the portal for the first time on a 375px-wide screen
+    expect:
+      - The page is no wider than the screen, and the illustration sits above the headline
+  - id: reduced-motion
+    title: With reduced motion the welcome only fades in, and the illustration is still
+    steps:
+      - Open the portal for the first time with reduced motion requested
+    expect:
+      - The headline and the doors use only the fade, and no part of the illustration animates

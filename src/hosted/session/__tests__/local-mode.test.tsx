@@ -138,11 +138,17 @@ describe('first visit: the welcome (MUT-513)', () => {
     expect(boot).not.toHaveBeenCalled();
   });
 
-  it('Create an account goes to the signup page', async () => {
-    stubApi({ 'GET /v1/me': nobody });
-    renderPortal('/');
+  // QA found it: while the router moves to /signup, the welcome's gate must not read the new address and send it to
+  // sign-in before the signup page mounts.
+  it('Create an account goes to the signup page, not to sign-in', async () => {
+    stubApi({ 'GET /v1/me': nobody, 'GET /v1/self-service': () => ok({ signup: true, recovery: true }) });
+    const { user, router } = renderPortal('/');
 
-    expect(await screen.findByRole('link', { name: 'Create an account' })).toHaveAttribute('href', '/signup');
+    await user.click(await screen.findByRole('link', { name: 'Create an account' }));
+
+    await waitFor(() => expect(locationOf(router)).toBe('/signup'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(locationOf(router)).toBe('/signup');
   });
 
   it('a deep link while undecided goes to sign-in, keeping where it was headed', async () => {

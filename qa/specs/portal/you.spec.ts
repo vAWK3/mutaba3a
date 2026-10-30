@@ -62,11 +62,11 @@ test('signed out on this device, the You page shows only what needs no account',
     await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible();
   });
 
-  await step('You › Account: On this device, then Sign in and Your data only', async () => {
+  await step('You › Account: On this device, then Sign in, Your data and What is MTB3A? (MUT-513)', async () => {
     await openYou(page, 'account');
     await expect(main.getByRole('heading', { level: 1 })).toHaveText('On this device');
     await expect(main.locator('.hp-you-who small')).toHaveCount(0);
-    await expect(rows).toHaveText(['Sign in', /^Your data/]);
+    await expect(rows).toHaveText(['Sign in', /^Your data/, 'What is MTB3A?']);
   });
 
   await step('You › App: Language and the terms only', async () => {
