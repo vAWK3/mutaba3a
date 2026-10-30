@@ -607,12 +607,22 @@ test('In Arabic the new-expense drawer offers إضافة إيصال, right to le
 });
 
 test('A firm records an expense with VAT: Standard 17 % on 117 previews and saves net 100.00 and VAT 17.00 (MUT-302)', { tag: '@portal.expenses.vat' }, async ({ page, step }) => {
-  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], categories: [office_, travel] });
+  // Saved before MUT-302: the API answers vat null for it.
+  const old = expense(1, { amount: '80.00', title: 'Old printer ink', categoryId: office_.id, occurredOn: '2026-09-15' });
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], categories: [office_, travel], expenses: [old] });
   const drawer = page.getByRole('dialog', { name: 'Record expense' });
   const vat = drawer.getByTestId('expense-vat');
 
-  await step('Open Record expense on a firm profile: the VAT row reads "No VAT recorded"', async () => {
+  await step('AC2: an expense saved before VAT existed opens reading "No VAT recorded"', async () => {
     await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Old printer ink/ }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(edit.getByTestId('expense-vat-summary')).toHaveText('No VAT recorded');
+    await edit.getByRole('button', { name: 'Cancel' }).click();
+    await expect(edit).toHaveCount(0);
+  });
+
+  await step('Open Record expense on a firm profile: the VAT row reads "No VAT recorded"', async () => {
     await page.getByRole('button', { name: 'Record expense' }).first().click();
     await drawer.getByLabel('Amount').fill('117');
     await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
@@ -634,7 +644,7 @@ test('A firm records an expense with VAT: Standard 17 % on 117 previews and save
   });
 
   await step('Reopen it: the row reads VAT 17% with 17.00, and net 100.00 when opened', async () => {
-    await page.getByRole('table', { name: 'Expenses' }).getByRole('row').nth(1).click();
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /117/ }).click();
     const edit = page.getByRole('dialog', { name: 'Edit expense' }).getByTestId('expense-vat');
     await expect(edit.getByTestId('expense-vat-summary')).toContainText('VAT 17%');
     await expect(edit.getByTestId('expense-vat-summary')).toContainText('17.00');

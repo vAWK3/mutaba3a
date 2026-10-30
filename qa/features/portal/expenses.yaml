@@ -256,10 +256,12 @@ features:
       - src/hosted/lib/expenseVat.ts
       - server/src/expenses/vat.ts
     steps:
-      - On a firm profile, record an expense of 117 and open VAT
+      - On a firm profile, open an expense saved before VAT existed
+      - Record an expense of 117 and open VAT
       - Choose Standard and type 17, then save
       - Reopen the expense
     expect:
+      - The old expense's VAT row reads "No VAT recorded" (MUT-302 AC2)
       - Closed, the row reads "No VAT recorded"; open, it shows net 100.00 and VAT 17.00
       - POST /v1/expenses gets vat with STANDARD_RATED and 1700 basis points, never net or VAT
       - Reopened, the row reads "VAT 17%" with 17.00, and net 100.00 when opened
