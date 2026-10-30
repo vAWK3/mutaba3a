@@ -23,6 +23,14 @@ features:
       - The welcome opens in Arabic, right to left, headed «كل مبلغ في مكانه.», with the account door (تسجيل الدخول، أنشئ حسابًا) and the this-device door
       - The this-device door says the records stay in this browser only, clearing site data erases them, back up from Your data › Download my records, and they don't move into an account; it mentions no phone
       - No app navigation shows, no mode is saved, and exactly one request reached the server, the first-visit check of /v1/me
+  - id: live-session
+    title: A browser with a live session but no saved mode goes straight to its account, never to the welcome
+    paths:
+      - src/hosted/api/client.ts
+    steps:
+      - Open the portal signed in, in a browser that has no saved mode
+    expect:
+      - The account's app opens with no welcome, and the browser now remembers the account (mut-mode remote)
   - id: try-local
     title: Try it on this device opens the app in one tap, and the welcome never shows again
     steps:

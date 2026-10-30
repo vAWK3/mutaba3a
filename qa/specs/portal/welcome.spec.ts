@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { MODE_KEY, OFFICE_A, signedOutServer } from '../../support/portal';
+import { MODE_KEY, OFFICE_A, office, signedOutServer } from '../../support/portal';
+import { FakeApi } from '../../support/portalApi';
 import { openYou, youRow } from '../../support/you';
 
 /**
@@ -47,6 +48,17 @@ test('A first visit with nobody signed in shows the welcome in Arabic, not the a
     await expect(page.getByRole('navigation', { name: 'الأقسام' })).toHaveCount(0);
     expect(await modeHint(page)).toBeNull();
     expect(server.requests).toEqual(['GET /v1/me']);
+  });
+});
+
+test('A browser with a live session but no saved mode goes straight to its account, never to the welcome', { tag: '@portal.welcome.live-session' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
+
+  await step('Open the portal signed in, in a browser that has no saved mode: the account opens, no welcome', async () => {
+    await api.open(page, '/', 'en', { mode: null });
+    await expect(page.getByRole('navigation', { name: 'Sections' })).toBeVisible();
+    await expect(welcomeHeading(page, WELCOME_EN)).toHaveCount(0);
+    expect(await modeHint(page)).toBe('remote');
   });
 });
 
