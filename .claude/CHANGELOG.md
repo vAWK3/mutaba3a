@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-30 — MUT-513: the portal's first-visit welcome (ADR-230)
+
+**Why:** a newcomer from the landing landed in an empty local app with no word on what MTB3A is or where their records would live. Plan `.claude/designs/mut-513-portal-welcome-plan.md`; design: Claude Design "Portal Welcome".
+
+### Added
+- `WelcomePage` (`src/hosted/pages/auth/WelcomePage.tsx`): what MTB3A is, an account door (Sign in, Create an account) and a this-device door with an honest explainer; Arabic first, 375px, light and dark. Illustration and motion from WELCOME-SPEC.md in `hosted.css` (`.hp-welcome-*`), with a reduced-motion fade.
+- `/welcome` (reopened from You › Account › What is MTB3A? on this device: "Continue on this device").
+- `useContinueOnThisDevice` (`src/hosted/session/continueOnThisDevice.ts`), shared by the sign-in page and the welcome.
+- `portal_welcome_choice` (analytics contract 2.4.0), counted cookieless through a separate `welcome` posthog-js instance (`countWelcomeChoice`); guard `cookieless` allowance; `posthogConfig` `'portal-welcome'` options.
+- `--welcome-*` type tokens (`src/styles/theme.css`).
+
+### Changed
+- An unhinted 401 now leaves the browser `undecided` (memory only) instead of saving `local`; `client.ts` answers later calls with its own 401 and never loads the local chunk before a choice. Undecided deep links go to sign-in.
+- A network failure on a first visit to `/` shows the welcome with Retry; Try then lasts for this visit only.
+- Carry-over: saving the received records on an undecided browser chooses this device.
+- Error reporting treats `undecided` as signed out.
+- DESIGN.md: the welcome is a Present surface; illustrations may use the brand palette as art.
+
+### Technical
+- Tests first: `client-mode.test.ts` (undecided rows), `mode.test.ts`, `errorReporting.test.ts`, `carryOverPages.test.tsx`, `local-mode.test.tsx` (welcome flows), `WelcomePage.test.tsx`, `portalAnalytics.welcome.test.ts`, `guard.test.ts`, `posthogConfig.test.ts`, `analytics-taxonomy.test.ts`.
+- Release-QA: `qa/features/portal/welcome.yaml` + `qa/specs/portal/welcome.spec.ts`; `signedOutServer` seeds `local` unless a spec passes `null`; `@portal.local.first-visit` passes the welcome via Try.
+- Privacy wording draft in `docs/operations/before-release.md` (Basel approves; web release before the server release). No API, schema or migration change.
+
 ## [Unreleased] - 2026-10-29 — MUT-504: real Hebrew receipts read without wrong fields (ADR-229)
 
 **Why:** the first bench over 16 real scans read Hebrew amounts 2/10 and dates 2/11 and filled wrong values with confidence (a card-expiry date, a pre-VAT total, PDF text-layer garbage). Reading stays dark; this is what makes a pilot in Israel safe. Plan `.claude/designs/mut-504-real-receipt-fixes.md`.

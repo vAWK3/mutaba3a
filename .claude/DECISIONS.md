@@ -6040,3 +6040,26 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Upscaling narrow scans (the ticket's first idea). Rejected after measuring: RapidOCR already read the digits; the merge dropped them.
 - Scoring a text layer's readability. Rejected: the render mode says exactly whose OCR it is.
 - Lowering `MIN_FIELD_CONFIDENCE` to reach AC2. Rejected: AC1 (nothing wrong) outranks AC2.
+
+## ADR-230: A First Visit Is Undecided Until a Door Chooses: the Portal Welcome, a 401 That Saves Nothing, and a Cookieless Door Count (MUT-513)
+
+**Status:** Accepted (2026-10-30, MUT-513; epic MUT-284; amends ADR-100's first-visit probe rule and ADR-097 §2.6 as amended, and makes one exception to `docs/analytics/README.md` rule 4). Plan and eng review: `.claude/designs/mut-513-portal-welcome-plan.md` (D1–D7, O1–O9).
+
+**Context:** since MUT-286 the first-visit check saved `mut-mode=local` the moment the server answered 401, so a newcomer from the landing landed in an empty local app with no word on what MTB3A is, that they weren't signed in, or that their records would stay in this browser.
+
+**Decision:**
+1. **An unhinted 401 is `undecided`** (`UnhintedMode`), held in memory only. `client.ts` answers every later call with its own 401 (`UNAUTHENTICATED`): no request, no ended session, and the local chunk is never imported, so no IndexedDB opens before a choice. A 200 still saves `remote`; a network failure still saves nothing. Only a door saves a mode: Try saves `local`, a successful sign-in `remote`.
+2. **Where it shows:** `AuthGate` renders the welcome on `/` when undecided. Any other signed-in path while undecided goes to sign-in with `next` (as `/connect/approve` already did). The signed-out pages (`/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over*`) never pass through it. `/welcome` reopens it from You › Account on this device ("Continue on this device"); signed in, it goes to `/`.
+3. **A network failure on `/` with no hint shows the welcome too, with Retry (D7).** Try after a failure lasts for this page only (`setUnhintedMode('local')`), so an account holder caught in an outage gets their account back on the next load. A 5xx keeps the can't-connect screen. Try opens the local backend first; if this browser can't open it, nothing is saved and `LocalUnavailable` shows.
+4. **Leaving without choosing returns to the welcome**: nothing was saved, so Back from `/sign-in` or a reload asks again.
+5. **Carry-over:** a records file saved on `/carry-over/receive` while not signed in chooses this device (`setMode('local')`), so Open lands on the records, not the welcome (O4).
+6. **Error reports:** `undecided` counts as signed out (ADR-097 §10): nothing is held for Sentry, and what was held is dropped (O6).
+7. **The door count (D3, D6):** `portal_welcome_choice {choice: sign_in | signup | local}` (contract 2.4.0) is the one portal event sent before anyone signs in. It goes through its own posthog-js instance named `welcome`, loaded on the click, with the landing's cookieless options (`'portal-welcome'` in `posthogConfig`) and the guard's cookieless allowance (`GuardContext.cookieless`): only `$cookieless_mode`, `$raw_user_agent`, `$host`, `$current_url` and `choice`, and no other event. The consented MUT-155 instance is never started or touched. The door never waits on the count. The privacy policy's wording waits for Basel's approval in `docs/operations/before-release.md` and ships before the server release that carries this.
+8. **Design (Basel, 2026-10-30):** layout, copy, illustration and motion are the Claude Design "Portal Welcome" (WELCOME-SPEC.md), on theme tokens. The welcome is a Present surface (display face), and its illustration keeps the design's peach nuqta as art (DESIGN.md amended).
+
+**Consequences:** browsers that already saved `local` under the old rule never see the welcome on their own; You › Account › What is MTB3A? reaches it. Release-QA signed-out specs now seed `local` (`signedOutServer`), and first-visit specs pass `null`. A browser whose hint was lost but whose records remain sees the welcome; Try finds the records (O9).
+
+**Alternatives considered:**
+- Save `local` on 401 and show the welcome over the local app. Rejected: it opens IndexedDB before a choice and leaves no way back to "undecided".
+- Count the doors through MUT-155's consent (the ticket's first wording). Rejected: that consent belongs to a signed-in person, so it could never send (D2/D3).
+- A direct capture POST instead of a named SDK instance (D6). Rejected: we would own PostHog's cookieless wire format.
