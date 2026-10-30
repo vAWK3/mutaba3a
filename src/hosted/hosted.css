@@ -1280,3 +1280,121 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* MUT-453: Reverse payment / Reduce / Cancel, under an entry's details in its drawer. Wraps at phone width. */
 .hp-correct-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-start: var(--space-5); padding-block-start: var(--space-4); border-block-start: 1px solid var(--border); }
 .hp-correct-explain { margin: 0 0 var(--space-4); }
+
+/* ── MUT-513: the first-visit welcome (Claude Design "Portal Welcome", WELCOME-SPEC.md) ──────────────────────────
+   A Present surface (DESIGN.md): the display face and the brand illustration. Colours are tokens; the export's hex values
+   are those tokens. Phone first, two columns from 900px (the design's desktop width; the content column is 540px). */
+.hp-welcome {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-space-16);
+  padding: var(--m-space-12) var(--m-space-20) var(--m-space-32);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+.hp-welcome-top { display: flex; align-items: center; justify-content: space-between; gap: var(--m-space-12); min-height: 44px; }
+.hp-welcome-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--m-space-24); align-items: center; }
+.hp-welcome-art {
+  display: grid;
+  place-items: center;
+  min-height: 208px;
+  border-radius: var(--m-radius-card);
+  /* No token names the panel tint: a quarter of the selected lavender over the canvas, in both themes */
+  background: color-mix(in oklch, var(--m-lavender) 25%, var(--m-canvas));
+  overflow: hidden;
+}
+.hp-welcome-art svg { width: 176px; height: 176px; overflow: visible; }
+.hp-welcome-content { display: flex; flex-direction: column; gap: var(--m-space-16); width: 100%; max-width: 540px; min-width: 0; justify-self: center; }
+.hp-welcome-intro { display: flex; flex-direction: column; gap: var(--m-space-10); }
+.hp-welcome-title { margin: 0; font-family: var(--m-font-display); font-weight: 700; font-size: var(--welcome-title); line-height: 1.15; text-wrap: balance; }
+.hp-welcome-lede { margin: 0; font-size: var(--welcome-lede); line-height: 1.6; color: var(--muted); text-wrap: pretty; }
+.hp-welcome-door { display: flex; flex-direction: column; gap: var(--m-space-16); padding: var(--m-space-20); border-radius: var(--m-radius-card); }
+.hp-welcome-door-account { background: var(--surface); box-shadow: var(--m-shadow-card); }
+.hp-welcome-door-device { gap: var(--welcome-door-gap); box-shadow: inset 0 0 0 1px var(--border); }
+.hp-welcome-door-head { display: flex; flex-direction: column; gap: var(--m-space-6); }
+.hp-welcome-door-head p { margin: 0; font-size: var(--text-body); line-height: 1.55; text-wrap: pretty; }
+.hp-welcome-eyebrow { margin: 0; font-size: var(--welcome-caption); font-weight: 600; color: var(--muted); }
+.hp-welcome-door-account .hp-welcome-eyebrow { color: var(--on-accent-subtle); }
+.hp-welcome-actions { display: flex; flex-direction: column; gap: var(--m-space-10); }
+.hp-welcome .btn { min-height: 52px; border-radius: var(--m-radius-md); font-size: var(--welcome-action); font-weight: 600; touch-action: manipulation; }
+.hp-welcome-tonal { background: var(--accent-subtle); color: var(--on-accent-subtle); border: none; }
+.hp-welcome-tonal:hover { background: color-mix(in oklch, var(--on-accent-subtle) 6%, var(--accent-subtle)); }
+.hp-welcome-tonal:active { background: color-mix(in oklch, var(--on-accent-subtle) 12%, var(--accent-subtle)); }
+.hp-welcome-door-device .btn-secondary { background: transparent; border: none; box-shadow: inset 0 0 0 1.5px var(--border); }
+.hp-welcome-door-device .btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.hp-welcome-offline { margin: calc(-1 * var(--m-space-8)) 0 calc(-1 * var(--m-space-10)); display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--m-space-6); font-size: var(--welcome-caption); line-height: 1.5; color: var(--muted); }
+.hp-welcome-offline .hp-link-button { min-height: 44px; }
+.hp-welcome-points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--m-space-8); }
+.hp-welcome-points li { display: flex; gap: var(--m-space-10); align-items: baseline; font-size: var(--welcome-point); line-height: 1.55; color: var(--muted); text-wrap: pretty; }
+/* The bullet is the nuqta (Basel, MUT-513: the welcome follows the design's peach, as on the phone) */
+.hp-welcome-points li::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--m-peach-strong); transform: translateY(-2px); }
+.hp-welcome-points strong { font-weight: 600; color: var(--text); }
+
+@media (min-width: 900px) {
+  .hp-welcome { gap: var(--m-space-32); padding: var(--m-space-28) var(--m-space-56) var(--m-space-48); }
+  .hp-welcome-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--m-space-64); }
+  .hp-welcome-art { order: 2; min-height: 600px; height: 100%; border-radius: var(--m-radius-hero); }
+  .hp-welcome-art svg { width: 340px; height: 340px; }
+  .hp-welcome-content { order: 1; gap: var(--m-space-20); }
+  .hp-welcome-title { font-size: var(--welcome-title-wide); }
+  .hp-welcome-lede { font-size: var(--welcome-lede-wide); }
+  .hp-welcome-door { padding: var(--m-space-24); }
+  .hp-welcome-actions { flex-direction: row; }
+  .hp-welcome-actions .btn { flex: 1 1 0; }
+}
+
+/* The scene: tokens per part; RTL mirrors the whole scene so the path leads in reading direction (a physical
+   transform, so it needs its [dir='rtl'] rule) */
+.hp-welcome-scene { transform-box: view-box; transform-origin: center; }
+[dir='rtl'] .hp-welcome-scene { transform: scaleX(-1); }
+.hp-welcome-ground, .hp-welcome-path, .hp-welcome-sparkle-2 { fill: none; stroke: var(--m-primary); stroke-width: 3; stroke-linecap: round; }
+.hp-welcome-arch { fill: var(--m-field-bg); stroke: var(--m-primary); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; transform-box: fill-box; transform-origin: 50% 100%; }
+.hp-welcome-path { stroke-dasharray: 1 9; }
+.hp-welcome-nuqta { fill: var(--m-peach-strong); transform-box: fill-box; transform-origin: center; }
+.hp-welcome-sparkle { transform-box: fill-box; transform-origin: center; }
+.hp-welcome-sparkle-1 { fill: var(--m-primary); }
+.hp-welcome-sparkle-3 { fill: none; stroke: var(--m-primary); stroke-width: 2; }
+
+/* Entrance and one ambient cycle (WELCOME-SPEC.md tables): spring for everything, overshoot on the nuqta only. Nothing
+   blocks input; the last motion ends at 4700ms (WCAG 2.2.2). The top bar has no entrance. */
+@media (prefers-reduced-motion: no-preference) {
+  .hp-welcome-art { animation: hp-welcome-fade 320ms var(--m-ease-spring) both; }
+  .hp-welcome-ground { animation: hp-welcome-fade 240ms var(--m-ease-spring) 60ms both; }
+  .hp-welcome-arch { animation: hp-welcome-arch-in 560ms var(--m-ease-spring) 60ms both, hp-welcome-arch-breathe 2800ms 1100ms; }
+  .hp-welcome-path { animation: hp-welcome-path-in 640ms var(--m-ease-spring) 300ms both, hp-welcome-path-walk 1400ms linear 1100ms 2; }
+  .hp-welcome-nuqta { animation: hp-welcome-pop 520ms var(--m-ease-overshoot) 380ms both, hp-welcome-nuqta-breathe 2800ms 1100ms; }
+  .hp-welcome-sparkle-1 { animation: hp-welcome-sparkle-in 420ms var(--m-ease-spring) 560ms both, hp-welcome-twinkle 2800ms cubic-bezier(.42, 0, .58, 1) 1100ms; }
+  .hp-welcome-sparkle-2 { animation: hp-welcome-sparkle-in 420ms var(--m-ease-spring) 640ms both, hp-welcome-twinkle 2800ms cubic-bezier(.42, 0, .58, 1) 1500ms; }
+  .hp-welcome-sparkle-3 { animation: hp-welcome-sparkle-in 420ms var(--m-ease-spring) 720ms both, hp-welcome-twinkle 2800ms cubic-bezier(.42, 0, .58, 1) 1900ms; }
+  .hp-welcome-title { animation: hp-welcome-rise-10 420ms var(--m-ease-spring) 120ms both; }
+  .hp-welcome-lede { animation: hp-welcome-rise-10 420ms var(--m-ease-spring) 170ms both; }
+  .hp-welcome-door-account { animation: hp-welcome-rise-16 480ms var(--m-ease-spring) 220ms both; }
+  .hp-welcome-door-device { animation: hp-welcome-rise-16 480ms var(--m-ease-spring) 280ms both; }
+}
+/* Reduced motion: only a 200ms opacity fade on the panel, the text and the doors; the scene is the static frame */
+@media (prefers-reduced-motion: reduce) {
+  .hp-welcome-art, .hp-welcome-title, .hp-welcome-lede, .hp-welcome-door { animation: hp-welcome-fade 200ms linear both; }
+}
+
+@keyframes hp-welcome-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hp-welcome-rise-10 { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes hp-welcome-rise-16 { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes hp-welcome-arch-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes hp-welcome-path-in { from { opacity: 0; stroke-dashoffset: 30; } to { opacity: 1; stroke-dashoffset: 0; } }
+@keyframes hp-welcome-path-walk { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -20; } }
+@keyframes hp-welcome-pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes hp-welcome-sparkle-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes hp-welcome-nuqta-breathe {
+  0% { transform: scale(1); animation-timing-function: var(--m-ease-spring); }
+  50% { transform: scale(1.25); animation-timing-function: var(--m-ease-spring); }
+  100% { transform: scale(1); }
+}
+@keyframes hp-welcome-arch-breathe {
+  0% { transform: none; animation-timing-function: var(--m-ease-spring); }
+  50% { transform: translateY(-1.5px); animation-timing-function: var(--m-ease-spring); }
+  100% { transform: none; }
+}
+@keyframes hp-welcome-twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
