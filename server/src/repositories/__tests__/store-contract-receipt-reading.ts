@@ -123,7 +123,7 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       const deleted = await w.pending();
       await store.expenseReceipts.softDelete(w.a.id, deleted.id, at(3));
       expect(await store.expenseReceipts.finishRead(deleted.id, deleted.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped' });
-      const e = await store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id }, at(4));
+      const e = await store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id }, at(4));
       const filed = await w.pending();
       const result = await store.expenseReceipts.fileOntoExpense({ organizationId: w.a.id, receiptId: filed.id, expenseId: e.id, maxReceipts: 10 });
       expect(result.kind).toBe('filed');

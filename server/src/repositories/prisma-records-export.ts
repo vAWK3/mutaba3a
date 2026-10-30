@@ -94,6 +94,8 @@ const EXPENSE = cols<Omit<ExpenseRecord, 'captureSource'>>()({
   projectId: true, createdByUserId: true, deletedAt: true, version: true, createdAt: true, updatedAt: true,
   // MUT-254
   vendorId: true,
+  // MUT-302
+  vatTreatment: true, vatRateBasisPoints: true, netMinor: true, vatMinor: true,
 });
 const EXPENSE_CATEGORY = cols<ExpenseCategoryRecord>()({ id: true, organizationId: true, name: true, color: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 // MUT-441: the server's reading state and capture hint stay on the server too; the local records format is unchanged.

@@ -214,6 +214,15 @@ function addReversalReasonCode(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-302, 13 → 14: expenses gain `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor` (ADR-231). Nothing
+ * on a device recorded VAT (as the SQL columns, every existing expense reads "No VAT recorded"): null, never a split.
+ */
+function addExpenseVat(snapshot: StoredSnapshot): StoredSnapshot {
+  const exps = snapshot.maps.exps as Map<string, Omit<ExpenseRecord, 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, exps: new Map([...exps].map(([id, e]) => [id, { ...e, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -232,6 +241,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 10, to: 11, migrate: addReceiptNumber },
   { from: 11, to: 12, migrate: addProposalDrafts },
   { from: 12, to: 13, migrate: addReversalReasonCode },
+  { from: 13, to: 14, migrate: addExpenseVat },
 ];
 
 /**

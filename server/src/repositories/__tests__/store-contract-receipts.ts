@@ -40,6 +40,10 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       customerId: null,
       projectId: null,
       notes: null,
+      vatTreatment: null,
+      vatRateBasisPoints: null,
+      netMinor: null,
+      vatMinor: null,
       createdByUserId: user.id,
       ...over,
     });

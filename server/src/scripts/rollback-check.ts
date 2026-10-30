@@ -79,6 +79,12 @@ export const ROLLBACK_HAZARDS: readonly RollbackHazard[] = [
     count: `SELECT (SELECT count(*) FROM payment_allocations WHERE "releasedAt" IS NOT NULL) + (SELECT count(*) FROM agreement_supplements WHERE distribution = 'CORRECTION')`,
     consequence: "an older revision counts released allocation rows, so a reversal releases twice and payment lists and statements double them; its Prisma client also has no CORRECTION distribution, so those agreements' details fail",
   },
+  {
+    ticket: 'MUT-302',
+    migration: '_mut302_',
+    count: `SELECT count(*) FROM expenses WHERE "vatTreatment" IS NOT NULL`,
+    consequence: "an older revision's PATCH of a VAT expense's amount leaves the split behind, so the expenses_vat_adds_up CHECK refuses it (500); its expenses also read without their VAT",
+  },
 ];
 
 const MIGRATIONS_DIR = 'server/prisma/migrations/';

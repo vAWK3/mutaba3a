@@ -46,6 +46,10 @@ export function describeLedgerStoreInboxContract(name: string, makeStore: () => 
       customerId: null,
       projectId: null,
       notes: 'Taxi from court',
+      vatTreatment: null,
+      vatRateBasisPoints: null,
+      netMinor: null,
+      vatMinor: null,
       createdByUserId: owner.user.id,
       ...over,
     });

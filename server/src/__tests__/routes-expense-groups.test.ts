@@ -365,7 +365,7 @@ describe('pre-landing review fixes (MUT-267)', () => {
     const t = await setup();
     const g = await t.newGroup();
     for (let i = 0; i < 205; i++) {
-      await t.store.expenses.create({ organizationId: t.a.id, occurredOn: `2026-10-0${3 + (i % 5)}`, amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: t.userId }, t.clock.now);
+      await t.store.expenses.create({ organizationId: t.a.id, occurredOn: `2026-10-0${3 + (i % 5)}`, amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: t.userId }, t.clock.now);
     }
     const jod = (await t.summary(g.id)).currencies[0];
     expect(jod).toMatchObject({ currency: 'JOD', count: 205, total: '205.000' });

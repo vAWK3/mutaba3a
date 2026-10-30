@@ -164,10 +164,11 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
   const [banner, setBanner] = useState<string | null>(null);
 
   // The suggestion at mount fills the form's defaults; one that lands later (MUT-441) is `late`, below.
-  const [prefill] = useState(() => suggestionToFormValues(receipt.suggested, { currencies: HOSTED_CURRENCIES }));
+  // MUT-302 (OV1): VAT is read into the form on a firm profile only, the one whose form shows it.
+  const [prefill] = useState(() => suggestionToFormValues(receipt.suggested, { currencies: HOSTED_CURRENCIES, firm: profile.firm }));
   const expenseForm = useHostedExpenseForm({ profileId: profile.id, timezone: profile.timezone, initialValues: prefill.values });
   const { form, categoriesLoading, errorLabels, picks } = expenseForm;
-  const late = useLateSuggestion(form, receipt.suggested);
+  const late = useLateSuggestion(form, receipt.suggested, profile.firm);
   const current = useWatch({ control: form.control, name: SUGGESTED_FORM_FIELDS });
 
   const hints = useMemo(() => {
@@ -180,6 +181,8 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
     for (const [field, confidence] of Object.entries(prefill.prefilled) as [HostedExpenseHintField, number][]) out[field] = fromReceipt(confidence);
     // A14: what the receipt said, beside the amount the form leaves empty.
     if (prefill.unsupported) out.amount = receiptSays(prefill.unsupported);
+    // MUT-302 (D6): a VAT amount with no usable rate is only said, beside the empty rate.
+    if (prefill.vatRead) out.vat = t('hosted.receipts.review.vatRead', { amount: prefill.vatRead });
     if (late) {
       // R10 #9: a hint only where the late suggestion's value is what the field holds (it filled it).
       const now = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
@@ -188,6 +191,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
         if (late.values[name] !== undefined && now[name] === late.values[name]) out[field] = fromReceipt(confidence);
       }
       if (late.unsupported && !out.amount && now.amount === '') out.amount = receiptSays(late.unsupported);
+      if (late.vatRead && !out.vat && now.vatTreatment === '') out.vat = t('hosted.receipts.review.vatRead', { amount: late.vatRead });
     }
     return out;
   }, [prefill, late, current, t]);
@@ -199,7 +203,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
   const onSubmit = async (values: HostedExpenseFormValues) => {
     setBanner(null);
     // A1: no `suggested` (approve would replace the stored one, and the portal reads nothing); A13: no captureSource.
-    const body = createExpenseBody(values);
+    const body = createExpenseBody(values, { firm: profile.firm });
     // A13: the next receipt from the list as it stands, before approving invalidates it.
     const next = nextReceiptId(queue.data, receipt.id);
     try {
@@ -269,6 +273,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
             readOnly={!writable}
             idPrefix="hosted-receipt"
             hints={hints}
+            firm={profile.firm}
           />
         </ReadOnlyFields>
       </form>
@@ -289,8 +294,8 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
 }
 
 /** The suggestion's fields as the form names them. */
-const FORM_FIELD_OF = { date: 'occurredAt', amount: 'amount', currency: 'currency', vendor: 'vendor' } as const satisfies Record<SuggestedField, keyof HostedExpenseFormValues>;
-const SUGGESTED_FORM_FIELDS = ['occurredAt', 'amount', 'currency', 'vendor'] as const;
+const FORM_FIELD_OF = { date: 'occurredAt', amount: 'amount', currency: 'currency', vendor: 'vendor', vat: 'vatTreatment' } as const satisfies Record<SuggestedField, keyof HostedExpenseFormValues>;
+const SUGGESTED_FORM_FIELDS = ['occurredAt', 'amount', 'currency', 'vendor', 'vatTreatment'] as const;
 type SuggestedFormField = (typeof SUGGESTED_FORM_FIELDS)[number];
 /** Fields that start empty: filled only while still empty. The date and currency always hold a value: filled while it is still the default. */
 const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor'];
@@ -300,9 +305,10 @@ const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor'];
  * only when the person hasn't changed it (typed, picked, or typed then cleared: any change event counts, and so does
  * touched or dirty) and it is still empty (amount, vendor) or still its default (date, currency); the amount only in
  * the currency it was read in. Nothing is filled while Approve is in flight; an Approve that fails then fills what is
- * still untouched (the effect re-runs when submitting ends). Returns the late suggestion, for hints.
+ * still untouched (the effect re-runs when submitting ends). MUT-302: a read rate fills the VAT row only while the
+ * person hasn't touched it and it still records none. Returns the late suggestion, for hints.
  */
-function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseReceipt['suggested']): SuggestionPrefill | null {
+function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseReceipt['suggested'], firm: boolean): SuggestionPrefill | null {
   const changed = useRef(new Set<string>());
   useEffect(() => {
     const subscription = form.watch((_values, { name, type }) => {
@@ -316,7 +322,7 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
   const [late, setLate] = useState<SuggestionPrefill | null>(null);
   if (suggested !== seen) {
     setSeen(suggested);
-    setLate(suggested ? suggestionToFormValues(suggested, { currencies: HOSTED_CURRENCIES }) : null);
+    setLate(suggested ? suggestionToFormValues(suggested, { currencies: HOSTED_CURRENCIES, firm }) : null);
   }
 
   // Subscribed, so the fill below runs again when an Approve that held it back ends (MUT-441 review).
@@ -334,6 +340,10 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
     }
     // An amount read in another currency than the one the form now holds would be the wrong number.
     if (late.values.amount !== undefined && fillable('amount') && form.getValues('currency') === late.values.currency) form.setValue('amount', late.values.amount);
+    if (late.values.vatTreatment && late.values.vatRate !== undefined && untouched('vatTreatment') && !changed.current.has('vatRate') && form.getValues('vatTreatment') === '') {
+      form.setValue('vatTreatment', late.values.vatTreatment);
+      form.setValue('vatRate', late.values.vatRate);
+    }
   }, [form, late, isSubmitting]);
 
   return late;

@@ -98,7 +98,8 @@ describe('local snapshot migrations', () => {
     const after = migrate(before);
 
     expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
-    expect([...after.maps.exps.values()]).toEqual([...before.maps.exps.values()].map((e) => ({ ...e, vendorId: null })));
+    // 13 → 14 (MUT-302) runs later in the chain and adds the four null VAT fields.
+    expect([...after.maps.exps.values()]).toEqual([...before.maps.exps.values()].map((e) => ({ ...e, vendorId: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null })));
     expect(after.maps.vendors.size).toBe(0);
     expect(after.maps.vendorNames.size).toBe(0);
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
@@ -233,9 +234,27 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(13);
+    // 13 → 14 runs next and touches only expenses.
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()].map((p) => ({ ...p, reversalReasonCode: null })));
     expect(after.maps.pays.get(undone.payment.id)).toMatchObject({ status: 'REVERSED', reversalReasonCode: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('13 → 14 (MUT-302): expenses gain four null VAT fields ("No VAT recorded", never a split), and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { user, personalOrganization: org } = await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.expenses.create({ organizationId: org.id, occurredOn: '2026-10-01', amountMinor: 11_700n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, AT);
+    const { maps } = store.snapshot();
+    const VAT_FIELDS = ['vatTreatment', 'vatRateBasisPoints', 'netMinor', 'vatMinor'];
+    const exps = new Map([...maps.exps].map(([id, e]) => [id, Object.fromEntries(Object.entries(e).filter(([field]) => !VAT_FIELDS.includes(field)))]));
+    const before: StoredSnapshot = { formatVersion: 13, stateVersion: 4, savedAt: AT, maps: { ...maps, exps } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(14);
+    expect([...after.maps.exps.values()]).toEqual([...maps.exps.values()]);
+    expect([...after.maps.exps.values()][0]).toMatchObject({ amountMinor: 11_700n, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

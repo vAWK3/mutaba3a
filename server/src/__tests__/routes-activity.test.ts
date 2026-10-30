@@ -143,7 +143,7 @@ describe('GET /v1/summaries/activity', () => {
   it('reads every page: 201 expenses and 201 payments all count', async () => {
     const s = await setup();
     for (let i = 0; i < 201; i++) {
-      await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-02', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: s.userId }, s.clock.now);
+      await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-02', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: s.userId }, s.clock.now);
       await s.store.payments.capture({ organizationId: s.personal, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn: '2026-10-02', method: 'CASH', notes: null, createdByUserId: s.userId, captureSource: null, requestId: null }, s.clock.now);
     }
     const body = await read(await s.get('from=2026-10-01&to=2026-10-31'));

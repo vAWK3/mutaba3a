@@ -21,7 +21,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
     const client = await store.customers.create({ organizationId: b.id, name: 'Acme', email: null, phone: null, notes: null, vatTreatment: 'OUT_OF_SCOPE' }, at(0));
 
     const expense = (organizationId: string, s: number) =>
-      store.expenses.create({ organizationId, occurredOn: '2026-10-08', amountMinor: 4_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(s));
+      store.expenses.create({ organizationId, occurredOn: '2026-10-08', amountMinor: 4_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(s));
     const conversion = (organizationId: string, s: number) =>
       store.conversions.create({ organizationId, occurredOn: '2026-10-08', amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: user.id }, at(s));
     const capture = (organizationId: string, s: number) =>
@@ -40,7 +40,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       const w = await world(store);
       const when = (iso: string) => new Date(iso);
       const exp = (iso: string) =>
-        store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-08', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id }, when(iso));
+        store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-08', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id }, when(iso));
       const cap = (iso: string) =>
         store.payments.capture({ organizationId: w.a.id, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn: '2026-10-08', method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, when(iso)).then((r) => r.payment);
 
@@ -211,7 +211,7 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
     async function dated(store: LedgerStore) {
       const w = await world(store);
       const expense = (organizationId: string, occurredOn: string, s: number) =>
-        store.expenses.create({ organizationId, occurredOn, amountMinor: 4_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: w.user.id }, at(s));
+        store.expenses.create({ organizationId, occurredOn, amountMinor: 4_000n, currency: 'ILS', title: 'Paper', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id }, at(s));
       const conversion = (organizationId: string, occurredOn: string, s: number) =>
         store.conversions.create({ organizationId, occurredOn, amountMinor: 10_000n, currency: 'USD', toAmountMinor: 36_500n, toCurrency: 'ILS', notes: null, createdByUserId: w.user.id }, at(s));
       const capture = (organizationId: string, receivedOn: string, s: number) =>

@@ -191,6 +191,16 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
     expect(audit.map((a) => a.entityId)).toEqual([receipt.id]);
   });
 
+  it('MUT-302: approving with vat stores the split on the expense; the approved record keeps its own fields (D7)', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: SUGGESTION });
+    const res = await h.app.request(`/v1/receipts/${receipt.id}/approve`, json({ ...approveBody, amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } }, { ...as(), ...idem() }));
+    expect(res.status).toBe(201);
+    const body = await read(res);
+    expect(body.expense.vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '100.00', vat: '17.00', gross: '117.00' });
+    expect(body.receipt.approved).not.toHaveProperty('vat');
+  });
+
   it('refuses where POST /v1/expenses refuses, before anything is filed', async () => {
     const { h, as } = await setup();
     const receipt = await upload(h, as());

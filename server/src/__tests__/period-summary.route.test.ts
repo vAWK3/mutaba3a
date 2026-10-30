@@ -237,11 +237,11 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
     expect((await ok(await period(h, 'currency=ILS', other.auth))).currencies).toEqual([expect.objectContaining({ payments: '999.00', closingBalance: '-999.00' })]);
   });
 
-  it('AC4: the contract version is 1.91.0-mut503 and the route is published under Summaries with the API key', async () => {
+  it('AC4: the contract version is 1.92.0-mut302 and the route is published under Summaries with the API key', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.91.0-mut503');
+    expect(API_VERSION).toBe('1.92.0-mut302');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.91.0-mut503');
+    expect(doc.info.version).toBe('1.92.0-mut302');
     const op = doc.paths['/v1/summaries/period'].get;
     expect(op.tags).toEqual(['Summaries']);
     expect(op.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);

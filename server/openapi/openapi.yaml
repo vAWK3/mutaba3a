@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.91.0-mut503
+  version: 1.92.0-mut302
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4709,6 +4709,8 @@ components:
           allOf:
             - $ref: "#/components/schemas/StoredCaptureSource"
             - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436.
+        vat:
+          $ref: "#/components/schemas/ExpenseVat"
         version:
           type: integer
         createdAt:
@@ -4731,9 +4733,37 @@ components:
         - notes
         - createdByUserId
         - captureSource
+        - vat
         - version
         - createdAt
         - updatedAt
+    ExpenseVat:
+      type: object
+      nullable: true
+      properties:
+        treatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+      required:
+        - treatment
+        - rateBasisPoints
+        - net
+        - vat
+        - gross
+      description: "MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302."
     FileAsExpenseRequest:
       type: object
       properties:
@@ -8039,6 +8069,22 @@ components:
           type: string
           format: date-time
           description: When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+        vat:
+          type: object
+          nullable: true
+          properties:
+            treatment:
+              $ref: "#/components/schemas/VatTreatment"
+            rateBasisPoints:
+              type: integer
+              minimum: 0
+              maximum: 10000
+              description: The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0.
+          required:
+            - treatment
+            - rateBasisPoints
+          additionalProperties: false
+          description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
       required:
         - occurredOn
         - amount
@@ -8087,6 +8133,22 @@ components:
           type: string
           nullable: true
           maxLength: 4000
+        vat:
+          type: object
+          nullable: true
+          properties:
+            treatment:
+              $ref: "#/components/schemas/VatTreatment"
+            rateBasisPoints:
+              type: integer
+              minimum: 0
+              maximum: 10000
+              description: The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0.
+          required:
+            - treatment
+            - rateBasisPoints
+          additionalProperties: false
+          description: "MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row's own. Since 1.92.0-mut302."
       additionalProperties: false
     CreateReceiptUploadResponse:
       type: object
@@ -9251,6 +9313,22 @@ components:
           type: string
           format: date-time
           description: When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.
+        vat:
+          type: object
+          nullable: true
+          properties:
+            treatment:
+              $ref: "#/components/schemas/VatTreatment"
+            rateBasisPoints:
+              type: integer
+              minimum: 0
+              maximum: 10000
+              description: The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0.
+          required:
+            - treatment
+            - rateBasisPoints
+          additionalProperties: false
+          description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"

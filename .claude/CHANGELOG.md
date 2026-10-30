@@ -28,6 +28,29 @@
 
 ---
 
+## [Unreleased] - 2026-10-30 — MUT-302: VAT on expenses (ADR-231)
+
+**Why:** firms reclaim the VAT they pay, but an expense held one amount. Plan `.claude/designs/mut-302-expense-vat-plan.md` (APPROVED 2026-10-29). Web half; the phone half is a Flutter branch after this API is on local main.
+
+### Added
+- Server: `server/src/expenses/vat.ts` (`expenseVat`, `storedExpenseVat`, `assertExpenseVatColumns`, `NO_EXPENSE_VAT`); migration `20261030120000_mut302_expense_vat` (four nullable columns, four CHECKs); `vat` on Create/Update expense and receipt approve requests and on `Expense` responses (`ExpenseVatInput`, `ExpenseVat`). API 1.92.0-mut302.
+- Shared case table `server/src/__tests__/fixtures/expense-vat-cases.json` (30 rows from `computeVat`), read by the server and portal tests.
+- Portal: `ExpenseVatRow` (firm profiles only), `src/hosted/lib/expenseVat.ts` (`vatPreview`, `percentToBasisPoints`, `basisPointsToPercent`); i18n `hosted.expenses.vat.*`, `hosted.receipts.review.vatRead` (ar + en).
+- Rollback hazard MUT-302 (`rollback-check.ts`, DEPLOYMENT.md §6).
+
+### Changed
+- `CreateExpenseInput` requires the four VAT fields (`| null`), so every writer states its VAT (inbox filing and the MCP tool record none).
+- Expense PATCH re-splits a VAT expense's new amount in the same write; `null` clears.
+- Receipt Review prefills a read VAT rate on a firm; `suggestionToFormValues` takes `{ firm }` and returns `vatRead`.
+- `createExpenseBody(values, { firm })`; the drawer's edit sends `vat` only when it changed (`updateExpenseVat`).
+- Local snapshot format 13 → 14 (`addExpenseVat`).
+- Brief `firm-books.md` §7 amended: no `grossMinor`; the split helper moves to MUT-308.
+
+### Technical
+- Tests first: `expenses/__tests__/vat.test.ts` (case table, property test), `compose.test.ts` (D4), `routes-expenses.test.ts` (AC1/AC2/AC4, D2, D4, OV10, review finding 3), `routes-receipts.test.ts`, `mcp-write-tools.test.ts`, `rollback-check.test.ts`, expenses store contract (CHECKs on memory and Postgres); local `migrations.test.ts`, `format-fingerprint.test.ts`, `parity.test.ts`; portal `expenseVat.test.ts`, `receiptSuggestion.test.ts`, `ExpenseDrawer.test.tsx`, `Receipts.test.tsx`, `expenseApiErrors.test.ts`.
+- Release-QA: `@portal.expenses.vat`, `@portal.expenses.vat-none-personal`, `@portal.receipts.vat-from-receipt`; the QA fake API splits VAT as the server does (`splitExpenseVat`).
+- Merging this restarts :8787 (a Prisma migration): warn the orchestrator first.
+
 ## [Unreleased] - 2026-10-30 — MUT-513: the portal's first-visit welcome (ADR-230)
 
 **Why:** a newcomer from the landing landed in an empty local app with no word on what MTB3A is or where their records would live. Plan `.claude/designs/mut-513-portal-welcome-plan.md`; design: Claude Design "Portal Welcome".

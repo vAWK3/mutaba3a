@@ -54,10 +54,10 @@ const plain = (item: ReceiptListItem): ExpenseReceipt => {
 
 const categories = { items: [{ id: GROCERIES, name: 'Groceries', color: null, archived: false, version: 1, createdAt: '', updatedAt: '' }] };
 
-function portal(path: string, world: { receipts?: ReceiptListItem[]; counts?: Handler; routes?: Record<string, Handler>; writable?: boolean } = {}) {
+function portal(path: string, world: { receipts?: ReceiptListItem[]; counts?: Handler; routes?: Record<string, Handler>; writable?: boolean; firm?: boolean } = {}) {
   const items = world.receipts ?? [];
   const routes: Record<string, Handler> = {
-    'GET /v1/me': () => ok(me([profile({ access: { payments: 'read', expenses: 'read-write', capture: 'read-write' } })])),
+    'GET /v1/me': () => ok(me([profile({ access: { payments: 'read', expenses: 'read-write', capture: 'read-write' }, firm: world.firm ?? false })])),
     ...emptyProfileRoutes(),
     'GET /v1/expense-categories': () => ok(categories),
     'GET /v1/vendors': () => ok({ items: [] }),
@@ -334,16 +334,57 @@ describe('the review page (AC3, D7, D8)', () => {
   });
 });
 
+describe('VAT read from the receipt (MUT-302)', () => {
+  const withRate = { ...suggested, totalMinor: { value: '11700', source: 'qr' as const, confidence: 0.95 }, vatRateBasisPoints: { value: 1700, source: 'qr' as const, confidence: 0.9 }, vatMinor: { value: '1700', source: 'qr' as const, confidence: 0.9 } };
+  const approveRoute = (seen: { body?: unknown }) => ({
+    [`POST /v1/receipts/${R1}/approve`]: ({ body }: { body: unknown }) => {
+      seen.body = body;
+      return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '117.00', currency: 'ILS', title: null, vendor: 'Shufersal', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+    },
+  });
+
+  it('OV1/AC3: on a personal profile a read rate shows no VAT row and approving sends no vat', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: withRate })], routes: approveRoute(seen) });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.queryByTestId('expense-vat')).toBeNull();
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).not.toHaveProperty('vat');
+  });
+
+  it('on a firm, the VAT row opens prefilled at the read rate, hinted, and approving sends it', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: withRate })], routes: approveRoute(seen), firm: true });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 17%');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From the receipt');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).toMatchObject({ amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+  });
+
+  it('D6: a VAT amount with no rate prefills nothing and says what the receipt showed', async () => {
+    const noRate = { ...suggested, totalMinor: { value: '11700', source: 'ocr' as const, confidence: 0.9 }, vatMinor: { value: '1700', source: 'ocr' as const, confidence: 0.9 } };
+    portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: noRate })], firm: true });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('The receipt shows VAT of 17.00');
+  });
+});
+
 describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
   const READING = 'Reading the receipt…';
   const ONE = `GET /v1/receipts/${R1}`;
   const tick = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
 
   /** The receipt as the server returns it, switchable mid-test. */
-  function reading(initial: ReceiptListItem, routes: Record<string, Handler> = {}) {
+  function reading(initial: ReceiptListItem, routes: Record<string, Handler> = {}, firm = false) {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const state = { current: initial };
-    const rendered = portal(`${BASE}/${R1}`, { receipts: [initial], routes: { [ONE]: () => ok(plain(state.current)), ...routes } });
+    const rendered = portal(`${BASE}/${R1}`, { receipts: [initial], routes: { [ONE]: () => ok(plain(state.current)), ...routes }, firm });
     return { ...rendered, state };
   }
 
@@ -370,6 +411,50 @@ describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
     const fetched = api.count(ONE);
     await tick(10_000);
     expect(api.count(ONE)).toBe(fetched);
+  });
+
+  // MUT-302: a rate read after the page opened fills the VAT row on a firm, only while untouched; never on a personal one (OV1).
+  const readWithRate = { ...suggested, vatRateBasisPoints: { value: 1700, source: 'ocr' as const, confidence: 0.9 } };
+
+  it('MUT-302: a late rate fills the untouched VAT row on a firm, hinted', async () => {
+    const { state } = reading(receipt(R1, { reading: 'pending' }), {}, true);
+    await screen.findByText(READING);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    state.current = receipt(R1, { reading: 'done', suggested: readWithRate });
+    await tick(3000);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 17%'));
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From the receipt');
+  });
+
+  it('MUT-302: a late rate leaves a VAT row the person already chose', async () => {
+    const { user, state } = reading(receipt(R1, { reading: 'pending' }), {}, true);
+    await screen.findByText(READING);
+    await user.click(screen.getByRole('button', { name: /VAT/ }));
+    await user.selectOptions(screen.getByLabelText('Treatment'), 'EXEMPT');
+    state.current = receipt(R1, { reading: 'done', suggested: readWithRate });
+    await tick(3000);
+    await waitFor(() => expect(screen.getByLabelText(/Amount/)).toHaveValue('84.20'));
+    expect(screen.getByLabelText('Treatment')).toHaveValue('EXEMPT');
+    expect(document.querySelector('[data-hint-for="vat"]')).toBeNull();
+  });
+
+  it('MUT-302 (OV1): a late rate on a personal profile adds no VAT row and no VAT to the approve', async () => {
+    let sent: unknown = null;
+    const { user, state } = reading(receipt(R1, { reading: 'pending' }), {
+      [`POST /v1/receipts/${R1}/approve`]: ({ body }) => {
+        sent = body;
+        return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '84.20', currency: 'ILS', title: null, vendor: 'Shufersal', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+      },
+    });
+    await screen.findByText(READING);
+    state.current = receipt(R1, { reading: 'done', suggested: readWithRate });
+    await tick(3000);
+    await waitFor(() => expect(screen.getByLabelText(/Amount/)).toHaveValue('84.20'));
+    expect(screen.queryByTestId('expense-vat')).toBeNull();
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(sent).not.toBeNull());
+    expect(sent).not.toHaveProperty('vat');
   });
 
   it('a field typed then cleared is not refilled', async () => {

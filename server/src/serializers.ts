@@ -577,9 +577,23 @@ export function serializeExpense(e: ExpenseRecord) {
     notes: e.notes,
     createdByUserId: e.createdByUserId,
     captureSource: (e.captureSource ?? null) as StoredCaptureSource | null,
+    vat: serializeExpenseVat(e),
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
+  };
+}
+
+/** MUT-302 (ADR-231): net, VAT and gross in the expense's own currency; null = no VAT recorded. */
+function serializeExpenseVat(e: ExpenseRecord) {
+  if (e.vatTreatment == null || e.netMinor == null || e.vatMinor == null) return null;
+  const currency = e.currency as Currency;
+  return {
+    treatment: e.vatTreatment,
+    rateBasisPoints: e.vatRateBasisPoints ?? 0,
+    net: formatMoney({ minor: e.netMinor, currency }),
+    vat: formatMoney({ minor: e.vatMinor, currency }),
+    gross: formatMoney({ minor: e.amountMinor, currency }),
   };
 }
 

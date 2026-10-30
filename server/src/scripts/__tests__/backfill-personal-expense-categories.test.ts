@@ -68,7 +68,7 @@ if (!url) {
     const { user, org } = await personalProfile(tag, 'en');
     await store.expenseCategories.seed(org.id, OLD_PERSONAL_PRESET_EN, at);
     const projects = (await store.expenseCategories.list(org.id, { includeArchived: false })).find((c) => c.name === 'Projects')!;
-    const expense = await store.expenses.create({ organizationId: org.id, occurredOn: '2026-10-10', amountMinor: 5000n, currency: 'ILS', title: 'Side gig software', vendor: null, categoryId: projects.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at);
+    const expense = await store.expenses.create({ organizationId: org.id, occurredOn: '2026-10-10', amountMinor: 5000n, currency: 'ILS', title: 'Side gig software', vendor: null, categoryId: projects.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at);
 
     const first = await backfillPersonalExpenseCategories(db, at);
     const line = first.organizations.find((l) => l.organizationId === org.id)!;
@@ -149,7 +149,7 @@ if (!url) {
     const { user, org } = await personalProfile(tag, 'en');
     await store.expenseCategories.seed(org.id, OLD_PERSONAL_PRESET_EN, at);
     const projects = (await store.expenseCategories.list(org.id, { includeArchived: false })).find((c) => c.name === 'Projects')!;
-    await store.expenses.create({ organizationId: org.id, occurredOn: '2026-10-10', amountMinor: 1200n, currency: 'ILS', title: null, vendor: null, categoryId: projects.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at);
+    await store.expenses.create({ organizationId: org.id, occurredOn: '2026-10-10', amountMinor: 1200n, currency: 'ILS', title: null, vendor: null, categoryId: projects.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at);
 
     const result = await backfillPersonalExpenseCategories(db, at, { dry: true });
     const line = result.organizations.find((l) => l.organizationId === org.id)!;

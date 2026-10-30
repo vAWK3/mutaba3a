@@ -3204,6 +3204,26 @@ export const VendorDetailsSchema = z
   .openapi('VendorDetails');
 export type VendorDetails = z.infer<typeof VendorDetailsSchema>;
 
+/** MUT-302 (ADR-231): the treatment and rate a write sends; the server splits net and VAT out of the amount. */
+export const ExpenseVatInputSchema = z
+  .object({
+    treatment: VatTreatmentSchema,
+    rateBasisPoints: z.number().int().min(0).max(10000).openapi({ description: 'The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0.' }),
+  })
+  .strict()
+  .openapi('ExpenseVatInput');
+
+/** MUT-302 (ADR-231): an expense's VAT, split out of the amount (gross = amount); null = no VAT recorded. */
+export const ExpenseVatSchema = z
+  .object({
+    treatment: VatTreatmentSchema,
+    rateBasisPoints: z.number().int(),
+    net: AmountSchema,
+    vat: AmountSchema,
+    gross: AmountSchema,
+  })
+  .openapi('ExpenseVat');
+
 export const ExpenseSchema = z
   .object({
     id: uuid,
@@ -3222,6 +3242,7 @@ export const ExpenseSchema = z
     notes: z.string().nullable(),
     createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
     captureSource: StoredCaptureSourceSchema.nullable().openapi({ description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436." }),
+    vat: ExpenseVatSchema.nullable().openapi({ description: 'MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302.' }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -3335,6 +3356,7 @@ export const CreateExpenseRequestSchema = z
     captureSource: CaptureSourceSchema.optional(),
     /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
     capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
+    vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302.' }),
   })
   .strict()
   .openapi('CreateExpenseRequest');
@@ -3365,6 +3387,7 @@ export const UpdateExpenseRequestSchema = z
     customerId: uuid.nullable().optional(),
     projectId: uuid.nullable().optional(),
     notes: expenseNotes.nullable().optional(),
+    vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row\'s own. Since 1.92.0-mut302.' }),
   })
   .strict()
   .openapi('UpdateExpenseRequest');

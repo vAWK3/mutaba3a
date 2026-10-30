@@ -26,6 +26,10 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       customerId: null,
       projectId: null,
       notes: null,
+      vatTreatment: null,
+      vatRateBasisPoints: null,
+      netMinor: null,
+      vatMinor: null,
       createdByUserId: user.id,
       ...over,
     });
@@ -278,6 +282,40 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       await store.expenses.create(w.expense({ occurredOn: '2026-10-04', currency: 'USD' }), at(3));
       const page = await store.expenses.list(w.a.id, { from: '2026-10-01', to: '2026-10-07', currency: 'ILS', amountMinor: 12_345n }, { limit: 50, cursor: null });
       expect(page.items.map((e) => e.id)).toEqual([hit.id]);
+    });
+
+    // MUT-302 (ADR-231): the four CHECKs on Postgres; the memory store mirrors them (the portal's local mode).
+    const VAT17 = { amountMinor: 11_700n, vatTreatment: 'STANDARD_RATED' as const, vatRateBasisPoints: 1700, netMinor: 10_000n, vatMinor: 1_700n };
+
+    it('MUT-302: stores and reads back a VAT split, and a row with none', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const withVat = await store.expenses.create(w.expense(VAT17), at(1));
+      expect(await store.expenses.getById(w.a.id, withVat.id)).toMatchObject(VAT17);
+      const none = await store.expenses.create(w.expense(), at(2));
+      expect(await store.expenses.getById(w.a.id, none.id)).toMatchObject({ vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null });
+    });
+
+    it.each([
+      ['all or none', { ...VAT17, vatMinor: null }],
+      ['adds up', { ...VAT17, vatMinor: 1_800n }],
+      ['zero unless standard', { ...VAT17, vatTreatment: 'EXEMPT' as const }],
+      ['standard rate in range', { ...VAT17, vatRateBasisPoints: 0, netMinor: 11_700n, vatMinor: 0n }],
+    ])('MUT-302: refuses a row that breaks %s', async (_label, over) => {
+      const store = await makeStore();
+      const w = await world(store);
+      await expect(store.expenses.create(w.expense(over), at(1))).rejects.toThrow();
+    });
+
+    it('MUT-302: refuses an amount change that leaves the split behind, and takes one that re-splits', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense(VAT17), at(1));
+      await expect(store.expenses.update(w.a.id, e.id, 1, { amountMinor: 23_400n }, at(2))).rejects.toThrow();
+      const ok = await store.expenses.update(w.a.id, e.id, 1, { amountMinor: 23_400n, netMinor: 20_000n, vatMinor: 3_400n }, at(3));
+      expect(ok).toMatchObject({ kind: 'updated', record: { amountMinor: 23_400n, netMinor: 20_000n, vatMinor: 3_400n } });
+      const cleared = await store.expenses.update(w.a.id, e.id, 2, { vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null }, at(4));
+      expect(cleared).toMatchObject({ kind: 'updated', record: { vatTreatment: null, netMinor: null } });
     });
   });
 }

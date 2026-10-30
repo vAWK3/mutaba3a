@@ -133,7 +133,7 @@ describe('MemoryLedgerStore snapshot/restore (MUT-286)', () => {
     // an expense
     const category = await source.expenseCategories.create(org.id, { name: 'Travel', color: '#0ea5e9' }, at(4));
     await source.expenses.create(
-      { organizationId: org.id, occurredOn: '2026-10-18', amountMinor: 5_000n, currency: 'ILS', title: 'Taxi', vendor: 'Taxi co', categoryId: category.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id },
+      { organizationId: org.id, occurredOn: '2026-10-18', amountMinor: 5_000n, currency: 'ILS', title: 'Taxi', vendor: 'Taxi co', categoryId: category.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id },
       at(5),
     );
 

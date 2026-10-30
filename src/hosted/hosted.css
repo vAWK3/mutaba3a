@@ -567,6 +567,13 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
 .hp-receipt-filed-facts dt { color: var(--muted); }
 .hp-receipt-filed-facts dd { margin: 0; }
 .form-hint[data-hint-for] { margin-block-start: var(--space-1); }
+/* MUT-302: the expense VAT row: the rate with its % sign, and net and VAT read-only (as the filed receipt's facts). */
+.hp-expense-vat-rate { display: flex; align-items: center; gap: var(--space-2); }
+.hp-expense-vat-rate .input { max-width: 8rem; }
+.hp-expense-vat-split { margin: 0 0 var(--space-3); display: grid; gap: var(--space-2); }
+.hp-expense-vat-split div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.hp-expense-vat-split dt { color: var(--muted); }
+.hp-expense-vat-split dd { margin: 0; }
 [data-suggested="true"].input, select[data-suggested="true"], [data-suggested="true"] .input { border-color: var(--success-muted); background: var(--success-subtle); }
 @media (max-width: 760px) {
   .hp-receipt-review { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }

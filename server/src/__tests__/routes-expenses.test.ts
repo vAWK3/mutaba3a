@@ -139,6 +139,7 @@ describe('POST /v1/expenses', () => {
       notes: 'Stamp duty',
       createdByUserId: p.userId,
       captureSource: null, // MUT-436 (ADR-201): none sent, none kept
+      vat: null, // MUT-302: none sent, "No VAT recorded"
       version: 1,
       createdAt: '2026-10-20T09:00:00.000Z',
       updatedAt: '2026-10-20T09:00:00.000Z',
@@ -287,7 +288,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-227: a row already older than the floor stays readable, editable without its date, and inside old-date filters', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2001-03-04', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2001-03-04', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
       h.clock.now,
     );
     const edited = await h.app.request(`/v1/expenses/${old.id}`, json({ notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
@@ -307,7 +308,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-388: a row still in a removed Gulf currency reads back with its real amount, in the list and on its own', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
       h.clock.now,
     );
     // A blank amount would fail every phone build's whole Recent page (MoneyCodec throws on ""), not just this row.
@@ -319,7 +320,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-388: a row still in a removed Gulf currency refuses a new amount (422) instead of rescaling it, and moves to a supported one', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
       h.clock.now,
     );
     const url = `/v1/expenses/${old.id}`;
@@ -448,6 +449,112 @@ describe('PATCH /v1/expenses/{id}', () => {
     const moved = await h.app.request(`/v1/expenses/${other.id}`, json({ categoryId: first.id }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
     expect((await read(moved)).error.details.reason).toBe('CATEGORY_ARCHIVED');
     expect((await read(await create({ categoryId: first.id }))).error.details.reason).toBe('CATEGORY_ARCHIVED');
+  });
+});
+
+describe('MUT-302: VAT on expenses (ADR-231)', () => {
+  const STD17 = { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 };
+  const patch = (h: Harness, as: Record<string, string>, id: string, version: number, body: Record<string, unknown>) =>
+    h.app.request(`/v1/expenses/${id}`, json(body, { ...as, 'if-match': String(version) }, 'PATCH'));
+
+  it('AC1: a rate stores net, VAT and gross that add up exactly, split out of the amount paid', async () => {
+    const { create } = await setup();
+    const res = await create({ amount: '117.00', vat: STD17 });
+    expect(res.status).toBe(201);
+    expect((await read(res)).vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '100.00', vat: '17.00', gross: '117.00' });
+    // Half-up, as receivables round: 0.01 at 17 % is 0.01 net and 0.00 VAT.
+    expect((await read(await create({ amount: '0.01', vat: STD17 }))).vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '0.01', vat: '0.00', gross: '0.01' });
+  });
+
+  it('formats a JOD split in its own three digits', async () => {
+    const { create } = await setup();
+    expect((await read(await create({ amount: '11.700', currency: 'JOD', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } }))).vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1600, net: '10.086', vat: '1.614', gross: '11.700' });
+  });
+
+  it('the other treatments store a 0 rate and 0 VAT, whatever rate was sent', async () => {
+    const { create } = await setup();
+    expect((await read(await create({ amount: '50.00', vat: { treatment: 'EXEMPT', rateBasisPoints: 1700 } }))).vat).toEqual({ treatment: 'EXEMPT', rateBasisPoints: 0, net: '50.00', vat: '0.00', gross: '50.00' });
+  });
+
+  it('a null vat records none', async () => {
+    const { create } = await setup();
+    expect((await read(await create({ vat: null }))).vat).toBeNull();
+  });
+
+  it.each([
+    ['a 0 % standard rate', { treatment: 'STANDARD_RATED', rateBasisPoints: 0 }, 422, 'VAT_RATE_INVALID'],
+    ['a rate over 100 %', { treatment: 'STANDARD_RATED', rateBasisPoints: 10001 }, 422, undefined],
+    ['a fractional basis point', { treatment: 'STANDARD_RATED', rateBasisPoints: 17.5 }, 422, undefined],
+    ['net or VAT sent by the client', { ...STD17, vatMinor: '17.00' }, 422, undefined],
+  ])('refuses %s', async (_label, vat, status, reason) => {
+    const { create } = await setup();
+    const res = await create({ amount: '117.00', vat });
+    expect(res.status).toBe(status);
+    if (reason) expect((await read(res)).error.details).toMatchObject({ reason, field: 'vat.rateBasisPoints' });
+  });
+
+  it('AC2: an expense saved before VAT existed reads "No VAT recorded" in the list, on its own, and in the feed', async () => {
+    const { h, a, p } = await setup();
+    // Inserted the way a pre-MUT-302 row reads after the migration: all four columns null.
+    const old = await h.store.expenses.create({ organizationId: a.org.id, occurredOn: '2026-10-01', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null }, h.clock.now);
+    expect((await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).vat).toBeNull();
+    expect((await read(await h.app.request('/v1/expenses', { headers: p.as(a.org.id) }))).items[0].vat).toBeNull();
+  });
+
+  it('review finding 3: PATCHing the amount, then currency + amount, then the date of a no-VAT row answers 200 and keeps vat null', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({}));
+    const r1 = await patch(h, p.as(a.org.id), e.id, 1, { amount: '99.00' });
+    expect(r1.status).toBe(200);
+    expect((await read(r1)).vat).toBeNull();
+    const r2 = await patch(h, p.as(a.org.id), e.id, 2, { amount: '9.990', currency: 'JOD' });
+    expect(r2.status).toBe(200);
+    expect((await read(r2)).vat).toBeNull();
+    const r3 = await patch(h, p.as(a.org.id), e.id, 3, { occurredOn: '2026-10-06' });
+    expect(r3.status).toBe(200);
+    expect((await read(r3)).vat).toBeNull();
+  });
+
+  it('D4: PATCH without vat keeps the treatment and rate, and re-splits a new amount in the same write', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({ amount: '117.00', vat: STD17 }));
+    const notes = await read(await patch(h, p.as(a.org.id), e.id, 1, { notes: 'kept' }));
+    expect(notes.vat).toEqual(e.vat);
+    const moved = await read(await patch(h, p.as(a.org.id), e.id, 2, { amount: '234.00' }));
+    expect(moved.vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '200.00', vat: '34.00', gross: '234.00' });
+  });
+
+  it('D4: PATCH vat null clears it', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({ amount: '117.00', vat: STD17 }));
+    expect((await read(await patch(h, p.as(a.org.id), e.id, 1, { vat: null }))).vat).toBeNull();
+  });
+
+  it('OV10: PATCH vat alone splits the row’s amount; with amount + currency it splits the new amount in the new digits', async () => {
+    const { h, a, p, create } = await setup();
+    const e = await read(await create({ amount: '117.00' }));
+    expect((await read(await patch(h, p.as(a.org.id), e.id, 1, { vat: STD17 }))).vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1700, net: '100.00', vat: '17.00', gross: '117.00' });
+    const jod = await read(await patch(h, p.as(a.org.id), e.id, 2, { amount: '11.700', currency: 'JOD', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } }));
+    expect(jod.vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1600, net: '10.086', vat: '1.614', gross: '11.700' });
+    // And a currency move with no vat re-splits the kept rate in the new digits.
+    const usd = await read(await patch(h, p.as(a.org.id), e.id, 3, { amount: '116.00', currency: 'USD' }));
+    expect(usd.vat).toEqual({ treatment: 'STANDARD_RATED', rateBasisPoints: 1600, net: '100.00', vat: '16.00', gross: '116.00' });
+  });
+
+  it('D2: any profile may send vat (the UI is firm-only); a personal profile that never sends it sees no change', async () => {
+    const { p, create } = await setup();
+    const personal = await create({ amount: '117.00', vat: STD17 }, p.personalProfileId);
+    expect(personal.status).toBe(201);
+    expect((await read(personal)).vat?.vat).toBe('17.00');
+    expect((await read(await create({}, p.personalProfileId))).vat).toBeNull();
+  });
+
+  it('AC4: the summary totals the gross per currency, VAT or not', async () => {
+    const { h, a, p, create } = await setup();
+    await create({ amount: '117.00', vat: STD17 });
+    await create({ amount: '50.00' });
+    const summary = await read(await h.app.request('/v1/summaries/expenses?from=2026-10-01&to=2026-10-31', { headers: p.as(a.org.id) }));
+    expect(JSON.stringify(summary)).toContain('167.00');
   });
 });
 

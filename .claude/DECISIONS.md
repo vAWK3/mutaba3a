@@ -6063,3 +6063,27 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Save `local` on 401 and show the welcome over the local app. Rejected: it opens IndexedDB before a choice and leaves no way back to "undecided".
 - Count the doors through MUT-155's consent (the ticket's first wording). Rejected: that consent belongs to a signed-in person, so it could never send (D2/D3).
 - A direct capture POST instead of a named SDK instance (D6). Rejected: we would own PostHog's cookieless wire format.
+
+## ADR-231: An Expense's VAT Is Split Out of Its Amount by the Server; No VAT Is Four Nulls, Never a Guess (MUT-302)
+
+**Status:** Accepted (2026-10-30, MUT-302; epic MUT-298, firm books v2; amends brief `firm-books.md` §7 and ADR-099's data-model row). Plan, eng review and Basel's decisions (D1–D11, OV1–OV12): `.claude/designs/mut-302-expense-vat-plan.md`.
+
+**Context:** firms reclaim the VAT they pay, but an expense held one amount. Receivables already carry a treatment, a frozen rate and net/VAT/gross.
+
+**Decision:**
+1. **The amount stays the gross.** An expense gains `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`, all nullable; all null = "No VAT recorded". There is no `grossMinor` column (D3, overrides brief §7): a second copy of the amount would be a second truth.
+2. **The server is the only writer of net and VAT (D1).** A client sends `vat: {treatment, rateBasisPoints}`; the server runs `computeVat` with `VAT_INCLUSIVE` (what was paid includes the VAT), half-up as receivables. A standard rate is 1..10000 basis points (`VAT_RATE_INVALID`); the other treatments store 0 and 0.
+3. **Four CHECKs** (`expenses_vat_all_or_none`, `_adds_up`, `_zero_unless_standard`, `_standard_rate`); the memory store asserts the same (`assertExpenseVatColumns`), so the portal's local mode holds them too.
+4. **PATCH (D4):** `vat` absent keeps the treatment and rate and re-splits a new amount in the same write; `null` clears; an object sets it, split from the amount sent (in its currency's digits) or the row's own.
+5. **Wire (D5):** `Expense.vat` is a nested, nullable object `{treatment, rateBasisPoints, net, vat, gross}`; absence is the main state, unlike receivables' flat fields.
+6. **Who may send it (D2):** any profile; only the UI is firm-gated (`profile.firm`). Refusing non-firm would break phone outbox replays queued before firm features were turned off. Receipt Review, create and edit send `vat` only on a firm (OV1).
+7. **Receipts (D6, OV5):** a read rate of 1..10000 prefills Standard at that rate; a VAT amount without a usable rate only hints; no rate is back-solved from amounts. `ApprovedReceiptFields` is unchanged (D7). The MCP write tool and inbox filing record none (D8).
+8. **Clients preview, never write.** The portal (`src/hosted/lib/expenseVat.ts`) and the phone carry a display-only preview held to the server by one case table, `server/src/__tests__/fixtures/expense-vat-cases.json`. The rate is typed or read, not taken from the profile's `vat_rates` (D11: input VAT is the vendor's rate).
+9. **Release order (OV4):** the API with 1.92.0-mut302 is deployed to production before any phone build that sends `vat` is submitted (request schemas are strict). Rolling back past the migration is a hazard once any VAT expense exists (OV2).
+
+**Consequences:** summaries, groups and the Glance total the gross per currency exactly as before (AC4). MUT-303 (vendor prefill), MUT-308 (bills; the largest-remainder split moves there, D10) and MUT-313 (VAT summary) build on these columns.
+
+**Alternatives considered:**
+- Accept a client's VAT amount within ±1 minor unit (the receipt's printed VAT). Rejected: MUT-313's totals must be reproducible from the rule.
+- A `grossMinor` column, as the brief listed. Rejected: the CHECK would chase two copies of one number.
+- Flat nullable fields on the wire, like receivables. Rejected: "no VAT" would be four nulls a client must agree on.

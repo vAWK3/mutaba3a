@@ -2750,6 +2750,11 @@ export interface ExpenseRecord {
   createdByUserId: string | null;
   /** MUT-436 (ADR-201): where it was captured; 'mcp' = the person's own Claude. Optional: local-mode records never carry it. */
   captureSource?: string | null;
+  /** MUT-302 (ADR-231): the VAT inside `amountMinor` (the gross); all four null = no VAT recorded. */
+  vatTreatment: VatTreatment | null;
+  vatRateBasisPoints: number | null;
+  netMinor: bigint | null;
+  vatMinor: bigint | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -2772,10 +2777,15 @@ export interface CreateExpenseInput {
   createdByUserId: string;
   /** MUT-436: the capture source to keep on the row (absent = none). */
   captureSource?: string | null;
+  /** MUT-302: required, so every caller (routes, receipt approval, inbox filing, MCP) states its VAT, null for none (OV7). */
+  vatTreatment: VatTreatment | null;
+  vatRateBasisPoints: number | null;
+  netMinor: bigint | null;
+  vatMinor: bigint | null;
 }
 
 /** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */
-export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes'>>;
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes' | 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor'>>;
 
 // ---- MUT-254: vendors --------------------------------------------------------
 
