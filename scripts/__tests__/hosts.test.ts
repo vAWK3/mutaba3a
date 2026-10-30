@@ -18,6 +18,20 @@ describe('config/hosts (MUT-326)', () => {
       for (const file of [raw, noDomain, placeholder]) expect(() => parseHostsConfig(file)).not.toThrow();
     });
 
+    // MUT-487 (AM11): the front door's upstream can move to the new project's service while legacy.portal, the old
+    // run.app host the forwarder still serves, stays in every allowlist.
+    it('reads legacy.portalUpstream, the Worker\'s upstream, apart from legacy.portal', () => {
+      const parsed = parseHostsConfig(config({ legacy: { ...LEGACY, portalUpstream: 'https://portal-new-zf.run.example' } }));
+      expect(parsed.production?.legacy).toEqual({ ...LEGACY, portalUpstream: 'https://portal-new-zf.run.example' });
+      expect(parseHostsConfig(config()).production?.legacy.portalUpstream).toBeUndefined();
+      expect(() => parseHostsConfig(config({ legacy: { ...LEGACY, portalUpstream: 'http://portal-new.run.example' } }))).toThrow(/legacy.portalUpstream/);
+      expect(() => parseHostsConfig(config({ legacy: { ...LEGACY, portalUpstream: 'https://portal-new.run.example/v1' } }))).toThrow(/legacy.portalUpstream/);
+      const hosts = resolveHosts(parseHostsConfig(config({ domain: 'placeholder.example', stage: 'live', legacy: { ...LEGACY, portalUpstream: 'https://portal-new-zf.run.example' } })));
+      expect(hosts.legacy).toEqual({ landingOrigin: LEGACY.landing, portalOrigin: LEGACY.portal });
+      expect(hosts.allOrigins).toContain(LEGACY.portal);
+      expect(hosts.allOrigins).not.toContain('https://portal-new-zf.run.example');
+    });
+
     it('ignores $-prefixed keys such as $comment', () => {
       expect(Object.keys(parseHostsConfig({ $comment: 'x', ...(config() as object) }))).toEqual(['production']);
     });

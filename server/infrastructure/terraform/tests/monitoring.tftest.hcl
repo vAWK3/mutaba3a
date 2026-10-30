@@ -16,8 +16,6 @@ mock_provider "google" {
     }
   }
 }
-# MUT-381: versions.tf configures google-beta too; unmocked, it would load real credentials.
-mock_provider "google-beta" {}
 mock_provider "random" {}
 
 variables {
@@ -158,8 +156,8 @@ run "email_and_sms_create_two_channels_and_five_policies" {
   }
 
   assert {
-    condition     = toset(keys(google_monitoring_alert_policy.endpoint_down)) == toset(["health", "ready", "portal"]) && toset(keys(google_monitoring_alert_policy.cloud_sql)) == toset(["disk", "cpu"])
-    error_message = "One policy per uptime check, plus the two Cloud SQL policies."
+    condition     = toset(keys(google_monitoring_alert_policy.endpoint_down)) == toset(["health", "ready", "portal"]) && toset(keys(google_monitoring_alert_policy.cloud_sql)) == toset(["disk", "cpu", "memory"])
+    error_message = "One policy per uptime check, plus the three Cloud SQL policies (MUT-511 added memory)."
   }
 
   assert {
@@ -213,7 +211,7 @@ run "an_uptime_policy_pages_on_two_failed_rounds_from_two_regions" {
   }
 }
 
-run "cloud_sql_alerts_on_disk_above_80_and_cpu_above_90_for_15_minutes" {
+run "cloud_sql_alerts_on_disk_above_80_cpu_above_80_and_memory_above_90_for_15_minutes" {
   command = apply
 
   variables {
@@ -226,13 +224,18 @@ run "cloud_sql_alerts_on_disk_above_80_and_cpu_above_90_for_15_minutes" {
   }
 
   assert {
-    condition     = google_monitoring_alert_policy.cloud_sql["cpu"].conditions[0].condition_threshold[0].threshold_value == 0.9 && strcontains(google_monitoring_alert_policy.cloud_sql["cpu"].conditions[0].condition_threshold[0].filter, "cloudsql.googleapis.com/database/cpu/utilization")
-    error_message = "CPU alert: utilization above 90%."
+    condition     = google_monitoring_alert_policy.cloud_sql["cpu"].conditions[0].condition_threshold[0].threshold_value == 0.8 && strcontains(google_monitoring_alert_policy.cloud_sql["cpu"].conditions[0].condition_threshold[0].filter, "cloudsql.googleapis.com/database/cpu/utilization")
+    error_message = "CPU alert: utilization above 80% (MUT-511, MUT-512's trigger)."
+  }
+
+  assert {
+    condition     = google_monitoring_alert_policy.cloud_sql["memory"].conditions[0].condition_threshold[0].threshold_value == 0.9 && strcontains(google_monitoring_alert_policy.cloud_sql["memory"].conditions[0].condition_threshold[0].filter, "cloudsql.googleapis.com/database/memory/utilization")
+    error_message = "Memory alert: utilization above 90% (MUT-511, MUT-512's trigger)."
   }
 
   assert {
     condition     = alltrue([for p in google_monitoring_alert_policy.cloud_sql : p.conditions[0].condition_threshold[0].duration == "900s" && strcontains(p.conditions[0].condition_threshold[0].filter, "resource.label.database_id=\"test-project:mutaba3a-pg\"") && p.severity == "WARNING"])
-    error_message = "Both Cloud SQL alerts hold for 15 minutes on this instance, at WARNING."
+    error_message = "Every Cloud SQL alert holds for 15 minutes on this instance, at WARNING."
   }
 }
 
@@ -297,7 +300,7 @@ run "disabling_uptime_checks_keeps_the_cloud_sql_alerts" {
   }
 
   assert {
-    condition     = length(google_monitoring_alert_policy.cloud_sql) == 2
+    condition     = length(google_monitoring_alert_policy.cloud_sql) == 3
     error_message = "The Cloud SQL alerts don't depend on the uptime checks."
   }
 }

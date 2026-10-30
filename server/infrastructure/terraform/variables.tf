@@ -1,5 +1,5 @@
 variable "project_id" {
-  description = "GCP project that hosts the Mutaba3a API (may be Malafat's or a dedicated project)."
+  description = "GCP project that hosts the MTB3A API. Production: mtb3a-production from the MUT-487 move (config/gcp.json, ADR-232); malafat-production only in legacy.tfvars (the forwarder, a rollback of the move, the teardown)."
   type        = string
 }
 
@@ -31,13 +31,13 @@ variable "artifact_repository" {
 }
 
 variable "db_tier" {
-  description = "Cloud SQL machine tier. The M1 control plane is tiny; db-g1-small is plenty until the ledger tables land."
+  description = "Cloud SQL machine tier. MUT-511 (ADR-233): mtb3a-production runs db-f1-micro (shared CPU, about 0.6 GB, no SLA) until MUT-512's triggers (the CPU and memory alerts in monitoring.tf); moving up a tier is a restart of a few minutes. The default, db-g1-small, is what malafat-production ran."
   type        = string
   default     = "db-g1-small"
 }
 
 variable "db_availability" {
-  description = "REGIONAL (HA) or ZONAL. Production runs REGIONAL."
+  description = "REGIONAL (HA, two zones) or ZONAL. MUT-511 (ADR-233): mtb3a-production runs ZONAL; a zone outage is survived by restoring the latest backup or PITR into another zone (pilot runbook §4.5). malafat-production ran REGIONAL."
   type        = string
   default     = "REGIONAL"
   validation {
@@ -50,16 +50,6 @@ variable "db_backup_enabled" {
   description = "Automated backups with point-in-time recovery. Required for production (ADR-024: firm data must be backed up)."
   type        = bool
   default     = true
-}
-
-variable "cmek_stage" {
-  description = "MUT-381 (ADR-164): our own KMS key for Cloud SQL and the attachments bucket. off (default) = nothing new exists, so a release changes nothing; prepared = the key, its grants, mutaba3a-pg2 and the bucket's default key exist while the API still serves from mutaba3a-pg; active = the API, its secret, the outputs and the alerts follow mutaba3a-pg2. Walk it forward only (DEPLOYMENT.md §6d): the key can't be destroyed."
-  type        = string
-  default     = "off"
-  validation {
-    condition     = contains(["off", "prepared", "active"], var.cmek_stage)
-    error_message = "cmek_stage must be off, prepared or active."
-  }
 }
 
 variable "oauth_enabled" {
@@ -189,7 +179,7 @@ variable "sentry_state_bucket" {
 }
 
 variable "api_ingress" {
-  description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for the CMEK switch apply (DEPLOYMENT.md §6d) and a whole-database restore (pilot runbook §4.3)."
+  description = "Cloud Run ingress. INGRESS_TRAFFIC_ALL (default) serves everyone; INGRESS_TRAFFIC_INTERNAL_ONLY closes the service to outside traffic, for a whole-database restore (pilot runbook §4.3) and the source side of the MUT-487 project move (project-move.sh freeze, DEPLOYMENT.md §6d)."
   type        = string
   default     = "INGRESS_TRAFFIC_ALL"
   validation {
@@ -205,7 +195,7 @@ variable "deletion_protection" {
 }
 
 variable "min_instances" {
-  description = "Cloud Run minimum instances. 1 avoids cold starts on the first Malafat request of the day."
+  description = "Cloud Run minimum instances. mtb3a-production runs 0 (Basel, 2026-10-30, ADR-233): the uptime checks every 300 s keep an instance warm, and with cpu_idle a non-minimum idle instance isn't billed, so it saves about ₪17 a month; the worst case is a cold start of a few seconds after about 15 minutes with no traffic, checks included. In-process timers don't run while it is scaled to zero (TD-215). max_instances stays 1 (TD-017). The default, 1, is what malafat-production ran."
   type        = number
   default     = 1
 }
@@ -221,7 +211,7 @@ variable "max_instances" {
 }
 
 variable "db_pool_size" {
-  description = "Prisma connection pool per Cloud Run instance: connection_limit in the DATABASE_URL secret (MUT-270). GET /v1/entries runs 4 queries per profile in parallel."
+  description = "Prisma connection pool per Cloud Run instance: connection_limit in the DATABASE_URL secret (MUT-270). GET /v1/entries runs 4 queries per profile in parallel. mtb3a-production: 5 on db-f1-micro (MUT-511), so 2 × 5 × 1 + 10 = 20 ≤ 25."
   type        = number
   default     = 10
   validation {
@@ -231,7 +221,7 @@ variable "db_pool_size" {
 }
 
 variable "db_max_connections" {
-  description = "Cloud SQL max_connections flag, set explicitly (MUT-270). 50 is db-g1-small's own default; raise it with a bigger tier. Changing it restarts the instance."
+  description = "Cloud SQL max_connections flag, set explicitly (MUT-270). 50 is db-g1-small's own default, 25 db-f1-micro's (mtb3a-production, MUT-511); raise it with a bigger tier. Changing it restarts the instance."
   type        = number
   default     = 50
 }
@@ -358,4 +348,68 @@ variable "ocr_subnet_cidr" {
   description = "MUT-441 (R9): the receipt-ocr subnet Direct VPC egress takes instance IPs from. /26 or larger; it connects to nothing, so any private range the project doesn't use."
   type        = string
   default     = "10.80.0.0/26"
+}
+
+# ============================================================================
+# MUT-487 (ADR-232): the move to mtb3a-production
+# ============================================================================
+
+variable "scheduler_paused" {
+  description = "MUT-487 (R2, D3): pauses every Cloud Scheduler job of this stack. The new project sets true from its first apply until the cutover's open step, so its jobs never act on a rehearsal copy (duplicate trial mails, purges). false (default) = the jobs run. The legacy forwarder pauses them regardless."
+  type        = bool
+  default     = false
+}
+
+variable "api_public" {
+  description = "MUT-487 (R3, D4): grants run.invoker to allUsers (the service authenticates every request itself). The new project sets false until the cutover's open step: then only callers with run.invoker reach it, through `gcloud run services proxy`. true (default) = public."
+  type        = bool
+  default     = true
+}
+
+variable "live_label" {
+  description = "MUT-487 (AM7): the Cloud Run label mtb3a-live, the signal project-move.sh reads: it refuses to copy data over a service labelled live. The new project sets false until the cutover's open step. true (default) = live."
+  type        = bool
+  default     = true
+}
+
+variable "legacy_stack" {
+  description = "MUT-487 (AM5): this is MTB3A's old project (malafat-production), applied with LEGACY_STACK=1 and legacy.tfvars. The forwarder token secret is then created empty, for project-move.sh secrets to copy the new project's value into, and the forwarder's own service account exists. false (default) = the production project, which generates the token."
+  type        = bool
+  default     = false
+}
+
+variable "legacy_forwarder" {
+  description = "MUT-487 (D6/D7, AM4): runs the service as the legacy run.app forwarder (server/src/forwarder.ts) to forward_to: no database mount, no secrets but the forwarder token, its own service account, every Scheduler job paused. Only with legacy_stack. MUT-521 retires it."
+  type        = bool
+  default     = false
+}
+
+variable "forward_to" {
+  description = "MUT-487: the new service's origin the forwarder relays to (https://mutaba3a-api-<hash>-zf.a.run.app, no path). Required with legacy_forwarder."
+  type        = string
+  default     = null
+}
+
+variable "registry_cleanup_dry_run" {
+  description = "MUT-511: Artifact Registry runs the cleanup policy (keep the 3 newest of each image, delete untagged images older than 7 days) as a dry run, logging what it would delete. Set false only after reading the dry run (DEPLOYMENT.md §6d)."
+  type        = bool
+  default     = true
+}
+
+variable "billing_account_id" {
+  description = "MUT-511: the billing account (XXXXXX-XXXXXX-XXXXXX) to put this project's monthly budget on (budget.tf). null (default) = no budget: set it only for MTB3A's own project."
+  type        = string
+  default     = null
+}
+
+variable "budget_amount" {
+  description = "MUT-511: the monthly budget, in budget_currency, alerting at 50%, 90% and 100%."
+  type        = number
+  default     = 100
+}
+
+variable "budget_currency" {
+  description = "MUT-511: the budget's currency. Google requires the billing account's own currency: ILS for ₪100, or set budget_amount in USD (about 27) if the account bills in USD."
+  type        = string
+  default     = "ILS"
 }

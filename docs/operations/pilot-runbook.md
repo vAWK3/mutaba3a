@@ -315,8 +315,7 @@ What you have:
 - 7 days of point-in-time recovery (PITR), down to the second.
 - The backups hold rows, not receipt files. A deleted receipt's file stays restorable for 14 days,
   as long as the oldest backup (§4.4).
-- **Which instance:** `mutaba3a-pg` until the MUT-381 cutover, `mutaba3a-pg2` after it
-  (DEPLOYMENT.md §6d). Set it once before the commands below:
+- **Which instance:** the one terraform state names (`mutaba3a-pg`). Set it once before the commands below:
 
   ```bash
   (cd server/infrastructure/terraform && terraform init -reconfigure -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production" >/dev/null)
@@ -354,10 +353,7 @@ export SOURCE_DATABASE_URL="postgresql://mutaba3a_api:$PW@127.0.0.1:5452/mutaba3
 
 - `gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID` to pick the backup;
 - `gcloud sql instances create "$COPY" …` with the flags in `scripts/restore-drill.sh`, `restore_backup`;
-- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID`. Once the
-  source is `mutaba3a-pg2`, create `$COPY` with
-  `--disk-encryption-key=projects/$GCP_PROJECT_ID/locations/me-west1/keyRings/mutaba3a/cryptoKeys/mutaba3a-data`
-  so the copy stays under the key.
+- `gcloud sql backups restore <id> --restore-instance="$COPY" --backup-instance="$INSTANCE" --project=$GCP_PROJECT_ID`.
 
 Check the copy before using it:
 
@@ -506,6 +502,44 @@ After a §4.2 or §4.3 restore, do this for each restored receipt whose file is 
 **Past the window, the file is gone.** Tell the person, and ask them to upload it again if they still
 have it.
 
+### 4.5 A zone outage (MUT-511, ADR-233)
+
+From the MUT-487 move, `mutaba3a-pg` in `mtb3a-production` runs in **one zone** (ZONAL `db-f1-micro`). If that zone
+goes down, the database goes with it until Google brings the zone back; nothing fails over by itself. Backups and
+the PITR logs are kept in the region (`me-west1`), not the zone, so they survive. You know it from the uptime alert
+on `/ready` and the Cloud SQL console showing the instance unavailable. Treat it as S1 (§5).
+
+Wait or restore? If Google's status page gives the zone back within about 30 minutes, wait. Otherwise restore the
+newest point in time into a new instance in another zone, then point the service at it:
+
+```bash
+NEW=mtb3a-production
+gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --ingress=internal   # stop writes reaching a half-moved state
+gcloud sql instances describe mutaba3a-pg --project=$NEW --format='value(gceZone)'          # the zone that is down, e.g. me-west1-a
+# The latest point in time (PITR, down to the second); pick another zone than the one that is down:
+gcloud sql instances clone mutaba3a-pg mutaba3a-pg-z2 --project=$NEW --point-in-time="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --preferred-zone=me-west1-b
+# If the clone is refused while the source zone is down, restore last night's backup instead:
+#   gcloud sql instances create mutaba3a-pg-z2 … (the flags in scripts/restore-drill.sh, --zone=me-west1-b),
+#   then gcloud sql backups restore <id> --restore-instance=mutaba3a-pg-z2 --backup-instance=mutaba3a-pg --project=$NEW
+```
+
+Then make the copy the API's database. The quickest path keeps every name in Terraform: once the zone is back,
+take an on-demand backup of `mutaba3a-pg-z2` and restore it into `mutaba3a-pg` (§4.3 A, with `--backup-instance=mutaba3a-pg-z2`).
+While the zone is still down, point the service at the copy by hand:
+
+```bash
+gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --set-cloudsql-instances=$NEW:me-west1:mutaba3a-pg-z2
+# and a new DATABASE_URL version naming /cloudsql/$NEW:me-west1:mutaba3a-pg-z2 (the password is the same: the clone copies the user)
+gcloud secrets versions access latest --secret=mutaba3a-api-database-url --project=$NEW | sed 's#:mutaba3a-pg&#:mutaba3a-pg-z2\&#' | gcloud secrets versions add mutaba3a-api-database-url --project=$NEW --data-file=-
+gcloud run services update mutaba3a-api --region=me-west1 --project=$NEW --ingress=all
+```
+
+Releases are refused meanwhile in effect (Terraform would mount `mutaba3a-pg` again): move back to `mutaba3a-pg` as
+above before the next release, then delete `mutaba3a-pg-z2`. **Expected time:** about 15–30 minutes for the clone
+or restore of a pilot-sized database, plus the hand steps; data loss is at most the seconds since the last log flush
+(PITR) or since last night's backup (backup path). Record the times in §10 the first time; until then they are
+estimates. After either: §4.3 "After either" steps 1, 3, 4 and 6.
+
 ## 5. Respond to an incident
 
 ### 5.1 How you find out
@@ -560,19 +594,9 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
 1. **Acknowledge.** Note the time you knew.
 2. **Contain:**
    - a release caused it: roll back with `make rollback-server SHA=<the previous api-v tag>` (DEPLOYMENT.md §6
-     "Roll back the service": no build, no migration; it refuses when a "Roll back past" count is above 0). After the MUT-381
-     cutover never shift Cloud Run traffic to a revision from before it: those mount only `mutaba3a-pg`
-     and fail every request (DEPLOYMENT.md §6d);
+     "Roll back the service": no build, no migration; it refuses when a "Roll back past" count is above 0);
    - access is at risk: lock or rotate (above);
    - writes are corrupting data: close ingress (§4.3);
-   - after the MUT-381 cutover, the database or receipts fail with a KMS or "key" error: a version of
-     `mutaba3a-data` was disabled or scheduled for destruction. Re-enable it, or cancel the destroy,
-     which is possible for 30 days (`gcloud kms keys versions list --key=mutaba3a-data --keyring=mutaba3a --location=me-west1`).
-     Never disable a version yourself: Cloud SQL doesn't re-encrypt on rotation (ADR-164). The same goes
-     for the Cloud SQL and Cloud Storage agents' grants on the key (`terraform apply` restores them). The
-     `mutaba3a-data key version changed` alert pages on any of these; its log filter has not been tried
-     against a live audit entry yet, so test it once in a scratch project (disable and re-enable a
-     non-primary version) before relying on it.
 3. **Restore** if data was lost (§4).
 4. **Tell** people (§5.2, §5.3).
 5. **Record** it (§5.5) within 2 days, with the cause and the fix (a ticket).
@@ -744,9 +768,8 @@ run it:
     `mutaba3a-pg-drill-<stamp>-b|p`.
   - The scratch copies get their own throwaway password, so the drill never reads production's.
   - `--dry-run` prints the whole sequence and calls nothing.
-- **Which instance (MUT-381):** without `--instance` it drills the one the API serves from, read from
-  terraform state (`TF_STATE_BUCKET`): `mutaba3a-pg2` after the CMEK cutover. A copy of a CMEK
-  instance is created under the same key.
+- **Which instance:** without `--instance` it drills the one the API serves from, read from
+  terraform state (`TF_STATE_BUCKET`).
 
 **Run it (Basel):**
 
@@ -850,6 +873,22 @@ Each drill adds its own block, newest first; keep the old ones. `make release se
 Problems found and tickets opened:
 
 -
+
+### Project move (MUT-487, ADR-232)
+
+Filled in by Basel at the C2 rehearsal and the C3 cutover (server/DEPLOYMENT.md §6d). One block per run.
+
+| | |
+|---|---|
+| Run (rehearse / cutover / rollback) and date (UTC) | |
+| `project-move.sh` output: steps and seconds | |
+| Downtime, freeze start to forward done | |
+| Tables matched (counts and checksums) / receipt objects / signed URL | |
+| Restore drill on `mtb3a-production` (MUT-511 AC3): seconds | |
+| Portal overview and `GET /v1/entries`, largest pilot account vs today's p95 + 50% (MUT-511 AC2) | |
+| Malafat VPC egress (AM13) | |
+| `gcloud projects get-iam-policy mtb3a-production`: no Malafat account | |
+| Cost before / after (billing export) | |
 
 ## 11. Retire a currency (MUT-388, ADR-166)
 

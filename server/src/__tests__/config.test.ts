@@ -67,7 +67,7 @@ describe('loadConfig — sessions (MUT-38)', () => {
 describe('loadConfig — placeholder secrets (MUT-472, ADR-211)', () => {
   const PLACEHOLDER = 'replace-with-32-plus-random-characters-from-secret-manager';
 
-  it.each(['MUTABA3A_ADMIN_TOKEN', 'SESSION_TOKEN_PEPPER', 'FRONT_DOOR_TOKEN', 'MUTABA3A_JOB_TOKEN', 'OAUTH_DERIVE_KEY'])(
+  it.each(['MUTABA3A_ADMIN_TOKEN', 'SESSION_TOKEN_PEPPER', 'FRONT_DOOR_TOKEN', 'FORWARDER_TOKEN', 'MUTABA3A_JOB_TOKEN', 'OAUTH_DERIVE_KEY'])(
     'refuses the .env.example placeholder as %s, naming the variable',
     (name) => {
       const env = { ...base, PORTAL_ORIGIN: 'https://portal.example.com', [name]: PLACEHOLDER };

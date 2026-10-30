@@ -1,0 +1,27 @@
+# MUT-487 (ADR-232, AM5): the OLD project's stack, malafat-production. Copy to legacy.tfvars (git-ignored) from
+# your current production.tfvars as it was before the move (every line), then set the lines below. Only ever used
+# with LEGACY_STACK=1 (deploy.sh, make, project-move.sh): for the forwarder, a rollback of the move, and the
+# teardown (MUT-520). Its state stays where it always was: gs://malafat-production-terraform-state,
+# prefix mutaba3a-api/production.
+project_id          = "malafat-production"
+region              = "me-west1"
+environment         = "production"
+# What it ran before the move: keep these, or the apply restarts or resizes the old instance.
+db_tier             = "db-g1-small"
+db_availability     = "REGIONAL"
+db_backup_enabled   = true
+deletion_protection = true
+min_instances       = 1
+db_pool_size        = 10
+db_max_connections  = 50
+
+# The old stack creates the forwarder token secret empty; project-move.sh secrets copies the new project's value.
+legacy_stack = true
+
+# The cutover's forward step sets these (project-move.sh forward applies them; then write them here):
+# legacy_forwarder    = true
+# forward_to          = "https://mutaba3a-api-<new hash>-zf.a.run.app"
+# min_instances       = 0
+# enable_uptime_check = false   # the new project's checks probe the same host
+# MUT-148: the Sentry stack's state stays in the old bucket until AM15 copies it; name it explicitly.
+# sentry_state_bucket = "malafat-production-terraform-state"

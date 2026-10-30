@@ -7,7 +7,7 @@
 # Step matrix (DEPLOYMENT.md §6 "Roll back the service"):
 #   Runs:  clean-tree and IMAGE_TAG refusals; the terms check against the commit's own CURRENT_TERMS; the image
 #          lookup (the commit's short-sha tag, its revision and dirty labels); the infra-drift gate; the 4 release
-#          guards (cmek, stripe, sentry, mailer); the migration gate; terraform apply -var image_tag=<that tag>; smoke.
+#          guards (project, ingress, stripe, sentry, mailer); the migration gate; terraform apply -var image_tag=<that tag>; smoke.
 #   Skips: the docker daemon, npm ci, the portal bundle and its check, the Sentry token checks, the Turnstile site
 #          key guard (the portal is the image's own), the image build and push, the terraform bootstrap,
 #          prisma migrate and the pre-roll checks (migrations are forward-only: the schema stays ahead), and the
@@ -48,7 +48,7 @@ rollback_infra_gate() {
   local deployed="$1" deployed_ocr="${2:-}" out rc=0 ocr_args=()
   [[ -n "${deployed_ocr}" ]] && ocr_args=(-var "ocr_image_tag=${deployed_ocr}")
   out="$(mktemp "${TMPDIR:-/tmp}/rollback-plan-XXXX")"
-  terraform plan -detailed-exitcode -input=false -no-color -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${deployed}" \
+  terraform plan -detailed-exitcode -input=false -no-color -var-file="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}" -var "image_tag=${deployed}" \
     ${ocr_args[@]+"${ocr_args[@]}"} >"${out}" 2>&1 || rc=$?
   case "${rc}" in
     0) rm -f "${out}"; info "infra-drift gate: this checkout's terraform matches what serves ${deployed}" ;;
@@ -89,7 +89,7 @@ rollback_main() {
   need cloud-sql-proxy "brew install cloud-sql-proxy"
   need terraform "brew install terraform"
   need node "node 22"
-  [[ -f "${TF_DIR}/${ENVIRONMENT}.tfvars" ]] || die "missing ${TF_DIR}/${ENVIRONMENT}.tfvars (copy ${ENVIRONMENT}.tfvars.example)"
+  [[ -f "${TF_DIR}/${TFVARS_FILE:-${ENVIRONMENT}.tfvars}" ]] || die "missing ${TF_DIR}/${TFVARS_FILE:-${ENVIRONMENT}.tfvars} (copy ${ENVIRONMENT}.tfvars.example)"
   # The drift gate plans this checkout's terraform, so it must be exactly a commit.
   [[ -z "$(git -C "${REPO_ROOT}" status --porcelain 2>/dev/null)" ]] || die "the repo has uncommitted changes; a rollback plans terraform from this checkout, so commit or stash them first"
 
@@ -123,7 +123,7 @@ rollback_main() {
   elif ! git -C "${REPO_ROOT}" merge-base --is-ancestor "${commit}" "${deployed_commit}"; then
     die "${ROLLBACK_TO} is not older than what serves (${deployed}); a rollback only goes back. To ship it, deploy it forward (./scripts/deploy.sh from that commit)"
   fi
-  TF_ARGS=(-input=false -var-file="${ENVIRONMENT}.tfvars" -var "image_tag=${tag}")
+  TF_ARGS=(-input=false -var-file="${TFVARS_FILE:-${ENVIRONMENT}.tfvars}" -var "image_tag=${tag}")
   APPROVE=(); [[ "${AUTO_APPROVE}" == "1" ]] && APPROVE=(-auto-approve)
   # MUT-441 (F6): pin receipt-ocr too, to the commit's image or, when it has none, the one that serves.
   pushd "${TF_DIR}" >/dev/null || die "cannot enter ${TF_DIR}"

@@ -77,6 +77,32 @@
 - Fixed: `ThemeProvider` (`src/lib/theme/context.tsx`) crashed every page when the browser blocks site storage (found by `@portal.welcome.blocked-storage`; AC8).
 - Privacy policy (Basel approved 2026-10-30): Anonymous usage counts now describes the welcome's cookieless door count (en/ar), Last updated October 30, 2026. Publish with `make release web` before the server release that carries MUT-513.
 
+## [Unreleased] - 2026-10-30 — MUT-487 + MUT-511: MTB3A's own GCP project, sized for cost (ADR-232, ADR-233; built, not run)
+
+- **Releases act on the old project on their own until the cutover** (Basel, 2026-10-30). `config/gcp.json` gains `"cutover": "pending"`; while it is pending the Makefile, `server/scripts/deploy.sh` and `scripts/preflight.sh` default `LEGACY_STACK` to 1 (an explicit `LEGACY_STACK=0` wins), and the first server command makes `legacy.tfvars` from `production.tfvars` with `legacy_stack = true`, only while `production.tfvars` still names the old project (`server/scripts/lib/legacy-stack.sh`, `server/scripts/legacy-tfvars.sh`, run first by `make preflight-server`). The Makefile reads the old project's state bucket from `.terraform` until `.terraform-malafat-production` exists. C3 sets `"cutover": "done"` (DEPLOYMENT.md §6d). Tests: `server/src/scripts/__tests__/legacy-stack.test.ts` (9).
+- ADR-230/231 were renumbered ADR-232/233 when main merged in (MUT-513 and MUT-302 took 230 and 231).
+
+**Why:** MTB3A's data lived in `malafat-production`, where Malafat's runtime account can read every customer's books (TD-195); CMEK didn't fix it and was dropped. The move creates a new database, so it is also the moment to size it: REGIONAL `db-g1-small` was ₪184 of MTB3A's ₪204 a month. Plan `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md` (eng review R1–R9, AM1–AM16).
+
+### Removed
+- The dormant CMEK code (MUT-381): `kms.tf`, `mutaba3a-pg2`, `cmek_stage`, the KMS alert, google-beta, `tests/cmek.tftest.hcl` (its MUT-382 backup-location assert moved to `database_pool`), `scripts/cmek-cutover.sh` and its test, the drill's scratch key, `guard_cmek_release` and `SKIP_CMEK_GUARD`. ADR-164 superseded by ADR-232.
+
+### Added
+- `server/scripts/project-move.sh`: idempotent steps `secrets` (state mv of the five generated secrets, R1), `secret-values` (pipe copy or `--rotate`, AM10/R7), `images` (add-tag, never over a tag), `rehearse`, `freeze`, `copy` (cross-project restore, the target's own DB password via the Admin API, rsync with deletions), `verify` (counts, per-table checksums, objects, a signed URL), `open`, `forward`; `--from/--to` swapped is the rollback.
+- `server/src/forwarder.ts`: the legacy run.app forwarder entrypoint; `FORWARDER_TOKEN` vouches for the caller's IP only (`requestClientIp`), never as the front door.
+- Terraform: `scheduler_paused`, `api_public`, `live_label` (`mtb3a-live`), `legacy_stack`, `legacy_forwarder`, `forward_to` (`forwarder.tf`); `budget.tf` (₪100/mo, 50/90/100%); the registry cleanup policy (keep 3 newest, delete untagged > 7 days, dry run first); Cloud SQL memory alert above 90%; `legacy.tfvars.example`.
+- `config/gcp.json` (the project releases go to) and `guard_project_release`; `LEGACY_STACK=1` and `legacy.tfvars` for the old project; one terraform data dir per project.
+- `config/hosts.json` `legacy.portalUpstream` (optional): the Worker's upstream after the move; `legacy.portal` stays the old host.
+
+### Changed
+- `production.tfvars.example`: `mtb3a-production`, ZONAL `db-f1-micro`, `db_pool_size = 5`, `db_max_connections = 25`, `min_instances = 0` (Basel, 2026-10-30). The Cloud SQL CPU alert fires above 80% (was 90%).
+- The closed-service half of the CMEK guard stays as `guard_ingress_release`, on by default (`SKIP_INGRESS_GUARD=1`).
+- DEPLOYMENT.md §6d is now the move (C0–C5, rollback, the D9 summary); pilot runbook §4.5 (zone outage) and §10 "Project move"; INFRA.md project, sizing, connection budget and cost table; before-release.md item.
+
+### Technical
+- Tests first: `project-move.test.ts` (25, fake CLIs, no secret value in any output or argv), `forwarder.test.ts` (9), `front-door.test.ts` forwarder token (5), `legacy-redirect.test.ts` (relayed visit still redirects), `release-guard.test.ts` (ingress and project guards, wiring), `tests/project_move.tftest.hcl` (15), monitoring, frontdoor upstream, hosts and no-hardcoded-hosts.
+- No schema, migration or API contract change. The move itself (C0–C5) is Basel's operator run.
+
 ## [Unreleased] - 2026-10-29 — MUT-504: real Hebrew receipts read without wrong fields (ADR-229)
 
 **Why:** the first bench over 16 real scans read Hebrew amounts 2/10 and dates 2/11 and filled wrong values with confidence (a card-expiry date, a pre-VAT total, PDF text-layer garbage). Reading stays dark; this is what makes a pilot in Israel safe. Plan `.claude/designs/mut-504-real-receipt-fixes.md`.

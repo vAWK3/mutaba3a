@@ -49,14 +49,34 @@ endif
 # rollback-server runs no preflight: check GCP_PROJECT_ID and TF_STATE_BUCKET,
 # which it prints, before you confirm.)
 TF_DIR       := server/infrastructure/terraform
+# MUT-487 (ADR-232): until the cutover, config/gcp.json says `"cutover": "pending"` and every server command acts
+# on the old project as LEGACY_STACK=1 would; LEGACY_STACK=0 on the command line still wins. C3 (DEPLOYMENT.md §6d)
+# sets it to "done". server/scripts/lib/legacy-stack.sh reads the same key for deploy.sh and preflight.
+GCP_CUTOVER  := $(shell sed -n 's/.*"cutover"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' config/gcp.json 2>/dev/null | head -1)
+ifeq ($(GCP_CUTOVER),pending)
+LEGACY_STACK ?= 1
+endif
+# MUT-487 (AM5, AM8): LEGACY_STACK=1 acts on the old project from legacy.tfvars; each project keeps its own
+# terraform data dir (.terraform-<project>, deploy.sh's TF_DATA_DIR), so the bucket is read from that one.
+# Before legacy.tfvars exists (scripts/legacy-tfvars.sh makes it from production.tfvars on the first server
+# command) the project comes from production.tfvars, and the bucket from the data dir every release used before
+# the move, .terraform.
+ifeq ($(LEGACY_STACK),1)
+TFVARS_FILE  := $(firstword $(wildcard $(TF_DIR)/legacy.tfvars) $(TF_DIR)/$(ENVIRONMENT).tfvars)
+else
 TFVARS_FILE  := $(TF_DIR)/$(ENVIRONMENT).tfvars
-TFSTATE_FILE := $(TF_DIR)/.terraform/terraform.tfstate
+endif
 
 GCP_PROJECT_ID  ?= $(shell sed -n 's/^project_id[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' $(TFVARS_FILE) 2>/dev/null | head -1)
+ifeq ($(LEGACY_STACK),1)
+TFSTATE_FILE := $(firstword $(wildcard $(TF_DIR)/.terraform-$(GCP_PROJECT_ID)/terraform.tfstate) $(TF_DIR)/.terraform/terraform.tfstate)
+else
+TFSTATE_FILE := $(TF_DIR)/.terraform-$(GCP_PROJECT_ID)/terraform.tfstate
+endif
 TF_STATE_BUCKET ?= $(shell sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' $(TFSTATE_FILE) 2>/dev/null | head -1)
 
 export RELEASE_BRANCH ENVIRONMENT NODE_MAJOR_REQUIRED
-export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO
+export GCP_PROJECT_ID TF_STATE_BUCKET GCP_REGION ARTIFACT_REPO LEGACY_STACK
 export IMAGE_TAG PROXY_PORT AUTO_APPROVE
 # MUT-155: the portal's PostHog key reaches `npm run build:hosted` inside deploy.sh
 export MUTABA3A_POSTHOG_KEY
@@ -138,7 +158,9 @@ help:
 	@printf '  ALLOW_DIRTY=1 ALLOW_UNMERGED=1 ALLOW_WORKTREES=1 ALLOW_NODE_MAJOR=1\n'
 	@printf '  SKIP_REMOTE=1          offline: do not contact origin or GCP\n'
 	@printf '  SKIP_TERMS_CHECK=1     server: skip the terms-are-live check (an emergency fix that keeps the terms version)\n'
-	@printf '  SKIP_CMEK_GUARD=0      server: run the CMEK release guard (off by default until MUT-385)\n'
+	@printf '  LEGACY_STACK=1         server: act on the OLD project (forwarder, rollback of the move, teardown; MUT-487).\n'
+	@printf '                         On by default until the cutover (config/gcp.json "cutover": "pending"); LEGACY_STACK=0 overrides\n'
+	@printf '  SKIP_INGRESS_GUARD=1   server: skip the closed-service release guard (a restore or project move holds it closed)\n'
 	@printf '  SKIP_STRIPE_GUARD=1    server: skip the Stripe release guard (MUT-360; on by default)\n'
 	@printf '  ALLOW_MIN_BUILD_CHANGE=IOS_MIN_BUILD,…  server: let this release change those phone minimum builds (MUT-471)\n'
 	@printf '  SKIP_MIN_BUILD_GUARD=1 server: skip the min-build release guard (only when it cannot read terraform or Cloud Run)\n'
@@ -198,10 +220,12 @@ preflight-web:
 	@scripts/preflight.sh web
 
 preflight-server:
+	@server/scripts/legacy-tfvars.sh
 	@scripts/preflight.sh server
 
 doctor:
 	@scripts/preflight.sh web || true
+	@server/scripts/legacy-tfvars.sh || true
 	@scripts/preflight.sh server || true
 
 # ---------------------------------------------------------------------------

@@ -28,6 +28,8 @@ export interface StripeBillingRouteOptions {
   ipLimiter: RateLimiter;
   trustedProxyHops: number;
   frontDoorToken?: string;
+  /** MUT-487: the legacy forwarder's secret, trusted for the client IP only. */
+  forwarderToken?: string;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });

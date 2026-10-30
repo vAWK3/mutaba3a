@@ -305,7 +305,8 @@ describe('deploy.sh PORTAL_CONFIG', () => {
 
 describe('deploy.sh ROLLBACK_TO', { timeout: 30_000 }, () => {
   it('refuses ROLLBACK_TO with IMAGE_TAG before touching anything (the Makefile exports IMAGE_TAG)', () => {
-    const env = { ...process.env, GCP_PROJECT_ID: 'demo', TF_STATE_BUCKET: 'b', ROLLBACK_TO: 'HEAD~1', IMAGE_TAG: 'hotfix', PATH: `${join(dir, 'bin')}:${process.env.PATH}` };
+    // LEGACY_STACK=0: the new project, explicitly (until the cutover deploy.sh would default to the old one, MUT-487).
+    const env = { ...process.env, GCP_PROJECT_ID: 'mtb3a-production', TF_STATE_BUCKET: 'b', LEGACY_STACK: '0', ROLLBACK_TO: 'HEAD~1', IMAGE_TAG: 'hotfix', PATH: `${join(dir, 'bin')}:${process.env.PATH}` };
     fake('gcloud', 'exit 1');
     fake('terraform', 'exit 1');
     const r = spawnSync('bash', [DEPLOY], { encoding: 'utf-8', env });

@@ -45,8 +45,8 @@ export interface AttachmentStorage {
    */
   removePrefix(prefix: string): Promise<void>;
   /**
-   * MUT-503: copies an object to a new key inside the bucket, never through this process (GCS rewrites it in place,
-   * under the bucket's default CMEK key, ADR-164). Overwrites `to`; throws when `from` is not there.
+   * MUT-503: copies an object to a new key inside the bucket, never through this process (GCS rewrites it in place).
+   * Overwrites `to`; throws when `from` is not there.
    */
   copy(from: string, to: string): Promise<void>;
 }

@@ -7,10 +7,12 @@ locals {
   enabled      = local.domain != null
   suffix       = var.environment == "production" ? "" : "-${var.environment}"
 
-  portal_host     = local.enabled ? "${local.hosts_config.portalSubdomain}.${local.domain}" : null
+  portal_host = local.enabled ? "${local.hosts_config.portalSubdomain}.${local.domain}" : null
   # Mail is sent from <mailSubdomain>.<apex> (the Resend domain), or the apex without one (config/hosts.ts mailDomain).
   mail_domain = local.enabled ? (try(local.hosts_config.mailSubdomain, null) == null ? local.domain : "${local.hosts_config.mailSubdomain}.${local.domain}") : null
-  upstream_origin = local.enabled ? local.hosts_config.legacy.portal : null
+  # MUT-487 (AM11): legacy.portalUpstream once the API moved to its own project; legacy.portal (the old run.app host,
+  # now the forwarder) until then.
+  upstream_origin = local.enabled ? try(local.hosts_config.legacy.portalUpstream, local.hosts_config.legacy.portal) : null
   netlify_host    = local.enabled ? trimprefix(local.hosts_config.legacy.landing, "https://") : null
 
   # Same name the API stack reads (server/infrastructure/terraform/domain.tf).

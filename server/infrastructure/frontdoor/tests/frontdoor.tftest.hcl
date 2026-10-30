@@ -228,3 +228,18 @@ run "a_malformed_dkim_value_is_refused" {
 
   expect_failures = [var.resend_dkim_value]
 }
+
+# MUT-487 (AM11): after the move the Worker sends traffic to the new project's service (legacy.portalUpstream), while
+# legacy.portal stays the old run.app host the forwarder serves.
+run "the_worker_follows_legacy_portal_upstream" {
+  command = plan
+
+  variables {
+    hosts_file = "../../../config/fixtures/hosts.upstream.json"
+  }
+
+  assert {
+    condition     = one([for b in cloudflare_workers_script.front_door[0].bindings : b.text if b.name == "UPSTREAM_ORIGIN" && b.type == "plain_text"]) == "https://portal-new.example.test"
+    error_message = "With legacy.portalUpstream set, the Worker's UPSTREAM_ORIGIN is it, not legacy.portal."
+  }
+}

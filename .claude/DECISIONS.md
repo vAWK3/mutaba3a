@@ -791,8 +791,9 @@ than an architecture rule:
 - **Firm data on the hosted service** is privileged client financial data and
   must be encrypted at rest, regionally resident beside the firm's CRM (GCP
   me-west1, matching Malafat), backed up, and deletable on request.
-  *(Note 2026-10-21: "encrypted at rest" with our own key is ADR-164, MUT-381;
-  before it, only Google's default encryption.)*
+  *(Note 2026-10-21: "encrypted at rest" with our own key was ADR-164, MUT-381.
+  Note 2026-10-30: ADR-164 is superseded by ADR-232; at rest it is Google's default
+  encryption, in MTB3A's own project, which no other product's account can reach.)*
 
 **What replaces it**: ADR-025 below.
 
@@ -4500,7 +4501,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 
 ## ADR-164: Our Own KMS Key for the Database and the Receipts Bucket, via a New Instance Behind an Opt-In Stage (MUT-381)
 
-**Status**: Active
+**Status**: Superseded by ADR-232 (2026-10-30, MUT-487). CMEK was dropped on 2026-10-27 (MUT-381, MUT-385 and MUT-383 closed) and its dormant code removed: it added no isolation from Malafat, which held project-wide KMS roles (TD-195). A key can be added when an instance is created, if it is ever wanted. Kept below as history.
 **Date**: 2026-10-21
 **Context**: ADR-024 requires firm data to be encrypted at rest. Until now Cloud SQL, the attachments bucket and Secret Manager used only Google's default encryption. The 2026-10-21 privacy review chose "harden + CMEK" and ruled out field-level and end-to-end encryption, which would break server totals, FX, Malafat and the accountant export. Cloud SQL can't add a customer-managed key to an existing instance. Plan and eng review: `.claude/designs/mut-381-cmek.md` (Basel's answers D1–D5).
 **Decision**:
@@ -6087,3 +6088,44 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Accept a client's VAT amount within ±1 minor unit (the receipt's printed VAT). Rejected: MUT-313's totals must be reproducible from the rule.
 - A `grossMinor` column, as the brief listed. Rejected: the CHECK would chase two copies of one number.
 - Flat nullable fields on the wire, like receivables. Rejected: "no VAT" would be four nulls a client must agree on.
+
+## ADR-232: MTB3A Runs in Its Own GCP Project, Moved by a Restore-Based Cutover; the Old run.app Host Becomes a Forwarder (MUT-487)
+
+**Status:** Accepted (2026-10-27 plan and eng review, Basel's D1–D11; built 2026-10-30, not yet run). Supersedes ADR-164. Plan: `~/.gstack/projects/vAWK3-mutaba3a-flutter/mut-487-plan.md`. Procedure: `server/DEPLOYMENT.md` §6d.
+
+**Context:** MTB3A's API, database, receipts bucket and secrets live in `malafat-production`, where Malafat's runtime service account holds project-wide SQL, storage, KMS and Secret Manager roles (TD-195). A bug or breach in Malafat could read every MTB3A customer's books. CMEK (ADR-164) didn't change that and was dropped. At pilot size the move is minutes of downtime.
+
+**Decision:**
+1. **A dedicated project, `mtb3a-production`** (D1), on the same billing account, me-west1. Terraform does not create projects (DEPLOYMENT.md §6d C0). `config/gcp.json` names it; `deploy.sh` (`guard_project_release`) and preflight refuse any other project, and the old one unless `LEGACY_STACK=1`, which reads `legacy.tfvars` (AM5 corrected: the stack is chosen by project, never by `ENVIRONMENT`; names and state prefixes are unchanged). Each project gets its own terraform data dir, `.terraform-<project>` (AM8).
+2. **Fresh state, not migrated** (D2): `gs://mtb3a-production-terraform-state`. The old state keeps managing the old resources until MUT-520's teardown.
+3. **The generated secrets carry over by state move, not import** (R1/D2): `terraform import` of a `random_password` plans a replacement (`special = true -> false`). `project-move.sh secrets` moves the five from a copy of the old state into the new one and pushes only the new state; the first new plan must keep all five.
+4. **Rotate what nobody signs in with** (R7/D8): the first new apply replaces `random_password.db`, `admin_token` and `job_token`; Stripe, Resend and Turnstile get new values (`secret-values --rotate`) and the old provider keys are revoked after the cutover. **The session pepper and the OAuth derive key are carried** (AM16): neither grants access alone (`auth/sessions.ts`: the pepper exists so that rotating it signs everyone out; `oauth/service.ts` derives successors from a live parent token), and rotating them would sign everyone out, against the ticket.
+5. **The database moves by a cross-project backup restore** (D4), receipts by `gcloud storage rsync --delete-unmatched-destination-objects` (D5, AM3). A restore brings back the source's `mutaba3a_api` password hash, so every restore is followed by setting the target's own password. *Deviation from R7's wording:* `terraform apply -replace=google_sql_user.api` would try to drop a role that owns every table and fail, so `project-move.sh` sets the password in place through the Cloud SQL Admin API (`users.update`), with the request body on stdin; verify then connects as `mutaba3a_api` (AM2).
+6. **Idempotent steps, no state machine** (R8/D10): `secrets`, `secret-values`, `images`, `freeze`, `copy`, `verify`, `open`, `forward`, `rehearse`. Each checks its own preconditions; the rollback is the same steps with `--from/--to` swapped.
+7. **The new project is rehearsed closed** (R2/D3, R3/D4, AM7): `scheduler_paused`, `api_public` (gates the `allUsers` invoker; smoke tests go through `gcloud run services proxy`) and `live_label` (a Terraform-owned `mtb3a-live` label, so a release can't strip it). `copy` refuses any target not labelled `mtb3a-live=false`; with `--rollback`, the old project's forwarder too, nothing else.
+8. **The old run.app host becomes a forwarder** (D6, R6/D7, AM4): the old service runs `node dist/forwarder.js` from the same image, a streaming proxy with no config, database or secret but its token, under its own service account; its jobs stay paused. Turning it on is what reopens traffic after the copy; the front door (`legacy.portalUpstream`, AM11) and Malafat (`https://app.mtb3a.com`, R9/D11) are repointed the same day, off the critical path. MUT-521 retires it.
+9. **The forwarder vouches for the caller's IP with its own token** (R5/D9): `FORWARDER_TOKEN`, generated in the new project, a copy mounted only on the forwarder. `requestClientIp` trusts `x-mutaba3a-client-ip` for it; `isViaFrontDoor` stays front-door-only, so carry-over and portal-origin checks treat relayed requests as direct.
+10. **Teardown is a follow-up** (R4/D5): MUT-520 deletes the old copies 14 days after the cutover; MAL-1465 drops Malafat's cron-scope workaround.
+
+**Consequences:** releases between the merge and the cutover act on the old project as `LEGACY_STACK=1`, set on their own while `config/gcp.json` says `"cutover": "pending"` (Basel, 2026-10-30: nobody should have to remember the flag); the first one makes `legacy.tfvars` from `production.tfvars` (`server/scripts/lib/legacy-stack.sh`), and C3 sets `"cutover": "done"`. The old project holds MTB3A data for 14 more days after the cutover (MUT-520). TD-195 closes at C5, with the new project's IAM policy recorded. One extra hop and a possible cold start for old phone builds until MUT-521.
+
+**Alternatives considered:** CMEK (ADR-164, dropped); asking Malafat to scope its roles (it would still share a project and a blast radius); `terraform import` of the generated secrets (replaces them, R1); a resumable cutover state machine (R8, cut); trusting two proxy hops instead of a forwarder token (lets anyone fake an IP, R5).
+
+## ADR-233: MTB3A's Database Runs in One Zone on db-f1-micro Until MUT-512's Triggers; Cloud Run Scales to Zero (MUT-511)
+
+**Status:** Accepted (Basel, 2026-10-29 and 2026-10-30; built with MUT-487, applied at its C1). Ticket MUT-511; scaling back up is MUT-512.
+
+**Context:** `mutaba3a-pg` ran REGIONAL `db-g1-small`, about ₪184 a month (billing export `malafat-production.malafat_billing_bq_export`, `MUT-487-COSTS.md`): the largest line on the bill, more than all of Malafat. MUT-487 creates a new instance anyway, so choosing its size costs nothing extra.
+
+**Decision:**
+1. **ZONAL `db-f1-micro`** in `mtb3a-production` (the tier Malafat production runs on): shared CPU, about 0.6 GB of memory, no SLA. Backups, PITR (7 days), 14 retained backups and deletion protection are unchanged.
+2. **Connection budget (MUT-270):** `db_max_connections = 25` (the micro default, a valid flag value) and `db_pool_size = 5`, so `2 × 5 × 1 + 10 = 20 ≤ 25`; the Terraform precondition still holds.
+3. **MUT-512's triggers are alerts:** Cloud SQL CPU above 80% and memory above 90%, each for 15 minutes (`monitoring.tf`). Moving up a tier is a restart of a few minutes.
+4. **A zone outage is a restore into another zone**, not a failover: the latest point in time (PITR) or last night's backup into a new instance in another me-west1 zone, about 15–30 minutes at pilot size plus the hand steps (pilot runbook §4.5). Backups live in the region, not the zone.
+5. **A ₪100 monthly budget** on the project in Terraform (`budget.tf`, only with `billing_account_id`), alerting at 50%, 90% and 100%.
+6. **Artifact Registry cleanup:** keep the 3 newest of each image (rollback.sh needs them), delete untagged images older than 7 days; a dry run until Basel has read it.
+7. **Cloud Run `min_instances = 0`** in the new project (Basel, 2026-10-30). The three uptime checks every 300 s keep an instance warm, and with request-based billing (`cpu_idle = true`) an idle non-minimum instance isn't billed, which saves about ₪17 a month; the worst case is a cold start of a few seconds after about 15 minutes with no traffic, checks included. `max_instances` stays 1: one instance is still required by TD-017 (the in-process rate limiter and timers). While scaled to zero, in-process timers (the review digest, prunes) don't run (TD-215); the digest's request-time nudge and the next start's prune cover it.
+
+**Result:** MTB3A's monthly cost goes from about ₪204 to about ₪50 with min 1 (the ticket's estimate), about ₪33 with min 0, once MUT-520 deletes the old copies. Next month's billing export is the proof.
+
+**Alternatives considered:** REGIONAL `db-g1-small` (today; twice the price of zonal, for a failover the pilot doesn't need); ZONAL `db-g1-small` (about ₪92, the earlier recommendation); Cloud Run min 0 was out of MUT-511's scope and decided separately the next day.

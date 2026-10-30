@@ -63,8 +63,7 @@ usage: scripts/restore-drill.sh --project <id> [options]
 
   --project <id>        GCP project holding the source instance (or GCP_PROJECT_ID)
   --instance <name>     source Cloud SQL instance, only ever read (default: the instance the API serves
-                        from, read from terraform state in TF_STATE_BUCKET: mutaba3a-pg, or mutaba3a-pg2
-                        once cmek_stage is active)
+                        from, read from terraform state in TF_STATE_BUCKET)
   --receipt-id <uuid>   the receipt to open (default: the newest READY receipt in the copy)
   --bucket <name>       attachments bucket (default: <project>-mutaba3a-attachments)
   --pitr-minutes <n>    restore point, minutes ago (default 60; at most 7 days of logs)
@@ -165,8 +164,7 @@ need cloud-sql-proxy "brew install cloud-sql-proxy"
 need psql "brew install libpq && brew link --force libpq"
 need openssl "preinstalled on macOS"
 
-# MUT-381: without --instance, drill the instance the API serves from, so a drill after the CMEK cutover
-# tests mutaba3a-pg2's backups, not the frozen mutaba3a-pg.
+# Without --instance, drill the instance the API serves from, as terraform state names it.
 if [[ -z "${SOURCE}" ]]; then
   if [[ "${DRY_RUN}" == 1 ]]; then
     printf '+ terraform output -raw cloud_sql_instance_name\n'
@@ -209,19 +207,16 @@ run_capture ACCOUNT "<you@example.com>" gcloud config get-value account
 info "gcloud account: ${ACCOUNT}"
 
 # CSV, not value(): read with a tab IFS collapses empty fields (an empty edition shifts every later one).
-run_capture DESCRIBED '<region>,<tier>,<edition>,<disk-gb>,POSTGRES_16,True,<source-kms-key>' \
+run_capture DESCRIBED '<region>,<tier>,<edition>,<disk-gb>,POSTGRES_16,True' \
   gcloud sql instances describe "${SOURCE}" --project="${PROJECT}" \
-  --format='csv[no-heading](region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled,diskEncryptionConfiguration.kmsKeyName)'
-IFS=, read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON KMS_KEY <<<"${DESCRIBED}"
-# MUT-381: a copy of a CMEK instance stays under the same key (the point-in-time clone inherits it).
-SCRATCH_KEY=()
-[[ -n "${KMS_KEY}" ]] && SCRATCH_KEY=(--disk-encryption-key="${KMS_KEY}")
+  --format='csv[no-heading](region,settings.tier,settings.edition,settings.dataDiskSizeGb,databaseVersion,settings.backupConfiguration.pointInTimeRecoveryEnabled)'
+IFS=, read -r REGION TIER EDITION DISK_GB DB_VERSION PITR_ON <<<"${DESCRIBED}"
 # describe says ENTERPRISE / ENTERPRISE_PLUS; create takes enterprise / enterprise-plus.
 EDITION="$(printf '%s' "${EDITION:-ENTERPRISE}" | tr '[:upper:]_' '[:lower:]-')"
 [[ "${PITR_ON}" == "True" || "${ONLY}" == "backup" ]] || die "point-in-time recovery is off on ${SOURCE}; nothing to drill (or use --only backup)"
-info "source: ${DB_VERSION}, ${TIER} (${EDITION}), ${DISK_GB} GB, ${REGION}${KMS_KEY:+, encrypted with ${KMS_KEY}}"
+info "source: ${DB_VERSION}, ${TIER} (${EDITION}), ${DISK_GB} GB, ${REGION}"
 
-COST_NOTE="a ${TIER} instance costs roughly \$0.05–0.10 an hour (twice that for the clone, which is REGIONAL like the source); teardown deletes it when the drill ends"
+COST_NOTE="a ${TIER} instance costs roughly \$0.05–0.10 an hour (twice that for the clone when the source is REGIONAL; MUT-511 runs it ZONAL); teardown deletes it when the drill ends"
 
 # Restore last night's automated backup into a fresh ZONAL scratch instance.
 restore_backup() {
@@ -236,8 +231,7 @@ restore_backup() {
   timed "Create scratch instance (backup)" mutate "${SCRATCH_B}" gcloud sql instances create "${SCRATCH_B}" --project="${PROJECT}" \
     --region="${REGION}" --database-version="${DB_VERSION}" --tier="${TIER}" --edition="${EDITION}" \
     --availability-type=zonal --storage-size="${DISK_GB}GB" --ssl-mode=ENCRYPTED_ONLY \
-    --no-backup --no-deletion-protection \
-    ${SCRATCH_KEY[@]+"${SCRATCH_KEY[@]}"} --quiet
+    --no-backup --no-deletion-protection --quiet
   timed "Restore last night's backup" mutate "${SCRATCH_B}" gcloud sql backups restore "${BACKUP_ID}" \
     --restore-instance="${SCRATCH_B}" --backup-instance="${SOURCE}" --project="${PROJECT}" --quiet
 }

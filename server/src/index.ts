@@ -204,6 +204,7 @@ const app = createApp({
     ...(config.PORTAL_ORIGIN ? { portalOrigin: config.PORTAL_ORIGIN } : {}),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     ...(config.FRONT_DOOR_TOKEN ? { frontDoorToken: config.FRONT_DOOR_TOKEN } : {}),
+    ...(config.FORWARDER_TOKEN ? { forwarderToken: config.FORWARDER_TOKEN } : {}),
     legacyRedirect: config.PORTAL_LEGACY_REDIRECT,
   },
   signInThrottle,

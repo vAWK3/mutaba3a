@@ -118,6 +118,13 @@ export const FRONT_DOOR_HEADER = 'x-mutaba3a-front-door';
 export const FRONT_DOOR_CLIENT_IP_HEADER = 'x-mutaba3a-client-ip';
 
 /**
+ * MUT-487 (ADR-232, R5/D9): the legacy run.app forwarder (src/forwarder.ts) relays old phone builds from the old
+ * project and vouches for the caller's IP with this header. Its token (FORWARDER_TOKEN) is trusted for the IP
+ * alone: it never counts as the front door, so the carry-over and the portal-origin checks see a direct request.
+ */
+export const FORWARDER_HEADER = 'x-mutaba3a-forwarder';
+
+/**
  * MUT-326 stage "redirect": where an old-host portal visit lands first. The page (built
  * with the carry-over, MUT-112/MUT-291, design §7) checks this origin's local records,
  * offers to carry them over, then sends the browser on to PORTAL_ORIGIN + `next`.
@@ -129,22 +136,33 @@ export interface RequestPathSettings {
   trustedProxyHops: number;
   /** The front door's shared secret (FRONT_DOOR_TOKEN); unset until the custom domain exists. */
   frontDoorToken?: string;
+  /** MUT-487: the legacy forwarder's secret (FORWARDER_TOKEN); trusted for the client IP only. */
+  forwarderToken?: string;
 }
 
 const digest = (value: string) => createHash('sha256').update(value).digest();
 /** One IPv4 or IPv6 address, nothing else (the front door sends CF-Connecting-IP). */
 const IP_ADDRESS = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]*)$/i;
 
-/** True only when the front door's token matches; compared as fixed-length digests, in constant time. */
-export function isViaFrontDoor(header: HeaderReader, token: string | undefined): boolean {
-  const presented = header(FRONT_DOOR_HEADER);
+/** True only when `name` carries `token`; compared as fixed-length digests, in constant time. */
+function presentsToken(header: HeaderReader, name: string, token: string | undefined): boolean {
+  const presented = header(name);
   if (!token || !presented) return false;
   return timingSafeEqual(digest(presented), digest(token));
 }
 
-/** The caller's address: the front door's word for it when the token matches, else X-Forwarded-For as before. */
+/** True only when the front door's token matches; compared as fixed-length digests, in constant time. */
+export function isViaFrontDoor(header: HeaderReader, token: string | undefined): boolean {
+  return presentsToken(header, FRONT_DOOR_HEADER, token);
+}
+
+/**
+ * The caller's address: the front door's (or, MUT-487, the legacy forwarder's) word for it when its token matches,
+ * else X-Forwarded-For as before.
+ */
 export function requestClientIp(header: HeaderReader, settings: RequestPathSettings): string {
-  if (!isViaFrontDoor(header, settings.frontDoorToken)) return clientIp(header, settings.trustedProxyHops);
+  const vouched = isViaFrontDoor(header, settings.frontDoorToken) || presentsToken(header, FORWARDER_HEADER, settings.forwarderToken);
+  if (!vouched) return clientIp(header, settings.trustedProxyHops);
   const ip = header(FRONT_DOOR_CLIENT_IP_HEADER)?.trim() ?? '';
   return ip.length <= 45 && IP_ADDRESS.test(ip) ? ip : 'unknown';
 }

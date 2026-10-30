@@ -1,23 +1,16 @@
 # shellcheck shell=bash
-# deploy.sh (MUT-381, ADR-164): refuse a release that would move the database or reopen a closed service.
-# (MUT-360: guard_stripe_release, below, refuses one that would switch Stripe off.)
-# Sourced by scripts/deploy.sh, which calls it before the bootstrap apply, before the migration and before the
+# deploy.sh's release guards: each refuses a release whose full `terraform apply` would change something
+# production relies on as a side effect, because the git-ignored production.tfvars of this checkout says so
+# (a stale copy, a missing line) or because an operator procedure is in the middle of something:
+#   * guard_project_release: the GCP project this release goes to (MUT-487, ADR-232);
+#   * guard_ingress_release: a service a restore or a project move holds closed;
+#   * guard_stripe_release, guard_sentry_release, guard_mailer_release: Stripe, error reports, mail;
+#   * guard_turnstile_site_key: a test Turnstile key in a portal that mails real links;
+#   * guard_min_build_release: the phone minimum builds (MUT-471).
+# Sourced by scripts/deploy.sh, which calls them before the bootstrap apply, before the migration and before the
 # full apply (each a few minutes apart). Tested by src/scripts/__tests__/release-guard.test.ts through a fake
-# `terraform` and `gcloud`.
-#
-# A release ends in a full `terraform apply`, so whatever this checkout's variables say happens:
-#   * cmek_stage "active" while mutaba3a-pg serves would switch to a mutaba3a-pg2 nobody has copied or
-#     migrated into (the switch belongs to DEPLOYMENT.md §6d, which runs it with ingress closed);
-#   * "off"/"prepared" while mutaba3a-pg2 serves (a stale, git-ignored tfvars in another checkout) would move
-#     the API back to the frozen mutaba3a-pg and lose everything written since; "off" once the key exists
-#     would plan the key's destroy after the migration ran;
-#   * a release while a cutover or a restore holds ingress closed would reopen it mid-copy.
-# The caller defines die and warn and runs this inside the terraform dir, after `terraform init`. It fails
-# closed: anything it cannot read stops the release.
-#
-# Off by default while the CMEK epic is unfinished (Basel, 2026-10-21): cmek_stage stays "off", so a release
-# changes nothing and runs exactly as it did before MUT-381. SKIP_CMEK_GUARD=0 turns it on; it must be on
-# before any CMEK cutover (DEPLOYMENT.md §6d), and MUT-385 makes on the default.
+# `terraform` and `gcloud`. The caller defines die and warn and runs the terraform-reading guards inside the
+# terraform dir, after `terraform init`. They fail closed: anything they cannot read stops the release.
 
 # guard_var_args <terraform args…>: keeps only -var and -var-file in GUARD_VAR_ARGS, so `terraform console`
 # sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
@@ -33,79 +26,69 @@ guard_var_args() {
   done
 }
 
-# guard_cmek_release <suffix> <service> <region> <project> <terraform args…>
-#   <terraform args…>: the apply's own arguments; only -var and -var-file are kept, so `terraform console`
-#   sees the same variables (tfvars, *.auto.tfvars, TF_VAR_*) the apply will.
-guard_cmek_release() {
-  if [[ "${SKIP_CMEK_GUARD:-1}" != "0" ]]; then
-    warn "CMEK release guard off (the default until MUT-385; SKIP_CMEK_GUARD=0 turns it on)"
+# guard_ingress_release <service> <region> <project> <terraform args…>
+# A whole-database restore (pilot runbook §4.3) and the source side of a project move (project-move.sh freeze,
+# DEPLOYMENT.md §6d) close the service to outside traffic. A release in the middle would reopen it mid-copy
+# unless this checkout's api_ingress keeps it internal. Kept from MUT-381's CMEK guard when MUT-487 removed CMEK.
+# On by default; SKIP_INGRESS_GUARD=1 skips it.
+guard_ingress_release() {
+  if [[ "${SKIP_INGRESS_GUARD:-0}" == "1" ]]; then
+    warn "ingress release guard skipped (SKIP_INGRESS_GUARD=1)"
     return 0
   fi
-  local suffix="$1" service="$2" region="$3" project="$4"; shift 4
+  local service="$1" region="$2" project="$3"; shift 3
   guard_var_args "$@"
 
-  # One expression: Terraform 1.15's console answers only the last of several lines (MUT-475).
-  local values stage ingress
-  # shellcheck disable=SC2016 # ${var.…} is Terraform interpolation, not bash
-  values="$(printf '"${var.cmek_stage} ${var.api_ingress}"\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
-    || die "could not evaluate cmek_stage and api_ingress with terraform console (above); refusing to release on a guess"
-  values="$(sed -n '1{s/"//g;p;}' <<<"${values}")"
-  [[ "${values}" =~ ^(off|prepared|active)\ (INGRESS_TRAFFIC_ALL|INGRESS_TRAFFIC_INTERNAL_ONLY)$ ]] \
-    || die "terraform console gave '${values}' for cmek_stage and api_ingress; refusing to release on a guess"
-  read -r stage ingress <<<"${values}"
+  local ingress
+  ingress="$(printf 'var.api_ingress\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
+    || die "could not evaluate api_ingress with terraform console (above); refusing to release on a guess"
+  ingress="$(sed -n '1{s/"//g;p;}' <<<"${ingress}")"
+  [[ "${ingress}" == "INGRESS_TRAFFIC_ALL" || "${ingress}" == "INGRESS_TRAFFIC_INTERNAL_ONLY" ]] \
+    || die "terraform console gave '${ingress}' for api_ingress; refusing to release on a guess"
 
-  local err serving rc=0
+  local live err rc=0
   err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
-  serving="$(terraform output -raw cloud_sql_instance_name 2>"${err}")" || rc=$?
-  if (( rc != 0 )); then
-    # A state applied before MUT-381 has no such output, and then mutaba3a-pg2 can't be serving.
-    if grep -q 'Output "cloud_sql_instance_name" not found' "${err}"; then
-      serving="mutaba3a-pg${suffix}"
-    else
-      cat "${err}" >&2; rm -f "${err}"
-      die "could not read cloud_sql_instance_name from terraform state (above); refusing to release on a guess"
-    fi
-  fi
-  rm -f "${err}"
-  [[ -n "${serving}" ]] || die "terraform output cloud_sql_instance_name is empty: is TF_STATE_BUCKET (and the prefix) right?"
-
-  if [[ "${stage}" == "off" ]] && terraform state list 2>/dev/null | grep -q '^google_kms_crypto_key\.data'; then
-    die "cmek_stage = \"off\" but the KMS key exists: this release would plan its destroy (refused by prevent_destroy, after the migration). Set cmek_stage to match what serves."
-  fi
-
-  local want="mutaba3a-pg${suffix}"
-  [[ "${stage}" == "active" ]] && want="mutaba3a-pg2${suffix}"
-  [[ "${want}" == "${serving}" ]] || die "this checkout's cmek_stage = \"${stage}\", which serves ${want}, but production serves ${serving}. A release never moves the database: the CMEK switch is DEPLOYMENT.md §6d's printed apply. Set cmek_stage to match what serves (a stale tfvars from another checkout?), then release."
-
-  local live
-  err="$(mktemp "${TMPDIR:-/tmp}/release-guard-XXXX")"
-  rc=0
   live="$(gcloud run services describe "${service}" --region="${region}" --project="${project}" \
     --format='value(metadata.annotations."run.googleapis.com/ingress-status")' 2>"${err}")" || rc=$?
   if (( rc != 0 )); then
     if grep -qiE 'cannot find service|could not be found|NOT_FOUND' "${err}"; then
-      rm -f "${err}"; return 0 # first deploy: no service yet, nothing to reopen or to have moved
+      rm -f "${err}"; return 0 # first deploy: no service yet, nothing to reopen
     fi
     cat "${err}" >&2; rm -f "${err}"
     die "could not read ${service}'s ingress (above); refusing to release on a guess"
   fi
   rm -f "${err}"
   if [[ "${live}" == "internal" && "${ingress}" != "INGRESS_TRAFFIC_INTERNAL_ONLY" ]]; then
-    die "${service} is closed to outside traffic: a CMEK cutover (DEPLOYMENT.md §6d) or a whole-database restore (pilot runbook §4.3) is in progress, and this release would reopen it mid-way. Finish or roll that back first."
+    die "${service} is closed to outside traffic: a whole-database restore (pilot runbook §4.3) or a project move (project-move.sh freeze, DEPLOYMENT.md §6d) is in progress, and this release would reopen it mid-way. Finish or roll that back first."
   fi
+}
 
-  # Terraform state says what should serve; the revisions taking traffic say what does.
-  local revs rev mounts conn
-  revs="$(gcloud run services describe "${service}" --region="${region}" --project="${project}" \
-    --format='value(status.traffic[].revisionName)')" || die "could not list ${service}'s revisions; refusing to release on a guess"
-  for rev in $(tr ';' ' ' <<<"${revs}"); do
-    mounts="$(gcloud run revisions describe "${rev}" --region="${region}" --project="${project}" \
-      --format='value(metadata.annotations."run.googleapis.com/cloudsql-instances")')" \
-      || die "could not read what ${rev} mounts; refusing to release on a guess"
-    for conn in $(tr ',' ' ' <<<"${mounts}"); do
-      [[ "${conn}" == *":${want}" ]] || die "${rev} mounts ${conn}, but this release would serve ${want}: terraform state and Cloud Run disagree. Find out why before releasing."
-    done
-  done
+# guard_project_release <project> (MUT-487, ADR-232, AM5): config/gcp.json names the one project production
+# releases go to, and the old one that still runs the legacy forwarder until MUT-520/MUT-521. A release to the
+# old project needs LEGACY_STACK=1 (the forwarder, a rollback, the teardown); any other project is refused.
+# Needs node (deploy.sh already does). GCP_CONFIG overrides the file (tests).
+guard_project_release() {
+  local project="$1" file="${GCP_CONFIG:-${SERVER_DIR:-.}/../config/gcp.json}" env="${ENVIRONMENT:-production}" pair want legacy
+  [[ -f "${file}" ]] || die "missing ${file}: it names the project ${env} releases go to"
+  # shellcheck disable=SC2016 # ${…} below is a JavaScript template literal
+  pair="$(node -e '
+    const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))[process.argv[2]] || {};
+    process.stdout.write(`${c.project || ""} ${c.legacyProject || ""}`);' "${file}" "${env}")" \
+    || die "could not read ${file}; refusing to release on a guess"
+  read -r want legacy <<<"${pair}"
+  [[ -n "${want}" ]] || die "${file} names no project for ${env}; refusing to release on a guess"
+  if [[ "${project}" == "${want}" ]]; then
+    [[ "${LEGACY_STACK:-0}" != "1" ]] || die "LEGACY_STACK=1 is for the old project ${legacy:-(none)}, but GCP_PROJECT_ID is ${project}, the live one. Unset LEGACY_STACK."
+    return 0
+  fi
+  if [[ -n "${legacy}" && "${project}" == "${legacy}" ]]; then
+    if [[ "${LEGACY_STACK:-0}" == "1" ]]; then
+      warn "LEGACY_STACK=1: acting on the OLD project ${project} (the forwarder, a rollback or the teardown), not ${want}"
+      return 0
+    fi
+    die "GCP_PROJECT_ID=${project} is MTB3A's old project; production runs in ${want} (config/gcp.json, ADR-232). Point deploy.env or production.tfvars at ${want}. Only the forwarder, a rollback or the teardown act on ${project}, with LEGACY_STACK=1 and legacy.tfvars (DEPLOYMENT.md §6d)."
+  fi
+  die "GCP_PROJECT_ID=${project} is not MTB3A's ${env} project (${want}, config/gcp.json); refusing to release there"
 }
 
 # MUT-360 (ADR-165): refuse a release whose checkout says stripe_enabled = false (or doesn't set it) while
@@ -116,8 +99,8 @@ guard_cmek_release() {
 #
 # "Production runs Stripe" is read from Google, not from terraform state: the reconcile job exists, or the
 # service's template mounts STRIPE_SECRET_KEY. Either one is enough. On by default; SKIP_STRIPE_GUARD=1 skips it.
-# It fails closed like the CMEK guard: anything it cannot read stops the release. It also warns (never refuses)
-# when the job is paused, which a CMEK cutover or a whole-database restore leaves to the operator to undo.
+# It fails closed like the other guards: anything it cannot read stops the release. It also warns (never refuses)
+# when the job is paused, which a project move or a whole-database restore leaves to the operator to undo.
 
 # guard_stripe_release <suffix> <service> <region> <project> <terraform args…>
 guard_stripe_release() {
@@ -131,7 +114,7 @@ guard_stripe_release() {
   local enabled
   enabled="$(printf 'var.stripe_enabled\n' | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
     || die "could not evaluate stripe_enabled with terraform console (above); refusing to release on a guess"
-  # The first line only, as guard_cmek_release reads its values: a console notice after it must not refuse a release.
+  # The first line only: a console notice after it must not refuse a release.
   enabled="$(sed -n '1{s/"//g;p;}' <<<"${enabled}")"
   [[ "${enabled}" == "true" || "${enabled}" == "false" ]] \
     || die "terraform console gave '${enabled}' for stripe_enabled; refusing to release on a guess"
@@ -150,7 +133,7 @@ guard_stripe_release() {
   fi
   rm -f "${err}"
   if [[ "${state}" == "PAUSED" ]]; then
-    warn "${job} is paused: the nightly Stripe reconcile doesn't run. If no CMEK cutover or restore holds the database closed, resume it: gcloud scheduler jobs resume ${job} --location=${region} --project=${project}"
+    warn "${job} is paused: the nightly Stripe reconcile doesn't run. If no project move or restore holds the database closed, resume it: gcloud scheduler jobs resume ${job} --location=${region} --project=${project}"
   fi
   [[ "${enabled}" == "true" ]] && return 0
 

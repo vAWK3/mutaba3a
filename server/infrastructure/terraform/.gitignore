@@ -1,4 +1,6 @@
 .terraform/
+# MUT-487 (AM8): deploy.sh keeps one data dir per project (TF_DATA_DIR).
+.terraform-*/
 *.tfstate
 *.tfstate.*
 *.tfvars
