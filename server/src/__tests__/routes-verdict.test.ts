@@ -198,7 +198,7 @@ describe('GET /v1/summaries/verdict — review fixes (qa-reconcile 2026-10-26)',
   it('answers 200 when a profile holds a row in a retired currency, leaving it out and naming it (#1)', async () => {
     const s = await setup();
     await s.income(s.personal, { kind: 'received', amount: '10.00', occurredOn: '2026-10-05' });
-    await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-06', amountMinor: 500n, currency: 'AED', title: 'Old', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: s.userId }, s.clock.now);
+    await s.store.expenses.create({ organizationId: s.personal, occurredOn: '2026-10-06', amountMinor: 500n, currency: 'AED', title: 'Old', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: s.userId }, s.clock.now);
     const res = await s.verdict();
     expect(res.status).toBe(200);
     const body = await read(res);

@@ -1,6 +1,7 @@
 import { todayFor } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
 import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { NO_EXPENSE_VAT } from '../expenses/vat.js';
 import type { CreateExpenseInput, ExpenseRecord, InboxEntryRecord, LedgerStore, Organization } from '../repositories/ports.js';
 import type { VendorDetails } from '../schemas.js';
 import { assertFilableCurrency, assertKind } from './compose.js';
@@ -59,6 +60,8 @@ export async function prepareInboxExpenseFiling(
       createdByUserId: userId,
       // MUT-436 (review R6): the entry's source stays with the expense it becomes, so its marker survives filing.
       ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
+      // MUT-302: filing records no VAT (an inbox entry has none to carry).
+      ...NO_EXPENSE_VAT,
     },
   };
 }

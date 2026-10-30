@@ -68,7 +68,7 @@ async function seed(store: LedgerStore) {
   await store.vendors.resolve({ organizationId: org, name: 'Corner Shop' }, AT);
   const expenses = [];
   for (const title of ['Taxi', 'Hotel', 'Lunch']) {
-    expenses.push(await store.expenses.create({ organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title, vendor: 'Yellow', vendorId: yellow.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, createdByUserId: user.id }, AT));
+    expenses.push(await store.expenses.create({ organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title, vendor: 'Yellow', vendorId: yellow.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, AT));
   }
   await store.vendors.touch(org, yellow.id, { categoryId: category.id }, LATER);
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expenses[0]!.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-11', uploadedByUserId: user.id, requestId: null }, AT);

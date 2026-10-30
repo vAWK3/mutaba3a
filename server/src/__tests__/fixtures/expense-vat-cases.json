@@ -1,0 +1,242 @@
+[
+  {
+    "amountMinor": "11700",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "10000",
+    "vatMinor": "1700"
+  },
+  {
+    "amountMinor": "11800",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1800,
+    "netMinor": "10000",
+    "vatMinor": "1800"
+  },
+  {
+    "amountMinor": "1",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "1",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "1",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 10000,
+    "netMinor": "1",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "2",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 10000,
+    "netMinor": "1",
+    "vatMinor": "1"
+  },
+  {
+    "amountMinor": "3",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 10000,
+    "netMinor": "2",
+    "vatMinor": "1"
+  },
+  {
+    "amountMinor": "100",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1,
+    "netMinor": "100",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "10001",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1,
+    "netMinor": "10000",
+    "vatMinor": "1"
+  },
+  {
+    "amountMinor": "20000",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 10000,
+    "netMinor": "10000",
+    "vatMinor": "10000"
+  },
+  {
+    "amountMinor": "10500",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 500,
+    "netMinor": "10000",
+    "vatMinor": "500"
+  },
+  {
+    "amountMinor": "1050",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 500,
+    "netMinor": "1000",
+    "vatMinor": "50"
+  },
+  {
+    "amountMinor": "11500",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1500,
+    "netMinor": "10000",
+    "vatMinor": "1500"
+  },
+  {
+    "amountMinor": "115",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1500,
+    "netMinor": "100",
+    "vatMinor": "15"
+  },
+  {
+    "amountMinor": "99999",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "85469",
+    "vatMinor": "14530"
+  },
+  {
+    "amountMinor": "123457",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1750,
+    "netMinor": "105070",
+    "vatMinor": "18387"
+  },
+  {
+    "amountMinor": "1000000000",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "854700855",
+    "vatMinor": "145299145"
+  },
+  {
+    "amountMinor": "999999999",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 9999,
+    "netMinor": "500025001",
+    "vatMinor": "499974998"
+  },
+  {
+    "amountMinor": "117",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "100",
+    "vatMinor": "17"
+  },
+  {
+    "amountMinor": "118",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1800,
+    "netMinor": "100",
+    "vatMinor": "18"
+  },
+  {
+    "amountMinor": "5",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 2500,
+    "netMinor": "4",
+    "vatMinor": "1"
+  },
+  {
+    "amountMinor": "1170",
+    "currencyExponent": 3,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1700,
+    "netMinor": "1000",
+    "vatMinor": "170"
+  },
+  {
+    "amountMinor": "1001",
+    "currencyExponent": 3,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1600,
+    "netMinor": "863",
+    "vatMinor": "138"
+  },
+  {
+    "amountMinor": "12345678",
+    "currencyExponent": 3,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1600,
+    "netMinor": "10642826",
+    "vatMinor": "1702852"
+  },
+  {
+    "amountMinor": "1",
+    "currencyExponent": 3,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1600,
+    "netMinor": "1",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "11700",
+    "currencyExponent": 2,
+    "treatment": "ZERO_RATED",
+    "rateBasisPoints": 0,
+    "netMinor": "11700",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "11700",
+    "currencyExponent": 2,
+    "treatment": "EXEMPT",
+    "rateBasisPoints": 0,
+    "netMinor": "11700",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "11700",
+    "currencyExponent": 2,
+    "treatment": "OUT_OF_SCOPE",
+    "rateBasisPoints": 0,
+    "netMinor": "11700",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "1",
+    "currencyExponent": 3,
+    "treatment": "ZERO_RATED",
+    "rateBasisPoints": 0,
+    "netMinor": "1",
+    "vatMinor": "0"
+  },
+  {
+    "amountMinor": "10750",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 750,
+    "netMinor": "10000",
+    "vatMinor": "750"
+  },
+  {
+    "amountMinor": "33",
+    "currencyExponent": 2,
+    "treatment": "STANDARD_RATED",
+    "rateBasisPoints": 1000,
+    "netMinor": "30",
+    "vatMinor": "3"
+  }
+]

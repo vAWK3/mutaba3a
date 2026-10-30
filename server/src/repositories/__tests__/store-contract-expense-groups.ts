@@ -19,7 +19,7 @@ export function describeLedgerStoreExpenseGroupsContract(name: string, makeStore
     const b = await org(store, 'B');
     const { user } = await store.users.create({ email: `g-${unique()}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: a.id, personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });
     const expense = (over: Partial<CreateExpenseInput> = {}): CreateExpenseInput => ({
-      organizationId: a.id, occurredOn: '2026-10-05', amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id, ...over,
+      organizationId: a.id, occurredOn: '2026-10-05', amountMinor: 1_000n, currency: 'JOD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id, ...over,
     });
     const group = (over: Partial<{ name: string; startOn: string; endOn: string | null }> = {}) =>
       store.expenseGroups.create({ organizationId: a.id, name: 'Jordan trip', startOn: '2026-10-03', endOn: '2026-10-07', notes: null, createdByUserId: user.id, ...over }, at(1));

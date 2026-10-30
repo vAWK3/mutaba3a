@@ -120,7 +120,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
           const profile = await createOwned(store, user.id, 'PERSONAL');
           await store.expenseCategories.seed(profile.id, preset(['Alpha', 'Beta']), at(1));
           const [alpha, beta] = await store.expenseCategories.list(profile.id, { includeArchived: true });
-          const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: alpha!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+          const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: alpha!.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1));
           const [retyped, moved] = await Promise.all([
             store.organizations.updateOwned(profile.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general')),
             store.expenses.update(profile.id, e.id, 1, { categoryId: beta!.id }, at(2)).catch((err: unknown) => err),
@@ -177,7 +177,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const archived = await store.expenseCategories.create(profile.id, { name: 'Old', color: null }, at(1));
       await store.expenseCategories.update(profile.id, archived.id, 1, { archived: true }, at(1));
       const expense = (categoryId: string | null) =>
-        store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+        store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1));
       const a = await expense(groceries!.id);
       const b = await expense(custom.id);
       const deleted = await expense(custom.id);
@@ -227,7 +227,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const { user, personalOrganization: p } = await owner(store);
       await store.expenseCategories.seed(p.id, preset(['Groceries']), at(1));
       const [category] = await store.expenseCategories.list(p.id, { includeArchived: true });
-      const e = await store.expenses.create({ organizationId: p.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: category!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+      const e = await store.expenses.create({ organizationId: p.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: category!.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1));
       const auditBefore = (await store.audit.listByOrganization(p.id, 100)).length;
       await expect(store.organizations.updateOwned(p.id, user.id, 1, { profileType: 'BUSINESS' }, GENERAL, at(2), upd(user.id, ['type'], 'general'))).rejects.toThrow();
       expect(await store.organizations.getById(p.id)).toMatchObject({ profileType: 'PERSONAL', version: 1 });
@@ -254,7 +254,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       await store.expenseCategories.seed(profile.id, preset(['Groceries', 'Rent']), at(1));
       const [groceries, rent] = await store.expenseCategories.list(profile.id, { includeArchived: false });
       await store.expenseCategories.update(profile.id, rent!.id, 1, { archived: true }, at(1));
-      const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 500n, currency: 'ILS', title: null, vendor: null, categoryId: groceries!.id, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+      const e = await store.expenses.create({ organizationId: profile.id, occurredOn: '2026-10-10', amountMinor: 500n, currency: 'ILS', title: null, vendor: null, categoryId: groceries!.id, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1));
       await store.organizations.updateOwned(profile.id, user.id, 1, { name: 'Shop', profileType: 'BUSINESS' }, GENERAL, at(3), upd(user.id, ['name', 'type'], 'general'));
       const events = await store.audit.listByOrganization(profile.id, 20);
       expect(events.find((ev) => ev.action === 'organization.updated')?.metadata).toEqual({ fields: ['name', 'type'] });
@@ -290,7 +290,7 @@ export function describeLedgerStoreProfilesContract(name: string, makeStore: () 
       const store = await makeStore();
       const { user, personalOrganization } = await owner(store);
       await expect(
-        store.expenses.create({ organizationId: personalOrganization.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: '00000000-0000-4000-8000-000000000000', customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1)),
+        store.expenses.create({ organizationId: personalOrganization.id, occurredOn: '2026-10-10', amountMinor: 1000n, currency: 'ILS', title: null, vendor: null, categoryId: '00000000-0000-4000-8000-000000000000', customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1)),
       ).rejects.toMatchObject({ constraint: expect.stringContaining('categoryId') }); // the exact predicate withCategoryForeignKey matches
     });
   });

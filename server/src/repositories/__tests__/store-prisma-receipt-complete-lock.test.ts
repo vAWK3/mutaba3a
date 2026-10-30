@@ -33,7 +33,7 @@ if (!url) {
   async function seed(s: LedgerStore) {
     const o = await s.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
     const { user } = await s.users.create({ email: `p-${unique()}@firm.ps`, displayName: 'Nour', passwordHash: 'x', locale: 'en', organizationId: o.id, personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });
-    const expense = await s.expenses.create({ organizationId: o.id, occurredOn: '2026-10-21', amountMinor: 1_500n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, at(1));
+    const expense = await s.expenses.create({ organizationId: o.id, occurredOn: '2026-10-21', amountMinor: 1_500n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, at(1));
     const upload = (expenseId: string | null): CreateExpenseReceiptInput => ({ organizationId: o.id, expenseId, filename: 'scan.jpg', mimeType: 'image/jpeg', sizeBytes: 2048, receivedOn: '2026-10-22', uploadedByUserId: user.id, requestId: null });
     const pending = (expenseId: string | null) => s.expenseReceipts.create(upload(expenseId), at(2));
     const ready = async (expenseId: string | null) => (await s.expenseReceipts.complete(o.id, (await pending(expenseId)).id, at(3)))!;

@@ -63,7 +63,7 @@ if (!url) {
       const [moved, filed] = await Promise.all([
         store.expenseReceipts.moveToProfile({ organizationId: a.id, receiptId: r.id, targetOrganizationId: b.id, storageKey: `org/${b.id}/expense-receipts/${r.id}-x` }),
         store.expenseReceipts.fileAsExpense(
-          { organizationId: a.id, receiptId: r.id, userId: user.id, expense: { organizationId: a.id, occurredOn: '2026-10-28', amountMinor: 1_500n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, approved: { occurredOn: '2026-10-28', amountMinor: '1500', currency: 'ILS', vendor: 'Cafe', categoryId: null } },
+          { organizationId: a.id, receiptId: r.id, userId: user.id, expense: { organizationId: a.id, occurredOn: '2026-10-28', amountMinor: 1_500n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, approved: { occurredOn: '2026-10-28', amountMinor: '1500', currency: 'ILS', vendor: 'Cafe', categoryId: null } },
           at(5),
         ),
       ]);
@@ -74,7 +74,7 @@ if (!url) {
       const { a, b, user, ready } = await seed(store);
       const filed = await ready();
       await store.expenseReceipts.fileAsExpense(
-        { organizationId: a.id, receiptId: filed.id, userId: user.id, expense: { organizationId: a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id }, approved: { occurredOn: '2026-10-28', amountMinor: '100', currency: 'ILS', vendor: null, categoryId: null } },
+        { organizationId: a.id, receiptId: filed.id, userId: user.id, expense: { organizationId: a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: user.id }, approved: { occurredOn: '2026-10-28', amountMinor: '100', currency: 'ILS', vendor: null, categoryId: null } },
         at(5),
       );
       expect((await store.expenseReceipts.moveToProfile({ organizationId: a.id, receiptId: filed.id, targetOrganizationId: b.id, storageKey: 'k' })).kind).toBe('already_filed');
