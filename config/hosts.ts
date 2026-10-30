@@ -22,6 +22,12 @@ export type Stage = (typeof STAGES)[number];
 export interface LegacyOrigins {
   landing: string;
   portal: string;
+  /**
+   * MUT-487 (ADR-230, AM11): where the front door (the Cloudflare Worker) sends portal and API traffic, when it differs
+   * from `portal`: the new project's run.app service, while `portal` stays the old run.app host the legacy forwarder
+   * still serves (so it stays in every allowlist). Read only by server/infrastructure/frontdoor. Absent = `portal`.
+   */
+  portalUpstream?: string;
 }
 
 export interface EnvironmentHosts {
@@ -99,7 +105,11 @@ function parseEnvironment(env: string, value: unknown): EnvironmentHosts {
       fail(env, `legacy.${key}`, legacy[key], 'must be a bare https origin');
     }
   }
-  const legacyOrigins = { landing: legacy.landing as string, portal: legacy.portal as string };
+  if (legacy.portalUpstream !== undefined && (typeof legacy.portalUpstream !== 'string' || !HTTPS_ORIGIN.test(legacy.portalUpstream))) {
+    fail(env, 'legacy.portalUpstream', legacy.portalUpstream, 'must be absent or a bare https origin');
+  }
+  const legacyOrigins: LegacyOrigins = { landing: legacy.landing as string, portal: legacy.portal as string };
+  if (typeof legacy.portalUpstream === 'string') legacyOrigins.portalUpstream = legacy.portalUpstream;
   const underDomain = (host: string) => host === domain || host.endsWith(`.${domain}`);
   if (domain !== null && Object.values(legacyOrigins).some((origin) => underDomain(new URL(origin).hostname))) {
     fail(env, 'domain', domain, 'must differ from the legacy hosts');

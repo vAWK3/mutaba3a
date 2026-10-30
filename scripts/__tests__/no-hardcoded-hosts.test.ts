@@ -45,7 +45,12 @@ const hostPattern = (host: string) => new RegExp(`(?<![a-z0-9@-])${escape(host)}
 
 /** The legacy hosts the config names, plus any Mutaba3a Cloud Run or Netlify host (a new service URL must go through the config too). */
 function legacyPatterns(config: unknown): RegExp[] {
-  const hosts = Object.values(parseHostsConfig(config)).flatMap((env) => [new URL(env.legacy.landing).hostname, new URL(env.legacy.portal).hostname]);
+  const hosts = Object.values(parseHostsConfig(config)).flatMap((env) => [
+    new URL(env.legacy.landing).hostname,
+    new URL(env.legacy.portal).hostname,
+    // MUT-487 (AM11): the front door's upstream, once it differs from legacy.portal.
+    ...(env.legacy.portalUpstream ? [new URL(env.legacy.portalUpstream).hostname] : []),
+  ]);
   return [...new Set(hosts)].map(hostPattern).concat(/mutaba3a[a-z0-9-]*\.(?:a\.run\.app|netlify\.app)/i);
 }
 
@@ -84,6 +89,13 @@ describe('no hardcoded hosts (MUT-326)', () => {
     expect(hardcodedHosts('const ok = "https://example.a.run.app";', planted)).toEqual([]);
     expect(hardcodedHosts('const mail = "info@placeholder.example";', planted)).toEqual([]);
     expect(hardcodedHosts('const host = "mail.placeholder.example";', planted)).toHaveLength(1);
+  });
+
+  it('catches the front door\'s upstream host too (MUT-487, legacy.portalUpstream)', () => {
+    const planted = forbiddenPatterns({
+      production: { domain: 'placeholder.example', portalSubdomain: 'app', stage: 'live', legacy: { landing: 'https://old.example', portal: 'https://portal.old.example', portalUpstream: 'https://upstream.new.example' } },
+    });
+    expect(hardcodedHosts('const u = "https://upstream.new.example";', planted)).toHaveLength(1);
   });
 
   /** Every scanned file's hits, each file checked against the patterns `patternsFor` picks for it. */

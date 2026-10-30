@@ -156,7 +156,7 @@ run "legacy_forwarder_runs_the_forwarder_with_no_database_and_no_api_secrets" {
   variables {
     legacy_stack     = true
     legacy_forwarder = true
-    forward_to       = "https://mutaba3a-api-new-zf.a.run.app"
+    forward_to       = "https://service-new-zf.a.run.example"
     stripe_enabled   = true
   }
 
@@ -173,7 +173,7 @@ run "legacy_forwarder_runs_the_forwarder_with_no_database_and_no_api_secrets" {
   assert {
     condition = (
       toset([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.name]) == toset(["FORWARD_TO", "FORWARDER_TOKEN"])
-      && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "FORWARD_TO"]) == "https://mutaba3a-api-new-zf.a.run.app"
+      && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "FORWARD_TO"]) == "https://service-new-zf.a.run.example"
     )
     error_message = "Its only env: where to forward, and the forwarder token. No DATABASE_URL, admin token, pepper or provider secret."
   }
@@ -194,7 +194,7 @@ run "legacy_forwarder_needs_the_old_stack_and_an_origin" {
 
   variables {
     legacy_forwarder = true
-    forward_to       = "https://mutaba3a-api-new-zf.a.run.app"
+    forward_to       = "https://service-new-zf.a.run.example"
   }
 
   expect_failures = [google_cloud_run_v2_service.api]
@@ -206,7 +206,7 @@ run "legacy_forwarder_refuses_a_url_with_a_path" {
   variables {
     legacy_stack     = true
     legacy_forwarder = true
-    forward_to       = "https://mutaba3a-api-new-zf.a.run.app/v1"
+    forward_to       = "https://service-new-zf.a.run.example/v1"
   }
 
   expect_failures = [google_cloud_run_v2_service.api]

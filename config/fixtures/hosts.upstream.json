@@ -1,0 +1,13 @@
+{
+  "$comment": "MUT-487 (AM11): the Terraform frontdoor test reads this fixture: the Worker's upstream (legacy.portalUpstream) differs from the old portal host.",
+  "production": {
+    "domain": "placeholder.example",
+    "portalSubdomain": "app",
+    "stage": "live",
+    "legacy": {
+      "landing": "https://landing.example.test",
+      "portal": "https://portal.example.test",
+      "portalUpstream": "https://portal-new.example.test"
+    }
+  }
+}
