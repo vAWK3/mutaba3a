@@ -60,7 +60,7 @@ function billingOverview(coveredProfileIds: string[]) {
     subscription: null,
     canManage: false,
     trial: { startedAt: inDays(-20), endsAt: inDays(-6), lockAt: inDays(10) },
-    catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
+    catalog: { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } },
     countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
     coveredProfileIds,
   };
@@ -192,7 +192,7 @@ test('On Owed, a running trial is one quiet line: the days left, Add a card and 
           subscription: null,
           canManage: false,
           trial: { startedAt: new Date(Date.now() - 4 * DAY).toISOString(), endsAt: trialEnds, lockAt: new Date(Date.now() + 24 * DAY).toISOString() },
-          catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
+          catalog: { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } },
           countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
           coveredProfileIds: [],
         }),

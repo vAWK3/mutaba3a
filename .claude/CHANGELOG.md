@@ -48,6 +48,41 @@
 ### Technical
 - Tests: `routes-operator-account-list.test.ts` (new), the store contract's account list block (memory and Postgres, run against the test database), `store-guard.test.ts`, `routes-operator-{accounts,billing-firms}.test.ts` updated for the amendment; portal `OperatorConsoleMut527.test.tsx` (new), `featureNames.test.ts` (new), `OperatorAccountPage.test.tsx` updated. Release-QA: `qa/features/portal-selfservice/operator.yaml` (`account-find` rewritten; `account-search-arabic`, `own-feature`, `feature-name-arabic`, `you-panel`), specs in `qa/specs/portal-selfservice/operator.spec.ts`; `operatorAccount()` takes a display name.
 - TD-297 (the list scans `users`; accepted at this size).
+## [Unreleased] - 2026-10-31 — MUT-529: the Freelancer list price is ₪29 / $9 a month
+
+- Basel set the list price to ₪29 / $9 a month, ₪290 / $90 a year, VAT-exclusive (pricing program MUT-528, ADR-235, overriding ADR-180 §6's ₪49 / $16). The app reads prices from the Stripe catalog, so no product code changed.
+- QA: `qa/support/billing-live.mjs` `PRICES` moves the sandbox's four `freelancer_list_*` keys to 2900 / 29000 ILS and 900 / 9000 USD by lookup-key transfer; the stub catalogs in `qa/specs/portal/{billing,you}.spec.ts` and the amounts in `qa/specs/portal-live/billing.spec.ts` and `qa/features/portal-live/billing.yaml` follow.
+- Docs: pilot runbook 3b and SYSTEM_OVERVIEW name the new amounts. Live Stripe prices are an operator step.
+
+## [Unreleased] - 2026-10-31 — MUT-524: the privacy policy names europe-west1 (Belgium)
+
+- MTB3A moved from me-west1 to Google Cloud's europe-west1 region (Belgium) on 2026-10-30 (MUT-487, MUT-523, ADR-232). The privacy policy's hosted-accounts section now says records and daily backups are in europe-west1 (Belgium), and that technical logs may be stored outside europe-west1; "Last updated" is October 31, 2026, in English and Arabic (`src/lib/i18n/translations/{en,ar}/landing.json`). The old copy in me-west1 was deleted the same night, so no overlap wording is needed.
+- Tests: `PrivacyPolicyPage.test.tsx`, `qa/specs/web/legal.spec.ts` and `qa/features/web/legal.yaml` name europe-west1.
+
+## [Unreleased] - 2026-10-31 — The restore drill and pilot runbook follow the move to mtb3a-production (MUT-327, MUT-487/523)
+
+**Why:** after the move, production is `mtb3a-production` in `europe-west1`, owned by the company account in
+`deploy.env`. The drill is run by hand, not by make, so it acted as the machine's own gcloud account. And the
+runbook's setup still exported `malafat-production`, whose state bucket also lingers in `server/.env.prod` and in old
+shells, so a drill could have read the old project's state. Its first production run was never repeated after the
+2026-10-23 `--labels` stop.
+
+### Changed
+- `server/scripts/lib/gcp-identity.sh`: `deploy_env_value` (reads one key, never sources the file) and
+  `load_deploy_env_identity` (GCP_ACCOUNT / GCP_ADC_FILE from deploy.env when the shell sets neither).
+- `server/scripts/restore-drill.sh` loads them before `use_gcp_identity`. Its state bucket comes from the shell, else
+  deploy.env, else this checkout's `.terraform-<project>` state (the Makefile's order). It refuses
+  `<other project>-terraform-state`, and refuses `--project` = config/gcp.json's `legacyProject` after the cutover
+  (`LEGACY_STACK=1` overrides it; teardown is always allowed). `DEPLOY_ENV_FILE`, `GCP_CONFIG` and
+  `RESTORE_DRILL_TF_DIR` override the files for tests.
+- Pilot runbook: §0 exports `mtb3a-production`, `europe-west1`, its state bucket and the deploy.env identity; §4.1/§4.3
+  use `$GCP_REGION`, not `me-west1`; §8 says how the drill finds its account and state, and its run lines paste
+  cleanly (no `<placeholder>`). §5.2 gets a ⚠ for Basel and counsel: whether Israel's PPA report still applies now that the data is in Belgium (the
+  privacy policy already says so, MUT-524).
+
+### Technical
+- 10 tests in `server/src/scripts/__tests__/restore-drill.test.ts` (fake gcloud logs the account, fake terraform the
+  bucket).
 
 ## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
 

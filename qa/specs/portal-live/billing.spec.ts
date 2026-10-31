@@ -24,8 +24,8 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
   const drawer = await step('Open Billing from You › Account', async () => openBilling(page, person.personalId));
   await step('Read where I stand, the prices and the rules before anything else', async () => {
     await expect(drawer.getByRole('button', { name: 'Subscribe' })).toBeVisible();
-    await expect(drawer.getByText('₪49.00')).toBeVisible();
-    await expect(drawer.getByText('$16.00')).toBeVisible();
+    await expect(drawer.getByText('₪29.00')).toBeVisible();
+    await expect(drawer.getByText('$9.00')).toBeVisible();
     await expect(drawer.getByText('Prices exclude VAT; VAT is added where the law requires it.')).toBeVisible();
   });
   await step('Press Subscribe and choose Israel, for a business, monthly', async () => {
@@ -33,13 +33,13 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
     const form = page.getByRole('dialog', { name: 'Subscribe to Freelancer' });
     await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
     await form.getByRole('radio', { name: /For a business/ }).check();
-    await expect(form.getByText('₪49.00')).toBeVisible();
+    await expect(form.getByText('₪29.00')).toBeVisible();
     await expect(form.getByText(/It's in English; you'll come back here/)).toBeVisible();
   });
   await step('Continue to Stripe’s payment page', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
-    await expect(page.getByText(/49\.00/).first()).toBeVisible();
+    await expect(page.getByText(/29\.00/).first()).toBeVisible();
   });
   await step('Fill in the test card, an Israeli address and the business tax number', async () => {
     await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL', taxNumber: '516000000' });
@@ -69,12 +69,12 @@ test('Subscribe in dollars from the Emirates as a business with a tax ID', { tag
     await drawer.getByRole('combobox', { name: 'Billing address country' }).selectOption('AE');
     await drawer.getByRole('radio', { name: /For a business/ }).check();
     await drawer.getByRole('radio', { name: 'Yearly · 2 months free' }).click();
-    await expect(drawer.getByText('$160.00')).toBeVisible();
+    await expect(drawer.getByText('$90.00')).toBeVisible();
   });
   await step('Fill in Stripe’s page with the test card and a UAE TRN', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'AE', taxId: { type: 'ae_trn', value: '123456789012345' } });
-    await expect(page.getByText(/160\.00/).first()).toBeVisible();
+    await expect(page.getByText(/90\.00/).first()).toBeVisible();
   });
   await step('Pay (through Stripe’s API: its page blocks automated payment, TD-201)', async () => {
     await payCheckoutByApi(page, person, 'freelancer_list_yearly_usd');
@@ -97,13 +97,13 @@ test('A person in any country goes straight on to the card; a business still giv
     await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('JO');
     await expect(form.getByText('No tax number needed, in any country')).toBeVisible();
     await expect(form.getByText(/We can't sell to individuals/)).toHaveCount(0);
-    await expect(form.getByText('$16.00')).toBeVisible();
+    await expect(form.getByText('$9.00')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeEnabled();
   });
   await step('Continue as a person: Stripe’s page asks for no business tax number', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
-    await expect(page.getByText(/16\.00/).first()).toBeVisible();
+    await expect(page.getByText(/\$9\.00/).first()).toBeVisible();
     await expect(page.getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
   });
 });
@@ -223,15 +223,15 @@ test('A new signup lands on the trial step; adding a card keeps the trial and th
     const form = page.getByRole('dialog', { name: 'Subscribe to Freelancer' });
     await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
     await expect(form.getByRole('radio', { name: /For yourself/ })).toBeChecked();
-    await expect(form.getByText('₪49.00')).toBeVisible();
+    await expect(form.getByText('₪29.00')).toBeVisible();
     await expect(form.getByText(/Your free trial continues: the first charge is on /)).toBeVisible();
     await expect(form.getByText(/It's in English; you'll come back here/)).toBeVisible();
   });
-  await step('Continue to Stripe’s page: it shows the free days before the first ₪49.00', async () => {
+  await step('Continue to Stripe’s page: it shows the free days before the first ₪29.00', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
     await expect(page.getByText(/days? free|free trial|trial/i).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/49\.00/).first()).toBeVisible();
+    await expect(page.getByText(/29\.00/).first()).toBeVisible();
   });
   await step('Fill in the test card and an Israeli address (no business tax number for a person)', async () => {
     await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL' });
