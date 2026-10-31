@@ -12,12 +12,14 @@ import { createPortalRouter, type PortalRouter } from './router';
 import { SENTRY_ENABLED, startErrorReporting } from './observability/errorReporting';
 import { LastResortBoundary } from './observability/LastResortBoundary';
 import { takeLinkedLanguage } from '../lib/i18n/linkLanguage';
+import { telemetryOn } from '../lib/telemetry/pageTelemetry';
 
 /** Entry of the hosted portal build (`vite --mode hosted`, hosted-portal.md §2). */
 
 const started: { router?: PortalRouter } = {};
-// MUT-149: first, so a crash while the portal starts is held for Sentry (signed in only)
-startErrorReporting({ enabled: SENTRY_ENABLED, currentRouteId: () => started.router?.state.matches.at(-1)?.routeId });
+// MUT-149: first, so a crash while the portal starts is held for Sentry (signed in only), and only on the
+// production host (ADR-236): never the legacy run.app host, a local build or the dev server
+startErrorReporting({ enabled: SENTRY_ENABLED && telemetryOn('sentry'), currentRouteId: () => started.router?.state.matches.at(-1)?.routeId });
 
 const root = document.getElementById('root');
 if (!root) throw new Error('hosted.html has no #root');

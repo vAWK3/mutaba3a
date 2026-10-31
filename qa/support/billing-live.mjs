@@ -193,6 +193,9 @@ async function main() {
     env: {
       ...withoutAppAssociation(process.env),
       NODE_ENV: 'development',
+      // ADR-236: a QA API never reports, whatever the shell exports
+      SENTRY_ENABLED: 'false',
+      POSTHOG_ENABLED: 'false',
       PORT: String(API_PORT),
       // MUT-463: loopback only, so the committed admin token can't be used from the network.
       HOST: '127.0.0.1',
@@ -217,7 +220,8 @@ async function main() {
   // Its own Vite cache (support/qa.vite.ts, MUT-440): the portal app's server runs at the same time
   run('npx', ['vite', '--config', 'qa/support/qa.vite.ts', '--mode', 'hosted', '--port', String(PORTAL_PORT), '--strictPort'], {
     cwd: ROOT,
-    env: { ...process.env, QA_VITE_ROLE: 'portal-live', MUTABA3A_API_ORIGIN: API_ORIGIN, MUTABA3A_POSTHOG_KEY: 'phc_releaseQaDummyKeyNeverSent000000' },
+    // ADR-236: telemetry off; no portal-live spec reads analytics or crash reports
+    env: { ...process.env, QA_VITE_ROLE: 'portal-live', MUTABA3A_API_ORIGIN: API_ORIGIN, MUTABA3A_POSTHOG_KEY: 'phc_releaseQaDummyKeyNeverSent000000', SENTRY_ENABLED: 'false', POSTHOG_ENABLED: 'false' },
   });
 
   mkdirSync(path.join(ROOT, 'qa', '.state'), { recursive: true });

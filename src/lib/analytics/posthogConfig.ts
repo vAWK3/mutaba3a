@@ -1,6 +1,7 @@
 import type { PostHogConfig } from 'posthog-js';
 import { guardEvent, type AnalyticsCapture, type GuardContext } from './guard';
 import type { AnalyticsLocale } from './contract';
+import { pageTelemetryEnvironment } from '../telemetry/pageTelemetry';
 
 /**
  * PostHog Cloud EU, project "Mutaba3a" (ADR-090). Fixed rather than
@@ -60,15 +61,19 @@ const SURFACE_OPTIONS: Record<'landing' | 'portal' | 'portal-welcome', Partial<P
 
 /**
  * posthog-js `init` options for the landing or the portal. `context` is read on
- * every event, so a language switch reaches the next event's `locale`.
+ * every event, so a language switch reaches the next event's `locale`. Every
+ * event carries this page's `environment` (ADR-236).
  */
-export function posthogInitOptions(context: () => GuardContext): Partial<PostHogConfig> {
+export function posthogInitOptions(
+  context: () => Omit<GuardContext, 'environment'>,
+  environment: () => GuardContext['environment'] = pageTelemetryEnvironment,
+): Partial<PostHogConfig> {
   const surface = context().surface;
   if (surface !== 'landing' && surface !== 'portal') throw new Error(`posthog-js runs on the landing and the portal, not ${surface}`);
   return {
     api_host: POSTHOG_HOST,
     ...FEATURES_OFF,
     ...SURFACE_OPTIONS[context().cookieless ? 'portal-welcome' : surface],
-    before_send: (capture) => guardEvent(capture as AnalyticsCapture | null, context()) as typeof capture,
+    before_send: (capture) => guardEvent(capture as AnalyticsCapture | null, { ...context(), environment: environment() }) as typeof capture,
   };
 }

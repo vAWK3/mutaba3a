@@ -12,6 +12,7 @@ import { LANDING_SENTRY_ENABLED, startLandingErrorReporting } from "./pages/land
 import { LandingShell } from "./pages/landing/LandingShell";
 import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
+import { telemetryOn } from "./lib/telemetry/pageTelemetry";
 import "./components/ui/ErrorBoundary.css";
 
 const LandingPage = lazy(() => import("./pages/landing/LandingPage").then((m) => ({ default: m.LandingPage })));
@@ -19,8 +20,9 @@ const PrivacyPolicyPage = lazy(() => import("./pages/landing/PrivacyPolicyPage")
 const TermsPage = lazy(() => import("./pages/landing/TermsPage").then((m) => ({ default: m.TermsPage })));
 
 // The website's error reports (MUT-150, ADR-091), started before React renders
-// so a crash at start-up is kept (eng O5).
-startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED });
+// so a crash at start-up is kept (eng O5). Only on the production host (ADR-236): the same
+// build answers on the legacy Netlify host and on localhost previews, which send nothing.
+startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED && telemetryOn("sentry") });
 
 /**
  * The website is the landing page, the privacy policy and the terms. The free

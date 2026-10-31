@@ -8,6 +8,7 @@ tier: secondary
 paths:
   - src/hosted/observability/**
   - src/lib/observability/**
+  - src/lib/telemetry/**
   - src/hosted/components/focusOnMount.ts
 features:
   - id: crash-reported

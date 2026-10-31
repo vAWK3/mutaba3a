@@ -200,6 +200,20 @@ npm run dev
 npm run build
 ```
 
+### Telemetry is release-only (ADR-236)
+
+Sentry and PostHog send only from a production build served on the production host `config/hosts.json` names (the
+apex for the website, `app.<apex>` for the portal), and the API reports only when `NODE_ENV=production`. The dev
+server, deploy previews, the legacy Netlify and Cloud Run hosts, localhost previews, tests and release-QA send nothing.
+
+| Variable | Unset | `false` | `true` |
+|---|---|---|---|
+| `SENTRY_ENABLED` | the rule above | off, even in production | on anywhere, only to check the integration |
+| `POSTHOG_ENABLED` | the rule above | off, even in production | on anywhere, only to check the integration |
+
+`npm run dev*` and the release-QA config set both to `false`; production deploys leave them unset. A missing key or
+DSN is always off. Every event carries its `environment` (`production` or `development`). See `.env.example`.
+
 ---
 
 ## Data model (conceptual)

@@ -7,6 +7,7 @@ paths:
   - src/pages/landing/afterLoadIdle.ts
   - src/pages/landing/marketingPath.ts
   - src/lib/observability/**
+  - src/lib/telemetry/**
 features:
   - id: landing-crash-reported
     title: An error on the home page sends one report with the landing surface, the route, the language and no account (MUT-150)

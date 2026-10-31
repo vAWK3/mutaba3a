@@ -2918,3 +2918,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: one money rule, previewed by clients, held together by a shared case table (MUT-302)
 **Where**: `server/src/__tests__/fixtures/expense-vat-cases.json`, read by `server/src/expenses/__tests__/vat.test.ts` and `src/hosted/lib/__tests__/expenseVat.test.ts`; the phone pins golden rows from it inline.
 **Rule**: when a client must show a figure the server computes (and the portal can't import server code), the server stays the only writer and the client's preview is a port held to it by a case table generated from the server's own function. Regenerate the table from that function, never by hand, and have every port's test read it (or pin rows from it).
+
+## Pattern: telemetry starts only through its gate, decided twice (ADR-236)
+**Where**: `src/lib/telemetry/telemetryGate.ts` (pure; vite.config.ts and the page), `src/lib/telemetry/pageTelemetry.ts`, `server/src/observability/telemetry-gate.ts`.
+**Rule**: a new Sentry or PostHog start (or any other telemetry SDK) asks the gate, never a key alone. On the web the build decides first (a tool that is off is compiled out with its key) and the page decides again from its own host, because one build answers on several hosts. The overrides are `SENTRY_ENABLED` / `POSTHOG_ENABLED` in every app; dev and QA scripts set them false, never production deploys. Every event carries `environment`.

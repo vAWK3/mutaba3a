@@ -13,6 +13,14 @@ export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
  * reporting runs, and qa/support/sentry.ts answers every Sentry request, so nothing is ever sent.
  */
 export const QA_SENTRY_DSN = 'https://00000000000000000000000000000000@o4512029835526144.ingest.de.sentry.io/1';
+/**
+ * Release-only telemetry (ADR-236): a QA run sends nothing. `env.vars` turns both tools off for every process, the
+ * live APIs included. The three apps below that serve the dummy key and DSN force them back on (`true` = checking the
+ * integration), because their specs read what the code would send: qa/support/posthog.ts and sentry.ts answer every
+ * request to either service locally, and the dummy key and DSN are never a real project's.
+ */
+const TELEMETRY_OFF = { SENTRY_ENABLED: 'false', POSTHOG_ENABLED: 'false' };
+const TELEMETRY_CHECKED_LOCALLY = { SENTRY_ENABLED: 'true', POSTHOG_ENABLED: 'true' };
 
 // Heap cap for the QA dev servers. Node's default lets each one grow to ~4 GB, and a long recorded run
 // alongside Playwright and an iOS Simulator can push a laptop into swap until the disk fills (it happened
@@ -43,7 +51,7 @@ export default {
         'src/components/ui/{ErrorBoundary,Input}.*',
         'src/hooks/**',
         'src/lib/{appVersion,dates,goHosted,utils}.ts',
-        'src/lib/{analytics,i18n,theme}/**',
+        'src/lib/{analytics,i18n,telemetry,theme}/**',
         'src/styles/**',
         'src/assets/**',
         'public/**',
@@ -58,7 +66,7 @@ export default {
       // A dummy PostHog key (MUT-154): the landing's analytics runs, and qa/support/posthog.ts
       // answers every PostHog request locally, so nothing is ever sent.
       // MUT-150: the landing's error reports run on the same dummy DSN; every spec answers Sentry locally
-      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --port 5173 --strictPort`, env: { QA_VITE_ROLE: 'web', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN } },
+      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --port 5173 --strictPort`, env: { QA_VITE_ROLE: 'web', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_LANDING_SENTRY_DSN: QA_SENTRY_DSN, ...TELEMETRY_CHECKED_LOCALLY } },
       ready: 'http://localhost:5173',
       personas: {}, // no auth
     },
@@ -70,7 +78,7 @@ export default {
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       // The portal's own code, plus the shared token and font files it renders with (MUT-102)
       // MUT-368: the self-service screens are the portal-selfservice app's (they need a live API and its outbox).
-      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/lib/observability/**',
+      watch: ['src/hosted/**', 'hosted.html', 'src/styles/**', 'src/assets/fonts/**', 'src/components/malafat/**', 'src/lib/malafatSuggestions.ts', 'src/content/malafatLinks.ts', 'src/lib/observability/**', 'src/lib/telemetry/**',
         // MUT-445: the shared UI only the portal renders now that the free web app is retired
         'src/components/{expenses,filters,icons,ui}/**', 'src/lib/{dom,forms,motion,whatsNew}/**', 'src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts',
         '!src/components/ui/{ErrorBoundary,Input}.*', '!src/hosted/**/__tests__/**', '!src/**/__tests__/**', '!src/**/*.test.{ts,tsx}',
@@ -94,7 +102,7 @@ export default {
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
       attachURL: 'http://127.0.0.1:5175',
-      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --mode hosted`, env: { QA_VITE_ROLE: 'portal', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
+      start: { cmd: `${HEAP_CAPPED} npx vite --config qa/support/qa.vite.ts --mode hosted`, env: { QA_VITE_ROLE: 'portal', MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN, ...TELEMETRY_CHECKED_LOCALLY } },
       ready: 'http://127.0.0.1:5175',
       personas: {},
     },
@@ -231,7 +239,7 @@ export default {
       // on the loopback, each told the others' origins through MUTABA3A_CARRY_OVER. No API runs; specs answer /v1.
       baseURL: 'http://127.0.0.1:5188',
       attachURL: 'http://127.0.0.1:5188',
-      start: { cmd: `${HEAP_CAPPED} node qa/support/carry-over.mjs`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN } },
+      start: { cmd: `${HEAP_CAPPED} node qa/support/carry-over.mjs`, env: { MUTABA3A_POSTHOG_KEY: QA_POSTHOG_KEY, MUTABA3A_SENTRY_DSN: QA_SENTRY_DSN, ...TELEMETRY_CHECKED_LOCALLY } },
       ready: 'http://127.0.0.1:5188',
       personas: {},
     },
@@ -240,7 +248,8 @@ export default {
   env: {
     // Isolated checkout so a QA run never touches your working tree or dev server.
     worktree: { path: '.claude/worktrees/qa-release', copy: [], install: 'npm ci --prefer-offline' },
-    vars: {},
+    // ADR-236: nothing a QA run does reaches Sentry or PostHog (the apps above override this only with dummy keys)
+    vars: { ...TELEMETRY_OFF },
     up: [],
     down: [],
     check: [],

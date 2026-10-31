@@ -18,6 +18,13 @@
 
 ## Open Debt
 
+
+### TD-298: The legacy hosts send no telemetry while people still use them
+**Status**: Accepted (ADR-236, 2026-10-31)
+- **What:** the website build sends only on the apex and the portal only on `app.<apex>`. Until the legacy landing redirects and MUT-521 retires the run.app portal, a visitor or signed-in person on an old address sends no PostHog events and no Sentry reports.
+- **Why it's acceptable:** the legacy landing traffic was mostly single direct `/privacy` loads (likely store reviews or old links), and the carry-over moves people to the new portal address.
+- **Fix:** none needed once the redirect stage lands; if a real gap shows first, add the legacy host to `productionHosts` for that build only, tagged `environment: production`.
+
 ### TD-297: The operator's account list scans every user
 **Status**: Accepted (MUT-527, 2026-10-31; ADR-234)
 - **What:** `users.listForOperator` orders by `lastSignInAt DESC NULLS LAST, createdAt DESC, id DESC` and filters `q` with `ILIKE '%q%'` on the email and display name, with no index for either: Postgres reads the whole `users` table each time. Production has 13 accounts, and only operators call it.

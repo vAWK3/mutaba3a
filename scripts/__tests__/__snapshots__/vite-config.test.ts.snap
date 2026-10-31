@@ -30,6 +30,7 @@ exports[`vite.config > leaves the website build exactly as it was 1`] = `
     "__LANDING_SENTRY_RELEASE__": """",
     "__PORTAL_URL__": "<config/hosts.json portalOrigin>",
     "__POSTHOG_KEY__": """",
+    "__TELEMETRY__": "{"productionBuild":true,"sentry":"off","posthog":"off","productionHosts":["<config/hosts.json landing host>"]}",
   },
   "plugins": [
     "vite:react-babel",

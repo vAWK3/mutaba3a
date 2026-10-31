@@ -25,7 +25,12 @@ company org `barmajiyat-ltd`, which holds only `mutaba3a-…` projects for now (
 
 Only production builds may send.
 
-- **Web.** Only production builds get a DSN, so dev, QA and preview builds send nothing.
+- **Web.** Only production builds keep the DSN, and the page reports only on the production host
+  config/hosts.json names (ADR-236), so dev, QA, deploy previews, the legacy Netlify and Cloud Run
+  hosts and localhost previews send nothing. `SENTRY_ENABLED=false` turns a production build off;
+  `true` forces reports on, only to check the integration.
+- **API.** Reports only when `NODE_ENV=production` (operator scripts: `SENTRY_ENVIRONMENT`), so
+  the local API and every QA API send nothing; `SENTRY_ENABLED` overrides it the same way.
 - **Phone.** The phone is the exception: its `.env` also feeds `make run` (the Flutter
   Makefile passes `--dart-define-from-file=.env`), so a DSN placed there reaches debug
   sessions too. Therefore the phone starts Sentry only in release builds (`kReleaseMode`) with

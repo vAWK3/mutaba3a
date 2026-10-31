@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { POSTHOG_HOST, posthogInitOptions } from '../posthogConfig';
 import type { GuardContext } from '../guard';
 
-const ctx = (surface: GuardContext['surface']): (() => GuardContext) => () => ({ surface, appVersion: '1.2.3', locale: 'ar' });
+const ctx = (surface: GuardContext['surface']): (() => Omit<GuardContext, 'environment'>) => () => ({ surface, appVersion: '1.2.3', locale: 'ar' });
 
 describe('posthogInitOptions', () => {
   it('sends to PostHog EU only (ADR-090)', () => {
@@ -65,5 +65,13 @@ describe('posthogInitOptions', () => {
     expect(beforeSend({ uuid: 'u', event: 'not_in_contract', properties: {} })).toBeNull();
     locale = 'en';
     expect(beforeSend({ uuid: 'u', event: 'portal_opened', properties: {} })?.properties).toMatchObject({ surface: 'portal', locale: 'en' });
+  });
+
+  // ADR-236: tests run on localhost with no build gate, so the page's own environment is development
+  it("tags every event with this page's environment", () => {
+    const fromPage = posthogInitOptions(ctx('portal')).before_send as (cr: unknown) => { properties: Record<string, unknown> } | null;
+    expect(fromPage({ uuid: 'u', event: 'portal_opened', properties: {} })?.properties.environment).toBe('development');
+    const production = posthogInitOptions(ctx('landing'), () => 'production').before_send as (cr: unknown) => { properties: Record<string, unknown> } | null;
+    expect(production({ uuid: 'u', event: '$pageview', properties: {} })?.properties.environment).toBe('production');
   });
 });

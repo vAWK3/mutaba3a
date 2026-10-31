@@ -427,6 +427,13 @@ describe('loadConfig — Sentry (MUT-148, ADR-091)', () => {
     expect(() => loadConfig({ ...base, SENTRY_DSN: dsn })).toThrow(/SENTRY_DSN/);
   });
 
+  it('takes SENTRY_ENABLED as true or false only (ADR-236)', () => {
+    expect(loadConfig(base).SENTRY_ENABLED).toBeUndefined();
+    expect(loadConfig({ ...base, SENTRY_ENABLED: 'false' }).SENTRY_ENABLED).toBe('false');
+    expect(loadConfig({ ...base, SENTRY_ENABLED: 'true' }).SENTRY_ENABLED).toBe('true');
+    expect(() => loadConfig({ ...base, SENTRY_ENABLED: 'yes' })).toThrow(/SENTRY_ENABLED/);
+  });
+
   it('reports under NODE_ENV unless SENTRY_ENVIRONMENT names another environment', () => {
     expect(loadConfig({ ...base, NODE_ENV: 'production' }).SENTRY_ENVIRONMENT).toBe('production');
     expect(loadConfig({ ...base, NODE_ENV: 'production', SENTRY_ENVIRONMENT: 'operator' }).SENTRY_ENVIRONMENT).toBe('operator');

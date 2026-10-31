@@ -28,6 +28,28 @@
 
 ---
 
+
+## [Unreleased] - 2026-10-31 — Release-only telemetry (ADR-236)
+
+**Why:** a PostHog digest showed dev, QA and legacy-host traffic in production analytics: 38 of about 95 pageviews in a week came from `mutaba3a.netlify.app`, which serves the same production build. Basel's rule for every app: Sentry and PostHog send only from release builds on production hosts.
+
+### Added
+- `src/lib/telemetry/telemetryGate.ts` (pure: build mode per tool, host check, environment) and `pageTelemetry.ts` (reads `__TELEMETRY__` and the page's host).
+- `server/src/observability/telemetry-gate.ts`: `serverSentryEnabled` (production NODE_ENV, or SENTRY_ENABLED=true; never without a DSN).
+- `SENTRY_ENABLED` / `POSTHOG_ENABLED` overrides; server config takes `SENTRY_ENABLED` (true|false).
+- Analytics contract 2.5.0: shared property `environment` (production | development), stamped by the guard.
+
+### Changed
+- `vite.config.ts`: `isProductionBuild`, `telemetryGate`; `__POSTHOG_KEY__` and the Sentry DSNs are "" when a tool is off; `__TELEMETRY__` defined in both builds. A Netlify deploy preview's PostHog key is now compiled out too.
+- `src/lib/analytics/posthogKey.ts`: "" off the production host. `src/main.tsx`, `src/hosted/main.tsx`: Sentry starts only where `telemetryOn('sentry')`.
+- `server/src/index.ts`, `createScriptReporter`: Sentry through the gate; the boot warning says why reports are off.
+- `package.json` `dev*` and `server/package.json` `dev`: flags default to false. `qa/qa.config.mjs`: `env.vars` turns both off; web, portal and carry-over force them on with the dummy keys. `qa/support/{billing,selfservice}-live.mjs`: both off.
+- `.env.example`, `server/.env.example`, README, CLAUDE.md, `docs/analytics/README.md`.
+
+### Technical
+- Tests first: `telemetryGate.test.ts`, `pageTelemetry.test.ts`, `telemetry-gate.test.ts` (matrices of build × flag × key), plus vite-config, guard, posthogConfig, sentry-reporter, config and analytics-taxonomy cases.
+- Not changed: PostHog and Sentry project settings (suggested to Basel instead), the privacy policy (an environment label is not personal data).
+
 ## [Unreleased] - 2026-10-31 — MUT-319: a new expense opens in the profile's currency
 
 ### Fixed

@@ -4,6 +4,7 @@ import { SENTRY_EU_DSN } from '../config.js';
 import { NOOP_REPORTER, type ErrorReporter } from './reporter.js';
 import { SENTRY_RULES } from './sentry-rules.js';
 import { scrubEvent } from './sentry-scrub.js';
+import { parseTelemetryFlag, SENTRY_ENABLED_FLAG, serverSentryEnabled } from './telemetry-gate.js';
 
 /**
  * The only file that imports the Sentry SDK (ADR-091, MUT-148). `@sentry/node-core/light` runs without
@@ -12,7 +13,7 @@ import { scrubEvent } from './sentry-scrub.js';
 export type SentryTransportFactory = NonNullable<Parameters<typeof Sentry.init>[0]>['transport'];
 
 export interface SentryReporterOptions {
-  /** Unset = the no-op reporter: dev, tests and CI send nothing. */
+  /** Unset = the no-op reporter: dev, tests and CI send nothing. Callers pass it only when `serverSentryEnabled` (ADR-236). */
   dsn: string | undefined;
   environment: string;
   release: string;
@@ -55,9 +56,12 @@ export function serverPackageVersion(): string {
 export function createScriptReporter(env: NodeJS.ProcessEnv = process.env, transport?: SentryTransportFactory): ErrorReporter {
   const dsn = env.SENTRY_DSN;
   if (dsn !== undefined && !SENTRY_EU_DSN.test(dsn)) throw new Error('SENTRY_DSN must be an https DSN on the EU region (ingest.de.sentry.io)');
+  const environment = env.SENTRY_ENVIRONMENT ?? env.NODE_ENV ?? 'development';
+  // ADR-236: deploy.sh files these under SENTRY_ENVIRONMENT=production; anywhere else they send nothing unless forced
+  const enabled = serverSentryEnabled({ runtimeEnv: environment, flag: parseTelemetryFlag(SENTRY_ENABLED_FLAG, env[SENTRY_ENABLED_FLAG]), dsn });
   return createSentryReporter({
-    dsn,
-    environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV ?? 'development',
+    dsn: enabled ? dsn : undefined,
+    environment,
     release: apiRelease(serverPackageVersion(), env.SERVICE_VERSION ?? '0.0.0-dev'),
     ...(transport ? { transport } : {}),
   });

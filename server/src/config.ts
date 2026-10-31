@@ -198,6 +198,11 @@ const envSchema = z.object({
   /** The environment events are filed under. Unset = NODE_ENV. */
   SENTRY_ENVIRONMENT: z.string().min(1).max(64).optional(),
   /**
+   * ADR-236: release-only error reports. Unset = report only when NODE_ENV is production; `false` = never (local
+   * release builds, QA, e2e); `true` = report from any environment, only to check the integration.
+   */
+  SENTRY_ENABLED: z.enum(['true', 'false']).optional(),
+  /**
    * MUT-359 (ADR-159 §5): which transport sends mail. `noop` (default) sends nothing; `log` and `memory` are for
    * development and tests only (refused in production, D14); `resend` needs every RESEND_/MAIL_ value below.
    */

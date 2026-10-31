@@ -9,6 +9,7 @@ import { startServer } from './listen.js';
 import { createLogger } from './logger.js';
 import { shutdownAndFlush } from './observability/reporter.js';
 import { apiRelease, createSentryReporter, serverPackageVersion } from './observability/sentry-node.js';
+import { parseTelemetryFlag, SENTRY_ENABLED_FLAG, serverSentryEnabled } from './observability/telemetry-gate.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
 import { PrismaLedgerStore } from './repositories/prisma.js';
 import { GcsAttachmentStorage } from './attachments/storage.js';
@@ -43,8 +44,10 @@ import { webauthnConfigOf } from './auth/webauthn.js';
 const config = loadConfig();
 const logger = createLogger(config.LOG_LEVEL);
 // MUT-148 (ADR-091): first, so a crash while wiring the rest is reported too.
+// ADR-236: only a production API reports (never the dev server or the local API release-QA drives), unless SENTRY_ENABLED says otherwise.
+const sentryEnabled = serverSentryEnabled({ runtimeEnv: config.NODE_ENV, flag: parseTelemetryFlag(SENTRY_ENABLED_FLAG, config.SENTRY_ENABLED), dsn: config.SENTRY_DSN });
 const reporter = createSentryReporter({
-  dsn: config.SENTRY_DSN,
+  dsn: sentryEnabled ? config.SENTRY_DSN : undefined,
   environment: config.SENTRY_ENVIRONMENT,
   release: apiRelease(serverPackageVersion(), config.SERVICE_VERSION),
 });
@@ -254,7 +257,11 @@ if (config.EMAIL_DOMAIN_CHECKER === 'fixture') logger.info('EMAIL_DOMAIN_CHECKER
 if (!config.TURNSTILE_SECRET) logger.warn('TURNSTILE_SECRET is not set; signup and recovery fail their check (403 CHECK_FAILED)');
 if (!config.RESEND_WEBHOOK_SECRET) logger.warn('RESEND_WEBHOOK_SECRET is not set; the Resend webhook answers 503');
 if (!config.PORTAL_DIST_DIR) logger.warn('PORTAL_DIST_DIR is not set; serving API only, no hosted portal');
-if (!reporter.enabled) logger.warn('SENTRY_DSN is not set; errors are logged but not reported');
+if (!reporter.enabled) {
+  logger.warn(config.SENTRY_DSN
+    ? `error reports are off here (NODE_ENV=${config.NODE_ENV}, SENTRY_ENABLED=${config.SENTRY_ENABLED ?? 'unset'}); errors are logged but not reported`
+    : 'SENTRY_DSN is not set; errors are logged but not reported');
+}
 if (!webauthn) logger.info('WEBAUTHN_RP_ID is not set; passkey routes answer 404');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 

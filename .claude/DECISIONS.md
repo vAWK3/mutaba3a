@@ -6147,6 +6147,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Amendment (MUT-523, 2026-10-30):** the instance is in europe-west1, so decision 4's zone outage restores into another europe-west1 zone (pilot runbook §4.5; the region's zones are b, c and d), and decision 5's budget is **£25** on Barmajiyat Ltd's GBP billing account `01E433-999491-75ECBD`, its amount and currency from tfvars (ADR-232 amendment). The "Result" costs are re-estimated in GBP in INFRA.md §3; the billing export is still the proof.
 
+
 ## ADR-234: The Operator Console Lists Every Account, Switches Your Own Features, and Has Your Settings (MUT-527)
 
 **Status:** Accepted (Basel, 2026-10-31, MUT-527 scope and AC; the Your settings tab added the same day). Amends E10 (ADR-215 decision 2, ADR-216 decision 4; override log in ADR-216's amendment).
@@ -6183,3 +6184,21 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:** ₪49 / $16 (the old price; similar revenue per trial only if conversion holds at ₪49, with about 40% fewer payers); ₪39 / $12 (left no room under it for the founder price); ₪19 (margin still fine, but support time per payer would rival the price).
 
 **Amendment (MUT-530, Basel, 2026-10-31): founder prices.** The founder prices drop below the new list prices: **Freelancer ₪21 / $6 a month, ₪210 / $60 a year** (was ₪39 / $10) and **Firm ₪109 / $33 a month, ₪1,090 / $330 a year** (was ₪299 / $80; about the same 28% under the Firm list price ₪149 / $45 as Freelancer's under ₪29). Still locked 12 months, then the list price through the subscription schedule (ADR-160 D4); pilot firms pay the Freelancer founder price until firm books v1 ships. The prices live under `freelancer_founder_*` and `firm_founder_*` (product `mtb3a_firm`); Checkout sells only `freelancer_list_*` (`server/src/billing/checkout.ts`), so a founder price is never offered to anyone outside the pilot. Live had no subscriptions on 2026-10-31, so no pilot subscription moved and no notice was owed.
+
+## ADR-236: Release-Only Telemetry: Sentry and PostHog Send Only From a Production Build on a Production Host
+
+**Status:** Accepted (Basel, 2026-10-31: one rule for every Barmajiyat app, after a PostHog digest mixed dev, QA, demo and preview traffic into production analytics). No Jira ticket. Amends ADR-090 (the contract gains a fourth shared property) and ADR-091 (when Sentry starts).
+
+**Context:** keys decided everything before. One Netlify production build answers on `mtb3a.com` and on the legacy `mutaba3a.netlify.app`; PostHog showed 38 of about 95 pageviews in the last week from the legacy host (27 on `/privacy`). The PostHog key was baked into every Netlify context, the dev server started the SDKs whenever a key was in the shell, and the API reported from any NODE_ENV that had a DSN.
+
+**Decision:**
+1. **Web** (`src/lib/telemetry/telemetryGate.ts`, pure, imported by vite.config.ts and the page): each tool has a build mode. `off` (compiled out with its key) unless the build has a key and is a production build (`vite build` outside Netlify or in its production context) or is forced on. The page then sends only on the one production host `config/hosts.json` names for that build: the apex for the website, `app.<apex>` for the portal. The legacy Netlify and run.app hosts, deploy previews and localhost send nothing. `src/lib/telemetry/pageTelemetry.ts` reads the build's `__TELEMETRY__` and the page's host; `POSTHOG_KEY` is "" and Sentry doesn't start when it says no.
+2. **API** (`server/src/observability/telemetry-gate.ts`): Sentry only when NODE_ENV is production (the operator scripts: SENTRY_ENVIRONMENT, else NODE_ENV). The local API on :8787 and every QA API never report. The API sends nothing to PostHog.
+3. **Overrides, one per tool, the same names in every app:** `SENTRY_ENABLED` and `POSTHOG_ENABLED`. Unset = the rule. `false` = off even in production. `true` = on anywhere, only to check the integration. Any other value fails the build or the boot. A missing key or DSN is always off.
+4. **Dev and QA set false:** `npm run dev*` default both to false (server `dev`: SENTRY_ENABLED), and release-QA's `env.vars` turns both off for every process. The three QA apps that serve the dummy key and DSN (web, portal, carry-over) force them on, because their specs read what would be sent and `qa/support/{posthog,sentry}.ts` answer every request locally. Production deploys keep the default.
+5. **Every event is tagged:** Sentry already carried `environment`; PostHog now gets a shared `environment` property (`production` only for a production build on a production host, else `development`), stamped by the guard. Contract 2.5.0.
+6. **Bots:** posthog-js's own filter (known crawler UAs, `navigator.webdriver`, HeadlessChrome) stays on; nothing extra. The data can't say more: cookieless mode consumes the raw user agent and the guard strips `$browser` on the landing.
+
+**Consequences:** the legacy run.app portal (until MUT-521's redirect) and the legacy landing host send nothing, so a person still on an old address is invisible to both tools (TD-298). A local `vite build` keeps its keys but sends nothing from localhost; `test:bundles` still builds with the dummy landing DSN.
+
+**Alternatives considered:** a Netlify-context-only gate (misses the legacy host, which is the production deploy); filtering in PostHog (Basel decides UI settings; data would still be sent); a UA blocklist of our own (posthog-js already has one, and our QA runs as a browser on purpose).

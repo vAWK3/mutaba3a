@@ -29,6 +29,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.3.0': '6c6d5fd1fb03bd9e921047533f2cafb4c6bfca3e746e815452f4f7d3c26ac563',
   // MUT-513: portal_welcome_choice (portal only, cookieless, before sign-in).
   '2.4.0': 'b1053f7170dc14fdaa5bf66ab891a6dd2932c3c10f588c2187cc3f638754124d',
+  // ADR-236: the shared environment property (production | development), so a dev or preview build's events can be filtered.
+  '2.5.0': '7a3a3dad36914c664d29669fdc6bb5d628d9729b173f54f2c4d3bb443211a9bb',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -37,7 +39,7 @@ const FORBIDDEN_EMITTERS = ['server', 'web', 'desktop'];
 const PROPERTY_TYPES = ['enum', 'boolean', 'integer', 'currency', 'semver'];
 const CURRENCY_CODE = /^[A-Z]{3}$/;
 const POSTHOG_BUILT_INS = ['$pageview'];
-const SHARED_PROPERTIES = ['surface', 'app_version', 'locale'];
+const SHARED_PROPERTIES = ['surface', 'app_version', 'locale', 'environment'];
 /** `semver` is a version number, never a way to smuggle digits: only the build version may use it. */
 const SEMVER_PROPERTIES = ['app_version'];
 const CONTRACT_KEYS = ['version', 'currencies', 'sharedProperties', 'events'];
@@ -173,6 +175,7 @@ function validContract(): Contract {
       surface: { type: 'enum', values: [...SURFACES] },
       app_version: { type: 'semver' },
       locale: { type: 'enum', values: ['ar', 'en'] },
+      environment: { type: 'enum', values: ['production', 'development'] },
     },
     events: {
       income_recorded: {

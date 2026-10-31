@@ -4,6 +4,7 @@ title: Landing page visit counts (PostHog, cookieless)
 tier: secondary
 paths:
   - src/lib/analytics/**
+  - src/lib/telemetry/**
   - src/pages/landing/analytics/**
   - docs/analytics/events.json
 features:

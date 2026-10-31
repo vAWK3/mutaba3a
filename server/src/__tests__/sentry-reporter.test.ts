@@ -111,6 +111,22 @@ describe('createScriptReporter (pre-roll and post-roll, run by deploy.sh on the 
     await reporter.flush(1000);
     expect(sink.events[0]).toMatchObject({ environment: 'production', release: `mutaba3a-api@${serverPackageVersion()}+5119667b` });
   });
+
+  // ADR-236: release-only error reports
+  it('sends nothing outside production, even with a DSN', () => {
+    expect(createScriptReporter({ SENTRY_DSN: DSN })).toBe(NOOP_REPORTER);
+    expect(createScriptReporter({ SENTRY_DSN: DSN, NODE_ENV: 'development' })).toBe(NOOP_REPORTER);
+    expect(createScriptReporter({ SENTRY_DSN: DSN, SENTRY_ENVIRONMENT: 'staging' })).toBe(NOOP_REPORTER);
+  });
+
+  it('sends nothing in production with SENTRY_ENABLED=false, and sends anywhere with true', () => {
+    expect(createScriptReporter({ SENTRY_DSN: DSN, SENTRY_ENVIRONMENT: 'production', SENTRY_ENABLED: 'false' })).toBe(NOOP_REPORTER);
+    expect(createScriptReporter({ SENTRY_DSN: DSN, SENTRY_ENVIRONMENT: 'development', SENTRY_ENABLED: 'true' }, capturing().transport).enabled).toBe(true);
+  });
+
+  it('refuses a SENTRY_ENABLED that is not true or false', () => {
+    expect(() => createScriptReporter({ SENTRY_DSN: DSN, SENTRY_ENVIRONMENT: 'production', SENTRY_ENABLED: 'yes' })).toThrow(/SENTRY_ENABLED/);
+  });
 });
 
 describe('apiRelease', () => {

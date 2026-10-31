@@ -25,6 +25,8 @@ import configFn, {
   SENTRY_CHUNK,
   socialMetaTags,
   withPageMeta,
+  isProductionBuild,
+  telemetryGate,
 } from '../../vite.config';
 import { readFileSync } from 'node:fs';
 import {
@@ -49,8 +51,8 @@ import { SENTRY_INGEST_ORIGIN } from '../../server/src/observability/sentry-inge
 
 type ConfigFactory = (env: ConfigEnv) => UserConfig;
 
-function resolve(mode: string): UserConfig {
-  return (configFn as unknown as ConfigFactory)({ mode, command: 'build', isSsrBuild: false, isPreview: false });
+function resolve(mode: string, command: ConfigEnv['command'] = 'build'): UserConfig {
+  return (configFn as unknown as ConfigFactory)({ mode, command, isSsrBuild: false, isPreview: false });
 }
 
 function pluginNames(plugins: PluginOption[] | undefined): string[] {
@@ -69,10 +71,19 @@ function maskPortalUrl(define: UserConfig['define']) {
   return define?.__PORTAL_URL__ === JSON.stringify(HOSTS.portalOrigin) ? { __PORTAL_URL__: '<config/hosts.json portalOrigin>' } : {};
 }
 
+/** ADR-236: the gate names the landing host from config/hosts.json too; masked the same way. */
+function maskTelemetryHosts(define: UserConfig['define']) {
+  const raw = define?.__TELEMETRY__;
+  if (typeof raw !== 'string') return {};
+  const gate = JSON.parse(raw) as { productionHosts: string[] };
+  if (JSON.stringify(gate.productionHosts) !== JSON.stringify([new URL(HOSTS.landingOrigin).hostname])) return {};
+  return { __TELEMETRY__: JSON.stringify({ ...gate, productionHosts: ['<config/hosts.json landing host>'] }) };
+}
+
 function comparable(config: UserConfig) {
   return {
     ...config,
-    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define) },
+    define: { ...config.define, __APP_VERSION__: '<package.json version>', ...maskPortalUrl(config.define), ...maskTelemetryHosts(config.define) },
     plugins: pluginNames(config.plugins),
   };
 }
@@ -83,6 +94,8 @@ describe('vite.config', () => {
     // deploy.env/the shell may export a real MUTABA3A_POSTHOG_KEY (Makefile line 51, MUT-155)
     // for an actual release build; pin it so the snapshot never depends on that ambient state.
     vi.stubEnv('MUTABA3A_POSTHOG_KEY', '');
+    // ADR-236: and the telemetry overrides and Netlify context, which change the gate
+    for (const name of ['POSTHOG_ENABLED', 'SENTRY_ENABLED', 'CONTEXT', 'MUTABA3A_LANDING_SENTRY_DSN']) vi.stubEnv(name, '');
     try {
       expect(comparable(resolve('web'))).toMatchSnapshot();
     } finally {
@@ -447,6 +460,8 @@ describe('vite.config', () => {
 
     it('gives the web and hosted builds the key', () => {
       vi.stubEnv('MUTABA3A_POSTHOG_KEY', KEY);
+      vi.stubEnv('POSTHOG_ENABLED', '');
+      vi.stubEnv('CONTEXT', '');
       try {
         expect(resolve('web').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
         expect(resolve('hosted').define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
@@ -467,7 +482,7 @@ describe('vite.config', () => {
         vi.unstubAllEnvs();
       }
     };
-    const QUIET = { MUTABA3A_SENTRY_DSN: '', SENTRY_AUTH_TOKEN: '', MUTABA3A_SENTRY_RELEASE: '', MUTABA3A_SENTRY_ENVIRONMENT: '' };
+    const QUIET = { MUTABA3A_SENTRY_DSN: '', SENTRY_AUTH_TOKEN: '', MUTABA3A_SENTRY_RELEASE: '', MUTABA3A_SENTRY_ENVIRONMENT: '', SENTRY_ENABLED: '', CONTEXT: '' };
 
     it('pins the org ingest host on the EU region (D7)', () => {
       expect(SENTRY_INGEST_ORIGIN).toMatch(/^https:\/\/o\d+\.ingest\.de\.sentry\.io$/);
@@ -551,6 +566,7 @@ describe('vite.config', () => {
       SENTRY_AUTH_TOKEN: '',
       COMMIT_REF: '',
       CONTEXT: '',
+      SENTRY_ENABLED: '',
     };
     const withEnv = <T,>(env: Record<string, string>, run: () => T): T => {
       for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
@@ -641,6 +657,94 @@ describe('vite.config', () => {
       },
     );
 
+  });
+
+  describe('release-only telemetry (ADR-236)', () => {
+    const KEY = 'phc_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+    const HOST = new URL(SENTRY_INGEST_ORIGIN).host;
+    const DSN = `https://fedcba9876543210fedcba9876543210@${HOST}/4512250374062161`;
+    const KEYS = { sentry: DSN, posthog: KEY };
+    const QUIET = { MUTABA3A_POSTHOG_KEY: KEY, MUTABA3A_LANDING_SENTRY_DSN: DSN, MUTABA3A_SENTRY_DSN: DSN, SENTRY_AUTH_TOKEN: '', COMMIT_REF: '', CONTEXT: '', POSTHOG_ENABLED: '', SENTRY_ENABLED: '' };
+    const withEnv = <T,>(env: Record<string, string>, run: () => T): T => {
+      for (const [name, value] of Object.entries({ ...QUIET, ...env })) vi.stubEnv(name, value);
+      try {
+        return run();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    };
+    const gateOf = (config: UserConfig) => JSON.parse(String(config.define?.__TELEMETRY__)) as ReturnType<typeof telemetryGate>;
+
+    it('counts only `vite build` outside Netlify or in its production context as a production build', () => {
+      expect(isProductionBuild('build', {})).toBe(true);
+      expect(isProductionBuild('build', { CONTEXT: 'production' })).toBe(true);
+      expect(isProductionBuild('serve', {})).toBe(false);
+      for (const context of ['deploy-preview', 'branch-deploy', 'dev']) expect(isProductionBuild('build', { CONTEXT: context })).toBe(false);
+    });
+
+    it('names the production host of each build from config/hosts.json', () => {
+      expect(telemetryGate('web', 'build', {}, KEYS).productionHosts).toEqual([new URL(HOSTS.landingOrigin).hostname]);
+      expect(telemetryGate('hosted', 'build', {}, KEYS).productionHosts).toEqual([new URL(HOSTS.portalOrigin).hostname]);
+      expect(telemetryGate('web', 'build', {}, KEYS, { landingOrigin: 'https://example.test', portalOrigin: 'https://app.example.test' }).productionHosts).toEqual(['example.test']);
+    });
+
+    it.each(['web', 'hosted'])('keeps both tools in a %s production build, for the production host only', (mode) => {
+      withEnv({}, () => {
+        const config = resolve(mode);
+        expect(gateOf(config)).toMatchObject({ productionBuild: true, sentry: 'production', posthog: 'production' });
+        expect(config.define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
+      });
+    });
+
+    it.each(['web', 'hosted'])('compiles both tools out of the %s dev server: no key, no DSN', (mode) => {
+      withEnv({}, () => {
+        const config = resolve(mode, 'serve');
+        expect(gateOf(config)).toMatchObject({ productionBuild: false, sentry: 'off', posthog: 'off' });
+        expect(config.define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
+        expect(config.define?.[mode === 'web' ? '__LANDING_SENTRY_DSN__' : '__SENTRY_DSN__']).toBe(JSON.stringify(''));
+      });
+    });
+
+    it('compiles a Netlify deploy preview\'s PostHog key out', () => {
+      withEnv({ CONTEXT: 'deploy-preview' }, () => {
+        expect(resolve('web').define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
+      });
+    });
+
+    it.each(['web', 'hosted'])('turns each tool off in a %s production build with its flag false', (mode) => {
+      withEnv({ POSTHOG_ENABLED: 'false' }, () => {
+        const config = resolve(mode);
+        expect(gateOf(config)).toMatchObject({ posthog: 'off', sentry: 'production' });
+        expect(config.define?.__POSTHOG_KEY__).toBe(JSON.stringify(''));
+      });
+      withEnv({ SENTRY_ENABLED: 'false', SENTRY_AUTH_TOKEN: 'sntrys_test' }, () => {
+        const config = resolve(mode);
+        expect(gateOf(config)).toMatchObject({ posthog: 'production', sentry: 'off' });
+        expect(config.define?.[mode === 'web' ? '__LANDING_SENTRY_ENABLED__' : '__SENTRY_ENABLED__']).toBe('false');
+        expect(pluginNames(config.plugins)).not.toContain('sentry-vite-plugin');
+      });
+    });
+
+    it('forces a tool on in the dev server with its flag true, to check the integration', () => {
+      withEnv({ POSTHOG_ENABLED: 'true', SENTRY_ENABLED: 'true' }, () => {
+        const config = resolve('web', 'serve');
+        expect(gateOf(config)).toMatchObject({ posthog: 'forced', sentry: 'forced' });
+        expect(config.define?.__POSTHOG_KEY__).toBe(JSON.stringify(KEY));
+        expect(config.define?.__LANDING_SENTRY_ENABLED__).toBe('true');
+      });
+    });
+
+    it('stays off without a key or DSN, even forced', () => {
+      withEnv({ MUTABA3A_POSTHOG_KEY: '', MUTABA3A_SENTRY_DSN: '', POSTHOG_ENABLED: 'true', SENTRY_ENABLED: 'true' }, () => {
+        expect(gateOf(resolve('hosted'))).toMatchObject({ posthog: 'off', sentry: 'off' });
+      });
+    });
+
+    it('fails the build on a flag that is not true or false', () => {
+      withEnv({ POSTHOG_ENABLED: 'yes' }, () => {
+        expect(() => resolve('web')).toThrow(/POSTHOG_ENABLED must be true or false/);
+      });
+    });
   });
 
   describe('Netlify form twin (MUT-186)', () => {

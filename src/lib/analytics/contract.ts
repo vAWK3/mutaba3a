@@ -26,7 +26,7 @@ export interface EventSpec {
 export interface AnalyticsContract {
   version: string;
   currencies: string[];
-  sharedProperties: Record<'surface' | 'app_version' | 'locale', PropertySpec>;
+  sharedProperties: Record<'surface' | 'app_version' | 'locale' | 'environment', PropertySpec>;
   events: Record<string, EventSpec>;
 }
 

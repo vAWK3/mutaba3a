@@ -16,6 +16,7 @@ import {
 } from "./src/pages/landing/hostedRequest";
 import { HOSTED_OFFER_URL } from "./src/content/download-config";
 import { TERMS_MANIFEST_FILE, termsManifest } from "./src/content/legal/termsManifest";
+import { parseTelemetryFlag, TELEMETRY_FLAGS, telemetryBuildMode, type TelemetryGate, type TelemetryTool } from "./src/lib/telemetry/telemetryGate";
 
 /** Dev-only default for where `vite --mode hosted` proxies `/v1`; override with MUTABA3A_API_ORIGIN. */
 const DEFAULT_DEV_API_ORIGIN = "http://127.0.0.1:8787";
@@ -96,6 +97,31 @@ export function posthogKey(override: string | undefined): string {
     throw new Error("MUTABA3A_POSTHOG_KEY must be a PostHog project key (phc_ followed by at least 20 letters or digits)");
   }
   return override;
+}
+
+/** A production build (ADR-236): `vite build`, outside Netlify or in Netlify's production context, never a deploy preview. */
+export function isProductionBuild(command: "build" | "serve", env: NodeJS.ProcessEnv): boolean {
+  return command === "build" && (env.CONTEXT === undefined || env.CONTEXT === "" || env.CONTEXT === "production");
+}
+
+/**
+ * Release-only telemetry (ADR-236): each tool's mode for this build, from whether it is a production build, the
+ * tool's SENTRY_ENABLED / POSTHOG_ENABLED override and whether it has a key, plus the one host the page counts as
+ * production (config/hosts.json: the apex for the website, app.<apex> for the portal). The page reads it as
+ * `__TELEMETRY__` and checks its own host; a tool that is off here is also compiled out with its key.
+ */
+export function telemetryGate(
+  target: "web" | "hosted",
+  command: "build" | "serve",
+  env: NodeJS.ProcessEnv,
+  keys: Record<TelemetryTool, string>,
+  hosts: Pick<ResolvedHosts, "landingOrigin" | "portalOrigin"> = HOSTS,
+): TelemetryGate {
+  const productionBuild = isProductionBuild(command, env);
+  const mode = (tool: TelemetryTool) =>
+    telemetryBuildMode({ productionBuild, flag: parseTelemetryFlag(TELEMETRY_FLAGS[tool], env[TELEMETRY_FLAGS[tool]]), hasKey: keys[tool] !== "" });
+  const origin = target === "web" ? hosts.landingOrigin : hosts.portalOrigin;
+  return { productionBuild, sentry: mode("sentry"), posthog: mode("posthog"), productionHosts: [new URL(origin).hostname] };
 }
 
 /** Cloudflare's published always-pass Turnstile site key: the default outside production (MUT-368, MUT-197 D4). */
@@ -208,9 +234,8 @@ function sentrySourceMaps(target: SentryBuildTarget): { sourcemap: "hidden" | fa
   };
 }
 
-/** The hosted build's crash reporting (MUT-149 D3, D6): the defines and the source maps. */
-function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
-  const dsn = sentryDsn(env.MUTABA3A_SENTRY_DSN);
+/** The hosted build's crash reporting (MUT-149 D3, D6): the defines and the source maps. `dsn` is "" when the gate is off. */
+function hostedSentry(env: NodeJS.ProcessEnv, dsn: string): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
   const release = sentryRelease(env.MUTABA3A_SENTRY_RELEASE);
   const define = {
     __SENTRY_ENABLED__: JSON.stringify(dsn !== ""),
@@ -224,16 +249,14 @@ function hostedSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>;
 
 /**
  * The landing's error reports (MUT-150, ADR-091): the web build only, and only
- * with MUTABA3A_LANDING_SENTRY_DSN, in Netlify's production context (any other
- * Netlify context compiles it out); without one the gate folds away and no
- * SDK chunk is emitted. A Netlify production build with a DSN but no upload
- * token fails: readable stacks are part of the feature, not optional.
+ * with MUTABA3A_LANDING_SENTRY_DSN in a production build, which on Netlify is
+ * the production context only (review D4, ADR-236: a DSN set for every context
+ * by mistake must not send deploy previews' errors or spend the shared quota).
+ * `dsn` is "" when the gate is off: the gate folds away and no SDK chunk is
+ * emitted. A Netlify production build with a DSN but no upload token fails:
+ * readable stacks are part of the feature, not optional.
  */
-function landingSentry(env: NodeJS.ProcessEnv): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
-  // On Netlify only the production context reports (review D4): a DSN set for every context by mistake
-  // must not send deploy previews' errors to the production project or spend the shared quota
-  const reportingContext = env.CONTEXT === undefined || env.CONTEXT === "" || env.CONTEXT === "production";
-  const dsn = reportingContext ? sentryDsn(env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN") : "";
+function landingSentry(env: NodeJS.ProcessEnv, dsn: string): { define: Record<string, string>; sourcemap: "hidden" | false; plugins: PluginOption[] } {
   // Release and environment are read only by the SDK chunk, which a build without a DSN never emits
   const release = dsn ? landingSentryRelease(env.COMMIT_REF) : "";
   const define = {
@@ -555,7 +578,10 @@ export function scopeServerBufferShim(): Plugin {
  * proxy, like the API service will serve it in production.
  */
 function hostedConfig(command: "build" | "serve"): UserConfig {
-  const sentry = hostedSentry(process.env);
+  const configuredDsn = sentryDsn(process.env.MUTABA3A_SENTRY_DSN);
+  const configuredPosthogKey = posthogKey(process.env.MUTABA3A_POSTHOG_KEY);
+  const telemetry = telemetryGate("hosted", command, process.env, { sentry: configuredDsn, posthog: configuredPosthogKey });
+  const sentry = hostedSentry(process.env, telemetry.sentry === "off" ? "" : configuredDsn);
   return {
     base: "/",
     publicDir: "src/hosted/public",
@@ -596,8 +622,10 @@ function hostedConfig(command: "build" | "serve"): UserConfig {
       __HOSTED_OFFER_URL__: JSON.stringify(hostedOfferUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
       // The terms the setup page, the Updated-terms step and the account menu link to (MUT-324)
       __TERMS_URL__: JSON.stringify(termsUrl(process.env.MUTABA3A_PUBLIC_ORIGIN)),
-      // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off
-      __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
+      // Opt-in, anonymous usage counts (MUT-155, ADR-090); "" turns analytics off, and so does the gate (ADR-236)
+      __POSTHOG_KEY__: JSON.stringify(telemetry.posthog === "off" ? "" : configuredPosthogKey),
+      // Release-only telemetry (ADR-236): each tool's mode and the production host the page checks
+      __TELEMETRY__: JSON.stringify(telemetry),
       // The bot check on /signup and /recover (MUT-368); public, never the secret
       __TURNSTILE_SITE_KEY__: JSON.stringify(turnstileSiteKey(process.env.MUTABA3A_TURNSTILE_SITE_KEY)),
       // The passkey relying party (MUT-115); "" = no passkeys in this build
@@ -646,7 +674,10 @@ export default defineConfig(({ mode, command }) => {
 
   // The website: the landing page, the privacy policy and the terms. The free web app at /app and the
   // desktop apps are retired (MUT-445); public/sw.js removes the old app's service worker from browsers.
-  const sentry = landingSentry(process.env);
+  const configuredDsn = sentryDsn(process.env.MUTABA3A_LANDING_SENTRY_DSN, "MUTABA3A_LANDING_SENTRY_DSN");
+  const configuredPosthogKey = posthogKey(process.env.MUTABA3A_POSTHOG_KEY);
+  const telemetry = telemetryGate("web", command, process.env, { sentry: configuredDsn, posthog: configuredPosthogKey });
+  const sentry = landingSentry(process.env, telemetry.sentry === "off" ? "" : configuredDsn);
 
   return {
     base: "/",
@@ -654,8 +685,10 @@ export default defineConfig(({ mode, command }) => {
       __APP_VERSION__: JSON.stringify(appVersion(process.env.MUTABA3A_APP_VERSION)),
       // The portal origin the landing's sign-in and signup links open (MUT-187, MUT-369)
       __PORTAL_URL__: JSON.stringify(portalUrl(process.env.MUTABA3A_PORTAL_URL)),
-      // The landing's cookieless visit counts (MUT-154, ADR-090)
-      __POSTHOG_KEY__: JSON.stringify(posthogKey(process.env.MUTABA3A_POSTHOG_KEY)),
+      // The landing's cookieless visit counts (MUT-154, ADR-090), compiled out when the gate is off (ADR-236)
+      __POSTHOG_KEY__: JSON.stringify(telemetry.posthog === "off" ? "" : configuredPosthogKey),
+      // Release-only telemetry (ADR-236): each tool's mode and the production host the page checks
+      __TELEMETRY__: JSON.stringify(telemetry),
       // The landing's error reports (MUT-150)
       ...sentry.define,
     },

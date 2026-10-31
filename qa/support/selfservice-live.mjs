@@ -86,6 +86,8 @@ function buildPortal() {
   // No PostHog key and no Sentry DSN: nothing leaves the machine. No Turnstile key: Cloudflare's always-pass test key.
   const env = { ...process.env };
   for (const name of ['MUTABA3A_POSTHOG_KEY', 'MUTABA3A_SENTRY_DSN', 'SENTRY_AUTH_TOKEN', 'MUTABA3A_TURNSTILE_SITE_KEY']) delete env[name];
+  // ADR-236: and both tools forced off, so a key that slips in still sends nothing
+  Object.assign(env, { SENTRY_ENABLED: 'false', POSTHOG_ENABLED: 'false' });
   // MUT-115: passkeys on this origin (the portal offers them only on a host under its RP ID).
   env.MUTABA3A_PASSKEY_RP_ID = 'localhost';
   execFileSync('npx', ['vite', 'build', '--mode', 'hosted', '--outDir', DIST, '--emptyOutDir'], { cwd: ROOT, env, stdio: 'inherit' });
@@ -132,6 +134,9 @@ async function main() {
     env: {
       ...cleanEnv(process.env),
       NODE_ENV: 'development',
+      // ADR-236: a QA API never reports, whatever the shell exports
+      SENTRY_ENABLED: 'false',
+      POSTHOG_ENABLED: 'false',
       PORT: String(API_PORT),
       // MUT-463: loopback only, so the committed admin token can't be used from the network. The origin stays
       // localhost (the passkey RP ID); browsers and Node fall back from ::1 to 127.0.0.1.
