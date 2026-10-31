@@ -52,7 +52,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/CopyField.tsx': { ltr: 1 },
   'src/hosted/components/ConnectClaudeDrawer.tsx': { ltr: 1, auto: 2 },
   'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
-  'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 3, auto: 1 }, // MUT-461: the search field, a match's and a miss's address; the match's name
+  'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 1, auto: 2 }, // MUT-527: each row's address; the search field (an address or a name) and each row's name
   'src/hosted/pages/operator/OperatorAccountPage.tsx': { ltr: 1, auto: 2 }, // MUT-461: the account's address; its name and each profile's name
   'src/hosted/pages/operator/OperatorBillingSection.tsx': { ltr: 1, auto: 2 }, // MUT-462: the drawer's address; a grant's reason and the reason field
   'src/hosted/pages/operator/OperatorFirmsPage.tsx': { ltr: 2, auto: 2 }, // MUT-462: the asker's and each member's address; the profile's and a member's name

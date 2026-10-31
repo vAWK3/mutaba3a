@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,12 +26,15 @@ function drill(...args: string[]) {
   return drillWith({}, ...args);
 }
 
+// The developer's own deploy.env and config/gcp.json never reach a test unless it names its own.
+const NO_FILE = join(tmpdir(), 'restore-drill-no-such-file');
+
 function drillWith(env: Record<string, string>, ...args: string[]) {
   rmSync(touched, { force: true });
   // setsid: a new session with no controlling terminal, so a prompt can never block on the developer's keyboard.
   const run = spawnSync('perl', ['-MPOSIX', '-e', 'POSIX::setsid(); exec @ARGV', 'bash', SCRIPT, ...args], {
     encoding: 'utf8',
-    env: { PATH: `${bin}:/usr/bin:/bin`, HOME: bin, ...env },
+    env: { PATH: `${bin}:/usr/bin:/bin`, HOME: bin, DEPLOY_ENV_FILE: NO_FILE, GCP_CONFIG: NO_FILE, ...env },
     input: '',
   });
   return { status: run.status, out: run.stdout, err: run.stderr, touched: existsSync(touched) };
@@ -215,14 +218,146 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     expect(r.out).toContain('+ gcloud sql instances delete mutaba3a-pg-drill-20261020t180000-b --project=demo-project --quiet');
   });
 
+  /**
+   * Run by hand, not by make (MUT-487/523): the drill takes who it acts as and the state bucket from deploy.env,
+   * as make does, and refuses MTB3A's old project once the move is done. A fake gcloud logs the account each call
+   * runs as; a fake terraform logs the state bucket it was pointed at.
+   */
+  describe('project, identity and state bucket (MUT-487/523)', () => {
+    let dir: string;
+    let calls: string;
+
+    function setUp() {
+      dir = mkdtempSync(join(tmpdir(), 'restore-drill-env-'));
+      calls = join(dir, 'calls.log');
+      writeFileSync(
+        join(dir, 'gcloud'),
+        `#!/bin/bash\necho "gcloud $* ACCOUNT=\${CLOUDSDK_CORE_ACCOUNT:-}" >> "${calls}"\nexit 99\n`,
+      );
+      writeFileSync(
+        join(dir, 'terraform'),
+        `#!/bin/bash\necho "terraform $*" >> "${calls}"\n[ "$1" = output ] && printf mutaba3a-pg\nexit 0\n`,
+      );
+      for (const tool of ['gcloud', 'terraform']) chmodSync(join(dir, tool), 0o755);
+      writeFileSync(join(dir, 'adc.json'), '{}');
+      writeFileSync(
+        join(dir, 'gcp.json'),
+        JSON.stringify({ production: { project: 'new-project', legacyProject: 'old-project', cutover: 'done' } }),
+      );
+    }
+
+    /** `deployEnv`: that deploy.env's lines; `$ADC` in it, or in env, is a credentials file that exists. */
+    function run(opts: { env?: Record<string, string>; deployEnv?: string }, ...args: string[]) {
+      setUp();
+      const adc = join(dir, 'adc.json');
+      const env: Record<string, string> = {
+        PATH: `${dir}:${bin}:${dirname(process.execPath)}:/usr/bin:/bin`,
+        GCP_CONFIG: join(dir, 'gcp.json'),
+      };
+      if (opts.deployEnv !== undefined) {
+        env.DEPLOY_ENV_FILE = join(dir, 'deploy.env');
+        writeFileSync(env.DEPLOY_ENV_FILE, opts.deployEnv.replaceAll('$ADC', adc));
+      }
+      for (const [k, v] of Object.entries(opts.env ?? {})) env[k] = v.replaceAll('$ADC', adc);
+      const r = drillWith(env, ...args);
+      const log = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+      rmSync(dir, { recursive: true, force: true });
+      return { ...r, log };
+    }
+
+    const COMPANY = 'GCP_PROJECT_ID=new-project\nGCP_ACCOUNT=company@example.com\nGCP_ADC_FILE=$ADC\n';
+
+    it("acts as deploy.env's GCP_ACCOUNT when the shell sets none", () => {
+      const r = run({ deployEnv: COMPANY }, '--project', 'new-project', '--instance', 'mutaba3a-pg');
+      expect(r.log).toContain('ACCOUNT=company@example.com');
+    });
+
+    it('lets the shell win over deploy.env, as a make command line does', () => {
+      const r = run(
+        { deployEnv: COMPANY, env: { GCP_ACCOUNT: 'shell@example.com', GCP_ADC_FILE: '$ADC' } },
+        '--project', 'new-project', '--instance', 'mutaba3a-pg',
+      );
+      expect(r.log).toContain('ACCOUNT=shell@example.com');
+      expect(r.log).not.toContain('company@example.com');
+    });
+
+    it('runs on the machine defaults when deploy.env names no account', () => {
+      const r = run({ deployEnv: 'GCP_PROJECT_ID=new-project\n' }, '--project', 'new-project', '--instance', 'mutaba3a-pg');
+      expect(r.log).toMatch(/ACCOUNT=$/m);
+    });
+
+    it('reads the state bucket from deploy.env when the shell sets none', () => {
+      const r = run({ deployEnv: 'TF_STATE_BUCKET=new-project-terraform-state\n' }, '--project', 'new-project');
+      expect(r.log).toContain('-backend-config=bucket=new-project-terraform-state');
+    });
+
+    it("else from this checkout's terraform state for that project, as make does", () => {
+      const tfDir = mkdtempSync(join(tmpdir(), 'restore-drill-tfdir-'));
+      mkdirSync(join(tfDir, '.terraform-new-project'));
+      writeFileSync(
+        join(tfDir, '.terraform-new-project', 'terraform.tfstate'),
+        JSON.stringify({ backend: { type: 'gcs', config: { bucket: 'new-project-terraform-state', prefix: 'p' } } }, null, 2),
+      );
+      const r = run({ env: { RESTORE_DRILL_TF_DIR: tfDir } }, '--project', 'new-project');
+      rmSync(tfDir, { recursive: true, force: true });
+      expect(r.log).toContain('-backend-config=bucket=new-project-terraform-state');
+    });
+
+    it("refuses a state bucket that is another project's, before reading it", () => {
+      const r = run({ env: { TF_STATE_BUCKET: 'old-project-terraform-state' } }, '--project', 'new-project');
+      expect(r.status).not.toBe(0);
+      expect(r.err).toContain('old-project-terraform-state');
+      expect(r.err).toContain('new-project');
+      expect(r.log).not.toContain('terraform ');
+    });
+
+    it('refuses the old project once the move is done, naming the live one', () => {
+      const r = run({}, '--project', 'old-project', '--dry-run');
+      expect(r.status).not.toBe(0);
+      expect(r.err).toMatch(/old-project is MTB3A's old project.*new-project/);
+    });
+
+    it('drills the old project with LEGACY_STACK=1 (the 14-day overlap)', () => {
+      const r = run({ env: { LEGACY_STACK: '1' } }, '--project', 'old-project', '--dry-run');
+      expect(r.status, r.err).toBe(0);
+    });
+
+    it('still tears down drill instances in the old project', () => {
+      const r = run({}, 'teardown', '--project', 'old-project', '--name', 'mutaba3a-pg-drill-20261023t082326-b', '--dry-run');
+      expect(r.status, r.err).toBe(0);
+    });
+  });
+
   it('uses no flag that only gcloud alpha/beta has (the first production run stopped on --labels)', () => {
     const r = drill('--project', 'demo-project', '--dry-run');
     expect(r.status, r.err).toBe(0);
     expect(r.out).not.toMatch(/--(update-)?labels/);
   });
 
+  /**
+   * 2026-10-31, first run on mtb3a-production: the backup restore onto db-f1-micro outlasted gcloud's own wait, so
+   * gcloud said "failed" while the restore went on, and the teardown's delete then got 409 (an operation in
+   * progress). Long steps now start with --async and wait with no limit; teardown waits out running operations.
+   */
+  it('starts each long step without blocking and waits for it with no time limit', () => {
+    const r = drill('--project', 'demo-project', '--dry-run');
+    expect(r.status, r.err).toBe(0);
+    for (const step of [
+      /\+ gcloud sql instances create mutaba3a-pg-drill-\d{8}t\d{6}-b .* --async /,
+      /\+ gcloud sql backups restore <backup-id> .* --async /,
+      /\+ gcloud sql instances clone <active-instance> mutaba3a-pg-drill-\d{8}t\d{6}-p .* --async /,
+      /\+ gcloud sql instances patch mutaba3a-pg-drill-\d{8}t\d{6}-p .* --async /,
+    ]) {
+      expect(r.out).toMatch(step);
+    }
+    const waits = r.out.split('\n').filter((l) => l.startsWith('+ gcloud sql operations wait '));
+    expect(waits.length).toBeGreaterThanOrEqual(4);
+    for (const line of waits) expect(line).toContain('--project=demo-project --timeout=unlimited');
+  });
+
   describe('teardown of a named instance, against a fake gcloud', () => {
-    function teardownWhere(listed: string) {
+    /** `running`: the operation ids still running on the instance, one per line. */
+    function teardownWhere(listed: string, running = '') {
       const fakeBin = mkdtempSync(join(tmpdir(), 'restore-drill-teardown-'));
       const log = join(fakeBin, 'calls.log');
       writeFileSync(
@@ -232,7 +367,9 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
           `echo "gcloud $*" >> "${log}"`,
           'case "$*" in',
           `  "sql instances list"*) printf "%s" "${listed}" ;;`,
-          '  "sql instances delete"*) exit 0 ;;',
+          `  "sql operations list"*) printf "%s" "${running}" ;;`,
+          '  "sql operations wait"*) exit 0 ;;',
+          '  "sql instances delete"*) echo op-delete ;;',
           '  *) exit 99 ;;',
           'esac',
         ].join('\n') + '\n',
@@ -252,10 +389,22 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
       expect(r.calls).not.toContain('sql instances delete');
     });
 
-    it('deletes an instance that exists', () => {
+    it('deletes an instance that exists, and waits for the delete', () => {
       const r = teardownWhere('mutaba3a-pg-drill-20261023t082326-b');
       expect(r.status, r.err).toBe(0);
       expect(r.calls).toContain('sql instances delete mutaba3a-pg-drill-20261023t082326-b --project=demo-project --quiet');
+      expect(r.calls).toContain('sql operations wait op-delete --project=demo-project --timeout=unlimited');
+    });
+
+    it('waits out an operation still running on the instance before deleting it (the 409)', () => {
+      const r = teardownWhere('mutaba3a-pg-drill-20261023t082326-b', 'op-restore');
+      expect(r.status, r.err).toBe(0);
+      const calls = r.calls.split('\n');
+      const waited = calls.findIndex((l) => l.includes('sql operations wait op-restore --project=demo-project --timeout=unlimited'));
+      const deleted = calls.findIndex((l) => l.includes('sql instances delete'));
+      expect(waited).toBeGreaterThan(-1);
+      expect(deleted).toBeGreaterThan(waited);
+      expect(r.calls).toContain("sql operations list --instance=mutaba3a-pg-drill-20261023t082326-b --project=demo-project --filter=status!=DONE");
     });
   });
 

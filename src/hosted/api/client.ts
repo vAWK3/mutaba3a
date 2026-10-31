@@ -113,7 +113,9 @@ export type OperatorSignupReviewList = Schemas['OperatorSignupReviewList'];
 export type SignupReviewDecision = Schemas['SignupReviewDecision'];
 export type SignupReviewVerb = 'approve' | 'decline' | 'resend';
 /** MUT-461: the operator console's accounts (/v1/operator/accounts). */
-export type OperatorAccountSearch = Schemas['OperatorAccountSearch'];
+/** MUT-527: the list of every account (no `email`); the exact-email answer stays for other callers, unused here. */
+export type OperatorAccountList = Schemas['OperatorAccountList'];
+export type OperatorAccountListItem = Schemas['OperatorAccountListItem'];
 export type OperatorAccount = Schemas['OperatorAccount'];
 export type OperatorAccountView = Schemas['OperatorAccountView'];
 export type OperatorAccountStatusResponse = Schemas['OperatorAccountStatusResponse'];
@@ -283,6 +285,8 @@ const SIGN_IN_PATH = '/v1/sessions';
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
 /** MUT-460: the server's largest page (server/src/pagination.ts MAX_LIMIT). */
 const OPERATOR_LIST_LIMIT = 200;
+/** MUT-527: the account list's page (the server's default; at most 100). */
+const OPERATOR_ACCOUNTS_PAGE = 50;
 const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
 const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
@@ -523,7 +527,9 @@ export const api = {
   decideSignupReview: (userId: string, verb: SignupReviewVerb) =>
     request<SignupReviewDecision>('POST', `/v1/operator/signup-reviews/${encodeURIComponent(userId)}/${verb}`),
   /** MUT-461: an account by its exact email; no match is `account: null` (never a 404). */
-  operatorAccountSearch: (email: string, signal?: AbortSignal) => request<OperatorAccountSearch>('GET', '/v1/operator/accounts', { query: { email }, signal }),
+  /** MUT-527: one page of every account, newest sign-in first; `q` is any part of the email or name. */
+  operatorAccounts: (page: { q: string; cursor: string | null }, signal?: AbortSignal) =>
+    request<OperatorAccountList>('GET', '/v1/operator/accounts', { query: { q: page.q, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE }, signal }),
   /** MUT-461: one account as the operator sees it; 404 details.reason ACCOUNT_NOT_FOUND when it's gone. */
   operatorAccount: (userId: string, signal?: AbortSignal) => request<OperatorAccountView>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}`, { signal }),
   /** MUT-461: disable or enable an account; the answer says what the disable ended. 403 RECENT_SIGN_IN_REQUIRED wants a step-up. */

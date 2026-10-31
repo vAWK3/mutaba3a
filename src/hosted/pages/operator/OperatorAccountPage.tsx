@@ -28,7 +28,8 @@ import { OperatorFeaturesSection } from './OperatorFeaturesSection';
  *
  * Every action confirms in its row and goes through the operator step-up (OperatorStepUp.tsx). The reset link lives
  * only in this page's state: shown once, never in a toast, the URL or a query, and gone when the page is left (12A).
- * The operator's own account shows the rows inert with the reason (E10); the server refuses them regardless.
+ * MUT-527: the operator's own account shows one note at the top and no Access rows or Grant row (E10; the server
+ * refuses them regardless); its feature switches work, with the step-up (the E10 amendment).
  *
  * MUT-462 (5A): Billing (grants, the grant drawer) and Features (flag switches) follow Access, before the profiles.
  */
@@ -83,12 +84,33 @@ function AccountDetail({ account, stepUpUntil, grantOpen, onGrantOpen }: { accou
           {t(account.passkeyCount > 0 ? 'hosted.operator.accounts.passkeyYes' : 'hosted.operator.accounts.passkeyNo')}
         </p>
       </header>
+      {own && <OwnAccountNote />}
       <StatusBanner account={account} />
-      <AccessGroup account={account} stepUpUntil={stepUpUntil} own={own} />
+      {/* MUT-527: on your own account the Access actions are never available here (E10), so they aren't shown. */}
+      {!own && <AccessGroup account={account} stepUpUntil={stepUpUntil} />}
       <OperatorBillingSection account={account} stepUpUntil={stepUpUntil} own={own} grantOpen={grantOpen} onGrantOpen={onGrantOpen} />
-      <OperatorFeaturesSection account={account} stepUpUntil={stepUpUntil} own={own} />
+      <OperatorFeaturesSection account={account} stepUpUntil={stepUpUntil} />
       <ProfilesGroup account={account} />
     </div>
+  );
+}
+
+/**
+ * MUT-527: one note on the operator's own account, in place of the same line on every row: what isn't here, where it
+ * is, and that features are.
+ */
+function OwnAccountNote() {
+  const t = useT();
+  return (
+    <Banner
+      tone="info"
+      text={
+        <>
+          {t('hosted.operator.accounts.ownNote')}{' '}
+          <Link to="/you/account">{t('hosted.operator.accounts.ownLink')}</Link>
+        </>
+      }
+    />
   );
 }
 
@@ -127,7 +149,7 @@ function actionsFor(account: OperatorAccount): Action[] {
 }
 
 /** 4A: the Access group. One confirm open at a time, in the row it replaces; Cancel gives focus back to that row. */
-function AccessGroup({ account, stepUpUntil, own }: { account: OperatorAccount; stepUpUntil: string | null; own: boolean }) {
+function AccessGroup({ account, stepUpUntil }: { account: OperatorAccount; stepUpUntil: string | null }) {
   const t = useT();
   const tp = useTp();
   const showToast = useToast();
@@ -231,7 +253,7 @@ function AccessGroup({ account, stepUpUntil, own }: { account: OperatorAccount; 
             <ResetLink key={action} email={email} link={link} onDone={() => setLink(null)} />
           ) : (
             <div key={action} data-access-row={action}>
-              <RowButton label={rows[action].label} sub={own ? t('hosted.operator.accounts.own') : rows[action].sub} inert={own} tone={rows[action].tone} onClick={() => ask(action)} />
+              <RowButton label={rows[action].label} sub={rows[action].sub} tone={rows[action].tone} onClick={() => ask(action)} />
             </div>
           ),
         )}

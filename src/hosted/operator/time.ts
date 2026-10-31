@@ -17,6 +17,11 @@ export function instantText(iso: string, language: Language): string {
   return new Intl.DateTimeFormat(latn(language), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 }
 
+/** MUT-527: a time today ("01:12"), for the step-up window's end. */
+export function clockText(iso: string, language: Language): string {
+  return new Intl.DateTimeFormat(latn(language), { timeStyle: 'short' }).format(new Date(iso));
+}
+
 export function dayText(iso: string, language: Language): string {
   return new Intl.DateTimeFormat(latn(language), { dateStyle: 'medium' }).format(new Date(iso));
 }

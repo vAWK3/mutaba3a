@@ -31,15 +31,21 @@ features:
       - Picking it fills Vendor and prefills Category with Travel
       - POST /v1/expenses gets vendor Yellow Cab and the Travel category
   - id: create
-    title: Record an expense; the drawer says what is missing, takes a currency's own decimals (JOD 3), and the expense is listed and filterable
+    title: Record an expense; the drawer opens in the profile's currency, says what is missing, takes a currency's own decimals (JOD 3), and the expense is listed and filterable
     tier: secondary
+    tickets: [MUT-319]
     steps:
       - Open Expenses and choose Record expense
-      - Save it empty, then with 12.345 in USD
+      - Save it empty, then with 12.345 in ILS
       - Switch to JOD, add a title, vendor and client, and save
       - Filter by another category, then Clear filters
+      - Record another, pick Client 1 and Add matter; then again after switching the drawer to EUR first
+      - Open the JOD expense
     expect:
-      - The date defaults to today in the profile's zone; empty Save shows "Enter a valid amount" and "Required"; 12.345 is refused in USD
+      - Record expense opens in the profile's currency (ILS on the stub profile, MUT-319)
+      - Add matter makes the matter in ILS, or in EUR when the drawer was switched first
+      - The JOD expense's edit drawer still shows JOD
+      - The date defaults to today in the profile's zone; empty Save shows "Enter a valid amount" and "Required"; 12.345 is refused in ILS
       - POST /v1/expenses gets the JOD expense with an Idempotency-Key
       - The row shows its category, client and amount, and "Saved" is announced
       - The category filter sends categoryId and says "Nothing matches these filters." until cleared

@@ -28,6 +28,7 @@
 
 ---
 
+
 ## [Unreleased] - 2026-10-31 — Release-only telemetry (ADR-236)
 
 **Why:** a PostHog digest showed dev, QA and legacy-host traffic in production analytics: 38 of about 95 pageviews in a week came from `mutaba3a.netlify.app`, which serves the same production build. Basel's rule for every app: Sentry and PostHog send only from release builds on production hosts.
@@ -48,6 +49,97 @@
 ### Technical
 - Tests first: `telemetryGate.test.ts`, `pageTelemetry.test.ts`, `telemetry-gate.test.ts` (matrices of build × flag × key), plus vite-config, guard, posthogConfig, sentry-reporter, config and analytics-taxonomy cases.
 - Not changed: PostHog and Sentry project settings (suggested to Basel instead), the privacy policy (an environment label is not personal data).
+
+## [Unreleased] - 2026-10-31 — MUT-319: a new expense opens in the profile's currency
+
+### Fixed
+- The portal's expense drawer opened every new expense in USD (`emptyExpenseValues` hardcodes it, and the drawer never got the profile's currency), so since MUT-318 «Add matter» from its matter picker made USD matters on an ILS profile. `ExpenseDrawer` now takes `defaultCurrency` (ExpensesList passes `profile.defaultCurrency`) and a new expense opens in it when the drawer offers it, else USD, as the income drawer does. Edit keeps the expense's own currency. Signed in and signed out alike (same page). Files: `src/hosted/components/ExpenseDrawer.tsx`, `src/hosted/pages/views/ExpensesList.tsx`; tests in `ExpenseDrawer.test.tsx`, release-QA steps in `qa/specs/portal/expenses.spec.ts`.
+
+## [Unreleased] - 2026-10-31 — The restore drill waits for slow Cloud SQL steps (MUT-327)
+
+**Why:** the first drill on `mtb3a-production` stopped early. The backup restore onto the `db-f1-micro` copy
+outlasted gcloud's own wait, so gcloud printed "failed" while the restore went on. The drill's teardown then
+couldn't delete the copy (409, an operation in progress), which left a paid instance running until it was cleaned up
+by hand.
+
+### Fixed
+- `server/scripts/restore-drill.sh`: `mutate_wait` replaces `mutate`. It keeps the scratch-name check, starts the
+  step with `--async`, and waits with `gcloud sql operations wait … --timeout=unlimited`. When gcloud names no
+  operation, it waits for whatever is still running on the target. Used for create, backup restore, clone, patch
+  and delete.
+- Teardown, and the drill's own cleanup, wait out an operation still running on a copy before deleting it.
+- Runbook §8 says how long steps are waited for; §9 records the run.
+
+### Technical
+- 3 tests in `server/src/scripts/__tests__/restore-drill.test.ts`: every long step is async and waited for with no
+  limit; teardown waits for the delete; teardown waits out a running operation before deleting (fake gcloud).
+
+## [Unreleased] - 2026-10-31 — The pilot offer names europe-west1 (Belgium)
+
+- `docs/commercial/pilot-offer.md` (en + ar) still said the data lives in Google Cloud in Tel Aviv (`me-west1`). Since the move on 2026-10-30 (MUT-487, MUT-523, ADR-232) it lives in `europe-west1` (Belgium), as the privacy policy already says (MUT-524). The offer now says so, with the 14-day backup retention in both languages.
+
+## [Unreleased] - 2026-10-31 — MUT-530: founder prices ₪21 / $6 (Freelancer) and ₪109 / $33 (Firm)
+
+- Basel lowered the founder prices below the new list prices (pricing program MUT-528, ADR-235 amendment): Freelancer ₪21 / $6 a month, ₪210 / $60 a year (was ₪39 / $10); Firm ₪109 / $33 a month, ₪1,090 / $330 a year (was ₪299 / $80). Still locked 12 months, then list.
+- `docs/commercial/pilot-offer.md` (en + ar) and the reply template `hosted-request-reply.md` (en + ar) quote the new prices; the offer also names the list prices after the lock and says the founder price is never shown outside the pilot. The pilot runbook names the founder amounts and the live Firm catalog.
+- `qa/support/billing-live.mjs` keeps the sandbox's four `freelancer_founder_*` prices at the live amounts. Live Stripe had no subscriptions, so nothing moved.
+
+## [Unreleased] - 2026-10-31 — MUT-527: the operator console lists every account, switches your own features, and has Your settings (ADR-234, E10 amended)
+
+**Why:** Basel's screenshot of his own account: every row greyed out with the same line pointing to You › Account, which has no feature switches; `receipt_reading` showed its raw key; accounts could only be found by exact email.
+
+### Added
+- Server: `GET /v1/operator/accounts` without `email` lists every account (newest sign-in first; `limit`, `cursor`, `q`); `OperatorAccountListQuery`, `OperatorAccountList`, `OperatorAccountListItem`; `server/src/operator/account-list.ts` (order, cursor, query); `users.listForOperator` in the port, memory and Prisma stores (store guard `operator`); `operatorSince` and `passkeyLastUsedAt` on `OperatorAccount`. API 1.93.0-mut527. No migration.
+- Portal: `OperatorYouPage` (`/operator/you`, the Your settings tab); `src/hosted/operator/featureNames.ts` (`humanizeFeature`, `useFeatureText`); `useStepUpUntil`; `clockText`; `useOperatorAccountList`; `api.operatorAccounts`; the no-passkey note in `OperatorLayout`; i18n `hosted.operator.{tabs.you, you.*, noPasskey.*, features.receipt_reading.*}` and the list's `accounts.*` strings (ar + en).
+
+### Changed
+- `PUT`/`DELETE /v1/operator/accounts/{userId}/features/{feature}` allow the operator's own account (step-up and audit as for anyone); disable, enable, sign out everywhere, the setup link and billing grants on your own account stay 409 `OWN_ACCOUNT`.
+- `OperatorAccountsPage`: the list with search as you type and Load more, replacing the exact-email search (`?q=`; `?email=` links still land). `OperatorAccountPage`: one own-account note, Access hidden; `OperatorBillingSection`: no Grant row on your own account; `OperatorFeaturesSection`: no `own` prop, switches live on your own account, humanised names for unnamed flags, optional group `label`.
+- `RowNavLink` takes `search` (deep links such as `{ passkeys: true }`).
+- Removed i18n `hosted.operator.accounts.{search, resultsLabel, own}`.
+
+### Fixed
+- `routes-receipt-reading.test.ts` flake: the "1540" checks could match a random UUID or pino's `time`/`pid`; `scrubIds` blanks them first.
+
+### Technical
+- Tests: `routes-operator-account-list.test.ts` (new), the store contract's account list block (memory and Postgres, run against the test database), `store-guard.test.ts`, `routes-operator-{accounts,billing-firms}.test.ts` updated for the amendment; portal `OperatorConsoleMut527.test.tsx` (new), `featureNames.test.ts` (new), `OperatorAccountPage.test.tsx` updated. Release-QA: `qa/features/portal-selfservice/operator.yaml` (`account-find` rewritten; `account-search-arabic`, `own-feature`, `feature-name-arabic`, `you-panel`), specs in `qa/specs/portal-selfservice/operator.spec.ts`; `operatorAccount()` takes a display name.
+- TD-297 (the list scans `users`; accepted at this size).
+
+## [Unreleased] - 2026-10-31 — MUT-529: the Freelancer list price is ₪29 / $9 a month
+
+- Basel set the list price to ₪29 / $9 a month, ₪290 / $90 a year, VAT-exclusive (pricing program MUT-528, ADR-235, overriding ADR-180 §6's ₪49 / $16). The app reads prices from the Stripe catalog, so no product code changed.
+- QA: `qa/support/billing-live.mjs` `PRICES` moves the sandbox's four `freelancer_list_*` keys to 2900 / 29000 ILS and 900 / 9000 USD by lookup-key transfer; the stub catalogs in `qa/specs/portal/{billing,you}.spec.ts` and the amounts in `qa/specs/portal-live/billing.spec.ts` and `qa/features/portal-live/billing.yaml` follow.
+- Docs: pilot runbook 3b and SYSTEM_OVERVIEW name the new amounts. Live Stripe prices are an operator step.
+
+## [Unreleased] - 2026-10-31 — MUT-524: the privacy policy names europe-west1 (Belgium)
+
+- MTB3A moved from me-west1 to Google Cloud's europe-west1 region (Belgium) on 2026-10-30 (MUT-487, MUT-523, ADR-232). The privacy policy's hosted-accounts section now says records and daily backups are in europe-west1 (Belgium), and that technical logs may be stored outside europe-west1; "Last updated" is October 31, 2026, in English and Arabic (`src/lib/i18n/translations/{en,ar}/landing.json`). The old copy in me-west1 was deleted the same night, so no overlap wording is needed.
+- Tests: `PrivacyPolicyPage.test.tsx`, `qa/specs/web/legal.spec.ts` and `qa/features/web/legal.yaml` name europe-west1.
+
+## [Unreleased] - 2026-10-31 — The restore drill and pilot runbook follow the move to mtb3a-production (MUT-327, MUT-487/523)
+
+**Why:** after the move, production is `mtb3a-production` in `europe-west1`, owned by the company account in
+`deploy.env`. The drill is run by hand, not by make, so it acted as the machine's own gcloud account. And the
+runbook's setup still exported `malafat-production`, whose state bucket also lingers in `server/.env.prod` and in old
+shells, so a drill could have read the old project's state. Its first production run was never repeated after the
+2026-10-23 `--labels` stop.
+
+### Changed
+- `server/scripts/lib/gcp-identity.sh`: `deploy_env_value` (reads one key, never sources the file) and
+  `load_deploy_env_identity` (GCP_ACCOUNT / GCP_ADC_FILE from deploy.env when the shell sets neither).
+- `server/scripts/restore-drill.sh` loads them before `use_gcp_identity`. Its state bucket comes from the shell, else
+  deploy.env, else this checkout's `.terraform-<project>` state (the Makefile's order). It refuses
+  `<other project>-terraform-state`, and refuses `--project` = config/gcp.json's `legacyProject` after the cutover
+  (`LEGACY_STACK=1` overrides it; teardown is always allowed). `DEPLOY_ENV_FILE`, `GCP_CONFIG` and
+  `RESTORE_DRILL_TF_DIR` override the files for tests.
+- Pilot runbook: §0 exports `mtb3a-production`, `europe-west1`, its state bucket and the deploy.env identity; §4.1/§4.3
+  use `$GCP_REGION`, not `me-west1`; §8 says how the drill finds its account and state, and its run lines paste
+  cleanly (no `<placeholder>`). §5.2 gets a ⚠ for Basel and counsel: whether Israel's PPA report still applies now that the data is in Belgium (the
+  privacy policy already says so, MUT-524).
+
+### Technical
+- 10 tests in `server/src/scripts/__tests__/restore-drill.test.ts` (fake gcloud logs the account, fake terraform the
+  bucket).
 
 ## [Unreleased] - 2026-10-30 — MUT-523: the move lands in europe-west1 on Barmajiyat Ltd's own billing account (ADR-232 amended)
 

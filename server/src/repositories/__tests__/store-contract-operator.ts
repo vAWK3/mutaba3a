@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AuditEventInput, CreateUserInput, LedgerStore } from '../ports.js';
+import type { AuditEventInput, CreateUserInput, LedgerStore, OperatorAccountCursor } from '../ports.js';
 
 /**
  * MUT-459 storage contract (ADR-212): the operator mark on a person, a session's passkey step-up, and the step-up
@@ -157,6 +157,79 @@ export function describeLedgerStoreOperatorContract(name: string, makeStore: () 
       await store.sessions.markStepUp(s.id, at(2));
       await store.users.changePassword({ userId: user.id, passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3', verifiedPasswordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', exceptSessionId: s.id, at: at(3), audit: [] });
       expect(await store.sessions.findByDigest(s.tokenDigest)).toMatchObject({ stepUpAt: null, revokedAt: null });
+    });
+  });
+
+  /**
+   * MUT-527: the operator's list of every account, newest sign-in first (never signed in last), then newest created,
+   * then id. Users are not scoped, so on a shared database each case filters by its own unique marker (`q`).
+   */
+  describe(`${name} LedgerStore operator account list (MUT-527)`, () => {
+    const marked = (marker: string, local: string, displayName = 'Basel Sader', minute = 0): CreateUserInput => ({
+      ...userInput(),
+      email: `${local}-${marker}@studio.ps`,
+      displayName,
+      at: at(minute),
+    });
+
+    it('orders by last sign-in (never last), then newest created, and carries the features that are on', async () => {
+      const store = await makeStore();
+      const marker = unique();
+      const never = (await store.users.create(marked(marker, 'never', 'Never', 1))).user;
+      const neverNewer = (await store.users.create(marked(marker, 'never-newer', 'Never newer', 2))).user;
+      const early = (await store.users.create(marked(marker, 'early', 'Early', 3))).user;
+      const late = (await store.users.create(marked(marker, 'late', 'Late', 4))).user;
+      await store.users.recordSignIn(early.id, at(10));
+      await store.users.recordSignIn(late.id, at(20));
+      await store.features.grant({ userId: late.id, feature: 'receipt_reading', grantedBy: 'admin', at: at(5), audit: [] });
+      await store.features.grant({ userId: late.id, feature: 'agent_access', grantedBy: 'admin', at: at(5), audit: [] });
+      await store.features.grant({ userId: early.id, feature: 'agent_access', grantedBy: 'admin', at: at(5), audit: [] });
+      await store.features.revoke({ userId: early.id, feature: 'agent_access', at: at(6), audit: [] });
+
+      const page = await store.users.listForOperator({ q: marker, limit: 10, cursor: null });
+      expect(page.items.map((i) => i.user.id)).toEqual([late.id, early.id, neverNewer.id, never.id]);
+      expect(page.items.map((i) => i.features)).toEqual([['agent_access', 'receipt_reading'], [], [], []]);
+      expect(page.items[0]!.user).toMatchObject({ email: `late-${marker}@studio.ps`, lastSignInAt: at(20), operatorAt: null });
+      expect(page.nextCursor).toBeNull();
+    });
+
+    it('pages with a cursor across signed-in and never-signed-in rows, each row once', async () => {
+      const store = await makeStore();
+      const marker = unique();
+      const ids: string[] = [];
+      for (let i = 0; i < 5; i++) ids.push((await store.users.create(marked(marker, `p${i}`, `P${i}`, i))).user.id);
+      await store.users.recordSignIn(ids[0]!, at(30));
+      await store.users.recordSignIn(ids[1]!, at(30));
+      const seen: string[] = [];
+      let cursor: OperatorAccountCursor | null = null;
+      let pages = 0;
+      do {
+        const page: Awaited<ReturnType<LedgerStore['users']['listForOperator']>> = await store.users.listForOperator({ q: marker, limit: 2, cursor });
+        expect(page.items.length).toBeLessThanOrEqual(2);
+        seen.push(...page.items.map((i) => i.user.id));
+        cursor = page.nextCursor;
+        pages++;
+      } while (cursor && pages < 10);
+      // The same sign-in instant: the newer account comes first.
+      expect(seen).toEqual([ids[1], ids[0], ids[4], ids[3], ids[2]]);
+      expect(pages).toBe(3);
+    });
+
+    it('q matches any part of the email or the display name, ignoring case; wildcards are plain text', async () => {
+      const store = await makeStore();
+      const marker = unique();
+      const byEmail = (await store.users.create(marked(marker, 'basel', 'Someone'))).user;
+      const byName = (await store.users.create(marked(marker, 'other', `Rana BASEL ${marker}`))).user;
+      await store.users.create(marked(marker, 'nobody', 'Nobody'));
+      const ids = async (q: string) => (await store.users.listForOperator({ q, limit: 50, cursor: null })).items.map((i) => i.user.id).sort();
+      expect(await ids(`basel-${marker}`)).toEqual([byEmail.id]);
+      expect(await ids(`basel ${marker.toUpperCase()}`)).toEqual([byName.id]);
+      expect((await ids('BaSeL')).filter((id) => [byEmail.id, byName.id].includes(id))).toEqual([byEmail.id, byName.id].sort());
+      expect(await ids(`${marker}%`)).toEqual([]);
+      expect(await ids(`${marker}_`)).toEqual([]);
+      // ...and a literal one still matches itself.
+      const literal = (await store.users.create(marked(marker, 'literal', `50%_off\\ ${marker}`))).user;
+      expect(await ids(`50%_off\\ ${marker}`)).toEqual([literal.id]);
     });
   });
 }

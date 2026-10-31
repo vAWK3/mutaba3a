@@ -42,12 +42,16 @@ Every command runs from `server/` on your machine, under Node 22. Nothing runs i
     `SET transaction_timeout`, and Postgres 16 rejects it. The 2026-10-20 walk hit exactly this.
   - `psql` itself can be any version.
 
-Set these once per shell:
+Set these once per shell. Since the move (MUT-487/523, ADR-232), production is `mtb3a-production` in
+`europe-west1`, run as the company account that `deploy.env` names (`config/gcp.json` holds the project and region).
+`malafat-production` and `me-west1` are only for the old forwarder and the teardown (MUT-520, MUT-521).
 
 ```bash
 cd server
-export GCP_PROJECT_ID=malafat-production
-export TF_STATE_BUCKET=<project>-terraform-state           # or put it in server/.env.prod (see .env.prod.example)
+export GCP_PROJECT_ID=mtb3a-production GCP_REGION=europe-west1
+export TF_STATE_BUCKET=mtb3a-production-terraform-state      # not server/.env.prod's: that one is still malafat-production's
+export CLOUDSDK_CORE_ACCOUNT=$(sed -n 's/^GCP_ACCOUNT=//p' ../deploy.env)                         # gcloud, this shell only
+export GOOGLE_APPLICATION_CREDENTIALS=$(sed -n 's/^GCP_ADC_FILE=//p' ../deploy.env | sed "s|^~|$HOME|")   # terraform and the proxy
 export URL=$(cd infrastructure/terraform && terraform init -reconfigure -input=false \
   -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=mutaba3a-api/production" >/dev/null \
   && terraform output -raw service_url)
@@ -147,7 +151,9 @@ section once MUT-300 lands (§9).
   1. On the Stripe **Customer**, set metadata `mutaba3a_user_id` = their user id (from `npm run users:…` or the
      admin listing). For a firm, also set `mutaba3a_organization_id` = the firm's profile id on the
      **Subscription**. It only counts if they own that profile, or if it's an operator firm.
-  2. Create the subscription with a catalogue price (lookup keys `freelancer_founder_monthly_ils` …).
+  2. Create the subscription with a catalogue price (lookup keys `freelancer_founder_monthly_ils` …): the founder
+     prices are ₪21 / $6 a month and ₪210 / $60 a year (MUT-530), with a 12-month schedule whose second phase is the
+     `freelancer_list_*` price.
   3. Check the subscription covers them without the grant. Only then revoke it:
 
   ```bash
@@ -193,7 +199,9 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 
 1. **Catalogue.** Each Product has metadata `tier` = `freelancer` or `firm`, backfilled on Products that already
    exist. A subscription whose product has no tier is never mirrored (`UNKNOWN_TIER`). Prices carry the lookup keys
-   `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`.
+   `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`. Live amounts (MUT-528, 2026-10-31): Freelancer
+   founder 2100 / 21000 ILS and 600 / 6000 USD; Firm founder 10900 / 109000 ILS and 3300 / 33000 USD; Firm list
+   (`firm_list_*`, product `mtb3a_firm`) 14900 / 149000 ILS and 4500 / 45000 USD.
 2. **Existing pilot customers.** Set `mutaba3a_user_id` on every pilot Customer and `mutaba3a_organization_id`
    on every firm's Subscription (§1.5).
 3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout
@@ -210,8 +218,8 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
    1 year, on the product tagged `tier: freelancer`; a price that isn't is never sold (MUT-362 review: it would be paid
    but never mirrored, or break the VAT promise). Don't turn on Adaptive Pricing or add currency options to them: the
    server pins Checkout to the price's own currency. Until both of a currency's prices exist, Billing says
-   "Subscriptions open soon". A changed price shows within 10 minutes. **MUT-418 (Basel, 2026-10-23):** the GA list
-   prices are ₪49.00 / $16.00 a month and ₪490.00 / $160.00 a year, VAT-exclusive. To change an amount later, create
+   "Subscriptions open soon". A changed price shows within 10 minutes. **MUT-529 (Basel, 2026-10-31, ADR-235):** the GA list
+   prices are ₪29.00 / $9.00 a month and ₪290.00 / $90.00 a year, VAT-exclusive (they were ₪49 / $16 under MUT-418). To change an amount later, create
    a new Price with the same lookup key and **Transfer lookup key** ticked (the API's `transfer_lookup_key=true`); the
    old Price keeps the subscriptions already on it. The sandbox holds the same amounts
    (`node qa/support/billing-live.mjs --catalog-only` sets them).
@@ -345,7 +353,7 @@ gcloud sql instances patch "$COPY" --no-deletion-protection --no-backup --no-ena
   --project=$GCP_PROJECT_ID --quiet
 PW=$(openssl rand -hex 24)
 gcloud sql users set-password mutaba3a_api --instance="$COPY" --password="$PW" --project=$GCP_PROJECT_ID --quiet   # the copy only
-cloud-sql-proxy "$GCP_PROJECT_ID:me-west1:$COPY" --port 5452 --quiet &
+cloud-sql-proxy "$GCP_PROJECT_ID:$GCP_REGION:$COPY" --port 5452 --quiet &
 export SOURCE_DATABASE_URL="postgresql://mutaba3a_api:$PW@127.0.0.1:5452/mutaba3a"
 ```
 
@@ -414,8 +422,8 @@ First:
 
 ```bash
 gcloud sql backups create --instance="$INSTANCE" --project=$GCP_PROJECT_ID --description="before restore $(date -u +%FT%RZ)"   # the undo point: delete it within 14 days (below)
-gcloud scheduler jobs pause mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID                         # once Stripe is on (§1.7); NOT_FOUND = off, go on
-gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=internal                       # stop portal, phone and Malafat traffic
+gcloud scheduler jobs pause mutaba3a-stripe-reconcile --location=$GCP_REGION --project=$GCP_PROJECT_ID                         # once Stripe is on (§1.7); NOT_FOUND = off, go on
+gcloud run services update mutaba3a-api --region=$GCP_REGION --project=$GCP_PROJECT_ID --ingress=internal                       # stop portal, phone and Malafat traffic
 ```
 
 Delete the undo point within 14 days of a confirmed restore, because the privacy policy says backups clear within 14 days and an on-demand backup never expires by itself (MUT-382): run `gcloud sql backups list --instance="$INSTANCE" --project=$GCP_PROJECT_ID --filter="type=ON_DEMAND"`, then `gcloud sql backups delete <id> --instance="$INSTANCE" --project=$GCP_PROJECT_ID`.
@@ -463,13 +471,13 @@ gcloud sql backups restore <backup id> --restore-instance="$INSTANCE" --backup-i
    every account purged after it (§7.3). Re-run `purge-user` for each purge-log line dated after
    the restore point. This is the one way a restore could break the deletion promise.
 4. **Reopen and check:**
-   `gcloud run services update mutaba3a-api --region=me-west1 --project=$GCP_PROJECT_ID --ingress=all`,
+   `gcloud run services update mutaba3a-api --region=$GCP_REGION --project=$GCP_PROJECT_ID --ingress=all`,
    then `npm run smoke -- --url "$URL"`.
 5. **Stripe** (once §1.7 is done). Stripe won't redeliver an event it already got a 200 for, so whatever the
    webhook mirrored after the restore point is gone until you replay it:
 
    ```bash
-   gcloud scheduler jobs resume mutaba3a-stripe-reconcile --location=me-west1 --project=$GCP_PROJECT_ID
+   gcloud scheduler jobs resume mutaba3a-stripe-reconcile --location=$GCP_REGION --project=$GCP_PROJECT_ID
    npm run billing:reconcile -- --url "$URL"
    ```
 
@@ -569,6 +577,8 @@ estimates. After either: §4.3 "After either" steps 1, 3, 4 and 6.
   becoming aware, unless the breach is unlikely to risk anyone's rights.
 - The data lives in Israel (`me-west1`), so Israel's Privacy Protection (Data Security) Regulations
   may also require a report to the Privacy Protection Authority.
+  - **⚠ Basel decides with counsel:** since MUT-523, MTB3A runs in `europe-west1` (Belgium), not `me-west1`, and the
+    privacy policy says so (MUT-524). Decide whether Israel's report still applies, then fix the line above.
 - **⚠ Basel decides with counsel** which of these apply, and who files.
 
 Contain first:
@@ -769,21 +779,31 @@ run it:
   - The scratch copies get their own throwaway password, so the drill never reads production's.
   - `--dry-run` prints the whole sequence and calls nothing.
 - **Which instance:** without `--instance` it drills the one the API serves from, read from
-  terraform state (`TF_STATE_BUCKET`).
+  terraform state. The state bucket is `TF_STATE_BUCKET` from your shell, else `deploy.env`'s, else the one this
+  checkout's `make release server` used for that project. It refuses another project's bucket.
+- **Who it acts as and where (MUT-487/523):** it reads `GCP_ACCOUNT` / `GCP_ADC_FILE` from `deploy.env` itself, as
+  `make` does (your shell wins), so it acts as the company account that owns `mtb3a-production`. It refuses
+  `--project malafat-production` now that the move is done (`LEGACY_STACK=1` overrides it during the overlap).
 
 **Run it (Basel):**
 
 ```bash
 cd server
-scripts/restore-drill.sh --project $GCP_PROJECT_ID --dry-run          # read the sequence first
-scripts/restore-drill.sh --project $GCP_PROJECT_ID --receipt-id <a receipt you know opens in the portal>
+scripts/restore-drill.sh --project mtb3a-production --dry-run          # read the sequence first
+scripts/restore-drill.sh --project mtb3a-production                    # the drill; it asks before each paid step
 ```
+
+To check one receipt you know opens in the portal, add `--receipt-id` and its id (a uuid) to the second line. Paste
+the id itself: a `<placeholder>` left in makes zsh stop with "parse error".
 
 1. **Pick the receipt** from your own test profile in the portal. Open it once there, and note its
    id from the expense drawer or `npm run db:psql`. Without `--receipt-id` the drill takes the newest
    receipt in each copy.
-2. **Expect** 10–20 minutes for the instance creation, the restore and the clone each. The checks
-   take seconds.
+2. **Expect** 10–20 minutes for the instance creation, the restore and the clone each, and longer on
+   `db-f1-micro`. The checks take seconds. Each long step starts with `--async` and then
+   `gcloud sql operations wait … --timeout=unlimited` holds until Cloud SQL says it's done, so a slow restore is
+   waited for, never reported as "failed". Ctrl-C still tears down: teardown waits out an operation still
+   running on a copy before it deletes it.
 3. **Paste** the "Drill results" table it prints, the receipt lines and the audit comparison into §10.
 4. **If it fails or you stop it,** the exit trap deletes what it made. Check with
    `scripts/restore-drill.sh teardown --project $GCP_PROJECT_ID`, which lists every leftover
@@ -836,6 +856,13 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 The cleanup's delete of the never-created instance then got `PERMISSION_DENIED`, Cloud SQL's answer for a missing
 instance. Teardown now checks the instance exists first. Every other flag the drill uses was checked against the
 installed `gcloud … --help`.
+
+**2026-10-31, first run on `mtb3a-production` (Basel).** It ran as `barmajiyatltd@gmail.com` and created
+`mutaba3a-pg-drill-20261031t064131-b`. The backup restore onto it (`db-f1-micro`) outlasted gcloud's own wait,
+so gcloud printed "failed" while the restore carried on (operation `3316ad2e-…`). The teardown's delete then got
+409, because an operation was in progress. Since then, long steps start with `--async` and are waited for with
+no limit, and teardown waits out running operations before deleting. The copy was cleaned up by hand: wait for
+the operation, then `teardown --name`.
 
 ## 10. Drill results
 

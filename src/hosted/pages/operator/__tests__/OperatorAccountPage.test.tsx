@@ -41,7 +41,9 @@ const account = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => (
   createdAt: '2026-10-01T09:00:00.000Z',
   closing: false,
   operator: false,
+  operatorSince: null,
   passkeyCount: 1,
+  passkeyLastUsedAt: null,
   features: [],
   activeSessionCount: 2,
   agentGrantCount: 1,
@@ -93,8 +95,12 @@ function portal({
   const api = stubApi({
     'GET /v1/me': () => ok(who),
     'GET /v1/operator/signup-reviews': () => ok({ data: [], nextCursor: null, stepUpUntil }),
-    'GET /v1/operator/accounts': (request) =>
-      ok({ account: request.url.searchParams.get('email') === current.email ? { id: current.id, email: current.email, displayName: current.displayName, status: current.status } : null, stepUpUntil }),
+    // MUT-527: the list (the exact-email search is gone from the portal).
+    'GET /v1/operator/accounts': (request) => {
+      const q = (request.url.searchParams.get('q') ?? '').toLowerCase();
+      const row = { id: current.id, email: current.email, displayName: current.displayName, status: current.status, operator: current.operator, lastSignInAt: current.lastSignInAt, features: current.features };
+      return ok({ data: !q || current.email.includes(q) || current.displayName.toLowerCase().includes(q) ? [row] : [], nextCursor: null, stepUpUntil });
+    },
     [`GET /v1/operator/accounts/${current.id}`]: () => ok({ account: current, stepUpUntil }),
     [`POST /v1/operator/accounts/${current.id}/disable`]: () => {
       current = { ...current, status: 'DISABLED', activeSessionCount: 0, agentGrantCount: 0 };
@@ -156,16 +162,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('the Accounts tab (design 17A, 3A)', () => {
-  it('finds an account by its email, keeps the address in the URL, and opens it', async () => {
+describe('the Accounts tab (design 17A, 3A; MUT-527 the list)', () => {
+  it('opens on the list, and a row opens the account', async () => {
     const { user, router } = portal({ path: '/operator/accounts' });
     expect(await screen.findByRole('link', { name: 'Accounts' })).toHaveAttribute('aria-current', 'page');
-    const field = screen.getByLabelText('Email address');
-    expect(field).toHaveAttribute('dir', 'ltr');
-    expect(field).toHaveAttribute('type', 'email');
-    await user.type(field, 'sara@studio.example{Enter}');
-    await waitFor(() => expect(locationOf(router)).toBe('/operator/accounts?email=sara%40studio.example'));
-    const found = await screen.findByRole('list', { name: 'Account found' });
+    const found = await screen.findByRole('list', { name: 'Accounts' });
     expect(within(found).getByText('Active')).toHaveClass('badge-success');
     await user.click(within(found).getByRole('link', { name: /sara@studio\.example/ }));
     await waitFor(() => expect(locationOf(router)).toBe(`/operator/accounts/${SARA}`));
@@ -173,14 +174,14 @@ describe('the Accounts tab (design 17A, 3A)', () => {
     expect(screen.getByRole('link', { name: 'Accounts' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('says so when no account has the address, showing the address as typed', async () => {
-    portal({ path: '/operator/accounts?email=nobody%40studio.example' });
-    expect(await screen.findByRole('heading', { name: 'No account with this address' })).toBeInTheDocument();
-    expect(screen.getByText('nobody@studio.example')).toHaveAttribute('dir', 'ltr');
+  it('an old ?email= link lands on the list filtered by that address', async () => {
+    const { api } = portal({ path: '/operator/accounts?email=nobody%40studio.example' });
+    expect(await screen.findByRole('heading', { name: 'No account matches “nobody@studio.example”' })).toBeInTheDocument();
+    expect(api.calls.some((c) => c.url.pathname === '/v1/operator/accounts' && c.url.searchParams.get('q') === 'nobody@studio.example')).toBe(true);
   });
 
   it('a non-operator gets the not-found answer (Home), and the server is never asked', async () => {
-    const { router, api } = portal({ me: me([profile()]), path: '/operator/accounts?email=sara%40studio.example' });
+    const { router, api } = portal({ me: me([profile()]), path: '/operator/accounts?q=sara' });
     await waitFor(() => expect(locationOf(router)).toMatch(/^\/p\/[0-9a-f-]{36}/));
     expect(api.count('GET /v1/operator/accounts')).toBe(0);
   });
@@ -227,16 +228,32 @@ describe('the account page (design 5A, 4A)', () => {
     expect(await screen.findByLabelText('Loading')).toHaveAttribute('aria-busy', 'true');
   });
 
-  it('the operator’s own account shows the Access rows inert, with the reason (E10)', async () => {
-    const { user, api } = portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}` });
-    const rows = await access();
-    const disable = rows.getByRole('button', { name: /Disable account/ });
-    expect(disable).toHaveAttribute('aria-disabled', 'true');
-    expect(disable).toHaveTextContent('This is your account: change it from You › Account.');
-    await user.click(disable);
-    expect(screen.queryByRole('group')).toBeNull();
+  it('the operator’s own account says once why Access is missing, and shows no Access rows (E10, MUT-527)', async () => {
+    const { api } = portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}` });
+    const note = await screen.findByText(/This is your account\. Sign-in and security actions are in You › Account; you can switch features for yourself here\./);
+    expect(within(note.closest('.hp-banner') as HTMLElement).getByRole('link', { name: 'Open You › Account' })).toHaveAttribute('href', '/you/account');
+    expect(screen.getAllByText(/This is your account/)).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Access' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Disable account/ })).toBeNull();
     expect(api.count(`POST /v1/operator/accounts/${OPERATOR_ID}/disable`)).toBe(0);
     expect(screen.getByText('Operator', { selector: '.badge' })).toHaveClass('badge-accent');
+  });
+
+  it('the operator’s own feature switch works, through the step-up (the E10 amendment)', async () => {
+    const own = account({ id: OPERATOR_ID, operator: true, availableFeatures: ['agent_access', 'receipt_reading'] });
+    const { user, api } = portal({
+      view: own,
+      path: `/operator/accounts/${OPERATOR_ID}`,
+      stepUpUntil: STALE,
+      extra: { [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`]: () => ok({ feature: 'receipt_reading', grantedAt: NOW.toISOString(), granted: true }) },
+    });
+    const flag = (await features()).getByRole('switch', { name: /Receipt reading/ });
+    expect(flag).toHaveTextContent('Reads new receipts on our servers and fills in the date, total and vendor.');
+    expect(flag).not.toHaveAttribute('aria-disabled');
+    await user.click(flag);
+    await waitFor(() => expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`)).toBe(1));
+    expect(browser.startAuthentication).toHaveBeenCalledTimes(1);
+    expect(api.count('POST /v1/operator/step-up')).toBe(1);
   });
 
   it('reads Arabic by default, right to left, with the address left to right', async () => {
@@ -339,8 +356,7 @@ describe('the reset link (AC2, design 12A)', () => {
     expect(await screen.findByLabelText('Reset link for sara@studio.example')).toHaveValue(LINK);
     await user.click(screen.getByRole('link', { name: 'Signups' }));
     await user.click(await screen.findByRole('link', { name: 'Accounts' }));
-    await user.type(await screen.findByLabelText('Email address'), 'sara@studio.example{Enter}');
-    await user.click(await screen.findByRole('link', { name: /sara@studio\.example/ }));
+    await user.click(await within(await screen.findByRole('list', { name: 'Accounts' })).findByRole('link', { name: /sara@studio\.example/ }));
     expect(await (await access()).findByRole('button', { name: /Send reset link/ })).toBeInTheDocument();
     expect(screen.queryByLabelText('Reset link for sara@studio.example')).toBeNull();
   });
@@ -432,13 +448,11 @@ describe('billing grants (MUT-462, design 14A)', () => {
     expect(await rows.findByText('Revoked Oct 27, 2026')).toBeInTheDocument();
   });
 
-  it('on the operator’s own account the grant row is inert with the reason and no drawer opens (E10)', async () => {
-    const { user, router } = portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}` });
-    const grant = (await billing()).getByRole('button', { name: /Grant coverage/ });
-    expect(grant).toHaveAttribute('aria-disabled', 'true');
-    expect(grant).toHaveTextContent('This is your account');
-    await user.click(grant);
-    expect(locationOf(router)).toBe(`/operator/accounts/${OPERATOR_ID}`);
+  it('on the operator’s own account there is no grant row and no drawer, even from the address (E10, MUT-527)', async () => {
+    portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}?grant=new` });
+    const rows = await billing();
+    expect(await rows.findByText('No grants.')).toBeInTheDocument();
+    expect(rows.queryByRole('button', { name: /Grant coverage/ })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

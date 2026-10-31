@@ -1148,6 +1148,17 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-operator-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-2); }
 .hp-operator-owners { display: grid; gap: var(--space-1); flex: 1 1 100%; margin: 0; padding: 0; border: 0; min-inline-size: 0; }
 .hp-operator-owners .hp-pick:has(input:disabled) { color: var(--text-secondary); cursor: default; }
+/* MUT-527: four tabs on a 375 px phone: they keep one line and the strip scrolls sideways, never the page. The list's
+   Load more, a stated row (no action), and the no-passkey note above every page. */
+.hp-operator .hp-section-tabs { overflow-x: auto; scrollbar-width: none; }
+.hp-operator .hp-section-tab { white-space: nowrap; }
+@media (max-width: 400px) {
+  .hp-operator .hp-section-tab { padding-inline: var(--space-2); }
+}
+.hp-operator-more { display: flex; justify-content: center; margin-block-start: var(--space-3); }
+.hp-operator-more > .btn { min-height: 44px; }
+.hp-operator-static { cursor: default; }
+.hp-operator-no-passkey { margin: 0 0 var(--space-4); }
 .hp-connect-heading { margin: var(--space-4) 0 var(--space-2); font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .hp-connect-steps { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-2); }
 .hp-connect-steps code { overflow-wrap: anywhere; font-size: var(--text-label); }

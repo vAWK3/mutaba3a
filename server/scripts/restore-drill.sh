@@ -16,7 +16,7 @@
 #
 # Safety:
 #   * Every command that creates, changes or deletes an instance names a scratch
-#     instance as its target, and `mutate` refuses any other name: the pattern is
+#     instance as its target, and `mutate_wait` refuses any other name: the pattern is
 #     mutaba3a-pg-drill-<yyyymmdd>t<hhmmss>-<b|p>, and never the source instance.
 #     The source only appears in read-only commands, as --backup-instance, and as
 #     the clone's source.
@@ -56,9 +56,17 @@ die()  { printf '\033[0;31m[drill] %s\033[0m\n' "$*" >&2; exit 1; }
 # shellcheck source-path=SCRIPTDIR source=lib/db-checks.sh
 . "${SERVER_DIR}/scripts/lib/db-checks.sh"
 # MUT-523: deploy.env's GCP_ACCOUNT / GCP_ADC_FILE (mtb3a-production is barmajiyatltd@gmail.com's), for this run only.
+# The drill is run by hand, not by make, so it reads them (and TF_STATE_BUCKET) from deploy.env itself; the shell wins.
 # shellcheck source-path=SCRIPTDIR source=lib/gcp-identity.sh
 . "${SERVER_DIR}/scripts/lib/gcp-identity.sh"
+DEPLOY_ENV_FILE="${DEPLOY_ENV_FILE:-${SERVER_DIR}/../deploy.env}"
+load_deploy_env_identity "${DEPLOY_ENV_FILE}"
 use_gcp_identity
+# MUT-487 (ADR-232): config/gcp.json names the live project and the one MTB3A moved out of.
+# shellcheck source-path=SCRIPTDIR source=lib/legacy-stack.sh
+. "${SERVER_DIR}/scripts/lib/legacy-stack.sh"
+GCP_CONFIG="${GCP_CONFIG:-${SERVER_DIR}/../config/gcp.json}"
+TF_DIR="${RESTORE_DRILL_TF_DIR:-${SERVER_DIR}/infrastructure/terraform}"
 
 usage() {
   cat >&2 <<EOF
@@ -105,6 +113,33 @@ done
 [[ "${SOURCE}" =~ ^mutaba3a-pg-drill- ]] && die "refusing: --instance ${SOURCE} is a drill scratch instance; the source is the instance you back up (the one the API serves from)"
 BUCKET="${BUCKET:-${PROJECT}-mutaba3a-attachments}"
 
+# Drilling the frozen old project after the move would prove nothing about today's backups. The overlap's own
+# checks set LEGACY_STACK=1; teardown always may, to clean up drill instances left there.
+refuse_legacy_project() {
+  local live legacy
+  live="$(gcp_config_value "${GCP_CONFIG}" "${ENVIRONMENT:-production}" project)"
+  legacy="$(gcp_config_value "${GCP_CONFIG}" "${ENVIRONMENT:-production}" legacyProject)"
+  [[ -n "${legacy}" && "${PROJECT}" == "${legacy}" && "${LEGACY_STACK:-0}" != 1 ]] || return 0
+  cutover_pending "${GCP_CONFIG}" "${ENVIRONMENT:-production}" && return 0
+  die "${PROJECT} is MTB3A's old project; production runs in ${live} (config/gcp.json, ADR-232). Drill ${live}, or set LEGACY_STACK=1 to drill the old one during the overlap."
+}
+[[ "${SUBCOMMAND}" == "teardown" ]] || refuse_legacy_project
+
+# state_bucket: TF_STATE_BUCKET from the shell, else deploy.env, else the bucket this checkout's `terraform init` for
+# PROJECT recorded (the Makefile's order). Refuses `<other project>-terraform-state`: another project's state names
+# another project's instance (MUT-487 left malafat-production-terraform-state in old shells and server/.env.prod).
+state_bucket() {
+  local bucket="${TF_STATE_BUCKET:-}"
+  [[ -n "${bucket}" ]] || bucket="$(deploy_env_value "${DEPLOY_ENV_FILE}" TF_STATE_BUCKET)"
+  if [[ -z "${bucket}" && -f "${TF_DIR}/.terraform-${PROJECT}/terraform.tfstate" ]]; then
+    bucket="$(sed -n 's/.*"bucket"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${TF_DIR}/.terraform-${PROJECT}/terraform.tfstate" | head -1)"
+  fi
+  if [[ "${bucket}" =~ ^(.+)-terraform-state$ && "${BASH_REMATCH[1]}" != "${PROJECT}" ]]; then
+    die "TF_STATE_BUCKET=${bucket} is ${BASH_REMATCH[1]}'s state, but --project is ${PROJECT}. Unset it (the drill finds ${PROJECT}'s), or export ${PROJECT}-terraform-state."
+  fi
+  printf '%s' "${bucket}"
+}
+
 # ---------------------------------------------------------------------------
 # Command helpers
 # ---------------------------------------------------------------------------
@@ -116,11 +151,29 @@ assert_scratch() {
   [[ "${name}" =~ ${SCRATCH_RE} ]] || die "refusing: ${name} is not a drill scratch instance (mutaba3a-pg-drill-<yyyymmdd>t<hhmmss>-<b|p>)"
 }
 
-# mutate <target instance> <command...>: the only way this script creates, changes or deletes anything.
-mutate() {
-  local target="$1"; shift
+# mutate_wait <target instance> <command...>: the only way this script creates, changes or deletes anything.
+# A Cloud SQL step can outlast gcloud's own wait: on 2026-10-31 the backup restore onto db-f1-micro did, gcloud said
+# "failed" while the restore went on, and the teardown's delete got 409. So a long step starts with --async and is
+# waited for with no time limit. When gcloud doesn't name the operation, wait for whatever runs on the target.
+mutate_wait() {
+  local target="$1" operation=""; shift
   assert_scratch "${target}"
-  run "$@"
+  run_capture operation "<operation>" "$@" --async --format='value(name)' || return $?
+  [[ -n "${operation}" ]] || operation="$(running_operations "${target}")"
+  wait_operations "${operation}"
+}
+
+# running_operations <instance>: the ids of operations not yet DONE on it, one per line (none when it can't tell).
+running_operations() {
+  gcloud sql operations list --instance="$1" --project="${PROJECT}" --filter='status!=DONE' --format='value(name)' 2>/dev/null || true
+}
+
+# wait_operations <ids>: waits for each, however long it takes.
+wait_operations() {
+  local operation
+  for operation in $1; do
+    run gcloud sql operations wait "${operation}" --project="${PROJECT}" --timeout=unlimited || return $?
+  done
 }
 
 utc_minutes_ago() {
@@ -140,7 +193,15 @@ delete_instance() {
     info "$1 was never created; nothing to delete"
     return 0
   fi
-  mutate "$1" gcloud sql instances delete "$1" --project="${PROJECT}" --quiet \
+  # A restore or clone still running on it makes the delete fail with 409: wait it out first.
+  local running
+  run_capture running "" gcloud sql operations list --instance="$1" --project="${PROJECT}" --filter='status!=DONE' --format='value(name)' \
+    || running=""
+  if [[ -n "${running}" ]]; then
+    info "$1 has an operation still running; waiting for it before deleting"
+    wait_operations "${running}" || warn "waiting on $1's operation failed; trying the delete anyway"
+  fi
+  mutate_wait "$1" gcloud sql instances delete "$1" --project="${PROJECT}" --quiet \
     || warn "could not delete $1: run  scripts/restore-drill.sh teardown --project ${PROJECT} --name $1"
 }
 
@@ -175,7 +236,9 @@ if [[ -z "${SOURCE}" ]]; then
     SOURCE="<active-instance>"
   else
     need terraform "brew install terraform"
-    SOURCE="$(tf_active_instance "${SERVER_DIR}/infrastructure/terraform" "${ENVIRONMENT:-production}")"
+    TF_STATE_BUCKET="$(state_bucket)" || exit 1
+    export TF_STATE_BUCKET
+    SOURCE="$(tf_active_instance "${TF_DIR}" "${ENVIRONMENT:-production}")"
   fi
 fi
 
@@ -232,11 +295,11 @@ restore_backup() {
   info "last night's backup: ${BACKUP_ID} (window ${BACKUP_AT})"
   confirm "Create scratch instance ${SCRATCH_B} and restore backup ${BACKUP_ID} into it? (${COST_NOTE})" || die "stopped before creating anything"
   CREATED+=("${SCRATCH_B}")
-  timed "Create scratch instance (backup)" mutate "${SCRATCH_B}" gcloud sql instances create "${SCRATCH_B}" --project="${PROJECT}" \
+  timed "Create scratch instance (backup)" mutate_wait "${SCRATCH_B}" gcloud sql instances create "${SCRATCH_B}" --project="${PROJECT}" \
     --region="${REGION}" --database-version="${DB_VERSION}" --tier="${TIER}" --edition="${EDITION}" \
     --availability-type=zonal --storage-size="${DISK_GB}GB" --ssl-mode=ENCRYPTED_ONLY \
     --no-backup --no-deletion-protection --quiet
-  timed "Restore last night's backup" mutate "${SCRATCH_B}" gcloud sql backups restore "${BACKUP_ID}" \
+  timed "Restore last night's backup" mutate_wait "${SCRATCH_B}" gcloud sql backups restore "${BACKUP_ID}" \
     --restore-instance="${SCRATCH_B}" --backup-instance="${SOURCE}" --project="${PROJECT}" --quiet
 }
 
@@ -245,10 +308,10 @@ restore_pitr() {
   PITR_AT="$(utc_minutes_ago "${PITR_MINUTES}")"
   confirm "Clone ${SOURCE} as of ${PITR_AT} into scratch instance ${SCRATCH_P}? (${COST_NOTE})" || die "stopped before the point-in-time clone"
   CREATED+=("${SCRATCH_P}")
-  timed "Point-in-time clone (${PITR_MINUTES} min ago)" mutate "${SCRATCH_P}" gcloud sql instances clone "${SOURCE}" "${SCRATCH_P}" \
+  timed "Point-in-time clone (${PITR_MINUTES} min ago)" mutate_wait "${SCRATCH_P}" gcloud sql instances clone "${SOURCE}" "${SCRATCH_P}" \
     --point-in-time="${PITR_AT}" --project="${PROJECT}" --quiet
   # The clone copies the source's settings: drop what would keep it around or make it back itself up.
-  mutate "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" \
+  mutate_wait "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" \
     --no-deletion-protection --no-backup --no-enable-point-in-time-recovery --quiet
 }
 

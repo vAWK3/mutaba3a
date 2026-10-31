@@ -177,3 +177,6 @@ dist/src-tauri/target/
 
 # MUT-468: npm --prefix server run mail:preview output
 server/.mail-preview/
+
+# Netlify CLI state (scripts/netlify-deploy.sh)
+.netlify/

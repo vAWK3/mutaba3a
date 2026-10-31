@@ -4926,7 +4926,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 3. **Two openers, one offer per page:** `firstRunPath` after /setup, `TrialWelcomeOpener` for any other first sign-in; showing the step spends the page's offer, so closing it never reopens it before the answer lands.
 4. **The trial is the person's:** step and banner read the personal profile's entitlement (TRIAL ACTIVE = no covering subscription).
 5. **Consumers everywhere:** `"consumerCountries": "*"`; `GET /v1/billing` says `countries.consumerEverywhere`. Buying For a business always proves it is one (Stripe's tax ID where supported, our required number field in IL/JO); a person never sees the field.
-6. **GA list prices** ₪49 / $16 a month, 10× a year, VAT-exclusive, by lookup key. QA's sandbox moved by lookup-key transfer; live is an operator step.
+6. **GA list prices** ₪49 / $16 a month, 10× a year, VAT-exclusive, by lookup key. QA's sandbox moved by lookup-key transfer; live is an operator step. **Superseded by ADR-235 (2026-10-31): ₪29 / $9.**
 
 **Consequences:**
 - Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
@@ -5688,7 +5688,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Decision:**
 1. **Extracted, not rewritten.** `server/src/operator/actions/accounts.ts` holds the actions; `/admin/v1/users` and `/v1/operator/accounts` are adapters (ADR-212 decision 4). The admin route tests pass unchanged; a parity test compares the two answers and audit trails row for row.
-2. **Never your own account (E10, widened).** The console refuses every account action on the operator's own account with 409 `OWN_ACCOUNT`, not only disable and sign out: a reset with lock would sign them out too, and their own password is You › Account's. The portal shows the rows inert with the reason. The CLI is unchanged.
+2. **Never your own account (E10, widened).** The console refuses every account action on the operator's own account with 409 `OWN_ACCOUNT`, not only disable and sign out: a reset with lock would sign them out too, and their own password is You › Account's. The portal shows the rows inert with the reason. The CLI is unchanged. *(Amended by MUT-527, 2026-10-31: features are allowed on your own account, see ADR-216's amendment; the portal hides the refused rows behind one note instead of greying each.)*
 3. **Every action is audited.** Sign out everywhere now writes `user.sessions_revoked` `{revoked, agentGrantsRevoked}`, for the token too (the AC: "every action … audited with the operator's id"). Like `user.agent_disconnected`, it is a security event about the person, so it is one of `SESSION_ONLY_ACTIONS`: API keys' `/v1/audit` (Malafat) never lists it (/qa-reconcile D1, Basel). Disable answers the admin `{user}` plus `sessionsRevoked` / `agentGrantsRevoked`, so the result can say what it ended.
 4. **A missing account is `NOT_FOUND` with `details.reason ACCOUNT_NOT_FOUND`,** not a new error code: `QueryView`'s `notFound` slot shows "No such account", and its `/v1/me` refetch also covers a revoked operator (design 3A). Search never 404s: no match is 200 `{account:null}`.
 5. **The reset link is shown once, in the page's state.** It never enters a query, the URL or a toast, and leaving the page discards it (design 12A). The portal asks for 24 hours (the CLI's default stays 72) with "Lock the current password" on by default.
@@ -5726,6 +5726,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:**
 - Granting a profile (`organizationId`) from the console. Rejected for now: the account page is about a person, and profile-level grants are rare operator fixes.
 - A copy of `FEATURES` in the portal. Rejected: the server's list is the one list.
+
+**Amendment (MUT-527, Basel 2026-10-31): E10 allows your own features.** Override log: replaces the "or a flag" half of decision 4 here and the flags part of ADR-215 decision 2's "every account action". **What:** `PUT` and `DELETE /v1/operator/accounts/{userId}/features/{feature}` no longer refuse the operator's own account; they need the same fresh passkey step-up as on anyone's (the operator gate) and are audited the same way (`user.feature_granted` / `user.feature_revoked`, actor ADMIN with the operator's id, on each of their profiles). Disable, enable, sign out everywhere, the setup link, and granting or revoking billing on your own account still answer 409 `OWN_ACCOUNT`. **Why:** features exist only in the console (You › Account has no switches), so the old rule left Basel no way to turn `receipt_reading` on for himself except `live-admin.sh feature-grant`; a flag can't lock anyone out, which was E10's reason. **When:** 2026-10-31. The portal stops greying the own-account rows: one note at the top, Access and Grant hidden, feature switches live (ADR-234).
 
 ## ADR-218: A Project's Figures Are in Its Own Currency; a Matter's Other-Currency Owed Counts in Its Own Block (MUT-488)
 
@@ -6145,6 +6147,43 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Amendment (MUT-523, 2026-10-30):** the instance is in europe-west1, so decision 4's zone outage restores into another europe-west1 zone (pilot runbook §4.5; the region's zones are b, c and d), and decision 5's budget is **£25** on Barmajiyat Ltd's GBP billing account `01E433-999491-75ECBD`, its amount and currency from tfvars (ADR-232 amendment). The "Result" costs are re-estimated in GBP in INFRA.md §3; the billing export is still the proof.
 
+
+## ADR-234: The Operator Console Lists Every Account, Switches Your Own Features, and Has Your Settings (MUT-527)
+
+**Status:** Accepted (Basel, 2026-10-31, MUT-527 scope and AC; the Your settings tab added the same day). Amends E10 (ADR-215 decision 2, ADR-216 decision 4; override log in ADR-216's amendment).
+
+**Context:** Basel's screenshot of his own account in the console: every row greyed out with the same "This is your account: change it from You › Account", though You › Account has no feature switches; `receipt_reading` showed its raw key; and an account could only be found by its exact email.
+
+**Decision:**
+1. **`GET /v1/operator/accounts` without `email` lists every account,** newest sign-in first, never signed in last, then newest created, then id (a total order, so the keyset cursor continues it exactly). `limit` 1–100 (default 50), an opaque unsigned `cursor` (base64url of the last row's `{lastSignInAt, createdAt, id}`; 422 `details.field cursor` for one it didn't issue), and `q`: any part of the email or display name, ignoring case, with `%` and `_` as plain text. Each row: id, email, displayName, status, operator, lastSignInAt, and the features that are on. With `email` it answers exactly as MUT-461 did. Operator-only (404 otherwise), as every console route.
+2. **One store method, both stores:** `users.listForOperator` (store guard class `operator`). The memory store sorts with the same comparator the cursor uses (`server/src/operator/account-list.ts`); Postgres orders `NULLS LAST` and pages with an `OR` of the three keys. **No migration and no index** at 13 accounts (TD-297).
+3. **Your own features (E10 amendment):** see ADR-216's amendment. Everything else on your own account stays 409 `OWN_ACCOUNT`.
+4. **The account view adds `operatorSince` and `passkeyLastUsedAt`** (additive), for Your settings. API 1.93.0-mut527.
+5. **Portal, Accounts:** opens on the list (50, then Load more); the search box filters as you type (300 ms debounce), `?q=` in the address, replaced rather than pushed so Back leaves the list; old `?email=` links land as the query. Empty, no-match, loading and error states.
+6. **Portal, your own account:** one note at the top ("This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.") with a link to You › Account; the Access group and the Grant row are hidden, not greyed; your grants still list read-only; feature switches work with the step-up.
+7. **Portal, Your settings (`/operator/you`, a fourth tab):** operator since, your passkeys (count, last used, and a deep link to You › Account › Passkeys: the passkey screens aren't duplicated), whether this session is confirmed with your passkey and until when, and your own feature switches (the same rows as the account page). The tab is named "Your settings" (إعداداتك), not "You", so it isn't a second "You" beside the shell's You island.
+8. **No passkey:** every operator page says once, at the top, that operator changes need a passkey, with the link to add one. An operator can't normally be without one (MUT-459 D7), so this is a guard, not a flow.
+9. **Feature names:** `receipt_reading` has a label, sub and turn-off confirmation in Arabic and English; a flag with no words shows a humanised name (`bank_feeds` → "Bank feeds"), never its key, and the generic turn-off line uses that name.
+
+**Consequences:** the release is one server release (the portal ships in the API image), so the list and the portal arrive together; no other client calls these routes. The portal no longer has an exact-email search box (the server's `email=` stays for scripts).
+
+**Alternatives considered:** a separate `/v1/operator/accounts/search` route (two shapes for one noun; the ticket asked for the same path); offset paging (rows move as people sign in, so a page could repeat or skip someone); greying the own-account rows once with one explanation (hiding them is calmer, and the note already says where they are); feature switches in You › Account (the console is where flags live; one place).
+## ADR-235: The Freelancer List Price Is ₪29 / $9 a Month (MUT-529, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-10-31). Overrides ADR-180 decision 6 (₪49 / $16). Part of the pricing program, epic MUT-528 (D1).
+
+**Context:** a cost and price review on 2026-10-31. A paying person costs about ₪3 a month in cash: Stripe about 6.35% + 20p per charge (card 3.15%, Billing 0.7%, Tax 0.5%, ILS→GBP 2%), about ₪2.6 at ₪29; servers, receipts, OCR and mail under ₪0.5. The fixed tech bill is about ₪70 a month (INFRA.md §3). So cost doesn't set the price; the market does. MTB3A's buyers are Arab freelancers and small firms in Israel, Palestine and Jordan who already pay for a legal invoicing tool, and the West Bank average wage is about ₪134 a day (PCBS, Q2 2026): ₪49, or ₪58 with Israeli VAT, sat above what they'd pay for a tool that tracks rather than invoices.
+
+**Decision:**
+1. **List price ₪29 / $9 a month, ₪290 / $90 a year** (a year stays 10× a month), VAT-exclusive, under the same four `freelancer_list_{monthly|yearly}_{ils|usd}` lookup keys. Nothing in the code names an amount; Billing reads the catalog (ADR-170).
+2. **The change is a lookup-key transfer** in each Stripe account: a new Price takes the key, the old Price keeps any subscription already on it. QA's sandbox moves with `node qa/support/billing-live.mjs --catalog-only`; live is an operator step (pilot runbook 3b). Live had no subscriptions on the ₪49 / $16 prices on 2026-10-31.
+3. **Existing payers are never moved by this decision.** A later list-price change reaches people already paying only with 30 days' notice (MUT-528 rule 5).
+
+**Consequences:** margin per monthly payer is about 89% before support time; the program's other prices follow from this one: founder ₪21 / $6 (MUT-530), the launch offer 50% off the first year, ₪145 / $45 (MUT-525), Firm ₪149 / $45 (MUT-363). The price is held for 6 months and read against trial → paying over the first 100 trials (MUT-528).
+
+**Alternatives considered:** ₪49 / $16 (the old price; similar revenue per trial only if conversion holds at ₪49, with about 40% fewer payers); ₪39 / $12 (left no room under it for the founder price); ₪19 (margin still fine, but support time per payer would rival the price).
+
+**Amendment (MUT-530, Basel, 2026-10-31): founder prices.** The founder prices drop below the new list prices: **Freelancer ₪21 / $6 a month, ₪210 / $60 a year** (was ₪39 / $10) and **Firm ₪109 / $33 a month, ₪1,090 / $330 a year** (was ₪299 / $80; about the same 28% under the Firm list price ₪149 / $45 as Freelancer's under ₪29). Still locked 12 months, then the list price through the subscription schedule (ADR-160 D4); pilot firms pay the Freelancer founder price until firm books v1 ships. The prices live under `freelancer_founder_*` and `firm_founder_*` (product `mtb3a_firm`); Checkout sells only `freelancer_list_*` (`server/src/billing/checkout.ts`), so a founder price is never offered to anyone outside the pilot. Live had no subscriptions on 2026-10-31, so no pilot subscription moved and no notice was owed.
 
 ## ADR-236: Release-Only Telemetry: Sentry and PostHog Send Only From a Production Build on a Production Host
 

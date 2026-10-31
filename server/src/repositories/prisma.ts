@@ -26,6 +26,7 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   AccountPurgeRepository,
+  OperatorAccountCursor,
   VendorRecord,
   VendorNameRecord,
   VendorRepository,
@@ -409,6 +410,28 @@ export class PrismaLedgerStore implements LedgerStore {
         latestVersion: u.termsAcceptances[0]?.version ?? null,
         latestClientRelease: u.termsAcceptances[0]?.clientRelease ?? null,
       })),
+    // MUT-527: a sequential scan of users is fine at this size (13 in production); TD notes an index if it grows.
+    listForOperator: async ({ q, limit, cursor }) => {
+      const pattern = q ? escapeLike(q) : null;
+      const where: Prisma.UserWhereInput = {
+        AND: [
+          pattern ? { OR: [{ email: { contains: pattern, mode: 'insensitive' } }, { displayName: { contains: pattern, mode: 'insensitive' } }] } : {},
+          cursor ? afterOperatorCursor(cursor) : {},
+        ],
+      };
+      const rows = await this.prisma.user.findMany({
+        where,
+        orderBy: [{ lastSignInAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        include: { featureGrants: { where: { revokedAt: null, feature: { in: [...FEATURES] } }, select: { feature: true }, orderBy: { feature: 'asc' } } },
+      });
+      const page = rows.slice(0, limit);
+      const last = page.at(-1);
+      return {
+        items: page.map(({ featureGrants, ...row }) => ({ user: toUser(row), features: featureGrants.map((g) => g.feature) })),
+        nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null,
+      };
+    },
     acceptTerms: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
@@ -3903,6 +3926,26 @@ function toTermsAcceptance(row: Prisma.TermsAcceptanceGetPayload<object>): Terms
     surface: row.surface,
     clientRelease: row.clientRelease,
     acceptedAt: row.acceptedAt,
+  };
+}
+
+/** MUT-527: `%`, `_` and the escape itself as plain text in a LIKE pattern (Postgres's default escape is `\`). */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * MUT-527: the rows after `cursor` in the operator list's order (lastSignInAt DESC NULLS LAST, createdAt DESC, id DESC).
+ * A signed-in cursor is followed by earlier sign-ins and every never-signed-in row; a never-signed-in cursor only by
+ * other never-signed-in rows.
+ */
+function afterOperatorCursor(cursor: OperatorAccountCursor): Prisma.UserWhereInput {
+  const sameSignInLater: Prisma.UserWhereInput = {
+    OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
+  };
+  if (cursor.lastSignInAt === null) return { AND: [{ lastSignInAt: null }, sameSignInLater] };
+  return {
+    OR: [{ lastSignInAt: { lt: cursor.lastSignInAt } }, { AND: [{ lastSignInAt: cursor.lastSignInAt }, sameSignInLater] }, { lastSignInAt: null }],
   };
 }
 
