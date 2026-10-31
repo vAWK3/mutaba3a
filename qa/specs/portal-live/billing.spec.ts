@@ -103,7 +103,7 @@ test('A person in any country goes straight on to the card; a business still giv
   await step('Continue as a person: Stripe’s page asks for no business tax number', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
-    await expect(page.getByText(/16\.00/).first()).toBeVisible();
+    await expect(page.getByText(/\$9\.00/).first()).toBeVisible();
     await expect(page.getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
   });
 });
