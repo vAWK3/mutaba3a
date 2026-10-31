@@ -41,7 +41,8 @@ describe('MUT-461 find an account by email', () => {
     const p = await person(h);
     expect(await read(await get(h, '/v1/operator/accounts?email=nobody%40studio.example', op.token))).toMatchObject({ account: null });
     expect(await read(await get(h, `/v1/operator/accounts?email=${encodeURIComponent(p.email.slice(0, 6))}`, op.token))).toMatchObject({ account: null });
-    expect((await get(h, '/v1/operator/accounts', op.token)).status).toBe(422);
+    // MUT-527: with no email the route lists every account (routes-operator-account-list.test.ts).
+    expect((await get(h, '/v1/operator/accounts', op.token)).status).toBe(200);
   });
 });
 

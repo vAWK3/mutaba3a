@@ -25,6 +25,8 @@ import {
   OrganizationResponseSchema,
   RevokeEntitlementGrantResponseSchema,
   IssueSetupLinkResponseSchema,
+  OperatorAccountListQuerySchema,
+  OperatorAccountListSchema,
   OperatorAccountSearchSchema,
   OperatorAccountStatusResponseSchema,
   OperatorAccountViewSchema,
@@ -53,14 +55,16 @@ import { serializeAdminOrganization, serializeGrant, serializeUser } from '../se
  *   POST /v1/operator/step-up/options  →  POST /v1/operator/step-up
  *
  * MUT-461: accounts, from operator/actions/accounts.ts (shared with /admin/v1/users). An operator never acts on their
- * own account here (E10: 409 OWN_ACCOUNT); their own is You › Account.
+ * own account here (E10: 409 OWN_ACCOUNT); their own is You › Account. MUT-527 amends E10 for features only (below).
  *
+ *   GET  /v1/operator/accounts?q=&limit=&cursor=           MUT-527: every account, newest sign-in first, paged
  *   GET  /v1/operator/accounts?email=                      exact email (D5): one match or null
  *   GET  /v1/operator/accounts/{userId}                    the account view
  *   POST /v1/operator/accounts/{userId}/disable|enable|sessions/revoke|setup-link
  *
  * MUT-462: billing grants and feature flags on an account (actions shared with /admin/v1/billing/grants and
- * /admin/v1/users/{id}/features; E10 again: never the operator's own), and firm requests (shared with
+ * /admin/v1/users/{id}/features; E10 again: never the operator's own billing; MUT-527: their own features yes, with
+ * the step-up), and firm requests (shared with
  * /admin/v1/firm-requests and /admin/v1/organizations/{id}).
  *
  *   GET|POST /v1/operator/accounts/{userId}/billing-grants        DELETE …/billing-grants/{grantId}
@@ -243,17 +247,24 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       method: 'get',
       path: '/v1/operator/accounts',
       tags: ['Operator'],
-      summary: 'Find an account by its exact email, normalised (MUT-461). No match is 200 with account null',
+      summary: 'List every account, newest sign-in first, paged and filtered by `q` (MUT-527); or, with `email`, find one by its exact address (MUT-461)',
+      description:
+        'Without `email`: OperatorAccountList, newest sign-in first (never signed in last), then newest created; `q` keeps the accounts whose email or display name contains it, ignoring case. With `email`: OperatorAccountSearch, the exact normalised address, no match being 200 with account null (unchanged since MUT-461).',
       security: SESSION,
-      request: { query: z.object({ email: z.string().min(1).max(320) }) },
+      request: { query: OperatorAccountListQuerySchema },
       responses: {
-        200: { description: 'Zero or one account, and when the step-up lapses', content: { 'application/json': { schema: OperatorAccountSearchSchema } } },
-        422: errorResponse('Validation failed'),
+        200: {
+          description: 'A page of accounts (no `email`), or zero or one account (`email`); and when the step-up lapses',
+          content: { 'application/json': { schema: z.union([OperatorAccountListSchema, OperatorAccountSearchSchema]) } },
+        },
+        422: errorResponse('Validation failed (a limit outside 1–100, or a cursor this API did not issue: details.field)'),
         ...operatorErrors,
       },
     }),
     async (c) => {
-      const user = await accounts.findByEmail(c.req.valid('query').email);
+      const query = c.req.valid('query');
+      if (query.email === undefined) return c.json({ ...(await accounts.list(query)), stepUpUntil: stepUpUntilOf(c) }, 200);
+      const user = await accounts.findByEmail(query.email);
       const account = user ? { id: user.id, email: user.email, displayName: user.displayName, status: user.status } : null;
       return c.json({ account, stepUpUntil: stepUpUntilOf(c) }, 200);
     },
@@ -428,21 +439,26 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     },
   );
 
-  const featureErrors = { ...accountErrors, 409: ownOrUnknown, 422: errorResponse('Unknown feature (VALIDATION_FAILED, details.field feature)') } as const;
+  // MUT-527 (E10 amendment, Basel 2026-10-31): features are the one thing an operator may switch on their own account
+  // here, behind the same step-up and audited the same way; no OWN_ACCOUNT check on these two routes.
+  const featureErrors = {
+    ...accountErrors,
+    409: errorResponse('CONFLICT: details.reason USER_PENDING_REVIEW (a flag for a waiting signup)'),
+    422: errorResponse('Unknown feature (VALIDATION_FAILED, details.field feature)'),
+  } as const;
 
   app.openapi(
     createRoute({
       method: 'put',
       path: '/v1/operator/accounts/{userId}/features/{feature}',
       tags: ['Operator'],
-      summary: 'Turn a feature on for the person (idempotent; a second grant keeps the first grantedAt) (MUT-462)',
+      summary: 'Turn a feature on for the person, your own account included (idempotent; a second grant keeps the first grantedAt) (MUT-462, MUT-527)',
       security: SESSION,
       request: { params: FeatureParams },
       responses: { 200: { description: 'The flag is on', content: { 'application/json': { schema: FeatureGrantResponseSchema } } }, ...featureErrors },
     }),
     async (c) => {
       const { userId, feature } = c.req.valid('param');
-      notOwn(c, userId);
       return c.json(await features.grant(userId, feature, contextOf(c)), 200);
     },
   );
@@ -452,14 +468,13 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       method: 'delete',
       path: '/v1/operator/accounts/{userId}/features/{feature}',
       tags: ['Operator'],
-      summary: 'Turn a feature off for the person (idempotent); agent access off disconnects every agent (MUT-462)',
+      summary: 'Turn a feature off for the person, your own account included (idempotent); agent access off disconnects every agent (MUT-462, MUT-527)',
       security: SESSION,
       request: { params: FeatureParams },
       responses: { 200: { description: 'The flag is off', content: { 'application/json': { schema: FeatureRevokeResponseSchema } } }, ...featureErrors },
     }),
     async (c) => {
       const { userId, feature } = c.req.valid('param');
-      notOwn(c, userId);
       return c.json(await features.revoke(userId, feature, contextOf(c)), 200);
     },
   );

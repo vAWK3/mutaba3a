@@ -7,6 +7,8 @@ tier: secondary
 # (support/passkeys.ts); waiting signups are made as /signup and /setup make them (support/selfService.ts pendingSignup).
 # MUT-461 adds Accounts: find an account by email and act on it (sign out everywhere, disable/enable, a reset link).
 # MUT-462 adds billing grants and feature flags on the account page, and the Firms tab (enable or decline a request).
+# MUT-527 makes Accounts a list (search as you type), lets you switch your own features, and adds Your settings. The
+# no-passkey note can't be reached live (an operator must hold a passkey, MUT-459 D7); component tests cover it.
 # Only a profile's owner can ask for firm features, so a live request is an owned Business profile's; an operator-made
 # firm's request (the one whose owners the operator chooses) is marked in the QA database (support/selfService.ts).
 paths:
@@ -79,21 +81,83 @@ features:
       - You › Account has no Operator row
       - /operator/signups goes to Home, and the server refuses the list with 404
   - id: account-find
-    title: Find an account by its email, and say so when there is none
-    tickets: [MUT-461]
+    title: Opening Accounts lists every account; search narrows it, and says so when nothing matches
+    tickets: [MUT-461, MUT-527]
     paths:
       - src/hosted/pages/operator/OperatorAccountsPage.tsx
       - src/hosted/pages/operator/AccountStatusBadge.tsx
       - src/hosted/pages/operator/OperatorLayout.tsx
       - src/hosted/router.tsx
+      - src/hosted/api/client.ts
+      - server/src/operator/account-list.ts
     steps:
-      - Open the Accounts tab of the operator console
-      - Search for an address no account has
-      - Search for a person's address in capitals, then open the match
+      - Open the Accounts tab of the operator console, with no search
+      - Type an address no account has
+      - Type part of a person's address in capitals, then open their row
     expect:
-      - The empty search says "No account with this address" with the address
-      - The match lists the person with an Active chip, and the address stays in the URL
-      - The account page shows the address, Active, the last sign-in and whether they have a passkey, the Access rows with how many devices each would end, and their personal profile with its billing
+      - The list shows every account without a search, newest sign-in first, each with its status chip and last sign-in; the operator's own row has the Operator chip
+      - Nothing matching says "No account matches “…”", and the query stays in the URL
+      - The person's row shows them with an Active chip; their account page shows the address, Active, the last sign-in and whether they have a passkey, the Access rows with how many devices each would end, and their personal profile with its billing
+  # MUT-527 (Basel 2026-10-31): the list, your own features, feature names, and Your settings.
+  - id: account-search-arabic
+    title: Searching "basel" finds every account with it in the email or name, in Arabic on a 375 px phone
+    tickets: [MUT-527]
+    paths:
+      - src/hosted/pages/operator/OperatorAccountsPage.tsx
+      - src/hosted/data/operatorQueries.ts
+      - src/hosted/hosted.css
+    steps:
+      - Two people exist, one with basel in the email, one with Basel in the name; a third has neither
+      - On a 375 px phone in Arabic, open الحسابات and type basel
+    expect:
+      - Both people are listed and the third is not; the addresses read left to right
+      - The page reads right to left with no sideways scroll, the four tabs included
+  - id: own-feature
+    title: Switch receipt reading on your own account with the passkey; the blocked actions are explained once
+    tickets: [MUT-527]
+    paths:
+      - src/hosted/pages/operator/OperatorAccountPage.tsx
+      - src/hosted/pages/operator/OperatorFeaturesSection.tsx
+      - src/hosted/pages/operator/OperatorBillingSection.tsx
+      - src/hosted/operator/featureNames.ts
+      - src/hosted/operator/OperatorStepUp.tsx
+    steps:
+      - Sign in with the password (no step-up yet) and open your own account from the list
+      - Turn Receipt reading on, confirming with the passkey
+      - Try to disable your own account through the API
+    expect:
+      - One note at the top says sign-in and security actions are in You › Account and features switch here; there are no Access rows and no Grant row
+      - Receipt reading is named and explained ("Reads new receipts on our servers…"), and turns on after the passkey; the CLI lists you as a holder
+      - The server still refuses to disable your own account (409 OWN_ACCOUNT)
+  - id: feature-name-arabic
+    title: Receipt reading shows its name and explanation in Arabic, and its own turn-off confirmation
+    tickets: [MUT-527]
+    paths:
+      - src/hosted/operator/featureNames.ts
+      - src/hosted/i18n/ar.json
+      - src/hosted/i18n/en.json
+    steps:
+      - In Arabic, open a person's account; in الميزات find قراءة الإيصالات and turn it on
+      - Turn it off
+    expect:
+      - The switch is named قراءة الإيصالات with its explanation, never receipt_reading
+      - Turning it off asks first, saying the person loses receipt reading and new receipts aren't read
+  - id: you-panel
+    title: Your settings shows you're an operator, your passkeys, the step-up, and your own features
+    tickets: [MUT-527]
+    paths:
+      - src/hosted/pages/operator/OperatorYouPage.tsx
+      - src/hosted/pages/operator/OperatorLayout.tsx
+      - src/hosted/operator/time.ts
+      - server/src/operator/actions/accounts.ts
+    steps:
+      - Sign in with the password on a 375 px phone and open Your settings in the console
+      - Turn Receipt reading on for yourself, confirming with the passkey
+      - Press Manage passkeys
+    expect:
+      - It says Operator since <date>, 1 passkey, and Not confirmed (changes will ask for your passkey), with no sideways scroll
+      - After the passkey the switch reads on and the page says Confirmed with your passkey until <time>
+      - Manage passkeys opens You › Account with the Passkeys drawer
   - id: account-revoke-sessions
     title: Sign a person out everywhere; their password still works
     tickets: [MUT-461]

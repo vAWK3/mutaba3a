@@ -18,6 +18,11 @@
 
 ## Open Debt
 
+### TD-297: The operator's account list scans every user
+**Status**: Accepted (MUT-527, 2026-10-31; ADR-234)
+- **What:** `users.listForOperator` orders by `lastSignInAt DESC NULLS LAST, createdAt DESC, id DESC` and filters `q` with `ILIKE '%q%'` on the email and display name, with no index for either: Postgres reads the whole `users` table each time. Production has 13 accounts, and only operators call it.
+- **Fix:** past a few thousand accounts, add `@@index([lastSignInAt(sort: Desc), createdAt(sort: Desc), id(sort: Desc)])` for the order and a `pg_trgm` GIN index on `lower(email)` and `lower("displayName")` for `q` (a migration each).
+
 ### TD-296: The credentials-file check and the cross-region copy are unproven against real GCP
 **Status**: Open (MUT-523, 2026-10-30; ADR-232 amendment)
 - **What:** preflight reads which account `GCP_ADC_FILE` signs in as by running `gcloud auth application-default print-access-token` with `GOOGLE_APPLICATION_CREDENTIALS` pointing at it, then Google's tokeninfo (`lib/gcp-identity.sh`). The tests fake both. That gcloud honours the variable for this command, and that `gcloud container images add-tag` copies between registries in different regions, are expected but not yet seen; the cross-region Cloud SQL restore is MUT-523 AC5.

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.92.0-mut302
+  version: 1.93.0-mut527
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -10137,6 +10137,54 @@ components:
           format: date-time
       required:
         - stepUpUntil
+    OperatorAccountList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorAccountListItem"
+        nextCursor:
+          type: string
+          nullable: true
+        stepUpUntil:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - data
+        - nextCursor
+        - stepUpUntil
+    OperatorAccountListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        operator:
+          type: boolean
+        lastSignInAt:
+          type: string
+          nullable: true
+          format: date-time
+        features:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - email
+        - displayName
+        - status
+        - operator
+        - lastSignInAt
+        - features
     OperatorAccountSearch:
       type: object
       properties:
@@ -10186,9 +10234,17 @@ components:
               type: boolean
             operator:
               type: boolean
+            operatorSince:
+              type: string
+              nullable: true
+              format: date-time
             passkeyCount:
               type: integer
               minimum: 0
+            passkeyLastUsedAt:
+              type: string
+              nullable: true
+              format: date-time
             features:
               type: array
               items:
@@ -10245,7 +10301,9 @@ components:
           required:
             - closing
             - operator
+            - operatorSince
             - passkeyCount
+            - passkeyLastUsedAt
             - features
             - activeSessionCount
             - agentGrantCount
@@ -22374,7 +22432,8 @@ paths:
     get:
       tags:
         - Operator
-      summary: Find an account by its exact email, normalised (MUT-461). No match is 200 with account null
+      summary: List every account, newest sign-in first, paged and filtered by `q` (MUT-527); or, with `email`, find one by its exact address (MUT-461)
+      description: "Without `email`: OperatorAccountList, newest sign-in first (never signed in last), then newest created; `q` keeps the accounts whose email or display name contains it, ignoring case. With `email`: OperatorAccountSearch, the exact normalised address, no match being 200 with account null (unchanged since MUT-461)."
       security:
         - session: []
       parameters:
@@ -22382,16 +22441,45 @@ paths:
             type: string
             minLength: 1
             maxLength: 320
-          required: true
+            description: "MUT-461: an exact, normalised address; answers OperatorAccountSearch. Without it the route lists (MUT-527)."
+          required: false
+          description: "MUT-461: an exact, normalised address; answers OperatorAccountSearch. Without it the route lists (MUT-527)."
           name: email
+          in: query
+        - schema:
+            type: string
+            maxLength: 320
+            description: "MUT-527: any part of the email or the display name, ignoring case. Blank lists everyone."
+          required: false
+          description: "MUT-527: any part of the email or the display name, ignoring case. Blank lists everyone."
+          name: q
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            description: "MUT-527: 1–100, default 50."
+          required: false
+          description: "MUT-527: 1–100, default 50."
+          name: limit
+          in: query
+        - schema:
+            type: string
+            maxLength: 512
+            description: "MUT-527: `nextCursor` from the previous page."
+          required: false
+          description: "MUT-527: `nextCursor` from the previous page."
+          name: cursor
           in: query
       responses:
         "200":
-          description: Zero or one account, and when the step-up lapses
+          description: A page of accounts (no `email`), or zero or one account (`email`); and when the step-up lapses
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperatorAccountSearch"
+                anyOf:
+                  - $ref: "#/components/schemas/OperatorAccountList"
+                  - $ref: "#/components/schemas/OperatorAccountSearch"
         "401":
           description: Not signed in
           content:
@@ -22411,7 +22499,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: Validation failed
+          description: "Validation failed (a limit outside 1–100, or a cursor this API did not issue: details.field)"
           content:
             application/json:
               schema:
@@ -22797,7 +22885,7 @@ paths:
     put:
       tags:
         - Operator
-      summary: Turn a feature on for the person (idempotent; a second grant keeps the first grantedAt) (MUT-462)
+      summary: Turn a feature on for the person, your own account included (idempotent; a second grant keeps the first grantedAt) (MUT-462, MUT-527)
       security:
         - session: []
       parameters:
@@ -22840,7 +22928,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          description: "CONFLICT: details.reason USER_PENDING_REVIEW (a flag for a waiting signup)"
           content:
             application/json:
               schema:
@@ -22854,7 +22942,7 @@ paths:
     delete:
       tags:
         - Operator
-      summary: Turn a feature off for the person (idempotent); agent access off disconnects every agent (MUT-462)
+      summary: Turn a feature off for the person, your own account included (idempotent); agent access off disconnects every agent (MUT-462, MUT-527)
       security:
         - session: []
       parameters:
@@ -22897,7 +22985,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup)"
+          description: "CONFLICT: details.reason USER_PENDING_REVIEW (a flag for a waiting signup)"
           content:
             application/json:
               schema:

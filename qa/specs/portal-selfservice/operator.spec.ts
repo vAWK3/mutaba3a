@@ -213,11 +213,14 @@ async function target(label: string): Promise<{ email: string; device: string }>
   return { email, device: await liveSession(email, TARGET_PASSWORD) };
 }
 
+/** MUT-527: the Accounts list, narrowed by the search box as you type. */
+const accountsList = (page: Page) => page.getByRole('list', { name: /^(Accounts|الحسابات)$/ });
+const accountLink = (page: Page, email: string) => accountsList(page).getByRole('link', { name: new RegExp(email.replace(/[.+]/g, '\\$&')) });
+
 async function openAccount(page: Page, email: string, language: 'en' | 'ar' = 'en') {
   await page.goto('/operator/accounts');
-  await page.getByLabel(language === 'ar' ? 'البريد الإلكتروني' : 'Email address').fill(email);
-  await page.getByRole('button', { name: language === 'ar' ? 'بحث' : 'Search' }).click();
-  await page.getByRole('list').getByRole('link', { name: new RegExp(email.replace(/[.+]/g, '\\$&')) }).click();
+  await page.getByLabel(language === 'ar' ? 'ابحث في الحسابات' : 'Search accounts').fill(email);
+  await accountLink(page, email).click();
   await expect(page.getByRole('heading', { level: 2, name: email })).toBeVisible();
 }
 
@@ -227,33 +230,33 @@ const toastText = (page: Page) => page.getByTestId('toast-live').evaluate((el) =
 /** MUT-462: the open in-row confirm's text, read the same way (its address is isolated too). */
 const confirmText = (page: Page) => page.getByRole('group').first().evaluate((el) => (el.textContent ?? '').replace(/[⁨⁩]/g, ''));
 
-test('Find an account by its email, and say so when there is none', { tag: '@portal-selfservice.operator.account-find' }, async ({ page, step }) => {
+test('Opening Accounts lists every account; search narrows it, and says so when nothing matches', { tag: '@portal-selfservice.operator.account-find' }, async ({ page, step }) => {
   await chooseLanguage(page, 'en');
-  await operator(page);
+  const me = await operator(page);
   const { email } = await target('findme');
-  await step('Open the Accounts tab of the operator console', async () => {
+  await step('Open the Accounts tab with no search: every account, newest sign-in first', async () => {
     await page.goto('/operator/signups');
     await page.getByRole('link', { name: 'Accounts' }).click();
     await expect(page).toHaveURL(/\/operator\/accounts$/);
-    await expect(page.getByLabel('Email address')).toHaveAttribute('dir', 'ltr');
+    // The person signed in on another device just now, after the operator: they are listed above the operator.
+    await expect(accountLink(page, me.email).getByText('Operator', { exact: true })).toBeVisible();
+    const order = (await accountsList(page).getByRole('link').allTextContents()).map((text) => (text.includes(email) ? 'person' : text.includes(me.email) ? 'operator' : null)).filter(Boolean);
+    expect(order).toEqual(['person', 'operator']);
+    await expect(accountLink(page, email)).toContainText(/Last signed in \d+ (seconds?|minutes?) ago/);
   });
-  await step('Search for an address no account has', async () => {
+  await step('Type an address no account has: nothing matches, and the query is in the URL', async () => {
     const nobody = address('nobody-here');
-    await page.getByLabel('Email address').fill(nobody);
-    await page.getByRole('button', { name: 'Search' }).click();
-    await expect(page.getByRole('heading', { name: 'No account with this address' })).toBeVisible();
-    await expect(page.getByText(nobody)).toHaveAttribute('dir', 'ltr');
+    await page.getByLabel('Search accounts').fill(nobody);
+    await expect(page.getByRole('heading', { name: `No account matches “${nobody}”` })).toBeVisible();
+    await expect(page).toHaveURL(/\/operator\/accounts\?q=/);
   });
-  await step('Search for the person’s address in capitals: one match, the address in the URL', async () => {
-    await page.getByLabel('Email address').fill(email.toUpperCase());
-    await page.keyboard.press('Enter');
-    const found = page.getByRole('list', { name: 'Account found' });
-    await expect(found.getByText(email)).toBeVisible();
-    await expect(found.getByText('Active')).toBeVisible();
-    await expect(page).toHaveURL(/\/operator\/accounts\?email=/);
+  await step('Type part of the person’s address in capitals: their row, Active', async () => {
+    await page.getByLabel('Search accounts').fill(email.split('@')[0]!.toUpperCase());
+    await expect(accountsList(page).getByRole('link')).toHaveCount(1);
+    await expect(accountLink(page, email).getByText('Active')).toBeVisible();
   });
-  await step('Open the match: who, how they stand, what each action would end, and their profile', async () => {
-    await page.getByRole('list', { name: 'Account found' }).getByRole('link').click();
+  await step('Open their row: who, how they stand, what each action would end, and their profile', async () => {
+    await accountLink(page, email).click();
     await expect(page.getByRole('heading', { level: 2, name: email })).toBeVisible();
     await expect(page.getByText(/Last signed in \d+ minutes? ago · No passkey/)).toBeVisible();
     await expect(accessRow(page, /Sign out everywhere/)).toContainText('1 device · the password still works');
@@ -537,5 +540,111 @@ test('Enable firm features for an operator firm, choosing its owners', { tag: '@
     expect(await memberRole(firm.organizationId, firm.requester.id)).toBe('OWNER');
     expect(await memberRole(firm.organizationId, firm.other.id)).toBe('OWNER');
     expect((await adminAudit(firm.organizationId)).find((e) => e.action === 'firm.enabled')).toMatchObject({ actorType: 'ADMIN', actorId: op.id });
+  });
+});
+
+// ---- MUT-527: the list, your own features, feature names, Your settings -------------------------------------------
+
+test('Searching "basel" finds every account with it in the email or name, in Arabic on a 375 px phone', { tag: '@portal-selfservice.operator.account-search-arabic' }, async ({ page, step }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await chooseLanguage(page, 'ar');
+  await operator(page, 'ar');
+  const byEmail = address('basel');
+  const byName = address('rana');
+  const neither = address('nour');
+  await step('Two people exist, one with basel in the email, one with Basel in the name; a third has neither', async () => {
+    await operatorAccount(byEmail, 'ar', undefined, 'Someone Else');
+    await operatorAccount(byName, 'ar', undefined, 'Rana Basel');
+    await operatorAccount(neither, 'ar', undefined, 'Nour Haddad');
+  });
+  await step('Open الحسابات and type basel: both are listed, the third is not', async () => {
+    await page.goto('/operator/signups');
+    await page.getByRole('link', { name: 'الحسابات' }).click();
+    await expect(accountsList(page)).toBeVisible();
+    await page.getByLabel('ابحث في الحسابات').fill('basel');
+    await expect(page).toHaveURL(/\/operator\/accounts\?q=basel$/);
+    await expect(accountLink(page, byEmail)).toBeVisible();
+    await expect(accountLink(page, byName)).toContainText('Rana Basel');
+    await expect(accountLink(page, neither)).toHaveCount(0);
+    await expect(accountLink(page, byEmail).locator('.hp-operator-email')).toHaveAttribute('dir', 'ltr');
+  });
+  await step('Right to left, with no sideways scroll, the four tabs included', async () => {
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('link', { name: 'إعداداتك' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'the account list at 375 px in Arabic');
+  });
+});
+
+test('Switch receipt reading on your own account with the passkey; the blocked actions are explained once', { tag: '@portal-selfservice.operator.own-feature' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  const me = await operator(page);
+  const flag = () => page.getByRole('region', { name: 'Features' }).getByRole('switch', { name: /Receipt reading/ });
+  await step('Open your own account from the list: one note, no Access rows, no Grant row', async () => {
+    await openAccount(page, me.email);
+    await expect(page.getByText('This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.')).toBeVisible();
+    await expect(page.getByText(/This is your account/)).toHaveCount(1);
+    await expect(page.getByRole('region', { name: 'Access' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Billing' }).getByRole('button', { name: /Grant coverage/ })).toHaveCount(0);
+  });
+  await step('Turn Receipt reading on, confirming with the passkey: it reads on, and the CLI lists you', async () => {
+    await expect(flag()).toContainText('Reads new receipts on our servers and fills in the date, total and vendor.');
+    await expect(flag()).toHaveAttribute('aria-checked', 'false');
+    await flag().click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'true');
+    expect(await featureHolders('receipt_reading')).toContain(me.id);
+  });
+  await step('The server still refuses to disable your own account (409 OWN_ACCOUNT)', async () => {
+    const res = await page.request.post(`/v1/operator/accounts/${me.id}/disable`, { headers: { origin: liveState().origin } });
+    expect(res.status()).toBe(409);
+    expect(((await res.json()) as { error: { details?: { reason?: string } } }).error.details?.reason).toBe('OWN_ACCOUNT');
+  });
+});
+
+test('Receipt reading shows its name and explanation in Arabic, and its own turn-off confirmation', { tag: '@portal-selfservice.operator.feature-name-arabic' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'ar');
+  await operator(page, 'ar');
+  const person = await targetWithId('reading');
+  const flag = () => page.getByRole('region', { name: 'الميزات' }).getByRole('switch', { name: /قراءة الإيصالات/ });
+  await step('Open their account: قراءة الإيصالات is named and explained, never by its key', async () => {
+    await openAccount(page, person.email, 'ar');
+    await expect(flag()).toContainText('تُقرأ الإيصالات الجديدة على خوادمنا ويُملأ التاريخ والمجموع والمورّد.');
+    await expect(page.getByText('receipt_reading')).toHaveCount(0);
+  });
+  await step('Turn it on with the passkey, then off: it asks first, in its own words', async () => {
+    await flag().click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'true');
+    await flag().click();
+    await expect.poll(() => confirmText(page)).toContain(`سيفقد ${person.email} قراءة الإيصالات؛ والإيصالات التي يضيفها من الآن لن تُقرأ.`);
+    await page.getByRole('button', { name: 'إيقاف', exact: true }).click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'false');
+    expect(await featureHolders('receipt_reading')).not.toContain(person.id);
+  });
+});
+
+test('Your settings shows you’re an operator, your passkeys, the step-up, and your own features', { tag: '@portal-selfservice.operator.you-panel' }, async ({ page, step }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await chooseLanguage(page, 'en');
+  await operator(page);
+  const flag = () => page.getByRole('region', { name: 'Your features' }).getByRole('switch', { name: /Receipt reading/ });
+  await step('Open Your settings: operator since, 1 passkey, not confirmed', async () => {
+    await page.goto('/operator/signups');
+    await page.getByRole('link', { name: 'Your settings' }).click();
+    await expect(page).toHaveURL(/\/operator\/you$/);
+    await expect(page.getByText(/^Operator since /)).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Passkeys' })).toContainText('1 passkey');
+    const confirmation = page.getByRole('region', { name: 'Confirmation' });
+    await expect(confirmation).toContainText('Not confirmed');
+    await expect(confirmation).toContainText('Changes will ask for your passkey.');
+    await expectNoHorizontalOverflow(page, 'Your settings at 375 px');
+  });
+  await step('Turn Receipt reading on for yourself with the passkey: on, and confirmed until a time', async () => {
+    await flag().click();
+    await expect(flag()).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('region', { name: 'Confirmation' })).toContainText(/Confirmed with your passkey until \d{1,2}:\d{2}/);
+  });
+  await step('Manage passkeys opens You › Account with the Passkeys drawer', async () => {
+    await page.getByRole('region', { name: 'Passkeys' }).getByRole('link', { name: /Manage passkeys/ }).click();
+    await expect(page).toHaveURL(/\/you\/account\?passkeys=true$/);
+    await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
   });
 });

@@ -34,6 +34,27 @@
 - `docs/commercial/pilot-offer.md` (en + ar) and the reply template `hosted-request-reply.md` (en + ar) quote the new prices; the offer also names the list prices after the lock and says the founder price is never shown outside the pilot. The pilot runbook names the founder amounts and the live Firm catalog.
 - `qa/support/billing-live.mjs` keeps the sandbox's four `freelancer_founder_*` prices at the live amounts. Live Stripe had no subscriptions, so nothing moved.
 
+## [Unreleased] - 2026-10-31 — MUT-527: the operator console lists every account, switches your own features, and has Your settings (ADR-234, E10 amended)
+
+**Why:** Basel's screenshot of his own account: every row greyed out with the same line pointing to You › Account, which has no feature switches; `receipt_reading` showed its raw key; accounts could only be found by exact email.
+
+### Added
+- Server: `GET /v1/operator/accounts` without `email` lists every account (newest sign-in first; `limit`, `cursor`, `q`); `OperatorAccountListQuery`, `OperatorAccountList`, `OperatorAccountListItem`; `server/src/operator/account-list.ts` (order, cursor, query); `users.listForOperator` in the port, memory and Prisma stores (store guard `operator`); `operatorSince` and `passkeyLastUsedAt` on `OperatorAccount`. API 1.93.0-mut527. No migration.
+- Portal: `OperatorYouPage` (`/operator/you`, the Your settings tab); `src/hosted/operator/featureNames.ts` (`humanizeFeature`, `useFeatureText`); `useStepUpUntil`; `clockText`; `useOperatorAccountList`; `api.operatorAccounts`; the no-passkey note in `OperatorLayout`; i18n `hosted.operator.{tabs.you, you.*, noPasskey.*, features.receipt_reading.*}` and the list's `accounts.*` strings (ar + en).
+
+### Changed
+- `PUT`/`DELETE /v1/operator/accounts/{userId}/features/{feature}` allow the operator's own account (step-up and audit as for anyone); disable, enable, sign out everywhere, the setup link and billing grants on your own account stay 409 `OWN_ACCOUNT`.
+- `OperatorAccountsPage`: the list with search as you type and Load more, replacing the exact-email search (`?q=`; `?email=` links still land). `OperatorAccountPage`: one own-account note, Access hidden; `OperatorBillingSection`: no Grant row on your own account; `OperatorFeaturesSection`: no `own` prop, switches live on your own account, humanised names for unnamed flags, optional group `label`.
+- `RowNavLink` takes `search` (deep links such as `{ passkeys: true }`).
+- Removed i18n `hosted.operator.accounts.{search, resultsLabel, own}`.
+
+### Fixed
+- `routes-receipt-reading.test.ts` flake: the "1540" checks could match a random UUID or pino's `time`/`pid`; `scrubIds` blanks them first.
+
+### Technical
+- Tests: `routes-operator-account-list.test.ts` (new), the store contract's account list block (memory and Postgres, run against the test database), `store-guard.test.ts`, `routes-operator-{accounts,billing-firms}.test.ts` updated for the amendment; portal `OperatorConsoleMut527.test.tsx` (new), `featureNames.test.ts` (new), `OperatorAccountPage.test.tsx` updated. Release-QA: `qa/features/portal-selfservice/operator.yaml` (`account-find` rewritten; `account-search-arabic`, `own-feature`, `feature-name-arabic`, `you-panel`), specs in `qa/specs/portal-selfservice/operator.spec.ts`; `operatorAccount()` takes a display name.
+- TD-297 (the list scans `users`; accepted at this size).
+
 ## [Unreleased] - 2026-10-31 — MUT-529: the Freelancer list price is ₪29 / $9 a month
 
 - Basel set the list price to ₪29 / $9 a month, ₪290 / $90 a year, VAT-exclusive (pricing program MUT-528, ADR-235, overriding ADR-180 §6's ₪49 / $16). The app reads prices from the Stripe catalog, so no product code changed.

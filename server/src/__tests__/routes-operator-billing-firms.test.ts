@@ -305,20 +305,19 @@ describe('MUT-462 the console’s rules hold for every new route', () => {
     expect((await post(h, `/v1/operator/firm-requests/${owned.organizationId}/decline`, token)).status).toBe(404);
   });
 
-  it('never grants billing or a flag on the operator’s own account (409 OWN_ACCOUNT), and nothing changes', async () => {
+  // MUT-527 (E10 amendment): flags on the operator's own account are allowed now (routes-operator-account-list.test.ts).
+  it('never grants or revokes billing on the operator’s own account (409 OWN_ACCOUNT), and nothing changes', async () => {
     const h = harness();
     const op = await operator(h);
     for (const [method, path, body] of [
       ['POST', accountPath(op.id, 'billing-grants'), GRANT],
-      ['PUT', accountPath(op.id, 'features/agent_access'), undefined],
-      ['DELETE', accountPath(op.id, 'features/agent_access'), undefined],
+      ['DELETE', accountPath(op.id, `billing-grants/${UNKNOWN}`), undefined],
     ] as const) {
       const res = await send(h, method, path, op.token, body);
       expect(res.status, `${method} ${path}`).toBe(409);
       expect(await read(res)).toMatchObject({ error: { details: { reason: 'OWN_ACCOUNT' } } });
     }
     expect(await h.store.billing.listGrants({ userId: op.id })).toEqual([]);
-    expect(await h.store.features.activeFor(op.id)).toEqual([]);
   });
 
   it('an operator whose own trial lapsed still grants, flags and decides firm requests (ADR-212 D2)', async () => {

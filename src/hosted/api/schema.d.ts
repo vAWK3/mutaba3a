@@ -16269,11 +16269,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Find an account by its exact email, normalised (MUT-461). No match is 200 with account null */
+        /**
+         * List every account, newest sign-in first, paged and filtered by `q` (MUT-527); or, with `email`, find one by its exact address (MUT-461)
+         * @description Without `email`: OperatorAccountList, newest sign-in first (never signed in last), then newest created; `q` keeps the accounts whose email or display name contains it, ignoring case. With `email`: OperatorAccountSearch, the exact normalised address, no match being 200 with account null (unchanged since MUT-461).
+         */
         get: {
             parameters: {
-                query: {
-                    email: string;
+                query?: {
+                    /** @description MUT-461: an exact, normalised address; answers OperatorAccountSearch. Without it the route lists (MUT-527). */
+                    email?: string;
+                    /** @description MUT-527: any part of the email or the display name, ignoring case. Blank lists everyone. */
+                    q?: string;
+                    /** @description MUT-527: 1–100, default 50. */
+                    limit?: number;
+                    /** @description MUT-527: `nextCursor` from the previous page. */
+                    cursor?: string;
                 };
                 header?: never;
                 path?: never;
@@ -16281,13 +16291,13 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Zero or one account, and when the step-up lapses */
+                /** @description A page of accounts (no `email`), or zero or one account (`email`); and when the step-up lapses */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["OperatorAccountSearch"];
+                        "application/json": components["schemas"]["OperatorAccountList"] | components["schemas"]["OperatorAccountSearch"];
                     };
                 };
                 /** @description Not signed in */
@@ -16317,7 +16327,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description Validation failed */
+                /** @description Validation failed (a limit outside 1–100, or a cursor this API did not issue: details.field) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -16929,7 +16939,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Turn a feature on for the person (idempotent; a second grant keeps the first grantedAt) (MUT-462) */
+        /** Turn a feature on for the person, your own account included (idempotent; a second grant keeps the first grantedAt) (MUT-462, MUT-527) */
         put: {
             parameters: {
                 query?: never;
@@ -16978,7 +16988,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup) */
+                /** @description CONFLICT: details.reason USER_PENDING_REVIEW (a flag for a waiting signup) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -16999,7 +17009,7 @@ export interface paths {
             };
         };
         post?: never;
-        /** Turn a feature off for the person (idempotent); agent access off disconnects every agent (MUT-462) */
+        /** Turn a feature off for the person, your own account included (idempotent); agent access off disconnects every agent (MUT-462, MUT-527) */
         delete: {
             parameters: {
                 query?: never;
@@ -17048,7 +17058,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT: details.reason OWN_ACCOUNT (your own account), or USER_PENDING_REVIEW (a flag for a waiting signup) */
+                /** @description CONFLICT: details.reason USER_PENDING_REVIEW (a flag for a waiting signup) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -22519,6 +22529,23 @@ export interface components {
             /** Format: date-time */
             stepUpUntil: string;
         };
+        OperatorAccountList: {
+            data: components["schemas"]["OperatorAccountListItem"][];
+            nextCursor: string | null;
+            /** Format: date-time */
+            stepUpUntil: string | null;
+        };
+        OperatorAccountListItem: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            displayName: string;
+            status: components["schemas"]["UserStatus"];
+            operator: boolean;
+            /** Format: date-time */
+            lastSignInAt: string | null;
+            features: string[];
+        };
         OperatorAccountSearch: {
             account: {
                 /** Format: uuid */
@@ -22538,7 +22565,11 @@ export interface components {
         OperatorAccount: components["schemas"]["UserSummary"] & {
             closing: boolean;
             operator: boolean;
+            /** Format: date-time */
+            operatorSince: string | null;
             passkeyCount: number;
+            /** Format: date-time */
+            passkeyLastUsedAt: string | null;
             features: string[];
             activeSessionCount: number;
             agentGrantCount: number;

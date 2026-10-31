@@ -8,6 +8,7 @@ import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt
 import { categoryNameKey } from '../expenses/names.js';
 import { presetKeyForName } from '../expenses/presets.js';
 import { compareByCreatedAtThenId, isAfterCursor } from '../pagination.js';
+import { compareForOperatorList, isAfterOperatorCursor, matchesOperatorQuery } from '../operator/account-list.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
@@ -594,6 +595,18 @@ export class MemoryLedgerStore implements LedgerStore {
           for (const a of this.termsAcceptances.values()) if (a.userId === u.id && (!latest || a.version > latest.version)) latest = a;
           return { userId: u.id, email: u.email, status: u.status, latestVersion: latest?.version ?? null, latestClientRelease: latest?.clientRelease ?? null };
         }),
+    listForOperator: async ({ q, limit, cursor }) => {
+      const rows = [...this.people.values()]
+        .filter((u) => matchesOperatorQuery(u, q) && (!cursor || isAfterOperatorCursor(u, cursor)))
+        .sort(compareForOperatorList);
+      const page = rows.slice(0, limit);
+      const items = page.map((u) => ({
+        user: { ...u },
+        features: [...this.featureGrants.values()].filter((g) => g.userId === u.id && g.revokedAt === null && isFeature(g.feature)).map((g) => g.feature).sort(),
+      }));
+      const last = page.at(-1);
+      return { items, nextCursor: rows.length > limit && last ? { lastSignInAt: last.lastSignInAt, createdAt: last.createdAt, id: last.id } : null };
+    },
     acceptTerms: async (input) => {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('terms_acceptances.userId');
       const { created } = this.recordTermsAcceptance(input.userId, input, input.at);

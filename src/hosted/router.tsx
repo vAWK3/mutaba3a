@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useRef, type ReactNode, type RefObject } from 'react';
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react';
 import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
@@ -45,6 +45,7 @@ import { OperatorSignupsPage } from './pages/operator/OperatorSignupsPage';
 import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
+import { OperatorYouPage } from './pages/operator/OperatorYouPage';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -373,22 +374,32 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     component: () => <OperatorPage>{(heading) => <OperatorSignupsPage headingRef={heading} />}</OperatorPage>,
   });
 
-  /** MUT-461 (17A): find an account by email; the address stays in the URL. */
+  /**
+   * MUT-527: every account, filtered by `?q=` (MUT-461's `?email=` links still land, as the query). Typing replaces the
+   * address rather than adding to history, so Back leaves the list instead of stepping through each letter.
+   */
   const operatorAccountsRoute = createRoute({
     getParentRoute: () => authedRoute,
     ...PAGE_CRASH,
     path: '/operator/accounts',
-    validateSearch: (search: Record<string, unknown>): { email?: string } => (typeof search.email === 'string' && search.email ? { email: search.email } : {}),
-    component: function OperatorAccounts() {
-      const { email = '' } = operatorAccountsRoute.useSearch();
-      const navigate = useNavigate();
-      return (
-        <OperatorPage>
-          {/* The key starts the field over when Back changes the address. */}
-          {() => <OperatorAccountsPage key={email} email={email} onSearch={(next) => void navigate({ to: '/operator/accounts', search: { email: next } })} />}
-        </OperatorPage>
-      );
+    validateSearch: (search: Record<string, unknown>): { q?: string } => {
+      const q = typeof search.q === 'string' ? search.q : typeof search.email === 'string' ? search.email : '';
+      return q.trim() ? { q: q.trim() } : {};
     },
+    component: function OperatorAccounts() {
+      const { q = '' } = operatorAccountsRoute.useSearch();
+      const navigate = useNavigate();
+      const onSearch = useCallback((next: string) => void navigate({ to: '/operator/accounts', search: next ? { q: next } : {}, replace: true }), [navigate]);
+      return <OperatorPage>{() => <OperatorAccountsPage q={q} onSearch={onSearch} />}</OperatorPage>;
+    },
+  });
+
+  /** MUT-527: the operator's own settings: their mark, passkeys, step-up and features. */
+  const operatorYouRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/you',
+    component: () => <OperatorPage>{() => <OperatorYouPage />}</OperatorPage>,
   });
 
   /** MUT-461 (5A): one account and its actions. */
@@ -433,6 +444,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       operatorAccountsRoute,
       operatorAccountRoute,
       operatorFirmsRoute,
+      operatorYouRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
         overviewRoute,

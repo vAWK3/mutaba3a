@@ -1571,6 +1571,24 @@ export interface UserRepository {
    * none) and, MUT-354, the client release recorded with that acceptance (null if none).
    */
   listLatestTermsVersions(): Promise<Array<{ userId: string; email: string; status: UserStatus; latestVersion: string | null; latestClientRelease: string | null }>>;
+  /**
+   * MUT-527 (operator only): one page of every account, newest sign-in first (never signed in last), then newest
+   * created, then id descending; each with the features that are on (sorted). `q`, when given, keeps the accounts whose
+   * email or display name contains it, ignoring case; `%` and `_` are plain text. `nextCursor` is null on the last page.
+   */
+  listForOperator(input: { q: string | null; limit: number; cursor: OperatorAccountCursor | null }): Promise<{ items: OperatorAccountListItem[]; nextCursor: OperatorAccountCursor | null }>;
+}
+
+/** MUT-527: where the operator's account list continues: the last row's sort key. */
+export interface OperatorAccountCursor {
+  lastSignInAt: Date | null;
+  createdAt: Date;
+  id: string;
+}
+
+export interface OperatorAccountListItem {
+  user: UserRecord;
+  features: string[];
 }
 
 /** MUT-324 (ADR-102): one person's acceptance of one terms version, tied to the exact text by its sha256. */

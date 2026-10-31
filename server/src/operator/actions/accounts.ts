@@ -6,6 +6,7 @@ import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from 
 import type { Entitlement } from '../../billing/entitlement.js';
 import { ApiError } from '../../errors.js';
 import { FEATURES } from '../../features.js';
+import { decodeOperatorCursor, encodeOperatorCursor, OPERATOR_LIST_DEFAULT_LIMIT, operatorQueryOf } from '../account-list.js';
 import type { Logger } from '../../logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from '../../observability/reporter.js';
 import { profileOwnerOf } from '../../personal-profile.js';
@@ -214,7 +215,9 @@ export function accountActions(options: AccountActionOptions) {
       ...serializeUser(user),
       closing: user.closure !== null,
       operator: user.operatorAt !== null,
+      operatorSince: user.operatorAt?.toISOString() ?? null,
       passkeyCount: passkeys.length,
+      passkeyLastUsedAt: latestUse(passkeys.map((p) => p.lastUsedAt)),
       features,
       activeSessionCount,
       agentGrantCount: agentGrants.length,
@@ -223,5 +226,33 @@ export function accountActions(options: AccountActionOptions) {
     };
   }
 
-  return { findByEmail, mustGet, memberOrganizations, audit, setStatus, revokeSessions, issueSetupLink, view };
+  /** MUT-527: one page of every account, as the console lists them. */
+  async function list(query: { q?: string | undefined; limit?: number | undefined; cursor?: string | undefined }) {
+    const page = await store.users.listForOperator({
+      q: operatorQueryOf(query.q),
+      limit: query.limit ?? OPERATOR_LIST_DEFAULT_LIMIT,
+      cursor: query.cursor ? decodeOperatorCursor(query.cursor) : null,
+    });
+    return {
+      data: page.items.map(({ user, features }) => ({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        status: user.status,
+        operator: user.operatorAt !== null,
+        lastSignInAt: user.lastSignInAt?.toISOString() ?? null,
+        features,
+      })),
+      nextCursor: page.nextCursor ? encodeOperatorCursor(page.nextCursor) : null,
+    };
+  }
+
+  return { findByEmail, mustGet, memberOrganizations, audit, setStatus, revokeSessions, issueSetupLink, view, list };
+}
+
+/** The newest of several instants, as ISO; null when there is none. */
+function latestUse(instants: Array<Date | null>): string | null {
+  let latest: Date | null = null;
+  for (const at of instants) if (at && (!latest || at > latest)) latest = at;
+  return latest?.toISOString() ?? null;
 }

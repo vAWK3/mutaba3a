@@ -20,6 +20,7 @@ import { MAX_BILLING_DAY } from './retainers/schedule.js';
 import { PRICING_BASES, VAT_TREATMENTS } from './vat.js';
 import { CREDIT_REASON_CODES } from './payments/credit.js';
 import { VERDICT_PROFILE_KINDS, VERDICT_TOTAL_LABELS } from './summaries/verdict.js';
+import { OPERATOR_LIST_DEFAULT_LIMIT, OPERATOR_LIST_MAX_LIMIT } from './operator/account-list.js';
 
 /**
  * Wire schemas. These are the OpenAPI components; every route references
@@ -1197,12 +1198,43 @@ export const OperatorAccountSearchSchema = z
   })
   .openapi('OperatorAccountSearch');
 
+/** MUT-527: GET /v1/operator/accounts with no `email`: a page of every account. */
+export const OperatorAccountListQuerySchema = z.object({
+  email: z.string().min(1).max(320).optional().openapi({ description: 'MUT-461: an exact, normalised address; answers OperatorAccountSearch. Without it the route lists (MUT-527).' }),
+  q: z.string().max(320).optional().openapi({ description: 'MUT-527: any part of the email or the display name, ignoring case. Blank lists everyone.' }),
+  limit: z.coerce.number().int().min(1).max(OPERATOR_LIST_MAX_LIMIT).optional().openapi({ description: `MUT-527: 1–${OPERATOR_LIST_MAX_LIMIT}, default ${OPERATOR_LIST_DEFAULT_LIMIT}.` }),
+  cursor: z.string().max(512).optional().openapi({ description: 'MUT-527: `nextCursor` from the previous page.' }),
+});
+
+/** MUT-527: one row of the operator's account list. */
+export const OperatorAccountListItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    email: z.string(),
+    displayName: z.string(),
+    status: UserStatusSchema,
+    operator: z.boolean(),
+    lastSignInAt: z.string().datetime().nullable(),
+    /** The per-user flags that are on (MUT-433), sorted. */
+    features: z.array(z.string()),
+  })
+  .openapi('OperatorAccountListItem');
+
+/** MUT-527: newest sign-in first (never signed in last), then newest created; `nextCursor` null on the last page. */
+export const OperatorAccountListSchema = z
+  .object({ data: z.array(OperatorAccountListItemSchema), nextCursor: z.string().nullable(), stepUpUntil: z.string().datetime().nullable() })
+  .openapi('OperatorAccountList');
+
 /** MUT-461 (design 4A, 5A): one account as the operator sees it before acting. Never a credential or a link. */
 export const OperatorAccountSchema = UserSummarySchema.extend({
   /** MUT-333: the account is closing (30 days' grace, then the hard delete). */
   closing: z.boolean(),
   operator: z.boolean(),
+  /** MUT-527: when the CLI made the person an operator; null when they are not one. */
+  operatorSince: z.string().datetime().nullable(),
   passkeyCount: z.number().int().min(0),
+  /** MUT-527: the most recent use of any of their passkeys; null with none, or none used yet. */
+  passkeyLastUsedAt: z.string().datetime().nullable(),
   /** The per-user flags that are on (MUT-433). */
   features: z.array(z.string()),
   /** Sessions that still work, phone and portal: what sign out everywhere or a disable would end. */
