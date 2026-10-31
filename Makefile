@@ -1,6 +1,7 @@
 # Mutaba3a release entry points.
 #
-#   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x>)
+#   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x> → netlify deploy)
+#   make deploy web       redeploy what is on origin/main to Netlify, no version bump
 #   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh → tag api-v<x>)
 #   make release full     web, then server — each gated and confirmed on its own
 #
@@ -8,6 +9,10 @@
 # stray worktrees, in sync with origin, the right node, and the tools and
 # secrets that target needs. A failed check stops the release before anything
 # is built, committed, pushed or rolled.
+#
+# Netlify's Git builds are stopped for this site, so pushing to main deploys
+# nothing: only `make release web` and `make deploy web` publish the web app
+# (scripts/netlify-deploy.sh).
 #
 # Run `make doctor` any time for a read-only report of the same checks.
 #
@@ -101,6 +106,9 @@ export MUTABA3A_TURNSTILE_SITE_KEY
 # Looked up only when the portal has a DSN: with no DSN the build needs no token.
 SENTRY_TOKEN_KEYCHAIN_SERVICE := release-kit
 SENTRY_TOKEN_KEYCHAIN_ACCOUNT := barmajiyat/SENTRY_AUTH_TOKEN
+# The mutaba3a site on the Barmajiyat Netlify team. scripts/netlify-deploy.sh deploys to it; preflight checks it.
+NETLIFY_SITE ?= 95c9c629-63d0-4850-9b73-7d80199b8d75
+export NETLIFY_SITE SENTRY_TOKEN_KEYCHAIN_SERVICE SENTRY_TOKEN_KEYCHAIN_ACCOUNT
 
 C_BOLD  := \033[1m
 C_DIM   := \033[2m
@@ -115,6 +123,12 @@ ifeq (release,$(firstword $(MAKECMDGOALS)))
   RELEASE_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
   ifneq ($(RELEASE_ARGS),)
     $(eval $(RELEASE_ARGS):;@:)
+  endif
+endif
+ifeq (deploy,$(firstword $(MAKECMDGOALS)))
+  DEPLOY_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+  ifneq ($(DEPLOY_ARGS),)
+    $(eval $(DEPLOY_ARGS):;@:)
   endif
 endif
 ifeq (ci,$(firstword $(MAKECMDGOALS)))
@@ -133,7 +147,7 @@ endif
 # Printed at the end of each release: CI no longer starts on push.
 CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on what you just pushed: make ci %s$(C_OFF)\n\n'
 
-.PHONY: help release release-web release-server release-full rollback-server ci create \
+.PHONY: help release release-web release-server release-full rollback-server ci create deploy deploy-web \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e qa-view \
         bump-web bump-server \
@@ -143,10 +157,11 @@ CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on w
 
 help:
 	@printf '$(C_BOLD)Mutaba3a — release$(C_OFF)\n\n'
-	@printf '  $(C_GREEN)make release web$(C_OFF)       deploy the frontend to Netlify (push to $(RELEASE_BRANCH))\n'
+	@printf '  $(C_GREEN)make release web$(C_OFF)       release the frontend: bump, push to $(RELEASE_BRANCH), deploy to Netlify\n'
+	@printf '  $(C_GREEN)make deploy web$(C_OFF)        redeploy origin/$(RELEASE_BRANCH) to Netlify (no bump; a push alone deploys nothing)\n'
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
-	@printf '  $(C_DIM)  after a terms bump: make release web, wait for Netlify, then make release server$(C_OFF)\n'
+	@printf '  $(C_DIM)  after a terms bump: make release web, then make release server$(C_OFF)\n'
 	@printf '  $(C_GREEN)make rollback-server SHA=<sha|api-vX.Y.Z>$(C_OFF)   roll the API + portal back to that commit'"'"'s image (no build, no migration)\n'
 	@printf '\n$(C_BOLD)Accounts$(C_OFF) $(C_DIM)(live admin API of $(ENVIRONMENT); prompts, then confirms)$(C_OFF)\n'
 	@printf '  $(C_GREEN)make create user$(C_OFF)       a person with their personal profile (optionally joining an existing firm)\n'
@@ -190,6 +205,25 @@ release:
 	  '')     printf 'usage: make release web | make release server | make release full\n' >&2; exit 2 ;; \
 	  *)      printf 'unknown release target "%s" — expected web, server, or full\n' '$(RELEASE_ARGS)' >&2; exit 2 ;; \
 	esac
+
+# `make deploy web`: publish origin/$(RELEASE_BRANCH) to Netlify again without a release —
+# a failed deploy at the end of `make release web`, or a change that needs no
+# version. HEAD must already be on origin so the live site is always a pushed commit.
+deploy:
+	@case '$(DEPLOY_ARGS)' in \
+	  web) $(MAKE) --no-print-directory deploy-web ;; \
+	  '')  printf 'usage: make deploy web\n' >&2; exit 2 ;; \
+	  *)   printf 'unknown deploy target "%s" — expected web\n' '$(DEPLOY_ARGS)' >&2; exit 2 ;; \
+	esac
+
+deploy-web: preflight-web
+	@if ! git merge-base --is-ancestor HEAD origin/$(RELEASE_BRANCH); then \
+	  printf '$(C_YEL)HEAD is not on origin/$(RELEASE_BRANCH) — push it first (or run make release web).$(C_OFF)\n' >&2; \
+	  exit 1; \
+	fi
+	@version=$$(node -p "require('./package.json').version"); \
+	if ! scripts/confirm.sh "Deploy web v$$version ($$(git rev-parse --short HEAD)) to Netlify production?"; then exit 0; fi; \
+	scripts/netlify-deploy.sh "$$version"
 
 # ---------------------------------------------------------------------------
 # Accounts — operator-issued, no signup (ADR-037, TD-018). Both flows are
@@ -290,9 +324,10 @@ bump-server:
 	@scripts/bump-version.sh server
 
 # ---------------------------------------------------------------------------
-# release web — Netlify builds whatever lands on $(RELEASE_BRANCH), so the
-# deploy *is* the push. Gates run before the bump so a failure leaves the
-# version untouched; the build runs after, with the new version baked in.
+# release web — gates run before the bump so a failure leaves the version
+# untouched; the build runs after, with the new version baked in. Netlify does
+# not build on push (its Git builds are stopped), so after the push and tag
+# scripts/netlify-deploy.sh builds HEAD here and publishes it.
 # ---------------------------------------------------------------------------
 
 release-web: preflight-web
@@ -317,12 +352,12 @@ release-web: preflight-web
 	fi; \
 	printf '\n$(C_BOLD)About to deploy the web app$(C_OFF)\n'; \
 	printf '  version   %s\n' "$$version"; \
-	printf '  branch    %s → origin (Netlify builds it)\n' '$(RELEASE_BRANCH)'; \
+	printf '  branch    %s → origin, then netlify deploy --prod\n' '$(RELEASE_BRANCH)'; \
 	printf '  commits   %s ahead of origin, plus the version bump\n' \
 	  "$$(git rev-list --count origin/$(RELEASE_BRANCH)..HEAD 2>/dev/null || echo '?')"; \
 	scripts/ci-reminder.sh web; \
 	scripts/before-release.sh web; \
-	if ! scripts/confirm.sh 'Push to $(RELEASE_BRANCH) and let Netlify deploy it?'; then \
+	if ! scripts/confirm.sh 'Push to $(RELEASE_BRANCH) and deploy it to Netlify?'; then \
 	  printf '$(C_YEL)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; \
 	  exit 0; \
 	fi; \
@@ -330,8 +365,9 @@ release-web: preflight-web
 	git diff --cached --quiet || git commit -m "release: web v$$version"; \
 	git push origin $(RELEASE_BRANCH); \
 	scripts/tag-release.sh web "$$version" --push; \
-	printf '\n$(C_GREEN)✓ v%s pushed to %s — Netlify is building$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
-	printf '$(C_DIM)Watch the build, then hard-reload the site and confirm the version in Settings.$(C_OFF)\n'; \
+	printf '\n$(C_GREEN)✓ v%s pushed to %s$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
+	scripts/netlify-deploy.sh "$$version"; \
+	printf '$(C_DIM)Hard-reload the site and confirm the version in Settings.$(C_OFF)\n'; \
 	printf '\n$(C_BOLD)Live OAuth client document (MUT-387)$(C_OFF)\n'; \
 	oauth_ok=1; npm run --silent release:oauth-client || oauth_ok=0; \
 	$(CI_REMINDER) web; \

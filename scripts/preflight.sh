@@ -236,7 +236,7 @@ fi
 # Target-specific: configuration and secrets
 # ---------------------------------------------------------------------------
 if [[ "$MODE" == "web" ]]; then
-  head_ "Web deploy (Netlify, builds from $RELEASE_BRANCH)"
+  head_ "Web deploy (netlify deploy from this checkout)"
 
   if [[ -f netlify.toml ]]; then
     if grep -q 'publish *= *"dist-web"' netlify.toml && grep -q 'command *= *"npm run build:web[" ]' netlify.toml; then
@@ -261,8 +261,29 @@ if [[ "$MODE" == "web" ]]; then
     if git ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
       ok "push credentials for origin work"
     else
-      bad "cannot authenticate against origin — the web deploy is a push to $RELEASE_BRANCH"
+      bad "cannot authenticate against origin — a web release pushes to $RELEASE_BRANCH"
     fi
+  fi
+
+  # Netlify's Git builds are stopped for this site: scripts/netlify-deploy.sh is the
+  # only way the web app reaches production, so the CLI must be installed and signed in.
+  if have netlify; then
+    if [[ "${SKIP_REMOTE:-0}" == "1" ]]; then
+      warn "SKIP_REMOTE=1 — Netlify access not checked"
+    elif SITE_JSON="$(netlify api getSite --data "{\"site_id\":\"${NETLIFY_SITE:-}\"}" 2>/dev/null)"; then
+      STOP_BUILDS="$(printf '%s' "$SITE_JSON" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const s=JSON.parse(d);console.log(s.name+" "+Boolean((s.build_settings||{}).stop_builds))})' 2>/dev/null || true)"
+      ok "netlify CLI can deploy to ${STOP_BUILDS%% *}"
+      if [[ "${STOP_BUILDS##* }" != "true" ]]; then
+        warn "Netlify Git builds are on again — every push to $RELEASE_BRANCH deploys (and spends credits) besides this release"
+        hint "Netlify > Site configuration > Build & deploy > Continuous deployment > Stop builds"
+      fi
+    else
+      bad "netlify CLI cannot reach site ${NETLIFY_SITE:-<unset>}"
+      hint "netlify login   (an account on the Barmajiyat team)"
+    fi
+  else
+    bad "netlify CLI is not installed — the web deploy runs it"
+    hint "npm i -g netlify-cli && netlify login"
   fi
 fi
 
