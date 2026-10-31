@@ -151,7 +151,9 @@ section once MUT-300 lands (§9).
   1. On the Stripe **Customer**, set metadata `mutaba3a_user_id` = their user id (from `npm run users:…` or the
      admin listing). For a firm, also set `mutaba3a_organization_id` = the firm's profile id on the
      **Subscription**. It only counts if they own that profile, or if it's an operator firm.
-  2. Create the subscription with a catalogue price (lookup keys `freelancer_founder_monthly_ils` …).
+  2. Create the subscription with a catalogue price (lookup keys `freelancer_founder_monthly_ils` …): the founder
+     prices are ₪21 / $6 a month and ₪210 / $60 a year (MUT-530), with a 12-month schedule whose second phase is the
+     `freelancer_list_*` price.
   3. Check the subscription covers them without the grant. Only then revoke it:
 
   ```bash
@@ -197,7 +199,9 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 
 1. **Catalogue.** Each Product has metadata `tier` = `freelancer` or `firm`, backfilled on Products that already
    exist. A subscription whose product has no tier is never mirrored (`UNKNOWN_TIER`). Prices carry the lookup keys
-   `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`.
+   `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`. Live amounts (MUT-528, 2026-10-31): Freelancer
+   founder 2100 / 21000 ILS and 600 / 6000 USD; Firm founder 10900 / 109000 ILS and 3300 / 33000 USD; Firm list
+   (`firm_list_*`, product `mtb3a_firm`) 14900 / 149000 ILS and 4500 / 45000 USD.
 2. **Existing pilot customers.** Set `mutaba3a_user_id` on every pilot Customer and `mutaba3a_organization_id`
    on every firm's Subscription (§1.5).
 3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout

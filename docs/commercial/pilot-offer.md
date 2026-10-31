@@ -16,6 +16,8 @@
 > - the VAT wording: "Prices exclude VAT; VAT is added where the law requires it.";
 > - firms pay the Freelancer price until firm books v1 ships, then move to the Firm founder price (§2).
 >
+> **Decided 2026-10-31** (pricing program MUT-528, MUT-530, ADR-235): the founder prices drop to **₪21 / $6** (Freelancer) and **₪109 / $33** (Firm) a month, below the list prices ₪29 / $9 and ₪149 / $45. They were ₪39 / $10 and ₪299 / $80.
+>
 > The rate per country is open in MUT-355. It blocks the first invoice, not this sign-off. §6 lists what else is open.
 
 ## 1. Who the pilot is for
@@ -35,15 +37,16 @@ Founder prices, monthly, excluding VAT:
 
 | Tier | Monthly | Yearly (2 months free) |
 |---|---|---|
-| **Freelancer** | ₪39 / $10 | ₪390 / $100 |
-| **Firm**, per firm | ₪299 / $80 | ₪2,990 / $800 |
+| **Freelancer** | ₪21 / $6 | ₪210 / $60 |
+| **Firm**, per firm | ₪109 / $33 | ₪1,090 / $330 |
 
 - Customers in Israel pay in **ILS**; everyone else (Jordan, the Gulf, elsewhere) pays in **USD**.
 - **The founder price stays locked for 12 months** from the day the account opens, whatever the list price becomes.
 - **A yearly plan costs 10× the monthly price.**
+- **The list prices** after the lock, for reference: Freelancer ₪29 / $9, Firm ₪149 / $45 a month (MUT-528). The founder price is never shown to anyone outside the pilot.
 - **VAT:** say exactly this: "Prices exclude VAT; VAT is added where the law requires it." Don't name a rate. The rate for each customer country is MUT-355 (Barmajiyat Ltd's accountant), which must be settled before the first invoice. Stripe Tax takes this over in MUT-332.
 - **Pilot length:** the pilot runs **3 months**. After that the founder price continues until its 12 months are up.
-- **Firms during the pilot:** until firm books v1 ships, the Firm tier has nothing the Freelancer tier lacks (staff invites come later, MUT-305/306). So a firm joins at the **Freelancer price** (₪39 / $10). When firm books v1 ships, tell the firm first, then move it to the **Firm founder price** (₪299 / $80), locked for 12 months from that day.
+- **Firms during the pilot:** until firm books v1 ships, the Firm tier has nothing the Freelancer tier lacks (staff invites come later, MUT-305/306). So a firm joins at the **Freelancer founder price** (₪21 / $6). When firm books v1 ships, tell the firm first, then move it to the **Firm founder price** (₪109 / $33), locked for 12 months from that day.
 
 ## 3. What each tier includes
 
@@ -135,15 +138,16 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 
 | الباقة | شهريًا | سنويًا (شهران مجانًا) |
 |---|---|---|
-| **المستقل** | ‏39 ₪ / ‏10 $ | ‏390 ₪ / ‏100 $ |
-| **المكتب**، لكل مكتب | ‏299 ₪ / ‏80 $ | ‏2,990 ₪ / ‏800 $ |
+| **المستقل** | ‏21 ₪ / ‏6 $ | ‏210 ₪ / ‏60 $ |
+| **المكتب**، لكل مكتب | ‏109 ₪ / ‏33 $ | ‏1,090 ₪ / ‏330 $ |
 
 - الدفع **بالشيكل** داخل فلسطين، و**بالدولار** لبقية الدول.
 - **السعر ثابت 12 شهرًا** من يوم فتح الحساب.
 - السعر السنوي يعادل **10 أشهر**.
+- **أسعار القائمة** بعد انتهاء التثبيت، للمرجع: المستقل ‏29 ₪ / ‏9 $، والمكتب ‏149 ₪ / ‏45 $ شهريًا. لا يُعرض سعر المؤسسين على أحد خارج التجربة.
 - **ضريبة القيمة المضافة:** نقول هذا بالضبط: «الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون.» لا نذكر نسبة. نسبة كل بلد يحددها محاسب الشركة في MUT-355 قبل أول فاتورة.
 - **مدة التجربة:** **3 أشهر**. بعدها يستمر سعر المؤسسين حتى تكتمل أشهره الاثنا عشر.
-- **المكاتب خلال التجربة:** يدفع المكتب **سعر باقة المستقل** (‏39 ₪ / ‏10 $) حتى تصدر النسخة الأولى من دفاتر المكتب. عندها نُبلغه أولًا، ثم ينتقل إلى سعر المؤسسين لباقة المكتب (‏299 ₪ / ‏80 $)، ثابتًا 12 شهرًا من ذلك اليوم.
+- **المكاتب خلال التجربة:** يدفع المكتب **سعر المؤسسين لباقة المستقل** (‏21 ₪ / ‏6 $) حتى تصدر النسخة الأولى من دفاتر المكتب. عندها نُبلغه أولًا، ثم ينتقل إلى سعر المؤسسين لباقة المكتب (‏109 ₪ / ‏33 $)، ثابتًا 12 شهرًا من ذلك اليوم.
 
 ## ٣. ما تشمله كل باقة
 

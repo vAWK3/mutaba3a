@@ -27,9 +27,9 @@ Hi {name},
 
 Thanks for asking about a hosted Mutaba3a account. We're opening hosted accounts to a small first group, and we'd like you in it.
 
-**A. Freelancer.** The **Freelancer** plan is **{₪39 / $10} a month**, or **{₪390 / $100} a year** (two months free).
+**A. Freelancer.** The **Freelancer** plan is **{₪21 / $6} a month**, or **{₪210 / $60} a year** (two months free).
 
-**B. Firm.** Until our firm books ship, firms join at the **Freelancer price: {₪39 / $10} a month**, or **{₪390 / $100} a year** (two months free). When firm books ship, we'll tell you first, and your firm moves to the **Firm founder price: {₪299 / $80} a month for the whole firm**, or **{₪2,990 / $800} a year**.
+**B. Firm.** Until our firm books ship, firms join at the **Freelancer price: {₪21 / $6} a month**, or **{₪210 / $60} a year** (two months free). When firm books ship, we'll tell you first, and your firm moves to the **Firm founder price: {₪109 / $33} a month for the whole firm**, or **{₪1,090 / $330} a year**.
 
 Prices exclude VAT; VAT is added where the law requires it. As one of the first users, your price stays the same for 12 months, whatever we charge later.
 
@@ -68,9 +68,9 @@ Mutaba3a, by Barmajiyat Ltd
 
 شكرًا لسؤالك عن حساب متابعة المستضاف. نفتح الحسابات المستضافة الآن لمجموعة أولى صغيرة، ويسعدنا أن تكون منها.
 
-**أ. المستقل.** باقة **المستقل** بسعر **{‏39 ₪ / ‏10 $} شهريًا**، أو **{‏390 ₪ / ‏100 $} سنويًا** (شهران مجانًا).
+**أ. المستقل.** باقة **المستقل** بسعر **{‏21 ₪ / ‏6 $} شهريًا**، أو **{‏210 ₪ / ‏60 $} سنويًا** (شهران مجانًا).
 
-**ب. المكتب.** حتى تصدر دفاتر المكتب، تنضم المكاتب **بسعر باقة المستقل: {‏39 ₪ / ‏10 $} شهريًا**، أو **{‏390 ₪ / ‏100 $} سنويًا** (شهران مجانًا). وعند صدور دفاتر المكتب نُبلغك أولًا، ثم ينتقل مكتبك إلى **سعر المؤسسين لباقة المكتب: {‏299 ₪ / ‏80 $} شهريًا للمكتب كله**، أو **{‏2,990 ₪ / ‏800 $} سنويًا**.
+**ب. المكتب.** حتى تصدر دفاتر المكتب، تنضم المكاتب **بسعر باقة المستقل: {‏21 ₪ / ‏6 $} شهريًا**، أو **{‏210 ₪ / ‏60 $} سنويًا** (شهران مجانًا). وعند صدور دفاتر المكتب نُبلغك أولًا، ثم ينتقل مكتبك إلى **سعر المؤسسين لباقة المكتب: {‏109 ₪ / ‏33 $} شهريًا للمكتب كله**، أو **{‏1,090 ₪ / ‏330 $} سنويًا**.
 
 الأسعار لا تشمل ضريبة القيمة المضافة، وتُضاف الضريبة حيث يفرضها القانون. ولأنك من أوائل المستخدمين، يبقى سعرك ثابتًا 12 شهرًا مهما تغيّرت أسعارنا لاحقًا.
 
