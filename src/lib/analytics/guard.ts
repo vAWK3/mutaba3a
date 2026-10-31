@@ -1,4 +1,5 @@
 import { eventSpecFor, isValidPropertyValue, type AnalyticsLocale, type AnalyticsSurface } from './contract';
+import type { TelemetryEnvironment } from '../telemetry/telemetryGate';
 
 /**
  * The required guard of `docs/analytics/README.md` rule 1 (ADR-090): every
@@ -23,6 +24,8 @@ export interface GuardContext {
   surface: AnalyticsSurface;
   appVersion: string;
   locale: AnalyticsLocale;
+  /** ADR-236: the build and host the event came from, so anything that slips out of a dev or preview build can be filtered. */
+  environment: TelemetryEnvironment;
   /** The page's own origin, to recognize a referrer from the local app (`/app`) on the landing. */
   origin?: string;
   /**
@@ -117,6 +120,7 @@ export function guardEvent(capture: AnalyticsCapture | null, ctx: GuardContext):
   properties.surface = ctx.surface;
   properties.app_version = ctx.appVersion;
   properties.locale = ctx.locale;
+  properties.environment = ctx.environment;
   properties.$geoip_disable = true;
 
   const guarded: AnalyticsCapture = { uuid: capture.uuid, event: capture.event, properties };

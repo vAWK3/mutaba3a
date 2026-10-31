@@ -1,5 +1,5 @@
 {
-  "version": "2.4.0",
+  "version": "2.5.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -15,6 +15,11 @@
       "type": "enum",
       "values": ["ar", "en"],
       "description": "The interface language when the event was sent. Sent on every event."
+    },
+    "environment": {
+      "type": "enum",
+      "values": ["production", "development"],
+      "description": "Where the build that sent the event runs (ADR-236): production only for a release build on a production host (the web) or a release build of the phone app. Analytics is off everywhere else unless POSTHOG_ENABLED=true forces it on to check the integration, and those events say development. Sent on every event."
     }
   },
   "events": {

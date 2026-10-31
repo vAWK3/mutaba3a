@@ -12,6 +12,8 @@ paths:
   - src/lib/analytics/guard.ts
   - src/lib/analytics/posthogConfig.ts
   - src/lib/analytics/contract.ts
+  - src/lib/analytics/posthogKey.ts
+  - src/lib/telemetry/**
 features:
   - id: prompt-silent-until-chosen
     title: The portal asks once and sends nothing before an answer

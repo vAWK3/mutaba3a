@@ -11,7 +11,7 @@ import { createScriptReporter } from '../observability/sentry-node.js';
  */
 const reporter = createScriptReporter();
 if (!reporter.enabled) {
-  console.error('sentry:smoke: SENTRY_DSN is not set');
+  console.error('sentry:smoke: SENTRY_DSN is not set, or reports are off here (SENTRY_ENVIRONMENT is not production, or SENTRY_ENABLED=false)');
   process.exit(2);
 }
 reporter.captureException(new Error(`sentry:smoke deliberate test error ${new Date().toISOString()}`), { route: 'sentry:smoke' });

@@ -4,9 +4,9 @@
   "version": "0.3.2",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:web": "vite --mode web",
-    "dev:hosted": "vite --mode hosted",
+    "dev": "SENTRY_ENABLED=${SENTRY_ENABLED:-false} POSTHOG_ENABLED=${POSTHOG_ENABLED:-false} vite",
+    "dev:web": "SENTRY_ENABLED=${SENTRY_ENABLED:-false} POSTHOG_ENABLED=${POSTHOG_ENABLED:-false} vite --mode web",
+    "dev:hosted": "SENTRY_ENABLED=${SENTRY_ENABLED:-false} POSTHOG_ENABLED=${POSTHOG_ENABLED:-false} vite --mode hosted",
     "build": "tsc -b && vite build",
     "build:web": "tsc -b && vite build --mode web",
     "build:hosted": "tsc -b && vite build --mode hosted",

@@ -4282,3 +4282,11 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - **Local mode:** `migrations.test.ts` 13 → 14; `format-fingerprint.test.ts` (a VAT split in the fixture); `parity.test.ts` (a VAT create signed in and out).
 - **Portal:** `expenseVat.test.ts` (case table, Arabic-Indic digits, percent parsing); `receiptSuggestion.test.ts` (firm rate prefills, D6 hint, OV5, OV1); `ExpenseDrawer.test.tsx` (AC3, preview and body, no-VAT body, rate required, D4 untouched/removed, OV10, Arabic `<bdi>`); `Receipts.test.tsx` (OV1 personal, firm prefill + approve, D6 hint); `expenseApiErrors.test.ts` (VAT_RATE_INVALID).
 - **Release-QA:** `@portal.expenses.vat`, `@portal.expenses.vat-none-personal`, `@portal.receipts.vat-from-receipt`. Phone: `ios.capture.vat` with the Flutter half.
+
+## Release-only telemetry (ADR-236)
+- **Web (Vitest):** `src/lib/telemetry/__tests__/telemetryGate.test.ts` — dev server / production build × flag unset/true/false × key present/missing; the host check (apex only: legacy Netlify, deploy previews, localhost, `www.` and `app.` all refused); per-tool independence; forced builds tagged development. `pageTelemetry.test.ts` — no gate sends nothing; a production gate sends on the production host only; the default host in tests is localhost.
+- **Build (Vitest):** `vite-config.test.ts` "release-only telemetry" — production-build rule per Netlify context, hosts from config/hosts.json, keys and DSNs compiled out of dev servers, deploy previews and `false` builds, forced on with `true`, off without a key, a bad flag fails the build.
+- **Analytics:** `guard.test.ts` stamps `environment`; `posthogConfig.test.ts` takes it from the page; `analytics-taxonomy.test.ts` pins contract 2.5.0.
+- **API (Vitest):** `telemetry-gate.test.ts` — NODE_ENV development/test/staging/production × flag × DSN; `sentry-reporter.test.ts` — the script reporter sends nothing outside production or with `false`; `config.test.ts` — `SENTRY_ENABLED` is true/false only.
+- **Release-QA:** unchanged specs (`@web.error-reports.*`, `@web.landing-analytics.*`, `@portal.error-reports.*`, `@portal.usage-analytics.*`) keep running because their apps force the tools on with dummy keys and every request is answered locally.
+

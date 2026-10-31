@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-298: The legacy hosts send no telemetry while people still use them
+**Status**: Accepted (ADR-236, 2026-10-31)
+- **What:** the website build sends only on the apex and the portal only on `app.<apex>`. Until the legacy landing redirects and MUT-521 retires the run.app portal, a visitor or signed-in person on an old address sends no PostHog events and no Sentry reports.
+- **Why it's acceptable:** the legacy landing traffic was mostly single direct `/privacy` loads (likely store reviews or old links), and the carry-over moves people to the new portal address.
+- **Fix:** none needed once the redirect stage lands; if a real gap shows first, add the legacy host to `productionHosts` for that build only, tagged `environment: production`.
+
 ### TD-296: The credentials-file check and the cross-region copy are unproven against real GCP
 **Status**: Open (MUT-523, 2026-10-30; ADR-232 amendment)
 - **What:** preflight reads which account `GCP_ADC_FILE` signs in as by running `gcloud auth application-default print-access-token` with `GOOGLE_APPLICATION_CREDENTIALS` pointing at it, then Google's tokeninfo (`lib/gcp-identity.sh`). The tests fake both. That gcloud honours the variable for this command, and that `gcloud container images add-tag` copies between registries in different regions, are expected but not yet seen; the cross-region Cloud SQL restore is MUT-523 AC5.

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { guardEvent, type AnalyticsCapture, type GuardContext } from '../guard';
 
-const LANDING: GuardContext = { surface: 'landing', appVersion: '0.1.12', locale: 'ar', origin: 'https://landing.example' };
-const PORTAL: GuardContext = { surface: 'portal', appVersion: '0.1.12', locale: 'en', origin: 'https://portal.example' };
+const LANDING: GuardContext = { surface: 'landing', appVersion: '0.1.12', locale: 'ar', environment: 'production', origin: 'https://landing.example' };
+const PORTAL: GuardContext = { surface: 'portal', appVersion: '0.1.12', locale: 'en', environment: 'production', origin: 'https://portal.example' };
 
 /** What posthog-js hands `before_send`: routing, identity, control and context properties around the event's own. */
 function capture(event: string, properties: Record<string, unknown> = {}, extra: Partial<AnalyticsCapture> = {}): AnalyticsCapture {
@@ -81,8 +81,8 @@ describe('guardEvent: event properties', () => {
 
 describe('guardEvent: shared and control properties', () => {
   it('injects surface, app_version and locale, overriding anything the caller set', () => {
-    const out = guardEvent(capture('portal_opened', { surface: 'landing', locale: 'he' }), PORTAL);
-    expect(out?.properties).toMatchObject({ surface: 'portal', app_version: '0.1.12', locale: 'en' });
+    const out = guardEvent(capture('portal_opened', { surface: 'landing', locale: 'he', environment: 'production' }), { ...PORTAL, environment: 'development' });
+    expect(out?.properties).toMatchObject({ surface: 'portal', app_version: '0.1.12', locale: 'en', environment: 'development' });
   });
 
   it('always sends $geoip_disable and keeps the routing, identity and control fields', () => {

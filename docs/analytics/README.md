@@ -44,7 +44,8 @@ Errors and crashes go to Sentry (epic MUT-146), never to PostHog.
        properties, the OS and its version, and the device type (phone or tablet).
 2. **Anonymous.**
    - Never call `identify()`, `alias()` or `group()`.
-   - Register no super properties beyond the three shared ones.
+   - Register no super properties beyond the four shared ones (`surface`, `app_version`,
+     `locale` and, from contract 2.5.0, `environment`: ADR-236).
    - No person profiles.
    - No location: the project's GeoIP transformation is off, and every event also sends
      `$geoip_disable: true`.
