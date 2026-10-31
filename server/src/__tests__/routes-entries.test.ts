@@ -379,6 +379,23 @@ describe('GET /v1/entries — who may call it, and what it accepts', () => {
     }
     expect((await feed('?limit=100')).status).toBe(200);
   });
+
+  it('answers 422 for a cursor whose time no Date can hold, on a paged list and on the feed (MUT-393)', async () => {
+    const { h, a, u, feed } = await setup();
+    const forged = (t: number) => Buffer.from(JSON.stringify({ t, id: '0f5c2a1e-7b3d-4c9a-9e1f-2a3b4c5d6e7f' }), 'utf8').toString('base64url');
+    for (const t of [9e15, -9e15]) {
+      for (const [where, res] of [
+        ['/v1/customers', await h.app.request(`/v1/customers?cursor=${forged(t)}`, { headers: u.as(a.id) })],
+        ['/v1/entries', await feed(`?cursor=${forged(t)}`)],
+      ] as const) {
+        expect(res.status, `${where} t=${t}`).toBe(422);
+        const { error } = await read(res);
+        expect(error.code).toBe('VALIDATION_FAILED');
+        expect(error.message).toBe('cursor is not a cursor this API issued');
+        expect(error.details.field).toBe('cursor');
+      }
+    }
+  });
 });
 
 /** MUT-390: order=occurredOn and the day / logged-since filters. The harness's today is 2026-10-12. */
