@@ -334,8 +334,30 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     expect(r.out).not.toMatch(/--(update-)?labels/);
   });
 
+  /**
+   * 2026-10-31, first run on mtb3a-production: the backup restore onto db-f1-micro outlasted gcloud's own wait, so
+   * gcloud said "failed" while the restore went on, and the teardown's delete then got 409 (an operation in
+   * progress). Long steps now start with --async and wait with no limit; teardown waits out running operations.
+   */
+  it('starts each long step without blocking and waits for it with no time limit', () => {
+    const r = drill('--project', 'demo-project', '--dry-run');
+    expect(r.status, r.err).toBe(0);
+    for (const step of [
+      /\+ gcloud sql instances create mutaba3a-pg-drill-\d{8}t\d{6}-b .* --async /,
+      /\+ gcloud sql backups restore <backup-id> .* --async /,
+      /\+ gcloud sql instances clone <active-instance> mutaba3a-pg-drill-\d{8}t\d{6}-p .* --async /,
+      /\+ gcloud sql instances patch mutaba3a-pg-drill-\d{8}t\d{6}-p .* --async /,
+    ]) {
+      expect(r.out).toMatch(step);
+    }
+    const waits = r.out.split('\n').filter((l) => l.startsWith('+ gcloud sql operations wait '));
+    expect(waits.length).toBeGreaterThanOrEqual(4);
+    for (const line of waits) expect(line).toContain('--project=demo-project --timeout=unlimited');
+  });
+
   describe('teardown of a named instance, against a fake gcloud', () => {
-    function teardownWhere(listed: string) {
+    /** `running`: the operation ids still running on the instance, one per line. */
+    function teardownWhere(listed: string, running = '') {
       const fakeBin = mkdtempSync(join(tmpdir(), 'restore-drill-teardown-'));
       const log = join(fakeBin, 'calls.log');
       writeFileSync(
@@ -345,7 +367,9 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
           `echo "gcloud $*" >> "${log}"`,
           'case "$*" in',
           `  "sql instances list"*) printf "%s" "${listed}" ;;`,
-          '  "sql instances delete"*) exit 0 ;;',
+          `  "sql operations list"*) printf "%s" "${running}" ;;`,
+          '  "sql operations wait"*) exit 0 ;;',
+          '  "sql instances delete"*) echo op-delete ;;',
           '  *) exit 99 ;;',
           'esac',
         ].join('\n') + '\n',
@@ -365,10 +389,22 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
       expect(r.calls).not.toContain('sql instances delete');
     });
 
-    it('deletes an instance that exists', () => {
+    it('deletes an instance that exists, and waits for the delete', () => {
       const r = teardownWhere('mutaba3a-pg-drill-20261023t082326-b');
       expect(r.status, r.err).toBe(0);
       expect(r.calls).toContain('sql instances delete mutaba3a-pg-drill-20261023t082326-b --project=demo-project --quiet');
+      expect(r.calls).toContain('sql operations wait op-delete --project=demo-project --timeout=unlimited');
+    });
+
+    it('waits out an operation still running on the instance before deleting it (the 409)', () => {
+      const r = teardownWhere('mutaba3a-pg-drill-20261023t082326-b', 'op-restore');
+      expect(r.status, r.err).toBe(0);
+      const calls = r.calls.split('\n');
+      const waited = calls.findIndex((l) => l.includes('sql operations wait op-restore --project=demo-project --timeout=unlimited'));
+      const deleted = calls.findIndex((l) => l.includes('sql instances delete'));
+      expect(waited).toBeGreaterThan(-1);
+      expect(deleted).toBeGreaterThan(waited);
+      expect(r.calls).toContain("sql operations list --instance=mutaba3a-pg-drill-20261023t082326-b --project=demo-project --filter=status!=DONE");
     });
   });
 

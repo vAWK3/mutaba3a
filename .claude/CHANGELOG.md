@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — The restore drill waits for slow Cloud SQL steps (MUT-327)
+
+**Why:** the first drill on `mtb3a-production` stopped early. The backup restore onto the `db-f1-micro` copy
+outlasted gcloud's own wait, so gcloud printed "failed" while the restore went on. The drill's teardown then
+couldn't delete the copy (409, an operation in progress), which left a paid instance running until it was cleaned up
+by hand.
+
+### Fixed
+- `server/scripts/restore-drill.sh`: `mutate_wait` replaces `mutate`. It keeps the scratch-name check, starts the
+  step with `--async`, and waits with `gcloud sql operations wait … --timeout=unlimited`. When gcloud names no
+  operation, it waits for whatever is still running on the target. Used for create, backup restore, clone, patch
+  and delete.
+- Teardown, and the drill's own cleanup, wait out an operation still running on a copy before deleting it.
+- Runbook §8 says how long steps are waited for; §9 records the run.
+
+### Technical
+- 3 tests in `server/src/scripts/__tests__/restore-drill.test.ts`: every long step is async and waited for with no
+  limit; teardown waits for the delete; teardown waits out a running operation before deleting (fake gcloud).
+
 ## [Unreleased] - 2026-10-31 — The pilot offer names europe-west1 (Belgium)
 
 - `docs/commercial/pilot-offer.md` (en + ar) still said the data lives in Google Cloud in Tel Aviv (`me-west1`). Since the move on 2026-10-30 (MUT-487, MUT-523, ADR-232) it lives in `europe-west1` (Belgium), as the privacy policy already says (MUT-524). The offer now says so, with the 14-day backup retention in both languages.
