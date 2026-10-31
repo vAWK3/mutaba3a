@@ -34,6 +34,25 @@ describe('cursor pagination', () => {
     expect(() => decodeCursor(forged)).toThrow(ApiError);
   });
 
+  it('refuses a time past either end of what a Date holds with the usual 422, and still decodes a valid instant (MUT-393)', () => {
+    const forge = (t: number) => Buffer.from(JSON.stringify({ t, id }), 'utf8').toString('base64url');
+    for (const t of [9e15, -9e15]) {
+      let caught: unknown;
+      try {
+        decodeCursor(forge(t));
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught, String(t)).toBeInstanceOf(ApiError);
+      expect((caught as ApiError).code).toBe('VALIDATION_FAILED');
+      expect((caught as ApiError).message).toBe('cursor is not a cursor this API issued');
+      expect((caught as ApiError).details).toEqual({ field: 'cursor' });
+    }
+    for (const t of [at.getTime(), 8.64e15, -8.64e15]) {
+      expect(decodeCursor(forge(t))).toEqual({ createdAt: new Date(t), id });
+    }
+  });
+
   it('parses limit with a default of 50 and a hard cap of 200', () => {
     expect(parseLimit(undefined)).toBe(50);
     expect(parseLimit(1)).toBe(1);

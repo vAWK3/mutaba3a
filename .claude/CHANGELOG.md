@@ -29,6 +29,14 @@
 ---
 
 
+## [Unreleased] - 2026-10-31 — Out-of-range list cursors: regression tests (MUT-393)
+
+**Why:** MUT-393 reported that a forged list cursor with `t` past ±8.64e15 ms made `new Date(t)` an Invalid Date, which Prisma refuses on Postgres: a 500 that reached Sentry. The guard in `decodeCursor` already landed with MUT-435's review fixes (2254ed05, Oct 26) and ships in api-v0.12.1 and later. The feed's own `order=occurredOn` decode has had the guard since MUT-390. Only part of it was tested, so this adds the tests the ticket asks for. No code change.
+
+### Technical
+- `server/src/__tests__/pagination.test.ts`: t=9e15 and -9e15 throw VALIDATION_FAILED with the usual message and `details.field: cursor`; a normal instant and ±8.64e15 decode as before.
+- `server/src/__tests__/routes-entries.test.ts`: on the memory store, both values answer 422 on `GET /v1/customers` (a `toPageRequest` route) and on `GET /v1/entries` without params. With the guard removed, these tests fail: the decode does not throw, and the route answers 200.
+
 ## [Unreleased] - 2026-10-31 — Release-only telemetry (ADR-236)
 
 **Why:** a PostHog digest showed dev, QA and legacy-host traffic in production analytics: 38 of about 95 pageviews in a week came from `mutaba3a.netlify.app`, which serves the same production build. Basel's rule for every app: Sentry and PostHog send only from release builds on production hosts.
