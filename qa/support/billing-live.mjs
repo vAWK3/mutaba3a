@@ -44,6 +44,11 @@ export const PRICES = [
   { lookup_key: 'freelancer_list_yearly_ils', currency: 'ils', unit_amount: 29000, interval: 'year' },
   { lookup_key: 'freelancer_list_monthly_usd', currency: 'usd', unit_amount: 900, interval: 'month' },
   { lookup_key: 'freelancer_list_yearly_usd', currency: 'usd', unit_amount: 9000, interval: 'year' },
+  // The founder prices (MUT-530): pilot only, never sold through Checkout; kept here so the sandbox matches live.
+  { lookup_key: 'freelancer_founder_monthly_ils', currency: 'ils', unit_amount: 2100, interval: 'month' },
+  { lookup_key: 'freelancer_founder_yearly_ils', currency: 'ils', unit_amount: 21000, interval: 'year' },
+  { lookup_key: 'freelancer_founder_monthly_usd', currency: 'usd', unit_amount: 600, interval: 'month' },
+  { lookup_key: 'freelancer_founder_yearly_usd', currency: 'usd', unit_amount: 6000, interval: 'year' },
 ];
 const PRODUCT_ID = 'mutaba3a_qa_freelancer';
 /** HANDLED_EVENT_TYPES in server/src/billing/stripe/sync.ts. */

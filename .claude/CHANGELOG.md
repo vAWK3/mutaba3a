@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — MUT-530: founder prices ₪21 / $6 (Freelancer) and ₪109 / $33 (Firm)
+
+- Basel lowered the founder prices below the new list prices (pricing program MUT-528, ADR-235 amendment): Freelancer ₪21 / $6 a month, ₪210 / $60 a year (was ₪39 / $10); Firm ₪109 / $33 a month, ₪1,090 / $330 a year (was ₪299 / $80). Still locked 12 months, then list.
+- `docs/commercial/pilot-offer.md` (en + ar) and the reply template `hosted-request-reply.md` (en + ar) quote the new prices; the offer also names the list prices after the lock and says the founder price is never shown outside the pilot. The pilot runbook names the founder amounts and the live Firm catalog.
+- `qa/support/billing-live.mjs` keeps the sandbox's four `freelancer_founder_*` prices at the live amounts. Live Stripe had no subscriptions, so nothing moved.
+
 ## [Unreleased] - 2026-10-31 — MUT-529: the Freelancer list price is ₪29 / $9 a month
 
 - Basel set the list price to ₪29 / $9 a month, ₪290 / $90 a year, VAT-exclusive (pricing program MUT-528, ADR-235, overriding ADR-180 §6's ₪49 / $16). The app reads prices from the Stripe catalog, so no product code changed.
