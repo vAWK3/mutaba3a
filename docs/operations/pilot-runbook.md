@@ -799,8 +799,11 @@ the id itself: a `<placeholder>` left in makes zsh stop with "parse error".
 1. **Pick the receipt** from your own test profile in the portal. Open it once there, and note its
    id from the expense drawer or `npm run db:psql`. Without `--receipt-id` the drill takes the newest
    receipt in each copy.
-2. **Expect** 10–20 minutes for the instance creation, the restore and the clone each. The checks
-   take seconds.
+2. **Expect** 10–20 minutes for the instance creation, the restore and the clone each, and longer on
+   `db-f1-micro`. The checks take seconds. Each long step starts with `--async` and then
+   `gcloud sql operations wait … --timeout=unlimited` holds until Cloud SQL says it's done, so a slow restore is
+   waited for, never reported as "failed". Ctrl-C still tears down: teardown waits out an operation still
+   running on a copy before it deletes it.
 3. **Paste** the "Drill results" table it prints, the receipt lines and the audit comparison into §10.
 4. **If it fails or you stop it,** the exit trap deletes what it made. Check with
    `scripts/restore-drill.sh teardown --project $GCP_PROJECT_ID`, which lists every leftover
@@ -853,6 +856,13 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 The cleanup's delete of the never-created instance then got `PERMISSION_DENIED`, Cloud SQL's answer for a missing
 instance. Teardown now checks the instance exists first. Every other flag the drill uses was checked against the
 installed `gcloud … --help`.
+
+**2026-10-31, first run on `mtb3a-production` (Basel).** It ran as `barmajiyatltd@gmail.com` and created
+`mutaba3a-pg-drill-20261031t064131-b`. The backup restore onto it (`db-f1-micro`) outlasted gcloud's own wait,
+so gcloud printed "failed" while the restore carried on (operation `3316ad2e-…`). The teardown's delete then got
+409, because an operation was in progress. Since then, long steps start with `--async` and are waited for with
+no limit, and teardown waits out running operations before deleting. The copy was cleaned up by hand: wait for
+the operation, then `teardown --name`.
 
 ## 10. Drill results
 
