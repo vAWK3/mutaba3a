@@ -542,6 +542,105 @@ describe('ExpenseDrawer (hosted)', () => {
   });
 });
 
+describe('ExpenseDrawer currency: a new expense opens in the profile’s currency (MUT-319)', () => {
+  const currencySelect = async () => {
+    await screen.findByText('Record expense');
+    return document.getElementById('expense-currency') as HTMLSelectElement;
+  };
+
+  function withClientAndMatterAdd(created: unknown[]) {
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok({ items: [{ id: 'c1', name: 'Haddad & Partners' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/projects': ({ body }) => {
+        created.push(body);
+        return ok({ id: 'p9', ...(body as object) }, 201);
+      },
+    });
+  }
+
+  async function addMatter(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.type(screen.getByLabelText('Client'), 'Haddad');
+    await user.click(await screen.findByRole('option', { name: 'Haddad & Partners' }));
+    await user.type(screen.getByLabelText('Matter'), name);
+    await user.click(await screen.findByRole('option', { name: new RegExp(`Add matter.*${name}`) }));
+  }
+
+  it('AC1: an ILS profile’s new expense opens with ILS selected', async () => {
+    renderDrawer({ defaultCurrency: 'ILS' });
+    expect((await currencySelect()).value).toBe('ILS');
+  });
+
+  it('AC1: a USD profile’s new expense opens with USD selected', async () => {
+    renderDrawer({ defaultCurrency: 'USD' });
+    expect((await currencySelect()).value).toBe('USD');
+  });
+
+  it('opens in USD when the profile’s currency is one the drawer does not offer', async () => {
+    renderDrawer({ defaultCurrency: 'GBP' as never });
+    expect((await currencySelect()).value).toBe('USD');
+  });
+
+  it('AC2: Add matter on an ILS profile creates the matter in ILS', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    withClientAndMatterAdd(created);
+    renderDrawer({ canAddClient: true, defaultCurrency: 'ILS' });
+    await screen.findByLabelText('Matter');
+    await addMatter(user, 'Lease dispute');
+    await waitFor(() => expect(created).toEqual([{ customerId: 'c1', name: 'Lease dispute', currency: 'ILS' }]));
+  });
+
+  it('AC2: Add matter follows the drawer’s currency when the person changed it first', async () => {
+    const user = userEvent.setup();
+    const created: unknown[] = [];
+    withClientAndMatterAdd(created);
+    renderDrawer({ canAddClient: true, defaultCurrency: 'ILS' });
+    await user.selectOptions(await currencySelect(), 'EUR');
+    await addMatter(user, 'Lease dispute');
+    await waitFor(() => expect(created).toEqual([{ customerId: 'c1', name: 'Lease dispute', currency: 'EUR' }]));
+  });
+
+  it('AC1: saves a new expense in the profile’s currency', async () => {
+    const user = userEvent.setup();
+    let body: Record<string, unknown> | null = null;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'POST /v1/expenses': (req) => {
+        body = req.body as Record<string, unknown>;
+        return ok({ id: 'e9', ...(req.body as object) }, 201);
+      },
+    });
+    const { onClose } = renderDrawer({ defaultCurrency: 'ILS' });
+    await user.type(await screen.findByPlaceholderText('0.00'), '120');
+    await user.selectOptions(await screen.findByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(body).toMatchObject({ amount: '120', currency: 'ILS' });
+    expect(trackPortal).toHaveBeenCalledExactlyOnceWith('expense_recorded', { currency: 'ILS' });
+  });
+
+  it('AC3: editing an expense still shows its own currency, not the profile’s', async () => {
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/expenses/e1': () =>
+        ok({
+          id: 'e1', occurredOn: '2026-09-01', amount: '99.99', currency: 'EUR', title: 'Hosting', vendor: 'ACME',
+          categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', version: 1,
+          createdAt: '', updatedAt: '', receipts: [],
+        }),
+    });
+    renderDrawer({ mode: 'edit', expenseId: 'e1', defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('ACME');
+    expect((document.getElementById('expense-currency') as HTMLSelectElement).value).toBe('EUR');
+  });
+});
+
 describe('ExpenseDrawer: added by Claude (MUT-436 AC5)', () => {
   const expenseFrom = (captureSource: string | null) => () =>
     ok({

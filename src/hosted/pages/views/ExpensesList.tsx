@@ -172,6 +172,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           readOnly={!writable}
           onCreated={(id) => setFilters({ ...filters, expense: id, newExpense: undefined })}
           firm={profile.firm}
+          defaultCurrency={profile.defaultCurrency}
         />
       )}
     </>

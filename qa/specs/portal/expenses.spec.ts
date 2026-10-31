@@ -86,17 +86,21 @@ test('Record an expense: the drawer says what is missing, a currency’s own dec
     await expect(page.getByRole('heading', { name: 'No expenses recorded on this profile yet' })).toBeVisible();
   });
 
-  await step('Choose Record expense and save it empty', async () => {
+  await step('AC1 (MUT-319): Record expense opens in the profile’s currency, ILS here', async () => {
     await page.getByRole('button', { name: 'Record expense' }).first().click();
     await expect(drawer).toBeVisible();
     await expect(page).toHaveURL(/newExpense=true/);
+    await expect(drawer.getByLabel('Currency')).toHaveValue('ILS');
+  });
+
+  await step('Save it empty', async () => {
     await expect(drawer.getByLabel('Date')).toHaveValue(todayInJerusalem());
     await drawer.getByRole('button', { name: 'Save' }).click();
     await expect(drawer.getByText('Enter a valid amount')).toBeVisible();
     await expect(drawer.getByText('Required')).toBeVisible();
   });
 
-  await step('12.345 is too precise for USD, and fine in JOD', async () => {
+  await step('12.345 is too precise for ILS, and fine in JOD', async () => {
     await drawer.getByLabel('Amount').fill('12.345');
     await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
     await drawer.getByRole('button', { name: 'Save' }).click();
@@ -133,6 +137,39 @@ test('Record an expense: the drawer says what is missing, a currency’s own dec
     expect(api.last('GET', /^\/v1\/expenses$/)?.query.get('categoryId')).toBe(travel.id);
     await page.getByRole('button', { name: 'Clear filters' }).click();
     await expect(page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Printer paper/ })).toBeVisible();
+  });
+
+  const pickClient1AndAddMatter = async (name: string) => {
+    await drawer.getByPlaceholder('Search for a client').fill('Client 1');
+    await drawer.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await drawer.getByLabel('Matter').fill(name);
+    await drawer.getByRole('option', { name: new RegExp(`Add matter.*${name}`) }).click();
+    await expect(drawer.getByLabel('Matter')).toHaveValue(name);
+  };
+
+  await step('AC2 (MUT-319): Record another, pick Client 1 and Add matter: the matter is made in ILS', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await expect(drawer.getByLabel('Currency')).toHaveValue('ILS');
+    await pickClient1AndAddMatter('Lease dispute');
+    expect(api.last('POST', /^\/v1\/projects$/)?.body).toEqual({ customerId: C1, name: 'Lease dispute', currency: 'ILS' });
+    await drawer.getByRole('button', { name: 'Cancel' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('AC2 (MUT-319): Change the drawer to EUR first, then Add matter: that matter is made in EUR', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Currency').selectOption('EUR');
+    await pickClient1AndAddMatter('Appeal');
+    expect(api.last('POST', /^\/v1\/projects$/)?.body).toEqual({ customerId: C1, name: 'Appeal', currency: 'EUR' });
+    await drawer.getByRole('button', { name: 'Cancel' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('AC3 (MUT-319): Edit the JOD expense: it still shows JOD, not the profile’s ILS', async () => {
+    await page.getByRole('table', { name: 'Expenses' }).getByRole('row', { name: /Printer paper/ }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(edit.getByLabel('Amount')).toHaveValue('12.345');
+    await expect(edit.getByLabel('Currency')).toHaveValue('JOD');
   });
 });
 
