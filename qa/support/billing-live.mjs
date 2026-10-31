@@ -7,7 +7,7 @@
  *      a test key only, never printed, never written to disk;
  *   2. a QA database on the test Postgres (`mutaba3a-test-pg`), migrated;
  *   3. the sandbox catalog: the Freelancer product (metadata tier=freelancer) and the four GA list prices by lookup
- *      key (₪49 / ₪490 / $16 / $160, MUT-418), VAT-exclusive; a key on another amount moves by lookup-key transfer;
+ *      key (₪29 / ₪290 / $9 / $90, MUT-529), VAT-exclusive; a key on another amount moves by lookup-key transfer;
  *      the Customer Portal's default configuration must already exist (pilot-runbook §1.7 step 3a);
  *   4. `stripe listen` forwarding to the API, for the webhook secret; the CLI gets the same sandbox key through
  *      STRIPE_API_KEY (never argv), so its own `stripe login`, which expires, is not needed;
@@ -35,15 +35,15 @@ const PEPPER = 'qa-portal-live-session-pepper-0123456789abcdef';
 const KEYCHAIN_ACCOUNT = 'barmajiyat/MUTABA3A_STRIPE_SANDBOX_KEY';
 
 /**
- * The GA list prices (Basel, 2026-10-23, MUT-418): ₪49 / $16 a month, a year 10× a month, VAT-exclusive, under the
- * list lookup keys the server reads. MUT-362 first made them at ₪39 / $10; `ensureCatalog` moves each key to a price
+ * The GA list prices (Basel, 2026-10-31, MUT-529, ADR-235): ₪29 / $9 a month, a year 10× a month, VAT-exclusive, under
+ * the list lookup keys the server reads. MUT-362 first made them at ₪39 / $10 and MUT-418 at ₪49 / $16; `ensureCatalog` moves each key to a price
  * at these amounts with Stripe's lookup-key transfer (the old prices stay, keyless, for subscriptions already on them).
  */
 export const PRICES = [
-  { lookup_key: 'freelancer_list_monthly_ils', currency: 'ils', unit_amount: 4900, interval: 'month' },
-  { lookup_key: 'freelancer_list_yearly_ils', currency: 'ils', unit_amount: 49000, interval: 'year' },
-  { lookup_key: 'freelancer_list_monthly_usd', currency: 'usd', unit_amount: 1600, interval: 'month' },
-  { lookup_key: 'freelancer_list_yearly_usd', currency: 'usd', unit_amount: 16000, interval: 'year' },
+  { lookup_key: 'freelancer_list_monthly_ils', currency: 'ils', unit_amount: 2900, interval: 'month' },
+  { lookup_key: 'freelancer_list_yearly_ils', currency: 'ils', unit_amount: 29000, interval: 'year' },
+  { lookup_key: 'freelancer_list_monthly_usd', currency: 'usd', unit_amount: 900, interval: 'month' },
+  { lookup_key: 'freelancer_list_yearly_usd', currency: 'usd', unit_amount: 9000, interval: 'year' },
 ];
 const PRODUCT_ID = 'mutaba3a_qa_freelancer';
 /** HANDLED_EVENT_TYPES in server/src/billing/stripe/sync.ts. */

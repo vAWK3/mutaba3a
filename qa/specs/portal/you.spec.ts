@@ -114,7 +114,7 @@ test('a locked profile still opens the You page under the locked banner, and Bil
     subscription: null,
     canManage: false,
     trial: { startedAt: new Date(Date.now() - 31 * DAY).toISOString(), endsAt: new Date(Date.now() - 17 * DAY).toISOString(), lockAt: new Date(Date.now() - DAY).toISOString() },
-    catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
+    catalog: { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } },
     countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
     coveredProfileIds: [OFFICE_A],
   };
