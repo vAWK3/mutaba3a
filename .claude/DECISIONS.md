@@ -4926,7 +4926,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 3. **Two openers, one offer per page:** `firstRunPath` after /setup, `TrialWelcomeOpener` for any other first sign-in; showing the step spends the page's offer, so closing it never reopens it before the answer lands.
 4. **The trial is the person's:** step and banner read the personal profile's entitlement (TRIAL ACTIVE = no covering subscription).
 5. **Consumers everywhere:** `"consumerCountries": "*"`; `GET /v1/billing` says `countries.consumerEverywhere`. Buying For a business always proves it is one (Stripe's tax ID where supported, our required number field in IL/JO); a person never sees the field.
-6. **GA list prices** ₪49 / $16 a month, 10× a year, VAT-exclusive, by lookup key. QA's sandbox moved by lookup-key transfer; live is an operator step.
+6. **GA list prices** ₪49 / $16 a month, 10× a year, VAT-exclusive, by lookup key. QA's sandbox moved by lookup-key transfer; live is an operator step. **Superseded by ADR-235 (2026-10-31): ₪29 / $9.**
 
 **Consequences:**
 - Nothing changes in production until signup opens: operator-issued accounts have no trial, so they never see the step or the banner.
@@ -6144,3 +6144,18 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Alternatives considered:** REGIONAL `db-g1-small` (today; twice the price of zonal, for a failover the pilot doesn't need); ZONAL `db-g1-small` (about ₪92, the earlier recommendation); Cloud Run min 0 was out of MUT-511's scope and decided separately the next day.
 
 **Amendment (MUT-523, 2026-10-30):** the instance is in europe-west1, so decision 4's zone outage restores into another europe-west1 zone (pilot runbook §4.5; the region's zones are b, c and d), and decision 5's budget is **£25** on Barmajiyat Ltd's GBP billing account `01E433-999491-75ECBD`, its amount and currency from tfvars (ADR-232 amendment). The "Result" costs are re-estimated in GBP in INFRA.md §3; the billing export is still the proof.
+
+## ADR-235: The Freelancer List Price Is ₪29 / $9 a Month (MUT-529, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-10-31). Overrides ADR-180 decision 6 (₪49 / $16). Part of the pricing program, epic MUT-528 (D1).
+
+**Context:** a cost and price review on 2026-10-31. A paying person costs about ₪3 a month in cash: Stripe about 6.35% + 20p per charge (card 3.15%, Billing 0.7%, Tax 0.5%, ILS→GBP 2%), about ₪2.6 at ₪29; servers, receipts, OCR and mail under ₪0.5. The fixed tech bill is about ₪70 a month (INFRA.md §3). So cost doesn't set the price; the market does. MTB3A's buyers are Arab freelancers and small firms in Israel, Palestine and Jordan who already pay for a legal invoicing tool, and the West Bank average wage is about ₪134 a day (PCBS, Q2 2026): ₪49, or ₪58 with Israeli VAT, sat above what they'd pay for a tool that tracks rather than invoices.
+
+**Decision:**
+1. **List price ₪29 / $9 a month, ₪290 / $90 a year** (a year stays 10× a month), VAT-exclusive, under the same four `freelancer_list_{monthly|yearly}_{ils|usd}` lookup keys. Nothing in the code names an amount; Billing reads the catalog (ADR-170).
+2. **The change is a lookup-key transfer** in each Stripe account: a new Price takes the key, the old Price keeps any subscription already on it. QA's sandbox moves with `node qa/support/billing-live.mjs --catalog-only`; live is an operator step (pilot runbook 3b). Live had no subscriptions on the ₪49 / $16 prices on 2026-10-31.
+3. **Existing payers are never moved by this decision.** A later list-price change reaches people already paying only with 30 days' notice (MUT-528 rule 5).
+
+**Consequences:** margin per monthly payer is about 89% before support time; the program's other prices follow from this one: founder ₪21 / $6 (MUT-530), the launch offer 50% off the first year, ₪145 / $45 (MUT-525), Firm ₪149 / $45 (MUT-363). The price is held for 6 months and read against trial → paying over the first 100 trials (MUT-528).
+
+**Alternatives considered:** ₪49 / $16 (the old price; similar revenue per trial only if conversion holds at ₪49, with about 40% fewer payers); ₪39 / $12 (left no room under it for the founder price); ₪19 (margin still fine, but support time per payer would rival the price).

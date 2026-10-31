@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — MUT-529: the Freelancer list price is ₪29 / $9 a month
+
+- Basel set the list price to ₪29 / $9 a month, ₪290 / $90 a year, VAT-exclusive (pricing program MUT-528, ADR-235, overriding ADR-180 §6's ₪49 / $16). The app reads prices from the Stripe catalog, so no product code changed.
+- QA: `qa/support/billing-live.mjs` `PRICES` moves the sandbox's four `freelancer_list_*` keys to 2900 / 29000 ILS and 900 / 9000 USD by lookup-key transfer; the stub catalogs in `qa/specs/portal/{billing,you}.spec.ts` and the amounts in `qa/specs/portal-live/billing.spec.ts` and `qa/features/portal-live/billing.yaml` follow.
+- Docs: pilot runbook 3b and SYSTEM_OVERVIEW name the new amounts. Live Stripe prices are an operator step.
+
 ## [Unreleased] - 2026-10-31 — MUT-524: the privacy policy names europe-west1 (Belgium)
 
 - MTB3A moved from me-west1 to Google Cloud's europe-west1 region (Belgium) on 2026-10-30 (MUT-487, MUT-523, ADR-232). The privacy policy's hosted-accounts section now says records and daily backups are in europe-west1 (Belgium), and that technical logs may be stored outside europe-west1; "Last updated" is October 31, 2026, in English and Arabic (`src/lib/i18n/translations/{en,ar}/landing.json`). The old copy in me-west1 was deleted the same night, so no overlap wording is needed.
