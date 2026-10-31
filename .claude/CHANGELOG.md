@@ -28,6 +28,11 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — MUT-319: a new expense opens in the profile's currency
+
+### Fixed
+- The portal's expense drawer opened every new expense in USD (`emptyExpenseValues` hardcodes it, and the drawer never got the profile's currency), so since MUT-318 «Add matter» from its matter picker made USD matters on an ILS profile. `ExpenseDrawer` now takes `defaultCurrency` (ExpensesList passes `profile.defaultCurrency`) and a new expense opens in it when the drawer offers it, else USD, as the income drawer does. Edit keeps the expense's own currency. Signed in and signed out alike (same page). Files: `src/hosted/components/ExpenseDrawer.tsx`, `src/hosted/pages/views/ExpensesList.tsx`; tests in `ExpenseDrawer.test.tsx`, release-QA steps in `qa/specs/portal/expenses.spec.ts`.
+
 ## [Unreleased] - 2026-10-31 — The pilot offer names europe-west1 (Belgium)
 
 - `docs/commercial/pilot-offer.md` (en + ar) still said the data lives in Google Cloud in Tel Aviv (`me-west1`). Since the move on 2026-10-30 (MUT-487, MUT-523, ADR-232) it lives in `europe-west1` (Belgium), as the privacy policy already says (MUT-524). The offer now says so, with the 14-day backup retention in both languages.

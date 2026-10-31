@@ -14,7 +14,8 @@ import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { formatDecimal } from '../format/DecimalAmount';
 import { applyExpenseApiError } from './expenseApiErrors';
 import { useAttemptKey } from '../data/attemptKey';
-import { ApiError, type CreateExpenseRequest, type Expense, type ExpenseDetail, type UpdateExpenseRequest } from '../api/client';
+import { ApiError, type CreateExpenseRequest, type Currency, type Expense, type ExpenseDetail, type UpdateExpenseRequest } from '../api/client';
+import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { trackPortal } from '../analytics/portalAnalytics';
 import { InGroupsLine } from './groups/InGroupsLine';
@@ -56,9 +57,16 @@ export interface ExpenseDrawerProps {
   onCreated?: (expenseId: string) => void;
   /** MUT-302: the profile is a firm (`profile.firm`), so the form shows the VAT row and saves its VAT. */
   firm?: boolean;
+  /** MUT-319: the profile's `defaultCurrency`; a new expense opens in it when the drawer offers it, else USD. */
+  defaultCurrency?: Currency;
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated, firm = false }: ExpenseDrawerProps) {
+/** A new expense's currency (MUT-319): the profile's, when the drawer offers it, else USD (as the income drawer's). */
+function newExpenseCurrency(profileCurrency: Currency | undefined): Currency {
+  return profileCurrency && (HOSTED_CURRENCIES as readonly string[]).includes(profileCurrency) ? profileCurrency : 'USD';
+}
+
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated, firm = false, defaultCurrency }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -73,7 +81,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
   const updateMutation = useUpdateExpense(profileId);
   const deleteMutation = useDeleteExpense(profileId);
 
-  const expenseForm = useHostedExpenseForm({ profileId, timezone });
+  // MUT-319: a new expense opens in the profile's currency; an edit refills from the expense, its own currency kept.
+  const expenseForm = useHostedExpenseForm({ profileId, timezone, initialValues: mode === 'create' ? { currency: newExpenseCurrency(defaultCurrency) } : undefined });
   const { form, categoriesLoading, errorLabels, picks } = expenseForm;
   const { handleSubmit, reset, setError } = form;
   // Read while rendering, so react-hook-form tracks it (its formState is a proxy that only updates what was read).
