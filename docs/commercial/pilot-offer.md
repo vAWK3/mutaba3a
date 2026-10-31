@@ -81,7 +81,7 @@ The table lists **only what has shipped** (the same rule as the /hosted copy). A
   - **Once MUT-325 ships:** you download them yourself.
 - **If you stop paying:** your account becomes read-only. You can still see and download everything. Nothing is deleted because a payment lapsed.
 - **If you close your account:** you have **30 days** to change your mind, and then everything is deleted. Backups clear 14 days after that.
-- **Where the data lives:** Google Cloud in Tel Aviv (`me-west1`), backed up daily and kept for 14 days. The terms (MUT-324) say this in full.
+- **Where the data lives:** Google Cloud in Belgium (`europe-west1`), backed up daily, with each backup kept for 14 days. The privacy policy says this in full (MUT-524); the terms (MUT-324) cover the rest.
 - **What we're not:** we're not your accountant. Mutaba3a doesn't file taxes or issue legal e-invoices.
 
 ## 5. How pilot users are invoiced
@@ -171,7 +171,7 @@ The account itself is still provisioned by hand (pilot runbook, MUT-327).
 - **بياناتك لك:** نرسلها لك ملفًا متى طلبت، وقريبًا تنزّلها بنفسك.
 - **إذا توقف الدفع:** يصبح الحساب للقراءة فقط، ويبقى التنزيل متاحًا، ولا يُحذف شيء.
 - **إذا أغلقت حسابك:** أمامك **30 يومًا** للتراجع، ثم يُحذف كل شيء، وتُمحى النسخ الاحتياطية بعد 14 يومًا أخرى.
-- **مكان البيانات:** خوادم Google Cloud في تل أبيب، مع نسخ احتياطي يومي.
+- **مكان البيانات:** خوادم Google Cloud في منطقة europe-west1 (بلجيكا)، مع نسخ احتياطي يومي نحتفظ بكل نسخة منه 14 يومًا.
 - **لسنا محاسبك:** متابعة لا تقدّم إقراراتك الضريبية ولا تُصدر فواتير إلكترونية رسمية.
 
 ## ٥. الفواتير

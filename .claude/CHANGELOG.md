@@ -28,6 +28,10 @@
 
 ---
 
+## [Unreleased] - 2026-10-31 — The pilot offer names europe-west1 (Belgium)
+
+- `docs/commercial/pilot-offer.md` (en + ar) still said the data lives in Google Cloud in Tel Aviv (`me-west1`). Since the move on 2026-10-30 (MUT-487, MUT-523, ADR-232) it lives in `europe-west1` (Belgium), as the privacy policy already says (MUT-524). The offer now says so, with the 14-day backup retention in both languages.
+
 ## [Unreleased] - 2026-10-31 — MUT-530: founder prices ₪21 / $6 (Freelancer) and ₪109 / $33 (Firm)
 
 - Basel lowered the founder prices below the new list prices (pricing program MUT-528, ADR-235 amendment): Freelancer ₪21 / $6 a month, ₪210 / $60 a year (was ₪39 / $10); Firm ₪109 / $33 a month, ₪1,090 / $330 a year (was ₪299 / $80). Still locked 12 months, then list.
