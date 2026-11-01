@@ -864,6 +864,15 @@ so gcloud printed "failed" while the restore carried on (operation `3316ad2e-…
 no limit, and teardown waits out running operations before deleting. The copy was cleaned up by hand: wait for
 the operation, then `teardown --name`.
 
+**2026-11-01, second run on `mtb3a-production` (Basel), log `~/restore-drill-20261101.log`.** The backup half
+passed: copy created in 511 s, last night's backup (window 03:00 UTC) restored in 901 s, 54 tables, 59 of 59
+migrations, newest audit event 2026-10-31 19:21, receipt `ce88561d-…` opens (JPEG, 374,483 bytes). The
+point-in-time clone (07:00:20 UTC) succeeded in 1,757 s. Then the clone's patch stopped the drill: gcloud refuses
+`--no-enable-point-in-time-recovery` next to `--no-backup`, a client-side check the tests' fake gcloud can't see.
+The teardown deleted both copies in 222 s. The patch now sends `--no-deletion-protection --no-backup` only, and a
+failed patch warns instead of stopping the checks. The point-in-time half's checks still owe a run
+(`--only pitr`).
+
 ## 10. Drill results
 
 Filled in by Basel after running §8 against production backups (AC1).

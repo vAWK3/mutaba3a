@@ -328,6 +328,15 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     });
   });
 
+  it("patches the clone with flags gcloud accepts together (2026-11-01: --no-backup with the PITR flag was refused)", () => {
+    const r = drill('--project', 'demo-project', '--dry-run');
+    const patch = r.out.split('\n').find((l) => l.startsWith('+ gcloud sql instances patch '));
+    expect(patch).toBeDefined();
+    expect(patch).toContain('--no-deletion-protection');
+    expect(patch).toContain('--no-backup');
+    expect(patch).not.toMatch(/point-in-time-recovery/);
+  });
+
   it('uses no flag that only gcloud alpha/beta has (the first production run stopped on --labels)', () => {
     const r = drill('--project', 'demo-project', '--dry-run');
     expect(r.status, r.err).toBe(0);
