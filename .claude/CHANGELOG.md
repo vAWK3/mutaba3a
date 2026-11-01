@@ -29,6 +29,21 @@
 ---
 
 
+## [Unreleased] - 2026-11-01 — The restore drill's clone patch uses flags gcloud accepts together (MUT-327)
+
+**Why:** the second drill on `mtb3a-production` passed its backup half (restore 901 s, every check green) and the
+point-in-time clone (1,757 s). Then gcloud refused the clone's patch before sending it:
+`--enable-point-in-time-recovery` can't be given with `--no-backup`. The drill stopped before the clone's checks.
+
+### Fixed
+- `server/scripts/restore-drill.sh`: the patch sends `--no-deletion-protection --no-backup` (no backups means no
+  PITR). It is housekeeping on a copy the teardown deletes, so a failure warns and the checks still run.
+- Runbook §9 records the run and its timings.
+
+### Technical
+- 1 test in `server/src/scripts/__tests__/restore-drill.test.ts`: the patch line never pairs `--no-backup` with a
+  point-in-time flag.
+
 ## [Unreleased] - 2026-10-31 — Out-of-range list cursors: regression tests (MUT-393)
 
 **Why:** MUT-393 reported that a forged list cursor with `t` past ±8.64e15 ms made `new Date(t)` an Invalid Date, which Prisma refuses on Postgres: a 500 that reached Sentry. The guard in `decodeCursor` already landed with MUT-435's review fixes (2254ed05, Oct 26) and ships in api-v0.12.1 and later. The feed's own `order=occurredOn` decode has had the guard since MUT-390. Only part of it was tested, so this adds the tests the ticket asks for. No code change.
