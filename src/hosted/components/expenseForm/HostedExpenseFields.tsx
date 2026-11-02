@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Controller, useWatch } from 'react-hook-form';
 import { ExpenseFormFields, type ExpenseFormHintField } from '../../../components/expenses/ExpenseFormFields';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -7,6 +7,7 @@ import { moneyDateCeiling, todayInZone, todayLocalISO } from '../../format/dates
 import { ClientPicker } from '../ClientPicker';
 import { ProjectPicker } from '../ProjectPicker';
 import { VendorPicker } from '../VendorPicker';
+import { vendorDefaultFills } from '../../lib/vendorDefaults';
 import { ExpenseVatRow } from './ExpenseVatRow';
 import type { HostedExpenseForm } from './useHostedExpenseForm';
 
@@ -32,14 +33,40 @@ export interface HostedExpenseFieldsProps {
   hints?: Partial<Record<HostedExpenseHintField, ReactNode>>;
   /** MUT-302 (AC3): the VAT row shows on a firm profile only (`profile.firm`, never the profile type). */
   firm?: boolean;
+  /**
+   * MUT-303 (R4): a picked vendor also fills its last currency and VAT. On for a new expense and a receipt review; off
+   * in the edit drawer, where a pick must never change saved money. `readFields` are what the receipt read, never
+   * replaced.
+   */
+  prefillDefaults?: boolean;
+  readFields?: { currency?: boolean; vat?: boolean };
+  /**
+   * MUT-303 (review): what a vendor filled, when the caller keeps it (Receipt Review, where a later reading may replace
+   * a vendor's value and the hints live). Without it the fields keep their own record.
+   */
+  vendorFilled?: VendorFilled;
+  onVendorFill?: (fills: VendorFilled) => void;
 }
 
-export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddClient = false, readOnly = false, currencyDisabled = false, idPrefix = 'hosted-expense', hints, firm = false }: HostedExpenseFieldsProps) {
+/** MUT-303: the values a vendor's defaults put in the form, so they can be said and later replaced. */
+export type VendorFilled = { currency?: string; vatTreatment?: string };
+
+export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddClient = false, readOnly = false, currencyDisabled = false, idPrefix = 'hosted-expense', hints, firm = false, prefillDefaults = false, readFields, vendorFilled: keptFilled, onVendorFill }: HostedExpenseFieldsProps) {
   const { t } = useLanguage();
   const { form, categories, labels, clientFlash, picks } = expenseForm;
-  const { control, formState, getValues, setValue } = form;
-  const [selectedClientId, selectedCurrency] = useWatch({ control, name: ['clientId', 'currency'] });
-  const { vendor: vendorHint, vat: vatHint, ...fieldHints } = hints ?? {};
+  const { control, formState, getValues, setValue, getFieldState } = form;
+  const [selectedClientId, selectedCurrency, selectedVat] = useWatch({ control, name: ['clientId', 'currency', 'vatTreatment'] });
+  // MUT-303: what a picked vendor filled, for the "from this vendor" line while the field still holds it.
+  const [ownFilled, setOwnFilled] = useState<VendorFilled>({});
+  const vendorFilled = keptFilled ?? ownFilled;
+  const recordFill = (fills: VendorFilled) => (onVendorFill ? onVendorFill(fills) : setOwnFilled((prev) => ({ ...prev, ...fills })));
+  const fromVendor = t('hosted.expenses.hints.fromVendor');
+  const { vendor: vendorHint, vat: vatHint = vendorFilled.vatTreatment && vendorFilled.vatTreatment === selectedVat ? fromVendor : undefined, ...fieldHints } = hints ?? {};
+  if (!fieldHints.currency && vendorFilled.currency && vendorFilled.currency === selectedCurrency) fieldHints.currency = fromVendor;
+  const changed = (name: 'currency' | 'vatTreatment' | 'vatRate') => {
+    const state = getFieldState(name);
+    return state.isDirty || state.isTouched;
+  };
 
   return (
     <>
@@ -73,6 +100,24 @@ export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddCl
                       // The vendor's last category, only into an empty field and never an archived one (MUT-254).
                       const category = categories?.find((c) => c.id === vendor.lastCategoryId);
                       if (!getValues('categoryId') && category && !category.archived) setValue('categoryId', category.id, { shouldDirty: true });
+                      if (!prefillDefaults) return;
+                      // MUT-303: its last currency and VAT, only into fields nothing read or changed (not dirtied, so a
+                      // later receipt reading may still replace them).
+                      // A VAT the last picked vendor filled is this pick's to replace (review #9), as on the phone.
+                      const values = getValues();
+                      const vendorsVat = vendorFilled.vatTreatment !== undefined && values.vatTreatment === vendorFilled.vatTreatment;
+                      const fills = vendorDefaultFills(
+                        { currency: vendor.lastCurrency, vat: vendor.lastVat },
+                        { ...values, vatTreatment: vendorsVat ? '' : values.vatTreatment },
+                        { currency: !!readFields?.currency || changed('currency'), vat: !!readFields?.vat || changed('vatTreatment') || changed('vatRate') },
+                        firm,
+                      );
+                      if (fills.currency) setValue('currency', fills.currency);
+                      if (fills.vatTreatment) {
+                        setValue('vatTreatment', fills.vatTreatment);
+                        setValue('vatRate', fills.vatRate ?? '');
+                      }
+                      if (fills.currency || fills.vatTreatment) recordFill(fills);
                     }}
                     placeholder={t('hosted.expenses.drawer.vendorPlaceholder')}
                     disabled={readOnly}

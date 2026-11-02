@@ -102,7 +102,7 @@ describe('yearlySwitchOf (D2: from the 2nd paid invoice, a monthly list price on
   });
 });
 
-/** MUT-532 (plan D6, D10, D11, ADR-239): pause instead of cancel, and the stay offer. */
+/** MUT-532 (plan D6, D10, D11, ADR-240): pause instead of cancel, and the stay offer. */
 const at = (iso: string) => new Date(iso);
 
 describe('cycleBoundaryAfter (Stripe\'s monthly rule: the anchor\'s day, clamped to the month, at the anchor\'s time)', () => {

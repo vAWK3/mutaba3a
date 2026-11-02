@@ -60,7 +60,7 @@ export function yearlySwitchOf(subscription: SwitchSubscription, facts: PlanFact
 }
 
 /*
- * MUT-532 (plan D6, D7, D10, D11, ADR-239): pause instead of cancel, and the stay offer. Pure, like the switch: the
+ * MUT-532 (plan D6, D7, D10, D11, ADR-240): pause instead of cancel, and the stay offer. Pure, like the switch: the
  * routes read Stripe's live subscription, the person's retention events and the coupon; these decide. Whether a pause
  * is running is the mirror's alone (R5); the events only answer "once a year" and "once ever".
  */

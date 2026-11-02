@@ -1317,6 +1317,11 @@ model Vendor {
   /// The category of the last expense saved with this vendor (never the automatic Other): the typeahead's prefill.
   lastCategoryId  String?          @db.Uuid
   lastCategory    ExpenseCategory? @relation(fields: [lastCategoryId], references: [id], onDelete: SetNull)
+  /// MUT-303: the currency of the last new expense saved with this vendor; prefills the next one.
+  lastCurrency           String?       @db.VarChar(3)
+  /// MUT-303: the VAT of the last expense with this vendor that carried VAT (CHECK: both set or both null).
+  lastVatTreatment       VatTreatment?
+  lastVatRateBasisPoints Int?
   /// Set on every successful link; the typeahead's "recent".
   lastUsedAt      DateTime
   version         Int              @default(1)
@@ -1584,7 +1589,7 @@ enum BillingRetentionKind {
   YEARLY_SWITCH
 }
 
-/// MUT-532 (ADR-239): that a pause, a stay offer, a cancel or a switch happened, for the once-a-year pause and the
+/// MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened, for the once-a-year pause and the
 /// once-ever stay offer and for history. Nothing reads its dates for access: the mirror alone says whether a pause is
 /// running. One STAY_OFFER per person ever (a raw-SQL partial unique index in the migration).
 model BillingRetentionEvent {

@@ -1,4 +1,4 @@
--- MUT-532 (ADR-239): pause instead of cancel, and the stay offer. Additive: two nullable billing_subscriptions columns
+-- MUT-532 (ADR-240): pause instead of cancel, and the stay offer. Additive: two nullable billing_subscriptions columns
 -- (the mirror of Stripe's pause_collection), one enum, one table and its indexes. No backfill: no subscription is
 -- paused today, and nobody has had a pause or an offer.
 --

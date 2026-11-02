@@ -2228,7 +2228,14 @@ export class PrismaLedgerStore implements LedgerStore {
             const [category] = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT id::text, name FROM expense_categories WHERE id = ${change.categoryId}::uuid AND "organizationId" = ${organizationId}::uuid FOR KEY SHARE`;
             if (category && !isAutomaticOtherCategory(category.name)) lastCategoryId = category.id;
           }
-          await tx.vendor.updateMany({ where: { id: vendorId, organizationId }, data: { lastUsedAt: at, ...(lastCategoryId ? { lastCategoryId } : {}) } });
+          await tx.vendor.updateMany({ where: { id: vendorId, organizationId }, data: { lastUsedAt: at, ...(lastCategoryId ? { lastCategoryId } : {}), ...(change.currency ? { lastCurrency: change.currency } : {}) } });
+          // MUT-303 (R7): a set always wins; a clear only while the stored default is still the VAT removed.
+          if (change.vat && 'set' in change.vat) {
+            await tx.vendor.updateMany({ where: { id: vendorId, organizationId }, data: { lastVatTreatment: change.vat.set.treatment, lastVatRateBasisPoints: change.vat.set.rateBasisPoints } });
+          } else if (change.vat) {
+            const { treatment, rateBasisPoints } = change.vat.clearIf;
+            await tx.vendor.updateMany({ where: { id: vendorId, organizationId, lastVatTreatment: treatment, lastVatRateBasisPoints: rateBasisPoints }, data: { lastVatTreatment: null, lastVatRateBasisPoints: null } });
+          }
         }),
       ),
     getById: async (organizationId, id) => {
@@ -2266,6 +2273,12 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!regKey) return null;
       const row = await this.prisma.vendor.findUnique({ where: { organizationId_registrationKey: { organizationId, registrationKey: regKey } } });
       return row ? toVendor(row) : null;
+    },
+    findByName: async (organizationId, name) => {
+      const nameKey = vendorNameKey(name);
+      if (!nameKey) return null;
+      const row = await this.prisma.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId, nameKey } }, include: { vendor: true } });
+      return row ? toVendor(row.vendor) : null;
     },
   };
 

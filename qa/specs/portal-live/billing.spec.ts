@@ -600,7 +600,7 @@ test('Switch to yearly - no line before the 2nd payment', { tag: '@portal-live.b
 });
 
 /*
- * MUT-532 (ADR-239): pause instead of cancel, the stay offer and MTB3A's own cancel flow. The server decides on its own
+ * MUT-532 (ADR-240): pause instead of cancel, the stay offer and MTB3A's own cancel flow. The server decides on its own
  * clock whether a pause runs, so the pause flows start a plan whose paid month ends two minutes from now.
  */
 const HOUR_S = 60 * 60;

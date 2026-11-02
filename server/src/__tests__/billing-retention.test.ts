@@ -10,7 +10,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
- * MUT-532 (plan D6–D12, R3, R6, ADR-239): MTB3A's own cancel flow through the real app and session auth, with Stripe's
+ * MUT-532 (plan D6–D12, R3, R6, ADR-240): MTB3A's own cancel flow through the real app and session auth, with Stripe's
  * doors faked. GET /v1/billing/retention says what the flow may offer; pause, Resume now, cancel, Keep my plan and the
  * stay offer each change Stripe once, record their event, and audit on the person's profiles.
  */

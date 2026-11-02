@@ -113,7 +113,7 @@ const EXPENSE_GROUP = cols<ExpenseGroupRecord>()({ id: true, organizationId: tru
 const GROUP_MARK = cols<ExpenseGroupOverrideRecord>()({ groupId: true, expenseId: true, organizationId: true, mode: true, createdAt: true, updatedAt: true });
 // MUT-254: vendors and every name of theirs (registrationKey is an index column, derived from registrationNo).
 const VENDOR = cols<VendorRecord>()({
-  id: true, organizationId: true, canonicalName: true, registrationNo: true, phone: true, email: true, lastCategoryId: true, lastUsedAt: true, version: true,
+  id: true, organizationId: true, canonicalName: true, registrationNo: true, phone: true, email: true, lastCategoryId: true, lastCurrency: true, lastVatTreatment: true, lastVatRateBasisPoints: true, lastUsedAt: true, version: true,
   createdAt: true, updatedAt: true,
 });
 const VENDOR_NAME = cols<VendorNameRecord>()({ id: true, organizationId: true, vendorId: true, name: true, nameKey: true, createdAt: true });

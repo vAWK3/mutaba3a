@@ -2293,7 +2293,7 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
-/** MUT-532 (ADR-239): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
+/** MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
 export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
 
 export interface BillingRetentionEventRecord {
@@ -2885,10 +2885,31 @@ export interface VendorRecord {
   phone: string | null;
   email: string | null;
   lastCategoryId: string | null;
+  /** MUT-303: the currency of the last new expense saved with this vendor (or the last one whose currency changed). */
+  lastCurrency: string | null;
+  /** MUT-303: the VAT of the last expense with this vendor that carried VAT; both set or both null. */
+  lastVatTreatment: VatTreatment | null;
+  lastVatRateBasisPoints: number | null;
   lastUsedAt: Date;
   version: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** MUT-303: a VAT a vendor learns or forgets. */
+export interface VendorVat {
+  treatment: VatTreatment;
+  rateBasisPoints: number;
+}
+
+/**
+ * MUT-303 (plan §3.2): what an expense write teaches its vendor besides the category. `currency` absent keeps the
+ * default; `vat.set` replaces it; `vat.clearIf` forgets it only while the stored default is still that VAT, so
+ * removing VAT from an old expense never wipes a newer default.
+ */
+export interface VendorLearning {
+  currency?: string;
+  vat?: { set: VendorVat } | { clearIf: VendorVat };
 }
 
 /** One of a vendor's names (its canonical name or an alias), unique per profile by `nameKey`. */
@@ -2935,9 +2956,10 @@ export interface VendorRepository {
   /**
    * After a successful expense write: `lastUsedAt = at`, and `lastCategoryId` when a category is given and it isn't the
    * profile's automatic Other. Locks the category (KEY SHARE) before the vendor row — the order a profile type change
-   * takes (categories, then vendors) — so the two can't deadlock. Never bumps `version`.
+   * takes (categories, then vendors) — so the two can't deadlock. Never bumps `version`. MUT-303: the same write
+   * applies `learning` (currency, VAT) in the same row update.
    */
-  touch(organizationId: string, vendorId: string, change: { categoryId: string | null }, at: Date): Promise<void>;
+  touch(organizationId: string, vendorId: string, change: { categoryId: string | null } & VendorLearning, at: Date): Promise<void>;
   getById(organizationId: string, id: string): Promise<VendorRecord | null>;
   /**
    * The typeahead: names whose key starts with or contains the query's key (SQL prefilter), plus the profile's most
@@ -2947,6 +2969,8 @@ export interface VendorRepository {
   search(organizationId: string, query: string, limit: number): Promise<VendorSuggestion[]>;
   /** MUT-441: the profile's vendor with this registration number (compared by `registrationKey`), or null. One indexed lookup. */
   findByRegistration(organizationId: string, registrationNo: string): Promise<VendorRecord | null>;
+  /** MUT-303 (review): the profile's vendor one of whose names is exactly this name (by `nameKey`), or null. One indexed lookup. */
+  findByName(organizationId: string, name: string): Promise<VendorRecord | null>;
 }
 
 

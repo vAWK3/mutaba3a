@@ -2450,7 +2450,7 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `yearlySwitchLineOf` — `src/hosted/data/billingView.ts`: the switch line, only on an active monthly plan the server says may switch.
 - Server: `yearlySwitchOf` / `yearlySavingsOf` / `listMonthlyCurrencyOf` (`server/src/billing/retention.ts`); `PlanGateway` (`server/src/billing/stripe/plan-gateway.ts`, fake `FakePlanGateway`); `billingPlanRoutes` (`server/src/routes/billing-plan.ts`).
 
-### Pause, stay offer and cancel — MUT-532 (ADR-239)
+### Pause, stay offer and cancel — MUT-532 (ADR-240)
 - `CancelBody` / `CancelFooter` — `src/hosted/components/BillingCancelFlow.tsx`: Billing's `?step=cancel` body (Why? with `RadioCards` and a comment, Pause instead? with the months as `RadioCards`, the stay offer, Confirm cancel as `InPlaceConfirm`) and its pinned footer per step. State in `useCancelFlow` (`src/hosted/components/useCancelFlow.ts`): the retention query, the phase, reason/comment/months, the pause, stay and cancel mutations, `failure`; `CANCEL_REASONS`, `CANCEL_COMMENT_MAX`.
 - `PlanChanges` (inside `BillingDrawer.tsx`): Don't pause, Resume now (an `InPlaceConfirm` with today's charge), Keep my plan and the Cancel plan link under Manage billing.
 - `pauseOf` / `canCancelOf` / `canKeepOf` / `monthPriceOf` — `src/hosted/data/billingView.ts`; panels `pauseScheduled` and `paused`. `lapseNoticeOf` gives `{ kind: 'paused', until }` (`src/hosted/data/trialPrompt.ts`); `PausedNote` in `LapseGate.tsx`.

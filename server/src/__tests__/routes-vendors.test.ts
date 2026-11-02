@@ -75,7 +75,7 @@ describe('the expense writers link the typed vendor (MUT-254)', () => {
     expect((await create({})).vendorId).toBeNull();
     // What saves as this vendor says so, however it is written.
     expect((await suggest('SUPER DEAL, inc.'))[0]).toMatchObject({ id: first.vendorId, exact: true });
-    expect(await suggest('super')).toEqual([{ id: first.vendorId, name: 'Super Deal Ltd', matchedName: 'Super Deal Ltd', exact: false, registrationNo: null, phone: null, email: null, lastCategoryId: null }]);
+    expect(await suggest('super')).toEqual([{ id: first.vendorId, name: 'Super Deal Ltd', matchedName: 'Super Deal Ltd', exact: false, registrationNo: null, phone: null, email: null, lastCategoryId: null, lastCurrency: 'ILS', lastVat: null }]);
   });
 
   it('vendorDetails: a matching registration number reuses the vendor under another name, which becomes an alias', async () => {
@@ -193,5 +193,147 @@ describe('GET /v1/vendors (MUT-254)', () => {
     const keyed = await app.request('/v1/vendors', { headers: a.auth });
     expect(keyed.status).toBe(403);
     expect((await read(keyed)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+  });
+});
+
+/** MUT-303 (ADR-099 §6.2): a vendor learns the currency and VAT of its expenses, and offers them back. */
+describe('vendor defaults: currency and VAT (MUT-303)', () => {
+  const vat16 = { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 };
+  const firmOn = async (s: Awaited<ReturnType<typeof setup>>) =>
+    s.store.organizations.setFirm(s.a.id, { enabled: true, ownerUserIds: [s.userId] }, s.clock.now, { actorId: null, requestId: null });
+
+  it('a new expense teaches its vendor the currency and the VAT; the typeahead offers them', async () => {
+    const s = await setup();
+    await firmOn(s);
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.suggest('bezeq'))[0]).toMatchObject({ lastCurrency: 'EUR', lastVat: vat16 });
+  });
+
+  it('a vendor never saved with a currency or VAT offers neither', async () => {
+    const s = await setup();
+    await s.store.vendors.resolve({ organizationId: s.a.id, name: 'Fresh Vendor' }, s.clock.now);
+    expect((await s.suggest('fresh'))[0]).toMatchObject({ lastCurrency: null, lastVat: null });
+  });
+
+  it('AC2: a changed value on the next expense becomes the new default', async () => {
+    const s = await setup();
+    await firmOn(s);
+    await s.create({ vendor: 'Bezeq', currency: 'ILS', amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.suggest('bezeq'))[0]).toMatchObject({ lastCurrency: 'EUR', lastVat: vat16 });
+  });
+
+  it('D1: a save without VAT keeps the vendor’s VAT default', async () => {
+    const s = await setup();
+    await firmOn(s);
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '20.00' });
+    expect((await s.suggest('bezeq'))[0].lastVat).toEqual(vat16);
+  });
+
+  it('D1: removing VAT clears the default only while it is still that VAT', async () => {
+    const s = await setup();
+    await firmOn(s);
+    const old = await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+    const latest = await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.patch(old, { vat: null })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastVat).toEqual(vat16);
+    expect((await s.patch(latest, { vat: null })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastVat).toBeNull();
+  });
+
+  it('R8: an edit that resends the vendor but changes no currency leaves the currency default alone', async () => {
+    const s = await setup();
+    const old = await s.create({ vendor: 'Bezeq', currency: 'ILS' });
+    await s.create({ vendor: 'Bezeq', currency: 'EUR' });
+    expect((await s.patch(old, { title: 'Fixed typo', vendor: 'Bezeq' })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastCurrency).toBe('EUR');
+  });
+
+  it('D2: a PATCH that changes the currency teaches it', async () => {
+    const s = await setup();
+    const expense = await s.create({ vendor: 'Bezeq', currency: 'ILS' });
+    expect((await s.patch(expense, { currency: 'USD', amount: '12.00' })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastCurrency).toBe('USD');
+  });
+
+  it('review: a PATCH that resends an unchanged VAT teaches nothing', async () => {
+    const s = await setup();
+    await firmOn(s);
+    const old = await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.patch(old, { vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 }, title: 'Same VAT' })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastVat).toEqual(vat16);
+  });
+
+  it('R10 (review): off firm profiles the typeahead offers the currency but never VAT', async () => {
+    const s = await setup();
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.suggest('bezeq'))[0]).toMatchObject({ lastCurrency: 'EUR', lastVat: null });
+  });
+
+  it('AC3: one profile’s vendor never offers its defaults to another profile', async () => {
+    const s = await setup();
+    await s.create({ vendor: 'Bezeq', currency: 'EUR' });
+    await s.create({ vendor: 'Bezeq', currency: 'USD' }, s.b.id);
+    expect((await s.suggest('bezeq'))[0].lastCurrency).toBe('EUR');
+    expect((await s.suggest('bezeq', s.b.id))[0].lastCurrency).toBe('USD');
+  });
+
+  describe('GET /v1/receipts/{id}: vendorDefaults (D6)', () => {
+    const toReview = async (s: Awaited<ReturnType<typeof setup>>, suggested: Loose = null, profile = s.a.id) => {
+      const receipt = await s.store.expenseReceipts.create({ organizationId: profile, expenseId: null, filename: 'r.jpg', mimeType: 'image/jpeg', sizeBytes: 10, receivedOn: '2026-10-24', suggested, uploadedByUserId: s.userId, requestId: null }, s.clock.now);
+      await s.store.expenseReceipts.setKey(profile, receipt.id, `org/${profile}/expense-receipts/${receipt.id}`);
+      await s.store.expenseReceipts.complete(profile, receipt.id, s.clock.now);
+      return receipt;
+    };
+    const getReceipt = async (s: Awaited<ReturnType<typeof setup>>, id: string, profile = s.a.id) => read(await s.app.request(`/v1/receipts/${id}`, { headers: s.as(profile) }));
+    const regNo = (value: string) => ({ value, source: 'ocr', confidence: 0.9 });
+
+    it('AC1: after two approved receipts from one registration no., the third opens with that vendor’s currency and VAT', async () => {
+      const s = await setup();
+      await firmOn(s);
+      for (const amount of ['116.00', '232.00']) {
+        const r = await toReview(s);
+        const res = await s.app.request(`/v1/receipts/${r.id}/approve`, json({ occurredOn: '2026-10-22', amount, currency: 'EUR', vendor: 'Bezeq', vendorDetails: { registrationNo: '520031931' }, vat: vat16 }, { ...s.as(), ...idem() }));
+        expect(res.status).toBe(201);
+      }
+      const third = await toReview(s, { readerVersion: 'test', registrationNo: regNo('52-003193-1') });
+      expect((await getReceipt(s, third.id)).vendorDefaults).toMatchObject({ vendorId: expect.any(String), currency: 'EUR', vat: vat16 });
+    });
+
+    it('matches by the exact vendor name when no registration no. was read', async () => {
+      const s = await setup();
+      await s.create({ vendor: 'مخبز الأقصى', currency: 'JOD', amount: '1.250' });
+      const r = await toReview(s, { readerVersion: 'test', vendorName: { value: 'مخبز الاقصى', source: 'ocr', confidence: 0.8 } });
+      expect((await getReceipt(s, r.id)).vendorDefaults).toMatchObject({ currency: 'JOD', vat: null });
+    });
+
+    it('is null when nothing was read, or nothing matches', async () => {
+      const s = await setup();
+      await s.create({ vendor: 'Bezeq', currency: 'EUR' });
+      expect((await getReceipt(s, (await toReview(s)).id)).vendorDefaults).toBeNull();
+      const unknown = await toReview(s, { readerVersion: 'test', vendorName: { value: 'Somebody Else', source: 'ocr', confidence: 0.8 } });
+      expect((await getReceipt(s, unknown.id)).vendorDefaults).toBeNull();
+    });
+
+    it('R10: a profile without firm features gets the currency but never the VAT', async () => {
+      const s = await setup();
+      await firmOn(s);
+      await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+      await s.store.organizations.setFirm(s.a.id, { enabled: false }, s.clock.now, { actorId: null, requestId: null });
+      const r = await toReview(s, { readerVersion: 'test', vendorName: { value: 'Bezeq', source: 'ocr', confidence: 0.8 } });
+      expect((await getReceipt(s, r.id)).vendorDefaults).toMatchObject({ currency: 'EUR', vat: null });
+    });
+
+    it('never writes the vendor’s values into what the reader read (R1)', async () => {
+      const s = await setup();
+      await s.create({ vendor: 'Bezeq', currency: 'EUR' });
+      const suggested = { readerVersion: 'test', vendorName: { value: 'Bezeq', source: 'ocr', confidence: 0.8 }, totalMinor: { value: '1234', source: 'ocr', confidence: 0.7 } };
+      const r = await toReview(s, suggested);
+      const got = await getReceipt(s, r.id);
+      expect(got.suggested.currency).toBeUndefined();
+      expect(got.suggested.totalMinor.value).toBe('1234');
+    });
   });
 });

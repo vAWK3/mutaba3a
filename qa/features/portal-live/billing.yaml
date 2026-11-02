@@ -254,7 +254,7 @@ features:
       - Open Billing
     expect:
       - Billing shows Active and Manage billing with no switch line, and GET /v1/billing/yearly-switch answers 409 SWITCH_NOT_AVAILABLE (TOO_EARLY)
-  # MUT-532 (ADR-239): pause instead of cancel, the stay offer and MTB3A's own cancel flow. A pause runs on the server's
+  # MUT-532 (ADR-240): pause instead of cancel, the stay offer and MTB3A's own cancel flow. A pause runs on the server's
   # real clock while Stripe runs on a test clock, so the pause flows start a subscription whose paid month ends a
   # couple of minutes from now (payingUntilSoon). The stay coupon is this run's own (BILLING_STAY_COUPON_ID).
   - id: pause

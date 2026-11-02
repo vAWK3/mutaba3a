@@ -215,7 +215,7 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
    no plan switching, no pausing; business name and tax ID editable. **MUT-531:** the switch to yearly is MTB3A's own
    (Billing › Switch to yearly, from the 2nd payment), so plan switching stays **off** here. Default return URL: the portal origin. Save, and
    check a portal session opens from Billing in the portal (test mode first).
-   **MUT-532 (ADR-239), after the web release that carries it:** turn **off** "Cancel subscriptions" here. Cancelling is
+   **MUT-532 (ADR-240), after the web release that carries it:** turn **off** "Cancel subscriptions" here. Cancelling is
    MTB3A's own flow now (Billing › Cancel plan: Why? → Pause instead? → the stay offer → Confirm), so the pause and the
    stay offer can't be skipped; Keep my plan undoes a cancel. The card, invoices and business details stay here. Turn it
    off only once the web release is live, or nobody can cancel in between. A founder price runs on a subscription
@@ -275,7 +275,7 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 **Test-mode checks (Basel).** In test mode, check whether the UK account can charge in ILS and whether ILS can
 settle as ILS. Add a USD bank account for USD settlement.
 
-### 1.9 Pause and the stay offer (MUT-532, ADR-239)
+### 1.9 Pause and the stay offer (MUT-532, ADR-240)
 
 Billing's own cancel flow offers a monthly list-price payer, in this order: a pause of 1–3 months (once in 12 months)
 and the stay offer (once per person, ever). Founders, yearly payers and Malafat- or grant-covered profiles get neither.

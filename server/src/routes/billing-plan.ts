@@ -45,7 +45,7 @@ import { auditOn, catalogOf, limit, refusedResponses, requireCheckout, SESSION_O
  *   GET  /v1/billing/yearly-switch   what the switch to yearly charges today (Stripe's proration preview)
  *   POST /v1/billing/yearly-switch   the switch, at the previewed proration date, or nothing at all
  *
- * MUT-532 (plan §2.5, D6–D12, R3, R6, ADR-239): MTB3A's own cancel flow, Why? → Pause → Stay → Cancel at period end.
+ * MUT-532 (plan §2.5, D6–D12, R3, R6, ADR-240): MTB3A's own cancel flow, Why? → Pause → Stay → Cancel at period end.
  *
  *   GET    /v1/billing/retention     what the flow may offer instead of cancelling (pause options, the stay offer)
  *   POST   /v1/billing/pause         pause 1–3 months from the paid period's end

@@ -709,3 +709,52 @@ test('A profile without firm features has no VAT row on its expense form (MUT-30
     expect(api.last('POST', /^\/v1\/expenses$/)?.body).not.toHaveProperty('vat');
   });
 });
+
+test('On a firm, picking a vendor fills its last currency and VAT; a typed amount keeps its currency (MUT-303)', { tag: '@portal.expenses.vendor-defaults' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], categories: [office_, travel] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+  const vat = drawer.getByTestId('expense-vat');
+  const pick = async (name: string) => {
+    await drawer.getByLabel('Vendor').fill(name.slice(0, 4));
+    await page.getByRole('option', { name }).click();
+  };
+
+  await step('Save an expense from Bezeq in EUR at Standard 16 %', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Vendor').fill('Bezeq');
+    await drawer.getByLabel(/^Currency/).selectOption('EUR');
+    await drawer.getByLabel('Amount').fill('116');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await vat.getByRole('button', { name: /VAT/ }).click();
+    await vat.getByLabel('Treatment').selectOption('STANDARD_RATED');
+    await vat.getByLabel('Rate').fill('16');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('Record another and pick Bezeq first: EUR and VAT 16% fill, "From this vendor’s last expense"', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await pick('Bezeq');
+    await expect(drawer.getByLabel(/^Currency/)).toHaveValue('EUR');
+    await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
+    await expect(drawer.getByText('From this vendor’s last expense').first()).toBeVisible();
+  });
+
+  await step('Save it: the server gets EUR and the 16 % rate', async () => {
+    await drawer.getByLabel('Amount').fill('58');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+    expect(api.last('POST', /^\/v1\/expenses$/)?.body).toMatchObject({ currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
+  });
+
+  await step('With an amount typed first, picking Bezeq keeps the currency and fills only the VAT', async () => {
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    const before = await drawer.getByLabel(/^Currency/).inputValue();
+    await drawer.getByLabel('Amount').fill('20');
+    await pick('Bezeq');
+    await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
+    await expect(drawer.getByLabel(/^Currency/)).toHaveValue(before);
+  });
+});

@@ -920,7 +920,7 @@ export const HostedProfileSchema = z
         until: z.string().datetime().nullable(),
         /**
          * MUT-532: READ_ONLY because the person paused their plan, until it restarts on its own on `until`. Always sent
-         * from 1.96.0-mut532; an older server omits it (read it as false).
+         * from 1.97.0-mut532; an older server omits it (read it as false).
          */
         paused: z.boolean().optional(),
       })
@@ -3530,6 +3530,18 @@ export const ListVendorsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(25).default(10).openapi({ description: '1–25.' }),
 });
 
+/** MUT-303: a VAT a vendor remembers (treatment and rate; 0 for the non-standard treatments). */
+export const VendorVatSchema = z.object({ treatment: VatTreatmentSchema, rateBasisPoints: z.number().int().min(0).max(10_000) }).openapi('VendorVat');
+
+/**
+ * MUT-303 (D6): the defaults of the saved vendor a receipt's read registration no. (else its exact name) points to,
+ * worked out when the receipt is read by GET and never stored in `suggested`. A client fills only fields that are
+ * empty, not read and not edited; `vat` is null unless the profile has firm features.
+ */
+export const ReceiptVendorDefaultsSchema = z
+  .object({ vendorId: uuid, currency: CurrencySchema.nullable(), vat: VendorVatSchema.nullable() })
+  .openapi('ReceiptVendorDefaults');
+
 export const VendorSuggestionSchema = z
   .object({
     id: uuid,
@@ -3544,10 +3556,17 @@ export const VendorSuggestionSchema = z
     exact: z.boolean(),
     /** The category the profile last filed this vendor under (never the automatic Other); a client prefills it only when none is chosen yet. */
     lastCategoryId: uuid.nullable(),
+    /** MUT-303: the currency of this vendor's last new expense. A client prefills it only while the currency is untouched and no amount is typed. Since 1.96.0-mut303. */
+    lastCurrency: CurrencySchema.nullable(),
+    /** MUT-303: the VAT of this vendor's last expense that carried VAT. A client prefills it on a firm profile, into an untouched VAT row only. Since 1.96.0-mut303. */
+    lastVat: VendorVatSchema.nullable(),
   })
   .openapi('VendorSuggestion');
 
 export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSuggestionSchema) }).openapi('VendorSuggestionList');
+
+/** MUT-303: one receipt as GET /v1/receipts/{id} returns it: the receipt and its vendor's defaults (D6). */
+export const ReceiptDetailSchema = ExpenseReceiptSchema.extend({ vendorDefaults: ReceiptVendorDefaultsSchema.nullable() }).openapi('ReceiptDetail');
 
 export const CreateExpenseRequestSchema = z
   .object({

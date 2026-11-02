@@ -6,7 +6,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
 import { completeExpenseReceipt, receiptAudit, startExpenseReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
-import { assertCategoryChoosable, expenseDate, expensePatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseDate, expensePatch, learnedFromNew, learnedFromPatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
 import { groupFilter } from '../expenses/groups.js';
 import { computeStreak, loggedAtOf } from '../expenses/streak.js';
@@ -193,7 +193,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const input = await withResolvedVendor(store, organization.id, prepared, body.vendorDetails, now);
       // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
       const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));
-      await touchExpenseVendor(store, expense, now);
+      await touchExpenseVendor(store, expense, now, learnedFromNew(expense));
       await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn: input.occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       return c.json(serializeExpense(expense), 201);
     },
@@ -236,7 +236,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const result = await withCategoryForeignKey(() => store.expenses.update(organization.id, existing.id, c.get('expectedVersion'), patch, now));
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
-      if (body.vendor !== undefined || body.categoryId !== undefined) await touchExpenseVendor(store, result.record, now);
+      const learning = learnedFromPatch(existing, result.record, body);
+      if (body.vendor !== undefined || body.categoryId !== undefined || learning.currency || learning.vat) await touchExpenseVendor(store, result.record, now, learning);
       await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version, ...currencyMove });
       return c.json(serializeExpense(result.record), 200);
     },

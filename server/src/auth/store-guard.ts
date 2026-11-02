@@ -276,7 +276,7 @@ export const STORE_ACCESS: StoreAccess = {
     getById: { read: 'expenses' },
     search: { read: 'expenses' },
     // MUT-441: the read job fills a receipt's vendor by registration no. (it runs unguarded; a session may read it too).
-    findByRegistration: { read: 'expenses' },
+    findByRegistration: { read: 'expenses' }, findByName: { read: 'expenses' },
   },
   expenseReceipts: {
     create: { write: 'expenses' },

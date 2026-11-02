@@ -178,7 +178,8 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
     { organizationId: org, occurredOn: '2026-10-02', amountMinor: 4_500n, currency: 'ILS', title: 'Taxi', vendor: 'Yellow Cab', vendorId: vendor.id, categoryId: category.id, customerId: customer.id, projectId: project.id, notes: null, vatTreatment: 'STANDARD_RATED', vatRateBasisPoints: 1700, netMinor: 3_846n, vatMinor: 654n, createdByUserId: user.id },
     AT,
   );
-  await store.vendors.touch(org, vendor.id, { categoryId: category.id }, AT);
+  // MUT-303: the vendor remembers the expense's currency and VAT.
+  await store.vendors.touch(org, vendor.id, { categoryId: category.id, currency: 'ILS', vat: { set: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } } }, AT);
   const receipt = await store.expenseReceipts.create({ organizationId: org, expenseId: expense.id, filename: 'taxi.pdf', mimeType: 'application/pdf', sizeBytes: 512, receivedOn: '2026-10-02', uploadedByUserId: user.id, requestId: null }, AT);
   await store.expenseReceipts.setKey(org, receipt.id, `org/${org}/expense-receipts/${receipt.id}`);
   await store.expenseReceipts.complete(org, receipt.id, AT);

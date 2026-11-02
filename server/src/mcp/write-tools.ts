@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { todayFor } from '../agreements/compose.js';
 import { agentPersonWriteGate, agentWriteGate } from '../auth/billing-gate.js';
 import { ApiError } from '../errors.js';
-import { prepareExpenseCreate, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { learnedFromNew, prepareExpenseCreate, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import type { MatchProbe } from '../expenses/similarity.js';
 import { parseInboxAmount, inboxDate } from '../inbox/compose.js';
 import { commitInboxExpenseFiling, prepareInboxExpenseFiling } from '../inbox/file-expense.js';
@@ -186,7 +186,7 @@ export function registerWriteTools(server: McpServer, ctx: McpContext, options: 
           // MUT-254: after the check, so a matched answer never leaves a vendor behind.
           const input = await withResolvedVendor(ctx.store, organization.id, prepared, undefined, now);
           const expense = await withCategoryForeignKey(() => ctx.store.expenses.create(input, now));
-          await touchExpenseVendor(ctx.store, expense, now);
+          await touchExpenseVendor(ctx.store, expense, now, learnedFromNew(expense));
           await ctx.store.audit.append({
             organizationId: organization.id,
             actorType: 'USER',

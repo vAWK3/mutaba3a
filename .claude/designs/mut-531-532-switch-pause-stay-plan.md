@@ -201,7 +201,7 @@ GET `/v1/billing` gains three things, all additive:
 
 The cancel step gets its offers from a separate read, `GET /v1/billing/retention` → `{ pause: { options } | null, stayOffer | null }`, which runs when the person presses Cancel. That way the Billing drawer doesn't read the coupon on every open.
 
-The contract goes to `1.95.0-mut531`, then `1.96.0-mut532`. Each step regenerates `openapi.yaml` and `src/hosted/api/schema.d.ts`.
+The contract goes to `1.95.0-mut531`, then `1.97.0-mut532`. Each step regenerates `openapi.yaml` and `src/hosted/api/schema.d.ts`.
 
 ## 3. Portal (`src/hosted/**`)
 - **`data/billingView.ts`:**

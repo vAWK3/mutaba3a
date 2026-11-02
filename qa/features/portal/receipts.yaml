@@ -137,3 +137,16 @@ features:
     expect:
       - The VAT row reads "VAT 17%" with 17.00, marked "From the receipt"
       - POST /v1/receipts/{id}/approve gets vat with STANDARD_RATED and 1700 basis points
+  - id: vendor-defaults
+    title: On a firm, a receipt that read a known vendor opens in its currency and VAT (MUT-303)
+    tier: secondary
+    tickets: [MUT-303]
+    paths:
+      - src/hosted/pages/views/ReceiptReview.tsx
+      - server/src/vendors/receipt-defaults.ts
+    steps:
+      - On a firm profile, open a receipt that read only the vendor Bezeq
+      - Approve and file it
+    expect:
+      - Currency EUR and VAT 16% come from Bezeq, marked "From this vendor’s last expense"
+      - Approve sends EUR and the 16 % rate
