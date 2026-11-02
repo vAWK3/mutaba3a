@@ -2,7 +2,7 @@
 
 Epic MUT-528 (pricing program, D4–D6) · two Stories, Jira Backlog · planned 2026-11-02 · not built. Combined plan; built as two branches in this order: `feature/mut-531-yearly-switch`, then `feature/mut-532-pause-stay` on top of it.
 
-**Status: awaiting Basel's approval of the ▲ decisions (§1) and the copy deck (§6).**
+**Status: APPROVED by Basel 2026-11-02 (this session): pause as planned (D6/D10/D11, monthly only), Cancel moves into MTB3A and off in Stripe's portal (D8), no founder switch in v1 (D5), copy deck §6 and the defaults D7/D9 approved. Building.**
 
 ## 0. Neighbourhood
 
@@ -384,11 +384,6 @@ VERDICT: ready for Basel's product approval. The build starts with spike step 0 
 
 OUTSIDE COVERAGE / CROSS-MODEL: none (Codex CLI absent).
 
-**UNRESOLVED DECISIONS:**
-- ▲D5 founders: no switch in v1
-- ▲D7 a pause cancelled before it starts doesn't use up the once-a-year pause
-- ▲D8 Cancel turned off in Stripe's Customer Portal; the cancel flow moves into MTB3A
-- ▲D9 the mail line lands with MUT-535
-- ▲D10 pause is monthly only, from the 1st paid invoice
-- ▲D11 the stay offer is monthly only, coupon `mtb3a_stay_monthly_50`
-- the copy deck in §6, ar + en
+All ▲ decisions and the copy deck were approved by Basel on 2026-11-02 (D5, D6/D10/D11, D7, D8, D9, §6).
+
+NO UNRESOLVED DECISIONS
