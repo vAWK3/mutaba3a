@@ -41,7 +41,7 @@ creation is 10–15 minutes of waiting.
 | Attachments bucket | `<project>-mutaba3a-attachments`, private; M6 attachments and MUT-42 expense receipts (`org/{id}/expense-receipts/…`) | same |
 | Service account | `mutaba3a-api@<project>.iam` — `cloudsql.client`, accessor on its three secrets, object access on the bucket | same |
 | Artifact Registry | `me-west1-docker.pkg.dev/<project>/mutaba3a/mutaba3a-api:<sha>` | same; image built by `scripts/deploy.sh` on your machine |
-| Uptime checks + alerts | `GET /health`, `/ready` and the portal `/` every 5 min from six regions; email + SMS after 2 failed rounds, Cloud SQL disk/CPU alerts (MUT-328, §6b). Alerts only once `alert_email` / `alert_sms_number` are set | `infrastructure/terraform/monitoring.tf` |
+| Uptime checks + alerts | `GET /health`, `/ready` and the portal `/` every 5 min from six regions; email after 2 failed rounds (email only, ADR-154 amendment 2026-11-02; SMS is optional), Cloud SQL disk/CPU alerts (MUT-328, §6b). Alerts only once `alert_email` (or `alert_sms_number`) is set | `infrastructure/terraform/monitoring.tf` |
 | Hosted portal | `dist-hosted/` (MUT-45), baked into the same image at `/app/portal`, served by the same Cloud Run service — no separate domain, load balancer or Terraform resource | `Dockerfile`, `src/app.ts` |
 
 The service issues and accepts **`live`** API keys (`config.API_KEY_ENVIRONMENT`).
@@ -1030,7 +1030,7 @@ Reading it:
 | Cloud SQL disk, on `mutaba3a-pg` | Above 80% for 15 min | WARNING |
 | Cloud SQL CPU, same instance | Above 90% for 15 min | WARNING |
 
-Alerts go to email and SMS (Basel's call, 2026-10-19), plus any ids in `alert_notification_channels`. With no channel set, Terraform keeps only the checks and creates no alerts. Production ran that way until this section was applied.
+Alerts go to email (Basel, 2026-11-02, ADR-154 amendment; the 2026-10-19 call was email and SMS), plus any ids in `alert_notification_channels`. SMS is optional: set `alert_sms_number` and do steps 2–4 only if you want it. With no channel set, Terraform keeps only the checks and creates no alerts. Production ran that way until this section was applied.
 
 **Cost:** the checks make about 160k runs a month, inside the 1M free per project. Channels are free. The 5 alert conditions cost about $0.50/month at most, if Google's per-condition alerting charge applies.
 

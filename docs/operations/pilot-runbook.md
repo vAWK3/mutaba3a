@@ -553,7 +553,8 @@ estimates. After either: §4.3 "After either" steps 1, 3, 4 and 6.
 ### 5.1 How you find out
 
 - **Uptime alerts (MUT-328):** `/health`, `/ready` and the portal from six regions. An alert pages
-  Basel by **email + SMS** after 2 failed rounds, about 10 minutes. Cloud SQL disk and CPU send
+  Basel by **email** after 2 failed rounds, about 10 minutes. Email only (Basel, 2026-11-02, replacing
+  the 2026-10-19 email + SMS); the SMS channel stays in Terraform, unset. Cloud SQL disk and CPU send
   warnings.
   - This only works once DEPLOYMENT.md §6b is applied and its drill has passed. Until then, nothing
     pages anyone.
@@ -563,11 +564,11 @@ estimates. After either: §4.3 "After either" steps 1, 3, 4 and 6.
 
 ### 5.2 Severity, who is told, how fast
 
-**⚠ Basel decides** all three columns. The proposal:
+Basel decided these on 2026-11-02.
 
 | Severity | Examples | Acknowledge | Tell |
 |---|---|---|---|
-| **S1** | Data lost or exposed to the wrong person; service down for more than 30 min; a whole-database restore | 30 min while awake | Every pilot user: within **2 hours** of knowing, then when it's resolved. A personal-data breach: also the authorities (below) |
+| **S1** | Data lost or exposed to the wrong person; service down for more than 30 min; a whole-database restore | 1 hour while awake | Every pilot user: within **4 hours** of knowing, then when it's resolved. A personal-data breach: also the authorities (below) |
 | **S2** | One user's data wrong or lost (§4.2); portal or phone broken for some users; down for under 30 min | Same day | The affected users, same day |
 | **S3** | Something looks wrong but no data or access is affected | Next working day | Whoever reported it, within the support promise (§6) |
 
@@ -575,11 +576,12 @@ estimates. After either: §4.3 "After either" steps 1, 3, 4 and 6.
 
 - The seller is Barmajiyat Ltd (UK). UK GDPR asks you to notify the ICO within **72 hours** of
   becoming aware, unless the breach is unlikely to risk anyone's rights.
-- The data lives in Israel (`me-west1`), so Israel's Privacy Protection (Data Security) Regulations
-  may also require a report to the Privacy Protection Authority.
-  - **⚠ Basel decides with counsel:** since MUT-523, MTB3A runs in `europe-west1` (Belgium), not `me-west1`, and the
-    privacy policy says so (MUT-524). Decide whether Israel's report still applies, then fix the line above.
-- **⚠ Basel decides with counsel** which of these apply, and who files.
+- The data is in `europe-west1` (Belgium) since MUT-523, and the privacy policy says so (MUT-524). MTB3A is still
+  run from Israel, so Israel's Privacy Protection (Data Security) Regulations may still require a report to the
+  Privacy Protection Authority.
+- **Who files:** Basel files both, the ICO and the PPA (Basel, 2026-11-02).
+  - **⚠ Counsel confirms** whether the PPA report applies now that the data is in Belgium. Until they answer, treat
+    it as required.
 
 Contain first:
 
@@ -623,10 +625,11 @@ Plain email from the support inbox, in the person's language. EN draft (the AR v
   - The inbox is **info@mtb3a.com** (MUT-382, B2), named in the terms, the privacy policy, the portal (`SUPPORT_EMAIL`) and the phone (`legal_links.dart`)
     and pilot-offer §4. info@malafat.app keeps forwarding to it for older app builds.
   - There's no WhatsApp and no phone (Basel, 2026-10-19).
-  - **⚠ Basel decides:** keep the shared Malafat inbox, or move Mutaba3a to its own address once the
-    domain lands (MUT-326). Either way the terms text and this line must match.
+  - Settled by MUT-382: MTB3A has its own inbox. If the address ever changes, the terms, the privacy policy,
+    `SUPPORT_EMAIL`, the phone's `legal_links.dart` and this line change together.
 - **Promise:** a reply within **2 working days** (pilot-offer §4, the terms).
-  - **⚠ Basel decides** the working days: Sunday–Thursday (Israel) or Monday–Friday (UK).
+  - Working days are **Monday–Friday** (UK, where the seller is; Basel, 2026-11-02). An email that arrives on a
+    Friday evening is due by the end of Tuesday.
 - **Triage routine:**
   1. **Each working morning,** read the inbox, and Netlify Forms › `hosted-request` (new /hosted
      requests, and their Spam folder weekly; INFRA.md §1).
@@ -674,12 +677,10 @@ The manual steps below are the fallback.
 ### 7.1 Day 0: the request, and the export
 
 1. **Confirm the request** from the account's own address (§6). Note the date in the offboarding log.
-2. **The export.** MUT-325 (signed-in "Download my records") is merged to `main` (2026-10-20) but
-   not released yet; it goes out with the next server release (MUT-329).
-   - **Once it's live,** the person downloads it themselves from Settings › Your data, per profile
-     they own. It's the same records file as local mode, receipts included, and it's audited
-     `records.exported`.
-   - **Until then,** you export for them, per profile they own:
+2. **The export.** The person downloads it themselves in the portal (Your data › Download my records), per
+   profile they own. That's MUT-325, live since api-v0.3.18. It's the same records file as local mode, receipts
+   included, and it's audited `records.exported`.
+   - **Only if they can't** (they can't sign in, or the download fails), you export for them, per profile they own:
 
      ```bash
      npm run db:run -- scripts/profile-rows.sh export --organization-id <profile id> --out ~/offboarding/<date>-<profile id> \
@@ -691,8 +692,8 @@ The manual steps below are the fallback.
      - The export is one CSV per table, the profile row, and the receipt files.
      - Send the zip one way and its password another: email, then SMS.
      - Delete both local copies once they confirm receipt.
-     - **⚠ Basel decides:** whether this CSV export is enough, or anyone leaving before the
-       release waits for MUT-325's records file.
+     - This hand export is CSV, not the records file, so it can't be restored into the portal. Say so when you
+       send it.
 3. **Cancel their Stripe subscription** at the period's end, in the dashboard (pilot-offer §5). In the same visit,
    delete the metadata that links them: `mutaba3a_user_id` on the Customer, and `mutaba3a_organization_id` on each
    of their Subscriptions. Otherwise the nightly reconcile keeps mirroring a person you are about to purge.
@@ -838,7 +839,7 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 | §2 `rotate:password` | ✅ | local API | Old password 201 until the link was used, then 401; old session 401 |
 | §2 `rotate:password --lock` | ✅ | local API | Session and password 401 at once; link restores access |
 | §3 move a signed-out user's data | ❌ | no tool (MUT-290 won't do) | Procedure only: Download, then retype |
-| §4.1 clone or backup into a scratch instance | ⚠ dry run only | needs production | The drill's dry run prints the exact sequence |
+| §4.1 clone or backup into a scratch instance | ✅ 2026-11-01 | production (`mtb3a-production`) | Both done by the drill: backup restore 901 s, point-in-time clone 2,240 s (§10) |
 | §4.2 restore one profile (dry run, then for real) | ✅ | dev copy → dev | Deleted expense came back; dry run changed nothing; `organization.restored` audited; 7 s |
 | §4.3 B whole database, `pg_dump` + `pg_restore --single-transaction` | ✅ | dev copy → new database, and `--clean` over a populated one | Every count matched (users 12, organizations 24, expenses 523, audit 4160, migrations 30); 1–2 s. **Found:** pg_dump 18 output fails on Postgres 16; use v16 tools (§0) |
 | §4.3 A backup restore in place; ingress close/reopen | ❌ | needs production | Commands from gcloud docs; not run |
@@ -848,7 +849,7 @@ AC2: each step walked once on staging or a scratch database. There's no staging 
 | §7.1 export | ✅ | dev | 26 CSV files and `receipts.txt`; no `api_keys` |
 | §7.2 `disable:user` | ✅ | local API | Sign-in 401 |
 | §7.3 `purge-user` (dry run, then for real) | ✅ | dev | 2 profiles and every row gone; nothing else touched; bucket lines printed |
-| §8 restore drill | ⚠ dry run + shellcheck | needs production | **Basel runs it**, results in §10 |
+| §8 restore drill | ✅ 2026-11-01 | production (`mtb3a-production`) | Basel ran it; every check passed (§10). Next by 2026-12-31 |
 
 **2026-10-23, first production run (Basel).** It stopped at its first paid step, before anything was created:
 `gcloud sql instances create` (Cloud SDK 557) has no `--labels` flag; only alpha and beta do, and `patch
