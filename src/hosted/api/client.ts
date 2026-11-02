@@ -109,6 +109,10 @@ export type BillingOffer = Schemas['BillingOffer'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
 export type BillingEntitlement = Schemas['BillingEntitlement'];
+/** MUT-531: the switch to yearly: its line on GET /v1/billing, Stripe's preview and the switch's answer. */
+export type BillingYearlySwitch = Schemas['BillingYearlySwitch'];
+export type YearlySwitchPreview = Schemas['YearlySwitchPreview'];
+export type YearlySwitchResult = Schemas['YearlySwitchResult'];
 /** MUT-460: the operator console's signup reviews (MUT-459's /v1/operator). */
 export type SignupReview = Schemas['SignupReview'];
 export type OperatorSignupReviewList = Schemas['OperatorSignupReviewList'];
@@ -603,6 +607,9 @@ export const api = {
   billing: (options: { signal?: AbortSignal } = {}) => request<BillingOverview>('GET', '/v1/billing', { signal: options.signal }),
   startCheckout: (body: CheckoutSessionRequest) => request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body }),
   openBillingPortal: (body: Schemas['PortalSessionRequest']) => request<BillingRedirect>('POST', '/v1/billing/portal-session', { body }),
+  /** MUT-531: what switching to yearly charges today, then the switch at that preview's proration date. */
+  yearlySwitchPreview: (options: { signal?: AbortSignal } = {}) => request<YearlySwitchPreview>('GET', '/v1/billing/yearly-switch', { signal: options.signal }),
+  switchToYearly: (body: Schemas['YearlySwitchRequest']) => request<YearlySwitchResult>('POST', '/v1/billing/yearly-switch', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

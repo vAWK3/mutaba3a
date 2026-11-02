@@ -1193,6 +1193,9 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-billing-chip-rose { background: var(--error-subtle); color: var(--error); }
 .hp-billing-chip-lavender { background: var(--accent-subtle); color: var(--on-accent-subtle); }
 .hp-billing-action { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+/* MUT-531: the switch line sits under Manage billing, a separate offer, never a second primary. */
+.hp-billing-switch { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
+.hp-billing-switch-due { font-weight: 600; }
 .hp-billing .btn { min-block-size: 44px; }
 .hp-billing .select { min-block-size: 44px; }
 /* The column's gap sets the rhythm; a banner's own margin would add to it. */

@@ -20,6 +20,7 @@ import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
 import { createStripeGateway, RECONCILE_BUDGET, WEBHOOK_BUDGET } from './billing/stripe/gateway.js';
 import { CHECKOUT_BUDGET, createCheckoutGateway } from './billing/stripe/checkout-gateway.js';
+import { createPlanGateway } from './billing/stripe/plan-gateway.js';
 import { offersFor } from './billing/offer.js';
 import { createAccountStripeGateway } from './billing/stripe/account-gateway.js';
 import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
@@ -71,6 +72,8 @@ const stripe = config.STRIPE_SECRET_KEY
       checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date(), ...(config.BILLING_OFFER_COUPON_ID ? { couponTtlMs: 0 } : {}) }),
       // MUT-333 (D14): the same key, which also needs Write on Subscriptions to end them when an account closes.
       accountGateway: createAccountStripeGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET }),
+      // MUT-531: the same key's Write on Subscriptions (MUT-333 D14) also changes a person's own plan.
+      planGateway: createPlanGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date() }),
     }
   : null;
 const billingSessionLimiter = new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);

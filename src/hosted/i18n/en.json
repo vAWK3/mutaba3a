@@ -1355,6 +1355,21 @@
         "refused": "This profile is read-only now. Subscribe to add or change records.",
         "newProfileBlocked": "Subscribe to add a profile: your plan has ended."
       },
+      "switch": {
+        "line": "Switch to yearly and save {amount} a year",
+        "action": "Switch to yearly",
+        "title": "Switch to yearly",
+        "body": "You'll pay {yearly} a year, renewing on {date}. What's left of this month comes off today's charge.",
+        "dueToday": "You pay {due} today, including VAT where it applies",
+        "confirm": "Pay {due} and switch",
+        "notNow": "Not now",
+        "done": "You're on the yearly plan. It renews on {date} at {yearly}.",
+        "declined": "Your card was declined, so nothing changed. You're still on the monthly plan.",
+        "amountChanged": "The amount changed since you opened this. Please check it again.",
+        "needsAction": "Your bank wants you to approve this payment. Until you do, you stay on the monthly plan.",
+        "approve": "Approve on Stripe's page",
+        "notAvailable": "Switching to yearly isn't open for this plan right now."
+      },
       "offer": {
         "segment": "Yearly · −50%",
         "topLine": "Launch offer: 50% off your first year on Yearly, until {date}.",

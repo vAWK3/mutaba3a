@@ -442,6 +442,40 @@ export const BillingOfferSchema = z
   })
   .openapi('BillingOffer');
 
+/** MUT-531 (D3): the "switch to yearly and save" line; the saving is the catalog's twelve months less its year. */
+export const BillingYearlySwitchSchema = z
+  .object({
+    /** The subscription's own currency. */
+    currency: z.enum(['ILS', 'USD']),
+    /** Minor units; null when the year saves nothing (the switch is still open, with no line to show). */
+    savings: z.number().int().positive().nullable(),
+  })
+  .openapi('BillingYearlySwitch');
+
+/** MUT-531 (D1): what the switch charges today, Stripe's own proration preview. */
+export const YearlySwitchPreviewSchema = z
+  .object({
+    /** Minor units, tax included where it applies: the year to `renewsOn`, less the unused part of this month. */
+    amountDue: z.number().int().nonnegative(),
+    currency: z.enum(['ILS', 'USD']),
+    /** The yearly list price it renews at, minor units, VAT-exclusive. */
+    yearlyAmount: z.number().int().positive(),
+    /** When the first yearly period ends: Stripe keeps the person's billing day, so its next anniversary (Stripe's preview). */
+    renewsOn: z.string().datetime(),
+    /** Send it back with POST so Stripe prorates at the same moment the preview did. */
+    prorationDate: z.string().datetime(),
+  })
+  .openapi('YearlySwitchPreview');
+
+export const YearlySwitchRequestSchema = z
+  .object({ prorationDate: z.string().datetime(), expectedAmountDue: z.number().int().nonnegative() })
+  .strict()
+  .openapi('YearlySwitchRequest');
+
+export const YearlySwitchResultSchema = z
+  .object({ renewsOn: z.string().datetime().nullable(), yearlyAmount: z.number().int().positive(), currency: z.enum(['ILS', 'USD']) })
+  .openapi('YearlySwitchResult');
+
 /** MUT-362: Settings › Billing in one read (GET /v1/billing). */
 export const BillingOverviewSchema = z
   .object({
@@ -478,6 +512,8 @@ export const BillingOverviewSchema = z
     coveredProfileIds: z.array(z.string().uuid()),
     /** MUT-525: the launch offer while its Stripe coupon runs; null otherwise (eng review finding 2: a union, never a nullable component). */
     offer: z.union([BillingOfferSchema, z.null()]),
+    /** MUT-531: the switch to yearly, once the shown subscription may switch (a monthly list price, 2 paid invoices); else null. */
+    yearlySwitch: z.union([BillingYearlySwitchSchema, z.null()]),
   })
   .openapi('BillingOverview');
 

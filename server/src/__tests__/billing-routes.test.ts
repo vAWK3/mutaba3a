@@ -108,6 +108,8 @@ describe('GET /v1/billing (MUT-362)', () => {
       coveredProfileIds: [u.personalId],
       // MUT-525 R3: with no launch coupon in Stripe every field above is today's, plus a null offer.
       offer: null,
+      // MUT-531: no subscription, so no switch to yearly.
+      yearlySwitch: null,
     });
   });
 

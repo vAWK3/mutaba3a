@@ -14,6 +14,7 @@ import {
   profilesListOf,
   renewalPriceOf,
   yearlySavingOf,
+  yearlySwitchLineOf,
   type BillingProfile,
 } from '../billingView';
 
@@ -35,6 +36,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   countries: { consumer: ['IL', 'GB'], consumerEverywhere: false, customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [],
   offer: null,
+  yearlySwitch: null,
   ...over,
 });
 const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}): NonNullable<BillingOverview['subscription']> => ({
@@ -306,5 +308,21 @@ describe('MUT-525: the launch offer (R5, DD3, DD10a, DD10d)', () => {
     expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, currency: 'EUR' }) }))).toBeNull();
     expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, cancelAtPeriodEnd: true }) }))).toBeNull();
     expect(renewalPriceOf(overview())).toBeNull();
+  });
+});
+
+describe('yearlySwitchLineOf (MUT-531 AC2)', () => {
+  const line = { currency: 'ILS' as const, savings: 5800 };
+
+  it('shows the server’s line on an active monthly plan', () => {
+    expect(yearlySwitchLineOf(overview({ subscription: sub({ status: 'active', interval: 'month' }), yearlySwitch: line }))).toEqual(line);
+  });
+
+  it('hides it on a yearly, cancelling or unpaid plan, and when the server sends none', () => {
+    expect(yearlySwitchLineOf(overview({ subscription: sub({ interval: 'year' }), yearlySwitch: line }))).toBeNull();
+    expect(yearlySwitchLineOf(overview({ subscription: sub({ cancelAtPeriodEnd: true }), yearlySwitch: line }))).toBeNull();
+    expect(yearlySwitchLineOf(overview({ subscription: sub({ status: 'past_due' }), yearlySwitch: line }))).toBeNull();
+    expect(yearlySwitchLineOf(overview({ subscription: sub(), yearlySwitch: null }))).toBeNull();
+    expect(yearlySwitchLineOf(overview({ subscription: null, yearlySwitch: line }))).toBeNull();
   });
 });

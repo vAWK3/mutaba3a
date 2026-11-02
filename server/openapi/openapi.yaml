@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.94.0-mut525
+  version: 1.95.0-mut531
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9099,6 +9099,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/BillingOffer"
             - nullable: true
+        yearlySwitch:
+          anyOf:
+            - $ref: "#/components/schemas/BillingYearlySwitch"
+            - nullable: true
       required:
         - configured
         - subscription
@@ -9108,6 +9112,7 @@ components:
         - countries
         - coveredProfileIds
         - offer
+        - yearlySwitch
     BillingOffer:
       type: object
       properties:
@@ -9149,6 +9154,22 @@ components:
         - interval
         - eligible
         - firstYear
+    BillingYearlySwitch:
+      type: object
+      properties:
+        currency:
+          type: string
+          enum:
+            - ILS
+            - USD
+        savings:
+          type: integer
+          nullable: true
+          minimum: 0
+          exclusiveMinimum: true
+      required:
+        - currency
+        - savings
     BillingRedirect:
       type: object
       properties:
@@ -9195,6 +9216,66 @@ components:
           description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
       required:
         - returnPath
+      additionalProperties: false
+    YearlySwitchPreview:
+      type: object
+      properties:
+        amountDue:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          enum:
+            - ILS
+            - USD
+        yearlyAmount:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+        renewsOn:
+          type: string
+          format: date-time
+        prorationDate:
+          type: string
+          format: date-time
+      required:
+        - amountDue
+        - currency
+        - yearlyAmount
+        - renewsOn
+        - prorationDate
+    YearlySwitchResult:
+      type: object
+      properties:
+        renewsOn:
+          type: string
+          nullable: true
+          format: date-time
+        yearlyAmount:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+        currency:
+          type: string
+          enum:
+            - ILS
+            - USD
+      required:
+        - renewsOn
+        - yearlyAmount
+        - currency
+    YearlySwitchRequest:
+      type: object
+      properties:
+        prorationDate:
+          type: string
+          format: date-time
+        expectedAmountDue:
+          type: integer
+          minimum: 0
+      required:
+        - prorationDate
+        - expectedAmountDue
       additionalProperties: false
     ReceiptReadJobResult:
       type: object
@@ -20345,6 +20426,127 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/yearly-switch:
+    get:
+      tags:
+        - Billing
+      summary: Preview the switch from monthly to yearly
+      description: "Stripe’s own proration preview: the yearly list price to the next anniversary of the person’s billing day (Stripe keeps the day), less the unused part of this month, tax included where it applies; `renewsOn` is Stripe’s. Open from the 2nd paid invoice on a monthly list price that is active, not cancelling, paused or discounted (founder prices never switch). No discount is ever applied."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YearlySwitchPreview"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      tags:
+        - Billing
+      summary: Switch from monthly to yearly
+      description: "Moves the subscription to the yearly list price at the preview’s `prorationDate` (at most 30 minutes old), charging the prorated invoice at once. Stripe previews again first: an amount other than `expectedAmountDue` charges nothing (AMOUNT_CHANGED). A payment that doesn’t go through leaves the plan monthly. Audited `billing.yearly_switched` on each profile the person owns."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/YearlySwitchRequest"
+      responses:
+        "200":
+          description: Switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YearlySwitchResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it)"
           content:
             application/json:
               schema:

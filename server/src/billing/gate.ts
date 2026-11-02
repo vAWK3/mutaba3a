@@ -41,6 +41,9 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'GET /v1/billing': 'open',
   'POST /v1/billing/checkout-session': 'open',
   'POST /v1/billing/portal-session': 'open',
+  // MUT-531: changing one's own plan moves money, never a record.
+  'GET /v1/billing/yearly-switch': 'open',
+  'POST /v1/billing/yearly-switch': 'open',
   // Reference rates: no record of anyone's.
   'GET /v1/fx-rates': 'open',
   // MUT-115: a person's own passkeys are identity, like the password (the sign-in routes are public, never gated).

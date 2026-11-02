@@ -4,6 +4,7 @@ import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
+import type { LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
 /**
@@ -334,5 +335,65 @@ export class FakeAccountStripeGateway implements AccountStripeGateway {
     const c = this.customers.get(customer);
     if (c) c.deleted = true;
     for (const sub of this.subscriptions.values()) if (sub.customer === customer) sub.status = 'canceled';
+  }
+}
+
+/**
+ * MUT-531: the plan door in memory. Each subscription is what Stripe holds now (`plan`), its paid-invoice count, what a
+ * switch preview would charge and how the switch ends; `calls` records every request in order.
+ */
+export class FakePlanGateway implements PlanGateway {
+  readonly plans = new Map<string, LivePlan>();
+  readonly paid = new Map<string, number>();
+  readonly switches: SwitchInput[] = [];
+  readonly calls: string[] = [];
+  amountDue = 27100;
+  previewCurrency = 'ILS';
+  /** Stripe keeps the billing day: the year ends on its anniversary (the MUT-531 spike). */
+  renewsOn: Date | null = new Date('2027-10-02T09:00:00Z');
+  outcome: SwitchResult = { outcome: 'switched', currentPeriodEnd: null };
+  private failures: StripeGatewayError[] = [];
+
+  /** A live monthly list-price subscription, as Stripe would hold it. */
+  withPlan(id: string, customer: string, over: Partial<LivePlan> = {}, paidInvoices = 2): this {
+    this.plans.set(id, { id, customer, status: 'active', itemId: `si_${id}`, lookupKey: 'freelancer_list_monthly_ils', cancelAtPeriodEnd: false, currentPeriodEnd: null, discounted: false, paused: false, clockNow: null, ...over });
+    this.paid.set(id, paidInvoices);
+    return this;
+  }
+
+  failNext(code: string | null = null): void {
+    this.failures.push(new StripeGatewayError({ code, type: code === null ? 'StripeAPIError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null }));
+  }
+
+  private failing(): void {
+    const failure = this.failures.shift();
+    if (failure) throw failure;
+  }
+
+  async planOf(subscriptionId: string): Promise<LivePlan> {
+    this.calls.push(`plan:${subscriptionId}`);
+    this.failing();
+    const plan = this.plans.get(subscriptionId);
+    if (!plan) throw new StripeGatewayError({ code: 'resource_missing', type: 'StripeInvalidRequestError', requestId: 'req_fake', transient: false });
+    return plan;
+  }
+
+  async paidInvoiceCount(subscriptionId: string, options: { fresh?: boolean } = {}): Promise<number> {
+    this.calls.push(`paid:${subscriptionId}${options.fresh ? ':fresh' : ''}`);
+    this.failing();
+    return this.paid.get(subscriptionId) ?? 0;
+  }
+
+  async previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string; renewsOn: Date | null }> {
+    this.calls.push(`preview:${input.subscriptionId}:${input.yearlyPriceId}`);
+    this.failing();
+    return { amountDue: this.amountDue, currency: this.previewCurrency, renewsOn: this.renewsOn };
+  }
+
+  async switchToYearly(input: SwitchInput): Promise<SwitchResult> {
+    this.calls.push(`switch:${input.subscriptionId}:${input.yearlyPriceId}`);
+    this.failing();
+    this.switches.push(input);
+    return this.outcome;
   }
 }

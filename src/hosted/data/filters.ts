@@ -328,7 +328,7 @@ export interface ProfileDrawerSearch {
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
    */
-  step?: 'subscribe' | 'welcome';
+  step?: 'subscribe' | 'welcome' | 'switch';
   /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
   checkout?: 'success' | 'cancelled';
   /** MUT-362: back from Stripe's Customer Portal (its return_url), where a change may not be mirrored yet. */
@@ -350,7 +350,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     passkeys: flag(raw.passkeys),
     review: raw.review === 'password' || raw.review === 'recovery' ? raw.review : undefined,
     connectClaude: flag(raw.connectClaude),
-    step: raw.step === 'subscribe' || raw.step === 'welcome' ? raw.step : undefined,
+    step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' ? raw.step : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' ? 'returned' : undefined,
   });
