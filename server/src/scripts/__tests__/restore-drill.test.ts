@@ -328,13 +328,19 @@ describe('restore-drill.sh', { timeout: 30_000 }, () => {
     });
   });
 
-  it("patches the clone with flags gcloud accepts together (2026-11-01: --no-backup with the PITR flag was refused)", () => {
+  /**
+   * 2026-11-01: gcloud refuses the PITR flag next to --no-backup (client side), and Cloud SQL refuses --no-backup
+   * while PITR is on ("Point in time recovery must be disabled when backup is disabled"). So two patches, in order.
+   */
+  it('patches the clone in two calls: point-in-time recovery off first, then backups', () => {
     const r = drill('--project', 'demo-project', '--dry-run');
-    const patch = r.out.split('\n').find((l) => l.startsWith('+ gcloud sql instances patch '));
-    expect(patch).toBeDefined();
-    expect(patch).toContain('--no-deletion-protection');
-    expect(patch).toContain('--no-backup');
-    expect(patch).not.toMatch(/point-in-time-recovery/);
+    const patches = r.out.split('\n').filter((l) => l.startsWith('+ gcloud sql instances patch '));
+    expect(patches).toHaveLength(2);
+    expect(patches[0]).toContain('--no-enable-point-in-time-recovery');
+    expect(patches[0]).toContain('--no-deletion-protection');
+    expect(patches[0]).not.toContain('--no-backup');
+    expect(patches[1]).toContain('--no-backup');
+    expect(patches[1]).not.toMatch(/point-in-time-recovery/);
   });
 
   it('uses no flag that only gcloud alpha/beta has (the first production run stopped on --labels)', () => {
