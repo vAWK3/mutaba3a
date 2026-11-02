@@ -1,4 +1,4 @@
-import type { BillingEntitlement, BillingOffer, BillingOverview } from '../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview, BillingYearlySwitch } from '../api/client';
 import type { Language } from '../../lib/i18n/types';
 import { formatInstant, todayInZone } from '../format/dates';
 
@@ -183,6 +183,17 @@ export interface OfferView {
 export const OFFER_TIME_ZONE = 'Asia/Jerusalem';
 
 /** This person's offer, before a currency is chosen: eligible, yearly, and takeable in at least one sold currency. */
+/**
+ * MUT-531 (AC2): the "switch to yearly" line, shown only on an active monthly plan the server says may switch. The
+ * generated type is `BillingYearlySwitch | unknown` (a nullable union); a server older than MUT-531 sends nothing.
+ */
+export function yearlySwitchLineOf(billing: Pick<BillingOverview, 'yearlySwitch' | 'subscription'>): BillingYearlySwitch | null {
+  const line = (billing.yearlySwitch ?? null) as BillingYearlySwitch | null;
+  const sub = billing.subscription;
+  if (!line || !sub || sub.status !== 'active' || sub.cancelAtPeriodEnd || sub.interval !== 'month') return null;
+  return line;
+}
+
 export function eligibleOfferOf(billing: Pick<BillingOverview, 'offer' | 'catalog'>): BillingOffer | null {
   // The generated type is `BillingOffer | unknown` (a nullable union); a server older than MUT-525 sends nothing.
   const offer = (billing.offer ?? null) as BillingOffer | null;
