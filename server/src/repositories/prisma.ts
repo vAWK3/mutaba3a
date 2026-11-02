@@ -2827,6 +2827,7 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.inboxEntry.deleteMany({ where: { userId } });
         await tx.userIdempotencyKey.deleteMany({ where: { userId } });
         await tx.entitlementGrant.deleteMany({ where: { userId } });
+        await tx.billingRetentionEvent.deleteMany({ where: { userId } });
         await tx.billingSubscription.deleteMany({ where: { billingAccount: { userId } } });
         await tx.billingAccount.deleteMany({ where: { userId } });
         await tx.signupReview.deleteMany({ where: { userId } });

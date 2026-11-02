@@ -28,7 +28,9 @@ if (!url) {
   const OUTSIDE_PROFILES = new Set(['_prisma_migrations', 'users', 'organizations', 'sessions', 'inbox_entries', 'user_idempotency_keys', 'terms_acceptances', 'billing_accounts', 'account_setup_tokens', 'signup_reviews', 'stripe_events', 'email_deliveries', 'email_suppressions', 'passkeys', 'webauthn_challenges', 'user_feature_grants',
     // MUT-434: a person's grants and decided requests cascade with them (PURGE_USER_COLUMNS), codes and tokens with the
     // grant; clients are anonymous registrations naming no one.
-    'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens']);
+    'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens',
+    // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
+    'billing_retention_events']);
 
   describe('Prisma account purge catalog (MUT-333)', () => {
     it('knows every table with an organizationId column', async () => {
