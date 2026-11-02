@@ -29,6 +29,40 @@
 ---
 
 
+## [Unreleased] - 2026-11-02 — The launch offer: 50% off a yearly plan's first year, automatic, once per person (MUT-525, ADR-237)
+
+**Why:** MUT-528's launch campaign. For three months from launch, anyone who never subscribed pays ₪145 / $45 for the
+first year of a yearly Freelancer plan, then ₪290 / $90, with no code to type. Founders and payers are untouched.
+
+### Added
+- `server/src/billing/offers.json` + `offer.ts`: the campaign is a Stripe coupon the code names (50% once, Freelancer
+  only, `redeem_by`); the offer ends for new Checkouts an hour before it. `offer-read.ts`: cached (GET, mails) and
+  fresh (Checkout) reads that fail open to full price. `money.ts` `formatMinor`.
+- GET `/v1/billing` `offer` (first year per currency, `eligible`, `endsAt`); subscription `renewsAtListPrice` and
+  `offer`. POST checkout-session `expectedOffer` → 409 `OFFER_ENDED`. API contract 1.94.0-mut525.
+- A yearly Checkout by someone with no subscription ever (mirror and Stripe) carries the coupon, the offer's name in
+  the subscription metadata, and an Arabic-then-English pay-page line with the first-year and renewal prices.
+- `billing_subscriptions.offerId` (migration `20261102120000_mut525_subscription_offer`), mirrored from
+  `metadata.mutaba3a_offer`.
+- The renewal notice `offer-renewing-soon` (ar/en): a daily run (`/jobs/v1/billing/renewal-mail`, operator
+  `/admin/v1/billing/renewal-mail`, `npm run billing:renewal-mail`), Cloud Scheduler job at 10:15 Jerusalem.
+- Portal: Subscribe opens on Yearly with the offer (₪145.00 before a struck ₪290.00, one first-charge sentence),
+  the OFFER_ENDED banner, PlanLines and status panels, the Home trial line, LapseGate's read-only and locked notices
+  (`OfferTopLine`), "Renews at" for list prices, "Launch offer applied". Analytics contract 2.6.0.
+- Trial mails carry the offer line and button while it runs.
+- `BILLING_OFFER_COUPON_ID` (test servers only): each live QA run owns its coupon; four `portal-live` launch-offer
+  flows; `qa/support/mut525-coupon-spike.mjs`.
+
+### Changed
+- Mail may name the offer's percent and last day and the renewal notice's price and day (ADR-237 overrides
+  ADR-159 §5 for those templates).
+- Pilot runbook §1.8 (the coupon, ending early, counting, the support reply); before-release.md (Read on Coupons
+  first, then the API, `billing:unlinked`, then the live coupon); INFRA.md (the renewal-mail job).
+
+### Technical
+- Tests listed in TEST_PLAN.md "MUT-525". The phone's `BillingOverview` parser reads named keys only, so the
+  additive fields need no Flutter change.
+
 ## [Unreleased] - 2026-11-02 — First restore drill on mtb3a-production passed; the clone is patched in two calls (MUT-327, MUT-511)
 
 **Why:** MUT-327 closes on a drill against production with its results in the runbook. The 2026-11-01 runs passed
