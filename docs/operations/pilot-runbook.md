@@ -206,13 +206,21 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
    on every firm's Subscription (§1.5).
 3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout
    Sessions, Invoices and Events, plus **Write** on Customers, Checkout Sessions and Customer portal (MUT-362's
-   Settings › Billing) and **Write** on Subscriptions (MUT-333 closing an account; MUT-531 the switch to yearly).
-   Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
+   Settings › Billing) and **Write** on Subscriptions (MUT-333 closing an account; MUT-531 the switch to yearly;
+   MUT-532 pause, cancel, Keep my plan and the stay offer). **MUT-532:** Resume now charges the month as its own invoice,
+   so the key also needs **Write** on **Invoices** (and **Invoice items**, where Stripe lists them apart), and **Read**
+   on **Coupons** (MUT-525) serves the stay offer too. Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
 3a. **Customer Portal (MUT-362).** Settings › Billing › Customer portal, in the Mutaba3a account: allow updating the
    payment method, show invoice history, allow cancelling **at the end of the billing period** (never immediately),
    no plan switching, no pausing; business name and tax ID editable. **MUT-531:** the switch to yearly is MTB3A's own
    (Billing › Switch to yearly, from the 2nd payment), so plan switching stays **off** here. Default return URL: the portal origin. Save, and
    check a portal session opens from Billing in the portal (test mode first).
+   **MUT-532 (ADR-239), after the web release that carries it:** turn **off** "Cancel subscriptions" here. Cancelling is
+   MTB3A's own flow now (Billing › Cancel plan: Why? → Pause instead? → the stay offer → Confirm), so the pause and the
+   stay offer can't be skipped; Keep my plan undoes a cancel. The card, invoices and business details stay here. Turn it
+   off only once the web release is live, or nobody can cancel in between. A founder price runs on a subscription
+   schedule, which neither MTB3A nor Stripe's portal can cancel: a founder who asks is cancelled by hand (Stripe ›
+   the subscription › Cancel › at the end of the period).
 3b. **GA prices (MUT-362).** When Basel sets the GA list prices, add four Prices on the Freelancer product with lookup
    keys `freelancer_list_monthly_ils`, `freelancer_list_yearly_ils`, `freelancer_list_monthly_usd` and
    `freelancer_list_yearly_usd` (each in its own currency and interval: a mismatch keeps that currency unsold). Each
@@ -266,6 +274,34 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 
 **Test-mode checks (Basel).** In test mode, check whether the UK account can charge in ILS and whether ILS can
 settle as ILS. Add a USD bank account for USD settlement.
+
+### 1.9 Pause and the stay offer (MUT-532, ADR-239)
+
+Billing's own cancel flow offers a monthly list-price payer, in this order: a pause of 1–3 months (once in 12 months)
+and the stay offer (once per person, ever). Founders, yearly payers and Malafat- or grant-covered profiles get neither.
+
+- **The stay coupon.** Create it once (Products › Coupons › New, in the Mutaba3a account), after before-release.md's
+  MUT-532 step 1: **ID** `mtb3a_stay_monthly_50`; **Name** `Stay offer · عرض البقاء`; **Percentage discount** 50%;
+  **Duration** Repeating, **2 months**; **Apply to specific products:** the Freelancer product only; no date range and
+  no usage limit (each person can take it once; the server enforces that). Until it exists the flow has no stay step
+  and nothing breaks; a coupon of another shape is ignored and logged. The sandbox spike: 1450, 1450, then 2900
+  (`.claude/designs/mut-532-pause-spike-result.md`).
+- **A pause** is Stripe's `pause_collection` (void) from the paid period's end, resuming an hour before the restart
+  date; the subscription stays `active` in Stripe. While it runs the person's records are read-only (never locked)
+  and Billing says "Paused until <date>". Stripe resumes it on its own; nothing of ours runs. A pause set in the
+  dashboard reads as paused from the start and the sync reports `PAUSE_NOT_OURS`: set it from MTB3A, or set
+  `metadata.mutaba3a_pause_from` (ISO) and a `resumes_at`.
+- **Resume now** restarts the cycle today and charges a full month as its own invoice; a declined card leaves the
+  plan past due and Stripe retries it (GRACE).
+- **Count it:** each pause, stay offer, cancel and switch is a row in `billing_retention_events` (with the reason),
+  and Stripe keeps the cancel reason on the subscription (`cancellation_details`).
+- **Support reply** for someone who looks for Cancel in Stripe's page:
+
+  > EN: You can cancel from MTB3A itself: open Billing (You › Account › Billing) and press Cancel plan. Your plan
+  > stays on until the end of the period you paid for, and you can take it back with Keep my plan until then.
+  >
+  > AR: يمكنك إلغاء اشتراكك من متابعة نفسها: افتح الاشتراك (أنت › الحساب › الاشتراك) واضغط «إلغاء الاشتراك». يبقى
+  > اشتراكك فعّالًا حتى نهاية الفترة التي دفعتها، ويمكنك التراجع بـ«أبقِ اشتراكي» حتى ذلك الحين.
 
 ### 1.8 The launch offer (MUT-525, ADR-237)
 

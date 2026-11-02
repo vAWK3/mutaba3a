@@ -18,6 +18,27 @@
 
 ## Open Debt
 
+### TD-299: Resume now is three Stripe writes, not one
+**Status**: Accepted (MUT-532, 2026-11-02; ADR-239 decision 6)
+- **What:** Resume now restarts the cycle (and clears the pause), then adds the month's invoice item, then creates, finalizes and pays the invoice. If Stripe fails after the first write, the person is unpaused and writable with the month uncharged until the next cycle; their retry answers NOT_PAUSED. The idempotency keys make a retry within the minute safe, not a later one.
+- **Why it's acceptable:** Stripe has no single call that restarts a voided cycle with a charge (the spike), the failure window is a Stripe outage between two calls a second apart, and it costs us at most one month, never the person.
+- **Fix:** if it shows up, look for a paused-then-active subscription with no `manual` invoice that day in the nightly reconcile and invoice it there.
+
+### TD-300: Founders can't cancel in MTB3A
+**Status**: Open (MUT-532, 2026-11-02; ADR-239 decision 10)
+- **What:** a founder price runs on a subscription schedule; Stripe refuses `cancel_at_period_end` on it, and its Customer Portal can't cancel a schedule's subscription either. Billing shows founders no Cancel plan; the operator cancels one by hand (pilot runbook §1.7 3a).
+- **Fix:** a schedule-aware cancel (end the schedule's current phase at the period end with `end_behavior: cancel`, and restore its phases on Keep my plan), with its own spike. Same family as ▲D5's founder switch.
+
+### TD-301: Lapse copy outside the paused banner still says "Subscribe" or "Manage billing"
+**Status**: Open (MUT-532, 2026-11-02)
+- **What:** a write refused during a pause shows `hosted.billing.gate.refused` ("…Subscribe to add or change records"); New profile while every profile is paused shows `gate.newProfileBlocked` ("your plan has ended"); the activeTrial line still says "Cancel any time before it from Manage billing", where cancelling now lives in Billing itself. The banner above the page says the right thing.
+- **Fix:** paused variants of the first two and a new activeTrial line, ar + en, once Basel approves the words.
+
+### TD-302: The phone shows a paused plan as a generic read-only profile
+**Status**: Open (MUT-532, 2026-11-02; plan §8)
+- **What:** `/v1/me` sends `paused: true` additively; the Flutter app doesn't read it yet, so a paused person sees the read-only wording for an ended plan.
+- **Fix:** a Flutter ticket: "Paused until <date>", Resume now opening the web Billing.
+
 
 ### TD-298: The legacy hosts send no telemetry while people still use them
 **Status**: Accepted (ADR-236, 2026-10-31)
