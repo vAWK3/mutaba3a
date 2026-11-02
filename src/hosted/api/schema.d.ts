@@ -12863,7 +12863,7 @@ export interface paths {
         };
         /**
          * Preview the switch from monthly to yearly
-         * @description Stripe’s own proration preview: the yearly list price less the unused part of this month, tax included where it applies. Open from the 2nd paid invoice on a monthly list price that is active, not cancelling, paused or discounted (founder prices never switch). No discount is ever applied.
+         * @description Stripe’s own proration preview: the yearly list price to the next anniversary of the person’s billing day (Stripe keeps the day), less the unused part of this month, tax included where it applies; `renewsOn` is Stripe’s. Open from the 2nd paid invoice on a monthly list price that is active, not cancelling, paused or discounted (founder prices never switch). No discount is ever applied.
          */
         get: {
             parameters: {

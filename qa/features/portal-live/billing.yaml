@@ -241,8 +241,8 @@ features:
       - Press Pay and switch
     expect:
       - Under Manage billing, "Switch to yearly and save ₪58.00 a year" (twelve months less the year, from the catalog; AC2)
-      - The step says ₪290.00 a year renewing a year from today and what is charged today, less the unused part of this month (AC1)
-      - Back on the status view "You're on the yearly plan. It renews on <date> at ₪290.00." and, once the webhook lands, Billed yearly
+      - The step says ₪290.00 a year renewing on the anniversary of the billing day (Stripe keeps the day) and what is charged today: the rest of that year less the unused part of this month (AC1)
+      - Back on the status view "You're on the yearly plan. It renews on <date> at ₪290.00." and, once the webhook lands, "Renews at ₪290.00 on <date>"
       - Stripe holds the yearly list price with no discount, and today's invoice is the previewed amount (AC3); /v1/me stays ACTIVE · STRIPE (AC4)
   - id: yearly-switch-early
     title: Switch to yearly - no line before the 2nd payment

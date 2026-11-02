@@ -6238,6 +6238,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 4. **No discount, ever:** the switch sends no `discounts` and is refused while one runs (the launch coupon is attached only at Checkout, ADR-237).
 5. **The paid count is cached** per subscription (a count of 2 for good, a lower one for 10 minutes), since GET `/v1/billing` is read on every page and polled after a return.
 6. **Stripe prorates on the subscription's own clock:** a sandbox test clock's frozen time in QA, the server's time otherwise.
+7. **The person keeps their billing day** (the spike, `.claude/designs/mut-531-switch-spike-result.md`): Stripe doesn't restart the period on the interval change, so today's charge is the yearly price to the next anniversary of the billing day, less the unused part of the month, and the plan renews on that anniversary at ₪290. The step shows Stripe's own date (the preview's yearly line). `billing_cycle_anchor=now` (a full year from today) can't be combined with a proration date, so its preview could never be the exact charge.
 
 **Consequences:** one cached Stripe read on GET `/v1/billing` for list-monthly payers, two calls to preview, three to switch. No migration. The restricted key needs Write on Subscriptions (MUT-333 already added it). The monthly summary mail's line ships with MUT-535 (`yearlySwitchOf`).
 

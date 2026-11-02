@@ -104,8 +104,13 @@ describe('PlanGateway.paidInvoiceCount (R1)', () => {
 
 describe('PlanGateway.previewYearlySwitch (D1)', () => {
   it("previews the item's move to the yearly price at the given proration date, and reads what is due today", async () => {
-    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: { object: 'invoice', amount_due: 27129, currency: 'ils' } }));
-    expect(await gateway.previewYearlySwitch(SWITCH)).toEqual({ amountDue: 27129, currency: 'ILS' });
+    // The spike's shape: a credit for the month's unused part, and the year from today to the billing day's anniversary.
+    const lines = list([
+      { object: 'line_item', amount: -2888, period: { start: 1_793_635_257, end: 1_796_216_577 } },
+      { object: 'line_item', amount: 26527, period: { start: 1_793_635_257, end: 1_822_482_177 } },
+    ]);
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: { object: 'invoice', amount_due: 23639, currency: 'ils', lines } }));
+    expect(await gateway.previewYearlySwitch(SWITCH)).toEqual({ amountDue: 23639, currency: 'ILS', renewsOn: new Date(1_822_482_177 * 1000) });
     const call = seen[0]!;
     expect(route(call)).toBe('POST /v1/invoices/create_preview');
     expect(call.form.get('customer')).toBe('cus_1');

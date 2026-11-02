@@ -455,12 +455,12 @@ export const BillingYearlySwitchSchema = z
 /** MUT-531 (D1): what the switch charges today, Stripe's own proration preview. */
 export const YearlySwitchPreviewSchema = z
   .object({
-    /** Minor units, tax included where it applies: the yearly price less the unused part of this month. */
+    /** Minor units, tax included where it applies: the year to `renewsOn`, less the unused part of this month. */
     amountDue: z.number().int().nonnegative(),
     currency: z.enum(['ILS', 'USD']),
     /** The yearly list price it renews at, minor units, VAT-exclusive. */
     yearlyAmount: z.number().int().positive(),
-    /** A year from the switch: Stripe restarts the billing period on an interval change. */
+    /** When the first yearly period ends: Stripe keeps the person's billing day, so its next anniversary (Stripe's preview). */
     renewsOn: z.string().datetime(),
     /** Send it back with POST so Stripe prorates at the same moment the preview did. */
     prorationDate: z.string().datetime(),

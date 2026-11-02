@@ -90,7 +90,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       tags: ['Billing'],
       summary: 'Preview the switch from monthly to yearly',
       description:
-        'Stripe’s own proration preview: the yearly list price less the unused part of this month, tax included where it applies. Open from the 2nd paid ' +
+        'Stripe’s own proration preview: the yearly list price to the next anniversary of the person’s billing day (Stripe keeps the day), less the unused part of this month, tax included where it applies; `renewsOn` is Stripe’s. Open from the 2nd paid ' +
         'invoice on a monthly list price that is active, not cancelling, paused or discounted (founder prices never switch). No discount is ever applied.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'The preview', content: { 'application/json': { schema: YearlySwitchPreviewSchema } } }, ...conflictResponses },
@@ -101,9 +101,9 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       await limit(c, options.limiter, user.id, now);
       const { plan, live, decision } = await switchOf(user, now);
       const prorationDate = new Date(Math.floor(subscriptionNow(live, now).getTime() / 1000) * 1000);
-      const { amountDue, currency } = await preview(user, plan, live, decision.yearly.id, prorationDate);
-      if (currency !== decision.currency) throw notAvailable('NO_PRICE');
-      return c.json({ amountDue, currency: decision.currency, yearlyAmount: decision.yearly.unitAmount, renewsOn: aYearAfter(prorationDate).toISOString(), prorationDate: prorationDate.toISOString() }, 200);
+      const { amountDue, currency, renewsOn } = await preview(user, plan, live, decision.yearly.id, prorationDate);
+      if (currency !== decision.currency || !renewsOn) throw notAvailable('NO_PRICE');
+      return c.json({ amountDue, currency: decision.currency, yearlyAmount: decision.yearly.unitAmount, renewsOn: renewsOn.toISOString(), prorationDate: prorationDate.toISOString() }, 200);
     },
   );
 
@@ -169,10 +169,4 @@ function planConflict(reason: PlanRefusal): ApiError {
   return new ApiError('CONFLICT', PLAN_CONFLICTS[reason], { reason });
 }
 
-/** Stripe restarts the period on an interval change, so the year runs from the switch (UTC calendar). */
-function aYearAfter(at: Date): Date {
-  const next = new Date(at);
-  next.setUTCFullYear(next.getUTCFullYear() + 1);
-  return next;
-}
 

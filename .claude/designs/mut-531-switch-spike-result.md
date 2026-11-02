@@ -17,5 +17,10 @@ advanced to 2 minutes before now.
   - `pending_update` is set (expires after about 23 h), and the subscription stays on the monthly price.
   - The latest invoice is open with a `hosted_invoice_url`, and its payment intent is `requires_action`. That is the
     R2 path: `PAYMENT_NEEDS_ACTION` with Stripe's page.
+- **Stripe keeps the billing day.** The yearly period runs from the old anchor (Oct 2) to its anniversary (Oct 2 2027).
+  The ₪236.39 is the year to Oct 2 2027 (26527) less the unused month (−2888). The preview's yearly line carries that end
+  date, which is what the step shows. `billing_cycle_anchor[type]=now` is refused together with a `proration_date`
+  ("You cannot specify proration_date when billing_cycle_anchor=now"), and `timestamp` isn't offered on a preview. A
+  full year from today could therefore never be previewed exactly, so we keep Stripe's default.
 - **Not checked here:** whether the live *restricted* key needs Write on Invoices for `createPreview`. The sandbox key
   isn't restricted. That check is the operator step in `docs/operations/before-release.md`.

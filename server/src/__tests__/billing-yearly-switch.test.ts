@@ -137,7 +137,7 @@ describe('GET /v1/billing/yearly-switch (D1: the preview)', () => {
     const { id } = await subscribed(h, u.userId);
     const res = await u.preview();
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ amountDue: 27100, currency: 'ILS', yearlyAmount: 39000, renewsOn: '2027-11-02T09:00:00.000Z', prorationDate: NOW.toISOString() });
+    expect(await read(res)).toEqual({ amountDue: 27100, currency: 'ILS', yearlyAmount: 39000, renewsOn: '2027-10-02T09:00:00.000Z', prorationDate: NOW.toISOString() });
     expect(h.plan.calls).toEqual([`plan:${id}`, `paid:${id}:fresh`, `preview:${id}:price_freelancer_list_yearly_ils`]);
   });
 

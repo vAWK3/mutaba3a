@@ -20,8 +20,11 @@ export interface PlanGateway {
    * `fresh` skips the cache (the switch itself).
    */
   paidInvoiceCount(subscriptionId: string, options?: { fresh?: boolean }): Promise<number>;
-  /** D1: what the switch charges today, Stripe's own proration at `prorationDate`, tax included. */
-  previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string }>;
+  /**
+   * D1: what the switch charges today, Stripe's own proration at `prorationDate`, tax included, and when the yearly
+   * period ends. The spike: Stripe keeps the person's billing day, so the first year runs to that day's anniversary.
+   */
+  previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string; renewsOn: Date | null }>;
   /** D1, R2: the switch itself; a payment that didn't go through leaves the plan monthly (`pending_if_incomplete`). */
   switchToYearly(input: SwitchInput): Promise<SwitchResult>;
 }
@@ -141,7 +144,8 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
           },
         }),
       );
-      return { amountDue: preview.amount_due, currency: preview.currency.toUpperCase() };
+      const ends = preview.lines.data.map((line) => line.period?.end).filter((end): end is number => typeof end === 'number');
+      return { amountDue: preview.amount_due, currency: preview.currency.toUpperCase(), renewsOn: ends.length > 0 ? new Date(Math.max(...ends) * 1000) : null };
     },
     async switchToYearly(input) {
       // D4: no `discounts` here, ever: the switch carries no coupon, the launch offer's included.

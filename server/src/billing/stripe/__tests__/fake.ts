@@ -349,6 +349,8 @@ export class FakePlanGateway implements PlanGateway {
   readonly calls: string[] = [];
   amountDue = 27100;
   previewCurrency = 'ILS';
+  /** Stripe keeps the billing day: the year ends on its anniversary (the MUT-531 spike). */
+  renewsOn: Date | null = new Date('2027-10-02T09:00:00Z');
   outcome: SwitchResult = { outcome: 'switched', currentPeriodEnd: null };
   private failures: StripeGatewayError[] = [];
 
@@ -382,10 +384,10 @@ export class FakePlanGateway implements PlanGateway {
     return this.paid.get(subscriptionId) ?? 0;
   }
 
-  async previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string }> {
+  async previewYearlySwitch(input: SwitchInput): Promise<{ amountDue: number; currency: string; renewsOn: Date | null }> {
     this.calls.push(`preview:${input.subscriptionId}:${input.yearlyPriceId}`);
     this.failing();
-    return { amountDue: this.amountDue, currency: this.previewCurrency };
+    return { amountDue: this.amountDue, currency: this.previewCurrency, renewsOn: this.renewsOn };
   }
 
   async switchToYearly(input: SwitchInput): Promise<SwitchResult> {

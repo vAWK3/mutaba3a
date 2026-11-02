@@ -35,7 +35,7 @@ Epic MUT-528 (pricing program, D4–D6) · two Stories, Jira Backlog · planned 
   - `proration_behavior: 'always_invoice'`
   - the same `proration_date`
   - `payment_behavior: 'pending_if_incomplete'`
-- The interval change resets the billing anchor to today. Stripe credits the unused part of the month against the year.
+- ~~The interval change resets the billing anchor to today.~~ **Spike (2026-11-02):** Stripe keeps the billing day. Today's charge is the year to that day's next anniversary, less the unused part of the month, and the renewal date shown is Stripe's own, from the preview's yearly line (ADR-238 decision 7).
 - A declined card changes nothing: Stripe keeps the pending update unapplied, and we answer 409 `PAYMENT_FAILED`.
 - **R2 (eng review):** a card that needs 3-D Secure leaves the latest invoice's payment `requires_action`. We answer 409 `PAYMENT_NEEDS_ACTION` with the invoice's `hosted_invoice_url`, checked by `assertStripeUrl`. The drawer opens it, and the poll picks up the switch once the invoice is paid. Stripe drops an unpaid pending update after 23 h. Spike step (c) also runs `pm_card_authenticationRequired`.
 - *Rejected:* turning on plan switching in the Customer Portal. It can't gate on "from the 2nd payment", it can't show our ₪58 line, and its page is English only.

@@ -560,7 +560,8 @@ test('Switch to yearly from the 2nd payment - the line names the saving, Stripe\
     await page.getByRole('button', { name: /^Pay ₪[\d,.]+ and switch$/ }).click();
     const back = page.getByRole('dialog', { name: 'Billing' });
     await expect(back.getByText(/^You're on the yearly plan\. It renews on .* at ₪290\.00\.$/)).toBeVisible({ timeout: 45_000 });
-    await expect(back.getByText('Billed yearly.')).toBeVisible({ timeout: 45_000 });
+    // Stripe keeps the billing day: the year renews on its anniversary, at the list price (MUT-525 DD3's line).
+    await expect(back.getByText(/^Renews at ₪290\.00 on /)).toBeVisible({ timeout: 45_000 });
   });
   await step('Stripe holds the yearly price with no discount; today\'s invoice is the previewed amount; the profile stays paid', async () => {
     const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
