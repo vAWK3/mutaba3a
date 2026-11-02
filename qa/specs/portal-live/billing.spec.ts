@@ -859,7 +859,8 @@ test('A declined renewal - one Arabic mail within the hour, no amount or card; U
     expect(m!.locale).toBe('ar');
     expect(m!.subject).toBe('لم تنجح عملية الدفع ببطاقتك');
     expect(m!.text).toContain('يبقى حسابك مفتوحًا بالكامل');
-    expect(m!.text).not.toMatch(/₪|\$|\d{4}/);
+    // No amount, currency or card digits; the links (which carry this env's port) aside.
+    expect(m!.text.replace(/https?:\/\/\S+/g, '')).not.toMatch(/₪|\$|\d{4}/);
     return m!;
   });
   await step('Running the job again sends nothing new', async () => {
