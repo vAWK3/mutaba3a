@@ -1,4 +1,6 @@
-import type { BillingEntitlement, BillingOverview } from '../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview } from '../api/client';
+import type { Language } from '../../lib/i18n/types';
+import { formatInstant, todayInZone } from '../format/dates';
 
 /**
  * MUT-362 (plan §2.7, design review DR1–DR12): what the Billing drawer shows. One panel (status chip + headline, DR1),
@@ -155,4 +157,87 @@ export function yearlySavingOf(pair: { month: number; year: number }): YearlySav
   const saved = pair.month * MONTHS_A_YEAR - pair.year;
   if (saved <= 0) return null;
   return saved % pair.month === 0 ? { kind: 'monthsFree', months: saved / pair.month } : { kind: 'save', amount: saved };
+}
+
+/**
+ * MUT-525 (R5, DD10a): the launch offer as the Subscribe step shows it in one currency. Every amount is the server's
+ * (the list price from the catalog, the first year from `offer.firstYear`): the portal never computes the discount.
+ */
+export interface OfferView {
+  id: string;
+  percentOff: number;
+  /** The list yearly price, minor units. */
+  list: number;
+  /** The first year's price, minor units. */
+  firstYear: number;
+  endsAt: string;
+  /** When the list price is first charged: a year after the first charge (the server's `renewsOnOf`). */
+  renewsOn: string;
+  /** The carried trial's end, when the first charge waits for it; null when it is taken at Checkout. */
+  firstChargeAt: string | null;
+  /** DD10d: today is the offer's last calendar day in Jerusalem. */
+  endsToday: boolean;
+}
+
+/** The offer's days are Jerusalem calendar days (DD7, DD10d): its end, as the coupon's runbook sets it, and the pay page's dates. */
+export const OFFER_TIME_ZONE = 'Asia/Jerusalem';
+
+/** This person's offer, before a currency is chosen: eligible, yearly, and takeable in at least one sold currency. */
+export function eligibleOfferOf(billing: Pick<BillingOverview, 'offer' | 'catalog'>): BillingOffer | null {
+  // The generated type is `BillingOffer | unknown` (a nullable union); a server older than MUT-525 sends nothing.
+  const offer = (billing.offer ?? null) as BillingOffer | null;
+  if (!offer?.eligible || offer.interval !== 'year') return null;
+  const takeable = (['ILS', 'USD'] as const).some((c) => offer.firstYear[c] !== null && billing.catalog[c] !== null);
+  return takeable ? offer : null;
+}
+
+/** The offer in `currency`, or null: not eligible, not yearly, no currency yet, or no first-year amount in it. */
+export function offerFor(billing: BillingOverview, currency: 'ILS' | 'USD' | null, now: Date): OfferView | null {
+  const offer = eligibleOfferOf(billing);
+  if (!offer || !currency) return null;
+  const list = billing.catalog[currency]?.year;
+  const firstYear = offer.firstYear[currency];
+  if (list === undefined || firstYear === null) return null;
+  const firstChargeAt = firstChargeOf(billing, now);
+  return {
+    id: offer.id,
+    percentOff: offer.percentOff,
+    list,
+    firstYear,
+    endsAt: offer.endsAt,
+    renewsOn: aYearAfter(firstChargeAt ?? now.toISOString()),
+    firstChargeAt,
+    endsToday: offerEndsToday(offer.endsAt, now),
+  };
+}
+
+/** DD10d: the offer's end falls on today's Jerusalem calendar day. */
+export function offerEndsToday(endsAt: string, now: Date): boolean {
+  return todayInZone(OFFER_TIME_ZONE, now) === todayInZone(OFFER_TIME_ZONE, new Date(endsAt));
+}
+
+/** An offer date (its end, a first charge, a renewal) as a Jerusalem calendar day, the pay page's and the mails' rule. */
+export function offerDay(iso: string, language: Language): string {
+  return formatInstant(iso, language, OFFER_TIME_ZONE);
+}
+
+/** D10: the analytics contract's enum value for an offer id (snake_case: `launch-2026` → `launch_2026`). */
+export function offerAnalyticsName(id: string): string {
+  return id.replace(/-/g, '_');
+}
+
+/** DD3: what a list-price subscription renews at (the catalog's price for its interval and currency); null keeps today's copy. */
+export function renewalPriceOf(billing: BillingOverview): { minor: number; currency: 'ILS' | 'USD' } | null {
+  const sub = billing.subscription;
+  if (!sub?.renewsAtListPrice || sub.cancelAtPeriodEnd || !sub.interval) return null;
+  if (sub.currency !== 'ILS' && sub.currency !== 'USD') return null;
+  const pair = billing.catalog[sub.currency];
+  return pair ? { minor: pair[sub.interval], currency: sub.currency } : null;
+}
+
+/** The server's `renewsOnOf`: the same instant a calendar year later (UTC). */
+function aYearAfter(iso: string): string {
+  const at = new Date(iso);
+  at.setUTCFullYear(at.getUTCFullYear() + 1);
+  return at.toISOString();
 }

@@ -1213,6 +1213,13 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .hp-billing-skeleton { block-size: 0.9rem; border-radius: var(--radius-xs); background: var(--border); }
 .hp-billing-skeleton-headline { block-size: 1.4rem; inline-size: 80%; }
 .hp-billing-skeleton-button { block-size: 2.75rem; inline-size: 40%; }
+/* MUT-525: the launch offer. Its copy is plain --text at most medium weight, never mint or --success (DD9b); the struck
+   list price and the fine lines are --muted (DD2, DD9a). */
+p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
+.hp-offer-today { font-weight: var(--weight-medium); }
+.hp-offer-price { color: var(--text); font-weight: var(--weight-medium); }
+.hp-offer-list { color: var(--muted); }
+.hp-billing p.hp-offer-fine, p.hp-offer-fine { color: var(--muted); font-size: var(--text-label); }
 .hp-banner-ok { background: var(--success-subtle); border: 1px solid var(--success-muted); color: var(--success); }
 .hp-banner-ok .hp-banner-icon { color: var(--success); }
 @media (max-width: 760px) {

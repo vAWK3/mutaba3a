@@ -104,6 +104,8 @@ export type AccountRecoveryRequest = Schemas['AccountRecoveryRequest'];
 /** MUT-368: the redeem's answer; `status` PENDING_REVIEW is a signup waiting for the operator (MUT-367). */
 export type SetupLinkRedeemed = Schemas['SetupLinkRedeemResponse'];
 export type BillingOverview = Schemas['BillingOverview'];
+/** MUT-525: the launch offer on GET /v1/billing (the generated field is `BillingOffer | unknown`, its nullable union). */
+export type BillingOffer = Schemas['BillingOffer'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
 export type BillingEntitlement = Schemas['BillingEntitlement'];

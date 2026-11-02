@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
-import type { BillingEntitlement, BillingOverview, Me } from '../../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview, Me } from '../../api/client';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 
 /**
@@ -21,6 +21,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
   countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [ORG_B],
+  offer: null,
   ...over,
 });
 
@@ -29,11 +30,14 @@ const personal = (billing: BillingEntitlement) =>
 
 const EXPENSE = { id: 'e1', occurredOn: '2026-10-01', amount: '45.50', currency: 'ILS', title: 'Office supplies', vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: 'u1', version: 1, createdAt: '', updatedAt: '', receipts: [{ id: 'r1', filename: 'receipt.png', status: 'READY', mimeType: 'image/png', sizeBytes: 4 }] };
 
-function portal(path: string, opts: { billing: BillingEntitlement; standing?: Me['billingStanding']; locale?: 'en' | 'ar'; covered?: string[]; routes?: Record<string, Handler>; others?: ReturnType<typeof profile>[] }) {
+function portal(
+  path: string,
+  opts: { billing: BillingEntitlement; standing?: Me['billingStanding']; locale?: 'en' | 'ar'; covered?: string[]; offer?: BillingOffer; routes?: Record<string, Handler>; others?: ReturnType<typeof profile>[] },
+) {
   const body = { ...me([personal(opts.billing), ...(opts.others ?? [])], opts.locale ?? 'en'), billingStanding: opts.standing === undefined ? 'read-only' : opts.standing };
   const api = stubApi({
     'GET /v1/me': () => ok(body),
-    'GET /v1/billing': () => ok(overview(opts.covered ? { coveredProfileIds: opts.covered } : {})),
+    'GET /v1/billing': () => ok(overview({ ...(opts.covered ? { coveredProfileIds: opts.covered } : {}), ...(opts.offer ? { offer: opts.offer } : {}) })),
     ...emptyProfileRoutes(),
     'GET /v1/expense-categories': () => ok({ items: [] }),
     'GET /v1/expenses': () => ok({ items: [EXPENSE], nextCursor: null }),
@@ -182,5 +186,53 @@ describe('a refusal that arrives after the page loaded', () => {
     await queryClient.invalidateQueries({ queryKey: ['p', ORG_B] });
     await waitFor(() => expect(api.count('GET /v1/me')).toBeGreaterThan(1));
     expect(await screen.findByRole('heading', { name: 'Subscribe or download your records' })).toBeInTheDocument();
+  });
+});
+
+describe('MUT-525: the launch offer above Subscribe (DD13)', () => {
+  const launch = (over: Partial<BillingOffer> = {}): BillingOffer => ({
+    id: 'launch-2026',
+    percentOff: 50,
+    endsAt: iso(60),
+    interval: 'year',
+    eligible: true,
+    firstYear: { ILS: 24500, USD: 8000 },
+    ...over,
+  });
+  const TOP_LINE = /^Launch offer: 50% off your first year on Yearly, until .+\.$/;
+
+  it('read-only: the offer line sits above Subscribe while the person gets it', async () => {
+    portal(`/p/${ORG_B}`, { billing: ent('READ_ONLY', 'TRIAL', iso(10)), offer: launch() });
+    const banner = await screen.findByRole('region', { name: 'Your plan' });
+    const line = await within(banner).findByText(TOP_LINE);
+    expect(line).toHaveClass('hp-offer-line');
+    expect(line.compareDocumentPosition(within(banner).getByRole('button', { name: 'Subscribe' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('read-only: nothing for someone the offer isn’t for, or whose payment wouldn’t cover the profile', async () => {
+    const first = portal(`/p/${ORG_B}`, { billing: ent('READ_ONLY', 'TRIAL', iso(10)), offer: launch({ eligible: false }) });
+    await within(await screen.findByRole('region', { name: 'Your plan' })).findByRole('button', { name: 'Subscribe' });
+    expect(screen.queryByText(TOP_LINE)).not.toBeInTheDocument();
+    first.unmount();
+    portal(`/p/${ORG_B}`, { billing: ent('READ_ONLY', 'TRIAL', iso(10)), offer: launch(), covered: [] });
+    expect(await screen.findByText(/The person who created this profile pays for it/)).toBeInTheDocument();
+    expect(screen.queryByText(TOP_LINE)).not.toBeInTheDocument();
+  });
+
+  it('locked: the offer line sits above Subscribe; gone without the offer', async () => {
+    const first = portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked', offer: launch() });
+    await screen.findByRole('heading', { name: 'Subscribe or download your records' });
+    const line = await screen.findByText(TOP_LINE);
+    expect(line.compareDocumentPosition(screen.getByRole('button', { name: 'Subscribe' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    first.unmount();
+    portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked' });
+    await screen.findByRole('button', { name: 'Subscribe' });
+    expect(screen.queryByText(TOP_LINE)).not.toBeInTheDocument();
+  });
+
+  it('locked, in Arabic', async () => {
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    portal(`/p/${ORG_B}`, { billing: ent('LOCKED', 'TRIAL'), standing: 'locked', locale: 'ar', offer: launch() });
+    expect(await screen.findByText(/^عرض الإطلاق: خصم 50% على سنتك الأولى في الاشتراك السنوي، حتى /)).toBeInTheDocument();
   });
 });

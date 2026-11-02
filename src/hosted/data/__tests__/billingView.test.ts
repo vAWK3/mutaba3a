@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { BillingEntitlement, BillingOverview } from '../../api/client';
-import { billingViewOf, checkoutRouteOf, currencyOfCountry, daysLeft, firstChargeOf, isConfirmed, isSellable, profilesListOf, yearlySavingOf, type BillingProfile } from '../billingView';
+import type { BillingEntitlement, BillingOffer, BillingOverview } from '../../api/client';
+import {
+  billingViewOf,
+  checkoutRouteOf,
+  currencyOfCountry,
+  daysLeft,
+  eligibleOfferOf,
+  firstChargeOf,
+  isConfirmed,
+  isSellable,
+  offerAnalyticsName,
+  offerFor,
+  profilesListOf,
+  renewalPriceOf,
+  yearlySavingOf,
+  type BillingProfile,
+} from '../billingView';
 
 /**
  * MUT-362 (plan §2.7, design review DR1–DR12): which panel the Billing drawer shows, its one action, and the small
@@ -19,6 +34,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
   countries: { consumer: ['IL', 'GB'], consumerEverywhere: false, customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [],
+  offer: null,
   ...over,
 });
 const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}): NonNullable<BillingOverview['subscription']> => ({
@@ -28,6 +44,8 @@ const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}): 
   currency: 'ILS',
   currentPeriodEnd: iso(20),
   cancelAtPeriodEnd: false,
+  renewsAtListPrice: false,
+  offer: null,
   ...over,
 });
 const ent = (state: BillingEntitlement['state'], source: BillingEntitlement['source'], until: string | null = null): BillingEntitlement => ({ state, source, tier: 'FREELANCER', until });
@@ -203,5 +221,90 @@ describe('the Subscribe step’s rules', () => {
     expect(daysLeft(iso(9), NOW)).toBe(9);
     expect(daysLeft(new Date(NOW.getTime() + 2 * 60 * 60 * 1000).toISOString(), NOW)).toBe(1);
     expect(daysLeft(iso(-1), NOW)).toBe(0);
+  });
+});
+
+describe('MUT-525: the launch offer (R5, DD3, DD10a, DD10d)', () => {
+  // 23:59 Asia/Jerusalem on 31 January 2027 (UTC+2 in winter): the coupon's redeem_by − 1 h.
+  const ENDS_AT = '2027-01-31T21:59:00.000Z';
+  const offer = (over: Partial<BillingOffer> = {}): BillingOffer => ({
+    id: 'launch-2026',
+    percentOff: 50,
+    endsAt: ENDS_AT,
+    interval: 'year',
+    eligible: true,
+    firstYear: { ILS: 14500, USD: 4500 },
+    ...over,
+  });
+  const priced = (over: Partial<BillingOverview> = {}) =>
+    overview({ catalog: { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } }, offer: offer(), ...over });
+
+  it('an eligible yearly offer: the list and first-year amounts from the server, never computed here', () => {
+    expect(offerFor(priced(), 'ILS', NOW)).toEqual({
+      id: 'launch-2026',
+      percentOff: 50,
+      list: 29000,
+      firstYear: 14500,
+      endsAt: ENDS_AT,
+      renewsOn: '2027-11-01T09:00:00.000Z',
+      firstChargeAt: null,
+      endsToday: false,
+    });
+    expect(offerFor(priced(), 'USD', NOW)).toMatchObject({ list: 9000, firstYear: 4500 });
+  });
+
+  it('no offer for someone not eligible, a monthly offer, no offer at all, or before a currency is known', () => {
+    expect(offerFor(priced({ offer: offer({ eligible: false }) }), 'ILS', NOW)).toBeNull();
+    expect(offerFor(priced({ offer: offer({ interval: 'month' }) }), 'ILS', NOW)).toBeNull();
+    expect(offerFor(priced({ offer: null }), 'ILS', NOW)).toBeNull();
+    expect(offerFor(priced(), null, NOW)).toBeNull();
+  });
+
+  it('no offer in a currency without its first-year amount or its list price', () => {
+    expect(offerFor(priced({ offer: offer({ firstYear: { ILS: null, USD: 4500 } }) }), 'ILS', NOW)).toBeNull();
+    expect(offerFor(priced({ catalog: { ILS: null, USD: { month: 900, year: 9000 } } }), 'ILS', NOW)).toBeNull();
+    expect(offerFor(priced({ offer: offer({ firstYear: { ILS: null, USD: 4500 } }) }), 'USD', NOW)).not.toBeNull();
+  });
+
+  it('a carried trial (48 h or more left) is charged on its end, and the list price a year after it', () => {
+    const view = offerFor(priced({ trial: { startedAt: iso(-4), endsAt: iso(10), lockAt: iso(26) } }), 'ILS', NOW);
+    expect(view).toMatchObject({ firstChargeAt: iso(10), renewsOn: '2027-11-11T09:00:00.000Z' });
+    // Under 48 h left: charged today, renewed a year from today.
+    expect(offerFor(priced({ trial: { startedAt: iso(-13), endsAt: iso(1), lockAt: iso(17) } }), 'ILS', NOW)).toMatchObject({
+      firstChargeAt: null,
+      renewsOn: '2027-11-01T09:00:00.000Z',
+    });
+  });
+
+  it('endsToday on the last calendar day in Jerusalem, whatever the UTC date', () => {
+    // 31 Jan 00:30 Jerusalem is still 30 Jan in UTC.
+    expect(offerFor(priced(), 'ILS', new Date('2027-01-30T22:30:00Z'))?.endsToday).toBe(true);
+    expect(offerFor(priced(), 'ILS', new Date('2027-01-31T21:00:00Z'))?.endsToday).toBe(true);
+    // 30 Jan 23:30 Jerusalem: the day before.
+    expect(offerFor(priced(), 'ILS', new Date('2027-01-30T21:30:00Z'))?.endsToday).toBe(false);
+  });
+
+  it('eligibleOfferOf: the offer before a currency is chosen, only while one currency can take it', () => {
+    expect(eligibleOfferOf(priced())?.id).toBe('launch-2026');
+    expect(eligibleOfferOf(priced({ offer: offer({ eligible: false }) }))).toBeNull();
+    expect(eligibleOfferOf(priced({ offer: offer({ firstYear: { ILS: null, USD: null } }) }))).toBeNull();
+    expect(eligibleOfferOf(overview())).toBeNull();
+    // A server older than MUT-525 sends no field.
+    expect(eligibleOfferOf({ ...priced(), offer: undefined } as unknown as BillingOverview)).toBeNull();
+  });
+
+  it('offerAnalyticsName: the contract\'s snake_case enum value', () => {
+    expect(offerAnalyticsName('launch-2026')).toBe('launch_2026');
+  });
+
+  it('renewalPriceOf (DD3): a list-price subscription renews at the catalog price of its interval and currency', () => {
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, interval: 'year', currency: 'ILS' }) }))).toEqual({ minor: 39000, currency: 'ILS' });
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, interval: 'month', currency: 'USD' }) }))).toEqual({ minor: 1000, currency: 'USD' });
+    // A founder price keeps today's copy; so does an unknown interval or currency, or a plan that ends.
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: false }) }))).toBeNull();
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, interval: null }) }))).toBeNull();
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, currency: 'EUR' }) }))).toBeNull();
+    expect(renewalPriceOf(overview({ subscription: sub({ renewsAtListPrice: true, cancelAtPeriodEnd: true }) }))).toBeNull();
+    expect(renewalPriceOf(overview())).toBeNull();
   });
 });

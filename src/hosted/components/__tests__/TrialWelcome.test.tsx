@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { ORG_B, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../__tests__/harness';
-import type { BillingEntitlement, BillingOverview, Me, TrialPrompt } from '../../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview, Me, TrialPrompt } from '../../api/client';
 import { resetTrialWelcomeOffer } from '../../session/trialWelcomeOffer';
 
-const { trackPortal } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}) }));
-vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPortal }));
+const { trackPortal, trackOfferShown } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}), trackOfferShown: vi.fn() }));
+vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPortal, trackOfferShown }));
 
 /**
  * MUT-418: the free trial's card prompt through the real portal (router, account drawers, query client), /v1 stubbed.
@@ -26,6 +26,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   catalog: { ILS: { month: 4900, year: 49000 }, USD: { month: 1600, year: 16000 } },
   countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [ORG_B],
+  offer: null,
   ...over,
 });
 
@@ -53,6 +54,7 @@ function portal(path: string, opts: { prompt?: TrialPrompt; billing?: BillingEnt
 
 beforeEach(() => {
   trackPortal.mockClear();
+  trackOfferShown.mockClear();
   resetTrialWelcomeOffer();
 });
 afterEach(() => vi.useRealTimers());
@@ -212,6 +214,49 @@ describe('the Home trial banner (AC3)', () => {
     portal(`/p/${ORG_B}`, { prompt: answered, overview: overview({ configured: false, catalog: { ILS: null, USD: null } }) });
     const banner = await screen.findByRole('region', { name: 'Your free trial' });
     await waitFor(() => expect(within(banner).queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument());
+  });
+});
+
+describe('MUT-525: the launch offer on the Home trial line (DD1)', () => {
+  const answered: TrialPrompt = { welcomedAt: iso(-1), welcomeAnswer: 'skipped', bannerSnoozedUntil: null };
+  const launch = (over: Partial<BillingOffer> = {}): BillingOffer => ({
+    id: 'launch-2026',
+    percentOff: 50,
+    endsAt: iso(60),
+    interval: 'year',
+    eligible: true,
+    firstYear: { ILS: 14500, USD: 4500 },
+    ...over,
+  });
+
+  it('the offer link takes Add a card’s place and opens Subscribe on Yearly; the line is counted once', async () => {
+    const { user, router } = portal(`/p/${ORG_B}`, { prompt: answered, billing: trial(9.5), overview: overview({ offer: launch() }) });
+    const banner = await screen.findByRole('region', { name: 'Your free trial' });
+    const link = await within(banner).findByRole('button', { name: /^50% off a yearly plan until / });
+    expect(banner.textContent).toMatch(/^10 days left in your free trial · 50% off a yearly plan until .+ · Hide for 3 days$/);
+    expect(within(banner).queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+    expect(banner.querySelectorAll('p')).toHaveLength(1);
+    expect(trackOfferShown).toHaveBeenCalledWith('launch_2026', 'banner');
+    expect(trackOfferShown).toHaveBeenCalledTimes(1);
+
+    await user.click(link);
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true&step=subscribe`);
+    expect(trackPortal).toHaveBeenCalledWith('trial_card_prompt_accepted', { prompt: 'banner' });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    expect(await within(step).findByRole('radio', { name: 'Yearly · −50%' })).toBeChecked();
+  });
+
+  it('someone the offer isn’t for keeps today’s line, uncounted (R3, DD11)', async () => {
+    portal(`/p/${ORG_B}`, { prompt: answered, billing: trial(9.5), overview: overview({ offer: launch({ eligible: false }) }) });
+    const banner = await screen.findByRole('region', { name: 'Your free trial' });
+    await within(banner).findByRole('button', { name: 'Add a card' });
+    expect(banner.textContent).toBe('10 days left in your free trial · Add a card · Hide for 3 days');
+    expect(trackOfferShown).not.toHaveBeenCalled();
+  });
+
+  it('in Arabic', async () => {
+    portal(`/p/${ORG_B}`, { prompt: answered, billing: trial(9.5), overview: overview({ offer: launch() }), locale: 'ar' });
+    expect(await screen.findByRole('button', { name: /^خصم 50% على الاشتراك السنوي حتى / })).toBeInTheDocument();
   });
 });
 

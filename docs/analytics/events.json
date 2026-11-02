@@ -1,5 +1,5 @@
 {
-  "version": "2.5.0",
+  "version": "2.6.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -123,6 +123,23 @@
       "description": "MUT-513: a door on the portal's first-visit welcome was chosen. Sent before anyone signs in, cookieless like the landing (its own instance, nothing stored, ADR-230): the only portal event sent without consent, and nothing else about the visitor.",
       "properties": {
         "choice": { "type": "enum", "values": ["sign_in", "signup", "local"], "description": "sign_in = Sign in; signup = Create an account; local = Try it on this device." }
+      }
+    },
+    "billing_offer_shown": {
+      "emitters": ["portal"],
+      "description": "MUT-525: the launch offer was shown to a person who gets it: in the Billing drawer (its offer line) or on the Home trial line. Once per page view per place. Never amounts.",
+      "properties": {
+        "offer": { "type": "enum", "values": ["launch_2026"], "description": "Which offer: the /v1/billing offer id with dashes as underscores." },
+        "place": { "type": "enum", "values": ["drawer", "banner"], "description": "drawer = the Billing drawer; banner = the Home trial line. Named place because surface is a shared property." }
+      }
+    },
+    "billing_checkout_started": {
+      "emitters": ["portal"],
+      "description": "MUT-525: Continue to payment opened a Stripe Checkout (the server made the session; the browser is leaving for Stripe). Never amounts.",
+      "properties": {
+        "interval": { "type": "enum", "values": ["month", "year"], "description": "The plan chosen: monthly or yearly." },
+        "currency": { "type": "currency", "description": "The Checkout's currency code, from the billing country. Never the amount." },
+        "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." }
       }
     }
   }

@@ -1256,7 +1256,8 @@
         "pending": "If your bank asked you to approve it, finish it in Manage billing. You're not subscribed until it does.",
         "activeMonth": "Billed monthly.",
         "activeYear": "Billed yearly.",
-        "activeTrial": "Your free trial continues until then. Cancel any time before it from Manage billing."
+        "activeTrial": "Your free trial continues until then. Cancel any time before it from Manage billing.",
+        "renewsAt": "Renews at {list} on {date}."
       },
       "action": {
         "subscribe": "Subscribe",
@@ -1332,7 +1333,8 @@
       "trialBanner": {
         "label": "Your free trial",
         "addCard": "Add a card",
-        "hide": "Hide for 3 days"
+        "hide": "Hide for 3 days",
+        "offer": "50% off a yearly plan until {date}"
       },
       "gate": {
         "label": "Your plan",
@@ -1352,6 +1354,21 @@
         "drawerNote": "This profile is read-only, so nothing here can be changed.",
         "refused": "This profile is read-only now. Subscribe to add or change records.",
         "newProfileBlocked": "Subscribe to add a profile: your plan has ended."
+      },
+      "offer": {
+        "segment": "Yearly · −50%",
+        "topLine": "Launch offer: 50% off your first year on Yearly, until {date}.",
+        "firstYear": "first year",
+        "srPrice": "{price} for the first year instead of {list}",
+        "firstChargeTrial": "Your free trial continues. On {firstCharge} you pay {price} for your first year, then {list} a year from {renewsOn}.",
+        "firstChargeNow": "You pay {price} today for your first year, then {list} a year from {renewsOn}.",
+        "monthlyHint": "Yearly is 50% off the first year until {date}.",
+        "endsToday": "Ends today",
+        "ended": "The launch offer has ended.",
+        "endedPrice": "The launch offer has ended. The yearly price is {list}."
+      },
+      "done": {
+        "offerApplied": "You're subscribed. Launch offer applied."
       }
     },
     "selfService": {

@@ -1,15 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage, useT } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
-import type { HostedProfile } from '../api/client';
+import type { BillingOffer, HostedProfile } from '../api/client';
 import { billingQuery } from '../data/billingQueries';
-import { isSellable } from '../data/billingView';
+import { eligibleOfferOf, isSellable } from '../data/billingView';
 import { lapseNoticeOf, type LapseNotice } from '../data/trialPrompt';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { useMe } from '../session/me';
 import { useAccountDrawers } from '../shell/AccountDrawers';
 import { AlertIcon, LockIcon } from './Icons';
+import { OfferTopLine } from './OfferTopLine';
 
 /**
  * MUT-361 (ADR-181): what the portal shows when the open profile's plan isn't running. `LapseBanner` sits above every
@@ -20,12 +21,22 @@ import { AlertIcon, LockIcon } from './Icons';
  * ask the profile's creator. Every action opens a drawer the shell already has: Billing, or Your data.
  */
 
-/** Whether this person's payment would cover the profile, and whether a price can be bought: null while unknown. */
-function useCoverage(profileId: string): { covered: boolean; sellable: boolean } | null {
+type Coverage = { covered: boolean; sellable: boolean; offer: BillingOffer | null };
+
+/**
+ * Whether this person's payment would cover the profile, whether a price can be bought, and the launch offer they'd
+ * get (MUT-525): null while unknown.
+ */
+function useCoverage(profileId: string): Coverage | null {
   const billing = useQuery(billingQuery);
   if (!billing.data) return null;
   // A server older than MUT-362 sends no list: then nobody's payment is known to cover it, so no Subscribe.
-  return { covered: (billing.data.coveredProfileIds ?? []).includes(profileId), sellable: isSellable(billing.data) };
+  return { covered: (billing.data.coveredProfileIds ?? []).includes(profileId), sellable: isSellable(billing.data), offer: eligibleOfferOf(billing.data) };
+}
+
+/** MUT-525 DD13: the offer's line above Subscribe, only where Subscribe itself opens the Subscribe step. */
+function OfferAboveSubscribe({ coverage }: { coverage: Coverage | null }) {
+  return coverage?.covered && coverage.sellable && coverage.offer ? <OfferTopLine offer={coverage.offer} /> : null;
 }
 
 export function LapseBanner({ profile }: { profile: HostedProfile }) {
@@ -48,6 +59,7 @@ function LockedNote({ profile }: { profile: HostedProfile }) {
       <div className="hp-lapse-banner-body">
         <p className="hp-lapse-banner-title">{t('hosted.billing.gate.lockedTitle')}</p>
         <p>{t(theirs ? 'hosted.billing.gate.lockedNotYours' : 'hosted.billing.gate.lockedBody')}</p>
+        <OfferAboveSubscribe coverage={coverage} />
         <div className="hp-lapse-banner-actions">
           <SubscribeAction coverage={coverage} size="sm" />
           <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
@@ -94,6 +106,7 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
       <div className="hp-lapse-banner-body">
         <p className="hp-lapse-banner-title">{t('hosted.billing.gate.readOnlyTitle')}</p>
         <p>{coverage && !coverage.covered ? t('hosted.billing.gate.notYours') : body}</p>
+        <OfferAboveSubscribe coverage={coverage} />
         <div className="hp-lapse-banner-actions">
           <SubscribeAction coverage={coverage} size="sm" />
           <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
@@ -110,7 +123,7 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
  * can be bought or the coverage couldn't be read (review: never leave the person with nothing to press); nothing for a
  * profile someone else pays for.
  */
-function SubscribeAction({ coverage, size }: { coverage: { covered: boolean; sellable: boolean } | null; size?: 'sm' }) {
+function SubscribeAction({ coverage, size }: { coverage: Coverage | null; size?: 'sm' }) {
   const t = useT();
   const drawers = useAccountDrawers();
   if (coverage && !coverage.covered) return null;
@@ -135,6 +148,7 @@ export function LockedScreen({ profile }: { profile: HostedProfile }) {
       </span>
       <h2 id="hp-locked-title">{t('hosted.billing.gate.lockedTitle')}</h2>
       <p>{t(theirs ? 'hosted.billing.gate.lockedNotYours' : 'hosted.billing.gate.lockedBody')}</p>
+      <OfferAboveSubscribe coverage={coverage} />
       <div className="hp-locked-actions">
         <SubscribeAction coverage={coverage} />
         <Button variant="secondary" onClick={drawers.openYourData}>

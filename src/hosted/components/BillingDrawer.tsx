@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
@@ -15,10 +15,15 @@ import {
   checkoutRouteOf,
   currencyOfCountry,
   daysLeft,
+  eligibleOfferOf,
   firstChargeOf,
   isConfirmed,
   isSellable,
+  offerAnalyticsName,
+  offerDay,
+  offerFor,
   profilesListOf,
+  renewalPriceOf,
   yearlySavingOf,
   type BillingPanel,
   type BillingProfile,
@@ -36,6 +41,7 @@ import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
 import { SUPPORT_EMAIL } from '../terms';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
+import { OfferTopLine } from './OfferTopLine';
 import { RadioCards } from './RadioCards';
 
 /**
@@ -186,11 +192,14 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
   const failure = failureOf(portal.error);
   // While a payment is being confirmed, or is slow to show, nothing invites a second one (review).
   const settled = phase !== 'confirming' && phase !== 'slow';
+  const offer = eligibleOfferOf(billing);
+  // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
+  const subscribed = billing.subscription?.offer ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
   const announcement =
     phase === 'confirming'
       ? t('hosted.billing.states.confirming')
       : phase === 'done'
-        ? t('hosted.billing.states.subscribed')
+        ? subscribed
         : phase === 'slow'
           ? t('hosted.billing.states.slow')
           : cancelled
@@ -207,7 +216,7 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
-      {phase === 'done' && <Banner tone="ok" text={t('hosted.billing.states.subscribed')} live={false} />}
+      {phase === 'done' && <Banner tone="ok" text={subscribed} live={false} />}
       {phase === 'slow' && <Banner tone="info" text={t('hosted.billing.states.slow')} live={false} />}
       {cancelled && phase === null && <Banner tone="info" text={t('hosted.billing.states.cancelled')} live={false} />}
 
@@ -220,25 +229,43 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
           <p>{t('hosted.billing.states.confirmingNote')}</p>
         </div>
       ) : (
-        <PanelStatus panel={view.panel} language={language} headlineRef={headline} />
+        <PanelStatus panel={view.panel} renewal={renewalPriceOf(billing)} language={language} headlineRef={headline} />
       )}
 
+      {/* MUT-525 DD10c: the offer line in the context, right above Subscribe. */}
+      {settled && view.action === 'subscribe' && !view.openSoon && offer && <OfferTopLine offer={offer} place="drawer" />}
       {settled && (
         <Action view={view} busy={portal.isPending} failure={failure} onSubscribe={onSubscribe} onPortal={() => portal.mutate(billingReturnPath(pathname))} />
       )}
 
-      {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} language={language} />}
+      {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
       {list.length > 0 && <ProfilesList profiles={list} />}
       {coOwnsOthers && <p className="hp-billing-fine">{t('hosted.billing.coOwnedNote')}</p>}
     </div>
   );
 }
 
-function PanelStatus({ panel, language, headlineRef }: { panel: BillingPanel; language: Language; headlineRef: React.RefObject<HTMLHeadingElement | null> }) {
+function PanelStatus({
+  panel,
+  renewal,
+  language,
+  headlineRef,
+}: {
+  panel: BillingPanel;
+  renewal: ReturnType<typeof renewalPriceOf>;
+  language: Language;
+  headlineRef: React.RefObject<HTMLHeadingElement | null>;
+}) {
   const t = useT();
   const tp = useTp();
   const day = (iso: string | null) => (iso ? formatInstant(iso, language, browserTimezone()) : '');
-  const { chip, tone, headline, context } = panelCopy(panel, t, tp, day);
+  const copy = panelCopy(panel, t, tp, day);
+  const { chip, tone, headline } = copy;
+  // MUT-525 DD3: a list-price plan says what it renews at (founder prices and a plan that ends keep today's line).
+  const context: ReactNode =
+    panel.kind === 'active' && renewal
+      ? sentence(t, 'hosted.billing.context.renewsAt', { list: <Amount minor={renewal.minor} currency={renewal.currency} language={language} />, date: day(panel.renewsAt) })
+      : copy.context;
   return (
     <div className="hp-billing-status">
       <Chip tone={tone} label={chip} />
@@ -408,10 +435,15 @@ function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingV
   }
 }
 
-/** DR12: both currencies until the person picks a country; yearly prices in the fine print. */
-function PlanLines({ catalog, language }: { catalog: BillingOverview['catalog']; language: Language }) {
+/**
+ * DR12: both currencies until the person picks a country; yearly prices in the fine print. MUT-525 DD10c: while the
+ * person gets the launch offer, the year reads as its first-year price with the list price struck (DD9a).
+ */
+function PlanLines({ catalog, offer, language }: { catalog: BillingOverview['catalog']; offer: ReturnType<typeof eligibleOfferOf>; language: Language }) {
   const t = useT();
   const pairs = (['ILS', 'USD'] as const).flatMap((currency) => (catalog[currency] ? [{ currency, ...catalog[currency]! }] : []));
+  const firstYearOf = (currency: 'ILS' | 'USD') => offer?.firstYear[currency] ?? null;
+  const anyOffer = pairs.some((p) => firstYearOf(p.currency) !== null);
   return (
     <div className="hp-billing-plan">
       <div className="hp-billing-plan-line">
@@ -428,12 +460,20 @@ function PlanLines({ catalog, language }: { catalog: BillingOverview['catalog'];
       </div>
       <p className="hp-billing-fine">
         {t('hosted.billing.plan.aYear')}:{' '}
-        {pairs.map((p, i) => (
-          <span key={p.currency}>
-            {i > 0 && ' / '}
-            <Amount minor={p.year} currency={p.currency} language={language} />
-          </span>
-        ))}
+        {pairs.map((p, i) => {
+          const firstYear = firstYearOf(p.currency);
+          return (
+            <span key={p.currency}>
+              {i > 0 && ' / '}
+              {firstYear === null ? (
+                <Amount minor={p.year} currency={p.currency} language={language} />
+              ) : (
+                <OfferPrice firstYear={firstYear} list={p.year} currency={p.currency} language={language} />
+              )}
+            </span>
+          );
+        })}
+        {anyOffer && <span aria-hidden="true"> {t('hosted.billing.offer.firstYear')}</span>}
       </p>
       <p className="hp-billing-fine">{t('hosted.billing.plan.vat')}</p>
       <p className="hp-billing-fine">{t('hosted.billing.plan.cancelRule')}</p>
@@ -476,25 +516,59 @@ function entitlementPanel(profile: BillingProfile): BillingPanel {
   return { kind: 'none' };
 }
 
-/** The Subscribe step's choices and its Continue, kept in BillingDrawer so the button can live in the pinned footer (DR10). */
+/**
+ * The Subscribe step's choices and its Continue, kept in BillingDrawer so the button can live in the pinned footer (DR10).
+ * MUT-525 DD5: the interval is decided once, on the first billing data (Yearly while the person gets the launch offer,
+ * else Monthly), by a render-time adjustment; refetches never change it, only the person's tap does. DD4: an offer the
+ * server says has ended is never shown or sent again in this drawer.
+ */
 function useSubscribeForm(billing: BillingOverview | undefined) {
   const { pathname } = useLocation();
   const [country, setCountry] = useState('');
   const [buyer, setBuyer] = useState<'person' | 'business'>('person');
-  const [interval, setBillingInterval] = useState<'month' | 'year'>('month');
+  const [chosen, setBillingInterval] = useState<'month' | 'year' | null>(null);
+  /** The offer the drawer opened with (DD5: its disappearing while open is said). */
+  const [openedWith, setOpenedWith] = useState<string | null>(null);
+  /** The offer a Continue was refused for (DD4, 409 OFFER_ENDED). */
+  const [refusedOffer, setRefusedOffer] = useState<string | null>(null);
+  // Render-time adjustment, not an effect (react-hooks v7): set once, on the first render with billing data.
+  if (chosen === null && billing) {
+    const opening = eligibleOfferOf(billing);
+    setBillingInterval(opening ? 'year' : 'month');
+    setOpenedWith(opening?.id ?? null);
+  }
+  const interval = chosen ?? 'month';
   const checkout = useStartCheckout();
   const route = billing ? checkoutRouteOf(country || null, buyer, billing.countries) : null;
   const currency = country ? currencyOfCountry(country) : null;
   const pair = billing && currency ? billing.catalog[currency] : null;
+  const eligible = billing ? eligibleOfferOf(billing) : null;
+  const activeOffer = eligible && eligible.id !== refusedOffer ? eligible : null;
+  const offer = billing && activeOffer ? offerFor(billing, currency, new Date()) : null;
+  /** The offer is on screen: before a country is picked, or in the chosen currency. */
+  const offerShown = activeOffer !== null && (currency === null || offer !== null);
+  /** The offer this Continue would carry: Yearly, in the chosen currency. */
+  const applied = interval === 'year' ? offer : null;
+  const offerEnded: 'withPrice' | 'whileOpen' | null = refusedOffer !== null ? 'withPrice' : openedWith !== null && activeOffer === null ? 'whileOpen' : null;
   const canContinue = route !== null && route !== 'contact-us' && pair !== null && !checkout.isPending;
   const submit = () => {
-    if (!canContinue) return;
-    checkout.mutate({
-      interval,
-      country,
-      buyer,
-      returnPath: billingReturnPath(pathname),
-    });
+    if (!canContinue || !currency) return;
+    const expectedOffer = applied?.id ?? null;
+    checkout.mutate(
+      {
+        interval,
+        country,
+        buyer,
+        returnPath: billingReturnPath(pathname),
+        ...(expectedOffer ? { expectedOffer } : {}),
+      },
+      {
+        onSuccess: () => void trackPortal('billing_checkout_started', { interval, currency, offer: expectedOffer ? offerAnalyticsName(expectedOffer) : null }),
+        onError: (error) => {
+          if (expectedOffer && error instanceof ApiError && apiErrorReason(error) === 'OFFER_ENDED') setRefusedOffer(expectedOffer);
+        },
+      },
+    );
   };
   return {
     country,
@@ -507,6 +581,11 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
     route,
     currency,
     pair,
+    activeOffer,
+    offer,
+    offerShown,
+    applied,
+    offerEnded,
     canContinue,
     submit,
   };
@@ -541,7 +620,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
   const { language } = useLanguage();
   const ids = useId();
   const body = useRef<HTMLDivElement>(null);
-  const { country, buyer, interval, route, currency, pair } = form;
+  const { country, buyer, interval, route, currency, pair, activeOffer, offerShown, applied } = form;
   const firstCharge = firstChargeOf(billing, new Date());
   const saving = pair ? yearlySavingOf(pair) : null;
   const yearlyNote =
@@ -552,6 +631,14 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
         : t('hosted.billing.subscribe.save', {
             amount: formatMinor(saving.amount, currency, language),
           });
+  // MUT-525 DD2: while the offer is on screen the Yearly segment stays short; otherwise today's label (R3).
+  const yearlyLabel = offerShown
+    ? t('hosted.billing.offer.segment')
+    : yearlyNote
+      ? `${t('hosted.billing.subscribe.yearly')} · ${yearlyNote}`
+      : t('hosted.billing.subscribe.yearly');
+  const summarised = route !== 'contact-us' && pair !== null && currency !== null;
+  const amount = (minor: number) => (currency ? <Amount minor={minor} currency={currency} language={language} /> : null);
 
   // DR10: entering the step puts focus on its heading: the drawer's own title, which already reads the step's name.
   useEffect(() => {
@@ -563,9 +650,17 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
 
   return (
     <div className="hp-billing" ref={body} aria-label={title}>
+      {/* MUT-525: the banner slot. DD4: the server refused the offer at Continue; DD5: it ended while this was open. */}
+      {form.offerEnded === 'withPrice' && pair ? (
+        <Banner tone="info" text={sentence(t, 'hosted.billing.offer.endedPrice', { list: amount(pair.year) })} />
+      ) : (
+        form.offerEnded !== null && <Banner tone="info" text={t('hosted.billing.offer.ended')} />
+      )}
       <button type="button" className="hp-billing-back" onClick={onBack}>
         {t('hosted.billing.subscribe.back')}
       </button>
+      {/* MUT-525 DD6: the offer reads first, before a country is picked; the step's order is unchanged. */}
+      {offerShown && activeOffer && <OfferTopLine offer={activeOffer} place="drawer" endsToday />}
 
       <Select
         label={t('hosted.billing.subscribe.country')}
@@ -617,12 +712,13 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
           onChange={form.setBillingInterval}
           options={[
             { value: 'month', label: t('hosted.billing.subscribe.monthly') },
-            {
-              value: 'year',
-              label: yearlyNote ? `${t('hosted.billing.subscribe.yearly')} · ${yearlyNote}` : t('hosted.billing.subscribe.yearly'),
-            },
+            { value: 'year', label: yearlyLabel },
           ]}
         />
+        {/* MUT-525 DD9d: on Monthly, one quiet line says what Yearly would bring. */}
+        {offerShown && activeOffer && interval === 'month' && (
+          <p className="hp-offer-fine">{t('hosted.billing.offer.monthlyHint', { date: offerDay(activeOffer.endsAt, language) })}</p>
+        )}
       </div>
 
       {route === 'contact-us' ? (
@@ -640,14 +736,42 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
         currency && (
           <div className="hp-billing-summary">
             <span>{t('hosted.billing.subscribe.summary')}</span>
-            <span>
-              <Amount minor={pair[interval]} currency={currency} language={language} />{' '}
-              {t(interval === 'month' ? 'hosted.billing.subscribe.perMonth' : 'hosted.billing.subscribe.perYear')}
+            {/* DD9c: the price is announced when it changes (only while the offer can change it; R3 keeps today's markup). */}
+            <span aria-live={offerShown ? 'polite' : undefined}>
+              {applied ? (
+                <>
+                  <OfferPrice firstYear={applied.firstYear} list={applied.list} currency={currency} language={language} />
+                  <span aria-hidden="true"> {t('hosted.billing.offer.firstYear')}</span>
+                </>
+              ) : (
+                <>
+                  <Amount minor={pair[interval]} currency={currency} language={language} />{' '}
+                  {t(interval === 'month' ? 'hosted.billing.subscribe.perMonth' : 'hosted.billing.subscribe.perYear')}
+                </>
+              )}
             </span>
           </div>
         )
       )}
-      {firstCharge && <p className="hp-billing-fine">{t('hosted.billing.subscribe.firstCharge', { date: formatInstant(firstCharge, language, browserTimezone()) })}</p>}
+      {summarised && applied ? (
+        <>
+          {/* DD10a: one sentence for the first charge and the renewal replaces the loose fine lines (DD2's "then ₪290 a
+              year · offer ends", whose end date the top line already says); "Prices exclude VAT" stays (plan §6). */}
+          <p className="hp-billing-fine">
+            {applied.firstChargeAt
+              ? sentence(t, 'hosted.billing.offer.firstChargeTrial', {
+                  firstCharge: offerDay(applied.firstChargeAt, language),
+                  price: amount(applied.firstYear),
+                  list: amount(applied.list),
+                  renewsOn: offerDay(applied.renewsOn, language),
+                })
+              : sentence(t, 'hosted.billing.offer.firstChargeNow', { price: amount(applied.firstYear), list: amount(applied.list), renewsOn: offerDay(applied.renewsOn, language) })}
+          </p>
+          <p className="hp-billing-fine">{t('hosted.billing.plan.vat')}</p>
+        </>
+      ) : (
+        firstCharge && <p className="hp-billing-fine">{t('hosted.billing.subscribe.firstCharge', { date: formatInstant(firstCharge, language, browserTimezone()) })}</p>
+      )}
       <p className="hp-billing-fine">{t('hosted.billing.subscribe.headsUp')}</p>
       {billing.catalog.ILS === null && billing.catalog.USD === null && <Banner tone="info" text={t('hosted.billing.openSoon')} />}
     </div>
@@ -748,6 +872,8 @@ function failureOf(error: Error | null): Failure {
   if (!error) return null;
   if (!(error instanceof ApiError)) return 'sessionFailed';
   const reason = apiErrorReason(error);
+  // MUT-525 DD4: an ended offer is said in the drawer's banner slot, with the yearly price, not as a failure.
+  if (reason === 'OFFER_ENDED') return null;
   if (reason === 'BILLING_ACCOUNT_NEEDS_HELP' || reason === 'CONTACT_US') return 'needsHelp';
   if (reason === 'ALREADY_SUBSCRIBED') return 'alreadySubscribed';
   if (error.code === 'RATE_LIMITED') return 'tooMany';
@@ -777,7 +903,7 @@ function ContactUs() {
 }
 
 /** `live={false}` for a banner the drawer's own live region already announces. */
-function Banner({ tone, text, live = true }: { tone: 'ok' | 'info' | 'error'; text: string; live?: boolean }) {
+function Banner({ tone, text, live = true }: { tone: 'ok' | 'info' | 'error'; text: ReactNode; live?: boolean }) {
   return (
     <div className={`hp-banner hp-banner-${tone}`} role={!live ? undefined : tone === 'error' ? 'alert' : 'status'}>
       <AlertIcon />
@@ -797,4 +923,35 @@ function formatMinor(minor: number, currency: 'ILS' | 'USD', language: Language)
 /** Amounts are plain `<bdi>` in the figure face (MUT-109), so ₪39 reads correctly inside Arabic. */
 function Amount({ minor, currency, language }: { minor: number; currency: 'ILS' | 'USD'; language: Language }) {
   return <bdi className="hp-amount">{formatMinor(minor, currency, language)}</bdi>;
+}
+
+/**
+ * MUT-525 DD9a: the first-year price, then the list price struck, each in its own <bdi>. The pair is hidden from
+ * screen readers, which read one sentence instead ("₪145 for the first year instead of ₪290").
+ */
+function OfferPrice({ firstYear, list, currency, language }: { firstYear: number; list: number; currency: 'ILS' | 'USD'; language: Language }) {
+  const t = useT();
+  return (
+    <>
+      <span className="sr-only">{t('hosted.billing.offer.srPrice', { price: formatMinor(firstYear, currency, language), list: formatMinor(list, currency, language) })}</span>
+      <span aria-hidden="true">
+        <bdi className="hp-amount hp-offer-price">{formatMinor(firstYear, currency, language)}</bdi>{' '}
+        <s className="hp-offer-list">
+          <bdi className="hp-amount">{formatMinor(list, currency, language)}</bdi>
+        </s>
+      </span>
+    </>
+  );
+}
+
+/** Marks a node's place in a translated sentence; no translation contains it (InsightList's way). */
+const MARK = '\u0001';
+const MARKED = new RegExp(`(${MARK}\\d+${MARK})`);
+
+/** A translated sentence whose `{vars}` are nodes (amounts stay their own <bdi>, ADR-101), or plain strings. */
+function sentence(t: Translate, key: string, vars: Record<string, ReactNode>): ReactNode[] {
+  const entries = Object.entries(vars).map(([name, node], i) => ({ name, node, mark: `${MARK}${i}${MARK}` }));
+  const byMark = new Map(entries.map((e) => [e.mark, e.node]));
+  const text = t(key, Object.fromEntries(entries.map((e) => [e.name, e.mark])));
+  return text.split(MARKED).map((piece, i) => (byMark.has(piece) ? <Fragment key={i}>{byMark.get(piece)}</Fragment> : piece));
 }

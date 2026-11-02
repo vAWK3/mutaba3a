@@ -5,6 +5,7 @@ import {
   endPortalUsage,
   resetPortalUsageForTests,
   syncPortalUsage,
+  trackOfferShown,
   trackPortal,
   usePortalUsage,
 } from '../portalAnalytics';
@@ -99,6 +100,17 @@ describe('turning it on', () => {
     await choosePortalUsage('on', 'settings');
     await trackPortal('expense_recorded', { currency: 'ILS' });
     expect(sdk.capture).toHaveBeenLastCalledWith('expense_recorded', { currency: 'ILS' });
+  });
+
+  it('counts the launch offer once per page view per place (MUT-525 D10)', async () => {
+    await syncPortalUsage(ME);
+    await choosePortalUsage('on', 'settings');
+    trackOfferShown('launch_2026', 'banner');
+    trackOfferShown('launch_2026', 'banner');
+    trackOfferShown('launch_2026', 'drawer');
+    await vi.waitFor(() => expect(calls.filter((c) => c === 'capture:billing_offer_shown')).toHaveLength(2));
+    expect(sdk.capture).toHaveBeenCalledWith('billing_offer_shown', { offer: 'launch_2026', place: 'banner' });
+    expect(sdk.capture).toHaveBeenCalledWith('billing_offer_shown', { offer: 'launch_2026', place: 'drawer' });
   });
 });
 

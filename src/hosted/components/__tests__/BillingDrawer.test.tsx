@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, openYou } from '../../__tests__/harness';
-import type { BillingEntitlement, BillingOverview } from '../../api/client';
+import type { BillingEntitlement, BillingOffer, BillingOverview } from '../../api/client';
 import { stripeNavigation } from '../../data/billingQueries';
+
+const { trackPortal, trackOfferShown } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}), trackOfferShown: vi.fn() }));
+vi.mock('../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../analytics/portalAnalytics')>()), trackPortal, trackOfferShown }));
 
 /**
  * MUT-362 (plan §2.7–§2.8, design review DR1–DR13): Settings › Billing through the real portal, the account menu, the
@@ -21,6 +24,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
   countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [ORG_B],
+  offer: null,
   ...over,
 });
 const SHARED = '33333333-3333-4333-8333-333333333333';
@@ -44,6 +48,8 @@ function portal(
 const assign = vi.fn();
 beforeEach(() => {
   assign.mockReset();
+  trackPortal.mockClear();
+  trackOfferShown.mockClear();
   vi.spyOn(stripeNavigation, 'assign').mockImplementation(assign);
 });
 afterEach(() => vi.useRealTimers());
@@ -163,7 +169,7 @@ describe('Billing drawer: the Subscribe step (DR2, DR6, DR7, DR11)', () => {
 describe('Billing drawer: back from Stripe (eng review D4)', () => {
   it('confirms while the webhook lands, then says thank you', async () => {
     let calls = 0;
-    const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false }, canManage: true });
+    const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false, renewsAtListPrice: false, offer: null }, canManage: true });
     portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? overview() : active) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect(await within(dialog).findByRole('heading', { name: 'Confirming your payment…' })).toBeInTheDocument();
@@ -173,7 +179,7 @@ describe('Billing drawer: back from Stripe (eng review D4)', () => {
 
   it('moves focus to the new headline when the payment confirms, and announces it in one live region (review a11y)', async () => {
     let calls = 0;
-    const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false }, canManage: true });
+    const active = overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false, renewsAtListPrice: false, offer: null }, canManage: true });
     portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? overview() : active) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect(await within(dialog).findByRole('heading', { name: 'Confirming your payment…' })).toHaveFocus();
@@ -210,7 +216,7 @@ describe('Billing drawer: back from Stripe (eng review D4)', () => {
 
 describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
   const subscribed = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}) =>
-    overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false, ...over }, canManage: true });
+    overview({ subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false, renewsAtListPrice: false, offer: null, ...over }, canManage: true });
 
   it('opens the Customer Portal for a subscriber', async () => {
     const { user, api } = portal(`/p/${ORG_B}?billing=true`, {
@@ -376,5 +382,217 @@ describe('Billing drawer: refusals and redirects (MUT-362 review)', () => {
     await screen.findByRole('dialog', { name: 'Billing' });
     router.history.back();
     await vi.waitFor(() => expect(locationOf(router)).not.toContain('step=subscribe'));
+  });
+});
+
+describe('MUT-525: the launch offer in the drawer (DD2–DD10, R3)', () => {
+  const PRICES = { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } };
+  const launch = (over: Partial<BillingOffer> = {}): BillingOffer => ({
+    id: 'launch-2026',
+    percentOff: 50,
+    endsAt: iso(60),
+    interval: 'year',
+    eligible: true,
+    firstYear: { ILS: 14500, USD: 4500 },
+    ...over,
+  });
+  const offered = (over: Partial<BillingOverview> = {}) => overview({ catalog: PRICES, offer: launch(), ...over });
+  /** A paragraph by its whole text: amounts are their own <bdi>, so the text spans elements. */
+  const para = (pattern: RegExp) => (_: string, el: Element | null) => el?.tagName === 'P' && pattern.test(el.textContent ?? '');
+  const checkoutBody = (api: ReturnType<typeof portal>['api']) => api.calls.filter((c) => c.url.pathname === '/v1/billing/checkout-session').map((c) => c.body);
+
+  it('opens on Yearly with the offer first, the first year before the struck list price, and Continue names the offer', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => ok(offered()),
+      routes: { 'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/cs_test_offer' }) },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    // DD6: the offer reads first, under Back, before a country is picked.
+    const topLine = await within(step).findByText(/^Launch offer: 50% off your first year on Yearly, until /);
+    expect(within(step).getByRole('button', { name: 'Back to Billing' }).compareDocumentPosition(topLine) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // DD5: Yearly preselected; DD2: the short segment label.
+    expect(within(step).getByRole('radio', { name: 'Yearly · −50%' })).toBeChecked();
+    expect(trackOfferShown).toHaveBeenCalledWith('launch_2026', 'drawer');
+
+    await user.selectOptions(within(step).getByRole('combobox', { name: 'Billing address country' }), 'IL');
+    const summary = step.querySelector('.hp-billing-summary')!;
+    // DD9a: ₪145 then the struck ₪290, both in <bdi>; the pair is hidden and one sentence is read instead.
+    const amounts = [...summary.querySelectorAll('bdi')].map((b) => b.textContent);
+    expect(amounts).toEqual(['₪145.00', '₪290.00']);
+    expect(summary.querySelector('s bdi')?.textContent).toBe('₪290.00');
+    expect(summary.querySelector('s')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(within(step).getByText('₪145.00 for the first year instead of ₪290.00')).toHaveClass('sr-only');
+    expect(summary.querySelector('[aria-live="polite"]')).not.toBeNull();
+    // DD10a: one sentence replaces the loose fine lines (no second "then ₪290 a year"); the VAT sentence stays (plan §6).
+    expect(within(step).queryByText(/^Then ₪290\.00 a year/)).not.toBeInTheDocument();
+    expect(within(step).getByText('Prices exclude VAT; VAT is added where the law requires it.')).toBeInTheDocument();
+    // DD10a: the trial carries over (9 days left), said in one sentence in place of the loose first-charge line.
+    expect(within(step).getByText(para(/^Your free trial continues\. On .+ you pay ₪145\.00 for your first year, then ₪290\.00 a year from .+\.$/))).toBeInTheDocument();
+    expect(within(step).queryByText(/^Your free trial continues: the first charge is on /)).not.toBeInTheDocument();
+
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(checkoutBody(api)).toEqual([{ interval: 'year', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}`, expectedOffer: 'launch-2026' }]);
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_offer'));
+    expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { interval: 'year', currency: 'ILS', offer: 'launch_2026' });
+  });
+
+  it('with no carried trial the first year is paid today', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { billing: () => ok(offered({ trial: { startedAt: iso(-13), endsAt: iso(1), lockAt: iso(17) } })) });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'GB');
+    expect(within(step).getByText(para(/^You pay \$45\.00 today for your first year, then \$90\.00 a year from .+\.$/))).toBeInTheDocument();
+    expect(within(step).getByText('$45.00 for the first year instead of $90.00')).toBeInTheDocument();
+  });
+
+  it('Monthly shows the hint under the switch and no offer price; Continue sends no offer', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => ok(offered()),
+      routes: { 'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/cs_test_m' }) },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    await user.click(within(step).getByRole('radio', { name: 'Monthly' }));
+    expect(within(step).getByText(/^Yearly is 50% off the first year until /)).toBeInTheDocument();
+    expect(within(step).queryByText(/for the first year instead of/)).not.toBeInTheDocument();
+    expect(step.querySelector('.hp-billing-summary s')).toBeNull();
+    expect(within(step).getByText('₪29.00')).toBeInTheDocument();
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(checkoutBody(api)).toEqual([{ interval: 'month', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}` }]);
+    await vi.waitFor(() => expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { interval: 'month', currency: 'ILS', offer: null }));
+  });
+
+  it('a person’s pick sticks across a billing refetch (DD5)', async () => {
+    const { user, queryClient } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { billing: () => ok(offered()) });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.click(await within(step).findByRole('radio', { name: 'Monthly' }));
+    await queryClient.refetchQueries({ queryKey: ['billing'] });
+    expect(within(step).getByRole('radio', { name: 'Monthly' })).toBeChecked();
+  });
+
+  it('no offer leaves today’s step: Monthly, "2 months free" and today’s summary (R3)', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { billing: () => ok(overview({ offer: launch({ eligible: false }) })) });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    expect(within(step).getByRole('radio', { name: 'Monthly' })).toBeChecked();
+    await user.click(within(step).getByRole('radio', { name: 'Yearly · 2 months free' }));
+    expect(within(step).getByText('₪390.00')).toBeInTheDocument();
+    expect(within(step).queryByText(/Launch offer|50%/)).not.toBeInTheDocument();
+    expect(step.querySelector('[aria-live="polite"]')).toBeNull();
+    expect(within(step).getByText(/^Your free trial continues: the first charge is on /)).toBeInTheDocument();
+    expect(trackOfferShown).not.toHaveBeenCalled();
+  });
+
+  it('OFFER_ENDED keeps the drawer open with the full yearly price; a second Continue goes to Stripe without the offer (DD4)', async () => {
+    let ended = false;
+    let attempts = 0;
+    const { user, api } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => ok(ended ? offered({ offer: null }) : offered()),
+      routes: {
+        'POST /v1/billing/checkout-session': () => {
+          attempts++;
+          if (attempts === 1) {
+            ended = true;
+            return fail(409, 'CONFLICT', { reason: 'OFFER_ENDED' });
+          }
+          return ok({ url: 'https://checkout.stripe.com/c/pay/cs_test_full' });
+        },
+      },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    const banner = await within(step).findByText((_, el) => el?.tagName === 'SPAN' && /^The launch offer has ended\. The yearly price is ₪290\.00\.$/.test(el.textContent ?? ''));
+    expect(banner.closest('.hp-banner-info')).not.toBeNull();
+    expect(banner.querySelector('bdi')?.textContent).toBe('₪290.00');
+    expect(assign).not.toHaveBeenCalled();
+    expect(within(step).queryByRole('alert')).not.toBeInTheDocument();
+    // The interval stays Yearly, now at the list price.
+    await vi.waitFor(() => expect(within(step).getByRole('radio', { name: 'Yearly · 2 months free' })).toBeChecked());
+    expect(step.querySelector('.hp-billing-summary bdi')?.textContent).toBe('₪290.00');
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_full'));
+    expect(checkoutBody(api)).toEqual([
+      { interval: 'year', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}`, expectedOffer: 'launch-2026' },
+      { interval: 'year', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}` },
+    ]);
+  });
+
+  it('an offer that ends while the drawer is open: the interval stays, the offer copy goes, one status line says so (DD5)', async () => {
+    let ended = false;
+    const { queryClient } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { billing: () => ok(ended ? offered({ offer: null }) : offered()) });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await within(step).findByText(/^Launch offer:/);
+    ended = true;
+    await queryClient.refetchQueries({ queryKey: ['billing'] });
+    await vi.waitFor(() => expect(within(step).queryByText(/^Launch offer:/)).not.toBeInTheDocument());
+    expect(within(step).getByRole('status')).toHaveTextContent('The launch offer has ended.');
+    expect(within(step).getByRole('radio', { name: /^Yearly/ })).toBeChecked();
+  });
+
+  it('says "Ends today" on the offer’s last Jerusalem day (DD10d)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date('2027-01-31T08:00:00Z') });
+    portal(`/p/${ORG_B}?billing=true&step=subscribe`, { billing: () => ok(offered({ offer: launch({ endsAt: '2027-01-31T21:59:00.000Z' }) })) });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    expect(await within(step).findByText('Ends today')).toBeInTheDocument();
+  });
+
+  it('the status view puts the offer above Subscribe, and the yearly plan line shows the first year struck (DD10c)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(offered()) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    const topLine = await within(dialog).findByText(/^Launch offer: 50% off your first year on Yearly, until /);
+    const subscribe = within(dialog).getByRole('button', { name: 'Subscribe' });
+    expect(topLine.compareDocumentPosition(subscribe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const plan = dialog.querySelector('.hp-billing-plan')!;
+    expect([...plan.querySelectorAll('s bdi')].map((b) => b.textContent)).toEqual(['₪290.00', '$90.00']);
+    expect(within(dialog).getByText('₪145.00 for the first year instead of ₪290.00')).toHaveClass('sr-only');
+    expect(within(dialog).getByText('$45.00 for the first year instead of $90.00')).toHaveClass('sr-only');
+  });
+
+  it('back from Stripe with the offer: "Launch offer applied" (DD10b)', async () => {
+    let calls = 0;
+    const paid = offered({
+      offer: null,
+      subscription: { tier: 'FREELANCER', status: 'active', interval: 'year', currency: 'ILS', currentPeriodEnd: iso(365), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: { id: 'launch-2026' } },
+      canManage: true,
+    });
+    portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? offered() : paid) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect((await within(dialog).findAllByText("You're subscribed. Launch offer applied.", {}, { timeout: 4000 })).length).toBeGreaterThan(0);
+  });
+
+  it('a list-price subscriber reads what it renews at; a founder price and a cancelled plan keep today’s copy (DD3)', async () => {
+    const sub = (over: Partial<NonNullable<BillingOverview['subscription']>>) =>
+      overview({
+        catalog: PRICES,
+        subscription: { tier: 'FREELANCER', status: 'active', interval: 'year', currency: 'ILS', currentPeriodEnd: iso(200), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: null, ...over },
+        canManage: true,
+      });
+    const listed = portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(sub({})), entitlement: ent('ACTIVE', 'STRIPE', iso(200)) });
+    let dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    const line = await within(dialog).findByText((_, el) => el?.tagName === 'P' && /^Renews at ₪290\.00 on .+\.$/.test(el.textContent ?? ''));
+    expect(line.querySelector('bdi')?.textContent).toBe('₪290.00');
+    listed.unmount();
+
+    const founder = portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(sub({ renewsAtListPrice: false })), entitlement: ent('ACTIVE', 'STRIPE', iso(200)) });
+    dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByText('Billed yearly.')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Renews at/)).not.toBeInTheDocument();
+    founder.unmount();
+
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(sub({ cancelAtPeriodEnd: true })), entitlement: ent('ACTIVE', 'STRIPE', iso(200)) });
+    dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ })).toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Renews at/)).not.toBeInTheDocument();
+  });
+
+  it('in Arabic: the copy deck’s words, amounts isolated in <bdi>', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, { locale: 'ar', billing: () => ok(offered()) });
+    const step = await screen.findByRole('dialog', { name: 'الاشتراك في المستقل' });
+    expect(await within(step).findByText(/^عرض الإطلاق: خصم 50% على سنتك الأولى في الاشتراك السنوي، حتى /)).toBeInTheDocument();
+    expect(within(step).getByRole('radio', { name: 'سنويًا · خصم 50%' })).toBeChecked();
+    await user.selectOptions(within(step).getByRole('combobox'), 'IL');
+    const summary = step.querySelector('.hp-billing-summary')!;
+    expect(summary.querySelectorAll('bdi')).toHaveLength(2);
+    expect(within(step).getByText(/للسنة الأولى بدلًا من/)).toHaveClass('sr-only');
   });
 });

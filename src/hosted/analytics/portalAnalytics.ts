@@ -22,9 +22,13 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent;
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
+/** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */
+export type BillingOfferEvent = 'billing_offer_shown' | 'billing_checkout_started';
+/** Where the launch offer was shown. The contract calls it `place`: `surface` is a shared property. */
+export type OfferPlace = 'drawer' | 'banner';
 
 interface UsageState {
   /** null: not asked yet; 'unavailable': this build has no key, so nothing is ever asked or sent. */
@@ -279,7 +283,19 @@ export async function trackPortal(event: PortalEvent, properties: Record<string,
   }
 }
 
+/** The offer/place pairs already counted on this page: `billing_offer_shown` is once per page view per place (D10). */
+const offersShown = new Set<string>();
+
+/** Counts the launch offer shown at `place`, once per page view; `offer` is the contract's name for it. */
+export function trackOfferShown(offer: string, place: OfferPlace): void {
+  const key = `${offer}|${place}`;
+  if (offersShown.has(key)) return;
+  offersShown.add(key);
+  void trackPortal('billing_offer_shown', { offer, place });
+}
+
 export function resetPortalUsageForTests() {
+  offersShown.clear();
   sdk = null;
   loading = null;
   welcomeLoading = null;
