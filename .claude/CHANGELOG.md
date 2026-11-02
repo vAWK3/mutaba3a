@@ -28,7 +28,6 @@
 
 ---
 
-
 ## [Unreleased] - 2026-11-02 — The launch offer: 50% off a yearly plan's first year, automatic, once per person (MUT-525, ADR-237)
 
 **Why:** MUT-528's launch campaign. For three months from launch, anyone who never subscribed pays ₪145 / $45 for the
@@ -62,6 +61,24 @@ first year of a yearly Freelancer plan, then ₪290 / $90, with no code to type.
 ### Technical
 - Tests listed in TEST_PLAN.md "MUT-525". The phone's `BillingOverview` parser reads named keys only, so the
   additive fields need no Flutter change.
+
+## [Unreleased] - 2026-11-02 — The pilot runbook's open decisions, settled (MUT-327)
+
+**Why:** Basel walked through the runbook's ⚠ markers on 2026-11-02. Two were already settled by later work (the
+inbox, MUT-382; the self-service export, MUT-325), and the runbook still said alerts page by SMS, which was never
+applied.
+
+### Changed
+- Pilot runbook §5.2: S1 is acknowledged within 1 hour while awake, and every pilot user is told within **4 hours**
+  (was a proposed 30 min / 2 h). S2 and S3 as proposed.
+- §5.2 breach: the data is in europe-west1 (Belgium); MTB3A is run from Israel. Basel files both the ICO and the PPA
+  reports. One ⚠ stays: counsel confirms whether the PPA report still applies, and until then it's treated as
+  required.
+- §6: working days are **Monday–Friday**; the inbox marker is settled (MUT-382).
+- §7.1: the person downloads their own records (MUT-325, live since api-v0.3.18); the hand-made CSV export is only
+  the fallback and can't be restored into the portal.
+- §5.1, DEPLOYMENT.md, ADR-154 amendment: alerts are **email only**; SMS stays optional in Terraform.
+- §9 walk log: §4.1 and §8 were done in production on 2026-11-01.
 
 ## [Unreleased] - 2026-11-02 — First restore drill on mtb3a-production passed; the clone is patched in two calls (MUT-327, MUT-511)
 

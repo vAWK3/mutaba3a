@@ -4230,6 +4230,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 4. Firing and closing are proven with an opt-in drill check (`uptime_drill_path`) passed only with `-var`, never by scaling production down.
 5. Monitoring changes are applied with a targeted plan (DEPLOYMENT.md §6b), separate from releases.
 **Consequences**: Expect about a 6 to 11 minute delay between an outage and the page. A one-region network problem never pages. The close notice depends on Cloud Monitoring's default until the provider is on 6.x (TD-185). Moving the domain may replace the checks (new ids), and their policies follow them.
+**Amendment (2026-11-02, Basel)**: alerts go by **email only**. The applied setup (2026-10-20) never had an SMS channel, and Basel kept it that way when the pilot runbook's decisions were settled (MUT-327). `alert_sms_number` and the SMS channel stay in Terraform, unset, so SMS can be added later by setting it and re-running DEPLOYMENT.md §6b steps 2–4. Pilot runbook §5.1 says email.
 
 ---
 
