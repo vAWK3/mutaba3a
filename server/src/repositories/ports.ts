@@ -2293,6 +2293,14 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
+/** MUT-533: a past_due subscription whose payer the failed-card mail may reach. */
+export interface PastDueCandidate {
+  stripeSubscriptionId: string;
+  userId: string;
+  email: string;
+  locale: UserLocale;
+}
+
 /** MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
 export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
 
@@ -2340,6 +2348,11 @@ export interface BillingRepository {
    * endsUpTo], paid by a linked ACTIVE person who isn't closing their account; soonest renewal first.
    */
   offerRenewalCandidates(window: { endsAfter: Date; endsUpTo: Date }): Promise<OfferRenewalCandidate[]>;
+  /**
+   * MUT-533: `past_due` subscriptions paid by a linked ACTIVE person who isn't closing their account, soonest period
+   * end first: who the hourly failed-card mail looks at. Stripe's own invoices then decide.
+   */
+  pastDueCandidates(): Promise<PastDueCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

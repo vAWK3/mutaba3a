@@ -27,6 +27,8 @@ export const TEMPLATE_IDS = [
   'account-closing',
   'passkey-added',
   'offer-renewing-soon',
+  'card-failed',
+  'card-failed-reminder',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -59,6 +61,10 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'passkey-added',
   // MUT-525 (DD8): sent once per subscription by the daily run, ~30 days before a price change the person must hear of.
   'offer-renewing-soon',
+  // MUT-533: only the hourly run sends these, at most two per failed invoice, and a stranger asking for signup links to
+  // the address must not cap away the mail that keeps their plan running.
+  'card-failed',
+  'card-failed-reminder',
 ]);
 
 export interface TemplateVars {
@@ -100,6 +106,16 @@ export interface TemplateVars {
    * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.
    */
   'offer-renewing-soon': { renewsOn: CalendarDay; listAmount: number; currency: string; manageLink: string };
+  /**
+   * MUT-533: a renewal payment failed and Stripe is retrying. No amount and no card details (Basel, 2026-11-02).
+   * `updateLink` opens Billing, whose past-due panel goes straight to Stripe's card form.
+   */
+  'card-failed': { updateLink: string };
+  /**
+   * MUT-533: the one reminder, from the retry window's midpoint. `daysLeft` is an upper bound (Stripe may give up
+   * sooner), worded "within N days at most"; `readOnlyAfter` says the lapse gate is on, so an ended plan is read-only.
+   */
+  'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; updateLink: string };
 }
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */

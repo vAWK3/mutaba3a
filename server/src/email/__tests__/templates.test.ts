@@ -28,6 +28,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: 'https://portal.example.test/sign-in' },
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: 'https://portal.example.test/' },
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
+  'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
+  'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
 };
 /** MUT-525: the launch offer line the trial mails carry while it runs (ADR-237). */
 const OFFER = { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } };
@@ -39,6 +41,7 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'review-digest': ['3'],
   'trial-ending-soon': ['3'],
   'trial-locking-soon': ['2'],
+  'card-failed-reminder': ['6'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
   'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
   // MUT-525 (ADR-237, overriding ADR-159 §5): a renewal notice must state its price and day.
@@ -255,6 +258,8 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'account-closing': { en: 'Your MTB3A account will be deleted on November 23, 2026', ar: 'سيُحذف حسابك في متابعة بتاريخ 23 نوفمبر 2026' },
   'passkey-added': { en: 'A passkey was added to your MTB3A account', ar: 'أُضيف مفتاح مرور إلى حسابك في متابعة' },
   'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 نوفمبر 2027' },
+  'card-failed': { en: "Your card didn't go through", ar: 'لم تنجح عملية الدفع ببطاقتك' },
+  'card-failed-reminder': { en: 'Your card still isn’t going through', ar: 'ما زالت عملية الدفع ببطاقتك لا تنجح' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];

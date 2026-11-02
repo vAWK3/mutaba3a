@@ -109,6 +109,7 @@ describe('STORE_ACCESS', () => {
       'billing.listAccounts',
       'billing.listGrants',
       'billing.offerRenewalCandidates',
+      'billing.pastDueCandidates',
       'billing.pruneStripeEvents',
       'billing.revokeGrant',
       'billing.saveAccount',
