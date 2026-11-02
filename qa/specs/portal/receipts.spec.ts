@@ -377,3 +377,35 @@ test('On a firm, a receipt read with a 17 % rate opens the VAT row prefilled, an
     expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
   });
 });
+
+test('On a firm, a receipt that read a known vendor opens in its currency and VAT, and what was read stays (MUT-303)', { tag: '@portal.receipts.vendor-defaults' }, async ({ page, step }) => {
+  const vendorOnly = { readerVersion: 'qa', vendorName: { value: 'Bezeq', source: 'ocr', confidence: 0.9 } };
+  const api = new FakeApi({
+    profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }],
+    categories: [groceries, travel],
+    vendors: [{ name: 'Bezeq', currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } }],
+    receipts: [libraryReceipt(1, { filename: 'bezeq.jpg', mimeType: 'image/jpeg', suggested: vendorOnly })],
+  });
+  const first = libraryReceipt(1).id;
+  const vat = page.getByTestId('expense-vat');
+
+  await step('AC1: open the receipt that read only the vendor', async () => {
+    await api.open(page, `${BASE}/receipts`);
+    await page.getByRole('link', { name: 'Open bezeq.jpg' }).click();
+    await expect(page.getByLabel('Vendor')).toHaveValue('Bezeq');
+  });
+
+  await step('Currency EUR and VAT 16% come from Bezeq, marked "From this vendor’s last expense"', async () => {
+    await expect(page.getByLabel(/^Currency/)).toHaveValue('EUR');
+    await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
+    await expect(page.locator('[data-hint-for="vat"]')).toHaveText('From this vendor’s last expense');
+  });
+
+  await step('Approve and file sends EUR and the 16 % rate', async () => {
+    await page.getByLabel('Amount').fill('116');
+    await page.getByLabel('Category').selectOption({ label: 'Groceries' });
+    await page.getByRole('button', { name: 'Approve and file' }).click();
+    await expect(page).toHaveURL(new RegExp(`${BASE}/receipts$`));
+    expect(api.last('POST', new RegExp(`^/v1/receipts/${first}/approve$`))?.body).toMatchObject({ currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
+  });
+});

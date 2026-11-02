@@ -271,6 +271,23 @@ features:
       - Closed, the row reads "No VAT recorded"; open, it shows net 100.00 and VAT 17.00
       - POST /v1/expenses gets vat with STANDARD_RATED and 1700 basis points, never net or VAT
       - Reopened, the row reads "VAT 17%" with 17.00, and net 100.00 when opened
+  - id: vendor-defaults
+    title: On a firm, picking a vendor fills its last currency and VAT; a typed amount keeps its currency (MUT-303)
+    tier: secondary
+    tickets: [MUT-303]
+    paths:
+      - src/hosted/lib/vendorDefaults.ts
+      - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+      - server/src/expenses/compose.ts
+    steps:
+      - On a firm profile, save an expense from Bezeq in EUR at Standard 16 %
+      - Record another and pick Bezeq before the amount
+      - Save it
+      - Record a third, type an amount first, then pick Bezeq
+    expect:
+      - The second opens in EUR with VAT 16%, marked "From this vendor’s last expense"
+      - Saving sends EUR and the 16 % rate
+      - With an amount typed first, the currency stays and only the VAT fills
   - id: vat-none-personal
     title: A profile without firm features has no VAT row, and its expenses send no VAT (MUT-302 AC3)
     tier: secondary

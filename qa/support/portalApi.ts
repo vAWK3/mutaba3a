@@ -37,6 +37,12 @@ export const DAYS_IN_FUTURE_LIMIT = 3660;
 export const ceilingOf = (iso: string) => daysAfter(iso, DAYS_IN_FUTURE_LIMIT);
 
 type Json = Record<string, unknown>;
+
+/** MUT-303: a vendor's remembered VAT, as the API sends it. */
+type VendorVatStub = { treatment: string; rateBasisPoints: number };
+
+/** MUT-254: the stub's minimal exact vendor key (case and spacing only). */
+const vendorKey = (name: string | null | undefined): string | undefined => name?.trim().toLowerCase().replace(/\s+/g, ' ') || undefined;
 type Currency = 'ILS' | 'USD' | 'EUR' | 'JOD';
 
 export interface Logged {
@@ -479,7 +485,7 @@ export interface FakeApiSeed {
    */
   receipts?: StubLibraryReceipt[];
   /** MUT-260: vendors already saved on the profile (as earlier expenses would have), with their last category. */
-  vendors?: { name: string; categoryId?: string }[];
+  vendors?: { name: string; categoryId?: string; currency?: string; vat?: VendorVatStub }[];
 }
 
 /** MUT-175: what one profile's Reports reads. */
@@ -646,7 +652,7 @@ export class FakeApi {
   private readonly categories;
   private readonly expenses;
   /** MUT-254 (A18): vendors as the server saves them, matched on a minimal exact key (case and spacing only). */
-  private readonly vendors: { id: string; name: string; keys: Set<string>; lastCategoryId: string | null; lastUsed: number }[] = [];
+  private readonly vendors: { id: string; name: string; keys: Set<string>; lastCategoryId: string | null; lastCurrency: string | null; lastVat: VendorVatStub | null; lastUsed: number }[] = [];
   private readonly conversions;
   private readonly groups: StubGroup[];
   private readonly marks: Map<string, Mark>;
@@ -703,7 +709,7 @@ export class FakeApi {
     this.termsAccepted = seed.termsAccepted ?? true;
     this.closure = seed.closure ?? null;
     this.libraryReceipts = seed.receipts ? [...seed.receipts] : null;
-    for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null);
+    for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
 
   /** MUT-175: GET /v1/summaries/activity for the named profile (defaults: this month, by day). */
@@ -959,7 +965,7 @@ export class FakeApi {
     }
     const found = library.find((r) => r.id === id && mine(r));
     if (!found) return notFound();
-    if (e.method === 'GET' && !sub) return json(found);
+    if (e.method === 'GET' && !sub) return json({ ...found, vendorDefaults: this.receiptVendorDefaults(found, here) });
     if (e.method === 'POST' && sub === 'move') return this.moveAnswer(found, here, (e.body as { profileId: string }).profileId);
     if (e.method === 'DELETE' && !sub) {
       library.splice(library.indexOf(found), 1);
@@ -983,7 +989,9 @@ export class FakeApi {
       delete b.captureSource;
       const made = { ...expense(this.serial++, { amount: String(b.amount), currency: b.currency as Currency }), ...b, id: this.nextId(0x9), receipts: [] as StubReceipt[] } as StubExpense;
       delete (made as { vendorDetails?: unknown }).vendorDetails;
-      made.vendorId = this.linkVendor(made.vendor, made.categoryId);
+      const vatIn = (b.vat as VendorVatStub | null | undefined) ?? null;
+      made.vat = splitExpenseVat(made.amount, made.currency as Currency, vatIn);
+      made.vendorId = this.linkVendor(made.vendor, made.categoryId, { currency: made.currency, vat: vatIn });
       this.expenses.unshift(made);
       Object.assign(found, { filingStatus: 'FILED', expenseId: made.id, approvedAt: STAMP, version: found.version + 1, approved: { occurredOn: made.occurredOn, amountMinor: '0', currency: made.currency, vendor: made.vendor, categoryId: made.categoryId } });
       return json({ expense: listed(made), receipt: found }, 201);
@@ -1227,18 +1235,33 @@ export class FakeApi {
     p.version += 1;
   }
 
-  /** MUT-254: the server's resolve + touch, minimally: the typed vendor's own exact key, created on first sight. */
-  private linkVendor(name: string | null, categoryId: string | null): string | null {
-    const key = name?.trim().toLowerCase().replace(/\s+/g, ' ');
+  /**
+   * MUT-254: the server's resolve + touch, minimally: the typed vendor's own exact key, created on first sight.
+   * MUT-303: a new expense also teaches its currency, and its VAT when it carries one (`learn`).
+   */
+  private linkVendor(name: string | null, categoryId: string | null, learn?: { currency?: string; vat?: VendorVatStub | null }): string | null {
+    const key = vendorKey(name);
     if (!name || !key) return null;
     let vendor = this.vendors.find((v) => v.keys.has(key));
     if (!vendor) {
-      vendor = { id: this.nextId(0xa), name: name.trim(), keys: new Set([key]), lastCategoryId: null, lastUsed: 0 };
+      vendor = { id: this.nextId(0xa), name: name.trim(), keys: new Set([key]), lastCategoryId: null, lastCurrency: null, lastVat: null, lastUsed: 0 };
       this.vendors.push(vendor);
     }
     vendor.lastUsed = ++this.serial;
     if (categoryId) vendor.lastCategoryId = categoryId;
+    if (learn?.currency) vendor.lastCurrency = learn.currency;
+    if (learn?.vat) vendor.lastVat = learn.vat;
     return vendor.id;
+  }
+
+  /** MUT-303 (D6): a To-review receipt's vendor defaults, matched by the read name (the stub has no registration index). */
+  private receiptVendorDefaults(found: StubLibraryReceipt, profileId: string | undefined) {
+    const read = (found.suggested as { vendorName?: { value?: string } } | null)?.vendorName?.value ?? null;
+    const key = vendorKey(read);
+    const vendor = key ? this.vendors.find((v) => v.keys.has(key)) : undefined;
+    if (found.expenseId || !vendor) return null;
+    const firm = this.profiles.find((p) => p.stub.id === profileId)?.stub.firm ?? false;
+    return { vendorId: vendor.id, currency: vendor.lastCurrency, vat: firm ? vendor.lastVat : null };
   }
 
   /** GET /v1/vendors: names containing the query (no fuzzy matching here), else the most recently used. */
@@ -1247,7 +1270,7 @@ export class FakeApi {
     const items = this.vendors
       .filter((v) => !q || v.name.toLowerCase().includes(q))
       .sort((a, b) => b.lastUsed - a.lastUsed)
-      .map((v) => ({ id: v.id, name: v.name, matchedName: v.name, exact: v.keys.has(q.replace(/\s+/g, ' ')), registrationNo: null, phone: null, email: null, lastCategoryId: v.lastCategoryId }));
+      .map((v) => ({ id: v.id, name: v.name, matchedName: v.name, exact: v.keys.has(q.replace(/\s+/g, ' ')), registrationNo: null, phone: null, email: null, lastCategoryId: v.lastCategoryId, lastCurrency: v.lastCurrency, lastVat: v.lastVat }));
     return json({ items });
   }
 
@@ -1271,8 +1294,9 @@ export class FakeApi {
         const b = e.body as Json;
         const made = { ...expense(this.serial++, { amount: String(b.amount), currency: b.currency as Currency }), ...b, id: this.nextId(0x9), receipts: [] as StubReceipt[] } as StubExpense;
         delete (made as { vendorDetails?: unknown }).vendorDetails;
-        made.vat = splitExpenseVat(made.amount, made.currency as Currency, (b.vat as { treatment: string; rateBasisPoints: number } | null | undefined) ?? null);
-        made.vendorId = this.linkVendor(made.vendor, made.categoryId);
+        const vatIn = (b.vat as VendorVatStub | null | undefined) ?? null;
+        made.vat = splitExpenseVat(made.amount, made.currency as Currency, vatIn);
+        made.vendorId = this.linkVendor(made.vendor, made.categoryId, { currency: made.currency, vat: vatIn });
         this.expenses.unshift(made);
         return json(listed(made), 201);
       }

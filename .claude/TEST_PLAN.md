@@ -4307,3 +4307,19 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - **Mail:** `templates.test.ts` — trial mails byte-identical with no offer (R3); with it, the offer as the last intro line and the action "Get 50% off a year", subject and preview unchanged, no amount; `offer-renewing-soon` en/ar with its details panel; the ADR-159 §5 allow-list (amount and day for the renewal notice only).
 - **Portal (Vitest):** `billingView.test.ts` — `offerFor`, `eligibleOfferOf`, renewal day with and without a carried trial, "Ends today" in Jerusalem, `renewalPriceOf`. `BillingDrawer.test.tsx` — opens on Yearly with an offer and Monthly without; the pick sticks across a refetch; struck list price, first year, sr-only sentence, aria-live; one first-charge sentence and the VAT sentence; Monthly hint; `expectedOffer` sent; OFFER_ENDED banner then full-price Continue; ended while open; done banner "Launch offer applied"; "Renews at"; no offer → today's drawer (R3). `TrialWelcome.test.tsx` (Home line), `LapseGate.test.tsx` (read-only and locked top line), `portalAnalytics.test.ts`; `analytics-taxonomy.test.ts` pins contract 2.6.0.
 - **Release-QA (portal-live, Stripe sandbox, serial, the run's own coupon):** `@portal-live.billing.launch-offer-yearly`, `.launch-offer-monthly`, `.launch-offer-ended`, `.launch-offer-trial-carry`. The other portal-live flows run with no coupon in Stripe and are unchanged.
+
+## MUT-303 — A known vendor fills its currency and VAT (ADR-238)
+
+- **Server** (`routes-vendors.test.ts`, `store-contract-vendors.ts` on memory and Postgres):
+  - learning on create and approve; AC2 (a changed value becomes the default); D1 (a no-VAT save keeps VAT); the guarded clear (R7);
+  - R8 (a resent vendor with no currency change keeps it); D2 (a changed currency teaches); AC3 isolation; the typeahead shape;
+  - `vendorDefaults` by registration no. (AC1, two approvals then a third read) and by exact name; none; off-firm without VAT (R10);
+  - never written into `suggested` (R1).
+  - The migration seed was checked by hand over a test DB with expenses, and the CHECK refuses a half write.
+- **Local mode:** 14 → 15 migration test, fingerprint, every-record fixture.
+- **Portal:**
+  - `vendorDefaultFills` table (`lib/__tests__/vendorDefaults.test.ts`).
+  - ExpenseDrawer: firm fill and save, R6 typed amount, R5 chosen currency, R10 non-firm, R4 edit never prefills.
+  - Receipts review: AC1 vendor-only read, R5/R6 read currency and amount kept, a late rate replacing a vendor VAT, R10.
+- **Release-QA:** `portal.expenses.vendor-defaults` and `portal.receipts.vendor-defaults` (passed 2026-11-02, with vendor-typeahead, vat and vat-from-receipt alongside). Phone: `ios.capture.vendor-defaults`, with the Flutter half.
+
