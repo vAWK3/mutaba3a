@@ -592,6 +592,15 @@ describe('POST /v1/billing/portal-session (MUT-362)', () => {
     expect((await billingAudit(h, u.personalId)).map((e) => e.action)).toEqual(['billing.portal_opened']);
   });
 
+  it('MUT-533 (D5): `flow: card` asks Stripe for its card form, returning to the drawer', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId);
+    expect((await u.post(PORTAL, { returnPath: '/', flow: 'card' })).status).toBe(200);
+    expect(h.checkout.portalSessions).toEqual([{ customer, returnUrl: 'http://localhost?billing=true&portal=returned', flow: 'card' }]);
+    expect((await u.post(PORTAL, { returnPath: '/', flow: 'invoices' })).status).toBe(422);
+  });
+
   it('without a linked customer is 409 NO_BILLING_ACCOUNT', async () => {
     const h = harness();
     const u = await person(h);

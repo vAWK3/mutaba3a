@@ -189,6 +189,11 @@ const envSchema = z.object({
   BILLING_OFFER_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
   /** MUT-532: QA only, the same rule for the cancel flow's stay coupon (offers.json `stay`). Refused where live. */
   BILLING_STAY_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
+  /**
+   * MUT-533 (D3): the length of Stripe's Smart Retries window, in days, as the dashboard sets it (7, 14, 21 or 28).
+   * The failed-card reminder goes at its midpoint; 28 keeps every mail key inside the 30-day send log.
+   */
+  BILLING_RETRY_WINDOW_DAYS: z.enum(['7', '14', '21', '28']).default('14').transform((v) => Number(v)),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**

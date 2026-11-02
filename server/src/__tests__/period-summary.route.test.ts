@@ -239,9 +239,9 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
 
   it('AC4: the contract version is 1.97.0-mut532 and the route is published under Summaries with the API key', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.97.0-mut532');
+    expect(API_VERSION).toBe('1.98.0-mut533');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.97.0-mut532');
+    expect(doc.info.version).toBe('1.98.0-mut533');
     const op = doc.paths['/v1/summaries/period'].get;
     expect(op.tags).toEqual(['Summaries']);
     expect(op.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);

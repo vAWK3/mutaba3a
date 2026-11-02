@@ -201,14 +201,16 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       path: '/v1/billing/portal-session',
       tags: ['Billing'],
       summary: 'Open the Stripe Customer Portal (card, invoices, cancel at period end)',
-      description: "Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns.",
+      description:
+        "Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns. " +
+        "MUT-533: `flow: card` opens Stripe's card form directly and comes back to the drawer once the card is saved.",
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: PortalSessionRequestSchema } } } },
       responses: { 200: { description: 'The Customer Portal', content: { 'application/json': { schema: BillingRedirectSchema } } }, ...refusedResponses },
     }),
     async (c) => {
       const { user } = c.get('identity');
-      const { returnPath } = c.req.valid('json');
+      const { returnPath, flow } = c.req.valid('json');
       const now = c.get('now')();
       await limit(c, options.limiter, user.id, now);
       const checkout = requireCheckout(options.checkout);
@@ -216,7 +218,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const summary = await store.billing.summaryOf(user.id);
       if (!summary.account) throw refusalError('NO_BILLING_ACCOUNT');
       const customer = summary.account.stripeCustomerId;
-      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true&portal=returned` }), user, customer, options.logger);
+      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true&portal=returned`, ...(flow ? { flow } : {}) }), user, customer, options.logger);
       const profiles = await ownedProfilesOf(store, user.id);
       await auditOn(store, profiles, user, 'billing.portal_opened', {}, c.get('requestId'), options.logger);
       return c.json({ url }, 200);

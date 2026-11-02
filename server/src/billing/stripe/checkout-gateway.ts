@@ -40,7 +40,8 @@ export interface CheckoutGateway {
   /** Expires the customer's open Checkout sessions, so only the newest can be paid; returns how many. */
   expireOpenCheckouts(customer: string): Promise<number>;
   createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }>;
-  createPortalSession(input: { customer: string; returnUrl: string }): Promise<{ url: string }>;
+  /** MUT-533 (D5): `flow: 'card'` opens straight on the card form and redirects to `returnUrl` once the card is saved. */
+  createPortalSession(input: { customer: string; returnUrl: string; flow?: 'card' }): Promise<{ url: string }>;
   /** Stripe tax IDs on the customer plus our invoice tax number, for the operator's country check (D9, review D3). */
   businessTaxIdCount(customer: string): Promise<number>;
   /** Review D3: prints the number a business typed on Checkout on every invoice the customer gets. */
@@ -171,8 +172,9 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const session = await wrapped(() => stripe.checkout.sessions.create(params));
       return { url: urlOf(session.url) };
     },
-    async createPortalSession({ customer, returnUrl }) {
-      const session = await wrapped(() => stripe.billingPortal.sessions.create({ customer, return_url: returnUrl, locale: 'auto' }));
+    async createPortalSession({ customer, returnUrl, flow }) {
+      const flowData = flow === 'card' ? { flow_data: { type: 'payment_method_update' as const, after_completion: { type: 'redirect' as const, redirect: { return_url: returnUrl } } } } : {};
+      const session = await wrapped(() => stripe.billingPortal.sessions.create({ customer, return_url: returnUrl, locale: 'auto', ...flowData }));
       return { url: urlOf(session.url) };
     },
     async businessTaxIdCount(customer) {

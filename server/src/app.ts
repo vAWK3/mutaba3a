@@ -32,6 +32,7 @@ import type { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import { trialMailRoutes } from './routes/trial-mail.js';
+import { cardFailedMailRoutes } from './routes/card-failed-mail.js';
 import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
@@ -166,6 +167,8 @@ export interface AppDependencies {
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
   trialMail?: { refuseLoopbackLinks: boolean };
+  /** MUT-533 (D3): BILLING_RETRY_WINDOW_DAYS, the Smart Retries window the failed-card reminder is timed in. Default 14. */
+  retryWindowDays?: number;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -287,7 +290,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.97.0-mut532';
+export const API_VERSION = '1.98.0-mut533';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -539,6 +542,20 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
       portalOrigin: sessions.portalOrigin,
       checkout: deps.stripe?.checkoutGateway ?? null,
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+    }),
+  );
+  // MUT-533: the hourly failed-card mails (job + operator), on the unguarded store like the trial mails.
+  app.route(
+    '/',
+    cardFailedMailRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      plan: deps.stripe?.planGateway ?? null,
+      windowDays: deps.retryWindowDays ?? 14,
+      gateOn: deps.billingGate ?? false,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );

@@ -611,7 +611,16 @@ export const CheckoutSessionRequestSchema = z
   .strict()
   .openapi('CheckoutSessionRequest');
 
-export const PortalSessionRequestSchema = z.object({ returnPath: ReturnPathSchema }).strict().openapi('PortalSessionRequest');
+export const PortalSessionRequestSchema = z
+  .object({
+    returnPath: ReturnPathSchema,
+    flow: z
+      .enum(['card'])
+      .optional()
+      .openapi({ description: "MUT-533: `card` opens Stripe's card form directly (a past-due plan's Update card) and comes back to the drawer when done. Additive since 1.98.0-mut533." }),
+  })
+  .strict()
+  .openapi('PortalSessionRequest');
 
 /** A Stripe-hosted page to send the browser to. */
 export const BillingRedirectSchema = z.object({ url: z.string().url() }).openapi('BillingRedirect');
@@ -710,6 +719,42 @@ export const RenewalMailRowSchema = z
   .openapi('RenewalMailRow');
 
 export const RenewalMailRunSchema = z.object({ summary: RenewalMailSummarySchema, rows: z.array(RenewalMailRowSchema) }).openapi('RenewalMailRun');
+
+/** MUT-533: the hourly failed-card mail's counts. */
+export const CardFailedMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'past_due subscriptions with a linked active payer' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage of this invoice was already mailed' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed' }),
+    skipped: z.object({
+      gone: z.number().int(),
+      notPastDue: z.number().int(),
+      settled: z.number().int(),
+      needsAuthentication: z.number().int().openapi({ description: 'The bank wants the person to confirm; Stripe mails them' }),
+      noStage: z.number().int().openapi({ description: 'Between the first mail and the reminder, or past both' }),
+      suppressed: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('CardFailedMailSummary');
+
+export const CardFailedMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stripeSubscriptionId: z.string(),
+    stage: z.enum(['first', 'reminder']).nullable(),
+    action: z.enum(['send', 'skip']),
+    skip: z.enum(['gone', 'not-past-due', 'settled', 'needs-authentication', 'no-stage', 'suppressed']).nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
+  })
+  .openapi('CardFailedMailRow');
+
+export const CardFailedMailRunSchema = z.object({ summary: CardFailedMailSummarySchema, rows: z.array(CardFailedMailRowSchema) }).openapi('CardFailedMailRun');
 
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
