@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.93.0-mut527
+  version: 1.94.0-mut525
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -8997,6 +8997,16 @@ components:
               format: date-time
             cancelAtPeriodEnd:
               type: boolean
+            renewsAtListPrice:
+              type: boolean
+            offer:
+              type: object
+              nullable: true
+              properties:
+                id:
+                  type: string
+              required:
+                - id
           required:
             - tier
             - status
@@ -9004,6 +9014,8 @@ components:
             - currency
             - currentPeriodEnd
             - cancelAtPeriodEnd
+            - renewsAtListPrice
+            - offer
         canManage:
           type: boolean
         trial:
@@ -9083,6 +9095,10 @@ components:
           items:
             type: string
             format: uuid
+        offer:
+          anyOf:
+            - $ref: "#/components/schemas/BillingOffer"
+            - nullable: true
       required:
         - configured
         - subscription
@@ -9091,6 +9107,48 @@ components:
         - catalog
         - countries
         - coveredProfileIds
+        - offer
+    BillingOffer:
+      type: object
+      properties:
+        id:
+          type: string
+        percentOff:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 100
+        endsAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          enum:
+            - month
+            - year
+        eligible:
+          type: boolean
+        firstYear:
+          type: object
+          properties:
+            ILS:
+              type: integer
+              nullable: true
+              minimum: 0
+            USD:
+              type: integer
+              nullable: true
+              minimum: 0
+          required:
+            - ILS
+            - USD
+      required:
+        - id
+        - percentOff
+        - endsAt
+        - interval
+        - eligible
+        - firstYear
     BillingRedirect:
       type: object
       properties:
@@ -9119,6 +9177,9 @@ components:
           type: string
           maxLength: 200
           description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
+        expectedOffer:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,39}$
       required:
         - interval
         - country
@@ -20040,7 +20101,7 @@ paths:
       tags:
         - Billing
       summary: The signed-in person's subscription, trial, prices and country rules
-      description: "One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile."
+      description: "One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end."
       security:
         - session: []
         - deviceSession: []
@@ -20068,7 +20129,7 @@ paths:
       tags:
         - Billing
       summary: Open Stripe Checkout for the Freelancer plan
-      description: Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns.
+      description: "Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says \"*\"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout."
       security:
         - session: []
         - deviceSession: []
@@ -20098,7 +20159,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it)"
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
           content:
             application/json:
               schema:
@@ -20162,7 +20223,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it)"
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
           content:
             application/json:
               schema:
