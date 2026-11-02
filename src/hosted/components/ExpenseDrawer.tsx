@@ -251,7 +251,7 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
       {mode === 'edit' && existingExpense?.captureSource === 'mcp' && <AddedByClaude label={t('hosted.expenses.drawer.addedByClaude')} />}
       <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ReadOnlyFields readOnly={readOnly}>
-          <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} firm={firm} />
+          <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} firm={firm} prefillDefaults={mode === 'create'} />
         </ReadOnlyFields>
       </form>
       {mode === 'create' && onCreated && !readOnly && <QueuedReceipts files={queued} onChange={setQueued} />}

@@ -589,3 +589,68 @@ describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
     expect(document.querySelector(`[data-receipt-id="${R2}"]`)).not.toHaveTextContent('Reading…');
   });
 });
+
+describe('a known vendor’s currency and VAT on review (MUT-303)', () => {
+  const bezeq = { vendorId: 'v9', currency: 'EUR' as const, vat: { treatment: 'STANDARD_RATED' as const, rateBasisPoints: 1600 } };
+  const vendorOnly = { readerVersion: 'phone-1', vendorName: { value: 'Bezeq', source: 'ocr' as const, confidence: 0.8 } };
+  const open = (suggestedFields: ReceiptListItem['suggested'], firm: boolean, seen: { body?: unknown } = {}) =>
+    portal(`${BASE}/${R1}`, {
+      receipts: [receipt(R1, { suggested: suggestedFields })],
+      firm,
+      routes: {
+        [`GET /v1/receipts/${R1}`]: () => ok({ ...plain(receipt(R1, { suggested: suggestedFields })), vendorDefaults: bezeq }),
+        [`POST /v1/receipts/${R1}/approve`]: ({ body }: { body: unknown }) => {
+          seen.body = body;
+          return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '116.00', currency: 'EUR', title: null, vendor: 'Bezeq', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+        },
+      },
+    });
+
+  it('AC1: on a firm, a receipt that read only the vendor opens in its currency and VAT, says so, and approving sends them', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = open(vendorOnly, true, seen);
+    await screen.findByLabelText(/Amount/);
+    expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('EUR');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From this vendor’s last expense');
+    await user.type(screen.getByLabelText(/Amount/), '116');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).toMatchObject({ currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
+  });
+
+  it('R5/R6: what the receipt read stays: its currency and amount win over the vendor’s; the VAT still fills', async () => {
+    open(suggested, true);
+    await screen.findByLabelText(/Amount/);
+    expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('ILS');
+    expect((screen.getByLabelText(/Amount/) as HTMLInputElement).value).toBe('84.20');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
+  });
+
+  it('R5: a VAT the vendor filled is replaced by a rate the server reads later', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const state = { current: receipt(R1, { reading: 'pending', suggested: vendorOnly }) };
+    portal(`${BASE}/${R1}`, { receipts: [state.current], firm: true, routes: { [`GET /v1/receipts/${R1}`]: () => ok({ ...plain(state.current), vendorDefaults: bezeq }) } });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
+    state.current = receipt(R1, { reading: 'done', suggested: { ...vendorOnly, vatRateBasisPoints: { value: 1700, source: 'ocr' as const, confidence: 0.9 } } });
+    await vi.advanceTimersByTimeAsync(3000);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 17%'));
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From the receipt');
+    vi.useRealTimers();
+  });
+
+  it('R10: on a personal profile the currency fills and there is no VAT', async () => {
+    const seen: { body?: unknown } = {};
+    const { user } = open(vendorOnly, false, seen);
+    await screen.findByLabelText(/Amount/);
+    expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('EUR');
+    expect(screen.queryByTestId('expense-vat')).toBeNull();
+    await user.type(screen.getByLabelText(/Amount/), '10');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).not.toHaveProperty('vat');
+  });
+});

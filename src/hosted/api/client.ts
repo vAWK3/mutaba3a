@@ -55,6 +55,11 @@ export type ExpenseDetail = Schemas['ExpenseDetail'];
 export type ExpenseCategory = Schemas['ExpenseCategory'];
 export type VendorSuggestion = Schemas['VendorSuggestion'];
 export type ExpenseReceipt = Schemas['ExpenseReceipt'];
+/**
+ * MUT-303: one receipt as GET returns it, with its vendor's defaults (D6). Optional here: the receipt query also
+ * serves a cached list item, which carries none.
+ */
+export type ReceiptDetail = ExpenseReceipt & Partial<Pick<Schemas['ReceiptDetail'], 'vendorDefaults'>>;
 export type ExpenseSummary = Schemas['ExpenseSummary'];
 export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
 export type UpdateExpenseRequest = Schemas['UpdateExpenseRequest'];
@@ -697,7 +702,7 @@ export const api = {
     request<Get<'/v1/receipts'>>('GET', '/v1/receipts', { profileId, query }),
   receiptCounts: (profileId: string) => request<ReceiptCounts>('GET', '/v1/receipts/counts', { profileId }),
   getReceipt: (profileId: string, receiptId: string) =>
-    request<ExpenseReceipt>('GET', `/v1/receipts/${encodeURIComponent(receiptId)}`, { profileId }),
+    request<ReceiptDetail>('GET', `/v1/receipts/${encodeURIComponent(receiptId)}`, { profileId }),
   libraryReceiptDownload: (profileId: string, receiptId: string, disposition: ReceiptDisposition = 'attachment') =>
     request<Get<'/v1/receipts/{receiptId}/download'>>('GET', `/v1/receipts/${encodeURIComponent(receiptId)}/download`, {
       profileId,

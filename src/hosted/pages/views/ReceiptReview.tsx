@@ -7,7 +7,7 @@ import { BrandLoader } from '../../../components/brand/BrandLoader';
 import { useLanguage } from '../../../lib/i18n/core';
 import { useSavedFlashStore } from '../../../lib/savedFlashStore';
 import { trackPortal } from '../../analytics/portalAnalytics';
-import { ApiError, apiErrorReason, type ExpenseReceipt, type HostedProfile } from '../../api/client';
+import { ApiError, apiErrorReason, type ExpenseReceipt, type HostedProfile, type ReceiptDetail } from '../../api/client';
 import { ReadOnlyFields } from '../../components/Drawer';
 import { Empty } from '../../components/QueryView';
 import { ReceiptPreview } from '../../components/ReceiptPreview';
@@ -15,7 +15,7 @@ import { useToast } from '../../components/Toast';
 import { AlertIcon, LockIcon } from '../../components/Icons';
 import { applyExpenseApiError } from '../../components/expenseApiErrors';
 import { HostedExpenseFields, type HostedExpenseHintField } from '../../components/expenseForm/HostedExpenseFields';
-import { createExpenseBody, useHostedExpenseForm, type HostedExpenseForm, type HostedExpenseFormValues } from '../../components/expenseForm/useHostedExpenseForm';
+import { createExpenseBody, emptyExpenseValues, useHostedExpenseForm, type HostedExpenseForm, type HostedExpenseFormValues } from '../../components/expenseForm/useHostedExpenseForm';
 import { useAttemptKey } from '../../data/attemptKey';
 import { useExpense } from '../../data/expenseQueries';
 import { canAddClient } from '../../data/incomeAffordances';
@@ -24,6 +24,7 @@ import { DecimalAmount } from '../../format/DecimalAmount';
 import { HOSTED_CURRENCIES } from '../../format/currencies';
 import { formatDay } from '../../format/dates';
 import { LOW_CONFIDENCE, suggestionToFormValues, type SuggestedField, type SuggestionPrefill } from '../../lib/receiptSuggestion';
+import { vendorDefaultFills } from '../../lib/vendorDefaults';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { MoveReceiptDrawerHost } from '../../components/MoveReceiptDrawer';
 import { hasOtherProfiles, useMovedToast } from '../../components/useMovedToast';
@@ -151,7 +152,7 @@ function ReceiptReviewBody({ receiptId, profile, back, search, setSearch }: { re
   );
 }
 
-function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: ExpenseReceipt }) {
+function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: ReceiptDetail }) {
   const { t } = useLanguage();
   const showToast = useToast();
   const navigate = useNavigate();
@@ -166,9 +167,15 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
   // The suggestion at mount fills the form's defaults; one that lands later (MUT-441) is `late`, below.
   // MUT-302 (OV1): VAT is read into the form on a firm profile only, the one whose form shows it.
   const [prefill] = useState(() => suggestionToFormValues(receipt.suggested, { currencies: HOSTED_CURRENCIES, firm: profile.firm }));
-  const expenseForm = useHostedExpenseForm({ profileId: profile.id, timezone: profile.timezone, initialValues: prefill.values });
+  // MUT-303 (D6): the matched vendor's currency and VAT fill only what the receipt didn't read (R5), the currency only
+  // while no amount was read (R6). Defaults, not dirty, so a later reading may still replace them.
+  const readFields = { currency: prefill.values.currency !== undefined, vat: prefill.values.vatTreatment !== undefined };
+  const [vendorFilled] = useState(() =>
+    vendorDefaultFills(receipt.vendorDefaults, { ...emptyExpenseValues(profile.timezone), ...prefill.values }, readFields, profile.firm),
+  );
+  const expenseForm = useHostedExpenseForm({ profileId: profile.id, timezone: profile.timezone, initialValues: { ...prefill.values, ...vendorFilled } });
   const { form, categoriesLoading, errorLabels, picks } = expenseForm;
-  const late = useLateSuggestion(form, receipt.suggested, profile.firm);
+  const late = useLateSuggestion(form, receipt.suggested, profile.firm, vendorFilled);
   const current = useWatch({ control: form.control, name: SUGGESTED_FORM_FIELDS });
 
   const hints = useMemo(() => {
@@ -183,6 +190,10 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
     if (prefill.unsupported) out.amount = receiptSays(prefill.unsupported);
     // MUT-302 (D6): a VAT amount with no usable rate is only said, beside the empty rate.
     if (prefill.vatRead) out.vat = t('hosted.receipts.review.vatRead', { amount: prefill.vatRead });
+    // MUT-303: a field the vendor filled says so while it still holds the vendor's value.
+    const nowValues = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
+    if (vendorFilled.currency && nowValues.currency === vendorFilled.currency) out.currency = t('hosted.expenses.hints.fromVendor');
+    if (vendorFilled.vatTreatment && nowValues.vatTreatment === vendorFilled.vatTreatment) out.vat = t('hosted.expenses.hints.fromVendor');
     if (late) {
       // R10 #9: a hint only where the late suggestion's value is what the field holds (it filled it).
       const now = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
@@ -194,7 +205,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
       if (late.vatRead && !out.vat && now.vatTreatment === '') out.vat = t('hosted.receipts.review.vatRead', { amount: late.vatRead });
     }
     return out;
-  }, [prefill, late, current, t]);
+  }, [prefill, late, current, t, vendorFilled]);
 
   const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
 
@@ -274,6 +285,8 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Exp
             idPrefix="hosted-receipt"
             hints={hints}
             firm={profile.firm}
+            prefillDefaults
+            readFields={readFields}
           />
         </ReadOnlyFields>
       </form>
@@ -308,7 +321,7 @@ const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor'];
  * still untouched (the effect re-runs when submitting ends). MUT-302: a read rate fills the VAT row only while the
  * person hasn't touched it and it still records none. Returns the late suggestion, for hints.
  */
-function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseReceipt['suggested'], firm: boolean): SuggestionPrefill | null {
+function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseReceipt['suggested'], firm: boolean, vendorFilled: { vatTreatment?: string } = {}): SuggestionPrefill | null {
   const changed = useRef(new Set<string>());
   useEffect(() => {
     const subscription = form.watch((_values, { name, type }) => {
@@ -340,11 +353,13 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
     }
     // An amount read in another currency than the one the form now holds would be the wrong number.
     if (late.values.amount !== undefined && fillable('amount') && form.getValues('currency') === late.values.currency) form.setValue('amount', late.values.amount);
-    if (late.values.vatTreatment && late.values.vatRate !== undefined && untouched('vatTreatment') && !changed.current.has('vatRate') && form.getValues('vatTreatment') === '') {
+    // MUT-303 (R5): a VAT the vendor filled is a default too; what the receipt read replaces it.
+    const vatOpen = form.getValues('vatTreatment') === '' || (vendorFilled.vatTreatment !== undefined && form.getValues('vatTreatment') === vendorFilled.vatTreatment);
+    if (late.values.vatTreatment && late.values.vatRate !== undefined && untouched('vatTreatment') && !changed.current.has('vatRate') && vatOpen) {
       form.setValue('vatTreatment', late.values.vatTreatment);
       form.setValue('vatRate', late.values.vatRate);
     }
-  }, [form, late, isSubmitting]);
+  }, [form, late, isSubmitting, vendorFilled]);
 
   return late;
 }
