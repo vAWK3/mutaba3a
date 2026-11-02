@@ -99,8 +99,8 @@ describe('billingViewOf: a subscription decides first', () => {
     });
   });
 
-  it('past_due → grace, Manage billing', () => {
-    expect(billingViewOf(overview({ subscription: sub({ status: 'past_due' }), canManage: true }), [profile(ent('GRACE', 'STRIPE'))], NOW)).toMatchObject({ panel: { kind: 'grace' }, action: 'manage' });
+  it('past_due → grace, Update card (MUT-533 D5: straight to Stripe’s card form)', () => {
+    expect(billingViewOf(overview({ subscription: sub({ status: 'past_due' }), canManage: true }), [profile(ent('GRACE', 'STRIPE'))], NOW)).toMatchObject({ panel: { kind: 'grace' }, action: 'updateCard' });
   });
 
   it('unpaid → pay the open invoice in Manage billing (eng review D6)', () => {
@@ -161,7 +161,7 @@ describe('billingViewOf: otherwise the owned profiles decide', () => {
       panel: { kind: 'active', renewsAt: iso(12), interval: null },
       action: 'manage',
     });
-    expect(billingViewOf(overview({ canManage: true }), [profile(ent('GRACE', 'STRIPE', iso(2)))], NOW)).toMatchObject({ panel: { kind: 'grace' }, action: 'manage' });
+    expect(billingViewOf(overview({ canManage: true }), [profile(ent('GRACE', 'STRIPE', iso(2)))], NOW)).toMatchObject({ panel: { kind: 'grace' }, action: 'updateCard' });
   });
 
   it('nothing at all → Subscribe', () => {

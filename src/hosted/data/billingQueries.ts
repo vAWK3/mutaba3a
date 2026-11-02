@@ -71,9 +71,14 @@ export function useStartCheckout() {
   return useMutation({ mutationFn: (body: CheckoutSessionRequest) => checked(api.startCheckout(body)), onSuccess: leaveFor, onError });
 }
 
+/** MUT-533 (D5): `flow: 'card'` opens Stripe's card form directly (a past-due plan's Update card). */
 export function useOpenBillingPortal() {
   const onError = useRefreshOnRefusal();
-  return useMutation({ mutationFn: (returnPath: string) => checked(api.openBillingPortal({ returnPath })), onSuccess: leaveFor, onError });
+  return useMutation({
+    mutationFn: ({ returnPath, flow }: { returnPath: string; flow?: 'card' }) => checked(api.openBillingPortal({ returnPath, ...(flow ? { flow } : {}) })),
+    onSuccess: leaveFor,
+    onError,
+  });
 }
 
 /** MUT-531: Stripe's preview of the switch to yearly. Never cached: it is today's amount at this moment's proration. */

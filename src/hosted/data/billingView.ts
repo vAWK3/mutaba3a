@@ -8,7 +8,8 @@ import { formatInstant, todayInZone } from '../format/dates';
  * branch is a unit test; the drawer only renders.
  */
 
-export type BillingAction = 'subscribe' | 'manage' | 'payInPortal' | 'contactUs';
+/** MUT-533 (D5): `updateCard` is a past-due plan's way to Stripe's card form, the link the failed-card mail leads to. */
+export type BillingAction = 'subscribe' | 'manage' | 'updateCard' | 'payInPortal' | 'contactUs';
 
 export type BillingPanel =
   | { kind: 'active'; renewsAt: string; interval: 'month' | 'year' | null }
@@ -98,7 +99,7 @@ function subscriptionPanel(sub: Subscription, now: Date): { panel: BillingPanel;
       return { panel: { kind: 'active', renewsAt: sub.currentPeriodEnd, interval: sub.interval }, action: 'manage' };
     }
     case 'past_due':
-      return { panel: { kind: 'grace' }, action: 'manage' };
+      return { panel: { kind: 'grace' }, action: 'updateCard' };
     case 'unpaid':
       return { panel: { kind: 'unpaid' }, action: 'payInPortal' };
     case 'paused':
@@ -128,7 +129,7 @@ function profilePanel(profiles: readonly BillingProfile[], billing: BillingOverv
     case 'STRIPE':
       // Paid but no subscription row to show (review): still the Customer Portal, never a second Subscribe.
       if (e.state === 'ACTIVE') return { panel: { kind: 'active', renewsAt: e.until ?? now.toISOString(), interval: null }, action: 'manage' };
-      if (e.state === 'GRACE') return { panel: { kind: 'grace' }, action: 'manage' };
+      if (e.state === 'GRACE') return { panel: { kind: 'grace' }, action: 'updateCard' };
       return { panel: { kind: e.state === 'READ_ONLY' ? 'lapsed' : 'none' }, action: 'subscribe' };
     default:
       return { panel: { kind: 'none' }, action: 'subscribe' };

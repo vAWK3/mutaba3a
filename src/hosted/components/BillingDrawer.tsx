@@ -366,7 +366,7 @@ function StatusView({
       {/* MUT-525 DD10c: the offer line in the context, right above Subscribe. */}
       {settled && view.action === 'subscribe' && !view.openSoon && offer && <OfferTopLine offer={offer} place="drawer" />}
       {settled && (
-        <Action view={view} busy={portal.isPending} failure={failure} onSubscribe={onSubscribe} onPortal={() => portal.mutate(billingReturnPath(pathname))} />
+        <Action view={view} busy={portal.isPending} failure={failure} onSubscribe={onSubscribe} onPortal={(flow) => portal.mutate({ returnPath: billingReturnPath(pathname), ...(flow ? { flow } : {}) })} />
       )}
 
       {/* MUT-531 (AC2): the switch line under Manage billing, from the 2nd paid invoice of a monthly list price. */}
@@ -668,7 +668,7 @@ function SwitchedBanner({ result, language }: { result: YearlySwitchResult; lang
   );
 }
 
-function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingView; busy: boolean; failure: Failure; onSubscribe: () => void; onPortal: () => void }) {
+function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingView; busy: boolean; failure: Failure; onSubscribe: () => void; onPortal: (flow?: 'card') => void }) {
   const t = useT();
   switch (view.action) {
     case 'subscribe':
@@ -680,10 +680,17 @@ function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingV
         </div>
       );
     case 'manage':
+    case 'updateCard':
     case 'payInPortal':
       return (
         <div className="hp-billing-action">
-          <Button variant={view.action === 'manage' ? 'secondary' : 'primary'} onClick={onPortal} isLoading={busy} keepLabelWhileLoading aria-busy={busy}>
+          <Button
+            variant={view.action === 'manage' ? 'secondary' : 'primary'}
+            onClick={() => onPortal(view.action === 'updateCard' ? 'card' : undefined)}
+            isLoading={busy}
+            keepLabelWhileLoading
+            aria-busy={busy}
+          >
             {t(`hosted.billing.action.${view.action}`)}
           </Button>
           {/* DR4: a failure shows under the button that failed. DR6: Stripe's page is in English, said before it opens. */}

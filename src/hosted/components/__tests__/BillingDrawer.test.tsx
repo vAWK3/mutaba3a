@@ -292,6 +292,19 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ })).toBeInTheDocument();
   });
 
+  it('MUT-533 (D5): past due → Update card opens Stripe’s card form directly', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true`, {
+      billing: () => ok(subscribed({ status: 'past_due' })),
+      entitlement: ent('GRACE', 'STRIPE', iso(30)),
+      routes: { 'POST /v1/billing/portal-session': () => ok({ url: 'https://billing.stripe.com/p/session/test_2' }) },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(within(dialog).queryByRole('button', { name: 'Manage billing' })).not.toBeInTheDocument();
+    await user.click(await within(dialog).findByRole('button', { name: 'Update card' }));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/portal-session')?.body).toEqual({ returnPath: `/p/${ORG_B}`, flow: 'card' });
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session/test_2'));
+  });
+
   it('unpaid → Pay in Manage billing', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(subscribed({ status: 'unpaid' })), entitlement: ent('READ_ONLY', 'STRIPE') });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });

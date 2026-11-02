@@ -12759,7 +12759,7 @@ export interface paths {
         put?: never;
         /**
          * Open the Stripe Customer Portal (card, invoices, cancel at period end)
-         * @description Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns.
+         * @description Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns. MUT-533: `flow: card` opens Stripe's card form directly and comes back to the drawer once the card is saved.
          */
         post: {
             parameters: {
@@ -19085,6 +19085,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/card-failed-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hourly failed-card mails (Cloud Scheduler)
+         * @description Mails the payer of each past_due subscription in their language: within 72 hours of the first failed attempt, that access stays open while Stripe retries, with a link to update the card; and one reminder from the retry window's midpoint while a retry is booked. Stripe’s open invoices decide. Never more than two mails per failed invoice; a second run sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardFailedMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/card-failed-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the failed-card mails now, or see who they would mail
+         * @description The same run as the hourly job, for the operator, with one row per past_due subscription: the stage it mails or why not (gone, not-past-due, settled, needs-authentication, no-stage, suppressed). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CardFailedMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -23086,6 +23222,11 @@ export interface components {
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
             returnPath: string;
+            /**
+             * @description MUT-533: `card` opens Stripe's card form directly (a past-due plan's Update card) and comes back to the drawer when done. Additive since 1.98.0-mut533.
+             * @enum {string}
+             */
+            flow?: "card";
         };
         YearlySwitchPreview: {
             amountDue: number;
@@ -23903,6 +24044,53 @@ export interface components {
             action: "send" | "skip";
             /** @enum {string|null} */
             skip: "gone" | "not-active" | "cancelling" | "not-first-year" | "not-list-price" | "suppressed" | null;
+            /**
+             * @description The mailer's answer, or failed; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        CardFailedMailSummary: {
+            dryRun: boolean;
+            /** @description past_due subscriptions with a linked active payer */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description This stage of this invoice was already mailed */
+            duplicate: number;
+            /** @description Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed */
+            notSent: number;
+            skipped: {
+                gone: number;
+                notPastDue: number;
+                settled: number;
+                /** @description The bank wants the person to confirm; Stripe mails them */
+                needsAuthentication: number;
+                /** @description Between the first mail and the reminder, or past both */
+                noStage: number;
+                suppressed: number;
+            };
+            /** @description The time budget ran out; the next run continues */
+            incomplete: boolean;
+        };
+        CardFailedMailRun: {
+            summary: components["schemas"]["CardFailedMailSummary"];
+            rows: components["schemas"]["CardFailedMailRow"][];
+        };
+        CardFailedMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            stripeSubscriptionId: string;
+            /** @enum {string|null} */
+            stage: "first" | "reminder" | null;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "gone" | "not-past-due" | "settled" | "needs-authentication" | "no-stage" | "suppressed" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}
