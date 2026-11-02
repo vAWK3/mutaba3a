@@ -260,7 +260,7 @@ describe('planCheckout with the launch offer (MUT-525 D1, R3, R8)', () => {
     const trialEndsAt = new Date('2026-11-12T09:00:00.000Z');
     const result = plan({ interval: 'year', trialEndsAt, offer: OFFER });
     if (!result.ok) throw new Error('expected a plan');
-    const message = result.params.custom_text?.submit?.message ?? '';
+    const message = (result.params.custom_text?.submit as { message: string } | undefined)?.message ?? '';
     expect(message).toBe(offerSubmitMessage(OFFER, 'ILS', new Date('2027-11-12T09:00:00.000Z')));
     const [arOffer, arNote, enOffer, enNote] = message.split('\n\n');
     expect(arOffer).toBe('عرض الإطلاق: \u2068₪195\u2069 عن سنتك الأولى، ثم يتجدد بسعر \u2068₪390\u2069 سنويًا ابتداءً من \u206812 نوفمبر 2027\u2069.');

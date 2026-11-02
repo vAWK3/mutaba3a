@@ -475,6 +475,25 @@ describe('billing verbs (MUT-358)', () => {
     expect(outbox.list()).toHaveLength(0);
   });
 
+  it('billing-renewal-mail --dry-run lists the launch-offer renewals it would tell, and mails nothing (MUT-525)', async () => {
+    const stripe = new FakeStripeGateway(() => new Date());
+    const checkout = new FakeCheckoutGateway();
+    const outbox = new MemoryMailTransport();
+    const store = new MemoryLedgerStore();
+    const mailer = createMailer({ transport: outbox, store, logger: pino({ level: 'silent' }), now: () => new Date(), fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
+    const h = harness({ store, mailer, stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout } });
+    const user = await person(h, 'rana@studio.ps');
+    const periodEnd = new Date(Date.now() + 20 * 24 * 3_600_000);
+    await store.billing.saveAccount({ stripeCustomerId: 'cus_cli', userId: user.id, country: 'IL', currency: 'ILS', at: new Date(), linkAudit: [] });
+    await store.billing.saveSubscription({ stripeCustomerId: 'cus_cli', stripeSubscriptionId: 'sub_cli', tier: 'FREELANCER', organizationId: null, status: 'active', currentPeriodEnd: periodEnd, cancelAtPeriodEnd: false, priceLookupKey: 'freelancer_list_yearly_ils', founderUntil: null, offerId: 'launch-2026', stripeUpdatedAt: new Date(), at: new Date(), audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null } });
+    checkout.renewals.set('sub_cli', { status: 'active', cancelAtPeriodEnd: false, currentPeriodEnd: periodEnd, firstPaidPeriod: true, unitAmount: 29000, currency: 'ILS', lookupKey: 'freelancer_list_yearly_ils' });
+
+    expect(await h.run(['billing-renewal-mail', '--dry-run'])).toBe(0);
+    expect(h.out).toContain(`would send  ${periodEnd.toISOString().slice(0, 10)}  sub_cli  rana@studio.ps`);
+    expect(h.out.at(-1)).toBe('Dry run: 1 would be mailed; skipped 0 gone, 0 notActive, 0 cancelling, 0 notFirstYear, 0 notListPrice, 0 suppressed.');
+    expect(outbox.list()).toHaveLength(0);
+  });
+
   it('billing-trial-mail sends, then reports the same day as already sent (MUT-419)', async () => {
     const stripe = new FakeStripeGateway(() => new Date());
     const outbox = new MemoryMailTransport();

@@ -57,6 +57,7 @@ const vars = {
   'trial-locking-soon': { daysLeft: 1, subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', exportLink: 'https://portal.example.test/?yourData=true' },
   'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: 'https://portal.example.test/sign-in' },
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: 'https://portal.example.test/' },
+  'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
 } as const;
 let seq = 0;
 const signup = (to: string) => ({ to, template: 'finish-signup' as const, locale: 'en' as const, vars: vars['finish-signup'], idempotencyKey: `signup-${++seq}` });

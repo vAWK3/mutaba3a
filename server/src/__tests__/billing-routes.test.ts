@@ -462,7 +462,7 @@ describe('the launch offer (MUT-525)', () => {
     const params = h.checkout.checkoutSessions[0]!;
     expect(params.discounts).toEqual([{ coupon: 'mtb3a_launch_yearly_2026' }]);
     expect(params.subscription_data).toEqual({ metadata: { mutaba3a_user_id: u.userId, mutaba3a_offer: 'launch-2026' }, trial_end: Math.floor((NOW.getTime() + 10 * DAY) / 1000) });
-    expect(params.custom_text?.submit?.message).toMatch(/^عرض الإطلاق: \u2068₪195\u2069/);
+    expect((params.custom_text?.submit as { message: string } | undefined)?.message).toMatch(/^عرض الإطلاق: \u2068₪195\u2069/);
     expect(h.checkout.couponReads).toEqual(['fresh:mtb3a_launch_yearly_2026']);
     expect((await billingAudit(h, u.personalId))[0]!.metadata).toMatchObject({ interval: 'year', offer: 'launch-2026' });
   });
