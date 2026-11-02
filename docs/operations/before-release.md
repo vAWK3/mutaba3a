@@ -6,6 +6,7 @@ record the date where the item says.
 
 ## server
 
+- **MUT-531 (API 1.95.0-mut531, ADR-238): switch from monthly to yearly in Billing.** No migration and no new job. **Before the API deploy:** check the live restricted key has **Write on Subscriptions** (MUT-333 added it for closing accounts; without it the switch answers 503-style "contact us" and logs a permission error) and that a switch preview works with it in test mode (`invoices.createPreview`; if Stripe refuses it, add **Write on Invoices**). Runbook 3a's "no plan switching" in Stripe's Customer Portal stays: the switch is MTB3A's own.
 - **MUT-525 (API 1.94.0-mut525, ADR-237): the launch offer, 50% off a yearly plan's first year.** Merged; it shows nothing until the live coupon exists. The release migrates `billing_subscriptions.offerId` (additive, nullable) and adds the `renewal_mail` Cloud Scheduler job (10:15 Jerusalem; created only where `mailer = "resend"` and `stripe_enabled`). **In this order:**
   1. **Before the API deploy:** add **Read** on **Coupons** to the live restricted key (Stripe › Developers › API keys › the key › Edit). Without it nothing breaks (every Checkout is full price and the API logs `launch offer coupon could not be read`), but the offer never shows.
   2. Release the server (`make release server`); its plan shows the new `google_cloud_scheduler_job.renewal_mail` and nothing else new.

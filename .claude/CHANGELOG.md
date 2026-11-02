@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-11-02 — Switch from monthly to yearly in Billing, from the 2nd payment (MUT-531, ADR-238)
+
+**Why:** MUT-528 D4. Yearly payers stay much longer than monthly ones, and Stripe's Customer Portal can't gate a
+switch on the 2nd payment or say what it saves in Arabic.
+
+### Added
+- `server/src/billing/retention.ts`: `yearlySwitchOf` (a monthly list price, active, not cancelling, paused or
+  discounted, 2 paid invoices that took money) and `yearlySavingsOf` (12 × month − year from the catalog).
+- `server/src/billing/stripe/plan-gateway.ts`: the plan door (same restricted key): `planOf` (live item, discounts,
+  pause, a test clock's time), `paidInvoiceCount` (cached, for good once it reaches 2), `previewYearlySwitch`
+  (Stripe's proration preview), `switchToYearly` (`pending_if_incomplete`, never a discount).
+- GET `/v1/billing` `yearlySwitch` (`currency`, `savings`); GET/POST `/v1/billing/yearly-switch` (`routes/billing-plan.ts`):
+  the preview, then the switch at the preview's proration date; 409 `SWITCH_NOT_AVAILABLE` (`why`), `AMOUNT_CHANGED`,
+  `PAYMENT_FAILED`, `PAYMENT_NEEDS_ACTION` (`hostedInvoiceUrl`). Audited `billing.yearly_switched`. API contract 1.95.0-mut531.
+- Portal: the line "Switch to yearly and save ₪58.00 a year" under Manage billing, `?step=switch` (`BillingSwitchBody`,
+  `useSwitchStep`) with today's charge, Pay and switch, the declined / approve-on-Stripe / changed-amount states, and
+  "You're on the yearly plan" after. ar + en.
+- Release-QA: `@portal-live.billing.yearly-switch`, `.yearly-switch-early`.
+
+### Technical
+- The drawer's `Banner`/`Amount` (`billingParts.tsx`) and `formatMinor`/`sentence` (`billingText.tsx`) left
+  `BillingDrawer.tsx` so its steps can share them. `customerOnClock` takes a start time (a test clock may start in the past).
+
+---
+
 ## [Unreleased] - 2026-11-02 — The launch offer: 50% off a yearly plan's first year, automatic, once per person (MUT-525, ADR-237)
 
 **Why:** MUT-528's launch campaign. For three months from launch, anyone who never subscribed pays ₪145 / $45 for the

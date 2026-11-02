@@ -6224,3 +6224,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:** one extra Stripe call per yearly Checkout and one cached coupon read per instance per 10 minutes; Read on Coupons joins the restricted key (before the API deploy); a migration adds one nullable column. The ₪145 → ₪290 jump arrives about a year after each campaign Checkout; the renewal notice is the honest warning and the retention moment. Owed by Basel outside the code: the live coupon's end date (set at release) and counsel's read on a terms line for promotional first-year prices and on the 30-day notice. The phone is untouched: `offer` is additive, and its Checkout is the web's.
 
 **Alternatives considered:** env vars or a DB setting for the window (a deploy, or more code, to end a campaign early); promo codes (Basel: automatic only); computing amounts in each client (ADR-004: the server does the arithmetic once); a `repeating` coupon (works, but leaves a discount on the subscription for months and adds nothing).
+
+## ADR-238: Switching From Monthly to Yearly Happens in MTB3A, From the 2nd Payment, at Stripe's Previewed Proration (MUT-531, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-11-02, plan `.claude/designs/mut-531-532-switch-pause-stay-plan.md` D1–D5, D13; eng review R1, R2). Part of MUT-528 (D4).
+
+**Context:** yearly payers stay much longer than monthly ones. Stripe's Customer Portal could switch plans, but it can't wait for the 2nd payment, show the saving or speak Arabic, and runbook 3a keeps its plan switching off.
+
+**Decision:**
+1. **Billing switches, not the Customer Portal.** GET `/v1/billing/yearly-switch` shows Stripe's own prorated preview (`invoices.createPreview`), and POST switches with `proration_behavior: always_invoice` at that preview's proration date, after a fresh preview equals the amount the person saw (else 409 `AMOUNT_CHANGED`, nothing charged). `payment_behavior: pending_if_incomplete`: a declined card leaves the plan monthly; a payment the bank holds answers with Stripe's invoice page to approve it.
+2. **Who:** the shown subscription is `active`, on `freelancer_list_monthly_*`, not cancelling, paused or discounted, with 2 paid invoices that took money (the ₪0 trial invoice doesn't count). Founders never switch in v1 (their schedule conflicts with a price change; the operator moves one by hand). Stripe's live subscription decides, never the mirror alone.
+3. **The saving is the catalog's:** 12 × the monthly list price less the yearly one, in the subscription's currency (₪58, $18), sent in minor units; never written in code or copy.
+4. **No discount, ever:** the switch sends no `discounts` and is refused while one runs (the launch coupon is attached only at Checkout, ADR-237).
+5. **The paid count is cached** per subscription (a count of 2 for good, a lower one for 10 minutes), since GET `/v1/billing` is read on every page and polled after a return.
+6. **Stripe prorates on the subscription's own clock:** a sandbox test clock's frozen time in QA, the server's time otherwise.
+
+**Consequences:** one cached Stripe read on GET `/v1/billing` for list-monthly payers, two calls to preview, three to switch. No migration. The restricted key needs Write on Subscriptions (MUT-333 already added it). The monthly summary mail's line ships with MUT-535 (`yearlySwitchOf`).
+
+**Alternatives considered:** Customer Portal plan switching (no 2nd-payment gate, no saving line, English only); switching without a preview (the person wouldn't know today's charge); `error_if_incomplete` (a 3-D Secure card would read as declined).
+
