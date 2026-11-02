@@ -29,6 +29,23 @@
 ---
 
 
+## [Unreleased] - 2026-11-02 — First restore drill on mtb3a-production passed; the clone is patched in two calls (MUT-327, MUT-511)
+
+**Why:** MUT-327 closes on a drill against production with its results in the runbook. The 2026-11-01 runs passed
+every check (backup restore 901 s, point-in-time clone 2,240 s, both copies 54 tables and 59/59 migrations, receipts
+open, a 14-day soft-delete window). The last run's clone patch got a server-side 400: Cloud SQL won't turn backups
+off while point-in-time recovery is on.
+
+### Changed
+- Pilot runbook §10: the 2026-11-01 drill block (timings, checks, what they mean for §4/§5, problems fixed, next
+  drill due by 2026-12-31); the project-move block's MUT-511 AC3 row; §9 records the third and fourth runs.
+  `make release server` stops listing the drill until 60 days have passed.
+- `server/scripts/restore-drill.sh`: the clone is patched in two calls, `--no-deletion-protection
+  --no-enable-point-in-time-recovery` and then `--no-backup`. A failure still only warns.
+
+### Technical
+- `restore-drill.test.ts`: the two patch calls, in order.
+
 ## [Unreleased] - 2026-11-01 — The restore drill's clone patch uses flags gcloud accepts together (MUT-327)
 
 **Why:** the second drill on `mtb3a-production` passed its backup half (restore 901 s, every check green) and the

@@ -310,12 +310,14 @@ restore_pitr() {
   CREATED+=("${SCRATCH_P}")
   timed "Point-in-time clone (${PITR_MINUTES} min ago)" mutate_wait "${SCRATCH_P}" gcloud sql instances clone "${SOURCE}" "${SCRATCH_P}" \
     --point-in-time="${PITR_AT}" --project="${PROJECT}" --quiet
-  # The clone copies the source's settings: drop what would keep it around or make it back itself up. --no-backup
-  # also ends point-in-time recovery, and gcloud refuses the PITR flag next to it (2026-11-01). Housekeeping on a copy
-  # the teardown deletes anyway, so a failure here warns and the checks still run.
-  mutate_wait "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" \
-    --no-deletion-protection --no-backup --quiet \
-    || warn "could not patch ${SCRATCH_P} (deletion protection, backups); carrying on, the teardown deletes it"
+  # The clone copies the source's settings: drop what would keep it around or make it back itself up. Two calls, in
+  # this order (2026-11-01): gcloud refuses the PITR flag next to --no-backup, and Cloud SQL refuses --no-backup while
+  # PITR is on. Housekeeping on a copy the teardown deletes anyway, so a failure warns and the checks still run.
+  if ! mutate_wait "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" \
+      --no-deletion-protection --no-enable-point-in-time-recovery --quiet \
+    || ! mutate_wait "${SCRATCH_P}" gcloud sql instances patch "${SCRATCH_P}" --project="${PROJECT}" --no-backup --quiet; then
+    warn "could not patch ${SCRATCH_P} (deletion protection, PITR, backups); carrying on, the teardown deletes it"
+  fi
 }
 
 # open_copy <scratch> <port> <label>: throwaway password on the copy, a proxy, then the read-only checks.

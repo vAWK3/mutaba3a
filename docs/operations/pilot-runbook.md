@@ -873,6 +873,11 @@ The teardown deleted both copies in 222 s. The patch now sends `--no-deletion-pr
 failed patch warns instead of stopping the checks. The point-in-time half's checks still owe a run
 (`--only pitr`).
 
+**2026-11-01, third and fourth runs (Basel).** At 12:28 UTC an `--only pitr` run started a minute before the
+patch fix was merged, so it stopped at the same place (clone 2,065 s). At 13:59 UTC the run on the fixed script
+passed every point-in-time check. Its patch then got a server-side 400 ("Point in time recovery must be disabled
+when backup is disabled"); the drill warned and carried on. The patch is now two calls. Results are in §10.
+
 ## 10. Drill results
 
 Filled in by Basel after running §8 against production backups (AC1).
@@ -880,35 +885,53 @@ Filled in by Basel after running §8 against production backups (AC1).
 Each drill adds its own block, newest first; keep the old ones. `make release server` reads the newest
 `Drill date (UTC)` here (`YYYY-MM-DD`) to tell when the next drill is due (every 60 days).
 
+#### 2026-11-01, `mtb3a-production` (first drill; AC1 of MUT-327, AC3 of MUT-511)
+
+The two halves ran separately on the same day: the backup half at 07:36 UTC, the point-in-time half at 13:59 UTC
+(`--only pitr`), because the first full run stopped at the clone's patch (problems below). Logs on Basel's Mac:
+`~/restore-drill-20261101.log` and `~/restore-drill-pitr2-20261101.log`.
+
 | | |
 |---|---|
-| Drill date (UTC) | |
-| Operator | |
-| Backup restored (id, window start) | |
-| Point in time restored | |
-| gcloud / Cloud SQL versions | |
+| Drill date (UTC) | 2026-11-01 |
+| Operator | Basel, as `barmajiyatltd@gmail.com` (deploy.env) |
+| Source | `mutaba3a-pg`, POSTGRES_16, db-f1-micro, ZONAL, 10 GB, europe-west1 |
+| Backup restored (id, window start) | `1793502000000`, 2026-11-01T03:00Z |
+| Point in time restored | 2026-11-01T12:59:45Z |
+| gcloud / Cloud SQL versions | Cloud SDK 557.0.0 / POSTGRES_16 |
 
 | Step | Seconds |
 |---|---:|
-| Create scratch instance (backup) | |
-| Restore last night's backup | |
-| Checks on the backup copy | |
-| Point-in-time clone (60 min ago) | |
-| Checks on the PITR copy | |
-| Whole drill (before teardown) | |
-| Teardown | |
+| Create scratch instance (backup) | 511 |
+| Restore last night's backup | 901 |
+| Checks on the backup copy | not printed (the run stopped before its table; seconds) |
+| Point-in-time clone (60 min ago) | 2240 |
+| Checks on the PITR copy | 11 |
+| Whole drill (PITR half, before teardown) | 2261 |
+| Teardown (both copies, backup-half run) | 222 |
 
 | Check | Backup copy | PITR copy |
 |---|---|---|
-| Tables / migrations applied | | |
-| Newest audit event | | |
-| `audit_events` (PITR ≥ backup) | | |
-| Receipt opens (id, type, bytes) | | |
-| Bucket soft-delete window | | |
+| Tables / migrations applied | 54 / 59 of 59 | 54 / 59 of 59 |
+| Newest audit event | 2026-10-31 19:21:16.601 | 2026-11-01 12:52:26.986 |
+| `audit_events` (PITR ≥ backup) | not compared: the counts are compared only when both copies are in one run | PITR copy is the later one, as expected |
+| Receipt opens (id, type, bytes) | PASS `ce88561d-…`, image/jpeg, 374,483 | PASS `1219ae11-…`, image/jpeg, 46,248 |
+| Bucket soft-delete window | — | `1209600` s (14 days), effective 2026-10-30T19:38Z |
 
-Problems found and tickets opened:
+What it tells an operator (`db-f1-micro`, §4): a whole-database restore from last night's backup takes about
+**24 minutes** (8.5 min to create an instance plus 15 min to restore). Going back to a point in time takes
+**30–37 minutes** (three clones: 1,757, 2,065 and 2,240 s). Plan incident timings (§5) on those numbers.
 
--
+Problems found and fixed:
+
+- gcloud gives up waiting before a restore on this tier finishes, and teardown then hit 409. Long steps now
+  start with `--async` and wait with no limit (abdb6649).
+- gcloud refuses `--no-enable-point-in-time-recovery` with `--no-backup`, and Cloud SQL refuses `--no-backup`
+  while point-in-time recovery is on. The clone is now patched in two calls, and a failed patch only warns
+  (cd3807fb, then this change).
+- Twice, the operator's Mac lost DNS during the final teardown wait. The delete had already been sent, and the
+  next `teardown` listing showed nothing left. After a network error, always run `scripts/restore-drill.sh teardown`.
+- Next drill: a full run (not split halves), so the `audit_events` counts are compared. Due by 2026-12-31.
 
 ### Project move (MUT-487, ADR-232)
 
@@ -920,7 +943,7 @@ Filled in by Basel at the C2 rehearsal and the C3 cutover (server/DEPLOYMENT.md 
 | `project-move.sh` output: steps and seconds | |
 | Downtime, freeze start to forward done | |
 | Tables matched (counts and checksums) / receipt objects / signed URL | |
-| Restore drill on `mtb3a-production` (MUT-511 AC3): seconds | |
+| Restore drill on `mtb3a-production` (MUT-511 AC3): seconds | 2026-11-01: backup restore 901 (plus create 511); point-in-time clone 2,240. All checks passed (Drill results above) |
 | Portal overview and `GET /v1/entries`, largest pilot account vs today's p95 + 50% (MUT-511 AC2) | |
 | Malafat VPC egress (AM13) | |
 | `gcloud projects get-iam-policy mtb3a-production`: no Malafat account | |
