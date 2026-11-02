@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-02 — before-release.md: the move and receipt reading are live (docs only)
+
+**Why:** two operator items still described work as not run. MUT-487's cutover happened on 2026-10-30, and MUT-441's
+reading has been on in `mtb3a-production` since the same day (`server_ocr_enabled = true`), piloted for one account.
+
+### Changed
+- `docs/operations/before-release.md`: the MUT-487/511 item now lists only C5 (record, revoke the old provider keys,
+  close TD-195). The MUT-441 item says reading is on and keeps the grant, rollback and switch-off steps; only TD-278
+  (production p95 and cold start) is left.
+
+---
+
 ## [Unreleased] - 2026-11-02 — Pause instead of cancel, the stay offer and MTB3A's own cancel flow (MUT-532, ADR-240)
 
 **Why:** MUT-528 D5/D6. People who would cancel get a seasonal break or half price for two months first, and Stripe's
