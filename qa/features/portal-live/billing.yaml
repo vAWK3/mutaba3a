@@ -221,3 +221,36 @@ features:
       - The step says "Your free trial continues. On <trial end> you pay ₪145.00 for your first year, then ₪290.00 a year from <a year later>"
       - Back in the portal "Card added. Your first charge is on <trial end>" and "Launch offer applied"
       - Stripe's invoices are ₪0 for the trial, then ₪145.00 with a ₪145.00 discount (the D5 spike's result, recorded)
+  # MUT-531 (ADR-238): the switch from monthly to yearly. A test clock started a month back makes two real monthly
+  # payments, and Stripe prorates on that clock's time (plan-gateway clockNow).
+  - id: yearly-switch
+    title: Switch to yearly from the 2nd payment - the line names the saving, Stripe's preview is what is charged, no discount
+    tier: core
+    paths:
+      - server/src/routes/billing-plan.ts
+      - server/src/billing/retention.ts
+      - server/src/billing/stripe/plan-gateway.ts
+      - src/hosted/components/BillingSwitchBody.tsx
+      - src/hosted/components/useSwitchStep.ts
+      - src/hosted/components/billingParts.tsx
+      - src/hosted/components/billingText.tsx
+    steps:
+      - A monthly subscriber in shekels has paid two months (the sandbox clock runs a month)
+      - Open Billing
+      - Press Switch to yearly and read the preview
+      - Press Pay and switch
+    expect:
+      - Under Manage billing, "Switch to yearly and save ₪58.00 a year" (twelve months less the year, from the catalog; AC2)
+      - The step says ₪290.00 a year renewing a year from today and what is charged today, less the unused part of this month (AC1)
+      - Back on the status view "You're on the yearly plan. It renews on <date> at ₪290.00." and, once the webhook lands, Billed yearly
+      - Stripe holds the yearly list price with no discount, and today's invoice is the previewed amount (AC3); /v1/me stays ACTIVE · STRIPE (AC4)
+  - id: yearly-switch-early
+    title: Switch to yearly - no line before the 2nd payment
+    tier: secondary
+    paths:
+      - server/src/billing/retention.ts
+    steps:
+      - A monthly subscriber has paid once
+      - Open Billing
+    expect:
+      - Billing shows Active and Manage billing with no switch line, and GET /v1/billing/yearly-switch answers 409 SWITCH_NOT_AVAILABLE (TOO_EARLY)

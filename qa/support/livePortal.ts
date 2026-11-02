@@ -79,8 +79,9 @@ export async function signIn(page: Page, person: LivePerson): Promise<void> {
 }
 
 /** A sandbox customer on a fresh test clock, as findOrCreateCustomer would find it (email + our metadata). */
-export async function customerOnClock(person: LivePerson): Promise<{ customerId: string; clockId: string; now: number }> {
-  const now = Math.floor(Date.now() / 1000);
+export async function customerOnClock(person: LivePerson, startAt = Math.floor(Date.now() / 1000)): Promise<{ customerId: string; clockId: string; now: number }> {
+  // MUT-531: a clock may start in the past (the spike), so a flow can have months already paid by today.
+  const now = startAt;
   const clock = await stripeApi('POST', 'test_helpers/test_clocks', { frozen_time: String(now), name: `MUT-362 QA ${person.email}` });
   const customer = await stripeApi('POST', 'customers', {
     email: person.email,
