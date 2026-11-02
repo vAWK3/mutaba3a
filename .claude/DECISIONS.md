@@ -6296,3 +6296,22 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:** one migration (two nullable columns, one table and its partial unique index). The restricted key needs Write on Invoices (Resume now) beside Write on Subscriptions. GET `/v1/billing` gains `subscription.pause`; its switch line hides while the stay offer runs (D13; one indexed read for eligible payers). The phone reads `paused` additively; its own paused copy is a follow-up. Contract 1.97.0-mut532.
 
 **Alternatives considered:** `POST /subscriptions/:id/pause` (pauses at once, loses the paid month, needs our own resume job, and its resume can stick); Stripe's portal cancel deep link with a retention coupon (English only, no pause, no once-per-person rule); Resume now as `always_invoice` (charges only a proration, since Stripe counts the voided period as paid).
+
+## ADR-241: MTB3A Sends Its Own Failed-Card Mail, ar + en, From an Hourly Job; Stripe's Goes Off (MUT-533, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-11-02: plan `.claude/designs/mut-533-534-card-failed-comeback-plan.md` D1–D7 and the §6 copy; eng review R1–R15). Built 2026-11-02. Part of MUT-528 (D10).
+
+**Context:** Stripe's failed-payment emails are English only, and failed cards are a large share of subscription churn. The webhook already mirrors `invoice.payment_failed` as `past_due` (GRACE), but nothing told the person in their language.
+
+**Decision:**
+1. **An hourly job, not a send in the webhook** (`/jobs/v1/billing/card-failed-mail`, minute 7, Terraform; operator door `/admin/v1/billing/card-failed-mail`, `npm run billing:card-failed-mail`). The webhook keeps its 4 s budget; a missed webhook is caught by the nightly reconcile and the next run.
+2. **One dunning episode per subscription:** its oldest open invoice with an attempt. Its first failure is the invoice's `status_transitions.finalized_at` (the spike: the first attempt happens at finalization). Read as subscription → open invoices → that invoice with `payments.data.payment.payment_intent` (4 expand levels; 5 from the subscription are refused).
+3. **Two stages, keyed on the invoice in the send log** (`card-failed:<invoice>:first|reminder`), only the current one sent: `first` within 72 h of the first failure; `reminder` from the retry window's midpoint (at least 3 days in) while Stripe has a retry booked. The 72 h limit and a window capped at 28 days keep every key inside the send log's 30 days, so an invoice never gets more than two mails.
+4. **`BILLING_RETRY_WINDOW_DAYS`** (7, 14, 21 or 28; default 14 = Stripe's "8 tries within 2 weeks") mirrors the dashboard's Smart Retries policy, which the API doesn't expose. The reminder says the plan ends "within N days at most", read-only only while the lapse gate is on.
+5. **No amount and no card details** (Basel declined the last 4 digits): ADR-159 §5 holds unchanged for both mails.
+6. **3-D Secure is Stripe's:** a payment waiting for the person to confirm (intent `requires_action`, no retry booked) gets no MTB3A mail; Stripe's confirm-payment email stays on.
+7. **Update card:** the mail opens Billing; the past-due panel's action is Update card, a Customer Portal session with `flow_data.type = payment_method_update` that redirects back to the drawer (`?portal=returned`). POST `/v1/billing/portal-session` takes `flow: 'card'`. Contract 1.98.0-mut533.
+
+**Consequences:** 24 runs a day; one indexed query each, then three Stripe reads per past_due subscription. No migration. Operator steps (before-release.md): match `billing_retry_window_days` to the dashboard and confirm the retries end in a cancel; after the API release, turn off Stripe's failed-payment customer email, keeping the 3-D Secure one.
+
+**Alternatives considered:** sending in the webhook (delays Stripe's 200, loses a failed send, still needs a job for the reminder); keying on `latest_invoice` (misses the invoice whose last retry ends the plan, and doubles the mails when a renewal lands mid-dunning); a reminder "3 days before the end" (Smart Retries may give up before the window ends); naming the card's last digits (declined by Basel).

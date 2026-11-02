@@ -3,15 +3,18 @@ import {
   advanceClock,
   createOfferCoupon,
   customerOnClock,
+  declinedRenewal,
   deleteOfferCoupon,
   fillStripeCheckout,
   finishSignupInPage,
   invoicesOf,
   liveState,
+  outboxOf,
   payCheckoutByApi,
   payingUntilSoon,
   provisionPerson,
   requestSignup,
+  runMailJob,
   setTrialStartedDaysAgo,
   signIn,
   stripeApi,
@@ -833,5 +836,75 @@ test('Cancel with a reason - the plan stays on to the period end, and Keep my pl
     await back.getByRole('button', { name: 'Keep my plan' }).click();
     await expect(back.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
     expect((await stripeApi('GET', `subscriptions/${subscriptionId}`)).cancel_at_period_end).toBe(false);
+  });
+});
+
+/*
+ * MUT-533 (ADR-241): our own failed-card mail, ar + en. The renewal declines on Stripe's always-declining test card;
+ * the hourly job is run through its operator door; the memory mailer's outbox is the inbox.
+ */
+test('A declined renewal - one Arabic mail within the hour, no amount or card; Update card opens Stripe’s card form', { tag: '@portal-live.billing.card-failed-mail' }, async ({ page, step }) => {
+  const person = await provisionPerson('ar', 'cardfail');
+  const { subscriptionId } = await step('A monthly subscriber’s renewal declines (the sandbox clock reaches it)', async () => {
+    const declined = await declinedRenewal(person, 2 * 60 * 60);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${declined.subscriptionId}`)).status, { timeout: 60_000 }).toBe('past_due');
+    return declined;
+  });
+  const mail = await step('The hourly job runs: one mail in Arabic', async () => {
+    await expect.poll(async () => {
+      await runMailJob('card-failed-mail');
+      return (await outboxOf(person.email)).filter((m) => m.template === 'card-failed').length;
+    }, { timeout: 60_000 }).toBe(1);
+    const [m] = (await outboxOf(person.email)).filter((x) => x.template === 'card-failed');
+    expect(m!.locale).toBe('ar');
+    expect(m!.subject).toBe('لم تنجح عملية الدفع ببطاقتك');
+    expect(m!.text).toContain('يبقى حسابك مفتوحًا بالكامل');
+    expect(m!.text).not.toMatch(/₪|\$|\d{4}/);
+    return m!;
+  });
+  await step('Running the job again sends nothing new', async () => {
+    await runMailJob('card-failed-mail');
+    expect((await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed'))).toHaveLength(1);
+  });
+  await signIn(page, person);
+  const drawer = await step('Open the mail’s button: Billing says the last payment didn’t go through', async () => {
+    const link = /href="([^"]*\?billing=true[^"]*)"/.exec(mail.html)?.[1];
+    expect(link).toBeTruthy();
+    await page.goto(link!.replace(/&amp;/g, '&'));
+    const d = page.getByRole('dialog', { name: 'الاشتراك' });
+    await expect(d.getByText('لم نتمكن من تحصيل دفعتك الأخيرة')).toBeVisible({ timeout: 45_000 });
+    return d;
+  });
+  await step('Press Update card: Stripe opens its card form', async () => {
+    await drawer.getByRole('button', { name: 'حدّث البطاقة' }).click();
+    await page.waitForURL(/billing\.stripe\.com/, { timeout: 45_000 });
+    await expect(page.locator('iframe[name^="__privateStripeFrame"]').first()).toBeVisible({ timeout: 45_000 });
+  });
+  await step('Stripe still holds the subscription past due with its open invoice, our mail named nothing of the card', async () => {
+    const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
+    expect(sub.status).toBe('past_due');
+  });
+});
+
+test('A declined renewal a week on - exactly one reminder, then nothing more for that invoice', { tag: '@portal-live.billing.card-failed-reminder' }, async ({ step }) => {
+  const person = await provisionPerson('en', 'cardremind');
+  await step('A monthly subscriber’s renewal first declined over a week ago, and Stripe is still retrying', async () => {
+    const declined = await declinedRenewal(person, 8 * 24 * 60 * 60);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${declined.subscriptionId}`)).status, { timeout: 90_000 }).toBe('past_due');
+  });
+  await step('The hourly job runs twice: one reminder, no first mail (only the current stage)', async () => {
+    await expect.poll(async () => {
+      await runMailJob('card-failed-mail');
+      return (await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed')).length;
+    }, { timeout: 60_000 }).toBe(1);
+    await runMailJob('card-failed-mail');
+    const mails = (await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed'));
+    expect(mails.map((m) => m.template)).toEqual(['card-failed-reminder']);
+    expect(mails[0]!.subject).toBe('Your card still isn’t going through');
+    expect(mails[0]!.text).toMatch(/your plan ends within \d+ days? at most/);
+  });
+  await step('A third run sends nothing more for the invoice', async () => {
+    await runMailJob('card-failed-mail');
+    expect((await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed'))).toHaveLength(1);
   });
 });

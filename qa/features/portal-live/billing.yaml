@@ -332,3 +332,35 @@ features:
     expect:
       - Billing says "Your plan ends on <date>" with the Ending chip; Stripe holds cancel_at_period_end with feedback switched_service and the comment
       - Keep my plan brings back "Freelancer, renews <date>"; Stripe no longer cancels
+  - id: card-failed-mail
+    title: A declined renewal - one Arabic mail within the hour, no amount or card; Update card opens Stripe's card form
+    tier: core
+    paths:
+      - server/src/billing/card-failed-mail.ts
+      - server/src/routes/card-failed-mail.ts
+      - server/src/billing/stripe/plan-gateway.ts
+      - server/src/email/templates/copy.ts
+      - server/src/email/templates/look.ts
+      - server/src/email/ports.ts
+      - src/hosted/data/billingQueries.ts
+    steps:
+      - A monthly subscriber in Arabic has a renewal that declines, and Stripe starts retrying
+      - The hourly failed-card job runs, then runs again
+      - Open the mail's button, signed in
+      - Press Update card
+    expect:
+      - One mail, in Arabic, "لم تنجح عملية الدفع ببطاقتك", saying the account stays fully open while Stripe retries; no amount, no currency, no card digits
+      - The second run sends nothing new
+      - Billing opens on "لم نتمكن من تحصيل دفعتك الأخيرة" with حدّث البطاقة (Update card) as the button
+      - Update card opens Stripe's own card form (the Customer Portal's payment-method flow)
+  - id: card-failed-reminder
+    title: A declined renewal a week on - exactly one reminder, then nothing more for that invoice
+    tier: secondary
+    paths:
+      - server/src/billing/card-failed-mail.ts
+    steps:
+      - A monthly subscriber's renewal first declined over a week ago, and Stripe is still retrying
+      - The hourly failed-card job runs three times
+    expect:
+      - Exactly one mail, the reminder "Your card still isn't going through", saying the plan ends within N days at most; no first mail (only the current stage is sent)
+      - Further runs send nothing more for the invoice (never more than two mails per failed invoice)

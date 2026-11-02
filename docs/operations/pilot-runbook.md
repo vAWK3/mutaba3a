@@ -335,6 +335,31 @@ The campaign is one Stripe coupon; the server names its id (`server/src/billing/
   **By hand (Basel decides each one):** in Stripe, open the subscription; if it is monthly, switch it to the yearly
   list price first; then **Add coupon** → `mtb3a_launch_yearly_2026`. Never add it to a founder price.
 
+### 1.10 The failed-card mail (MUT-533, ADR-241)
+
+When a renewal payment fails, Stripe keeps retrying (Smart Retries) and the plan is past due: the person keeps full
+access (GRACE). MTB3A mails them itself, in their language, from an hourly job (`mutaba3a-card-failed-mail`):
+
+- **The first mail** within the hour (and only within 72 hours of the first failure): the payment didn't go through,
+  the account stays open while Stripe retries, and an **Update card** button. No amount and no card details.
+- **One reminder** from the middle of the retry window while Stripe still has a retry booked: the plan ends within N
+  days at most, and (while the lapse gate is on) the account then becomes read-only. Never more than two mails for
+  one failed invoice.
+- A payment the bank wants the person to **confirm** (3-D Secure) gets no MTB3A mail: Stripe's own confirm-payment
+  email covers it, so keep that one on in the dashboard.
+- **Update card** opens Billing, whose past-due panel goes straight to Stripe's card form.
+- **Check who it would mail:** `npm run billing:card-failed-mail -- --dry-run --url "$URL"` (each past_due
+  subscription and its stage, or why not: settled, not-past-due, needs-authentication, no-stage, suppressed).
+- **Keep it in step with Stripe:** `billing_retry_window_days` must match the dashboard's Smart Retries window
+  (Settings › Billing › Revenue recovery). Change both together.
+- **Support reply** for "I got a mail that my card failed":
+
+  > EN: Your bank declined your MTB3A payment, but nothing has stopped: Stripe will try the card again over the next
+  > few days. To fix it now, open Billing (You › Account › Billing) and press Update card.
+  >
+  > AR: رفض البنك دفعة اشتراكك في متابعة، لكن لم يتوقف شيء: سيحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة.
+  > لإصلاح ذلك الآن، افتح الاشتراك (أنت › الحساب › الاشتراك) واضغط «حدّث البطاقة».
+
 ## 2. Reset a password
 
 There's no "forgot password" form (ADR-037). The person emails support (§6), and you reply with a
