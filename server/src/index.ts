@@ -20,6 +20,7 @@ import { CachedFxRates, FrankfurterSource } from './fx-rates.js';
 import { PUBLIC_FX_POLICY } from './routes/fx-rates.js';
 import { createStripeGateway, RECONCILE_BUDGET, WEBHOOK_BUDGET } from './billing/stripe/gateway.js';
 import { CHECKOUT_BUDGET, createCheckoutGateway } from './billing/stripe/checkout-gateway.js';
+import { offersFor } from './billing/offer.js';
 import { createAccountStripeGateway } from './billing/stripe/account-gateway.js';
 import { STRIPE_WEBHOOK_POLICY } from './routes/stripe-billing.js';
 import { BILLING_SESSION_POLICY } from './routes/billing.js';
@@ -66,7 +67,8 @@ const stripe = config.STRIPE_SECRET_KEY
   ? {
       webhookGateway: stripeGateway(WEBHOOK_BUDGET),
       reconcileGateway: stripeGateway(RECONCILE_BUDGET),
-      checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date() }),
+      // MUT-525 (R6): a QA run's own coupon is read uncached, so creating or deleting it shows at once.
+      checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date(), ...(config.BILLING_OFFER_COUPON_ID ? { couponTtlMs: 0 } : {}) }),
       // MUT-333 (D14): the same key, which also needs Write on Subscriptions to end them when an account closes.
       accountGateway: createAccountStripeGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET }),
     }
@@ -215,6 +217,8 @@ const app = createApp({
   webauthn,
   publicFxIpLimiter,
   stripe,
+  // MUT-525 (D12, R6): offers.json, or the QA run's own coupon on a test server.
+  offers: offersFor(config.BILLING_OFFER_COUPON_ID),
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
   oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter, agentPersonLimiter } : null,
   stripeWebhookIpLimiter,

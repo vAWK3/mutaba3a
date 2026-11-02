@@ -21,6 +21,8 @@ export interface MirrorFields {
   priceLookupKey: string | null;
   /** D4: MUT-363 reads the subscription schedule and fills it. */
   founderUntil: null;
+  /** MUT-525: the offer the Checkout carried (`metadata.mutaba3a_offer`); anything not shaped like an offer id is null. */
+  offerId: string | null;
   /** The account's currency (billing_accounts.currency): ILS for Israel, USD elsewhere. */
   currency: 'ILS' | 'USD';
 }
@@ -28,6 +30,8 @@ export interface MirrorFields {
 const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', firm: 'FIRM' };
 const LOOKUP_KEY_MAX = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** offers.json's id rule, and billing_subscriptions.offerId's VarChar(40). */
+const OFFER_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** `products`: by id, for list results, which can't expand `price.product` (five levels; Stripe allows four). */
 export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string, Stripe.Product>): { ok: MirrorFields; notes: MirrorNote[] } | { error: MirrorError } {
@@ -62,10 +66,15 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       // turn the event into a database error Stripe retries for days.
       priceLookupKey: tieredItem.price.lookup_key?.slice(0, LOOKUP_KEY_MAX) ?? null,
       founderUntil: null,
+      offerId: offerIdOf(sub.metadata?.['mutaba3a_offer']),
       currency,
     },
     notes,
   };
+}
+
+function offerIdOf(value: string | undefined): string | null {
+  return value !== undefined && OFFER_ID_RE.test(value) ? value : null;
 }
 
 function tierOf(product: string | Stripe.Product | Stripe.DeletedProduct, products: ReadonlyMap<string, Stripe.Product>): BillingTier | null {

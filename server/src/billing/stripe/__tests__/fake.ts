@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import type { LiveSubscription } from '../../../accounts/closure.js';
 import type { AccountStripeGateway } from '../account-gateway.js';
+import type { CouponFact } from '../../offer.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
@@ -10,6 +11,8 @@ import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGa
  * told to fail the next calls.
  */
 export const FAKE_WEBHOOK_SECRET = 'whsec_mut360_fake_endpoint';
+/** MUT-525: the product every fake GA price is on, which the launch coupon is restricted to. */
+export const FAKE_FREELANCER_PRODUCT = 'prod_FREELANCER';
 const signer = new Stripe('sk_test_mut360_fake', { telemetry: false });
 
 export class FakeStripeGateway implements StripeGateway {
@@ -132,7 +135,8 @@ export class FakeCheckoutGateway implements CheckoutGateway {
 
   /** All four GA prices, in their currencies (the founder ratio: a year is 10× a month). */
   withGaPrices(): this {
-    const add = (key: string, currency: string, unitAmount: number, interval: 'month' | 'year') => this.prices.set(key, { id: `price_${key}`, currency, unitAmount, interval });
+    const add = (key: string, currency: string, unitAmount: number, interval: 'month' | 'year') =>
+      this.prices.set(key, { id: `price_${key}`, currency, unitAmount, interval, productId: FAKE_FREELANCER_PRODUCT });
     add('freelancer_list_monthly_ils', 'ILS', 3900, 'month');
     add('freelancer_list_yearly_ils', 'ILS', 39000, 'year');
     add('freelancer_list_monthly_usd', 'USD', 1000, 'month');
@@ -218,6 +222,29 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   async setInvoiceTaxNumber(customer: string, value: string): Promise<void> {
     this.take(`taxNumber:${customer}`);
     this.taxNumbers.set(customer, value);
+  }
+
+  /** MUT-525: coupons Stripe holds, by id (valid ones only, as the real gateway answers). */
+  readonly coupons = new Map<string, CouponFact>();
+  /** Each coupon read, `fresh:<id>` or `cached:<id>`, apart from `calls` so MUT-362's call lists stay as they were. */
+  readonly couponReads: string[] = [];
+  private couponFailure: StripeGatewayError | null = null;
+
+  /** The launch coupon as D1 shapes it: 50% once on the Freelancer product, redeemable until `redeemBy`. */
+  withLaunchCoupon(redeemBy: Date, id = 'mtb3a_launch_yearly_2026', over: Partial<CouponFact> = {}): this {
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'once', redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    return this;
+  }
+
+  /** Every coupon read fails until cleared, as a key without Read on Coupons would (R7). */
+  failCoupons(failure: StripeGatewayError | null = new StripeGatewayError({ code: null, type: 'StripePermissionError', requestId: 'req_fake', transient: false })): void {
+    this.couponFailure = failure;
+  }
+
+  async couponById(id: string, options: { fresh?: boolean } = {}): Promise<CouponFact | null> {
+    this.couponReads.push(`${options.fresh ? 'fresh' : 'cached'}:${id}`);
+    if (this.couponFailure) throw this.couponFailure;
+    return this.coupons.get(id) ?? null;
   }
 
   private take(call: string): void {

@@ -1,6 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { setupLinkOrigin } from '../auth/account-setup.js';
+import { OFFERS, type OfferEntry } from '../billing/offer.js';
+import { trialMailOffer } from '../billing/offer-read.js';
+import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { runTrialMail, trialMailLinks, type TrialMailRunOptions } from '../billing/trial-mail.js';
 import type { Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
@@ -29,6 +32,9 @@ export interface TrialMailRouteOptions {
   gateOn: boolean;
   /** R11 (production): refuse a real operator run whose links would point at a loopback origin. */
   refuseLoopbackLinks: boolean;
+  /** MUT-525 (D8): where the launch offer is read from (cached); absent, the mails carry no offer line. */
+  checkout?: CheckoutGateway | null;
+  offers?: readonly OfferEntry[];
 }
 
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -37,13 +43,14 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
 export function trialMailRoutes(options: TrialMailRouteOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  const run = (requestUrl: string, now: Date, dryRun: boolean) => {
+  const run = async (requestUrl: string, now: Date, dryRun: boolean) => {
     if (!options.billingConfigured) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server, so a trial mail could not be acted on');
     const origin = setupLinkOrigin(options.portalOrigin, requestUrl);
     if (!dryRun && options.refuseLoopbackLinks && LOOPBACK.test(origin)) {
       throw new ApiError('LINK_ORIGIN_LOOPBACK', 'These mails would link to a local address; set PORTAL_ORIGIN or call the service by its public URL', { origin });
     }
-    const runOptions: TrialMailRunOptions = { store: options.store, mailer: options.mailer, logger: options.logger, now, gateOn: options.gateOn, links: trialMailLinks(origin), dryRun };
+    const offer = await trialMailOffer(options.checkout ?? null, options.offers ?? OFFERS, now, options.logger);
+    const runOptions: TrialMailRunOptions = { store: options.store, mailer: options.mailer, logger: options.logger, now, gateOn: options.gateOn, links: trialMailLinks(origin), dryRun, offer };
     return runTrialMail(runOptions);
   };
 

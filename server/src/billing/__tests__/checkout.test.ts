@@ -11,8 +11,11 @@ import {
   currentSubscription,
   isConsumerCountry,
   isReturnPath,
+  offerSubmitMessage,
   parseBillingCountries,
+  payPageDay,
   planCheckout,
+  renewsOnOf,
   type Catalog,
   type CheckoutInput,
   type PersonBilling,
@@ -28,8 +31,8 @@ const USER = '11111111-1111-4111-8111-111111111111';
 const PROFILE = '22222222-2222-4222-8222-222222222222';
 const COUNTRIES = parseBillingCountries({ consumerCountries: ['IL', 'GB'], customTaxIdCountries: ['IL', 'JO'] });
 const CATALOG: Catalog = {
-  ILS: { month: { id: 'price_ils_m', unitAmount: 3900 }, year: { id: 'price_ils_y', unitAmount: 39000 } },
-  USD: { month: { id: 'price_usd_m', unitAmount: 1000 }, year: { id: 'price_usd_y', unitAmount: 10000 } },
+  ILS: { month: { id: 'price_ils_m', unitAmount: 3900, productId: 'prod_F' }, year: { id: 'price_ils_y', unitAmount: 39000, productId: 'prod_F' } },
+  USD: { month: { id: 'price_usd_m', unitAmount: 1000, productId: 'prod_F' }, year: { id: 'price_usd_y', unitAmount: 10000, productId: 'prod_F' } },
 };
 const DAY = 24 * 60 * 60 * 1000;
 const LATER = new Date(NOW.getTime() + 20 * DAY);
@@ -228,6 +231,57 @@ describe('planCheckout parameters (MUT-362 §2.3)', () => {
   });
 });
 
+describe('planCheckout with the launch offer (MUT-525 D1, R3, R8)', () => {
+  const OFFER = { id: 'launch-2026', couponId: 'mtb3a_launch_yearly_2026', firstAmount: 19500, listAmount: 39000 };
+
+  it('a yearly offer Checkout carries the coupon, names the offer on the subscription and keeps the carried trial', () => {
+    const trialEndsAt = new Date(NOW.getTime() + 10 * DAY);
+    const result = plan({ interval: 'year', trialEndsAt, offer: OFFER });
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.discounts).toEqual([{ coupon: 'mtb3a_launch_yearly_2026' }]);
+    expect(result.params.subscription_data).toEqual({
+      metadata: { mutaba3a_user_id: USER, mutaba3a_offer: 'launch-2026' },
+      trial_end: Math.floor(trialEndsAt.getTime() / 1000),
+    });
+    expect(result.params.allow_promotion_codes).toBeUndefined();
+  });
+
+  it('with no offer the parameters are byte-identical to today’s (R3)', () => {
+    for (const over of [{}, { interval: 'year' as const }, { interval: 'year' as const, trialEndsAt: new Date(NOW.getTime() + 10 * DAY) }]) {
+      const today = plan(over);
+      expect(plan({ ...over, offer: null })).toEqual(today);
+      if (!today.ok) throw new Error('expected a plan');
+      expect(today.params).not.toHaveProperty('discounts');
+      expect(JSON.stringify(today.params)).not.toContain('mutaba3a_offer');
+    }
+  });
+
+  it('the pay-page note puts the offer line first in Arabic, then in English, with the renewal price and day (R8, DD12a)', () => {
+    const trialEndsAt = new Date('2026-11-12T09:00:00.000Z');
+    const result = plan({ interval: 'year', trialEndsAt, offer: OFFER });
+    if (!result.ok) throw new Error('expected a plan');
+    const message = result.params.custom_text?.submit?.message ?? '';
+    expect(message).toBe(offerSubmitMessage(OFFER, 'ILS', new Date('2027-11-12T09:00:00.000Z')));
+    const [arOffer, arNote, enOffer, enNote] = message.split('\n\n');
+    expect(arOffer).toBe('عرض الإطلاق: \u2068₪195\u2069 عن سنتك الأولى، ثم يتجدد بسعر \u2068₪390\u2069 سنويًا ابتداءً من \u206812 نوفمبر 2027\u2069.');
+    expect(enOffer).toBe('Launch offer: \u2068₪195\u2069 for your first year. It then renews at \u2068₪390\u2069 a year from \u2068November 12, 2027\u2069.');
+    expect(`${arNote}\n\n${enNote}`).toBe(CHECKOUT_SUBMIT_MESSAGE);
+    expect(message.length).toBeLessThanOrEqual(1200);
+  });
+
+  it('without a carried trial the year renews a year from now', () => {
+    expect(renewsOnOf(NOW, undefined)).toEqual(new Date('2027-11-01T09:00:00.000Z'));
+    expect(renewsOnOf(NOW, Math.floor(new Date('2026-11-12T09:00:00.000Z').getTime() / 1000))).toEqual(new Date('2027-11-12T09:00:00.000Z'));
+  });
+
+  it('pay-page days are Jerusalem calendar days with Western digits in Arabic too', () => {
+    // 23:30 UTC on 31 Jan is already 1 February in Jerusalem.
+    const late = new Date('2027-01-31T23:30:00.000Z');
+    expect(payPageDay(late, 'en')).toBe('February 1, 2027');
+    expect(payPageDay(late, 'ar')).toBe('1 فبراير 2027');
+  });
+});
+
 describe('consumerCountryCheck (MUT-362 eng review D9: the operator’s flag)', () => {
   it('flags a payer outside the consumer countries with no tax ID on their customer', () => {
     expect(consumerCountryCheck('JO', 0, COUNTRIES)).toEqual({ openToConsumers: false, flagged: true });
@@ -251,20 +305,20 @@ describe('billing countries, currency and return paths', () => {
   });
 
   it('a currency is in the catalog only with both prices, each in its own currency and interval', () => {
-    const fact = (id: string, currency: string, unitAmount: number, interval: 'month' | 'year') => ({ id, currency, unitAmount, interval });
+    const fact = (id: string, currency: string, unitAmount: number, interval: 'month' | 'year') => ({ id, currency, unitAmount, interval, productId: 'prod_F' });
     const prices = new Map([
       ['freelancer_list_monthly_ils', fact('p1', 'ILS', 3900, 'month')],
       ['freelancer_list_yearly_ils', fact('p2', 'ILS', 39000, 'year')],
       ['freelancer_list_monthly_usd', fact('p3', 'USD', 1000, 'month')],
     ]);
-    expect(catalogFrom(prices)).toEqual({ ILS: { month: { id: 'p1', unitAmount: 3900 }, year: { id: 'p2', unitAmount: 39000 } }, USD: null });
+    expect(catalogFrom(prices)).toEqual({ ILS: { month: { id: 'p1', unitAmount: 3900, productId: 'prod_F' }, year: { id: 'p2', unitAmount: 39000, productId: 'prod_F' } }, USD: null });
     // A key pointing at the wrong currency or interval is a dashboard mistake: never sell it.
     prices.set('freelancer_list_yearly_usd', fact('p4', 'EUR', 10000, 'year'));
     expect(catalogFrom(prices).USD).toBeNull();
     prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'month'));
     expect(catalogFrom(prices).USD).toBeNull();
     prices.set('freelancer_list_yearly_usd', fact('p4', 'USD', 10000, 'year'));
-    expect(catalogFrom(prices).USD).toEqual({ month: { id: 'p3', unitAmount: 1000 }, year: { id: 'p4', unitAmount: 10000 } });
+    expect(catalogFrom(prices).USD).toEqual({ month: { id: 'p3', unitAmount: 1000, productId: 'prod_F' }, year: { id: 'p4', unitAmount: 10000, productId: 'prod_F' } });
   });
 
   it('the lookup keys follow the spike’s convention', () => {

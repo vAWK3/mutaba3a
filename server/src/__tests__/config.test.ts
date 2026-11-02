@@ -394,6 +394,14 @@ describe('loadConfig — Stripe and the job token (MUT-360)', () => {
     expect(loadConfig({ ...base, API_KEY_ENVIRONMENT: 'live', ...stripe, STRIPE_SECRET_KEY: 'rk_live_x' }).STRIPE_SECRET_KEY).toBe('rk_live_x');
   });
 
+  it('a QA coupon id is for test servers only, never a live one (MUT-525 R6)', () => {
+    expect(loadConfig({ ...base, ...stripe, BILLING_OFFER_COUPON_ID: 'qa_offer_k3x9' }).BILLING_OFFER_COUPON_ID).toBe('qa_offer_k3x9');
+    expect(loadConfig({ ...base, ...stripe }).BILLING_OFFER_COUPON_ID).toBeUndefined();
+    const live = { ...base, API_KEY_ENVIRONMENT: 'live', ...stripe, STRIPE_SECRET_KEY: 'rk_live_x' };
+    expect(() => loadConfig({ ...live, BILLING_OFFER_COUPON_ID: 'qa_offer_k3x9' })).toThrow(/BILLING_OFFER_COUPON_ID/);
+    expect(() => loadConfig({ ...base, ...stripe, BILLING_OFFER_COUPON_ID: 'not a coupon id' })).toThrow(/BILLING_OFFER_COUPON_ID/);
+  });
+
   it('a live server takes only a restricted live key: no full-access key, no test key (MUT-360 review)', () => {
     const live = { ...base, API_KEY_ENVIRONMENT: 'live', ...stripe };
     expect(() => loadConfig({ ...live, STRIPE_SECRET_KEY: 'sk_live_full_access' })).toThrow(/restricted live key/);

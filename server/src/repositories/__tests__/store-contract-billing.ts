@@ -54,6 +54,18 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
   });
 
   describe(`${name} LedgerStore billing (MUT-358)`, () => {
+    it('keeps the offer a subscription’s Checkout carried; absent is none (MUT-525 DD10b)', async () => {
+      const store = await makeStore();
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, null));
+      const offered = { ...subscription(customer), offerId: 'launch-2026' };
+      expect((await store.billing.saveSubscription(offered)).subscription.offerId).toBe('launch-2026');
+      expect((await store.billing.getSubscription(offered.stripeSubscriptionId))?.offerId).toBe('launch-2026');
+      const plain = subscription(customer);
+      expect((await store.billing.saveSubscription(plain)).subscription.offerId).toBeNull();
+      expect((await store.billing.getSubscription(plain.stripeSubscriptionId))?.offerId).toBeNull();
+    });
+
     it('factsFor returns the owner’s subscriptions with their payer, grants on the owner or the profile, and trial starts', async () => {
       const store = await makeStore();
       const firm = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });

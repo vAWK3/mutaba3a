@@ -2660,7 +2660,8 @@ export class PrismaLedgerStore implements LedgerStore {
       }
     },
     saveSubscription: async (input) => {
-      const { stripeCustomerId, at, audit, ...fields } = input;
+      const { stripeCustomerId, at, audit, ...given } = input;
+      const fields = { ...given, offerId: given.offerId ?? null };
       const attempt = () =>
         translate(() =>
           this.prisma.$transaction(async (tx) => {

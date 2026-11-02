@@ -11,10 +11,14 @@ import {
   isReturnPath,
   planCheckout,
   type BillingCountries,
+  type AppliedOffer,
+  type BillingInterval,
   type Catalog,
   type CheckoutRefusal,
   type PersonBilling,
 } from '../billing/checkout.js';
+import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
+import { offerOrNothing } from '../billing/offer-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { trialTimelineOf } from '../billing/entitlement.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
@@ -52,6 +56,8 @@ export interface BillingRouteOptions {
   /** Where Stripe sends the person back (the setup-link rule: PORTAL_ORIGIN, else the request's own origin). */
   portalOrigin?: string | undefined;
   logger: Pick<Logger, 'warn' | 'error'>;
+  /** MUT-525 (D12): the campaigns whose Stripe coupons may make an offer. Defaults to offers.json. */
+  offers?: readonly OfferEntry[];
 }
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -65,7 +71,8 @@ const refusedResponses = {
   403: errorResponse('PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST'),
   409: errorResponse(
     'CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, ' +
-      'NO_BILLING_ACCOUNT, or BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it)',
+      'NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), ' +
+      'or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)',
   ),
   422: errorResponse('VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS'),
   429: errorResponse(`RATE_LIMITED: more than ${BILLING_SESSION_POLICY.perMinute} billing sessions a minute; \`Retry-After\` says when`),
@@ -75,6 +82,7 @@ const refusedResponses = {
 
 export function billingRoutes(store: LedgerStore, options: BillingRouteOptions): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
+  const offers = options.offers ?? OFFERS;
 
   app.openapi(
     createRoute({
@@ -85,7 +93,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       description:
         'One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), ' +
         `cached for ${CATALOG_TTL_MS / MINUTE_MS} minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. ` +
-        '`coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile.',
+        '`coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. ' +
+        '`offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it ' +
+        '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
@@ -96,7 +106,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         options.checkout ? catalogOrNothing(options.checkout, options.logger, c.get('requestId')) : NO_CATALOG,
         ownedProfilesOf(store, user.id),
       ]);
-      const shown = currentSubscription(summary.subscriptions, c.get('now')());
+      const now = c.get('now')();
+      const shown = currentSubscription(summary.subscriptions, now);
+      const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
       return c.json(
         {
           configured: options.checkout !== null,
@@ -106,6 +118,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
           countries: countriesView(options.countries),
           coveredProfileIds: covered.map((p) => p.id),
+          offer: offer ? offerView(offer, offerEligible(offer, summary.subscriptions, offer.interval), catalog) : null,
         },
         200,
       );
@@ -123,7 +136,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         'metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says "*"); a business proves it is one. Stripe itself is ' +
         "asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts " +
         'are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe ' +
-        'webhook. Audited `billing.checkout_started` on each profile the person owns.',
+        'webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a ' +
+        'subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means ' +
+        'full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout.',
       security: SESSION_ONLY,
       request: { body: { required: true, content: { 'application/json': { schema: CheckoutSessionRequestSchema } } } },
       responses: { 200: { description: 'The Checkout page', content: { 'application/json': { schema: BillingRedirectSchema } } }, ...refusedResponses },
@@ -145,22 +160,30 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const plan = planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt }, person, options.countries, catalog);
       if (!plan.ok) throw refusalError(plan.code);
       const linked = summary.account?.stripeCustomerId ?? null;
-      const { url } = await viaStripe(
+      const { url, applied } = await viaStripe(
         async () => {
           const customer = linked ?? (await checkout.findOrCreateCustomer(personOf(user)));
           // Review: the mirror can be late (a slow webhook, a failed one), so Stripe's own word decides before money moves.
           const inStripe = await checkout.subscriptionsOf(customer);
-          const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...summary.subscriptions, ...inStripe] }, options.countries);
+          const everSubscribed = [...summary.subscriptions, ...inStripe];
+          const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: everSubscribed }, options.countries);
           if (stillRefused) throw refusalError(stillRefused);
+          // MUT-525 (OV-4): the offer is decided only now, on the mirror and Stripe together (D2), from a fresh coupon read (D6).
+          const offer = body.interval === 'year' ? await offerOrNothing(checkout, offers, catalog, now, true, options.logger, c.get('requestId')) : null;
+          const applied = offerEligible(offer, everSubscribed, body.interval) ? appliedOffer(offer!, catalog, plan.currency, body.interval) : null;
+          // DD4: the drawer showed an offer that no longer applies: no silent full price, the person decides again.
+          if (body.expectedOffer && applied?.id !== body.expectedOffer) throw refusalError('OFFER_ENDED');
+          const final = applied ? planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt, offer: applied }, person, options.countries, catalog) : plan;
+          if (!final.ok) throw refusalError(final.code);
           // Only the newest Checkout can be paid: another tab's, or an abandoned one, can't charge a second time.
           await checkout.expireOpenCheckouts(customer);
-          return checkout.createCheckoutSession({ ...plan.params, customer });
+          return { ...(await checkout.createCheckoutSession({ ...final.params, customer })), applied };
         },
         user,
         linked,
         options.logger,
       );
-      const metadata = { interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country };
+      const metadata = { interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: applied?.id ?? null };
       await auditOn(store, owned.profiles, user, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
       return c.json({ url }, 200);
     },
@@ -197,7 +220,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
   return app;
 }
 
-type Refusal = CheckoutRefusal | 'NO_BILLING_ACCOUNT' | 'BILLING_ACCOUNT_NEEDS_HELP';
+type Refusal = CheckoutRefusal | 'NO_BILLING_ACCOUNT' | 'BILLING_ACCOUNT_NEEDS_HELP' | 'OFFER_ENDED';
 
 /** The house rule (PATTERNS.md, MUT-120): an existing code with a `details.reason`, never a new code per refusal. */
 function refusalError(reason: Refusal): ApiError {
@@ -222,6 +245,7 @@ const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_
   COVERED_BY_GRANT: 'Your account is covered by MTB3A; there is nothing to pay',
   NO_BILLING_ACCOUNT: 'There is no billing account to manage yet',
   BILLING_ACCOUNT_NEEDS_HELP: 'We could not open billing for your account; please contact us',
+  OFFER_ENDED: 'The launch offer has ended; the yearly plan is at its regular price',
 };
 
 function requireCheckout(checkout: CheckoutGateway | null): CheckoutGateway {
@@ -265,6 +289,13 @@ async function catalogOrNothing(checkout: CheckoutGateway, logger: Pick<Logger, 
     logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'billing catalog unavailable; prices hidden');
     return NO_CATALOG;
   }
+}
+
+/** D4: what the offer adds to this Checkout, in the price's own currency. */
+function appliedOffer(offer: Offer, catalog: Catalog, currency: 'ILS' | 'USD', interval: BillingInterval): AppliedOffer | null {
+  const price = catalog[currency]?.[interval];
+  if (!price) return null;
+  return { id: offer.id, couponId: offer.couponId, firstAmount: firstYearOf(price.unitAmount, offer.percentOff), listAmount: price.unitAmount };
 }
 
 /**
@@ -327,6 +358,9 @@ function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
     currency,
     currentPeriodEnd: sub.currentPeriodEnd.toISOString(),
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    // MUT-525 DD3: a list price renews at the catalog's amount, which the drawer names; a founder price never shows one.
+    renewsAtListPrice: sub.priceLookupKey !== null && ALL_GA_LOOKUP_KEYS.includes(sub.priceLookupKey),
+    offer: sub.offerId ? { id: sub.offerId } : null,
   } as const;
 }
 

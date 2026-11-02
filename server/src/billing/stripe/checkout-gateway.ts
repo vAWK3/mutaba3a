@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 import type { SubscriptionState } from '../checkout.js';
+import type { CouponFact } from '../offer.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
 import { periodEndOf } from './mirror.js';
 
@@ -18,6 +19,8 @@ export interface PriceFact {
   currency: string;
   unitAmount: number;
   interval: 'month' | 'year';
+  /** MUT-525 (OV-4): the price's product, so the launch coupon can be checked to be restricted to it. */
+  productId: string;
 }
 
 export interface CheckoutPerson {
@@ -41,6 +44,11 @@ export interface CheckoutGateway {
   businessTaxIdCount(customer: string): Promise<number>;
   /** Review D3: prints the number a business typed on Checkout on every invoice the customer gets. */
   setInvoiceTaxNumber(customer: string, value: string): Promise<void>;
+  /**
+   * MUT-525 (D6): the coupon behind an offer, null when Stripe has none by that id or it is no longer valid. Cached
+   * for `couponTtlMs` (a failure for CATALOG_FAILURE_TTL_MS); `fresh` skips the cache (Checkout) and refreshes it.
+   */
+  couponById(id: string, options?: { fresh?: boolean }): Promise<CouponFact | null>;
 }
 
 /** A person is waiting: one retry, which the SDK makes safe with the same idempotency key. */
@@ -58,6 +66,8 @@ export interface CheckoutGatewayOptions {
   maxNetworkRetries: number;
   now: () => Date;
   httpClient?: Stripe.HttpClient;
+  /** MUT-525 (R6): how long a coupon read is reused. CATALOG_TTL_MS by default; the QA harness's API uses 0. */
+  couponTtlMs?: number;
 }
 
 const LOOKUP_PAGE = 10;
@@ -66,6 +76,7 @@ const OPEN_SESSIONS_PAGE = 10;
 const SELLABLE_TIER = 'freelancer';
 
 type CatalogEntry = { at: number; prices: Map<string, PriceFact> } | { at: number; failure: StripeGatewayError };
+type CouponEntry = { at: number; coupon: CouponFact | null } | { at: number; failure: StripeGatewayError };
 
 export function createCheckoutGateway(options: CheckoutGatewayOptions): CheckoutGateway {
   const stripe = new Stripe(options.secretKey, {
@@ -77,6 +88,26 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
   });
   const cache = new Map<string, CatalogEntry>();
   const inFlight = new Map<string, Promise<Map<string, PriceFact>>>();
+  const coupons = new Map<string, CouponEntry>();
+  const couponTtl = options.couponTtlMs ?? CATALOG_TTL_MS;
+
+  async function readCoupon(id: string): Promise<CouponFact | null> {
+    const at = options.now().getTime();
+    try {
+      const found = await wrapped(() => stripe.coupons.retrieve(id, { expand: ['applies_to'] }));
+      const coupon = found.valid ? couponFactOf(found) : null;
+      coupons.set(id, { at, coupon });
+      return coupon;
+    } catch (err) {
+      const failure = err instanceof StripeGatewayError ? err : toGatewayError(err);
+      if (failure.code === 'resource_missing') {
+        coupons.set(id, { at, coupon: null });
+        return null;
+      }
+      coupons.set(id, { at, failure });
+      throw failure;
+    }
+  }
 
   async function lookUp(cacheKey: string, keys: readonly string[]): Promise<Map<string, PriceFact>> {
     try {
@@ -149,6 +180,13 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     async setInvoiceTaxNumber(customer, value) {
       await wrapped(() => stripe.customers.update(customer, { invoice_settings: { custom_fields: [{ name: INVOICE_TAX_NUMBER_FIELD, value }] } }));
     },
+    async couponById(id, { fresh = false } = {}) {
+      const hit = fresh ? undefined : coupons.get(id);
+      const age = hit ? options.now().getTime() - hit.at : Number.POSITIVE_INFINITY;
+      if (hit && 'coupon' in hit && age < couponTtl) return hit.coupon;
+      if (hit && 'failure' in hit && age < Math.min(couponTtl, CATALOG_FAILURE_TTL_MS)) throw hit.failure;
+      return readCoupon(id);
+    },
   };
 }
 
@@ -164,7 +202,19 @@ function sellableFactOf(price: Stripe.Price): PriceFact | null {
   if (price.tax_behavior !== 'exclusive') return null;
   const product = typeof price.product === 'object' && !('deleted' in price.product && price.product.deleted) ? (price.product as Stripe.Product) : null;
   if ((product?.metadata?.['tier'] ?? '').trim().toLowerCase() !== SELLABLE_TIER) return null;
-  return { id: price.id, currency: price.currency.toUpperCase(), unitAmount: price.unit_amount, interval };
+  return { id: price.id, currency: price.currency.toUpperCase(), unitAmount: price.unit_amount, interval, productId: product!.id };
+}
+
+function couponFactOf(coupon: Stripe.Coupon): CouponFact {
+  return {
+    id: coupon.id,
+    valid: coupon.valid,
+    percentOff: coupon.percent_off ?? null,
+    amountOff: coupon.amount_off ?? null,
+    duration: coupon.duration,
+    redeemBy: typeof coupon.redeem_by === 'number' ? new Date(coupon.redeem_by * 1000) : null,
+    appliesToProducts: coupon.applies_to?.products ? [...coupon.applies_to.products] : null,
+  };
 }
 
 function digestOf(...parts: string[]): string {

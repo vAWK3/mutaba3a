@@ -152,6 +152,23 @@ describe('runTrialMail (MUT-419)', () => {
     expect(mails[2]!.subject).toBe('Your MTB3A account locks within 3 days');
   });
 
+  it('MUT-525 (R9b, D8): while the launch offer runs, every mail the run sends carries its line; without it, none does', async () => {
+    const h = harness();
+    const { user } = await h.person({ locale: 'ar' });
+    const other = await h.person();
+    h.setClock(jobAt(12));
+    await h.run({ now: jobAt(12), offer: { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } } });
+    const [arMail] = h.outbox.list({ to: user.email });
+    expect(arMail!.text).toContain('عرض الإطلاق: خصم 50% على سنتك الأولى في الاشتراك السنوي');
+    expect(arMail!.text).toContain('احصل على خصم 50%');
+    expect(h.outbox.list({ to: other.user.email })[0]!.text).toContain('Launch offer: 50% off your first year on a yearly plan, until February 1, 2027.');
+    h.setClock(jobAt(15));
+    await h.run({ now: jobAt(15), offer: null });
+    const ended = h.outbox.list({ to: other.user.email }).at(-1)!;
+    expect(ended.template).toBe('trial-ended');
+    expect(ended.text).not.toContain('Launch offer');
+  });
+
   it('A2: running twice on the same day sends nothing new', async () => {
     const h = harness();
     const { user } = await h.person();

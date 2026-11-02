@@ -182,6 +182,11 @@ const envSchema = z.object({
    */
   STRIPE_SECRET_KEY: z.string().regex(/^(rk|sk)_(test|live)_[A-Za-z0-9_]+$/, 'must be a Stripe secret or restricted key (sk_/rk_)').optional(),
   STRIPE_WEBHOOK_SECRET: z.string().regex(/^whsec_[A-Za-z0-9_]+$/, 'must be a Stripe webhook signing secret (whsec_)').optional(),
+  /**
+   * MUT-525 (R6): QA only. A coupon id that replaces offers.json with one yearly offer and reads it uncached, so each
+   * live QA run owns its coupon. Refused where API_KEY_ENVIRONMENT is live.
+   */
+  BILLING_OFFER_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**
@@ -324,6 +329,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   // subscriptions would then cover real people) is refused there.
   if (config.STRIPE_SECRET_KEY && config.API_KEY_ENVIRONMENT === 'live' && !/^rk_live_/.test(config.STRIPE_SECRET_KEY)) {
     throw new ConfigError('Invalid configuration:\n  STRIPE_SECRET_KEY: a live server needs a restricted live key (rk_live_…), never sk_ or a test key');
+  }
+  if (config.BILLING_OFFER_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
+    throw new ConfigError('Invalid configuration:\n  BILLING_OFFER_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
   }
   receiptReadingConfig(config);
   if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {

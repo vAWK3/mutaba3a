@@ -106,6 +106,8 @@ describe('GET /v1/billing (MUT-362)', () => {
       catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1000, year: 10000 } },
       countries: { consumer: ['IL', 'GB'], consumerEverywhere: false, customTaxId: ['IL', 'JO'] },
       coveredProfileIds: [u.personalId],
+      // MUT-525 R3: with no launch coupon in Stripe every field above is today's, plus a null offer.
+      offer: null,
     });
   });
 
@@ -170,6 +172,8 @@ describe('GET /v1/billing (MUT-362)', () => {
       currency: 'ILS',
       currentPeriodEnd: new Date(NOW.getTime() + 20 * DAY).toISOString(),
       cancelAtPeriodEnd: false,
+      renewsAtListPrice: true,
+      offer: null,
     });
   });
 
@@ -207,7 +211,7 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     });
     const audit = await billingAudit(h, u.personalId);
     expect(audit.map((e) => [e.action, e.actorType, e.actorId])).toEqual([['billing.checkout_started', 'USER', u.userId]]);
-    expect(audit[0]!.metadata).toEqual({ interval: 'month', currency: 'ILS', buyer: 'person', country: 'IL' });
+    expect(audit[0]!.metadata).toEqual({ interval: 'month', currency: 'ILS', buyer: 'person', country: 'IL', offer: null });
   });
 
   it('a person with a linked customer reuses it, never creating another (MUT-360 OV-7)', async () => {
@@ -402,6 +406,136 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     for (let i = 0; i < 11; i++) statuses.push((await u.post(CHECKOUT, checkoutBody())).status);
     expect(statuses.slice(0, 10).every((s) => s === 409)).toBe(true);
     expect(statuses[10]).toBe(429);
+  });
+});
+
+describe('the launch offer (MUT-525)', () => {
+  const REDEEM_BY = new Date('2027-02-01T22:59:00.000Z');
+  const ENDS_AT = new Date(REDEEM_BY.getTime() - 60 * 60 * 1000).toISOString();
+  const offered = () => {
+    const h = harness();
+    h.checkout.withLaunchCoupon(REDEEM_BY);
+    return h;
+  };
+  const yearly = (over: Record<string, unknown> = {}) => checkoutBody({ interval: 'year', ...over });
+
+  it('GET shows the offer with each currency’s first year, to someone who never subscribed (§2, D4)', async () => {
+    const h = offered();
+    const u = await person(h);
+    expect((await read(await u.get())).offer).toEqual({
+      id: 'launch-2026',
+      percentOff: 50,
+      endsAt: ENDS_AT,
+      interval: 'year',
+      eligible: true,
+      firstYear: { ILS: 19500, USD: 5000 },
+    });
+    expect(h.checkout.couponReads).toEqual(['cached:mtb3a_launch_yearly_2026']);
+  });
+
+  it('GET says not eligible to someone the mirror shows a subscription for, even a cancelled one (D2)', async () => {
+    const h = offered();
+    const u = await person(h);
+    await linkSubscription(h, u.userId, 'canceled');
+    expect((await read(await u.get())).offer).toMatchObject({ id: 'launch-2026', eligible: false });
+  });
+
+  it('GET answers offer: null with no coupon, or when the coupon can’t be read, and still opens (R7)', async () => {
+    const none = harness();
+    expect((await read(await (await person(none)).get())).offer).toBeNull();
+    const h = offered();
+    const u = await person(h);
+    h.checkout.failCoupons();
+    const res = await u.get();
+    expect(res.status).toBe(200);
+    expect((await read(res)).offer).toBeNull();
+    expect(h.logs.some((l) => l.includes('launch offer unavailable'))).toBe(true);
+    expect((await read(await (await person(harness({ stripeOff: true }))).get())).offer).toBeNull();
+  });
+
+  it('a yearly Checkout carries the coupon, read fresh, keeps the trial, and the audit names the offer (D1, D6, R8)', async () => {
+    const h = offered();
+    const u = await person(h);
+    await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 4 * DAY));
+    const res = await u.post(CHECKOUT, yearly({ expectedOffer: 'launch-2026' }));
+    expect(res.status).toBe(200);
+    const params = h.checkout.checkoutSessions[0]!;
+    expect(params.discounts).toEqual([{ coupon: 'mtb3a_launch_yearly_2026' }]);
+    expect(params.subscription_data).toEqual({ metadata: { mutaba3a_user_id: u.userId, mutaba3a_offer: 'launch-2026' }, trial_end: Math.floor((NOW.getTime() + 10 * DAY) / 1000) });
+    expect(params.custom_text?.submit?.message).toMatch(/^عرض الإطلاق: \u2068₪195\u2069/);
+    expect(h.checkout.couponReads).toEqual(['fresh:mtb3a_launch_yearly_2026']);
+    expect((await billingAudit(h, u.personalId))[0]!.metadata).toMatchObject({ interval: 'year', offer: 'launch-2026' });
+  });
+
+  it('a monthly Checkout reads no coupon and carries none (D3, R9d)', async () => {
+    const h = offered();
+    const u = await person(h);
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect(h.checkout.couponReads).toEqual([]);
+    expect(h.checkout.checkoutSessions[0]).not.toHaveProperty('discounts');
+  });
+
+  it('Stripe knowing a cancelled subscription the mirror lacks means full price (D2: Stripe decides at Checkout)', async () => {
+    const h = offered();
+    // The mirror never got the row (a webhook that failed); Stripe still lists the cancelled subscription.
+    const fresh = await person(h);
+    h.checkout.customers.set('cus_known', { email: fresh.email, userId: fresh.userId });
+    h.checkout.stripeSubscriptions.set('cus_known', [{ status: 'canceled', currentPeriodEnd: new Date(NOW.getTime() - 40 * DAY) }]);
+    expect((await fresh.post(CHECKOUT, yearly())).status).toBe(200);
+    expect(h.checkout.checkoutSessions.at(-1)).not.toHaveProperty('discounts');
+    expect((await billingAudit(h, fresh.personalId))[0]!.metadata).toMatchObject({ offer: null });
+  });
+
+  it('a coupon deleted after the drawer showed it: 409 OFFER_ENDED and no Checkout; asked again, full price (DD4)', async () => {
+    const h = offered();
+    const u = await person(h);
+    expect((await read(await u.get())).offer).not.toBeNull();
+    h.checkout.coupons.clear();
+    const res = await u.post(CHECKOUT, yearly({ expectedOffer: 'launch-2026' }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toEqual({ reason: 'OFFER_ENDED' });
+    expect(h.checkout.checkoutSessions).toHaveLength(0);
+    const again = await u.post(CHECKOUT, yearly());
+    expect(again.status).toBe(200);
+    expect(h.checkout.checkoutSessions[0]).not.toHaveProperty('discounts');
+  });
+
+  it('a coupon read failing at Checkout is full price and a 200, logged as an error (R7)', async () => {
+    const h = offered();
+    const u = await person(h);
+    h.checkout.failCoupons();
+    const res = await u.post(CHECKOUT, yearly());
+    expect(res.status).toBe(200);
+    expect(h.checkout.checkoutSessions[0]).not.toHaveProperty('discounts');
+    expect(h.logs.some((l) => l.includes('"level":50') && l.includes('launch offer coupon could not be read'))).toBe(true);
+  });
+
+  it('within the last hour before redeem_by a Checkout gets no coupon (R1)', async () => {
+    const h = harness({ now: () => new Date(REDEEM_BY.getTime() - 30 * 60 * 1000) });
+    h.checkout.withLaunchCoupon(REDEEM_BY);
+    const u = await person(h);
+    expect((await read(await u.get())).offer).toBeNull();
+    expect((await u.post(CHECKOUT, yearly())).status).toBe(200);
+    expect(h.checkout.checkoutSessions[0]).not.toHaveProperty('discounts');
+  });
+
+  it('the shown subscription says which offer it carried and whether it renews at a list price (DD3, DD10b)', async () => {
+    const h = harness();
+    const u = await person(h);
+    const customer = await linkSubscription(h, u.userId, 'active', 'freelancer_list_yearly_ils');
+    const sub = (await h.store.billing.summaryOf(u.userId)).subscriptions[0]!;
+    await h.store.billing.saveSubscription({ ...sub, stripeCustomerId: customer, offerId: 'launch-2026', stripeUpdatedAt: new Date(NOW.getTime() + 1), at: NOW, audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null } });
+    expect((await read(await u.get())).subscription).toMatchObject({ renewsAtListPrice: true, offer: { id: 'launch-2026' } });
+    const founder = harness();
+    const f = await person(founder);
+    await linkSubscription(founder, f.userId, 'active', 'freelancer_founder_yearly_ils');
+    expect((await read(await f.get())).subscription).toMatchObject({ renewsAtListPrice: false, offer: null });
+  });
+
+  it('refuses an expectedOffer that is not an offer id', async () => {
+    const h = offered();
+    const u = await person(h);
+    expect((await u.post(CHECKOUT, yearly({ expectedOffer: 'Bad Id!' }))).status).toBe(422);
   });
 });
 

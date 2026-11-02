@@ -426,6 +426,22 @@ const CatalogPairSchema = z
   .nullable()
   .openapi({ description: 'Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold.' });
 
+/** MUT-525 (§2): the launch offer as GET /v1/billing reports it. Amounts in minor units, per currency (ADR-004). */
+export const BillingOfferSchema = z
+  .object({
+    /** The campaign (offers.json `id`), for analytics and `expectedOffer`. */
+    id: z.string(),
+    percentOff: z.number().positive().max(100),
+    /** The last moment a new Checkout gets it: an hour before the coupon's redeem_by (eng review R1). */
+    endsAt: z.string().datetime(),
+    interval: z.enum(['month', 'year']),
+    /** This person gets it: they never had a subscription, in any status (D2). */
+    eligible: z.boolean(),
+    /** The first period's price after the discount; null where that currency isn't sold. */
+    firstYear: z.object({ ILS: z.number().int().nonnegative().nullable(), USD: z.number().int().nonnegative().nullable() }),
+  })
+  .openapi('BillingOffer');
+
 /** MUT-362: Settings › Billing in one read (GET /v1/billing). */
 export const BillingOverviewSchema = z
   .object({
@@ -440,6 +456,10 @@ export const BillingOverviewSchema = z
         currency: z.string(),
         currentPeriodEnd: z.string().datetime(),
         cancelAtPeriodEnd: z.boolean(),
+        /** MUT-525 DD3: on a GA list price (`freelancer_list_*`), so it renews at the catalog's amount; false for a founder price. */
+        renewsAtListPrice: z.boolean(),
+        /** MUT-525 DD10b: the launch offer the subscription's Checkout carried. */
+        offer: z.object({ id: z.string() }).nullable(),
       })
       .nullable(),
     /** A Stripe customer is linked to this person, so the Customer Portal can open. */
@@ -456,6 +476,8 @@ export const BillingOverviewSchema = z
     }),
     /** The profiles a payment would cover: the ones the person created (a co-owner's shared profile is its creator's, TD-193). */
     coveredProfileIds: z.array(z.string().uuid()),
+    /** MUT-525: the launch offer while its Stripe coupon runs; null otherwise (eng review finding 2: a union, never a nullable component). */
+    offer: z.union([BillingOfferSchema, z.null()]),
   })
   .openapi('BillingOverview');
 
@@ -471,6 +493,8 @@ export const CheckoutSessionRequestSchema = z
     country: z.string().regex(/^[A-Z]{2}$/),
     buyer: z.enum(['person', 'business']),
     returnPath: ReturnPathSchema,
+    /** MUT-525 DD4: the offer the drawer showed; if it no longer applies the server answers 409 OFFER_ENDED instead of charging the full price. */
+    expectedOffer: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
   })
   .strict()
   .openapi('CheckoutSessionRequest');

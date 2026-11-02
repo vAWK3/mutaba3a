@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { normalizeEmail } from '../auth/users.js';
-import type { Mailer, SendResult } from '../email/ports.js';
+import type { MailOffer, Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { LedgerStore, UserLocale } from '../repositories/ports.js';
@@ -99,6 +99,8 @@ export interface TrialMailRunOptions {
   gateOn: boolean;
   links: { subscribe: string; export: string };
   dryRun: boolean;
+  /** MUT-525 (R9b): the launch offer while it runs, read once for the run; every mail sent then names it. */
+  offer?: MailOffer | null;
   /** R1 (R9): elapsed milliseconds on the run's own clock, separate from `now`. Defaults to a monotonic timer. */
   elapsedMs?: () => number;
   budgetMs?: number;
@@ -160,16 +162,17 @@ async function skipReason(options: TrialMailRunOptions, userId: string, email: s
 
 function send(options: TrialMailRunOptions, row: TrialMailRow): Promise<SendResult> {
   const { links } = options;
+  const offer = options.offer ?? null;
   const to = row.email;
   const base = { to, locale: row.locale, idempotencyKey: `trial:${row.userId}:${row.stage}` };
   const daysLeft = row.daysLeft ?? TRIAL_REMINDER_DAYS;
   switch (row.stage) {
     case 'ending-soon':
-      return options.mailer.send({ ...base, template: 'trial-ending-soon', vars: { daysLeft, subscribeLink: links.subscribe } });
+      return options.mailer.send({ ...base, template: 'trial-ending-soon', vars: { daysLeft, subscribeLink: links.subscribe, offer } });
     case 'ended':
-      return options.mailer.send({ ...base, template: 'trial-ended', vars: { subscribeLink: links.subscribe, exportLink: links.export } });
+      return options.mailer.send({ ...base, template: 'trial-ended', vars: { subscribeLink: links.subscribe, exportLink: links.export, offer } });
     case 'locking-soon':
-      return options.mailer.send({ ...base, template: 'trial-locking-soon', vars: { daysLeft, subscribeLink: links.subscribe, exportLink: links.export } });
+      return options.mailer.send({ ...base, template: 'trial-locking-soon', vars: { daysLeft, subscribeLink: links.subscribe, exportLink: links.export, offer } });
   }
 }
 

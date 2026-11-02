@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
 import { createApp, type AppDependencies } from '../app.js';
-import { FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
+import { FakeCheckoutGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
 import { createMailer } from '../email/mailer.js';
 import { MemoryMailTransport } from '../email/transports/memory.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -23,7 +23,7 @@ type Loose = any;
 const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
 let seq = 0;
 
-function harness(overrides: Partial<AppDependencies> & { stripeOff?: boolean } = {}) {
+function harness(overrides: Partial<AppDependencies> & { stripeOff?: boolean; checkout?: FakeCheckoutGateway } = {}) {
   const store = new MemoryLedgerStore();
   const outbox = new MemoryMailTransport(() => NOW);
   const logger = pino({ level: 'silent' });
@@ -39,7 +39,7 @@ function harness(overrides: Partial<AppDependencies> & { stripeOff?: boolean } =
     now: () => NOW,
     mailer,
     billingGate: true,
-    stripe: overrides.stripeOff ? null : { webhookGateway: gateway, reconcileGateway: gateway },
+    stripe: overrides.stripeOff ? null : { webhookGateway: gateway, reconcileGateway: gateway, ...(overrides.checkout ? { checkoutGateway: overrides.checkout } : {}) },
     jobToken: JOB_TOKEN,
     ...overrides,
   });
@@ -70,6 +70,22 @@ describe('POST /jobs/v1/billing/trial-mail (Cloud Scheduler)', () => {
     expect(body).toEqual({ dryRun: false, checked: 1, due: 1, sent: 1, duplicate: 0, notSent: 0, skipped: { paying: 0, covered: 0, otherProfiles: 0, suppressed: 0, gateOff: 0 }, incomplete: false });
     expect(JSON.stringify(body)).not.toContain(person.email);
     expect(h.outbox.list({ to: person.email }).map((m) => m.template)).toEqual(['trial-ended']);
+  });
+
+  it('MUT-525: the launch offer, read once per run from Stripe, adds its line; a coupon Stripe can’t read adds none (R7, R9b)', async () => {
+    const checkout = new FakeCheckoutGateway().withGaPrices().withLaunchCoupon(new Date('2027-02-01T22:59:00.000Z'));
+    const h = harness({ checkout });
+    const a = await h.trialPerson(12);
+    const b = await h.trialPerson(20);
+    expect((await h.post(JOB, { 'x-job-token': JOB_TOKEN })).status).toBe(200);
+    expect(checkout.couponReads).toEqual(['cached:mtb3a_launch_yearly_2026']);
+    for (const person of [a, b]) expect(h.outbox.list({ to: person.email })[0]!.text).toContain('Launch offer: 50% off your first year on a yearly plan, until February 1, 2027.');
+    const failing = new FakeCheckoutGateway().withGaPrices().withLaunchCoupon(new Date('2027-02-01T22:59:00.000Z'));
+    failing.failCoupons();
+    const h2 = harness({ checkout: failing });
+    const c = await h2.trialPerson(12);
+    expect((await h2.post(JOB, { 'x-job-token': JOB_TOKEN })).status).toBe(200);
+    expect(h2.outbox.list({ to: c.email })[0]!.text).not.toContain('Launch offer');
   });
 
   it('A2: a second call the same day sends nothing new', async () => {

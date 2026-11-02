@@ -27,7 +27,10 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'trial-locking-soon': { daysLeft: 2, subscribeLink: SUBSCRIBE, exportLink: EXPORT },
   'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: 'https://portal.example.test/sign-in' },
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: 'https://portal.example.test/' },
+  'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
 };
+/** MUT-525: the launch offer line the trial mails carry while it runs (ADR-237). */
+const OFFER = { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } };
 /** Numbers a template may print, from its own count vars; anything else numeric is a defect. */
 const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'finish-signup': ['24'],
@@ -38,6 +41,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'trial-locking-soon': ['2'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
   'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
+  // MUT-525 (ADR-237, overriding ADR-159 §5): a renewal notice must state its price and day.
+  'offer-renewing-soon': ['₪290', mailDay({ year: 2027, month: 11, day: 12 }, 'en'), mailDay({ year: 2027, month: 11, day: 12 }, 'ar')],
 };
 const LINKS_OF = (vars: object): string[] => Object.values(vars).filter((v): v is string => typeof v === 'string' && /^https?:\/\//.test(v));
 const CURRENCY = /\b(USD|ILS|NIS|EUR|GBP|JOD|AED|SAR|QAR|KWD|BHD|OMR|EGP)\b|[₪$€£]|شيكل|دولار|دينار|درهم|ريال/;
@@ -182,6 +187,46 @@ describe('templates', () => {
   });
 });
 
+describe('the launch offer in mail (MUT-525 DD7, DD8, DD12d)', () => {
+  const TRIAL_IDS = ['trial-ending-soon', 'trial-ended', 'trial-locking-soon'] as const;
+  const withOffer = <T extends (typeof TRIAL_IDS)[number]>(id: T) => ({ ...SAMPLE[id], offer: OFFER }) as TemplateVars[T];
+
+  it.each(TRIAL_IDS)('%s: with no offer, renders exactly as before (R3)', (id) => {
+    for (const locale of LOCALES) {
+      expect(renderMail(id, locale, { ...SAMPLE[id], offer: null } as never, FRAME)).toEqual(renderMail(id, locale, SAMPLE[id] as never, FRAME));
+    }
+  });
+
+  it.each(TRIAL_IDS)('%s: the offer is the last intro line, the action asks for it, subject and preview stay', (id) => {
+    const en = renderMail(id, 'en', withOffer(id), FRAME);
+    const ar = renderMail(id, 'ar', withOffer(id), FRAME);
+    const enLine = `Launch offer: 50% off your first year on a yearly plan, until ${mailDay(OFFER.endsOn, 'en')}.`;
+    const arLine = `عرض الإطلاق: خصم 50% على سنتك الأولى في الاشتراك السنوي، حتى ${mailDay(OFFER.endsOn, 'ar')}.`;
+    expect(en.text).toContain(`${enLine}\n\nGet 50% off a year:\n${SUBSCRIBE}`);
+    expect(ar.text).toContain(`${arLine}\n\nاحصل على خصم 50%:\n${SUBSCRIBE}`);
+    expect(en.subject).toBe(renderMail(id, 'en', SAMPLE[id] as never).subject);
+    expect(ar.subject).toBe(renderMail(id, 'ar', SAMPLE[id] as never).subject);
+    // No amount anywhere in a trial mail: percent and day only (D8).
+    for (const mail of [en, ar]) expect(mail.text).not.toMatch(CURRENCY);
+  });
+
+  it('the renewal notice: its day, the new yearly price plus VAT, Manage billing and how to cancel (DD8)', () => {
+    const vars = SAMPLE['offer-renewing-soon'];
+    const en = renderMail('offer-renewing-soon', 'en', vars, FRAME);
+    const ar = renderMail('offer-renewing-soon', 'ar', vars, FRAME);
+    expect(en.text).toContain('Your first year ends on November 12, 2027');
+    expect(en.text).toContain('Renews on: November 12, 2027');
+    expect(en.text).toContain('New price: ₪290 a year, plus VAT where it applies');
+    expect(en.text).toContain(`Manage billing:\n${vars.manageLink}`);
+    expect(en.text).toContain("Don't want to renew? Cancel any time before November 12, 2027 from Manage billing. You keep the year you paid for.");
+    expect(en.html).toContain('data-details');
+    expect(ar.text).toContain('السعر الجديد:');
+    expect(ar.text).toContain('₪290');
+    expect(ar.text).toContain('إدارة الدفع');
+    expect(ar.html).toContain('dir="rtl"');
+  });
+});
+
 /**
  * MUT-468 (plan §5, regression contract R2/D3): the frame. The rules above stay unchanged; with no art origin they
  * also prove the images-off render. These add the pictures, the headline and preview line, the footer, contrast and
@@ -209,6 +254,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'trial-locking-soon': { en: 'Your MTB3A account locks within 2 days', ar: 'يُقفَل حسابك في متابعة خلال يومين' },
   'account-closing': { en: 'Your MTB3A account will be deleted on November 23, 2026', ar: 'سيُحذف حسابك في متابعة بتاريخ 23 نوفمبر 2026' },
   'passkey-added': { en: 'A passkey was added to your MTB3A account', ar: 'أُضيف مفتاح مرور إلى حسابك في متابعة' },
+  'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 نوفمبر 2027' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
@@ -334,7 +380,7 @@ describe('MUT-468 frame', () => {
     const closing = renderMail('account-closing', 'ar', SAMPLE['account-closing'], FRAME);
     expect(closing.html).toContain('data-details');
     expect(closing.text).toContain(`يوم الحذف: ${mailDay(SAMPLE['account-closing'].deleteOn, 'ar')}`);
-    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing')) {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon')) {
       expect(renderMail(id, 'en', SAMPLE[id] as never, FRAME).html).not.toContain('data-details');
     }
   });

@@ -33,10 +33,17 @@ describe('mirrorOf (MUT-360)', () => {
         cancelAtPeriodEnd: false,
         priceLookupKey: 'freelancer_founder_monthly_ils',
         founderUntil: null,
+        offerId: null,
         currency: 'ILS',
       },
       notes: [],
     });
+  });
+
+  it('mirrors the launch offer a Checkout named, and nothing not shaped like an offer id (MUT-525 DD10b)', () => {
+    expect(mirrorOf(subscription({ metadata: { mutaba3a_offer: 'launch-2026' } }), new Map())).toMatchObject({ ok: { offerId: 'launch-2026' } });
+    expect(mirrorOf(subscription({ metadata: { mutaba3a_offer: 'Launch 2026; drop' } }), new Map())).toMatchObject({ ok: { offerId: null } });
+    expect(mirrorOf(subscription({ metadata: { mutaba3a_offer: 'x'.repeat(41) } }), new Map())).toMatchObject({ ok: { offerId: null } });
   });
 
   it('takes the tier from product metadata, never the amount, and resolves an unexpanded product from the list', () => {

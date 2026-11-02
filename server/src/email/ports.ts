@@ -7,7 +7,9 @@ import type { UserLocale } from '../repositories/ports.js';
  *
  * No template variable is an amount, a currency or a date: an email carries a link, never a money record
  * (ADR-159 §5, pinned by templates.test.ts). One exception (MUT-333, ADR-188 override log): `account-closing` names
- * the day the account is deleted, a calendar day and never a money date.
+ * the day the account is deleted, a calendar day and never a money date. MUT-525 (ADR-237 override log): the trial
+ * mails may name the launch offer's percent and last day, and `offer-renewing-soon` names the subscription's own
+ * yearly price and renewal day, because a renewal notice must state them. Money records still never appear.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -24,6 +26,7 @@ export const TEMPLATE_IDS = [
   'trial-locking-soon',
   'account-closing',
   'passkey-added',
+  'offer-renewing-soon',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -54,6 +57,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   // MUT-414: adding a passkey needs a recent sign-in or the password, like the password notice; a stranger asking for
   // signup links to the address must not cap away the one mail that reports a planted passkey.
   'passkey-added',
+  // MUT-525 (DD8): sent once per subscription by the daily run, ~30 days before a price change the person must hear of.
+  'offer-renewing-soon',
 ]);
 
 export interface TemplateVars {
@@ -77,9 +82,9 @@ export interface TemplateVars {
    * MUT-419: the trial reminders. `daysLeft` is whole days left, rounded up (1-3), always worded "within N days" (D2).
    * `subscribeLink` opens Billing's Subscribe step; `exportLink` opens Your data (the records export).
    */
-  'trial-ending-soon': { daysLeft: number; subscribeLink: string };
-  'trial-ended': { subscribeLink: string; exportLink: string };
-  'trial-locking-soon': { daysLeft: number; subscribeLink: string; exportLink: string };
+  'trial-ending-soon': { daysLeft: number; subscribeLink: string; offer?: MailOffer | null };
+  'trial-ended': { subscribeLink: string; exportLink: string; offer?: MailOffer | null };
+  'trial-locking-soon': { daysLeft: number; subscribeLink: string; exportLink: string; offer?: MailOffer | null };
   /**
    * MUT-333 (D10): the account was closed; it is deleted on `deleteOn` (a calendar day in the person's zone,
    * accounts/closure.ts deletionDayOf) unless they sign in and keep it.
@@ -90,6 +95,18 @@ export interface TemplateVars {
    * the passkey is added and says so (ADR-159 §5, no dates in mail).
    */
   'passkey-added': { passkeyName: string; signInLink: string };
+  /**
+   * MUT-525 (DD8): ~30 days before a launch-offer subscription's first renewal. `listAmount` is the subscription's own
+   * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.
+   */
+  'offer-renewing-soon': { renewsOn: CalendarDay; listAmount: number; currency: string; manageLink: string };
+}
+
+/** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */
+export interface MailOffer {
+  percentOff: number;
+  /** The last calendar day a Checkout gets it, in Asia/Jerusalem. */
+  endsOn: CalendarDay;
 }
 
 /** MUT-333: a calendar day, formatted by the template in the mail's own language. */

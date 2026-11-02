@@ -2145,6 +2145,8 @@ export interface BillingSubscriptionRecord {
   cancelAtPeriodEnd: boolean;
   priceLookupKey: string | null;
   founderUntil: Date | null;
+  /** MUT-525: the launch offer the subscription's Checkout carried (its `mutaba3a_offer` metadata), else null. */
+  offerId: string | null;
   stripeUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2247,6 +2249,8 @@ export interface SaveBillingSubscriptionInput {
   cancelAtPeriodEnd: boolean;
   priceLookupKey: string | null;
   founderUntil: Date | null;
+  /** MUT-525: the offer the Checkout carried. Absent is null. */
+  offerId?: string | null;
   /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
   at: Date;

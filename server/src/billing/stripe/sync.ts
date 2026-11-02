@@ -170,6 +170,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       cancelAtPeriodEnd: state.cancelAtPeriodEnd,
       priceLookupKey: stored.priceLookupKey,
       founderUntil: stored.founderUntil,
+      offerId: stored.offerId,
       stripeUpdatedAt: fetchedAt,
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },

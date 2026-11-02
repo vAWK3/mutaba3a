@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import countriesFile from './billing-countries.json' with { type: 'json' };
 import { periodOver, type Entitlement } from './entitlement.js';
+import { formatMinor } from './money.js';
 
 /**
  * MUT-362 (plan §2.3, eng review D5/D6): who may start a Stripe Checkout, and with exactly which parameters. Pure: the
@@ -22,6 +23,8 @@ export interface CatalogPrice {
   id: string;
   /** Minor units, as Stripe stores them. */
   unitAmount: number;
+  /** MUT-525 (OV-4): the price's product, so an offer's coupon can be checked to be the Freelancer one's. */
+  productId: string;
 }
 
 /** A currency is sellable only with both its prices; otherwise null (PRICES_NOT_SET). */
@@ -95,6 +98,17 @@ export interface CheckoutInput {
   now: Date;
   /** The person's free trial end (review D2): a later one carries into the subscription. Null: no trial. */
   trialEndsAt: Date | null;
+  /** MUT-525: the launch offer this Checkout carries (the route decided it applies), else null or absent. */
+  offer?: AppliedOffer | null;
+}
+
+/** MUT-525: what an offer adds to a Checkout: its coupon, its name in the metadata, and the pay-page line (R8). */
+export interface AppliedOffer {
+  id: string;
+  couponId: string;
+  /** Minor units of the price's own currency: the first year after the discount, and the list price it renews at. */
+  firstAmount: number;
+  listAmount: number;
 }
 
 export interface PersonBilling {
@@ -116,11 +130,11 @@ export const ALL_GA_LOOKUP_KEYS: readonly string[] = Object.values(GA_PRICE_LOOK
  * The sellable catalog from the prices Stripe returned: a currency needs both its prices, each in that currency and
  * interval. A key put on the wrong price in the dashboard leaves that currency unsellable rather than mischarging.
  */
-export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: string; unitAmount: number; interval: BillingInterval }>): Catalog {
+export function catalogFrom(prices: ReadonlyMap<string, { id: string; currency: string; unitAmount: number; interval: BillingInterval; productId: string }>): Catalog {
   const pairOf = (currency: BillingCurrency) => {
     const pick = (interval: BillingInterval) => {
       const price = prices.get(GA_PRICE_LOOKUP_KEYS[currency][interval]);
-      return price && price.currency === currency && price.interval === interval ? { id: price.id, unitAmount: price.unitAmount } : null;
+      return price && price.currency === currency && price.interval === interval ? { id: price.id, unitAmount: price.unitAmount, productId: price.productId } : null;
     };
     const month = pick('month');
     const year = pick('year');
@@ -171,7 +185,7 @@ export function planCheckout(input: CheckoutInput, person: PersonBilling, countr
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
   if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
-  return { ok: true, currency, params: paramsOf(input, prices[input.interval], countries) };
+  return { ok: true, currency, params: paramsOf(input, currency, prices[input.interval], countries) };
 }
 
 /** Every refusal that needs no price: the route checks these before asking Stripe for the catalog. */
@@ -191,7 +205,7 @@ export function checkoutRefusalOf(input: Pick<CheckoutInput, 'country' | 'buyer'
   return null;
 }
 
-function paramsOf(input: CheckoutInput, price: CatalogPrice, countries: BillingCountries): CheckoutParams {
+function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: CatalogPrice, countries: BillingCountries): CheckoutParams {
   // MUT-418 D10: buying "For a business" means proving it is one, in any country: Stripe's tax ID where Stripe has the
   // type, our field where it doesn't. A person (who may buy anywhere under "*") is never asked for either.
   const business = input.buyer === 'business';
@@ -200,24 +214,60 @@ function paramsOf(input: CheckoutInput, price: CatalogPrice, countries: BillingC
   const customFields: Stripe.Checkout.SessionCreateParams.CustomField[] = typedNumber
     ? [{ key: BUSINESS_TAX_NUMBER_KEY, label: { type: 'custom', custom: TAX_NUMBER_FIELD_LABEL }, type: 'text', optional: false }]
     : [];
+  const offer = input.offer ?? null;
+  const trial = trialCarriedOver(input);
   return {
     mode: 'subscription',
     line_items: [{ price: price.id, quantity: 1 }],
     client_reference_id: input.userId,
-    subscription_data: { metadata: { mutaba3a_user_id: input.userId }, ...trialCarriedOver(input) },
+    ...(offer ? { discounts: [{ coupon: offer.couponId }] } : {}),
+    subscription_data: { metadata: { mutaba3a_user_id: input.userId, ...(offer ? { [OFFER_METADATA_KEY]: offer.id } : {}) }, ...trial },
     customer_update: { address: 'auto', name: 'auto' },
     automatic_tax: { enabled: true },
     billing_address_collection: 'required',
     tax_id_collection: { enabled: true, required: taxIdRequired ? 'if_supported' : 'never' },
     custom_fields: customFields,
     locale: 'auto',
-    custom_text: { submit: { message: CHECKOUT_SUBMIT_MESSAGE } },
+    custom_text: { submit: { message: offer ? offerSubmitMessage(offer, currency, renewsOnOf(input.now, trial.trial_end)) : CHECKOUT_SUBMIT_MESSAGE } },
     // The charge stays in the price's own currency: a subscription in any other couldn't be mirrored (UNSUPPORTED_CURRENCY).
     adaptive_pricing: { enabled: false },
     expires_at: Math.floor(input.now.getTime() / 1000) + CHECKOUT_SESSION_TTL_SECONDS,
     success_url: `${input.returnUrl}?billing=true&checkout=success`,
     cancel_url: `${input.returnUrl}?billing=true&checkout=cancelled`,
   };
+}
+
+/** MUT-525: the subscription metadata naming the offer a Checkout carried; the webhook mirrors it (`offerId`). */
+export const OFFER_METADATA_KEY = 'mutaba3a_offer';
+
+/** The first paid year starts at the carried trial's end, else now; the list price is charged a year later. */
+export function renewsOnOf(now: Date, trialEndSeconds: number | undefined): Date {
+  const start = trialEndSeconds === undefined ? new Date(now) : new Date(trialEndSeconds * 1000);
+  start.setUTCFullYear(start.getUTCFullYear() + 1);
+  return start;
+}
+
+const ISOLATE = (text: string) => `\u2068${text}\u2069`;
+
+/** A pay-page date (DD12a): a long date on the Jerusalem calendar, Western digits in Arabic too. */
+export function payPageDay(at: Date, locale: 'ar' | 'en'): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-u-nu-latn' : 'en-US', { dateStyle: 'long', timeZone: 'Asia/Jerusalem' }).format(at);
+}
+
+/**
+ * R8, DD12a: an offer Checkout states, in Arabic and English above Pay, the first year's price, the price it renews
+ * at and from when. Arabic first (Stripe's page has none of its own); amounts and dates are bidi-isolated.
+ */
+export function offerSubmitMessage(offer: AppliedOffer, currency: BillingCurrency, renewsOn: Date): string {
+  const price = ISOLATE(formatMinor(offer.firstAmount, currency));
+  const list = ISOLATE(formatMinor(offer.listAmount, currency));
+  const [arNote, enNote] = CHECKOUT_SUBMIT_MESSAGE.split('\n\n');
+  return [
+    `عرض الإطلاق: ${price} عن سنتك الأولى، ثم يتجدد بسعر ${list} سنويًا ابتداءً من ${ISOLATE(payPageDay(renewsOn, 'ar'))}.`,
+    arNote,
+    `Launch offer: ${price} for your first year. It then renews at ${list} a year from ${ISOLATE(payPageDay(renewsOn, 'en'))}.`,
+    enNote,
+  ].join('\n\n');
 }
 
 /** Review D2: subscribing during the trial keeps the rest of it, so Stripe first charges on the trial's end. */

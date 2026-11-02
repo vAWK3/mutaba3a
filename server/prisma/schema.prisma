@@ -1559,6 +1559,8 @@ model BillingSubscription {
   priceLookupKey       String?        @db.VarChar(100)
   /// The end of a founder-price lock (12 months, D4).
   founderUntil         DateTime?
+  /// MUT-525: the offer the Checkout carried (`metadata.mutaba3a_offer`, e.g. `launch-2026`); null for none.
+  offerId              String?        @db.VarChar(40)
   /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
   stripeUpdatedAt      DateTime
   createdAt            DateTime       @default(now())

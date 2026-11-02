@@ -82,6 +82,7 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'trial-locking-soon': { mood: 'trial', header: 'spot-lock', chip: 'lock' },
   'account-declined': { mood: 'goodbye', header: 'empty-state', chip: 'info' },
   'account-closing': { mood: 'goodbye', header: 'destructive-confirmation', chip: 'delete' },
+  'offer-renewing-soon': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

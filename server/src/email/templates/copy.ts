@@ -1,13 +1,15 @@
 import type { UserLocale } from '../../repositories/ports.js';
-import type { CalendarDay, MailTemplateId, TemplateVars } from '../ports.js';
-import type { CustomerMailBody, MailBody } from './layout.js';
+import { formatMinor } from '../../billing/money.js';
+import type { CalendarDay, MailOffer, MailTemplateId, TemplateVars } from '../ports.js';
+import type { CustomerMailBody, Inline, MailBody } from './layout.js';
 import type { CustomerTemplateId } from './look.js';
 
 /**
  * MUT-359: every mail's words, English and Arabic side by side (brief §8.4). Server-generated strings, so a record
  * per language is enough (precedent: PERSONAL_PROFILE_NAME); there is no i18n library on the server. Arabic is the
  * default wherever a caller has no language (ADR-077). No amount, currency or date ever appears (ADR-159 §5), except
- * the deletion day of `account-closing` (MUT-333, ADR-188), never a money date.
+ * the deletion day of `account-closing` (MUT-333, ADR-188), never a money date, and the launch offer's percent and
+ * last day in the trial mails and the renewal price and day of `offer-renewing-soon` (MUT-525, ADR-237).
  *
  * MUT-468 (plan §4): each customer mail also has a headline and an inbox preview line, in the approved mail kit's
  * shape, with the kit's sample facts corrected. Subjects are unchanged.
@@ -252,83 +254,104 @@ const NOTHING_DELETED: Record<UserLocale, string> = {
   ar: 'لا يُحذف أي شيء.',
 };
 
+/**
+ * MUT-525 (DD12d): while the launch offer runs, it is the last intro line, right above the action, and the action asks
+ * for it (still to Subscribe). Subject and preview line never change. With no offer the mail is exactly as before.
+ */
+function withOffer<B extends { intro: Inline[][]; action?: { label: string; href: string } }>(body: B, offer: MailOffer | null | undefined, locale: UserLocale): B {
+  if (!offer || !body.action) return body;
+  const day = mailDay(offer.endsOn, locale);
+  const line =
+    locale === 'ar'
+      ? `عرض الإطلاق: خصم ${offer.percentOff}% على سنتك الأولى في الاشتراك السنوي، حتى ${day}.`
+      : `Launch offer: ${offer.percentOff}% off your first year on a yearly plan, until ${day}.`;
+  const label = locale === 'ar' ? `احصل على خصم ${offer.percentOff}%` : `Get ${offer.percentOff}% off a year`;
+  return { ...body, intro: [...body.intro, [line]], action: { label, href: body.action.href } };
+}
+
 const trialEndingSoon: Copy<'trial-ending-soon'> = {
-  en: ({ daysLeft, subscribeLink }) => ({
-    subject: `Your MTB3A free trial ends within ${enDays(daysLeft)}`,
-    preheader: 'Add a card so nothing stops.',
-    headline: `Your free trial ends within ${enDays(daysLeft)}`,
-    intro: [
-      ["After that your account becomes read-only: you can still see and download everything, but you can't add or change anything until you subscribe."],
-      ['Add a card now so nothing stops.'],
-    ],
-    action: { label: 'Add a card', href: subscribeLink },
-    outro: [['Your records stay safe whatever you decide.']],
-  }),
-  ar: ({ daysLeft, subscribeLink }) => ({
-    subject: `تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}`,
-    preheader: 'أضف بطاقة كي لا يتوقف شيء.',
-    headline: `تنتهي تجربتك المجانية خلال ${arDays(daysLeft)}`,
-    intro: [
-      ['بعدها يصبح حسابك للقراءة فقط: يمكنك رؤية كل شيء وتنزيله، لكن لا يمكنك إضافة أي شيء أو تعديله إلى أن تشترك.'],
-      ['أضف بطاقة الآن كي لا يتوقف شيء.'],
-    ],
-    action: { label: 'أضف بطاقة', href: subscribeLink },
-    outro: [['سجلاتك في أمان مهما قررت.']],
-  }),
+  en: ({ daysLeft, subscribeLink, offer }) =>
+    withOffer({
+      subject: `Your MTB3A free trial ends within ${enDays(daysLeft)}`,
+      preheader: 'Add a card so nothing stops.',
+      headline: `Your free trial ends within ${enDays(daysLeft)}`,
+      intro: [
+        ["After that your account becomes read-only: you can still see and download everything, but you can't add or change anything until you subscribe."],
+        ['Add a card now so nothing stops.'],
+      ],
+      action: { label: 'Add a card', href: subscribeLink },
+      outro: [['Your records stay safe whatever you decide.']],
+    }, offer, 'en'),
+  ar: ({ daysLeft, subscribeLink, offer }) =>
+    withOffer({
+      subject: `تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}`,
+      preheader: 'أضف بطاقة كي لا يتوقف شيء.',
+      headline: `تنتهي تجربتك المجانية خلال ${arDays(daysLeft)}`,
+      intro: [
+        ['بعدها يصبح حسابك للقراءة فقط: يمكنك رؤية كل شيء وتنزيله، لكن لا يمكنك إضافة أي شيء أو تعديله إلى أن تشترك.'],
+        ['أضف بطاقة الآن كي لا يتوقف شيء.'],
+      ],
+      action: { label: 'أضف بطاقة', href: subscribeLink },
+      outro: [['سجلاتك في أمان مهما قررت.']],
+    }, offer, 'ar'),
 };
 
 const trialEnded: Copy<'trial-ended'> = {
-  en: ({ subscribeLink, exportLink }) => ({
-    subject: 'Your MTB3A account is read-only',
-    preheader: 'You can still see and download everything.',
-    headline: 'Your account is read-only',
-    intro: [
-      ['Your free trial has ended, so your MTB3A account is now read-only.'],
-      ['Your records are safe: you can see and download all of them. Subscribe to keep adding them.'],
-    ],
-    action: { label: 'Subscribe', href: subscribeLink },
-    secondary: { label: 'Download my records', href: exportLink },
-    outro: [[NOTHING_DELETED.en]],
-  }),
-  ar: ({ subscribeLink, exportLink }) => ({
-    subject: 'حسابك في متابعة للقراءة فقط',
-    preheader: 'ما زال بإمكانك رؤية كل شيء وتنزيله.',
-    headline: 'حسابك للقراءة فقط',
-    intro: [
-      ['انتهت تجربتك المجانية، لذلك أصبح حسابك في متابعة للقراءة فقط.'],
-      ['سجلاتك محفوظة: يمكنك رؤيتها كلها وتنزيلها. اشترك لتواصل إضافتها.'],
-    ],
-    action: { label: 'اشترك', href: subscribeLink },
-    secondary: { label: 'نزّل سجلاتي', href: exportLink },
-    outro: [[NOTHING_DELETED.ar]],
-  }),
+  en: ({ subscribeLink, exportLink, offer }) =>
+    withOffer({
+      subject: 'Your MTB3A account is read-only',
+      preheader: 'You can still see and download everything.',
+      headline: 'Your account is read-only',
+      intro: [
+        ['Your free trial has ended, so your MTB3A account is now read-only.'],
+        ['Your records are safe: you can see and download all of them. Subscribe to keep adding them.'],
+      ],
+      action: { label: 'Subscribe', href: subscribeLink },
+      secondary: { label: 'Download my records', href: exportLink },
+      outro: [[NOTHING_DELETED.en]],
+    }, offer, 'en'),
+  ar: ({ subscribeLink, exportLink, offer }) =>
+    withOffer({
+      subject: 'حسابك في متابعة للقراءة فقط',
+      preheader: 'ما زال بإمكانك رؤية كل شيء وتنزيله.',
+      headline: 'حسابك للقراءة فقط',
+      intro: [
+        ['انتهت تجربتك المجانية، لذلك أصبح حسابك في متابعة للقراءة فقط.'],
+        ['سجلاتك محفوظة: يمكنك رؤيتها كلها وتنزيلها. اشترك لتواصل إضافتها.'],
+      ],
+      action: { label: 'اشترك', href: subscribeLink },
+      secondary: { label: 'نزّل سجلاتي', href: exportLink },
+      outro: [[NOTHING_DELETED.ar]],
+    }, offer, 'ar'),
 };
 
 const trialLockingSoon: Copy<'trial-locking-soon'> = {
-  en: ({ daysLeft, subscribeLink, exportLink }) => ({
-    subject: `Your MTB3A account locks within ${enDays(daysLeft)}`,
-    preheader: 'Nothing is deleted when it locks.',
-    headline: `Your account locks within ${enDays(daysLeft)}`,
-    intro: [
-      ['After that you can only subscribe or download your records.'],
-      ['You can still download all your records, now or after the lock.'],
-    ],
-    action: { label: 'Subscribe', href: subscribeLink },
-    secondary: { label: 'Download my records', href: exportLink },
-    outro: [[NOTHING_DELETED.en]],
-  }),
-  ar: ({ daysLeft, subscribeLink, exportLink }) => ({
-    subject: `يُقفَل حسابك في متابعة خلال ${arDays(daysLeft)}`,
-    preheader: 'لا يُحذف أي شيء عند الإقفال.',
-    headline: `يُقفَل حسابك خلال ${arDays(daysLeft)}`,
-    intro: [
-      ['بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.'],
-      ['ما زال بإمكانك تنزيل كل سجلاتك، الآن أو بعد الإقفال.'],
-    ],
-    action: { label: 'اشترك', href: subscribeLink },
-    secondary: { label: 'نزّل سجلاتي', href: exportLink },
-    outro: [[NOTHING_DELETED.ar]],
-  }),
+  en: ({ daysLeft, subscribeLink, exportLink, offer }) =>
+    withOffer({
+      subject: `Your MTB3A account locks within ${enDays(daysLeft)}`,
+      preheader: 'Nothing is deleted when it locks.',
+      headline: `Your account locks within ${enDays(daysLeft)}`,
+      intro: [
+        ['After that you can only subscribe or download your records.'],
+        ['You can still download all your records, now or after the lock.'],
+      ],
+      action: { label: 'Subscribe', href: subscribeLink },
+      secondary: { label: 'Download my records', href: exportLink },
+      outro: [[NOTHING_DELETED.en]],
+    }, offer, 'en'),
+  ar: ({ daysLeft, subscribeLink, exportLink, offer }) =>
+    withOffer({
+      subject: `يُقفَل حسابك في متابعة خلال ${arDays(daysLeft)}`,
+      preheader: 'لا يُحذف أي شيء عند الإقفال.',
+      headline: `يُقفَل حسابك خلال ${arDays(daysLeft)}`,
+      intro: [
+        ['بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.'],
+        ['ما زال بإمكانك تنزيل كل سجلاتك، الآن أو بعد الإقفال.'],
+      ],
+      action: { label: 'اشترك', href: subscribeLink },
+      secondary: { label: 'نزّل سجلاتي', href: exportLink },
+      outro: [[NOTHING_DELETED.ar]],
+    }, offer, 'ar'),
 };
 
 /**
@@ -393,6 +416,48 @@ const passkeyAdded: Copy<'passkey-added'> = {
   }),
 };
 
+/**
+ * MUT-525 (DD8, ADR-237): a launch-offer year ends; the plan renews at the subscription's own price. Built like
+ * `account-closing`: the day in the headline, a details panel, one action, and how to cancel before it renews.
+ */
+const offerRenewingSoon: Copy<'offer-renewing-soon'> = {
+  en: ({ renewsOn, listAmount, currency, manageLink }) => {
+    const day = mailDay(renewsOn, 'en');
+    const list = formatMinor(listAmount, currency);
+    return {
+      subject: `Your MTB3A first year ends on ${day}`,
+      preheader: `Your plan renews at ${list} a year.`,
+      headline: `Your first year ends on ${day}`,
+      intro: [['Your launch-offer year ends soon. Your plan then renews at the regular yearly price.']],
+      details: [
+        { label: 'Plan', value: 'Freelancer, yearly' },
+        { label: 'Renews on', value: day },
+        { label: 'New price', value: `${list} a year, plus VAT where it applies` },
+      ],
+      action: { label: 'Manage billing', href: manageLink },
+      outro: [[`Don't want to renew? Cancel any time before ${day} from Manage billing. You keep the year you paid for.`]],
+    };
+  },
+  ar: ({ renewsOn, listAmount, currency, manageLink }) => {
+    const day = mailDay(renewsOn, 'ar');
+    // Isolated so the amount reads left to right inside Arabic (ADR-101).
+    const list = `\u2068${formatMinor(listAmount, currency)}\u2069`;
+    return {
+      subject: `تنتهي سنتك الأولى في متابعة يوم ${day}`,
+      preheader: `يتجدد اشتراكك بسعر ${list} سنويًا.`,
+      headline: `تنتهي سنتك الأولى يوم ${day}`,
+      intro: [['تنتهي قريبًا سنة عرض الإطلاق، ثم يتجدد اشتراكك بالسعر السنوي المعتاد.']],
+      details: [
+        { label: 'الخطة', value: 'المستقل، سنويًا' },
+        { label: 'يتجدد في', value: day },
+        { label: 'السعر الجديد', value: `${list} سنويًا، وتُضاف ضريبة القيمة المضافة حيث تنطبق` },
+      ],
+      action: { label: 'إدارة الدفع', href: manageLink },
+      outro: [[`لا تريد التجديد؟ ألغِ في أي وقت قبل ${day} من «إدارة الدفع»، وتبقى سنتك المدفوعة كاملة.`]],
+    };
+  },
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -408,4 +473,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'trial-locking-soon': trialLockingSoon,
   'account-closing': accountClosing,
   'passkey-added': passkeyAdded,
+  'offer-renewing-soon': offerRenewingSoon,
 };

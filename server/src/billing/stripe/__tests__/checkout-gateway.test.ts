@@ -26,9 +26,9 @@ const price = (lookupKey: string, currency: string, unitAmount: number, interval
 const customer = (id: string, email: string, userId: string | null) => ({ id, object: 'customer', email, metadata: userId ? { mutaba3a_user_id: userId } : {} });
 const list = (data: unknown[]) => ({ object: 'list', has_more: false, data });
 
-function gatewayWith(respond: Parameters<typeof fakeStripe>[0], now = () => new Date('2026-11-01T09:00:00.000Z')) {
+function gatewayWith(respond: Parameters<typeof fakeStripe>[0], now = () => new Date('2026-11-01T09:00:00.000Z'), couponTtlMs?: number) {
   const fake = fakeStripe(respond);
-  return { ...fake, gateway: createCheckoutGateway({ secretKey: KEY, ...CHECKOUT_BUDGET, now, httpClient: fake.httpClient }) };
+  return { ...fake, gateway: createCheckoutGateway({ secretKey: KEY, ...CHECKOUT_BUDGET, now, httpClient: fake.httpClient, ...(couponTtlMs === undefined ? {} : { couponTtlMs }) }) };
 }
 const route = (s: SeenRequest) => `${s.method} ${s.path}`;
 
@@ -180,7 +180,7 @@ describe('CheckoutGateway prices (MUT-362 §2.1)', () => {
   it('looks the active prices up by lookup key', async () => {
     const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([price(keys[0]!, 'ils', 3900, 'month'), price(keys[1]!, 'ils', 39000, 'year')]) }));
     const prices = await gateway.pricesByLookupKey(keys);
-    expect(prices.get(keys[0]!)).toEqual({ id: `price_${keys[0]}`, currency: 'ILS', unitAmount: 3900, interval: 'month' });
+    expect(prices.get(keys[0]!)).toEqual({ id: `price_${keys[0]}`, currency: 'ILS', unitAmount: 3900, interval: 'month', productId: 'prod_FREELANCER' });
     expect(prices.get(keys[1]!)).toMatchObject({ unitAmount: 39000, interval: 'year' });
     expect(seen.map(route)).toEqual(['GET /v1/prices']);
     expect(seen[0]!.query.get('expand[0]')).toBe('data.product');
@@ -235,5 +235,84 @@ describe('CheckoutGateway prices (MUT-362 §2.1)', () => {
   it('skips a price that isn’t recurring or has no amount', async () => {
     const { gateway } = gatewayWith(() => ({ status: 200, body: list([{ ...price(keys[0]!, 'ils', 3900, 'month'), recurring: null }, { ...price(keys[1]!, 'ils', 0, 'year'), unit_amount: null }]) }));
     expect((await gateway.pricesByLookupKey(keys)).size).toBe(0);
+  });
+});
+
+describe('CheckoutGateway coupons (MUT-525 D6, R6, R7)', () => {
+  const COUPON = 'mtb3a_launch_yearly_2026';
+  const coupon = (over: Record<string, unknown> = {}) => ({
+    id: COUPON,
+    object: 'coupon',
+    valid: true,
+    percent_off: 50,
+    amount_off: null,
+    duration: 'once',
+    redeem_by: 1801000000,
+    applies_to: { products: ['prod_FREELANCER'] },
+    ...over,
+  });
+  const missing = { status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such coupon' } } };
+
+  it('reads the coupon with applies_to expanded', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: coupon() }));
+    expect(await gateway.couponById(COUPON)).toEqual({
+      id: COUPON,
+      valid: true,
+      percentOff: 50,
+      amountOff: null,
+      duration: 'once',
+      redeemBy: new Date(1801000000 * 1000),
+      appliesToProducts: ['prod_FREELANCER'],
+    });
+    expect(seen.map(route)).toEqual([`GET /v1/coupons/${COUPON}`]);
+    expect(seen[0]!.query.get('expand[0]')).toBe('applies_to');
+  });
+
+  it('a coupon Stripe no longer has, or one no longer valid, is null', async () => {
+    expect(await gatewayWith(() => missing).gateway.couponById(COUPON)).toBeNull();
+    expect(await gatewayWith(() => ({ status: 200, body: coupon({ valid: false }) })).gateway.couponById(COUPON)).toBeNull();
+  });
+
+  it('a coupon with no redeem_by or no product list says so', async () => {
+    const fact = await gatewayWith(() => ({ status: 200, body: coupon({ redeem_by: null, applies_to: undefined }) })).gateway.couponById(COUPON);
+    expect(fact).toMatchObject({ redeemBy: null, appliesToProducts: null });
+  });
+
+  it('caches for ten minutes by default, a failure for one; `fresh` always asks Stripe', async () => {
+    let now = new Date('2026-11-01T09:00:00.000Z');
+    let fail = true;
+    const { seen, gateway } = gatewayWith(() => (fail ? { status: 500, body: { error: { type: 'api_error', message: 'boom' } } } : { status: 200, body: coupon() }), () => now);
+    await expect(gateway.couponById(COUPON)).rejects.toBeInstanceOf(StripeGatewayError);
+    const failed = seen.length;
+    fail = false;
+    await expect(gateway.couponById(COUPON)).rejects.toBeInstanceOf(StripeGatewayError);
+    expect(seen.length).toBe(failed);
+    expect(await gateway.couponById(COUPON, { fresh: true })).not.toBeNull();
+    expect(seen.length).toBe(failed + 1);
+    // The fresh read refreshed the cache.
+    await gateway.couponById(COUPON);
+    expect(seen.length).toBe(failed + 1);
+    now = new Date(now.getTime() + CATALOG_TTL_MS + 1);
+    await gateway.couponById(COUPON);
+    expect(seen.length).toBe(failed + 2);
+  }, 15_000);
+
+  it('a missing coupon is cached like an answer, not a failure', async () => {
+    const { seen, gateway } = gatewayWith(() => missing);
+    expect(await gateway.couponById(COUPON)).toBeNull();
+    expect(await gateway.couponById(COUPON)).toBeNull();
+    expect(seen).toHaveLength(1);
+  });
+
+  it('a cache TTL of 0 (the QA harness, R6) asks Stripe every time', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: coupon() }), undefined, 0);
+    await gateway.couponById(COUPON);
+    await gateway.couponById(COUPON);
+    expect(seen).toHaveLength(2);
+  });
+
+  it('a permission error is a gateway error the route turns into no offer (R7)', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 403, body: { error: { type: 'invalid_request_error', message: 'The provided key does not have the required permissions' } } }));
+    await expect(gateway.couponById(COUPON)).rejects.toBeInstanceOf(StripeGatewayError);
   });
 });
