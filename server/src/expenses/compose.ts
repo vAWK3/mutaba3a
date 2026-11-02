@@ -225,7 +225,8 @@ export function learnedFromPatch(existing: ExpenseRecord, updated: ExpenseRecord
   if (updated.currency !== existing.currency) learning.currency = updated.currency;
   const before = vatOf(existing);
   const after = vatOf(updated);
-  if (body.vat !== undefined && after) learning.vat = { set: after };
+  const same = before !== null && after !== null && before.treatment === after.treatment && before.rateBasisPoints === after.rateBasisPoints;
+  if (body.vat !== undefined && after && !same) learning.vat = { set: after };
   else if (body.vat === null && before) learning.vat = { clearIf: before };
   return learning;
 }

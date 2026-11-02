@@ -558,8 +558,9 @@ export function serializeExpenseGroupOverride(m: ExpenseGroupOverrideRecord) {
 }
 
 /** MUT-254: a typeahead hit; the registration key is an index column and never leaves the server. */
-export function serializeVendorSuggestion(s: VendorSuggestion) {
-  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, exact: s.exact, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId, ...vendorDefaults(s.vendor, true) };
+/** MUT-303 (R10): `withVat` false off firm profiles, which never see VAT. */
+export function serializeVendorSuggestion(s: VendorSuggestion, withVat = true) {
+  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, exact: s.exact, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId, ...vendorDefaults(s.vendor, withVat) };
 }
 
 /** MUT-303: a vendor's currency and VAT as a client may prefill them; a currency the API no longer offers reads null. */

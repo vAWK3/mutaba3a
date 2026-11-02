@@ -257,6 +257,21 @@ describe('vendor defaults: currency and VAT (MUT-303)', () => {
     expect((await s.suggest('bezeq'))[0].lastCurrency).toBe('USD');
   });
 
+  it('review: a PATCH that resends an unchanged VAT teaches nothing', async () => {
+    const s = await setup();
+    await firmOn(s);
+    const old = await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '117.00', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } });
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.patch(old, { vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 }, title: 'Same VAT' })).status).toBe(200);
+    expect((await s.suggest('bezeq'))[0].lastVat).toEqual(vat16);
+  });
+
+  it('R10 (review): off firm profiles the typeahead offers the currency but never VAT', async () => {
+    const s = await setup();
+    await s.create({ vendor: 'Bezeq', currency: 'EUR', amount: '116.00', vat: vat16 });
+    expect((await s.suggest('bezeq'))[0]).toMatchObject({ lastCurrency: 'EUR', lastVat: null });
+  });
+
   it('AC3: one profile’s vendor never offers its defaults to another profile', async () => {
     const s = await setup();
     await s.create({ vendor: 'Bezeq', currency: 'EUR' });

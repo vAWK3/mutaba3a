@@ -6,13 +6,13 @@ ADD COLUMN "lastVatRateBasisPoints" INTEGER;
 
 ALTER TABLE "vendors" ADD CONSTRAINT "vendors_last_vat_both_or_none" CHECK (("lastVatTreatment" IS NULL) = ("lastVatRateBasisPoints" IS NULL));
 
--- D5: seed each vendor's currency from its latest live expense, in the currencies the API supports today. No VAT
+-- D5: seed each vendor's currency from its most recently entered live expense (as touch learns: the last one saved), in the currencies the API supports today. No VAT
 -- seed: expense VAT is days old (MUT-302), and the next save with VAT teaches it.
 UPDATE "vendors" v SET "lastCurrency" = latest."currency"
 FROM (
   SELECT DISTINCT ON ("vendorId") "vendorId", "currency"
   FROM "expenses"
   WHERE "vendorId" IS NOT NULL AND "deletedAt" IS NULL AND "currency" IN ('ILS', 'USD', 'EUR', 'JOD')
-  ORDER BY "vendorId", "occurredOn" DESC, "createdAt" DESC, "id" DESC
+  ORDER BY "vendorId", "createdAt" DESC, "id" DESC
 ) AS latest
 WHERE v."id" = latest."vendorId" AND v."lastCurrency" IS NULL;

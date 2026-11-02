@@ -20,7 +20,5 @@ async function matchedVendor(store: LedgerStore, organizationId: string, receipt
   const byRegistration = registration ? await store.vendors.findByRegistration(organizationId, registration) : null;
   if (byRegistration) return byRegistration;
   const name = receipt.suggested?.vendorName?.value;
-  if (!name) return null;
-  const [best] = await store.vendors.search(organizationId, name, 1);
-  return best?.exact ? best.vendor : null;
+  return name ? store.vendors.findByName(organizationId, name) : null;
 }

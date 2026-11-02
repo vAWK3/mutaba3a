@@ -2273,6 +2273,12 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.vendor.findUnique({ where: { organizationId_registrationKey: { organizationId, registrationKey: regKey } } });
       return row ? toVendor(row) : null;
     },
+    findByName: async (organizationId, name) => {
+      const nameKey = vendorNameKey(name);
+      if (!nameKey) return null;
+      const row = await this.prisma.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId, nameKey } }, include: { vendor: true } });
+      return row ? toVendor(row.vendor) : null;
+    },
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {

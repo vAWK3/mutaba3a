@@ -213,6 +213,7 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 12 (MUT-479): `props` gained `agreementType` and `draft`.
  * 13 (MUT-443): `pays` gained `reversalReasonCode`.
  * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
+ * 15 (MUT-303): `vendors` gained `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
  */
 export const CURRENT_STORE_SNAPSHOT_VERSION = 15;
 
@@ -2668,6 +2669,12 @@ export class MemoryLedgerStore implements LedgerStore {
     findByRegistration: async (organizationId, registrationNo) => {
       const regKey = registrationKey(registrationNo);
       const v = regKey ? [...this.vendorMap.values()].find((x) => x.organizationId === organizationId && registrationKey(x.registrationNo) === regKey) : undefined;
+      return v ? { ...v } : null;
+    },
+    findByName: async (organizationId, name) => {
+      const nameKey = vendorNameKey(name);
+      const owner = nameKey ? [...this.vendorNames.values()].find((n) => n.organizationId === organizationId && n.nameKey === nameKey) : undefined;
+      const v = owner ? this.vendorMap.get(owner.vendorId) : undefined;
       return v ? { ...v } : null;
     },
   };

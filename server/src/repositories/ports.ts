@@ -2918,6 +2918,8 @@ export interface VendorRepository {
   search(organizationId: string, query: string, limit: number): Promise<VendorSuggestion[]>;
   /** MUT-441: the profile's vendor with this registration number (compared by `registrationKey`), or null. One indexed lookup. */
   findByRegistration(organizationId: string, registrationNo: string): Promise<VendorRecord | null>;
+  /** MUT-303 (review): the profile's vendor one of whose names is exactly this name (by `nameKey`), or null. One indexed lookup. */
+  findByName(organizationId: string, name: string): Promise<VendorRecord | null>;
 }
 
 
