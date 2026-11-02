@@ -230,3 +230,87 @@ test('On Owed, a running trial is one quiet line: the days left, Add a card and 
     await attachScreenshot(page, 'portal-trial-line-ar-375');
   });
 });
+
+/** MUT-532: a monthly list-price plan, as GET /v1/billing shows it; `pause` as the mirror holds it. */
+function monthlyPlan(coveredProfileIds: string[], pause: { from: string; until: string | null } | null = null) {
+  return {
+    ...billingOverview(coveredProfileIds),
+    trial: null,
+    canManage: true,
+    subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: inDays(12), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: null, pause },
+  };
+}
+
+test('A paused plan’s profile says it is paused until it restarts, with Resume now, never “ended”', { tag: '@portal.billing.paused-banner' }, async ({ page, step }) => {
+  const billing = { state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: inDays(40), paused: true };
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), billing }], billingStanding: 'read-only', billing: monthlyPlan([OFFICE_A], { from: inDays(-3), until: inDays(40) }) });
+  await api.open(page, `/p/${OFFICE_A}/expenses`);
+  const banner = page.getByRole('region', { name: 'Your plan' });
+
+  await step('Open Expenses while the plan is paused', async () => {
+    await expect(banner.getByText('Paused', { exact: true })).toBeVisible();
+    await expect(banner.getByText(/^Your plan is paused until .+\. You can see and download everything; adding and changing come back when it restarts\.$/)).toBeVisible();
+    await expect(banner.getByText(/has ended/)).toHaveCount(0);
+    await expect(banner.getByRole('button', { name: 'Subscribe' })).toHaveCount(0);
+    await expect(banner.getByRole('button', { name: 'Download my records' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Record expense' })).toHaveCount(0);
+  });
+  await step('Press Resume now on the banner: Billing says paused until, with Resume now', async () => {
+    await banner.getByRole('button', { name: 'Resume now' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Billing' });
+    await expect(drawer.getByRole('heading', { name: /^Paused until / })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Resume now' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Cancel plan' })).toHaveCount(0);
+  });
+});
+
+test('The cancel flow reads right to left in Arabic on a 375px phone, every step', { tag: '@portal.billing.cancel-rtl-375' }, async ({ page, step }) => {
+  await page.setViewportSize(PHONE);
+  const billing = { state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: inDays(12) };
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'استوديو نور'), billing }], billingStanding: 'open', billing: monthlyPlan([OFFICE_A]) });
+  await api.open(page, `/p/${OFFICE_A}?billing=true`, 'ar');
+  const offers = {
+    endsOn: inDays(12),
+    pause: { options: [1, 2, 3].map((months) => ({ months, from: inDays(12), until: inDays(12 + 30 * months) })) },
+    stayOffer: { percentOff: 50, months: 2, currency: 'ILS', monthlyAmount: 1450, listAmount: 2900 },
+  };
+  let retention: unknown = offers;
+  await page.route('**/v1/billing/retention', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(retention) }));
+  const noSideScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  const flow = page.getByRole('dialog', { name: 'إلغاء الاشتراك' });
+
+  await step('Press إلغاء الاشتراك: why, right to left', async () => {
+    await page.getByRole('dialog', { name: 'الاشتراك' }).getByRole('button', { name: 'إلغاء الاشتراك' }).click();
+    await expect(flow.getByRole('heading', { name: 'لماذا تريد الإلغاء؟' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    expect(await noSideScroll()).toBe(true);
+    await attachScreenshot(page, 'portal-cancel-why-ar-375');
+  });
+  await step('Pick a reason and press متابعة: the pause step', async () => {
+    await flow.getByRole('radio', { name: 'السعر مرتفع' }).check();
+    await page.getByRole('button', { name: 'متابعة' }).click();
+    await expect(flow.getByRole('heading', { name: 'ما رأيك بإيقاف مؤقت بدل الإلغاء؟' })).toBeVisible();
+    await expect(flow.getByRole('radio', { name: /^شهران، يعود في / })).toBeVisible();
+    expect(await noSideScroll()).toBe(true);
+    await attachScreenshot(page, 'portal-cancel-pause-ar-375');
+  });
+  await step('Press لا، أكمل الإلغاء: the stay offer, amounts as ₪ figures', async () => {
+    await page.getByRole('button', { name: 'لا، أكمل الإلغاء' }).click();
+    await expect(flow.getByRole('heading', { name: 'ابقَ معنا بخصم 50% لمدة شهرين' })).toBeVisible();
+    await expect(flow.locator('bdi.hp-amount', { hasText: '14.50' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^أبقِ اشتراكي بسعر / })).toBeVisible();
+    expect(await noSideScroll()).toBe(true);
+    await attachScreenshot(page, 'portal-cancel-stay-ar-375');
+  });
+  await step('With no offers, the flow goes from the reason to Confirm cancel', async () => {
+    retention = { endsOn: inDays(12), pause: null, stayOffer: null };
+    await page.goto(`/p/${OFFICE_A}?billing=true&step=cancel`);
+    await flow.getByRole('radio', { name: 'سبب آخر' }).check();
+    await page.getByRole('button', { name: 'متابعة' }).click();
+    await expect(flow.getByRole('heading', { name: 'إلغاء اشتراكك؟' })).toBeVisible();
+    await expect(flow.getByRole('button', { name: 'أبقِ اشتراكي' })).toBeVisible();
+    await expect(flow.getByRole('button', { name: 'ألغِ الاشتراك' })).toBeVisible();
+    expect(await noSideScroll()).toBe(true);
+    await attachScreenshot(page, 'portal-cancel-confirm-ar-375');
+  });
+});

@@ -127,3 +127,32 @@ features:
       - Owed shows one muted line "10 days left in your free trial · Add a card · Hide for 3 days", with no icon, no box and no end date
       - Add a card opens Billing's Subscribe step
       - In Arabic the line reads right to left with إخفاء لمدة 3 أيام, and nothing scrolls sideways
+  # MUT-532: the paused banner and the cancel flow in Arabic on a phone, with the API stubbed (the money moves in
+  # portal-live).
+  - id: paused-banner
+    title: A paused plan's profile says it is paused until it restarts, with Resume now, never "ended"
+    tier: secondary
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/data/trialPrompt.ts
+      - src/hosted/pages/you/YouAccount.tsx
+    steps:
+      - Open Expenses on a profile whose plan is paused
+      - Press Resume now on the banner
+    expect:
+      - The banner says "Paused" and "Your plan is paused until <date>. You can see and download everything; adding and changing come back when it restarts.", with Resume now and Download my records and no Subscribe
+      - Resume now opens Billing, which says "Paused until <date>" with Resume now
+  - id: cancel-rtl-375
+    title: The cancel flow reads right to left in Arabic on a 375px phone, every step
+    tier: secondary
+    paths:
+      - src/hosted/components/BillingCancelFlow.tsx
+      - src/hosted/components/useCancelFlow.ts
+    steps:
+      - On a 375px phone in Arabic, open Billing on a monthly plan and press إلغاء الاشتراك
+      - Pick a reason and press متابعة; on the pause step press لا، أكمل الإلغاء
+      - Read the stay offer, then open the flow again with no offers and continue to Confirm cancel
+    expect:
+      - Every step is right to left with no sideways scroll, its heading in Arabic (لماذا تريد الإلغاء؟, ما رأيك بإيقاف مؤقت بدل الإلغاء؟, ابقَ معنا بخصم 50% لمدة شهرين, إلغاء اشتراكك؟)
+      - Amounts stay ₪ figures in their own direction
+

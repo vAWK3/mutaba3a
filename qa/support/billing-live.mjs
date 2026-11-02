@@ -20,6 +20,10 @@
  * (BILLING_OFFER_COUPON_ID, which a test server reads uncached) that exists in the sandbox only while a launch-offer
  * spec has made it, so the other flows see no offer; it is deleted when the env stops. `--catalog-only` also makes
  * one such coupon and prints its id, for trying the offer by hand against a dev API.
+ *
+ * MUT-532: the stay offer's coupon is this run's too (BILLING_STAY_COUPON_ID, 50% off 2 months on the Freelancer
+ * product), made when the env starts and deleted when it stops. The sandbox Customer Portal's cancel is turned off, as
+ * live's is after the web release (pilot-runbook 3a): cancelling is MTB3A's own flow.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -59,6 +63,16 @@ const PRODUCT_ID = 'mutaba3a_qa_freelancer';
 /** MUT-525: this run's launch coupon id; another session's run, sharing the sandbox, never sees it. */
 export const OFFER_COUPON_ID = `qa_launch_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const DAY_S = 24 * 60 * 60;
+/** MUT-532: this run's stay coupon id. */
+export const STAY_COUPON_ID = `qa_stay_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** MUT-532 (D11): the stay coupon as the runbook makes it live: 50% off the next 2 invoices, Freelancer only, no end. */
+export async function ensureStayCoupon(key, id = STAY_COUPON_ID) {
+  const existing = await stripe(key, 'GET', `coupons/${id}`);
+  if (existing.status !== 404) return existing.json;
+  const params = { id, name: 'Stay offer · عرض البقاء', percent_off: '50', duration: 'repeating', duration_in_months: '2', 'applies_to[products][0]': PRODUCT_ID };
+  return (await stripe(key, 'POST', 'coupons', params)).json;
+}
 
 /**
  * MUT-525 (D1, DD12b): the launch coupon as the runbook makes it live: 50% once, on the Freelancer product only,
@@ -158,8 +172,14 @@ export async function ensureCatalog(key) {
     console.log(`[portal-live] ${wanted.lookup_key} → ${made.json.id} (${wanted.unit_amount} ${wanted.currency}${current ? `, was ${current.id} at ${current.unit_amount}` : ''})`);
   }
   const portal = await stripe(key, 'GET', 'billing_portal/configurations', { is_default: 'true', limit: '1' });
-  if (!portal.json.data?.length) {
+  const config = portal.json.data?.[0];
+  if (!config) {
     throw new Error('The sandbox has no default Customer Portal configuration: save Settings › Billing › Customer portal once in the sandbox dashboard (pilot-runbook §1.7 step 3a).');
+  }
+  // MUT-532 (D8): cancelling is MTB3A's own flow; the portal keeps the card, invoices and the business details.
+  if (config.features?.subscription_cancel?.enabled) {
+    await stripe(key, 'POST', `billing_portal/configurations/${config.id}`, { 'features[subscription_cancel][enabled]': 'false' });
+    console.log('[portal-live] the sandbox Customer Portal no longer cancels (MUT-532)');
   }
 }
 
@@ -199,6 +219,7 @@ async function main() {
   await assertPortFree(API_PORT, 'portal-live');
   ensureDatabase();
   await ensureCatalog(key);
+  await ensureStayCoupon(key);
   const whsec = webhookSecret(key);
 
   const children = [];
@@ -219,6 +240,7 @@ async function main() {
     for (const child of children) child.kill('SIGTERM');
     // MUT-525: never leave this run's coupon in the shared sandbox.
     deleteOfferCoupon(key).catch(() => undefined);
+    deleteOfferCoupon(key, STAY_COUPON_ID).catch(() => undefined);
     setTimeout(() => process.exit(code), 1500).unref();
   };
   process.on('SIGINT', () => stop());
@@ -245,6 +267,8 @@ async function main() {
       STRIPE_WEBHOOK_SECRET: whsec,
       // MUT-525 (R6): this run's own launch coupon id, read uncached; absent from Stripe until a spec makes it.
       BILLING_OFFER_COUPON_ID: OFFER_COUPON_ID,
+      // MUT-532: this run's stay coupon, read uncached.
+      BILLING_STAY_COUPON_ID: STAY_COUPON_ID,
       // MUT-418: the trial flows start at a real signup: the memory mailer (read through GET /admin/v1/dev-outbox), the
       // fixture domain checker (business.example opens at once) and the always-pass Turnstile test secret
       // (config.ts's development default). Each spec sends its own X-Forwarded-For, so the per-IP budget never adds up.
@@ -264,7 +288,7 @@ async function main() {
   });
 
   mkdirSync(path.join(ROOT, 'qa', '.state'), { recursive: true });
-  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN, offerCouponId: OFFER_COUPON_ID }, null, 2));
+  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN, offerCouponId: OFFER_COUPON_ID, stayCouponId: STAY_COUPON_ID }, null, 2));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

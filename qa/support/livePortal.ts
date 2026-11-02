@@ -16,6 +16,8 @@ interface LiveState {
   adminToken: string;
   /** MUT-525: this run's launch coupon id, which the API reads; absent from Stripe unless a spec made it. */
   offerCouponId: string;
+  /** MUT-532: this run's stay coupon id, which the API reads; made when the env starts. */
+  stayCouponId: string;
 }
 
 const STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.state', 'portal-live.json');
@@ -133,6 +135,27 @@ export async function invoicesOf(customerId: string): Promise<{ total: number; s
   return (listed.data as Json[])
     .sort((a, b) => a.created - b.created)
     .map((inv) => ({ total: inv.total, subtotal: inv.subtotal, discount: (inv.total_discount_amounts ?? []).reduce((sum: number, d: Json) => sum + d.amount, 0), reason: inv.billing_reason }));
+}
+
+/**
+ * MUT-532: a monthly subscriber whose paid month ends `endsInS` seconds from now: the clock starts a calendar month
+ * before that, so a pause booked from the period end starts, in real time, while the flow runs (the server's own
+ * clock decides whether a pause is running; only Stripe runs on the test clock).
+ */
+export async function payingUntilSoon(person: LivePerson, endsInS = 120): Promise<{ customerId: string; clockId: string; subscriptionId: string; periodEnd: number }> {
+  const end = new Date((Math.floor(Date.now() / 1000) + endsInS) * 1000);
+  const start = new Date(end);
+  start.setUTCMonth(start.getUTCMonth() - 1);
+  const { customerId, clockId } = await customerOnClock(person, Math.floor(start.getTime() / 1000));
+  const subscriptionId = await subscribeByApi(customerId);
+  const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
+  return { customerId, clockId, subscriptionId, periodEnd: sub.items.data[0].current_period_end as number };
+}
+
+/** Waits, in real time, until the wall clock passes `unix` (the server's clock is the real one). */
+export async function waitUntilPast(unix: number): Promise<void> {
+  const ms = unix * 1000 - Date.now() + 1_000;
+  if (ms > 0) await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Moves the test clock and waits until Stripe has finished acting on it. */
