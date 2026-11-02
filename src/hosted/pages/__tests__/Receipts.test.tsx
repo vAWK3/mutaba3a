@@ -641,6 +641,28 @@ describe('a known vendor’s currency and VAT on review (MUT-303)', () => {
     vi.useRealTimers();
   });
 
+  it('review #1: defaults that arrive once the server has read the receipt fill the untouched fields', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const state = { current: receipt(R1, { reading: 'pending' }), defaults: null as typeof bezeq | null };
+    portal(`${BASE}/${R1}`, { receipts: [state.current], firm: true, routes: { [`GET /v1/receipts/${R1}`]: () => ok({ ...plain(state.current), vendorDefaults: state.defaults }) } });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    state.current = receipt(R1, { reading: 'done', suggested: vendorOnly });
+    state.defaults = bezeq;
+    await vi.advanceTimersByTimeAsync(3000);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
+    expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('EUR');
+    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From this vendor’s last expense');
+    vi.useRealTimers();
+  });
+
+  it('review #8: a currency the receipt read that the portal doesn’t offer is never replaced by the vendor’s', async () => {
+    open({ ...vendorOnly, currency: { value: 'GBP', source: 'ocr' as const, confidence: 0.9 } }, true);
+    await screen.findByLabelText(/Amount/);
+    expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).not.toBe('EUR');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
+  });
+
   it('R10: on a personal profile the currency fills and there is no VAT', async () => {
     const seen: { body?: unknown } = {};
     const { user } = open(vendorOnly, false, seen);

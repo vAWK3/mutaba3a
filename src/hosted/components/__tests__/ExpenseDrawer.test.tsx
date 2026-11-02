@@ -1133,6 +1133,20 @@ describe('ExpenseDrawer vendor defaults: currency and VAT (MUT-303)', () => {
     expect(screen.queryByTestId('expense-vat')).not.toBeInTheDocument();
   });
 
+  it('review #9: picking another vendor replaces the VAT the last one filled, as on the phone', async () => {
+    const user = userEvent.setup();
+    const EXEMPT = { ...BEZEQ, id: 'v10', name: 'Bank Fees', matchedName: 'Bank Fees', lastCurrency: null, lastVat: { treatment: 'EXEMPT', rateBasisPoints: 0 } };
+    route({ 'GET /v1/vendors': () => ok({ items: [BEZEQ, EXEMPT] }) });
+    renderDrawer({ firm: true, defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('Choose a category');
+    await pickBezeq(user);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
+    await user.clear(screen.getByLabelText('Vendor'));
+    await user.click(screen.getByLabelText('Vendor'));
+    await user.click(await screen.findByRole('option', { name: 'Bank Fees' }));
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).not.toHaveTextContent('VAT 16%'));
+  });
+
   it('R4: the edit drawer never prefills: a pick leaves the saved currency and VAT, and the PATCH sends no vat', async () => {
     const user = userEvent.setup();
     const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
