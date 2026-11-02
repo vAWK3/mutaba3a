@@ -21,6 +21,8 @@ import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEn
 import { offerOrNothing } from '../billing/offer-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { trialTimelineOf } from '../billing/entitlement.js';
+import { SWITCH_AFTER_PAID_INVOICES, yearlySwitchOf } from '../billing/retention.js';
+import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
 import { ApiError } from '../errors.js';
@@ -58,15 +60,17 @@ export interface BillingRouteOptions {
   logger: Pick<Logger, 'warn' | 'error'>;
   /** MUT-525 (D12): the campaigns whose Stripe coupons may make an offer. Defaults to offers.json. */
   offers?: readonly OfferEntry[];
+  /** MUT-531: the plan door, for the paid-invoice count behind `yearlySwitch`. Null: no switch line. */
+  plan?: PlanGateway | null;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
+export const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const MINUTE_MS = 60 * 1000;
 /** Refusals Stripe will repeat however often it's asked: the operator's to fix, so never "try again". */
 const PERMANENT_STRIPE_ERRORS: ReadonlySet<string> = new Set(['StripeInvalidRequestError', 'StripePermissionError', 'StripeAuthenticationError', 'StripeIdempotencyError']);
 const NO_CATALOG: Catalog = { ILS: null, USD: null };
-const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
-const refusedResponses = {
+export const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
+export const refusedResponses = {
   401: errorResponse('No valid session'),
   403: errorResponse('PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST'),
   409: errorResponse(
@@ -109,6 +113,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const now = c.get('now')();
       const shown = currentSubscription(summary.subscriptions, now);
       const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
+      const yearlySwitch = shown && options.plan ? await yearlySwitchLine(options.plan, shown, catalog, options.logger, c.get('requestId')) : null;
       return c.json(
         {
           configured: options.checkout !== null,
@@ -119,6 +124,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           countries: countriesView(options.countries),
           coveredProfileIds: covered.map((p) => p.id),
           offer: offer ? offerView(offer, offerEligible(offer, summary.subscriptions, offer.interval), catalog) : null,
+          yearlySwitch,
         },
         200,
       );
@@ -248,12 +254,12 @@ const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_
   OFFER_ENDED: 'The launch offer has ended; the yearly plan is at its regular price',
 };
 
-function requireCheckout(checkout: CheckoutGateway | null): CheckoutGateway {
+export function requireCheckout(checkout: CheckoutGateway | null): CheckoutGateway {
   if (!checkout) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
   return checkout;
 }
 
-async function limit(c: Context<AppEnv>, limiter: RateLimiter, userId: string, now: Date): Promise<void> {
+export async function limit(c: Context<AppEnv>, limiter: RateLimiter, userId: string, now: Date): Promise<void> {
   const decision = await limiter.check(`billing-session:${userId}`, now);
   if (decision.allowed) return;
   c.header('Retry-After', String(decision.retryAfterSeconds));
@@ -276,7 +282,7 @@ async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Da
   return { profiles, entitlements: profiles.map((p) => entitlements.get(p.id)!) };
 }
 
-async function catalogOf(checkout: CheckoutGateway): Promise<Catalog> {
+export async function catalogOf(checkout: CheckoutGateway): Promise<Catalog> {
   return catalogFrom(await checkout.pricesByLookupKey(ALL_GA_LOOKUP_KEYS));
 }
 
@@ -304,7 +310,7 @@ function appliedOffer(offer: Offer, catalog: Catalog, currency: 'ILS' | 'USD', i
  * (a key without D2's scopes, a bad price or parameter) is the operator's too, logged as an error so it is seen; only
  * the rest (a timeout, a rate limit, Stripe's own error) may pass if retried.
  */
-async function viaStripe<T>(call: () => Promise<T>, user: UserRecord, linkedCustomer: string | null, logger: Pick<Logger, 'warn' | 'error'>): Promise<T> {
+export async function viaStripe<T>(call: () => Promise<T>, user: UserRecord, linkedCustomer: string | null, logger: Pick<Logger, 'warn' | 'error'>): Promise<T> {
   try {
     return await call();
   } catch (err) {
@@ -331,7 +337,7 @@ function personOf(user: UserRecord) {
  * After Stripe made the session, so best effort (review): a failed audit must not answer 500 while a payable Checkout
  * exists, or the person's retry opens a second. Logged as an error instead.
  */
-async function auditOn(
+export async function auditOn(
   store: LedgerStore,
   profiles: readonly Organization[],
   user: UserRecord,
@@ -346,6 +352,24 @@ async function auditOn(
     }
   } catch (err) {
     logger.error({ err, action, userId: user.id, requestId }, 'billing audit not written');
+  }
+}
+
+/**
+ * MUT-531 (D2, D3, R1): the "switch to yearly" line, from the mirror plus Stripe's paid-invoice count (cached). Only a
+ * monthly list price that is active and not cancelling asks Stripe at all; a failure hides the line, never the read.
+ * Stripe's own discount and pause are checked when the person opens the switch (GET /v1/billing/yearly-switch).
+ */
+async function yearlySwitchLine(plan: PlanGateway, shown: BillingSubscriptionRecord, catalog: Catalog, logger: Pick<Logger, 'warn'>, requestId: string) {
+  const mirrored = { status: shown.status, priceLookupKey: shown.priceLookupKey, cancelAtPeriodEnd: shown.cancelAtPeriodEnd };
+  if (yearlySwitchOf(mirrored, { paidInvoices: SWITCH_AFTER_PAID_INVOICES, discounted: false, paused: false }, catalog).ok === false) return null;
+  try {
+    const decision = yearlySwitchOf(mirrored, { paidInvoices: await plan.paidInvoiceCount(shown.stripeSubscriptionId), discounted: false, paused: false }, catalog);
+    return decision.ok ? { currency: decision.currency, savings: decision.savings } : null;
+  } catch (err) {
+    if (!(err instanceof StripeGatewayError)) throw err;
+    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'paid invoices unavailable; switch line hidden');
+    return null;
   }
 }
 

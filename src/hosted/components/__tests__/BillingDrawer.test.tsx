@@ -25,6 +25,7 @@ const overview = (over: Partial<BillingOverview> = {}): BillingOverview => ({
   countries: { consumer: ['IL', 'GB'], customTaxId: ['IL', 'JO'] },
   coveredProfileIds: [ORG_B],
   offer: null,
+  yearlySwitch: null,
   ...over,
 });
 const SHARED = '33333333-3333-4333-8333-333333333333';
@@ -594,5 +595,101 @@ describe('MUT-525: the launch offer in the drawer (DD2–DD10, R3)', () => {
     const summary = step.querySelector('.hp-billing-summary')!;
     expect(summary.querySelectorAll('bdi')).toHaveLength(2);
     expect(within(step).getByText(/للسنة الأولى بدلًا من/)).toHaveClass('sr-only');
+  });
+});
+
+describe('MUT-531: switch to yearly in the drawer (AC1–AC3, D1, R2)', () => {
+  const monthly = (over: Partial<BillingOverview> = {}) =>
+    overview({
+      subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(20), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: null },
+      canManage: true,
+      yearlySwitch: { currency: 'ILS', savings: 7800 },
+      ...over,
+    });
+  const PREVIEW = { amountDue: 27100, currency: 'ILS', yearlyAmount: 39000, renewsOn: '2027-11-02T09:00:00.000Z', prorationDate: '2026-11-02T09:00:00.000Z' };
+  const paid = ent('ACTIVE', 'STRIPE', iso(20));
+
+  it('shows the line from the server under Manage billing, and none on a yearly plan', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(monthly()), entitlement: paid });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByText(/Switch to yearly and save/)).toHaveTextContent('Switch to yearly and save ₪78.00 a year');
+    expect(within(dialog).getByRole('button', { name: 'Switch to yearly' })).toBeInTheDocument();
+  });
+
+  it('no line when the server sends none (before the 2nd payment)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(monthly({ yearlySwitch: null })), entitlement: paid });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    expect(within(dialog).queryByRole('button', { name: 'Switch to yearly' })).toBeNull();
+  });
+
+  it('previews today’s charge, confirms at the preview’s proration date and says when it renews', async () => {
+    const { user, api, router } = portal(`/p/${ORG_B}?billing=true`, {
+      billing: () => ok(monthly()),
+      entitlement: paid,
+      routes: {
+        'GET /v1/billing/yearly-switch': () => ok(PREVIEW),
+        'POST /v1/billing/yearly-switch': () => ok({ renewsOn: '2027-11-02T09:00:00.000Z', yearlyAmount: 39000, currency: 'ILS' }),
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await user.click(await within(dialog).findByRole('button', { name: 'Switch to yearly' }));
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true&step=switch`);
+    const step = await screen.findByRole('dialog', { name: 'Switch to yearly' });
+    expect(await within(step).findByText(/You pay/)).toHaveTextContent('You pay ₪271.00 today, including VAT where it applies');
+    expect(within(step).getByText(/a year, renewing on/)).toHaveTextContent(/₪390.00 a year, renewing on/);
+    await user.click(within(step).getByRole('button', { name: 'Pay ₪271.00 and switch' }));
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname === '/v1/billing/yearly-switch')?.body).toEqual({ prorationDate: PREVIEW.prorationDate, expectedAmountDue: 27100 });
+    const back = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(back).findByText(/You're on the yearly plan/)).toHaveTextContent(/It renews on .* at ₪390\.00\./);
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true`);
+  });
+
+  it('a declined card says nothing changed and stays on the step', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=switch`, {
+      billing: () => ok(monthly()),
+      entitlement: paid,
+      routes: { 'GET /v1/billing/yearly-switch': () => ok(PREVIEW), 'POST /v1/billing/yearly-switch': () => fail(409, 'CONFLICT', { reason: 'PAYMENT_FAILED' }) },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Switch to yearly' });
+    await user.click(await within(step).findByRole('button', { name: 'Pay ₪271.00 and switch' }));
+    expect(await within(step).findByRole('alert')).toHaveTextContent("Your card was declined, so nothing changed. You're still on the monthly plan.");
+  });
+
+  it('a payment the bank holds offers Stripe’s page to approve it (R2)', async () => {
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=switch`, {
+      billing: () => ok(monthly()),
+      entitlement: paid,
+      routes: {
+        'GET /v1/billing/yearly-switch': () => ok(PREVIEW),
+        'POST /v1/billing/yearly-switch': () => fail(409, 'CONFLICT', { reason: 'PAYMENT_NEEDS_ACTION', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_9' }),
+      },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Switch to yearly' });
+    await user.click(await within(step).findByRole('button', { name: 'Pay ₪271.00 and switch' }));
+    await user.click(await within(step).findByRole('button', { name: "Approve on Stripe's page" }));
+    expect(assign).toHaveBeenCalledWith('https://invoice.stripe.com/i/acct_1/in_9');
+  });
+
+  it('a changed amount is previewed again before anything is charged', async () => {
+    let previews = 0;
+    const { user } = portal(`/p/${ORG_B}?billing=true&step=switch`, {
+      billing: () => ok(monthly()),
+      entitlement: paid,
+      routes: {
+        'GET /v1/billing/yearly-switch': () => ok(++previews === 1 ? PREVIEW : { ...PREVIEW, amountDue: 27500 }),
+        'POST /v1/billing/yearly-switch': () => fail(409, 'CONFLICT', { reason: 'AMOUNT_CHANGED' }),
+      },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Switch to yearly' });
+    await user.click(await within(step).findByRole('button', { name: 'Pay ₪271.00 and switch' }));
+    expect(await within(step).findByText('The amount changed since you opened this. Please check it again.')).toBeInTheDocument();
+    expect(await within(step).findByRole('button', { name: 'Pay ₪275.00 and switch' })).toBeInTheDocument();
+  });
+
+  it('reads in Arabic first', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(monthly()), entitlement: paid, locale: 'ar' });
+    expect(await screen.findByText(/انتقل إلى الدفع السنوي ووفّر/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'انتقل إلى السنوي' })).toBeInTheDocument();
   });
 });

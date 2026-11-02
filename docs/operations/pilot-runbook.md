@@ -206,10 +206,12 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
    on every firm's Subscription (§1.5).
 3. **Keys.** Create a **restricted key** with read access to Customers, Subscriptions, Products, Prices, Checkout
    Sessions, Invoices and Events, plus **Write** on Customers, Checkout Sessions and Customer portal (MUT-362's
-   Settings › Billing). Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
+   Settings › Billing) and **Write** on Subscriptions (MUT-333 closing an account; MUT-531 the switch to yearly).
+   Add it to Secret Manager (`server/DEPLOYMENT.md` §6e).
 3a. **Customer Portal (MUT-362).** Settings › Billing › Customer portal, in the Mutaba3a account: allow updating the
    payment method, show invoice history, allow cancelling **at the end of the billing period** (never immediately),
-   no plan switching, no pausing; business name and tax ID editable. Default return URL: the portal origin. Save, and
+   no plan switching, no pausing; business name and tax ID editable. **MUT-531:** the switch to yearly is MTB3A's own
+   (Billing › Switch to yearly, from the 2nd payment), so plan switching stays **off** here. Default return URL: the portal origin. Save, and
    check a portal session opens from Billing in the portal (test mode first).
 3b. **GA prices (MUT-362).** When Basel sets the GA list prices, add four Prices on the Freelancer product with lookup
    keys `freelancer_list_monthly_ils`, `freelancer_list_yearly_ils`, `freelancer_list_monthly_usd` and

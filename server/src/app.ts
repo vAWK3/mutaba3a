@@ -39,6 +39,7 @@ import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
 import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js';
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
+import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { agentAuditFor } from './oauth/audit.js';
 import { OAuthService } from './oauth/service.js';
@@ -51,6 +52,7 @@ import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/session
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
 import { accountPurgeRoutes } from './routes/account-purge.js';
 import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
+import type { PlanGateway } from './billing/stripe/plan-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
 import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } from './routes/device-sessions.js';
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
@@ -134,7 +136,7 @@ export interface AppDependencies {
    * MUT-333: `accountGateway` ends subscriptions when an account closes and deletes the Stripe customer when it is
    * purged; absent = a person with a Stripe customer can't close (503) and the purge skips them.
    */
-  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway; checkoutGateway?: CheckoutGateway; accountGateway?: AccountStripeGateway } | null;
+  stripe?: { webhookGateway: StripeGateway; reconcileGateway: StripeGateway; checkoutGateway?: CheckoutGateway; accountGateway?: AccountStripeGateway; planGateway?: PlanGateway } | null;
   /** MUT-362: the consumer-country rules. Defaults to the shipped billing-countries.json. */
   billingCountries?: BillingCountries;
   /** MUT-525 (D12, R6): the launch offers. Defaults to the shipped offers.json; QA names its own coupon. */
@@ -285,7 +287,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.95.0-mut303';
+export const API_VERSION = '1.96.0-mut303';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -345,7 +347,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES]),
     }),
   );
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
@@ -433,17 +435,24 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
+  const billingLimiter = deps.billingSessionLimiter ?? new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);
   // MUT-362: signed in only and person-level, so outside PORTAL_ROUTES (the signed-out portal has no billing).
   app.route(
     '/',
     billingRoutes(store, {
       checkout: deps.stripe?.checkoutGateway ?? null,
       countries: deps.billingCountries ?? BILLING_COUNTRIES,
-      limiter: deps.billingSessionLimiter ?? new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute),
+      limiter: billingLimiter,
       portalOrigin: sessions.portalOrigin,
       logger: deps.logger,
       ...(deps.offers ? { offers: deps.offers } : {}),
+      plan: deps.stripe?.planGateway ?? null,
     }),
+  );
+  // MUT-531: changing one's own plan, person-level like the rest of Billing. One limiter for every billing press.
+  app.route(
+    '/',
+    billingPlanRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, plan: deps.stripe?.planGateway ?? null, limiter: billingLimiter, logger: deps.logger }),
   );
   // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).
   const receiptReader =

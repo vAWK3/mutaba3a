@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import { Button } from '../../components/ui/Button';
@@ -8,7 +8,7 @@ import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import { trackPortal } from '../analytics/portalAnalytics';
-import { ApiError, apiErrorReason, type BillingOverview } from '../api/client';
+import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type YearlySwitchResult } from '../api/client';
 import { billingQuery, billingReturnPath, CONFIRM_POLL_LIMIT_MS, CONFIRM_POLL_MS, useOpenBillingPortal, useStartCheckout } from '../data/billingQueries';
 import {
   billingViewOf,
@@ -25,13 +25,12 @@ import {
   profilesListOf,
   renewalPriceOf,
   yearlySavingOf,
+  yearlySwitchLineOf,
   type BillingPanel,
   type BillingProfile,
   type BillingView,
 } from '../data/billingView';
 import { countryName, countryOptions } from '../data/countries';
-import { formatDecimal } from '../format/DecimalAmount';
-import { minorToDecimal } from '../format/currencies';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { trialWelcomeApplies } from '../data/trialPrompt';
@@ -39,7 +38,10 @@ import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
 import { ME_KEY, useMe } from '../session/me';
 import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
 import { SUPPORT_EMAIL } from '../terms';
-import { AlertIcon } from './Icons';
+import { Amount, Banner } from './billingParts';
+import { formatMinor, sentence } from './billingText';
+import { SwitchBody, SwitchFooter } from './BillingSwitchBody';
+import { useSwitchStep } from './useSwitchStep';
 import { Drawer } from './Drawer';
 import { OfferTopLine } from './OfferTopLine';
 import { RadioCards } from './RadioCards';
@@ -53,7 +55,7 @@ import { RadioCards } from './RadioCards';
  * and skippable; adding one goes to Subscribe, which carries the rest of the trial into Stripe (ADR-170 R-D2).
  */
 
-export type BillingStep = 'subscribe' | 'welcome';
+export type BillingStep = 'subscribe' | 'welcome' | 'switch';
 
 /** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
 const TRIAL_LENGTH_DAYS = 14;
@@ -64,7 +66,7 @@ export interface BillingDrawerProps {
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
   /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
-  onStep: (step: 'subscribe' | undefined, replace?: boolean) => void;
+  onStep: (step: 'subscribe' | 'switch' | undefined, replace?: boolean) => void;
   onClose: () => void;
 }
 
@@ -82,12 +84,24 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
   const subscribing = step === 'subscribe' && billing.data !== undefined;
   const welcome = useTrialWelcome(step === 'welcome', billing.data, onStep, onClose);
   const welcomeTitle = step === 'welcome' && (billing.isPending || welcome.open);
+  // MUT-531: the switch to yearly is its own step; once it went through, the status view says so and waits for the
+  // webhook to mirror the yearly plan.
+  const [switched, setSwitched] = useState<YearlySwitchResult | null>(null);
+  const switching = step === 'switch' && billing.data !== undefined;
+  const switchStep = useSwitchStep(
+    step === 'switch',
+    useCallback((result: YearlySwitchResult) => {
+      setSwitched(result);
+      onStep(undefined);
+    }, [onStep]),
+  );
+  usePollBilling(switched !== null && billing.data?.subscription?.interval !== 'year', useCallback(() => setSwitched((s) => s), []));
   // Review: the step is on screen (loading included), so the shell's one offer is spent: closing it while billing
   // loads never has the shell open it again on this page.
   useEffect(() => {
     if (step === 'welcome') takeTrialWelcomeOffer();
   }, [step]);
-  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : welcomeTitle ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
+  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : step === 'switch' ? t('hosted.billing.switch.title') : welcomeTitle ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
 
   let body;
   if (billing.isPending) {
@@ -112,10 +126,12 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
     );
   } else if (welcome.open) {
     body = <WelcomeBody welcome={welcome} />;
+  } else if (switching) {
+    body = <SwitchBody step={switchStep} />;
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
   } else {
-    body = <StatusView billing={billing.data} phase={phase} cancelled={checkout === 'cancelled'} onSubscribe={() => onStep('subscribe')} />;
+    body = <StatusView billing={billing.data} phase={phase} cancelled={checkout === 'cancelled'} switched={switched} onSubscribe={() => onStep('subscribe')} onSwitch={() => onStep('switch')} />;
   }
 
   return (
@@ -123,7 +139,7 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
       title={title}
       onClose={welcome.open ? welcome.skip : onClose}
       closeLabel={t('common.close')}
-      footer={welcome.open ? <WelcomeFooter welcome={welcome} /> : subscribing ? <SubscribeFooter form={subscribe} /> : undefined}
+      footer={welcome.open ? <WelcomeFooter welcome={welcome} /> : subscribing ? <SubscribeFooter form={subscribe} /> : switching ? <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} /> : undefined}
     >
       {body}
     </Drawer>
@@ -176,7 +192,21 @@ function usePortalReturn(returned: boolean, billing: BillingOverview | undefined
   usePollBilling(polling, useCallback(() => setPolling(false), []));
 }
 
-function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: BillingOverview; phase: Phase; cancelled: boolean; onSubscribe: () => void }) {
+function StatusView({
+  billing,
+  phase,
+  cancelled,
+  switched,
+  onSubscribe,
+  onSwitch,
+}: {
+  billing: BillingOverview;
+  phase: Phase;
+  cancelled: boolean;
+  switched: YearlySwitchResult | null;
+  onSubscribe: () => void;
+  onSwitch: () => void;
+}) {
   const t = useT();
   const { language } = useLanguage();
   const me = useMe();
@@ -193,6 +223,7 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
   // While a payment is being confirmed, or is slow to show, nothing invites a second one (review).
   const settled = phase !== 'confirming' && phase !== 'slow';
   const offer = eligibleOfferOf(billing);
+  const switchLine = yearlySwitchLineOf(billing);
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
   const subscribed = billing.subscription?.offer ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
   const announcement =
@@ -219,6 +250,7 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
       {phase === 'done' && <Banner tone="ok" text={subscribed} live={false} />}
       {phase === 'slow' && <Banner tone="info" text={t('hosted.billing.states.slow')} live={false} />}
       {cancelled && phase === null && <Banner tone="info" text={t('hosted.billing.states.cancelled')} live={false} />}
+      {switched && <SwitchedBanner result={switched} language={language} />}
 
       {phase === 'confirming' ? (
         <div className="hp-billing-status">
@@ -238,6 +270,8 @@ function StatusView({ billing, phase, cancelled, onSubscribe }: { billing: Billi
         <Action view={view} busy={portal.isPending} failure={failure} onSubscribe={onSubscribe} onPortal={() => portal.mutate(billingReturnPath(pathname))} />
       )}
 
+      {/* MUT-531 (AC2): the switch line under Manage billing, from the 2nd paid invoice of a monthly list price. */}
+      {settled && !switched && switchLine && <SwitchLine yearlySwitch={switchLine} language={language} onSwitch={onSwitch} />}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
       {list.length > 0 && <ProfilesList profiles={list} />}
       {coOwnsOthers && <p className="hp-billing-fine">{t('hosted.billing.coOwnedNote')}</p>}
@@ -403,6 +437,36 @@ function panelCopy(
         context: k('context.none'),
       };
   }
+}
+
+/** MUT-531 (AC2, D3): "Switch to yearly and save ₪58 a year", the saving from the server (the catalog's, never written here). */
+function SwitchLine({ yearlySwitch, language, onSwitch }: { yearlySwitch: BillingYearlySwitch; language: Language; onSwitch: () => void }) {
+  const t = useT();
+  return (
+    <div className="hp-billing-switch">
+      {yearlySwitch.savings !== null && (
+        <p>{sentence(t, 'hosted.billing.switch.line', { amount: <Amount minor={yearlySwitch.savings} currency={yearlySwitch.currency} language={language} /> })}</p>
+      )}
+      <div>
+        <Button variant="secondary" onClick={onSwitch}>
+          {t('hosted.billing.switch.action')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SwitchedBanner({ result, language }: { result: YearlySwitchResult; language: Language }) {
+  const t = useT();
+  return (
+    <Banner
+      tone="ok"
+      text={sentence(t, 'hosted.billing.switch.done', {
+        date: result.renewsOn ? formatInstant(result.renewsOn, language, browserTimezone()) : '',
+        yearly: <Amount minor={result.yearlyAmount} currency={result.currency} language={language} />,
+      })}
+    />
+  );
 }
 
 function Action({ view, busy, failure, onSubscribe, onPortal }: { view: BillingView; busy: boolean; failure: Failure; onSubscribe: () => void; onPortal: () => void }) {
@@ -902,27 +966,8 @@ function ContactUs() {
   );
 }
 
-/** `live={false}` for a banner the drawer's own live region already announces. */
-function Banner({ tone, text, live = true }: { tone: 'ok' | 'info' | 'error'; text: ReactNode; live?: boolean }) {
-  return (
-    <div className={`hp-banner hp-banner-${tone}`} role={!live ? undefined : tone === 'error' ? 'alert' : 'status'}>
-      <AlertIcon />
-      <span>{text}</span>
-    </div>
-  );
-}
-
 function Chip({ tone, label }: { tone: Tone; label: string }) {
   return <span className={`hp-billing-chip hp-billing-chip-${tone}`}>{label}</span>;
-}
-
-function formatMinor(minor: number, currency: 'ILS' | 'USD', language: Language): string {
-  return formatDecimal(minorToDecimal(minor, currency), currency, language);
-}
-
-/** Amounts are plain `<bdi>` in the figure face (MUT-109), so ₪39 reads correctly inside Arabic. */
-function Amount({ minor, currency, language }: { minor: number; currency: 'ILS' | 'USD'; language: Language }) {
-  return <bdi className="hp-amount">{formatMinor(minor, currency, language)}</bdi>;
 }
 
 /**
@@ -942,16 +987,4 @@ function OfferPrice({ firstYear, list, currency, language }: { firstYear: number
       </span>
     </>
   );
-}
-
-/** Marks a node's place in a translated sentence; no translation contains it (InsightList's way). */
-const MARK = '\u0001';
-const MARKED = new RegExp(`(${MARK}\\d+${MARK})`);
-
-/** A translated sentence whose `{vars}` are nodes (amounts stay their own <bdi>, ADR-101), or plain strings. */
-function sentence(t: Translate, key: string, vars: Record<string, ReactNode>): ReactNode[] {
-  const entries = Object.entries(vars).map(([name, node], i) => ({ name, node, mark: `${MARK}${i}${MARK}` }));
-  const byMark = new Map(entries.map((e) => [e.mark, e.node]));
-  const text = t(key, Object.fromEntries(entries.map((e) => [e.name, e.mark])));
-  return text.split(MARKED).map((piece, i) => (byMark.has(piece) ? <Fragment key={i}>{byMark.get(piece)}</Fragment> : piece));
 }

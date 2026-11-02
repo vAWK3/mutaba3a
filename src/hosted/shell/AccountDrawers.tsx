@@ -32,7 +32,7 @@ export function useAccountDrawers() {
     open: () => go({ changePassword: true }, false),
     openYourData: () => go({ yourData: true }, false),
     /** MUT-362: Settings › Billing; the Subscribe step is its own history entry, so Back returns to the status view (DR2). */
-    openBilling: (step?: 'subscribe' | 'welcome', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
+    openBilling: (step?: 'subscribe' | 'welcome' | 'switch', replace = false) => go(step ? { billing: true, step } : { billing: true }, replace),
     /** The step's own Back replaces its entry: browser Back afterwards never reopens the step (review). */
     leaveBillingStep: () => go({ billing: true }, true),
     /** MUT-333: Close my account. */

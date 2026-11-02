@@ -64,7 +64,7 @@ model Vendor {
   - Removing VAT from an old expense therefore never wipes a newer default.
 - `touchExpenseVendor(store, expense, change)` takes the change from the route, which knows `body` and `existing`.
 
-### 3.3 API (`1.95.0-mut303`, or the next free minor; additive)
+### 3.3 API (`1.96.0-mut303`, or the next free minor; additive)
 - **D3: flat fields beside `lastCategoryId`:** `VendorSuggestion.lastCurrency: Currency | null`, `lastVat: { treatment, rateBasisPoints } | null`. This overrides brief §12's `vendor.defaults`.
 - `ExpenseReceipt` (library item and review read) gains `vendorDefaults: { vendorId, currency, vat } | null`.
   - It is resolved at GET time by the read registration no. (`findByRegistration`), else by an exact name key.

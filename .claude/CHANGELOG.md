@@ -28,7 +28,31 @@
 
 ---
 
-## [Unreleased] - 2026-11-02 — A known vendor fills its currency and VAT (MUT-303, ADR-238)
+## [Unreleased] - 2026-11-02 — Switch from monthly to yearly in Billing, from the 2nd payment (MUT-531, ADR-238)
+
+**Why:** MUT-528 D4. Yearly payers stay much longer than monthly ones, and Stripe's Customer Portal can't gate a
+switch on the 2nd payment or say what it saves in Arabic.
+
+### Added
+- `server/src/billing/retention.ts`: `yearlySwitchOf` (a monthly list price, active, not cancelling, paused or
+  discounted, 2 paid invoices that took money) and `yearlySavingsOf` (12 × month − year from the catalog).
+- `server/src/billing/stripe/plan-gateway.ts`: the plan door (same restricted key): `planOf` (live item, discounts,
+  pause, a test clock's time), `paidInvoiceCount` (cached, for good once it reaches 2), `previewYearlySwitch`
+  (Stripe's proration preview), `switchToYearly` (`pending_if_incomplete`, never a discount).
+- GET `/v1/billing` `yearlySwitch` (`currency`, `savings`); GET/POST `/v1/billing/yearly-switch` (`routes/billing-plan.ts`):
+  the preview, then the switch at the preview's proration date; 409 `SWITCH_NOT_AVAILABLE` (`why`), `AMOUNT_CHANGED`,
+  `PAYMENT_FAILED`, `PAYMENT_NEEDS_ACTION` (`hostedInvoiceUrl`). Audited `billing.yearly_switched`. API contract 1.95.0-mut531.
+- Portal: the line "Switch to yearly and save ₪58.00 a year" under Manage billing, `?step=switch` (`BillingSwitchBody`,
+  `useSwitchStep`) with today's charge, Pay and switch, the declined / approve-on-Stripe / changed-amount states, and
+  "You're on the yearly plan" after. ar + en.
+- Release-QA: `@portal-live.billing.yearly-switch`, `.yearly-switch-early`.
+
+### Technical
+- The drawer's `Banner`/`Amount` (`billingParts.tsx`) and `formatMinor`/`sentence` (`billingText.tsx`) left
+  `BillingDrawer.tsx` so its steps can share them. `customerOnClock` takes a start time (a test clock may start in the past).
+
+---
+## [Unreleased] - 2026-11-02 — A known vendor fills its currency and VAT (MUT-303, ADR-239)
 
 **What:** a vendor remembers the currency and VAT of its expenses and fills them into the next one, on a new expense and on receipt review.
 - **Server:**
@@ -38,7 +62,7 @@
   - `VendorSuggestion` gains `lastCurrency` and `lastVat`.
   - `GET /v1/receipts/{id}` answers `ReceiptDetail` with `vendorDefaults`, matched by the read registration no. or exact name and worked out at read time. It is **never written into `suggested`**. `vat` is null off firms.
   - Migration `20261102180000_mut303_vendor_defaults` adds a both-or-none CHECK and seeds `lastCurrency` from each vendor's latest expense (supported currencies only).
-  - Local snapshot 15. API 1.95.0-mut303.
+  - Local snapshot 15. API 1.96.0-mut303.
 - **Portal:** one pure rule, `src/hosted/lib/vendorDefaults.ts` (`vendorDefaultFills`).
   - It fills only fields nothing read and nobody changed; the currency only while no amount is typed; VAT only on a firm.
   - It is used by the vendor pick (create drawer and review, never the edit drawer: `prefillDefaults`) and by the review's `vendorDefaults` at mount.

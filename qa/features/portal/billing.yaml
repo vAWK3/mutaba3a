@@ -11,6 +11,11 @@ paths:
   - src/hosted/data/countries.ts
   - src/hosted/components/RadioCards.tsx
   - src/hosted/shell/AccountDrawers.tsx
+  # MUT-531: the drawer's shared parts and its switch step (the switch itself runs in portal-live).
+  - src/hosted/components/billingParts.tsx
+  - src/hosted/components/billingText.tsx
+  - src/hosted/components/BillingSwitchBody.tsx
+  - src/hosted/components/useSwitchStep.ts
 features:
   - id: open-soon
     title: Before Stripe or the GA prices are set, Billing says subscriptions open soon and offers no Subscribe

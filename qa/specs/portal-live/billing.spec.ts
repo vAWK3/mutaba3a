@@ -522,3 +522,71 @@ test.describe('the launch offer (MUT-525)', () => {
     });
   });
 });
+
+/** MUT-531: a monthly subscriber whose clock started a month and three hours back, so two payments have gone through by now. */
+async function payingTwoMonths(person: Awaited<ReturnType<typeof provisionPerson>>) {
+  const { customerId, clockId } = await customerOnClock(person, Math.floor(Date.now() / 1000) - 31 * DAY_S - 3 * 60 * 60);
+  const subscriptionId = await subscribeByApi(customerId);
+  // Two minutes short of now: Stripe prorates on the clock, and the server takes a preview over 30 minutes old as stale.
+  await advanceClock(clockId, Math.floor(Date.now() / 1000) - 120);
+  return { customerId, subscriptionId };
+}
+
+test('Switch to yearly from the 2nd payment - the line names the saving, Stripe\'s preview is what is charged, no discount', { tag: '@portal-live.billing.yearly-switch' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'switch');
+  const { customerId, subscriptionId } = await step('A monthly subscriber in shekels has paid two months (the sandbox clock runs a month)', async () => {
+    const paying = await payingTwoMonths(person);
+    await expect.poll(async () => (await invoicesOf(paying.customerId)).filter((i) => i.total > 0).length, { timeout: 60_000 }).toBe(2);
+    return paying;
+  });
+  await signIn(page, person);
+
+  const drawer = await step('Open Billing: the line says what a year saves', async () => {
+    const d = await openBilling(page, person.personalId);
+    await expect(d.getByText('Switch to yearly and save ₪58.00 a year')).toBeVisible({ timeout: 45_000 });
+    return d;
+  });
+  const due = await step('Press Switch to yearly and read the preview', async () => {
+    await drawer.getByRole('button', { name: 'Switch to yearly' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Switch to yearly' });
+    await expect(sheet.getByText(/₪290\.00 a year, renewing on/)).toBeVisible({ timeout: 45_000 });
+    const line = await sheet.getByText(/^You pay ₪[\d,.]+ today/).textContent();
+    const amount = Number(/₪([\d,.]+)/.exec(line ?? '')?.[1]?.replace(/,/g, ''));
+    expect(amount).toBeGreaterThan(0);
+    expect(amount).toBeLessThan(290);
+    return amount;
+  });
+  await step('Press Pay and switch', async () => {
+    await page.getByRole('button', { name: /^Pay ₪[\d,.]+ and switch$/ }).click();
+    const back = page.getByRole('dialog', { name: 'Billing' });
+    await expect(back.getByText(/^You're on the yearly plan\. It renews on .* at ₪290\.00\.$/)).toBeVisible({ timeout: 45_000 });
+    // Stripe keeps the billing day: the year renews on its anniversary, at the list price (MUT-525 DD3's line).
+    await expect(back.getByText(/^Renews at ₪290\.00 on /)).toBeVisible({ timeout: 45_000 });
+  });
+  await step('Stripe holds the yearly price with no discount; today\'s invoice is the previewed amount; the profile stays paid', async () => {
+    const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
+    expect(sub.items.data[0].price.lookup_key).toBe('freelancer_list_yearly_ils');
+    expect(sub.discounts).toEqual([]);
+    const last = (await invoicesOf(customerId)).at(-1)!;
+    expect(last.total).toBe(Math.round(due * 100));
+    expect(last.discount).toBe(0);
+    const me = await (await page.request.get('/v1/me')).json();
+    expect(me.profiles.find((p: { id: string }) => p.id === person.personalId)?.billing).toMatchObject({ state: 'ACTIVE', source: 'STRIPE' });
+  });
+});
+
+test('Switch to yearly - no line before the 2nd payment', { tag: '@portal-live.billing.yearly-switch-early' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'switch-early');
+  const { customerId } = await customerOnClock(person);
+  await subscribeByApi(customerId);
+  await signIn(page, person);
+  await step('Open Billing after the first payment: Active, Manage billing, no switch line', async () => {
+    const d = await openBilling(page, person.personalId);
+    await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
+    await expect(d.getByRole('button', { name: 'Manage billing' })).toBeVisible();
+    await expect(d.getByRole('button', { name: 'Switch to yearly' })).toHaveCount(0);
+    const res = await page.request.get('/v1/billing/yearly-switch');
+    expect(res.status()).toBe(409);
+    expect((await res.json()).error.details).toEqual({ reason: 'SWITCH_NOT_AVAILABLE', why: 'TOO_EARLY' });
+  });
+});

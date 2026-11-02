@@ -12854,6 +12854,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/yearly-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview the switch from monthly to yearly
+         * @description Stripe’s own proration preview: the yearly list price to the next anniversary of the person’s billing day (Stripe keeps the day), less the unused part of this month, tax included where it applies; `renewsOn` is Stripe’s. Open from the 2nd paid invoice on a monthly list price that is active, not cancelling, paused or discounted (founder prices never switch). No discount is ever applied.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["YearlySwitchPreview"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Switch from monthly to yearly
+         * @description Moves the subscription to the yearly list price at the preview’s `prorationDate` (at most 30 minutes old), charging the prorated invoice at once. Stripe previews again first: an amount other than `expectedAmountDue` charges nothing (AMOUNT_CHANGED). A payment that doesn’t go through leaves the plan monthly. Audited `billing.yearly_switched` on each profile the person owns.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["YearlySwitchRequest"];
+                };
+            };
+            responses: {
+                /** @description Switched */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["YearlySwitchResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/receipts/read": {
         parameters: {
             query?: never;
@@ -22258,6 +22450,7 @@ export interface components {
             };
             coveredProfileIds: string[];
             offer: components["schemas"]["BillingOffer"] | unknown;
+            yearlySwitch: components["schemas"]["BillingYearlySwitch"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -22271,6 +22464,11 @@ export interface components {
                 ILS: number | null;
                 USD: number | null;
             };
+        };
+        BillingYearlySwitch: {
+            /** @enum {string} */
+            currency: "ILS" | "USD";
+            savings: number | null;
         };
         BillingRedirect: {
             /** Format: uri */
@@ -22289,6 +22487,28 @@ export interface components {
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
             returnPath: string;
+        };
+        YearlySwitchPreview: {
+            amountDue: number;
+            /** @enum {string} */
+            currency: "ILS" | "USD";
+            yearlyAmount: number;
+            /** Format: date-time */
+            renewsOn: string;
+            /** Format: date-time */
+            prorationDate: string;
+        };
+        YearlySwitchResult: {
+            /** Format: date-time */
+            renewsOn: string | null;
+            yearlyAmount: number;
+            /** @enum {string} */
+            currency: "ILS" | "USD";
+        };
+        YearlySwitchRequest: {
+            /** Format: date-time */
+            prorationDate: string;
+            expectedAmountDue: number;
         };
         ReceiptReadJobResult: {
             /**

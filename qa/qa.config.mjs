@@ -138,6 +138,12 @@ export default {
         // MUT-361: the lapse gate, enforced by the API and shown by the portal.
         'server/src/billing/gate.ts',
         'server/src/auth/billing-gate.ts',
+        // MUT-531: the switch to yearly, decided on Stripe's live subscription and its paid invoices.
+        'server/src/routes/billing-plan.ts',
+        'server/src/billing/retention.ts',
+        'server/src/billing/stripe/plan-gateway.ts',
+        'src/hosted/components/BillingSwitchBody.tsx',
+        'src/hosted/components/useSwitchStep.ts',
       ],
       // support/billing-live.mjs: the Keychain sandbox key, a migrated QA database, the sandbox catalog,
       // `stripe listen`, the API on :8790 and the portal on :5176 (8787-8789 are other sessions' dev APIs).

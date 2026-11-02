@@ -2444,6 +2444,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `useContinueOnThisDevice()` (`src/hosted/session/continueOnThisDevice.ts`): `(options?: { remember?: boolean }) => void` — switches to this device's records (saved, or for this page only with `remember: false`), clears the query cache and opens `/`. Used by the sign-in page's "Continue on this device" and the welcome's Try.
 - `countWelcomeChoice(choice)` (`src/hosted/analytics/portalAnalytics.ts`): the welcome's cookieless door count through the separate `welcome` posthog-js instance; fire and forget.
 
+### Switch to yearly — MUT-531 (ADR-238)
+- `BillingSwitchBody` / `SwitchFooter` — `src/hosted/components/BillingSwitchBody.tsx`: Billing's `?step=switch` body and pinned footer (Not now, Pay {due} and switch). State in `useSwitchStep` (`src/hosted/components/useSwitchStep.ts`): the preview query, the switch mutation, `failure` (declined, amountChanged, needsAction, notAvailable, failed) and `approveUrl` (stripe.com only).
+- `Banner` / `Amount` — `src/hosted/components/billingParts.tsx`; `formatMinor` / `sentence` — `src/hosted/components/billingText.tsx`: the Billing drawer's shared parts (moved out of `BillingDrawer.tsx`).
+- `yearlySwitchLineOf` — `src/hosted/data/billingView.ts`: the switch line, only on an active monthly plan the server says may switch.
+- Server: `yearlySwitchOf` / `yearlySavingsOf` / `listMonthlyCurrencyOf` (`server/src/billing/retention.ts`); `PlanGateway` (`server/src/billing/stripe/plan-gateway.ts`, fake `FakePlanGateway`); `billingPlanRoutes` (`server/src/routes/billing-plan.ts`).
+
 ### Expense VAT — MUT-302 (ADR-231)
 - `ExpenseVatRow` — `src/hosted/components/expenseForm/ExpenseVatRow.tsx`: the firm-only collapsed VAT row (`.form-disclosure`) on the shared expense fields: "No VAT recorded" or the VAT inside the amount; open, treatment `Select`, Standard rate, net and VAT preview (`<bdi>`). Props `form`, `idPrefix`, `readOnly`, `hint`. Rendered by `HostedExpenseFields` when `firm`.
 - `vatPreview` / `percentToBasisPoints` / `basisPointsToPercent` / `VAT_TREATMENTS` — `src/hosted/lib/expenseVat.ts`: display-only port of the server split, held by the shared case table.

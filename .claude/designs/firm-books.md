@@ -188,7 +188,7 @@ interface ReceiptSuggestion {
 
 MUT-255 stores it as the receipt's suggested fields, next to the approved fields. A field under the reader's confidence threshold is **omitted, never sent wrong** (MUT-256's rule).
 
-> **Amended 2026-11-02 (MUT-303, ADR-238):** vendor defaults are served beside the reader's suggestion (`vendorDefaults` on a receipt, flat `lastCurrency`/`lastVat` on the typeahead), never merged into `suggested` with `source: "vendor"`; §12's `vendor.defaults` object became those flat fields.
+> **Amended 2026-11-02 (MUT-303, ADR-239):** vendor defaults are served beside the reader's suggestion (`vendorDefaults` on a receipt, flat `lastCurrency`/`lastVat` on the typeahead), never merged into `suggested` with `source: "vendor"`; §12's `vendor.defaults` object became those flat fields.
 
 ### 6.2 Where reading happens (ID4: always on the user's device)
 

@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, type BillingRedirect, type CheckoutSessionRequest } from '../api/client';
+import { api, ApiError, type BillingRedirect, type CheckoutSessionRequest, type YearlySwitchPreview } from '../api/client';
 import { ME_KEY } from '../session/me';
 
 /**
@@ -74,4 +74,30 @@ export function useStartCheckout() {
 export function useOpenBillingPortal() {
   const onError = useRefreshOnRefusal();
   return useMutation({ mutationFn: (returnPath: string) => checked(api.openBillingPortal({ returnPath })), onSuccess: leaveFor, onError });
+}
+
+/** MUT-531: Stripe's preview of the switch to yearly. Never cached: it is today's amount at this moment's proration. */
+export const yearlySwitchQuery = queryOptions({
+  queryKey: [...BILLING_KEY, 'yearly-switch'] as const,
+  queryFn: ({ signal }) => api.yearlySwitchPreview({ signal }),
+  staleTime: 0,
+  gcTime: 0,
+  retry: false,
+});
+
+/**
+ * MUT-531: the switch, at the preview's proration date and amount. Billing and /v1/me are read again either way: on
+ * success the webhook mirrors the yearly plan; on a refusal (AMOUNT_CHANGED, a plan no longer eligible) the drawer's
+ * view is stale.
+ */
+export function useSwitchToYearly() {
+  const queryClient = useQueryClient();
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
+    void queryClient.invalidateQueries({ queryKey: ME_KEY });
+  };
+  return useMutation({
+    mutationFn: (preview: Pick<YearlySwitchPreview, 'prorationDate' | 'amountDue'>) => api.switchToYearly({ prorationDate: preview.prorationDate, expectedAmountDue: preview.amountDue }),
+    onSettled: refresh,
+  });
 }
