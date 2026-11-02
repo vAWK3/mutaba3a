@@ -14,6 +14,8 @@ interface LiveState {
   apiOrigin: string;
   portalOrigin: string;
   adminToken: string;
+  /** MUT-525: this run's launch coupon id, which the API reads; absent from Stripe unless a spec made it. */
+  offerCouponId: string;
 }
 
 const STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.state', 'portal-live.json');
@@ -32,7 +34,7 @@ function sandboxKey(): string {
 
 type Json = any;
 
-export async function stripeApi(method: 'GET' | 'POST', endpoint: string, params: Record<string, string> = {}): Promise<Json> {
+export async function stripeApi(method: 'GET' | 'POST' | 'DELETE', endpoint: string, params: Record<string, string> = {}): Promise<Json> {
   const body = new URLSearchParams(params).toString();
   const res = await fetch(`https://api.stripe.com/v1/${endpoint}${method === 'GET' && body ? `?${body}` : ''}`, {
     method,
@@ -94,7 +96,7 @@ export async function customerOnClock(person: LivePerson): Promise<{ customerId:
  * A paid subscription on that customer (test card, monthly ILS unless named), mirrored into the API by the webhook.
  * `trialEnd` (MUT-418) starts it `trialing` until then, as our Checkout does during the free trial (ADR-170 R-D2).
  */
-export async function subscribeByApi(customerId: string, lookupKey = 'freelancer_list_monthly_ils', trialEnd?: number): Promise<string> {
+export async function subscribeByApi(customerId: string, lookupKey = 'freelancer_list_monthly_ils', trialEnd?: number, coupon?: string, metadata: Record<string, string> = {}): Promise<string> {
   await stripeApi('POST', 'payment_methods/pm_card_visa/attach', { customer: customerId }).catch(() => undefined);
   const methods = await stripeApi('GET', 'payment_methods', { customer: customerId, type: 'card' });
   const prices = await stripeApi('GET', 'prices', { 'lookup_keys[]': lookupKey });
@@ -103,8 +105,33 @@ export async function subscribeByApi(customerId: string, lookupKey = 'freelancer
     'items[0][price]': prices.data[0].id,
     default_payment_method: methods.data[0].id,
     ...(trialEnd ? { trial_end: String(trialEnd) } : {}),
+    ...(coupon ? { 'discounts[0][coupon]': coupon } : {}),
+    ...Object.fromEntries(Object.entries(metadata).map(([k, v]) => [`metadata[${k}]`, v])),
   });
   return sub.id;
+}
+
+/**
+ * MUT-525 (R3, R6): this run's launch coupon, made only by the launch-offer specs and deleted by them (absent is the
+ * default the other flows rely on). `redeemBy` defaults to three days from now; the offer shown ends an hour before.
+ */
+export async function createOfferCoupon(redeemBy = Math.floor(Date.now() / 1000) + 3 * 24 * 60 * 60): Promise<string> {
+  const id = liveState().offerCouponId;
+  await deleteOfferCoupon();
+  await stripeApi('POST', 'coupons', { id, name: 'Launch offer · عرض الإطلاق', percent_off: '50', duration: 'once', 'applies_to[products][0]': 'mutaba3a_qa_freelancer', redeem_by: String(redeemBy) });
+  return id;
+}
+
+export async function deleteOfferCoupon(): Promise<void> {
+  await stripeApi('DELETE', `coupons/${liveState().offerCouponId}`).catch(() => undefined);
+}
+
+/** The person's invoices on a customer, oldest first: total, subtotal and the discount Stripe applied. */
+export async function invoicesOf(customerId: string): Promise<{ total: number; subtotal: number; discount: number; reason: string }[]> {
+  const listed = await stripeApi('GET', 'invoices', { customer: customerId, limit: '10' });
+  return (listed.data as Json[])
+    .sort((a, b) => a.created - b.created)
+    .map((inv) => ({ total: inv.total, subtotal: inv.subtotal, discount: (inv.total_discount_amounts ?? []).reduce((sum: number, d: Json) => sum + d.amount, 0), reason: inv.billing_reason }));
 }
 
 /** Moves the test clock and waits until Stripe has finished acting on it. */
@@ -158,7 +185,10 @@ export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey
   expect(session.line_items.data[0].price.lookup_key).toBe(lookupKey);
   const customer = await stripeApi('GET', `customers/${session.customer}`);
   expect(customer.metadata.mutaba3a_user_id).toBe(person.userId);
-  await subscribeByApi(session.customer, lookupKey, opts.trialEnd);
+  // MUT-525: a Checkout carrying the launch coupon puts it and the offer's name (the server's subscription_data, which
+  // a retrieved session doesn't show) on the subscription, as paying on the page would.
+  const coupon = session.discounts?.[0]?.coupon as string | undefined;
+  await subscribeByApi(session.customer, lookupKey, opts.trialEnd, coupon, coupon ? { mutaba3a_offer: 'launch-2026' } : {});
   await stripeApi('POST', `checkout/sessions/${sessionId}/expire`);
   await page.goto(session.success_url);
 }

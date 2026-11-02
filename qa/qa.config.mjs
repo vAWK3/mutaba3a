@@ -87,7 +87,9 @@ export default {
         // MUT-468: the mail art is read through the live API's outbox: the portal-selfservice app's.
         '!src/hosted/public/mail/**',
         // MUT-418: the trial's card prompt needs a real signup and Stripe's sandbox: the portal-live app's.
-        '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts',
+        '!src/hosted/components/TrialBanner.tsx', '!src/hosted/data/{trialPrompt,trialPromptQueries}.ts',
+        // MUT-525: the launch offer's line needs a coupon in Stripe's sandbox: the portal-live app's.
+        '!src/hosted/components/OfferTopLine.tsx', '!src/hosted/shell/TrialWelcomeOpener.tsx', '!src/hosted/session/trialWelcomeOffer.ts',
         // MUT-291: the carry-over's pages and mapping are the carry-over app's (they need the old app's origin too).
         '!src/hosted/pages/carry-over/**', '!src/hosted/local/carryOver/**',
         // MUT-115: passkeys need a real WebAuthn relying party: the portal-selfservice app's.
@@ -121,6 +123,11 @@ export default {
         'server/src/billing/checkout.ts',
         'server/src/billing/billing-countries.json',
         'server/src/billing/stripe/checkout-gateway.ts',
+        // MUT-525: the launch offer, decided from the Stripe coupon and shown in Billing and on Home.
+        'server/src/billing/offer.ts',
+        'server/src/billing/offers.json',
+        'server/src/billing/offer-read.ts',
+        'src/hosted/components/OfferTopLine.tsx',
         // MUT-418: the free trial's card prompt (first-run step, Home banner) and the answers it stores.
         'src/hosted/components/TrialBanner.tsx',
         'src/hosted/data/trialPrompt.ts',

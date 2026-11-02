@@ -15,6 +15,11 @@
  *
  * It writes qa/.state/portal-live.json (origins and the QA admin token, no Stripe key) for the specs, and stops
  * everything it started on SIGINT/SIGTERM. Ports 8787-8789 belong to other sessions' dev APIs.
+ *
+ * MUT-525 (eng review R3, R6): the launch offer's coupon belongs to this run alone. The API gets a per-run coupon id
+ * (BILLING_OFFER_COUPON_ID, which a test server reads uncached) that exists in the sandbox only while a launch-offer
+ * spec has made it, so the other flows see no offer; it is deleted when the env stops. `--catalog-only` also makes
+ * one such coupon and prints its id, for trying the offer by hand against a dev API.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -51,6 +56,34 @@ export const PRICES = [
   { lookup_key: 'freelancer_founder_yearly_usd', currency: 'usd', unit_amount: 6000, interval: 'year' },
 ];
 const PRODUCT_ID = 'mutaba3a_qa_freelancer';
+/** MUT-525: this run's launch coupon id; another session's run, sharing the sandbox, never sees it. */
+export const OFFER_COUPON_ID = `qa_launch_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+const DAY_S = 24 * 60 * 60;
+
+/**
+ * MUT-525 (D1, DD12b): the launch coupon as the runbook makes it live: 50% once, on the Freelancer product only,
+ * redeemable until `redeemBy` (unix seconds; the offer shown ends an hour before it).
+ */
+export function offerCouponParams(id, redeemBy) {
+  return {
+    id,
+    name: 'Launch offer · عرض الإطلاق',
+    percent_off: '50',
+    duration: 'once',
+    'applies_to[products][0]': PRODUCT_ID,
+    redeem_by: String(redeemBy),
+  };
+}
+
+export async function ensureOfferCoupon(key, id = OFFER_COUPON_ID, redeemBy = Math.floor(Date.now() / 1000) + 3 * DAY_S) {
+  const existing = await stripe(key, 'GET', `coupons/${id}`);
+  if (existing.status !== 404) return existing.json;
+  return (await stripe(key, 'POST', 'coupons', offerCouponParams(id, redeemBy))).json;
+}
+
+export async function deleteOfferCoupon(key, id = OFFER_COUPON_ID) {
+  await stripe(key, 'DELETE', `coupons/${id}`);
+}
 /** HANDLED_EVENT_TYPES in server/src/billing/stripe/sync.ts. */
 const EVENTS = [
   'checkout.session.completed',
@@ -159,6 +192,8 @@ async function main() {
   const key = sandboxKey();
   if (CATALOG_ONLY) {
     await ensureCatalog(key);
+    const coupon = await ensureOfferCoupon(key);
+    console.log(`[portal-live] launch coupon ${coupon.id} (50% once, until ${new Date(coupon.redeem_by * 1000).toISOString()}); set BILLING_OFFER_COUPON_ID=${coupon.id} on a dev API to try it, and delete it after`);
     return;
   }
   await assertPortFree(API_PORT, 'portal-live');
@@ -182,7 +217,9 @@ async function main() {
   const stop = (code = 0) => {
     stopping = true;
     for (const child of children) child.kill('SIGTERM');
-    setTimeout(() => process.exit(code), 500).unref();
+    // MUT-525: never leave this run's coupon in the shared sandbox.
+    deleteOfferCoupon(key).catch(() => undefined);
+    setTimeout(() => process.exit(code), 1500).unref();
   };
   process.on('SIGINT', () => stop());
   process.on('SIGTERM', () => stop());
@@ -206,6 +243,8 @@ async function main() {
       PORTAL_ORIGIN,
       STRIPE_SECRET_KEY: key,
       STRIPE_WEBHOOK_SECRET: whsec,
+      // MUT-525 (R6): this run's own launch coupon id, read uncached; absent from Stripe until a spec makes it.
+      BILLING_OFFER_COUPON_ID: OFFER_COUPON_ID,
       // MUT-418: the trial flows start at a real signup: the memory mailer (read through GET /admin/v1/dev-outbox), the
       // fixture domain checker (business.example opens at once) and the always-pass Turnstile test secret
       // (config.ts's development default). Each spec sends its own X-Forwarded-For, so the per-IP budget never adds up.
@@ -225,7 +264,7 @@ async function main() {
   });
 
   mkdirSync(path.join(ROOT, 'qa', '.state'), { recursive: true });
-  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN }, null, 2));
+  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN, offerCouponId: OFFER_COUPON_ID }, null, 2));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -157,3 +157,67 @@ features:
     expect:
       - On day 20 the banner says the profile is read-only, there's no Record expense, and the API answers a write with 402 SUBSCRIPTION_LAPSED
       - On day 31 only "Subscribe or download your records" shows, the API refuses a list read with 402, and Download my records saves the file
+  # MUT-525 (ADR-237, eng review R3/R6): the launch offer. Each run owns its coupon id (billing-live.mjs passes it to the
+  # API, which reads it uncached); only these four create it and delete it, so every flow above sees no offer.
+  - id: launch-offer-yearly
+    title: Launch offer - a trialist picks Yearly, sees ₪290 → ₪145, and pays ₪145 for the first year
+    tier: core
+    paths:
+      - server/src/billing/offer.ts
+      - server/src/billing/offers.json
+      - server/src/billing/offer-read.ts
+      - src/hosted/components/TrialBanner.tsx
+      - src/hosted/components/OfferTopLine.tsx
+      - qa/support/livePortal.ts
+    steps:
+      - The launch coupon runs in Stripe (50% once, Freelancer only, three days left)
+      - Sign up, press Not now on the trial step, and move the trial to its last day
+      - On Home, press "50% off a yearly plan until <date>" in the trial line
+      - Read the Subscribe step, choose Israel and continue to Stripe's page
+      - Fill in the test card and pay (through Stripe's API with the Checkout's coupon, TD-201)
+    expect:
+      - The Home line offers 50% off a yearly plan until the offer's last day, in place of Add a card
+      - Subscribe opens on "Yearly · −50%" with the launch line, ₪145.00 before a struck ₪290.00 for the first year, and "You pay ₪145.00 today for your first year, then ₪290.00 a year from <date>"
+      - Stripe's page carries the coupon (Launch offer) and our Arabic offer line above Pay
+      - Back in the portal "You're subscribed. Launch offer applied."; the first invoice is ₪145.00 with a ₪145.00 discount line
+  - id: launch-offer-monthly
+    title: Launch offer - Monthly shows no offer price and Stripe charges the full monthly price
+    tier: secondary
+    paths:
+      - server/src/routes/billing.ts
+    steps:
+      - The launch coupon runs in Stripe
+      - Sign up, press Not now, open Billing and press Subscribe
+      - Switch to Monthly, choose Israel and continue to Stripe's page
+    expect:
+      - The step opens on Yearly while the offer applies; on Monthly it shows ₪29.00, no struck price, and "Yearly is 50% off the first year until <date>"
+      - Stripe's page charges ₪29.00 a month with no discount, and the Checkout carries no coupon
+  - id: launch-offer-ended
+    title: Launch offer - ended early mid-Subscribe, the drawer says so before any charge; the next Checkout is at full price
+    tier: secondary
+    paths:
+      - src/hosted/data/billingQueries.ts
+    steps:
+      - The launch coupon runs in Stripe; sign up, press Not now, open Subscribe (Yearly, offer shown) and choose Israel
+      - The operator deletes the coupon (ends the campaign early)
+      - Press Continue to payment
+      - Press Continue to payment again
+      - Go back to Home
+    expect:
+      - The first Continue makes no Checkout and shows "The launch offer has ended. The yearly price is ₪290.00." in the drawer
+      - The second goes to Stripe's page at ₪290.00 a year with no discount
+      - Home's trial line is back to Add a card, and GET /v1/billing answers offer null
+  - id: launch-offer-trial-carry
+    title: Launch offer - with more than 48 hours of trial left the trial carries over and the first paid invoice is ₪145
+    tier: secondary
+    paths:
+      - server/src/billing/checkout.ts
+    steps:
+      - The launch coupon runs in Stripe; sign up (14 days of trial) and press Not now
+      - Open Subscribe, choose Israel, continue to Stripe's page and fill in the test card
+      - Add the card (through Stripe's API, with the trial's end and the coupon)
+      - End the trial in Stripe (its API's trial_end=now bills the first paid period at once)
+    expect:
+      - The step says "Your free trial continues. On <trial end> you pay ₪145.00 for your first year, then ₪290.00 a year from <a year later>"
+      - Back in the portal "Card added. Your first charge is on <trial end>" and "Launch offer applied"
+      - Stripe's invoices are ₪0 for the trial, then ₪145.00 with a ₪145.00 discount (the D5 spike's result, recorded)

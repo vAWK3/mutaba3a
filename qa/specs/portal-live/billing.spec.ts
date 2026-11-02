@@ -1,5 +1,5 @@
 import { test, expect } from '../../support/qa';
-import { advanceClock, customerOnClock, fillStripeCheckout, finishSignupInPage, payCheckoutByApi, provisionPerson, requestSignup, setTrialStartedDaysAgo, signIn, stripeApi, subscribeByApi } from '../../support/livePortal';
+import { advanceClock, createOfferCoupon, customerOnClock, deleteOfferCoupon, fillStripeCheckout, finishSignupInPage, invoicesOf, payCheckoutByApi, provisionPerson, requestSignup, setTrialStartedDaysAgo, signIn, stripeApi, subscribeByApi } from '../../support/livePortal';
 import { openYou } from '../../support/you';
 
 /**
@@ -355,5 +355,170 @@ test('After the trial the API refuses writes and the portal is read-only; from d
     const exported = page.waitForResponse((res) => new URL(res.url()).pathname === '/v1/records-export');
     await yourData.getByRole('button', { name: 'Download my records' }).click();
     expect((await exported).status()).toBe(200);
+  });
+});
+
+// ---- MUT-525: the launch offer (ADR-237). This run's coupon exists only inside these tests (R3, R6) ----------------
+
+/** A new signup in English who pressed Not now on the trial step: on Home, trial running, no card. */
+async function trialist(page: import('@playwright/test').Page, label: string) {
+  await page.addInitScript((key) => localStorage.setItem(key, 'en'), PORTAL_LANGUAGE_KEY);
+  const person = await finishSignupInPage(page, await requestSignup('en', label), 'en');
+  const welcome = page.getByRole('dialog', { name: 'Your free trial' });
+  await expect(welcome.getByRole('button', { name: 'Not now' })).toBeVisible({ timeout: 30_000 });
+  await welcome.getByRole('button', { name: 'Not now' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  return person;
+}
+
+const subscribeForm = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Subscribe to Freelancer' });
+const checkoutSessionOf = (page: import('@playwright/test').Page) => /\/(cs_test_[A-Za-z0-9]+)/.exec(page.url())?.[1] ?? '';
+
+test.describe('the launch offer (MUT-525)', () => {
+  // The coupon is this run's shared sandbox state: one test at a time, and it never outlives the test.
+  test.describe.configure({ mode: 'serial' });
+  test.afterEach(async () => deleteOfferCoupon());
+
+  test('Launch offer - a trialist picks Yearly, sees ₪290 → ₪145, and pays ₪145 for the first year', { tag: '@portal-live.billing.launch-offer-yearly' }, async ({ page, step }) => {
+    await step('The launch coupon runs in Stripe: 50% once, on the Freelancer product, three days left', async () => createOfferCoupon());
+    const person = await step('Sign up, press Not now, and move the trial to its last day (no trial to carry)', async () => {
+      const p = await trialist(page, 'offer-yearly');
+      setTrialStartedDaysAgo(p.userId, 13);
+      await page.reload();
+      return p;
+    });
+    const banner = page.getByRole('region', { name: 'Your free trial' });
+    await step('Home’s trial line offers 50% off a yearly plan, in place of Add a card', async () => {
+      await expect(banner.getByRole('button', { name: /^50% off a yearly plan until / })).toBeVisible({ timeout: 30_000 });
+      await expect(banner.getByRole('button', { name: 'Add a card' })).toHaveCount(0);
+    });
+    const form = subscribeForm(page);
+    await step('Press it: Subscribe opens on Yearly · −50% with the launch line', async () => {
+      await banner.getByRole('button', { name: /^50% off a yearly plan until / }).click();
+      await expect(form.getByRole('radio', { name: 'Yearly · −50%' })).toBeChecked();
+      await expect(form.getByText(/^Launch offer: 50% off your first year on Yearly, until .+\.$/)).toBeVisible();
+    });
+    await step('Choose Israel: ₪145.00 before a struck ₪290.00, and what is paid today and from when', async () => {
+      await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
+      await expect(form.locator('s', { hasText: '₪290.00' }).first()).toBeVisible();
+      await expect(form.getByText('₪145.00').first()).toBeVisible();
+      await expect(form.getByText(/^You pay ₪145\.00 today for your first year, then ₪290\.00 a year from .+\.$/)).toBeVisible();
+    });
+    await step('Continue to Stripe’s page: the coupon is on it, with our Arabic offer line above Pay', async () => {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
+      await expect(page.getByText(/Launch offer/).first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/عرض الإطلاق: .*145.* عن سنتك الأولى/)).toBeVisible();
+      const session = await stripeApi('GET', `checkout/sessions/${checkoutSessionOf(page)}`);
+      expect(session.discounts?.[0]?.coupon).toBeTruthy();
+    });
+    await step('Fill in the test card and an Israeli address, then pay (through Stripe’s API with the coupon, TD-201)', async () => {
+      await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL' });
+      await payCheckoutByApi(page, person, 'freelancer_list_yearly_ils');
+    });
+    await step('Back in the portal: subscribed, launch offer applied; the first invoice is ₪145.00 with a ₪145.00 discount', async () => {
+      await page.waitForURL(/checkout=success/, { timeout: 90_000 });
+      const back = page.getByRole('dialog', { name: 'Billing' });
+      await expect(back.locator('.hp-banner', { hasText: "You're subscribed. Launch offer applied." })).toBeVisible({ timeout: 45_000 });
+      const customers = await stripeApi('GET', 'customers', { email: person.email });
+      const [first] = await invoicesOf(customers.data[0].id);
+      expect(first).toMatchObject({ subtotal: 29000, discount: 14500, total: 14500 });
+    });
+  });
+
+  test('Launch offer - Monthly shows no offer price and Stripe charges the full monthly price', { tag: '@portal-live.billing.launch-offer-monthly' }, async ({ page, step }) => {
+    await step('The launch coupon runs in Stripe', async () => createOfferCoupon());
+    const person = await step('Sign up and press Not now', async () => trialist(page, 'offer-monthly'));
+    const form = subscribeForm(page);
+    await step('Open Billing and press Subscribe: it opens on Yearly while the offer applies', async () => {
+      await page.goto(`/p/${person.personalId}?billing=true&step=subscribe`);
+      await expect(form.getByRole('radio', { name: 'Yearly · −50%' })).toBeChecked({ timeout: 30_000 });
+    });
+    await step('Switch to Monthly and choose Israel: ₪29.00, no struck price, and the hint that Yearly is 50% off', async () => {
+      await form.getByRole('radio', { name: 'Monthly' }).click();
+      await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
+      await expect(form.getByText('₪29.00').first()).toBeVisible();
+      await expect(form.locator('s')).toHaveCount(0);
+      await expect(form.getByText(/^Yearly is 50% off the first year until .+\.$/)).toBeVisible();
+    });
+    await step('Continue to Stripe’s page: ₪29.00 a month, no discount, no coupon on the Checkout', async () => {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
+      await expect(page.getByText(/29\.00/).first()).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/Launch offer/)).toHaveCount(0);
+      const session = await stripeApi('GET', `checkout/sessions/${checkoutSessionOf(page)}`);
+      expect(session.discounts ?? []).toEqual([]);
+    });
+  });
+
+  test('Launch offer - ended early mid-Subscribe, the drawer says so before any charge; the next Checkout is at full price', { tag: '@portal-live.billing.launch-offer-ended' }, async ({ page, step }) => {
+    await step('The launch coupon runs in Stripe', async () => createOfferCoupon());
+    const person = await step('Sign up and press Not now', async () => trialist(page, 'offer-ended'));
+    const form = subscribeForm(page);
+    await step('Open Subscribe: Yearly with the offer; choose Israel', async () => {
+      await page.goto(`/p/${person.personalId}?billing=true&step=subscribe`);
+      await expect(form.getByRole('radio', { name: 'Yearly · −50%' })).toBeChecked({ timeout: 30_000 });
+      await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
+      await expect(form.getByText('₪145.00').first()).toBeVisible();
+    });
+    await step('The operator deletes the coupon: the campaign ends early', async () => deleteOfferCoupon());
+    await step('Press Continue: no Checkout, and the drawer says the offer has ended and the yearly price', async () => {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await expect(page.getByText('The launch offer has ended. The yearly price is ₪290.00.')).toBeVisible({ timeout: 30_000 });
+      expect(page.url()).not.toMatch(/checkout\.stripe\.com/);
+    });
+    await step('Press Continue again: Stripe’s page at ₪290.00 a year, no discount', async () => {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
+      await expect(page.getByText(/290\.00/).first()).toBeVisible({ timeout: 30_000 });
+      const session = await stripeApi('GET', `checkout/sessions/${checkoutSessionOf(page)}`);
+      expect(session.discounts ?? []).toEqual([]);
+    });
+    await step('Home: the trial line is back to Add a card, and /v1/billing has no offer', async () => {
+      await page.goto(`/p/${person.personalId}`);
+      const banner = page.getByRole('region', { name: 'Your free trial' });
+      await expect(banner.getByRole('button', { name: 'Add a card' })).toBeVisible({ timeout: 30_000 });
+      await expect(banner.getByRole('button', { name: /50% off/ })).toHaveCount(0);
+      expect((await (await page.request.get('/v1/billing')).json()).offer).toBeNull();
+    });
+  });
+
+  test('Launch offer - with more than 48 hours of trial left the trial carries over and the first paid invoice is ₪145', { tag: '@portal-live.billing.launch-offer-trial-carry' }, async ({ page, step }) => {
+    await step('The launch coupon runs in Stripe', async () => createOfferCoupon());
+    const person = await step('Sign up (14 days of trial) and press Not now', async () => trialist(page, 'offer-carry'));
+    const billing = await (await page.request.get('/v1/billing')).json();
+    const trialEnd = Math.floor(Date.parse(billing.trial.endsAt) / 1000);
+    const form = subscribeForm(page);
+    await step('Open Subscribe and choose Israel: the trial continues, ₪145.00 on its last day, then ₪290.00 a year', async () => {
+      await page.goto(`/p/${person.personalId}?billing=true&step=subscribe`);
+      await expect(form.getByRole('radio', { name: 'Yearly · −50%' })).toBeChecked({ timeout: 30_000 });
+      await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
+      await expect(form.getByText(/^Your free trial continues\. On .+ you pay ₪145\.00 for your first year, then ₪290\.00 a year from .+\.$/)).toBeVisible();
+    });
+    await step('Continue to Stripe’s page and fill in the test card', async () => {
+      await page.getByRole('button', { name: 'Continue to payment' }).click();
+      await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL' });
+    });
+    await step('Add the card (through Stripe’s API with the trial’s end and the coupon, TD-201)', async () => {
+      await payCheckoutByApi(page, person, 'freelancer_list_yearly_ils', { trialEnd });
+    });
+    await step('Back: card added, first charge on the trial’s end, launch offer applied', async () => {
+      await page.waitForURL(/checkout=success/, { timeout: 90_000 });
+      const back = page.getByRole('dialog', { name: 'Billing' });
+      await expect(back.locator('.hp-banner', { hasText: "You're subscribed. Launch offer applied." })).toBeVisible({ timeout: 45_000 });
+      await expect(back.getByRole('heading', { name: /^Card added\. Your first charge is on / })).toBeVisible({ timeout: 45_000 });
+    });
+    // Checkout can't use a test-clock customer (Stripe's customer list leaves them out), so the trial is ended through
+    // Stripe's API instead: the first paid period is billed at once, as on the trial's last day.
+    await step('End the trial in Stripe: ₪0 for the trial, then ₪145.00 with a ₪145.00 discount', async () => {
+      const customerId = (await stripeApi('GET', 'customers', { email: person.email })).data[0].id as string;
+      const subs = await stripeApi('GET', 'subscriptions', { customer: customerId, status: 'trialing' });
+      expect(subs.data[0]?.trial_end).toBe(trialEnd);
+      await stripeApi('POST', `subscriptions/${subs.data[0].id}`, { trial_end: 'now' });
+      await expect.poll(async () => (await invoicesOf(customerId)).length, { timeout: 60_000, intervals: [2_000] }).toBeGreaterThanOrEqual(2);
+      const [trialInvoice, firstPaid] = await invoicesOf(customerId);
+      expect(trialInvoice).toMatchObject({ total: 0 });
+      expect(firstPaid).toMatchObject({ subtotal: 29000, discount: 14500, total: 14500 });
+    });
   });
 });
