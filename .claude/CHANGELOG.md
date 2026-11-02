@@ -28,6 +28,41 @@
 
 ---
 
+## [Unreleased] - 2026-11-02 — Receipt reading: no confidently wrong VAT, totals, bill-to numbers or dates (MUT-514, ADR-241)
+
+**Why:** 18 wrong-and-confident fields on 32 new real scans, and every Paz fuel receipt in production filled its
+pre-VAT total as the VAT. A wrong VAT fills a firm's VAT row (MUT-302); a wrong registration no. feeds vendor
+defaults (MUT-303). An empty field is fine.
+
+### Fixed
+- `server/src/receipts/extract/total.ts`: a VAT is filled only when the rate (printed, or ILS 17/18%, JOD 16%) or a
+  labelled total less a labelled subtotal confirms it; a VAT row over 20% of a labelled total is skipped for the next;
+  subtotal + VAT is a total only at the rate; tips, instalments, cash tendered and change never give or vote for a
+  total, and `סה"כ שולם` is the total paid; a misread labelled total loses to a labelled balance the arithmetic
+  confirms; two loose rules that disagree give none.
+- `normalize.ts`: OCR's `לפנ'` / `לל'` before מע"מ folds to `לפני` / `ללא`. `keywords.ts`: `total to vat`, `net
+  amount`, `inc. tax`, `authorized dealer`, and the new TIP, instalment, BALANCE, CUSTOMER, STREET and table-column sets.
+- `dates.ts`: a date outside [upload day − 2 years, + 1 day] or touching an OCR "1" glyph is never the answer, and
+  still counts when dates disagree. `fields.ts`: an address row ends the vendor search; no vendor field from a bill-to
+  row or with a buyer's number.
+
+### Added
+- `server/src/receipts/extract/buyer.ts` (pure): bill-to blocks, identifier normalisation, the learned buyer set (block
+  numbers less any read as a vendor's). `readReceipt` returns them beside the suggestion.
+- Migration `20261103180000_mut514_receipt_read_identifiers`: `expense_receipts.readIdentifiers` (nullable JSONB,
+  digits only, never in the API). The read job saves it on DONE, passes `receivedOn` and the organization's learned
+  buyer numbers (its last 200 receipts) to the extractor, and stamps `server-ocr-rapid-tess-2`.
+- Bench (`server/ocr/bench/run.py`): real receipts in scan order with prior-only buyer memory and `receivedOn`; real
+  rescore; `--server` for a main baseline; `--compare` per-field gate (exit 1 on a lost hit); list truths; the real
+  table in `summary.md`.
+
+### Result
+- Real 48 (rescore of the 2026-10-29 reads, `--compare` main: 0 lost): amount 29/46 (26), date 29/47 (29), VAT 8/24
+  (6), wrong and confident 4 (20): the three TD-294 fields and 3-p31's one-digit date (D7, TD-294). Synthetic: 0 wrong,
+  two more VATs right.
+
+---
+
 ## [Unreleased] - 2026-11-02 — before-release.md: the move and receipt reading are live (docs only)
 
 **Why:** two operator items still described work as not run. MUT-487's cutover happened on 2026-10-30, and MUT-441's
