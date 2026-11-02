@@ -287,7 +287,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.95.0-mut531';
+export const API_VERSION = '1.96.0-mut532';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -449,10 +449,17 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       plan: deps.stripe?.planGateway ?? null,
     }),
   );
-  // MUT-531: changing one's own plan, person-level like the rest of Billing. One limiter for every billing press.
+  // MUT-531/532: changing one's own plan (switch, pause, cancel, the stay offer), person-level like the rest of Billing.
+  // One limiter for every billing press.
   app.route(
     '/',
-    billingPlanRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, plan: deps.stripe?.planGateway ?? null, limiter: billingLimiter, logger: deps.logger }),
+    billingPlanRoutes(store, {
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      plan: deps.stripe?.planGateway ?? null,
+      limiter: billingLimiter,
+      logger: deps.logger,
+      ...(deps.offers ? { offers: deps.offers } : {}),
+    }),
   );
   // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).
   const receiptReader =

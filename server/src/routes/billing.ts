@@ -29,7 +29,7 @@ import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { ownedProfilesOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { BillingRetentionEventRecord, BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import { BillingOverviewSchema, BillingRedirectSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
 
 /**
@@ -113,7 +113,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const now = c.get('now')();
       const shown = currentSubscription(summary.subscriptions, now);
       const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
-      const yearlySwitch = shown && options.plan ? await yearlySwitchLine(options.plan, shown, catalog, options.logger, c.get('requestId')) : null;
+      const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalog, now, options.logger, c.get('requestId')) : null;
       return c.json(
         {
           configured: options.checkout !== null,
@@ -360,9 +360,21 @@ export async function auditOn(
  * monthly list price that is active and not cancelling asks Stripe at all; a failure hides the line, never the read.
  * Stripe's own discount and pause are checked when the person opens the switch (GET /v1/billing/yearly-switch).
  */
-async function yearlySwitchLine(plan: PlanGateway, shown: BillingSubscriptionRecord, catalog: Catalog, logger: Pick<Logger, 'warn'>, requestId: string) {
+async function yearlySwitchLine(
+  store: LedgerStore,
+  userId: string,
+  plan: PlanGateway,
+  shown: BillingSubscriptionRecord,
+  catalog: Catalog,
+  now: Date,
+  logger: Pick<Logger, 'warn'>,
+  requestId: string,
+) {
   const mirrored = { status: shown.status, priceLookupKey: shown.priceLookupKey, cancelAtPeriodEnd: shown.cancelAtPeriodEnd };
-  if (yearlySwitchOf(mirrored, { paidInvoices: SWITCH_AFTER_PAID_INVOICES, discounted: false, paused: false }, catalog).ok === false) return null;
+  const paused = shown.pausedFrom !== null;
+  if (yearlySwitchOf(mirrored, { paidInvoices: SWITCH_AFTER_PAID_INVOICES, discounted: false, paused }, catalog).ok === false) return null;
+  // MUT-532 (D13): not while the stay offer runs; the rest of its discount would land on the yearly invoice or be lost.
+  if (stayOfferRuns(await store.billing.retentionEventsOf(userId), now)) return null;
   try {
     const decision = yearlySwitchOf(mirrored, { paidInvoices: await plan.paidInvoiceCount(shown.stripeSubscriptionId), discounted: false, paused: false }, catalog);
     return decision.ok ? { currency: decision.currency, savings: decision.savings } : null;
@@ -371,6 +383,10 @@ async function yearlySwitchLine(plan: PlanGateway, shown: BillingSubscriptionRec
     logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'paid invoices unavailable; switch line hidden');
     return null;
   }
+}
+
+function stayOfferRuns(events: readonly BillingRetentionEventRecord[], now: Date): boolean {
+  return events.some((e) => e.kind === 'STAY_OFFER' && (e.endsAt === null || e.endsAt > now));
 }
 
 function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
@@ -385,6 +401,7 @@ function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
     // MUT-525 DD3: a list price renews at the catalog's amount, which the drawer names; a founder price never shows one.
     renewsAtListPrice: sub.priceLookupKey !== null && ALL_GA_LOOKUP_KEYS.includes(sub.priceLookupKey),
     offer: sub.offerId ? { id: sub.offerId } : null,
+    pause: sub.pausedFrom ? { from: sub.pausedFrom.toISOString(), until: sub.pauseResumesAt?.toISOString() ?? null } : null,
   } as const;
 }
 

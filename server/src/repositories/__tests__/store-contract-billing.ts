@@ -411,6 +411,63 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
         { userId: lastIn.id, email: lastIn.email, locale: 'en', trialStartedAt: start(9) },
       ]);
     });
+
+    it('mirrors a pause and clears it again (MUT-532)', async () => {
+      const store = await makeStore();
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, null));
+      const base = subscription(customer);
+      const { subscription: saved } = await store.billing.saveSubscription(base);
+      expect(saved).toMatchObject({ pausedFrom: null, pauseResumesAt: null });
+      const paused = await store.billing.saveSubscription({ ...base, pausedFrom: at(30), pauseResumesAt: at(50), stripeUpdatedAt: at(2), at: at(2) });
+      expect(paused).toMatchObject({ outcome: 'changed', subscription: { pausedFrom: at(30), pauseResumesAt: at(50) } });
+      const resumed = await store.billing.saveSubscription({ ...base, stripeUpdatedAt: at(3), at: at(3) });
+      expect(resumed).toMatchObject({ outcome: 'changed', subscription: { pausedFrom: null, pauseResumesAt: null } });
+    });
+
+    it('claims a retention event, lists it, ends it early and releases it (MUT-532)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const claim = { userId: user.id, stripeSubscriptionId: 'sub_pause', kind: 'PAUSE' as const, reason: 'unused', months: 2, startsAt: at(30), endsAt: at(50), at: at(5) };
+      const event = await store.billing.claimRetentionEvent(claim);
+      expect(event).toMatchObject({ userId: user.id, kind: 'PAUSE', reason: 'unused', months: 2, startsAt: at(30), endsAt: at(50), endedEarlyAt: null, createdAt: at(5) });
+      expect(await store.billing.endRetentionEventEarly(event.id, at(10))).toMatchObject({ id: event.id, endedEarlyAt: at(10) });
+      expect(await store.billing.retentionEventsOf(user.id)).toEqual([{ ...event, endedEarlyAt: at(10) }]);
+      expect(await store.billing.releaseRetentionEvent(event.id)).toBe(true);
+      expect(await store.billing.releaseRetentionEvent(event.id)).toBe(false);
+      expect(await store.billing.endRetentionEventEarly(event.id, at(11))).toBeNull();
+      expect(await store.billing.retentionEventsOf(user.id)).toEqual([]);
+    });
+
+    it('a second stay offer for a person is TAKEN, even claimed at the same moment (MUT-532 rule 2)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const { user: other } = await store.users.create(userInput());
+      const stay = (userId: string) => ({ userId, stripeSubscriptionId: 'sub_stay', kind: 'STAY_OFFER' as const, reason: 'too_expensive', months: 2, startsAt: at(5), endsAt: null, at: at(5) });
+      const results = await Promise.allSettled([store.billing.claimRetentionEvent(stay(user.id)), store.billing.claimRetentionEvent(stay(user.id))]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { name: 'StateConflict', reason: 'TAKEN' } });
+      await expect(store.billing.claimRetentionEvent(stay(other.id))).resolves.toMatchObject({ userId: other.id });
+      await expect(store.billing.claimRetentionEvent({ ...stay(user.id), kind: 'CANCEL' })).resolves.toMatchObject({ kind: 'CANCEL' });
+    });
+
+    it('a pause claimed while another counts in the window is TAKEN; one undone before it started does not count (MUT-532 R6)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const pause = { userId: user.id, stripeSubscriptionId: 'sub_pause', kind: 'PAUSE' as const, reason: 'unused', months: 1, startsAt: at(30), endsAt: at(40), at: at(5), noPauseSince: at(0) };
+      const results = await Promise.allSettled([store.billing.claimRetentionEvent(pause), store.billing.claimRetentionEvent(pause)]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const won = results.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ id: string }>;
+      await store.billing.endRetentionEventEarly(won.value.id, at(6));
+      await expect(store.billing.claimRetentionEvent(pause)).resolves.toMatchObject({ kind: 'PAUSE' });
+      await expect(store.billing.claimRetentionEvent(pause)).rejects.toMatchObject({ name: 'StateConflict', reason: 'TAKEN' });
+    });
+
+    it('a retention event belongs to a real person (ForeignKeyViolation otherwise)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      await store.billing.claimRetentionEvent({ userId: user.id, stripeSubscriptionId: 'sub_x', kind: 'CANCEL', reason: 'other', months: null, startsAt: null, endsAt: null, at: at(5) });
+      await expect(store.billing.claimRetentionEvent({ userId: randomUUID(), stripeSubscriptionId: 'sub_x', kind: 'CANCEL', reason: null, months: null, startsAt: null, endsAt: null, at: at(5) })).rejects.toMatchObject({ name: 'ForeignKeyViolation' });
+    });
   });
 }
-

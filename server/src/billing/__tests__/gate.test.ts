@@ -93,10 +93,16 @@ describe('lapsedError', () => {
     const error = lapsedError('org-1', READ_ONLY);
     expect(error.code).toBe('SUBSCRIPTION_LAPSED');
     expect(error.status).toBe(402);
-    expect(error.details).toEqual({ profileId: 'org-1', state: 'READ_ONLY', source: 'TRIAL', until: '2026-11-20T00:00:00.000Z' });
+    expect(error.details).toEqual({ profileId: 'org-1', state: 'READ_ONLY', source: 'TRIAL', until: '2026-11-20T00:00:00.000Z', paused: false });
   });
   it('says LOCKED with no date, and names no profile on a person-level refusal', () => {
-    expect(lapsedError(null, LOCKED).details).toEqual({ profileId: null, state: 'LOCKED', source: 'TRIAL', until: null });
+    expect(lapsedError(null, LOCKED).details).toEqual({ profileId: null, state: 'LOCKED', source: 'TRIAL', until: null, paused: false });
+  });
+  it('says a paused plan is paused until it restarts, not that it ended (MUT-532)', () => {
+    const error = lapsedError('org-1', { state: 'READ_ONLY', source: 'STRIPE', until: new Date('2027-02-02T13:00:00Z'), paused: true });
+    expect(error.details).toEqual({ profileId: 'org-1', state: 'READ_ONLY', source: 'STRIPE', until: '2027-02-02T13:00:00.000Z', paused: true });
+    expect(error.message).toContain('paused');
+    expect(error.message).not.toContain('ended');
   });
   it('refuses to build an error for a state that is not gated', () => {
     expect(() => lapsedError('org-1', ACTIVE)).toThrow();

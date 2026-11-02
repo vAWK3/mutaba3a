@@ -151,9 +151,9 @@ describe('the lapse gate on a profile (MUT-361)', () => {
     const trial = await person(h, 'trial-read-only');
     const paid = await person(h, 'paid-lapsed');
     const t = await read(await h.app.request('/v1/expenses', expense(trial.on())));
-    expect(t.error.details).toEqual({ profileId: trial.personalId, state: 'READ_ONLY', source: 'TRIAL', until: new Date(daysAgo(20).getTime() + 30 * DAY).toISOString() });
+    expect(t.error.details).toEqual({ profileId: trial.personalId, state: 'READ_ONLY', source: 'TRIAL', until: new Date(daysAgo(20).getTime() + 30 * DAY).toISOString(), paused: false });
     const s = await read(await h.app.request('/v1/expenses', expense(paid.on())));
-    expect(s.error.details).toEqual({ profileId: paid.personalId, state: 'READ_ONLY', source: 'STRIPE', until: null });
+    expect(s.error.details).toEqual({ profileId: paid.personalId, state: 'READ_ONLY', source: 'STRIPE', until: null, paused: false });
   });
 
   it('trial-locked: reads are refused too; the records export and its receipts still answer', async () => {
@@ -172,7 +172,7 @@ describe('the lapse gate on a profile (MUT-361)', () => {
 
     const list = await app.request('/v1/expenses', { headers: p.on() });
     expect(list.status).toBe(402);
-    expect((await read(list)).error.details).toEqual({ profileId: p.personalId, state: 'LOCKED', source: 'TRIAL', until: null });
+    expect((await read(list)).error.details).toEqual({ profileId: p.personalId, state: 'LOCKED', source: 'TRIAL', until: null, paused: false });
     expect((await app.request(`/v1/expenses/${created.id}/receipts/${started.receipt.id}/download`, { headers: p.on() })).status).toBe(402);
     expect((await app.request('/v1/expenses', expense(p.on()))).status).toBe(402);
 
@@ -289,7 +289,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
     expect(feed.items.map((i: Loose) => i.id)).not.toContain(created.id);
     const asked = await h.app.request(`/v1/entries?profileId=${p.personalId}`, { headers: p.session });
     expect(asked.status).toBe(402);
-    expect((await read(asked)).error.details).toEqual({ profileId: p.personalId, state: 'LOCKED', source: 'TRIAL', until: null });
+    expect((await read(asked)).error.details).toEqual({ profileId: p.personalId, state: 'LOCKED', source: 'TRIAL', until: null, paused: false });
     // The firm is covered by its grant, so it writes; the personal profile, locked, doesn't.
     expect((await h.app.request('/v1/expenses', expense(p.on(firm.id)))).status).toBe(201);
     expect((await h.app.request('/v1/expenses', expense(p.on()))).status).toBe(402);

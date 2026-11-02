@@ -10,7 +10,7 @@ import type { BillingTier } from '../entitlement.js';
 /** The subscription can't be mirrored; the sync records the code and writes nothing. */
 export type MirrorError = 'UNKNOWN_TIER' | 'UNSUPPORTED_CURRENCY' | 'NO_PERIOD';
 /** Mirrored, with something the operator should look at. */
-export type MirrorNote = 'FIRM_WITHOUT_ORG' | 'UNKNOWN_ORG';
+export type MirrorNote = 'FIRM_WITHOUT_ORG' | 'UNKNOWN_ORG' | 'PAUSE_NOT_OURS';
 
 export interface MirrorFields {
   tier: BillingTier;
@@ -23,6 +23,10 @@ export interface MirrorFields {
   founderUntil: null;
   /** MUT-525: the offer the Checkout carried (`metadata.mutaba3a_offer`); anything not shaped like an offer id is null. */
   offerId: string | null;
+  /** MUT-532: when a pause takes effect (`pauseOf`); null with no pause set. */
+  pausedFrom: Date | null;
+  /** MUT-532: when Stripe resumes collecting; null with no pause set, or a pause with no end. */
+  pauseResumesAt: Date | null;
   /** The account's currency (billing_accounts.currency): ILS for Israel, USD elsewhere. */
   currency: 'ILS' | 'USD';
 }
@@ -54,6 +58,8 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
   const organizationId = orgMeta !== null && UUID_RE.test(orgMeta) ? orgMeta.toLowerCase() : null;
   if (orgMeta !== null && organizationId === null) notes.push('UNKNOWN_ORG');
   if (tier === 'FIRM' && organizationId === null && orgMeta === null) notes.push('FIRM_WITHOUT_ORG');
+  const pause = pauseOf(sub);
+  if (pause.notOurs) notes.push('PAUSE_NOT_OURS');
 
   return {
     ok: {
@@ -67,11 +73,38 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       priceLookupKey: tieredItem.price.lookup_key?.slice(0, LOOKUP_KEY_MAX) ?? null,
       founderUntil: null,
       offerId: offerIdOf(sub.metadata?.['mutaba3a_offer']),
+      pausedFrom: pause.pausedFrom,
+      pauseResumesAt: pause.pauseResumesAt,
       currency,
     },
     notes,
   };
 }
+
+/** MUT-532: the metadata an MTB3A pause writes beside `pause_collection` (plan-gateway.ts `schedulePause`). */
+export const PAUSE_FROM_METADATA = 'mutaba3a_pause_from';
+export const PAUSE_MONTHS_METADATA = 'mutaba3a_pause_months';
+
+/**
+ * MUT-532 (§2.3, R4): a pause is Stripe's `pause_collection`, which leaves the status `active`. MTB3A's own starts at
+ * the paid period's end (its metadata) and has a `resumes_at`. Anything else (set in the dashboard, no or bad metadata,
+ * no end) reads as paused from the start, flagged for the operator, so a pause is never silently ACTIVE. Stripe leaves
+ * the metadata behind when it resumes: without `pause_collection` there is no pause.
+ */
+export function pauseOf(sub: Stripe.Subscription): { pausedFrom: Date | null; pauseResumesAt: Date | null; notOurs: boolean } {
+  const pause = sub.pause_collection ?? null;
+  if (pause === null) return { pausedFrom: null, pauseResumesAt: null, notOurs: false };
+  const resumesAt = typeof pause.resumes_at === 'number' ? new Date(pause.resumes_at * 1000) : null;
+  const raw = sub.metadata?.[PAUSE_FROM_METADATA];
+  const parsed = raw && ISO_INSTANT_RE.test(raw) ? new Date(raw) : null;
+  const from = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  const ours = from !== null && resumesAt !== null && from < resumesAt;
+  // No end: paused from its own start if it names one, else from the start; either way until someone resumes it.
+  const pausedFrom = ours || (from !== null && resumesAt === null) ? from : new Date(0);
+  return { pausedFrom, pauseResumesAt: resumesAt, notOurs: !ours };
+}
+
+const ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
 function offerIdOf(value: string | undefined): string | null {
   return value !== undefined && OFFER_ID_RE.test(value) ? value : null;

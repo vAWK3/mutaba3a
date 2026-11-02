@@ -44,6 +44,13 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   // MUT-531: changing one's own plan moves money, never a record.
   'GET /v1/billing/yearly-switch': 'open',
   'POST /v1/billing/yearly-switch': 'open',
+  // MUT-532: pausing, cancelling and the stay offer are how a person handles their plan, paused or not.
+  'GET /v1/billing/retention': 'open',
+  'POST /v1/billing/pause': 'open',
+  'DELETE /v1/billing/pause': 'open',
+  'POST /v1/billing/cancellation': 'open',
+  'DELETE /v1/billing/cancellation': 'open',
+  'POST /v1/billing/stay-offer': 'open',
   // Reference rates: no record of anyone's.
   'GET /v1/fx-rates': 'open',
   // MUT-115: a person's own passkeys are identity, like the password (the sign-in routes are public, never gated).
@@ -143,16 +150,21 @@ export function profileGateRefuses(standing: Standing, method: string, endpoint:
  * The refusal (D2, D3): 402 SUBSCRIPTION_LAPSED, one code with the state in its details. `until` is the lock date
  * while a trial is read-only, else null. `profileId` is null when the person's standing refused (no one profile).
  */
-export function lapsedError(profileId: string | null, entitlement: Pick<Entitlement, 'state' | 'source' | 'until'>): ApiError {
+export function lapsedError(profileId: string | null, entitlement: Pick<Entitlement, 'state' | 'source' | 'until' | 'paused'>): ApiError {
   if (entitlement.state !== 'READ_ONLY' && entitlement.state !== 'LOCKED') throw new Error(`No lapse to report for ${entitlement.state}`);
-  const message =
-    entitlement.state === 'LOCKED'
-      ? 'This account is locked until it is subscribed; only Subscribe and Download my records still work'
-      : 'This profile is read-only: its plan has ended. Subscribe to add or change records; reading and the records export still work';
-  return new ApiError('SUBSCRIPTION_LAPSED', message, {
+  const paused = entitlement.paused === true;
+  return new ApiError('SUBSCRIPTION_LAPSED', lapsedMessage(entitlement.state, paused), {
     profileId,
     state: entitlement.state,
     source: entitlement.source,
     until: entitlement.until?.toISOString() ?? null,
+    paused,
   });
+}
+
+function lapsedMessage(state: 'READ_ONLY' | 'LOCKED', paused: boolean): string {
+  if (state === 'LOCKED') return 'This account is locked until it is subscribed; only Subscribe and Download my records still work';
+  // MUT-532: a pause ends on its own (`until`); Billing's Resume now ends it sooner.
+  if (paused) return 'This profile is read-only while its plan is paused. Adding and changing records come back when it restarts; reading and the records export still work';
+  return 'This profile is read-only: its plan has ended. Subscribe to add or change records; reading and the records export still work';
 }

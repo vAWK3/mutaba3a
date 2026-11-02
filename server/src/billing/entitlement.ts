@@ -8,7 +8,8 @@
  *   2 OPERATOR  an unrevoked, unexpired grant           → ACTIVE
  *   3 STRIPE    a covering subscription, active/past_due → ACTIVE / GRACE (until its period end + 7 days, MUT-360)
  *   4 TRIAL     trialStartedAt + 14 days > now          → ACTIVE
- *   5 STRIPE    a covering subscription that lapsed, or  → READ_ONLY, for good (a payer is never LOCKED)
+ *   5 STRIPE    a pause running now (MUT-532)           → READ_ONLY until it resumes, `paused`
+ *     STRIPE    a covering subscription that lapsed, or  → READ_ONLY, for good (a payer is never LOCKED)
  *               one whose period + 7 days has passed
  *   6 TRIAL     ended, nobody ever paid                 → READ_ONLY until day 30, then LOCKED
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
@@ -26,6 +27,8 @@ export interface Entitlement {
   tier: BillingTier | null;
   /** When this state ends, if it is known to: a grant's expiry, a period end, the trial's end or its lock date. */
   until: Date | null;
+  /** MUT-532: READ_ONLY because the person paused their plan, until it restarts on `until`. Absent is false. */
+  paused?: boolean;
 }
 
 /** D3: the trial runs 14 days from `trialStartedAt`; the account is read-only after that and locked from day 30. */
@@ -71,6 +74,10 @@ export interface SubscriptionFact {
   /** Stripe's own status string, kept as Stripe sends it. */
   status: string;
   currentPeriodEnd: Date;
+  /** MUT-532: when a pause takes effect (Stripe keeps the status `active`); null or absent with none set. */
+  pausedFrom?: Date | null;
+  /** MUT-532: when it ends; null with a pause set means until someone resumes it. */
+  pauseResumesAt?: Date | null;
 }
 
 export interface GrantFact {
@@ -106,12 +113,16 @@ export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, n
   if (grant) return { state: 'ACTIVE', source: 'OPERATOR', tier: grant.tier, until: grant.expiresAt };
 
   const subscriptions = facts.subscriptions.filter((s) => subscriptionCovers(s, profile));
-  const covering = bestSubscription(subscriptions.filter((s) => coveringState(s) !== undefined && !periodOver(s, now)));
+  const covering = bestSubscription(subscriptions.filter((s) => coveringState(s) !== undefined && !periodOver(s, now) && !pausedNow(s, now)));
   if (covering) return { state: coveringState(covering)!, source: 'STRIPE', tier: covering.tier, until: covering.currentPeriodEnd };
 
   const trialStartedAt = profile.ownerUserId ? (facts.trialStarts.get(profile.ownerUserId) ?? null) : null;
   const trialEnd = trialStartedAt && trialTimelineOf(trialStartedAt).endsAt;
   if (trialEnd && now < trialEnd) return { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnd };
+
+  // MUT-532: before the lapse and the trial lock, so a pause is never LOCKED and says when it restarts.
+  const paused = bestSubscription(subscriptions.filter((s) => pausedNow(s, now)));
+  if (paused) return { state: 'READ_ONLY', source: 'STRIPE', tier: paused.tier, until: paused.pauseResumesAt ?? null, paused: true };
 
   const lapsed = bestSubscription(subscriptions.filter((s) => LAPSED_STATUSES.has(s.status) || (coveringState(s) !== undefined && periodOver(s, now))));
   if (lapsed) return { state: 'READ_ONLY', source: 'STRIPE', tier: lapsed.tier, until: null };
@@ -163,6 +174,14 @@ function bestSubscription(subscriptions: readonly SubscriptionFact[]): Subscript
 /** Past the period end plus PERIOD_GRACE_DAYS: Stripe would have renewed or ended it by now, so the row is stale. */
 export function periodOver(subscription: Pick<SubscriptionFact, 'currentPeriodEnd'>, now: Date): boolean {
   return addDays(subscription.currentPeriodEnd, PERIOD_GRACE_DAYS) <= now;
+}
+
+/** MUT-532: from `pausedFrom` (inclusive) to `pauseResumesAt` (exclusive), or for good with no end. */
+export function pausedNow(subscription: Pick<SubscriptionFact, 'pausedFrom' | 'pauseResumesAt'>, now: Date): boolean {
+  const from = subscription.pausedFrom ?? null;
+  if (from === null || now < from) return false;
+  const until = subscription.pauseResumesAt ?? null;
+  return until === null || now < until;
 }
 
 function coveringState(subscription: SubscriptionFact): 'ACTIVE' | 'GRACE' | undefined {

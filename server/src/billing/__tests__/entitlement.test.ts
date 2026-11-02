@@ -222,3 +222,47 @@ describe('trialTimelineOf (MUT-361, read by MUT-419)', () => {
     });
   });
 });
+
+describe('resolveEntitlement: a pause (MUT-532 §2.3: Stripe keeps the status active; the mirror\'s pause fields decide)', () => {
+  const from = daysFromNow(-3);
+  const until = daysFromNow(40);
+  const paused = (over: Partial<SubscriptionFact> = {}) => sub({ pausedFrom: from, pauseResumesAt: until, currentPeriodEnd: daysFromNow(27), ...over });
+
+  it('a pause still to come covers as usual', () => {
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pausedFrom: daysFromNow(5) })] }), NOW)).toEqual({ state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: daysFromNow(27) });
+  });
+
+  it('a running pause is READ_ONLY until it resumes, and says it is a pause', () => {
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused()] }), NOW)).toEqual({ state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until, paused: true });
+  });
+
+  it('starts exactly at pausedFrom and ends exactly at pauseResumesAt', () => {
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pausedFrom: NOW })] }), NOW)).toMatchObject({ state: 'READ_ONLY', paused: true });
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pauseResumesAt: new Date(NOW.getTime() + 1) })] }), NOW)).toMatchObject({ state: 'READ_ONLY', paused: true });
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pauseResumesAt: NOW })] }), NOW)).toEqual({ state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: daysFromNow(27) });
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pauseResumesAt: new Date(NOW.getTime() - 1) })] }), NOW)).toMatchObject({ state: 'ACTIVE' });
+  });
+
+  it('a pause with no resume date stays READ_ONLY with no end', () => {
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused({ pauseResumesAt: null })] }), NOW)).toEqual({ state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: null, paused: true });
+  });
+
+  it('is never LOCKED, even after an ended trial nobody else paid for', () => {
+    const trialStarts = new Map([[OWNER, daysFromNow(-60)]]);
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused()], trialStarts }), NOW)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE', paused: true });
+  });
+
+  it('a Malafat-connected profile stays ACTIVE (D12), and so does one an operator grant covers', () => {
+    expect(resolveEntitlement({ ...PERSONAL, malafatConnected: true }, facts({ subscriptions: [paused()] }), NOW)).toEqual({ state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null });
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused()], grants: [grant({})] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'OPERATOR' });
+  });
+
+  it('another covering subscription still covers', () => {
+    const firm = sub({ tier: 'FIRM', organizationId: PERSONAL.organizationId });
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [paused(), firm] }), NOW)).toMatchObject({ state: 'ACTIVE', tier: 'FIRM' });
+  });
+
+  it('Stripe\'s own `paused` status (a trial ended without a card) stays READ_ONLY with no pause flag', () => {
+    expect(resolveEntitlement(PERSONAL, facts({ subscriptions: [sub({ status: 'paused' })] }), NOW)).toEqual({ state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: null });
+  });
+});

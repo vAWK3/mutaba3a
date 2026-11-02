@@ -8,6 +8,7 @@ import {
   offersFor,
   offerView,
   parseOffers,
+  stayEntryOf,
   productIdsOf,
   resolveOffer,
   type CouponFact,
@@ -24,7 +25,8 @@ import { formatMinor } from '../money.js';
 const NOW = new Date('2026-11-02T09:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
 const END = new Date('2027-02-01T22:59:00.000Z');
-const ENTRY: OfferEntry = { id: 'launch-2026', couponId: 'mtb3a_launch_yearly_2026', interval: 'year', tier: 'freelancer' };
+const ENTRY: OfferEntry = { id: 'launch-2026', couponId: 'mtb3a_launch_yearly_2026', kind: 'launch', interval: 'year', tier: 'freelancer' };
+const STAY: OfferEntry = { id: 'stay-2026', couponId: 'mtb3a_stay_monthly_50', kind: 'stay', interval: 'month', tier: 'freelancer' };
 const PRODUCTS = new Set(['prod_FREELANCER']);
 const CATALOG: Catalog = {
   ILS: { month: { id: 'price_ils_m', unitAmount: 2900, productId: 'prod_FREELANCER' }, year: { id: 'price_ils_y', unitAmount: 29000, productId: 'prod_FREELANCER' } },
@@ -37,14 +39,25 @@ const coupon = (over: Partial<CouponFact> = {}): CouponFact => ({
   percentOff: 50,
   amountOff: null,
   duration: 'once',
+  durationInMonths: null,
   redeemBy: END,
   appliesToProducts: ['prod_FREELANCER'],
   ...over,
 });
 
 describe('offers.json (D12)', () => {
-  it('ships the launch offer, yearly, on the Freelancer tier', () => {
-    expect(OFFERS).toEqual([ENTRY]);
+  it('ships the launch offer, yearly, and the stay offer, monthly, on the Freelancer tier (MUT-532)', () => {
+    expect(OFFERS).toEqual([ENTRY, STAY]);
+  });
+
+  it('reads an entry with no kind as a launch offer, and a stay offer only monthly (MUT-532)', () => {
+    const { kind: _kind, ...noKind } = ENTRY;
+    void _kind;
+    expect(parseOffers([noKind])).toEqual([ENTRY]);
+    expect(() => parseOffers([{ ...STAY, interval: 'year' }])).toThrow(/stay offer/);
+    expect(() => parseOffers([{ ...STAY, kind: 'comeback' }])).toThrow(/kind/);
+    expect(stayEntryOf(OFFERS)).toEqual(STAY);
+    expect(stayEntryOf([ENTRY])).toBeNull();
   });
 
   it('fails fast on a malformed list', () => {
@@ -58,7 +71,16 @@ describe('offers.json (D12)', () => {
 
   it('a non-production coupon id replaces the list with one yearly QA entry (R6)', () => {
     expect(offersFor(undefined)).toBe(OFFERS);
-    expect(offersFor('qa_offer_abc')).toEqual([{ id: 'launch-2026', couponId: 'qa_offer_abc', interval: 'year', tier: 'freelancer' }]);
+    expect(offersFor('qa_offer_abc')).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, STAY]);
+    expect(offersFor(undefined, 'qa_stay_abc')).toEqual([ENTRY, { ...STAY, couponId: 'qa_stay_abc' }]);
+    expect(offersFor('qa_offer_abc', 'qa_stay_abc')).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, { ...STAY, couponId: 'qa_stay_abc' }]);
+  });
+
+  it('never takes a stay coupon for the launch offer of a monthly Checkout (MUT-532)', async () => {
+    const read: string[] = [];
+    const stay = coupon({ id: STAY.couponId, duration: 'repeating', durationInMonths: 2, redeemBy: null });
+    expect(await resolveOffer([ENTRY, STAY], 'month', async (id) => (read.push(id), stay), PRODUCTS, NOW)).toBeNull();
+    expect(read).toEqual([]);
   });
 });
 
@@ -98,7 +120,7 @@ describe('offerFromCoupon (D1, R1, OV-6)', () => {
 });
 
 describe('resolveOffer (D12): the first entry for the interval whose coupon is an offer', () => {
-  const second: OfferEntry = { id: 'spring-2027', couponId: 'mtb3a_spring_2027', interval: 'year', tier: 'freelancer' };
+  const second: OfferEntry = { id: 'spring-2027', couponId: 'mtb3a_spring_2027', kind: 'launch', interval: 'year', tier: 'freelancer' };
 
   it('reads each yearly entry’s coupon in order and stops at the first offer', async () => {
     const read: string[] = [];

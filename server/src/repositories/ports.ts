@@ -2147,6 +2147,10 @@ export interface BillingSubscriptionRecord {
   founderUntil: Date | null;
   /** MUT-525: the launch offer the subscription's Checkout carried (its `mutaba3a_offer` metadata), else null. */
   offerId: string | null;
+  /** MUT-532: when a pause (Stripe's `pause_collection`) takes effect; null with none set (mirror.ts `pauseOf`). */
+  pausedFrom: Date | null;
+  /** MUT-532: when Stripe resumes collecting; null with none set, or a pause with no end. */
+  pauseResumesAt: Date | null;
   stripeUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2251,6 +2255,9 @@ export interface SaveBillingSubscriptionInput {
   founderUntil: Date | null;
   /** MUT-525: the offer the Checkout carried. Absent is null. */
   offerId?: string | null;
+  /** MUT-532: the pause Stripe holds. Absent is null. */
+  pausedFrom?: Date | null;
+  pauseResumesAt?: Date | null;
   /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
   at: Date;
@@ -2284,6 +2291,38 @@ export interface OfferRenewalCandidate {
   userId: string;
   email: string;
   locale: UserLocale;
+}
+
+/** MUT-532 (ADR-239): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
+export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
+
+export interface BillingRetentionEventRecord {
+  id: string;
+  userId: string;
+  stripeSubscriptionId: string;
+  kind: BillingRetentionKindRecord;
+  reason: string | null;
+  months: number | null;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  endedEarlyAt: Date | null;
+  createdAt: Date;
+}
+
+export interface ClaimRetentionEventInput {
+  userId: string;
+  stripeSubscriptionId: string;
+  kind: BillingRetentionKindRecord;
+  reason: string | null;
+  months: number | null;
+  startsAt: Date | null;
+  endsAt: Date | null;
+  at: Date;
+  /**
+   * R6: PAUSE only. Refused (StateConflict TAKEN) when the person has a PAUSE that counts (`pauseCounts`) starting after
+   * this, re-checked under a lock on their billing account so two tabs can't both claim the year's pause.
+   */
+  noPauseSince?: Date;
 }
 
 export interface BillingRepository {
@@ -2332,6 +2371,18 @@ export interface BillingRepository {
    * `billing.subscription_changed` only when a mirrored field changed. The account must exist (ForeignKeyViolation).
    */
   saveSubscription(input: SaveBillingSubscriptionInput): Promise<{ subscription: BillingSubscriptionRecord; outcome: SaveBillingSubscriptionOutcome }>;
+  /** MUT-532: the person's retention events, oldest first. */
+  retentionEventsOf(userId: string): Promise<BillingRetentionEventRecord[]>;
+  /**
+   * MUT-532: records an event before the Stripe call it stands for. StateConflict('billing_retention_event', 'TAKEN')
+   * on a second STAY_OFFER for the person (a unique index) or a PAUSE that `noPauseSince` refuses; ForeignKeyViolation
+   * on an unknown user.
+   */
+  claimRetentionEvent(input: ClaimRetentionEventInput): Promise<BillingRetentionEventRecord>;
+  /** MUT-532 (R3): deletes a claim Stripe definitely didn't act on. False when there was none. */
+  releaseRetentionEvent(id: string): Promise<boolean>;
+  /** MUT-532 (D7): a pause undone or resumed early, a cancel taken back. Null when unknown. */
+  endRetentionEventEarly(id: string, at: Date): Promise<BillingRetentionEventRecord | null>;
   /** MUT-360: records a webhook event; `alreadyProcessed` only once `finishStripeEvent` stored a processedAt. */
   beginStripeEvent(input: { id: string; type: string; at: Date }): Promise<{ alreadyProcessed: boolean }>;
   /** An error leaves processedAt null, so a redelivery is handled again. */

@@ -244,6 +244,7 @@ function couponFactOf(coupon: Stripe.Coupon): CouponFact {
     percentOff: coupon.percent_off ?? null,
     amountOff: coupon.amount_off ?? null,
     duration: coupon.duration,
+    durationInMonths: coupon.duration_in_months ?? null,
     redeemBy: typeof coupon.redeem_by === 'number' ? new Date(coupon.redeem_by * 1000) : null,
     appliesToProducts: coupon.applies_to?.products ? [...coupon.applies_to.products] : null,
   };

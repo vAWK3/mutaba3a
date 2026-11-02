@@ -1,5 +1,6 @@
 import { z } from '@hono/zod-openapi';
 import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
+import { CANCELLATION_COMMENT_MAX, CANCELLATION_REASONS } from './billing/retention.js';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
 import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
@@ -362,6 +363,8 @@ const BillingEntitlementSchema = z
     source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
     tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
     until: z.string().datetime().nullable(),
+    /** MUT-532: READ_ONLY because the person paused their plan; `until` is when it restarts on its own (null: no end set). */
+    paused: z.boolean(),
   })
   .openapi('BillingEntitlement');
 
@@ -476,6 +479,74 @@ export const YearlySwitchResultSchema = z
   .object({ renewsOn: z.string().datetime().nullable(), yearlyAmount: z.number().int().positive(), currency: z.enum(['ILS', 'USD']) })
   .openapi('YearlySwitchResult');
 
+/** MUT-532 (D8): Stripe's `cancellation_details.feedback` values, in the order the Why? step lists them. */
+const CancellationReasonSchema = z.enum(CANCELLATION_REASONS);
+
+/** MUT-532 (D6, D10, D11): what the cancel flow may offer instead, read when the person presses Cancel plan. */
+export const BillingRetentionSchema = z
+  .object({
+    /** When the plan would end if cancelled: the paid period's end. */
+    endsOn: z.string().datetime().nullable(),
+    /** Null when a pause isn't open to this plan (monthly list payers, one paid invoice, once in 12 months). */
+    pause: z
+      .object({
+        options: z.array(
+          z.object({
+            months: z.number().int().min(1).max(3),
+            /** The paid period's end: the pause starts then. */
+            from: z.string().datetime(),
+            /** The cycle boundary billing restarts on, on its own. */
+            until: z.string().datetime(),
+          }),
+        ),
+      })
+      .nullable(),
+    /** Null when the stay offer isn't open (once per person ever, monthly list payers with no discount, a stay coupon running). */
+    stayOffer: z
+      .object({
+        percentOff: z.number().positive().max(100),
+        months: z.number().int().positive(),
+        currency: z.enum(['ILS', 'USD']),
+        /** Minor units: each discounted month, Stripe's rounding. */
+        monthlyAmount: z.number().int().nonnegative(),
+        /** Minor units: the monthly list price it returns to. */
+        listAmount: z.number().int().positive(),
+      })
+      .nullable(),
+  })
+  .openapi('BillingRetention');
+
+export const PauseRequestSchema = z
+  .object({ months: z.union([z.literal(1), z.literal(2), z.literal(3)]), reason: CancellationReasonSchema })
+  .strict()
+  .openapi('PauseRequest');
+
+export const PauseResultSchema = z.object({ from: z.string().datetime(), until: z.string().datetime() }).openapi('PauseResult');
+
+export const PauseEndResultSchema = z
+  .object({
+    /** `cancelled`: a pause still to come, undone; `now`: a running one ended, and a month charged today. */
+    resumed: z.enum(['cancelled', 'now']),
+    /** For `now`: whether today's charge went through. `failed`: Stripe retries it (the plan shows past due). */
+    payment: z.enum(['charged', 'failed', 'needs-action']).nullable(),
+    /** For `needs-action`: Stripe's page to approve it (3-D Secure). */
+    hostedInvoiceUrl: z.string().url().nullable(),
+  })
+  .openapi('PauseEndResult');
+
+export const CancellationRequestSchema = z
+  .object({ reason: CancellationReasonSchema, comment: z.string().trim().max(CANCELLATION_COMMENT_MAX).optional() })
+  .strict()
+  .openapi('CancellationRequest');
+
+export const CancellationResultSchema = z.object({ endsOn: z.string().datetime().nullable() }).openapi('CancellationResult');
+
+export const StayOfferRequestSchema = z.object({ reason: CancellationReasonSchema }).strict().openapi('StayOfferRequest');
+
+export const StayOfferResultSchema = z
+  .object({ percentOff: z.number().positive().max(100), months: z.number().int().positive(), currency: z.enum(['ILS', 'USD']), monthlyAmount: z.number().int().nonnegative() })
+  .openapi('StayOfferResult');
+
 /** MUT-362: Settings › Billing in one read (GET /v1/billing). */
 export const BillingOverviewSchema = z
   .object({
@@ -494,6 +565,11 @@ export const BillingOverviewSchema = z
         renewsAtListPrice: z.boolean(),
         /** MUT-525 DD10b: the launch offer the subscription's Checkout carried. */
         offer: z.object({ id: z.string() }).nullable(),
+        /**
+         * MUT-532: a pause, as the mirror holds it: from the paid period's end (`from`) until billing restarts on its own
+         * (`until`; null: no end set). Before `from` it is booked; from then the records are read-only. Null: none.
+         */
+        pause: z.object({ from: z.string().datetime(), until: z.string().datetime().nullable() }).nullable(),
       })
       .nullable(),
     /** A Stripe customer is linked to this person, so the Customer Portal can open. */
@@ -842,6 +918,11 @@ export const HostedProfileSchema = z
         tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
         /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
         until: z.string().datetime().nullable(),
+        /**
+         * MUT-532: READ_ONLY because the person paused their plan, until it restarts on its own on `until`. Always sent
+         * from 1.96.0-mut532; an older server omits it (read it as false).
+         */
+        paused: z.boolean().optional(),
       })
       .nullable()
       .optional(),

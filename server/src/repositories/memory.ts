@@ -4,6 +4,7 @@ import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
 import { applyTrialPromptAction } from '../billing/trial-prompt.js';
+import { pauseCounts } from '../billing/retention.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import { categoryNameKey } from '../expenses/names.js';
 import { presetKeyForName } from '../expenses/presets.js';
@@ -19,6 +20,7 @@ import type {
   BillingRepository,
   EmailRepository,
   BillingSubscriptionRecord,
+  BillingRetentionEventRecord,
   SaveBillingAccountConflict,
   EntitlementGrantRecord,
   AccountSetupRepository,
@@ -318,6 +320,7 @@ export class MemoryLedgerStore implements LedgerStore {
    */
   private readonly billingAccounts = new Map<string, BillingAccountRecord>();
   private readonly billingSubs = new Map<string, BillingSubscriptionRecord>();
+  private readonly retentionEvents = new Map<string, BillingRetentionEventRecord>();
   private readonly grants = new Map<string, EntitlementGrantRecord>();
   /**
    * MUT-433, keyed `${userId}:${feature}`. Deliberately not in snapshot()/restore() (eng review C5): the portal's
@@ -3093,6 +3096,7 @@ export class MemoryLedgerStore implements LedgerStore {
       this.billingAccounts.delete(key);
     }
     for (const [key, review] of this.reviews) if (review.userId === id) this.reviews.delete(key);
+    for (const [key, event] of this.retentionEvents) if (event.userId === id) this.retentionEvents.delete(key);
     this.trialStarts.delete(id);
     this.people.delete(id);
   }
@@ -3322,7 +3326,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
       const { stripeCustomerId, at, audit, ...given } = input;
       void stripeCustomerId; // matched above; the subscription row stores the account id instead
-      const fields = { ...given, offerId: given.offerId ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null };
       const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
       if (existing && existing.stripeUpdatedAt > input.stripeUpdatedAt) return { subscription: { ...existing }, outcome: 'stale' as const };
       const before = existing ? { ...existing } : null;
@@ -3343,6 +3347,30 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!row) return;
       if ('processedAt' in outcome) Object.assign(row, { processedAt: outcome.processedAt, error: null });
       else row.error = outcome.error.slice(0, STRIPE_EVENT_ERROR_MAX);
+    },
+    retentionEventsOf: async (userId) =>
+      [...this.retentionEvents.values()]
+        .filter((e) => e.userId === userId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((e) => ({ ...e })),
+    claimRetentionEvent: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('billing_retention_events.userId');
+      const mine = [...this.retentionEvents.values()].filter((e) => e.userId === input.userId);
+      if (input.kind === 'STAY_OFFER' && mine.some((e) => e.kind === 'STAY_OFFER')) throw new StateConflict('billing_retention_event', 'TAKEN');
+      const since = input.noPauseSince;
+      if (input.kind === 'PAUSE' && since && mine.some((e) => pauseCounts(e, since))) throw new StateConflict('billing_retention_event', 'TAKEN');
+      const { at, noPauseSince: _since, ...fields } = input;
+      void _since;
+      const event: BillingRetentionEventRecord = { id: randomUUID(), ...fields, endedEarlyAt: null, createdAt: at };
+      this.retentionEvents.set(event.id, event);
+      return { ...event };
+    },
+    releaseRetentionEvent: async (id) => this.retentionEvents.delete(id),
+    endRetentionEventEarly: async (id, at) => {
+      const event = this.retentionEvents.get(id);
+      if (!event) return null;
+      event.endedEarlyAt = at;
+      return { ...event };
     },
     pruneStripeEvents: async (before) => {
       let count = 0;

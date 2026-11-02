@@ -354,6 +354,7 @@ model User {
   billingAccount    BillingAccount?
   /// MUT-358: operator grants covering this person's own profiles.
   entitlementGrants EntitlementGrant[]
+  retentionEvents   BillingRetentionEvent[]
   /// MUT-433 (ADR-196): operator-granted feature flags (server/src/features.ts).
   featureGrants     UserFeatureGrant[]
   /// MUT-367: the review a PENDING_REVIEW signup waits on (kept, unlinked, after a decline).
@@ -1561,6 +1562,11 @@ model BillingSubscription {
   founderUntil         DateTime?
   /// MUT-525: the offer the Checkout carried (`metadata.mutaba3a_offer`, e.g. `launch-2026`); null for none.
   offerId              String?        @db.VarChar(40)
+  /// MUT-532: when a pause from `pause_collection` takes effect (`metadata.mutaba3a_pause_from`; epoch 0 for a pause set
+  /// outside MTB3A). Null when no pause is set.
+  pausedFrom           DateTime?
+  /// MUT-532: Stripe's `pause_collection.resumes_at`; null with a pause set means paused until someone resumes it.
+  pauseResumesAt       DateTime?
   /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
   stripeUpdatedAt      DateTime
   createdAt            DateTime       @default(now())
@@ -1569,6 +1575,34 @@ model BillingSubscription {
   @@index([billingAccountId])
   @@index([organizationId])
   @@map("billing_subscriptions")
+}
+
+enum BillingRetentionKind {
+  PAUSE
+  STAY_OFFER
+  CANCEL
+  YEARLY_SWITCH
+}
+
+/// MUT-532 (ADR-239): that a pause, a stay offer, a cancel or a switch happened, for the once-a-year pause and the
+/// once-ever stay offer and for history. Nothing reads its dates for access: the mirror alone says whether a pause is
+/// running. One STAY_OFFER per person ever (a raw-SQL partial unique index in the migration).
+model BillingRetentionEvent {
+  id                   String               @id @default(uuid()) @db.Uuid
+  userId               String               @db.Uuid
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeSubscriptionId String
+  kind                 BillingRetentionKind
+  /// Stripe's `cancellation_details.feedback` value the person picked.
+  reason               String?              @db.VarChar(40)
+  months               Int?
+  startsAt             DateTime?
+  endsAt               DateTime?
+  endedEarlyAt         DateTime?
+  createdAt            DateTime             @default(now())
+
+  @@index([userId, kind, startsAt])
+  @@map("billing_retention_events")
 }
 
 /// MUT-358: an operator grant. Exactly one of userId (the person's own profiles) and organizationId (that profile)
