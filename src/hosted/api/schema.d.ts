@@ -18165,6 +18165,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/renewal-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily launch-offer renewal notices (Cloud Scheduler)
+         * @description Mails the payer of each launch-offer subscription whose first renewal is within 30 days: the day, the yearly price it renews at and how to cancel. Stripe's own subscription decides (active, not cancelling, first paid year, a list price). Once per subscription and renewal day; a second run sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RenewalMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/renewal-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the launch-offer renewal notices now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per subscription in the window: whether it is mailed or why not (gone, not-active, cancelling, not-first-year, not-list-price, suppressed). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RenewalMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -22832,6 +22968,51 @@ export interface components {
         };
         TrialMailRequest: {
             dryRun: boolean;
+        };
+        RenewalMailSummary: {
+            dryRun: boolean;
+            /** @description Launch-offer subscriptions renewing within 30 days */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description Already told about this renewal */
+            duplicate: number;
+            /** @description Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed */
+            notSent: number;
+            skipped: {
+                gone: number;
+                notActive: number;
+                cancelling: number;
+                notFirstYear: number;
+                notListPrice: number;
+                suppressed: number;
+            };
+            /** @description The time budget ran out; the next run continues */
+            incomplete: boolean;
+        };
+        RenewalMailRun: {
+            summary: components["schemas"]["RenewalMailSummary"];
+            rows: components["schemas"]["RenewalMailRow"][];
+        };
+        RenewalMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            stripeSubscriptionId: string;
+            /** Format: date-time */
+            renewsAt: string;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "gone" | "not-active" | "cancelling" | "not-first-year" | "not-list-price" | "suppressed" | null;
+            /**
+             * @description The mailer's answer, or failed; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
         };
         AccountPurgeSummary: {
             dryRun: boolean;

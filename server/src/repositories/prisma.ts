@@ -2546,6 +2546,23 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, trialStartedAt: p.trialStartedAt! }));
     },
+    offerRenewalCandidates: async ({ endsAfter, endsUpTo }) => {
+      const subs = await this.prisma.billingSubscription.findMany({
+        where: {
+          offerId: { not: null },
+          status: 'active',
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: { gt: endsAfter, lte: endsUpTo },
+          billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } },
+        },
+        select: { stripeSubscriptionId: true, offerId: true, currentPeriodEnd: true, billingAccount: { select: { user: { select: { id: true, email: true, locale: true } } } } },
+        orderBy: [{ currentPeriodEnd: 'asc' }, { stripeSubscriptionId: 'asc' }],
+      });
+      return subs.flatMap((s) => {
+        const user = s.billingAccount.user;
+        return user ? [{ stripeSubscriptionId: s.stripeSubscriptionId, offerId: s.offerId!, currentPeriodEnd: s.currentPeriodEnd, userId: user.id, email: user.email, locale: user.locale as UserLocale }] : [];
+      });
+    },
     createGrant: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {

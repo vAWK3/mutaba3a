@@ -32,6 +32,7 @@ import type { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import { trialMailRoutes } from './routes/trial-mail.js';
+import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
 import type { CheckoutGateway } from './billing/stripe/checkout-gateway.js';
@@ -511,6 +512,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
       checkout: deps.stripe?.checkoutGateway ?? null,
       ...(deps.offers ? { offers: deps.offers } : {}),
+    }),
+  );
+  // MUT-525 (DD8): the daily launch-offer renewal notices (job + operator), on the unguarded store like the trial mails.
+  app.route(
+    '/',
+    renewalMailRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );
   // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.

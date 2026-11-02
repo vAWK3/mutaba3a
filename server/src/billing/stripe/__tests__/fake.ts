@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import type { LiveSubscription } from '../../../accounts/closure.js';
 import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
+import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
@@ -239,6 +240,14 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   /** Every coupon read fails until cleared, as a key without Read on Coupons would (R7). */
   failCoupons(failure: StripeGatewayError | null = new StripeGatewayError({ code: null, type: 'StripePermissionError', requestId: 'req_fake', transient: false })): void {
     this.couponFailure = failure;
+  }
+
+  /** MUT-525: Stripe's word on each launch-offer subscription, for the renewal notice. */
+  readonly renewals = new Map<string, RenewalFacts>();
+
+  async renewalOf(subscriptionId: string): Promise<RenewalFacts | null> {
+    this.take(`renewal:${subscriptionId}`);
+    return this.renewals.get(subscriptionId) ?? null;
   }
 
   async couponById(id: string, options: { fresh?: boolean } = {}): Promise<CouponFact | null> {

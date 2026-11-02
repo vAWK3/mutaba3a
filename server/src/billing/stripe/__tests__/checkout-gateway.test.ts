@@ -316,3 +316,42 @@ describe('CheckoutGateway coupons (MUT-525 D6, R6, R7)', () => {
     await expect(gateway.couponById(COUPON)).rejects.toBeInstanceOf(StripeGatewayError);
   });
 });
+
+describe('CheckoutGateway renewals (MUT-525 DD8)', () => {
+  const T0 = 1_794_000_000;
+  const YEAR = 365 * 24 * 60 * 60;
+  const sub = (over: Record<string, unknown> = {}, itemOver: Record<string, unknown> = {}) => ({
+    id: 'sub_1',
+    object: 'subscription',
+    status: 'active',
+    cancel_at_period_end: false,
+    cancel_at: null,
+    start_date: T0 - 10 * 86_400,
+    trial_end: T0,
+    items: { object: 'list', has_more: false, data: [{ id: 'si_1', object: 'subscription_item', current_period_start: T0, current_period_end: T0 + YEAR, price: { id: 'price_y', currency: 'ils', unit_amount: 29000, lookup_key: 'freelancer_list_yearly_ils' }, ...itemOver }] },
+    ...over,
+  });
+
+  it('reads the subscription’s own price and whether this is its first paid year (the trial’s end, or the start)', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: sub() }));
+    expect(await gateway.renewalOf('sub_1')).toEqual({
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: new Date((T0 + YEAR) * 1000),
+      firstPaidPeriod: true,
+      unitAmount: 29000,
+      currency: 'ILS',
+      lookupKey: 'freelancer_list_yearly_ils',
+    });
+    expect(seen.map(route)).toEqual(['GET /v1/subscriptions/sub_1']);
+    const noTrial = await gatewayWith(() => ({ status: 200, body: sub({ trial_end: null, start_date: T0 }) })).gateway.renewalOf('sub_1');
+    expect(noTrial?.firstPaidPeriod).toBe(true);
+    const secondYear = await gatewayWith(() => ({ status: 200, body: sub({}, { current_period_start: T0 + YEAR, current_period_end: T0 + 2 * YEAR }) })).gateway.renewalOf('sub_1');
+    expect(secondYear?.firstPaidPeriod).toBe(false);
+  });
+
+  it('a subscription Stripe no longer has is null', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such subscription' } } }));
+    expect(await gateway.renewalOf('sub_gone')).toBeNull();
+  });
+});

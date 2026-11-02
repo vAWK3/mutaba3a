@@ -3211,6 +3211,17 @@ export class MemoryLedgerStore implements LedgerStore {
           return person && person.status === 'ACTIVE' && !person.closure && inWindow ? [{ userId, email: person.email, locale: person.locale, trialStartedAt }] : [];
         })
         .sort((a, b) => a.trialStartedAt.getTime() - b.trialStartedAt.getTime() || a.userId.localeCompare(b.userId)),
+    offerRenewalCandidates: async ({ endsAfter, endsUpTo }) =>
+      [...this.billingSubs.values()]
+        .flatMap((sub) => {
+          const payer = this.billingAccounts.get(sub.billingAccountId)?.userId ?? null;
+          const person = payer ? this.people.get(payer) : undefined;
+          const due = sub.offerId !== null && sub.status === 'active' && !sub.cancelAtPeriodEnd && sub.currentPeriodEnd > endsAfter && sub.currentPeriodEnd <= endsUpTo;
+          return due && person && person.status === 'ACTIVE' && !person.closure
+            ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, offerId: sub.offerId!, currentPeriodEnd: sub.currentPeriodEnd, userId: payer!, email: person.email, locale: person.locale }]
+            : [];
+        })
+        .sort((a, b) => a.currentPeriodEnd.getTime() - b.currentPeriodEnd.getTime() || a.stripeSubscriptionId.localeCompare(b.stripeSubscriptionId)),
     createGrant: async (input) => {
       if ((input.userId === null) === (input.organizationId === null)) throw new StateConflict('entitlement_grant', 'ONE_TARGET');
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');

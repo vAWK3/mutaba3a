@@ -54,6 +54,25 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
   });
 
   describe(`${name} LedgerStore billing (MUT-358)`, () => {
+    it('offerRenewalCandidates: offer subscriptions, active and not cancelling, renewing in the window, with a linked active payer (MUT-525)', async () => {
+      const store = await makeStore();
+      const firm = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      const { user } = await store.users.create(userInput(firm.id));
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, user.id));
+      const save = (over: Record<string, unknown>) => store.billing.saveSubscription({ ...subscription(customer), offerId: 'launch-2026', ...over });
+      const due = (await save({ currentPeriodEnd: at(20) })).subscription;
+      await save({ currentPeriodEnd: at(40) });
+      await save({ currentPeriodEnd: at(20), offerId: null });
+      await save({ currentPeriodEnd: at(20), status: 'canceled' });
+      await save({ currentPeriodEnd: at(20), cancelAtPeriodEnd: true });
+      const unlinked = `cus_${unique()}`;
+      await store.billing.saveAccount(account(unlinked, null));
+      await store.billing.saveSubscription({ ...subscription(unlinked), offerId: 'launch-2026', currentPeriodEnd: at(20) });
+      const found = await store.billing.offerRenewalCandidates({ endsAfter: at(10), endsUpTo: at(30) });
+      expect(found).toEqual([{ stripeSubscriptionId: due.stripeSubscriptionId, offerId: 'launch-2026', currentPeriodEnd: at(20), userId: user.id, email: user.email, locale: user.locale }]);
+    });
+
     it('keeps the offer a subscription’s Checkout carried; absent is none (MUT-525 DD10b)', async () => {
       const store = await makeStore();
       const customer = `cus_${unique()}`;

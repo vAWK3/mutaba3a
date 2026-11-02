@@ -2276,6 +2276,16 @@ export interface TrialMailCandidate {
   trialStartedAt: Date;
 }
 
+/** MUT-525: a launch-offer subscription renewing soon, and the linked payer to tell. */
+export interface OfferRenewalCandidate {
+  stripeSubscriptionId: string;
+  offerId: string;
+  currentPeriodEnd: Date;
+  userId: string;
+  email: string;
+  locale: UserLocale;
+}
+
 export interface BillingRepository {
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
@@ -2286,6 +2296,11 @@ export interface BillingRepository {
    * trial-mail run looks at. PENDING_REVIEW people have no trial until approval; DISABLED people are never mailed.
    */
   trialMailCandidates(window: { startedAfter: Date; startedUpTo: Date }): Promise<TrialMailCandidate[]>;
+  /**
+   * MUT-525: subscriptions that carried an offer, `active` and not cancelling, whose period ends in (endsAfter,
+   * endsUpTo], paid by a linked ACTIVE person who isn't closing their account; soonest renewal first.
+   */
+  offerRenewalCandidates(window: { endsAfter: Date; endsUpTo: Date }): Promise<OfferRenewalCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

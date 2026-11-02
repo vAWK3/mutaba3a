@@ -51,6 +51,8 @@ locals {
   account_purge_job    = "mutaba3a-account-purge${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
+  # MUT-525: the launch-offer renewal notices need mail and Stripe; they announce a price, not the lapse gate.
+  renewal_mail_enabled = var.mailer == "resend" && var.stripe_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -979,6 +981,38 @@ resource "google_cloud_scheduler_job" "trial_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/trial-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-525 (ADR-237, DD8): the daily launch-offer renewal notices, about 30 days before a campaign subscription's first
+# renewal (its price rises to the list price). At 10:15 Jerusalem time, after the trial mails. Only with mail and
+# Stripe on (Stripe's own subscription decides who is told and at what price). The run stops itself at about 200 s;
+# the window is 30 days and each subscription's renewal is mailed once, so retries and a missed day are safe.
+resource "google_cloud_scheduler_job" "renewal_mail" {
+  count = local.renewal_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-renewal-mail${local.suffix}"
+  region           = var.region
+  description      = "Daily launch-offer renewal notices (MUT-525)."
+  schedule         = "15 10 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/renewal-mail"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

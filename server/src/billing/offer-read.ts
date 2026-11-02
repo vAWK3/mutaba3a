@@ -1,4 +1,4 @@
-import type { MailOffer } from '../email/ports.js';
+import type { CalendarDay, MailOffer } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import { ALL_GA_LOOKUP_KEYS, catalogFrom, type BillingInterval, type Catalog } from './checkout.js';
 import { productIdsOf, resolveOffer, type Offer, type OfferEntry } from './offer.js';
@@ -53,7 +53,12 @@ export async function trialMailOffer(checkout: CheckoutGateway | null, offers: r
 
 /** The offer as mail names it: its percent and the Jerusalem calendar day of its end (23:59 there, DD10d). */
 export function mailOfferOf(offer: Offer): MailOffer {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(offer.endsAt);
+  return { percentOff: offer.percentOff, endsOn: jerusalemDayOf(offer.endsAt) };
+}
+
+/** Billing mail days are Asia/Jerusalem calendar days (DD7), whatever zone the server runs in. */
+export function jerusalemDayOf(at: Date): CalendarDay {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(at);
   const part = (type: string) => Number(parts.find((p) => p.type === type)!.value);
-  return { percentOff: offer.percentOff, endsOn: { year: part('year'), month: part('month'), day: part('day') } };
+  return { year: part('year'), month: part('month'), day: part('day') };
 }

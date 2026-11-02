@@ -365,6 +365,7 @@ export const STORE_ACCESS: StoreAccess = {
     setTrialStart: 'operator',
     // MUT-419: the daily trial-mail run (the job and the operator), on the unguarded store.
     trialMailCandidates: 'operator',
+    offerRenewalCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',

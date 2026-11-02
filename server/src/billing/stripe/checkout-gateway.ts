@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 import type { SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
+import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
-import { periodEndOf } from './mirror.js';
+import { periodEndOf, stateOf } from './mirror.js';
 
 /**
  * MUT-362 (plan §2.2, eng review D1–D3, ADR-170): the server's write door to Stripe, apart from MUT-360's read-only
@@ -49,6 +50,8 @@ export interface CheckoutGateway {
    * for `couponTtlMs` (a failure for CATALOG_FAILURE_TTL_MS); `fresh` skips the cache (Checkout) and refreshes it.
    */
   couponById(id: string, options?: { fresh?: boolean }): Promise<CouponFact | null>;
+  /** MUT-525 (DD8): what the renewal notice needs of a subscription; null when Stripe no longer has it. */
+  renewalOf(subscriptionId: string): Promise<RenewalFacts | null>;
 }
 
 /** A person is waiting: one retry, which the SDK makes safe with the same idempotency key. */
@@ -180,6 +183,15 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     async setInvoiceTaxNumber(customer, value) {
       await wrapped(() => stripe.customers.update(customer, { invoice_settings: { custom_fields: [{ name: INVOICE_TAX_NUMBER_FIELD, value }] } }));
     },
+    async renewalOf(subscriptionId) {
+      try {
+        const sub = await wrapped(() => stripe.subscriptions.retrieve(subscriptionId));
+        return renewalFactsOf(sub);
+      } catch (err) {
+        if (err instanceof StripeGatewayError && err.code === 'resource_missing') return null;
+        throw err;
+      }
+    },
     async couponById(id, { fresh = false } = {}) {
       const hit = fresh ? undefined : coupons.get(id);
       const age = hit ? options.now().getTime() - hit.at : Number.POSITIVE_INFINITY;
@@ -203,6 +215,26 @@ function sellableFactOf(price: Stripe.Price): PriceFact | null {
   const product = typeof price.product === 'object' && !('deleted' in price.product && price.product.deleted) ? (price.product as Stripe.Product) : null;
   if ((product?.metadata?.['tier'] ?? '').trim().toLowerCase() !== SELLABLE_TIER) return null;
   return { id: price.id, currency: price.currency.toUpperCase(), unitAmount: price.unit_amount, interval, productId: product!.id };
+}
+
+/**
+ * The first paid period starts at the trial's end, or at the subscription's start with no trial; the current period
+ * is that one exactly when its start is that moment. The price is the subscription's own (what the renewal charges).
+ */
+function renewalFactsOf(sub: Stripe.Subscription): RenewalFacts | null {
+  const item = sub.items.data[0];
+  const state = stateOf(sub);
+  if (!item || !state.currentPeriodEnd || typeof item.price.unit_amount !== 'number') return null;
+  const periodStart = Math.max(...sub.items.data.map((i) => i.current_period_start));
+  return {
+    status: state.status,
+    cancelAtPeriodEnd: state.cancelAtPeriodEnd,
+    currentPeriodEnd: state.currentPeriodEnd,
+    firstPaidPeriod: periodStart === (sub.trial_end ?? sub.start_date),
+    unitAmount: item.price.unit_amount,
+    currency: item.price.currency.toUpperCase(),
+    lookupKey: item.price.lookup_key ?? null,
+  };
 }
 
 function couponFactOf(coupon: Stripe.Coupon): CouponFact {

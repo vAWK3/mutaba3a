@@ -10991,6 +10991,127 @@ components:
       required:
         - dryRun
       additionalProperties: false
+    RenewalMailSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        checked:
+          type: integer
+          description: Launch-offer subscriptions renewing within 30 days
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: Already told about this renewal
+        notSent:
+          type: integer
+          description: "Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed"
+        skipped:
+          type: object
+          properties:
+            gone:
+              type: integer
+            notActive:
+              type: integer
+            cancelling:
+              type: integer
+            notFirstYear:
+              type: integer
+            notListPrice:
+              type: integer
+            suppressed:
+              type: integer
+          required:
+            - gone
+            - notActive
+            - cancelling
+            - notFirstYear
+            - notListPrice
+            - suppressed
+        incomplete:
+          type: boolean
+          description: The time budget ran out; the next run continues
+      required:
+        - dryRun
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - skipped
+        - incomplete
+    RenewalMailRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/RenewalMailSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/RenewalMailRow"
+      required:
+        - summary
+        - rows
+    RenewalMailRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        stripeSubscriptionId:
+          type: string
+        renewsAt:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum:
+            - send
+            - skip
+        skip:
+          type: string
+          nullable: true
+          enum:
+            - gone
+            - not-active
+            - cancelling
+            - not-first-year
+            - not-list-price
+            - suppressed
+            - null
+        outcome:
+          type: string
+          nullable: true
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+            - null
+          description: The mailer's answer, or failed; null on a skip or a dry run
+      required:
+        - userId
+        - email
+        - locale
+        - stripeSubscriptionId
+        - renewsAt
+        - action
+        - skip
+        - outcome
     AccountPurgeSummary:
       type: object
       properties:
@@ -23678,6 +23799,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TrialMailRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/renewal-mail:
+    post:
+      tags:
+        - Billing
+      summary: Daily launch-offer renewal notices (Cloud Scheduler)
+      description: "Mails the payer of each launch-offer subscription whose first renewal is within 30 days: the day, the yearly price it renews at and how to cancel. Stripe's own subscription decides (active, not cancelling, first paid year, a list price). Once per subscription and renewal day; a second run sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenewalMailSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/renewal-mail:
+    post:
+      tags:
+        - Admin
+      summary: Run the launch-offer renewal notices now, or see who they would mail
+      description: "The same run as the daily job, for the operator, with one row per subscription in the window: whether it is mailed or why not (gone, not-active, cancelling, not-first-year, not-list-price, suppressed). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RenewalMailRun"
         "401":
           description: Missing or invalid admin token
           content:

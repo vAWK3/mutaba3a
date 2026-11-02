@@ -563,6 +563,42 @@ export const TrialMailRunSchema = z.object({ summary: TrialMailSummarySchema, ro
 
 export const TrialMailRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('TrialMailRequest');
 
+/** MUT-525 (DD8): the daily launch-offer renewal notice's counts. */
+export const RenewalMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'Launch-offer subscriptions renewing within 30 days' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'Already told about this renewal' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed' }),
+    skipped: z.object({
+      gone: z.number().int(),
+      notActive: z.number().int(),
+      cancelling: z.number().int(),
+      notFirstYear: z.number().int(),
+      notListPrice: z.number().int(),
+      suppressed: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('RenewalMailSummary');
+
+export const RenewalMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stripeSubscriptionId: z.string(),
+    renewsAt: z.string().datetime(),
+    action: z.enum(['send', 'skip']),
+    skip: z.enum(['gone', 'not-active', 'cancelling', 'not-first-year', 'not-list-price', 'suppressed']).nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
+  })
+  .openapi('RenewalMailRow');
+
+export const RenewalMailRunSchema = z.object({ summary: RenewalMailSummarySchema, rows: z.array(RenewalMailRowSchema) }).openapi('RenewalMailRun');
+
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
 
 export const UserLocaleSchema = z.enum(['en', 'ar']).openapi('UserLocale');
