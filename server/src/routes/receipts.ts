@@ -6,7 +6,7 @@ import type { AttachmentStorage } from '../attachments/storage.js';
 import { ApiError } from '../errors.js';
 import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
 import { completeLibraryReceipt, MAX_PENDING_LIBRARY_UPLOADS, moveLibraryReceipt, receiptAudit, signReceiptUpload, startLibraryReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
-import { MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { learnedFromNew, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, tooManyReceipts, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { RateLimiter } from '../rate-limit.js';
@@ -20,6 +20,7 @@ import {
   CreateReceiptUploadResponseSchema,
   ErrorEnvelopeSchema,
   ExpenseReceiptSchema,
+  ReceiptDetailSchema,
   FileReceiptRequestSchema,
   FileReceiptResponseSchema,
   IfMatchHeaderSchema,
@@ -34,6 +35,7 @@ import {
   SignedUploadSchema,
 } from '../schemas.js';
 import { serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
+import { receiptVendorDefaults } from '../vendors/receipt-defaults.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 /** MUT-255 decision P3: unfinished library uploads one profile may hold from the last day, before a new one is refused. */
@@ -217,12 +219,13 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       security: SESSION_ONLY,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ReceiptIdParamSchema },
-      responses: { 200: { description: 'The receipt', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+      responses: { 200: { description: 'The receipt, with its vendor\'s defaults (MUT-303)', content: { 'application/json': { schema: ReceiptDetailSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
       storage();
       const { organization } = sessionAuth(c);
-      return c.json(serializeExpenseReceipt(await mustGet(organization.id, c.req.valid('param').receiptId)), 200);
+      const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
+      return c.json({ ...serializeExpenseReceipt(receipt), vendorDefaults: await receiptVendorDefaults(store, organization, receipt) }, 200);
     },
   );
 
@@ -303,7 +306,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
       if (result.kind === 'already_filed') throw await alreadyFiled(organization.id, receiptId);
       if (result.kind === 'not_ready') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
-      await touchExpenseVendor(store, result.expense, now);
+      await touchExpenseVendor(store, result.expense, now, learnedFromNew(result.expense));
       // The same row POST /v1/expenses writes, same keys, so anything counting expense.created counts these; receiptId marks where it came from.
       await audit(c, 'expense.created', 'expense', result.expense.id, { currency: result.expense.currency, occurredOn: result.expense.occurredOn, receiptId: result.receipt.id, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'new' });

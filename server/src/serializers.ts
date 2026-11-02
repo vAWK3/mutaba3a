@@ -4,7 +4,7 @@ import { incomeCaptureRulesFor } from './income/compose.js';
 import { profileOwnersOf } from './co-owners.js';
 import { ownsProfile, profileTypeOf } from './personal-profile.js';
 import type { IsoDate } from './dates.js';
-import { formatMoney, type Currency } from './money.js';
+import { formatMoney, SUPPORTED_CURRENCIES, type Currency } from './money.js';
 import { windowEnd } from './expenses/groups.js';
 import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
@@ -48,6 +48,7 @@ import type {
   SupplementRecord,
   UserRecord,
   VatRateRecord,
+  VendorRecord,
   VendorSuggestion,
 } from './repositories/ports.js';
 
@@ -557,8 +558,16 @@ export function serializeExpenseGroupOverride(m: ExpenseGroupOverrideRecord) {
 }
 
 /** MUT-254: a typeahead hit; the registration key is an index column and never leaves the server. */
-export function serializeVendorSuggestion(s: VendorSuggestion) {
-  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, exact: s.exact, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId };
+/** MUT-303 (R10): `withVat` false off firm profiles, which never see VAT. */
+export function serializeVendorSuggestion(s: VendorSuggestion, withVat = true) {
+  return { id: s.vendor.id, name: s.vendor.canonicalName, matchedName: s.matchedName, exact: s.exact, registrationNo: s.vendor.registrationNo, phone: s.vendor.phone, email: s.vendor.email, lastCategoryId: s.vendor.lastCategoryId, ...vendorDefaults(s.vendor, withVat) };
+}
+
+/** MUT-303: a vendor's currency and VAT as a client may prefill them; a currency the API no longer offers reads null. */
+export function vendorDefaults(v: VendorRecord, withVat: boolean) {
+  const lastCurrency = (SUPPORTED_CURRENCIES as readonly string[]).includes(v.lastCurrency ?? '') ? (v.lastCurrency as Currency) : null;
+  const lastVat = withVat && v.lastVatTreatment && v.lastVatRateBasisPoints !== null ? { treatment: v.lastVatTreatment, rateBasisPoints: v.lastVatRateBasisPoints } : null;
+  return { lastCurrency, lastVat };
 }
 
 /** MUT-42: the original amount, formatted in its own currency — never converted. */

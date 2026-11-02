@@ -54,7 +54,7 @@ const EXPECTED: Record<string, Fingerprint> = {
   refs: { createdAt: 'Date', entityId: 'string', entityType: 'string', externalId: 'string', id: 'string', organizationId: 'string', provider: 'string' },
   supps: { agreementId: 'string', amountMinor: 'bigint', appliedGrossMinor: 'bigint|null', createdAt: 'Date', creditedMinor: 'bigint', description: 'null|string', distribution: 'string', effectiveDate: 'string', id: 'string', organizationId: 'string', reasonCode: 'null|string', requestId: 'null|string', resultingAmountMinor: 'bigint' },
   vendorNames: { createdAt: 'Date', id: 'string', name: 'string', nameKey: 'string', organizationId: 'string', vendorId: 'string' },
-  vendors: { canonicalName: 'string', createdAt: 'Date', email: 'null|string', id: 'string', lastCategoryId: 'null|string', lastUsedAt: 'Date', organizationId: 'string', phone: 'null|string', registrationNo: 'null|string', updatedAt: 'Date', version: 'number' },
+  vendors: { canonicalName: 'string', createdAt: 'Date', email: 'null|string', id: 'string', lastCategoryId: 'null|string', lastCurrency: 'null|string', lastUsedAt: 'Date', lastVatRateBasisPoints: 'null|number', lastVatTreatment: 'null|string', organizationId: 'string', phone: 'null|string', registrationNo: 'null|string', updatedAt: 'Date', version: 'number' },
   versions: { agreementId: 'string', billingDay: 'number', createdAt: 'Date', effectiveMonth: 'string', endMonth: 'null|string', grossMinor: 'bigint', id: 'string', monthlyAmountMinor: 'bigint', netMinor: 'bigint', organizationId: 'string', paymentTerms: 'string', pricingBasis: 'string', rateBasisPoints: 'number', reason: 'string', requestId: 'null|string', vatMinor: 'bigint', vatTreatment: 'string', version: 'number' },
 };
 

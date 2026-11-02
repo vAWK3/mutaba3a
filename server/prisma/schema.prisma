@@ -1316,6 +1316,11 @@ model Vendor {
   /// The category of the last expense saved with this vendor (never the automatic Other): the typeahead's prefill.
   lastCategoryId  String?          @db.Uuid
   lastCategory    ExpenseCategory? @relation(fields: [lastCategoryId], references: [id], onDelete: SetNull)
+  /// MUT-303: the currency of the last new expense saved with this vendor; prefills the next one.
+  lastCurrency           String?       @db.VarChar(3)
+  /// MUT-303: the VAT of the last expense with this vendor that carried VAT (CHECK: both set or both null).
+  lastVatTreatment       VatTreatment?
+  lastVatRateBasisPoints Int?
   /// Set on every successful link; the typeahead's "recent".
   lastUsedAt      DateTime
   version         Int              @default(1)

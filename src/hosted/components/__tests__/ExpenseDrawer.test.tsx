@@ -1058,3 +1058,105 @@ describe('ExpenseDrawer VAT row summary (MUT-302 review)', () => {
     expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent(/^VAT 17\.5%/);
   });
 });
+
+describe('ExpenseDrawer vendor defaults: currency and VAT (MUT-303)', () => {
+  const BEZEQ = { id: 'v9', name: 'Bezeq', matchedName: 'Bezeq', exact: true, registrationNo: null, phone: null, email: null, lastCategoryId: null, lastCurrency: 'EUR', lastVat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } };
+  const SAVED = {
+    id: 'e1', occurredOn: '2026-09-01', amount: '117.00', currency: 'ILS', title: 'Printer', vendor: null, vendorId: null,
+    categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', captureSource: null, version: 3,
+    createdAt: '', updatedAt: '', receipts: [], vat: null,
+  };
+  let sent: Record<string, unknown> | undefined;
+  beforeEach(() => {
+    sent = undefined;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/vendors': () => ok({ items: [BEZEQ] }),
+      'POST /v1/expenses': () => ok(SAVED, 201),
+      'GET /v1/expenses/e1': () => ok(SAVED),
+      'PATCH /v1/expenses/e1': () => ok(SAVED),
+    });
+    const handler = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (init.method === 'POST' || init.method === 'PATCH') sent = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+      return handler(input, init);
+    });
+  });
+  const pickBezeq = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByLabelText('Vendor'));
+    await user.click(await screen.findByRole('option', { name: 'Bezeq' }));
+  };
+  const currency = () => screen.getByLabelText(/^Currency/) as HTMLSelectElement;
+
+  it('on a firm, picking a vendor before the amount fills its currency and VAT, says so, and saves them', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderDrawer({ firm: true, defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('Choose a category');
+    await pickBezeq(user);
+    await waitFor(() => expect(currency().value).toBe('EUR'));
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
+    expect(screen.getAllByText('From this vendor’s last expense').length).toBeGreaterThanOrEqual(2);
+    await user.type(screen.getByPlaceholderText('0.00'), '116');
+    await user.selectOptions(screen.getByDisplayValue('Choose a category'), 'cat-1');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).toMatchObject({ amount: '116', currency: 'EUR', vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1600 } });
+  });
+
+  it('R6: once an amount is typed the currency stays; the VAT still fills', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ firm: true, defaultCurrency: 'ILS' });
+    await user.type(await screen.findByPlaceholderText('0.00'), '100');
+    await pickBezeq(user);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
+    expect(currency().value).toBe('ILS');
+  });
+
+  it('R5: a currency the person chose is never replaced', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ firm: true, defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('Choose a category');
+    await user.selectOptions(currency(), 'USD');
+    await pickBezeq(user);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
+    expect(currency().value).toBe('USD');
+  });
+
+  it('R10: off firm profiles the currency fills, and there is no VAT row', async () => {
+    const user = userEvent.setup();
+    renderDrawer({ defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('Choose a category');
+    await pickBezeq(user);
+    await waitFor(() => expect(currency().value).toBe('EUR'));
+    expect(screen.queryByTestId('expense-vat')).not.toBeInTheDocument();
+  });
+
+  it('review #9: picking another vendor replaces the VAT the last one filled, as on the phone', async () => {
+    const user = userEvent.setup();
+    const EXEMPT = { ...BEZEQ, id: 'v10', name: 'Bank Fees', matchedName: 'Bank Fees', lastCurrency: null, lastVat: { treatment: 'EXEMPT', rateBasisPoints: 0 } };
+    route({ 'GET /v1/vendors': () => ok({ items: [BEZEQ, EXEMPT] }) });
+    renderDrawer({ firm: true, defaultCurrency: 'ILS' });
+    await screen.findByDisplayValue('Choose a category');
+    await pickBezeq(user);
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
+    await user.clear(screen.getByLabelText('Vendor'));
+    await user.click(screen.getByLabelText('Vendor'));
+    await user.click(await screen.findByRole('option', { name: 'Bank Fees' }));
+    await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).not.toHaveTextContent('VAT 16%'));
+  });
+
+  it('R4: the edit drawer never prefills: a pick leaves the saved currency and VAT, and the PATCH sends no vat', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Printer');
+    await pickBezeq(user);
+    expect((screen.getByLabelText('Vendor') as HTMLInputElement).value).toBe('Bezeq');
+    expect(currency().value).toBe('ILS');
+    expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('No VAT recorded');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('vat');
+  });
+});

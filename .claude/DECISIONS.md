@@ -6243,4 +6243,33 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:** one cached Stripe read on GET `/v1/billing` for list-monthly payers, two calls to preview, three to switch. No migration. The restricted key needs Write on Subscriptions (MUT-333 already added it). The monthly summary mail's line ships with MUT-535 (`yearlySwitchOf`).
 
 **Alternatives considered:** Customer Portal plan switching (no 2nd-payment gate, no saving line, English only); switching without a preview (the person wouldn't know today's charge); `error_if_incomplete` (a 3-D Secure card would read as declined).
+## ADR-239: A Vendor Remembers Its Currency and VAT; Defaults Fill Only What Nothing Read and Nobody Changed (MUT-303)
+
+**Status:** Accepted (2026-11-02, MUT-303; epic MUT-298, firm books v2; amends brief `firm-books.md` §6.2 and §12, and the MUT-299 note "suggestions carry source: vendor"). Plan, eng review and Basel's decisions (D1–D6, R1–R11): `.claude/designs/mut-303-vendor-defaults-plan.md`.
+
+**Context:** MUT-254 made vendors remember a category. A firm's vendors also bill in one currency and at one VAT rate, and MUT-302 put VAT on expenses.
+
+**Decision:**
+1. **Learning:** `Vendor.lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints` (CHECK both-or-none) ride `vendors.touch`, in its existing lock order (categories, then vendors).
+   - A new expense teaches its currency, and its VAT when it carries one.
+   - A PATCH teaches only what it changed (R8): the portal resends `vendor` on every save.
+   - A save without VAT keeps the default (D1). An explicit `vat: null` forgets it only while the default is still the VAT removed (`clearIf`, R7).
+2. **Offering:**
+   - The typeahead returns flat `lastCurrency` and `lastVat` beside `lastCategoryId` (D3, overrides brief §12's `defaults` object).
+   - A receipt's `GET /v1/receipts/{id}` returns `vendorDefaults`, matched by the read registration no., else by an exact name, worked out at read time (D6).
+3. **Never in `suggested` (R1):** a vendor's currency stored there would re-scale a total the reader stored without one (`amounts.ts` defaults to 2 digits). `MONEY_GROUP` would also then lock out later readings. Vendor values are served beside what was read, never merged into it.
+4. **The fill rule, one pure function per client (`vendorDefaultFills`):**
+   - A default fills a field only when nothing read it and nobody changed it.
+   - The currency fills only while no amount is typed (R6).
+   - VAT fills only on a firm (R10; the server also answers `vat: null` off firms).
+   - Prefill runs on create and review only, never in the edit drawer (R4).
+   - Filled values aren't dirty, so a later receipt reading replaces them (R5).
+5. **Seeding (D5):** the migration seeds `lastCurrency` from each vendor's latest live expense in a supported currency. There is no VAT seed and no operator step.
+
+**Consequences:** works with server reading switched off, since a typed and picked vendor or a read name is enough. MUT-308's bills can reuse the same defaults.
+
+**Alternatives considered:**
+- Write vendor defaults into the reader's suggestion with `source: "vendor"` (the brief's plan). Rejected: R1.
+- Learn from every write naming the vendor. Rejected: R8, an edit to an old expense would reset the default.
+- Seed VAT too. Rejected: expense VAT is days old, and a wrong seed would prefill a wrong rate.
 

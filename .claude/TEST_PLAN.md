@@ -4315,4 +4315,18 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - **Server routes:** `__tests__/billing-yearly-switch.test.ts` — GET `/v1/billing` `yearlySwitch` (2 paid → saving; 1 → null; yearly/founder/cancelling/trialing → null with no Stripe call; failure → null, 200); GET preview (amounts, renewal, proration date; Stripe's discount/pause/too-early/founder → 409 `why`; no subscription; 503 without Stripe; 401); POST (switch at the preview's date, yearly price, audit; changed amount, stale or future proration date → AMOUNT_CHANGED with no switch; PAYMENT_FAILED; PAYMENT_NEEDS_ACTION with the URL; ineligible since the preview; a test clock's time; strict body). `billing-gate-routes.test.ts` classifies both routes `open`. `mirror.test.ts` — tier and status unchanged through a switch (AC4).
 - **Portal:** `billingView.test.ts` — `yearlySwitchLineOf`. `BillingDrawer.test.tsx` — the line (and none before the 2nd payment), preview → confirm body → done banner, declined, approve on Stripe's page, changed amount re-previewed, Arabic.
 - **Release-QA (portal-live), both PASSED 2026-11-02:** `@portal-live.billing.yearly-switch` (two paid months on a back-dated clock → line → preview → switch → Stripe yearly, no discount, invoice = preview, /v1/me ACTIVE), `@portal-live.billing.yearly-switch-early`.
+## MUT-303 — A known vendor fills its currency and VAT (ADR-239)
+
+- **Server** (`routes-vendors.test.ts`, `store-contract-vendors.ts` on memory and Postgres):
+  - learning on create and approve; AC2 (a changed value becomes the default); D1 (a no-VAT save keeps VAT); the guarded clear (R7);
+  - R8 (a resent vendor with no currency change keeps it); D2 (a changed currency teaches); AC3 isolation; the typeahead shape;
+  - `vendorDefaults` by registration no. (AC1, two approvals then a third read) and by exact name; none; off-firm without VAT (R10);
+  - never written into `suggested` (R1).
+  - The migration seed was checked by hand over a test DB with expenses, and the CHECK refuses a half write.
+- **Local mode:** 14 → 15 migration test, fingerprint, every-record fixture.
+- **Portal:**
+  - `vendorDefaultFills` table (`lib/__tests__/vendorDefaults.test.ts`).
+  - ExpenseDrawer: firm fill and save, R6 typed amount, R5 chosen currency, R10 non-firm, R4 edit never prefills.
+  - Receipts review: AC1 vendor-only read, R5/R6 read currency and amount kept, a late rate replacing a vendor VAT, R10.
+- **Release-QA:** `portal.expenses.vendor-defaults` and `portal.receipts.vendor-defaults` (passed 2026-11-02, with vendor-typeahead, vat and vat-from-receipt alongside). Phone: `ios.capture.vendor-defaults`, with the Flutter half.
 

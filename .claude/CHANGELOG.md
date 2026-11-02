@@ -52,6 +52,29 @@ switch on the 2nd payment or say what it saves in Arabic.
   `BillingDrawer.tsx` so its steps can share them. `customerOnClock` takes a start time (a test clock may start in the past).
 
 ---
+## [Unreleased] - 2026-11-02 — A known vendor fills its currency and VAT (MUT-303, ADR-239)
+
+**What:** a vendor remembers the currency and VAT of its expenses and fills them into the next one, on a new expense and on receipt review.
+- **Server:**
+  - `vendors.touch` stores `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
+  - A new expense (create, approve, inbox filing, MCP) teaches its currency, and its VAT when it carries one (`learnedFromNew`).
+  - A PATCH teaches only what it changed (`learnedFromPatch`). Removing VAT forgets the default only while it is still that VAT, through a guarded `updateMany`.
+  - `VendorSuggestion` gains `lastCurrency` and `lastVat`.
+  - `GET /v1/receipts/{id}` answers `ReceiptDetail` with `vendorDefaults`, matched by the read registration no. or exact name and worked out at read time. It is **never written into `suggested`**. `vat` is null off firms.
+  - Migration `20261102180000_mut303_vendor_defaults` adds a both-or-none CHECK and seeds `lastCurrency` from each vendor's latest expense (supported currencies only).
+  - Local snapshot 15. API 1.96.0-mut303.
+- **Portal:** one pure rule, `src/hosted/lib/vendorDefaults.ts` (`vendorDefaultFills`).
+  - It fills only fields nothing read and nobody changed; the currency only while no amount is typed; VAT only on a firm.
+  - It is used by the vendor pick (create drawer and review, never the edit drawer: `prefillDefaults`) and by the review's `vendorDefaults` at mount.
+  - Filled values aren't dirty, so a later reading replaces them. "From this vendor's last expense" says so.
+- **QA:** `portal.expenses.vendor-defaults`, `portal.receipts.vendor-defaults`.
+
+**Why:** a firm's repeat vendors bill in the same currency and at the same VAT; this is two fewer fields per expense on the firm books loop (epic MUT-298, v2).
+
+**Files:**
+- Server: `server/src/{expenses/compose.ts,vendors/receipt-defaults.ts,routes/{expenses,receipts}.ts,repositories/{ports,memory,prisma,prisma-records-export}.ts,schemas.ts,serializers.ts}` and the migration.
+- Portal and local mode: `src/hosted/{lib/vendorDefaults.ts,components/expenseForm/HostedExpenseFields.tsx,components/ExpenseDrawer.tsx,pages/views/ReceiptReview.tsx,api/client.ts,local/migrations/index.ts,i18n/*.json}`.
+- QA: `qa/support/portalApi.ts` and the specs.
 
 ## [Unreleased] - 2026-11-02 — The launch offer: 50% off a yearly plan's first year, automatic, once per person (MUT-525, ADR-237)
 

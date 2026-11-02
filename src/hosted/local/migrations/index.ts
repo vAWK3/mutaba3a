@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -223,6 +223,15 @@ function addExpenseVat(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-303, 14 → 15: vendors gain `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`. A device's vendors
+ * learn them from their next expense; nothing is seeded (the server seeds currency only, from Postgres).
+ */
+function addVendorDefaults(snapshot: StoredSnapshot): StoredSnapshot {
+  const vendors = snapshot.maps.vendors as Map<string, Omit<VendorRecord, 'lastCurrency' | 'lastVatTreatment' | 'lastVatRateBasisPoints'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, vendors: new Map([...vendors].map(([id, v]) => [id, { ...v, lastCurrency: null, lastVatTreatment: null, lastVatRateBasisPoints: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -242,6 +251,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 11, to: 12, migrate: addProposalDrafts },
   { from: 12, to: 13, migrate: addReversalReasonCode },
   { from: 13, to: 14, migrate: addExpenseVat },
+  { from: 14, to: 15, migrate: addVendorDefaults },
 ];
 
 /**

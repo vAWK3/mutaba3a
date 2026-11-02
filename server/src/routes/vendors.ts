@@ -32,7 +32,8 @@ export function vendorRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = sessionAuth(c);
       const { q, limit } = c.req.valid('query');
       const hits = await store.vendors.search(organization.id, q ?? '', limit);
-      return c.json({ items: hits.map(serializeVendorSuggestion) }, 200);
+      const firm = organization.firmEnabledAt !== null;
+      return c.json({ items: hits.map((hit) => serializeVendorSuggestion(hit, firm)) }, 200);
     },
   );
 
