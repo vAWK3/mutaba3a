@@ -108,7 +108,19 @@ const RECORDS_EXPORT_OPERATIONS = ['GET /v1/records-export', 'GET /v1/records-ex
 const REPORTS_OPERATIONS = ['GET /v1/summaries/activity', 'GET /v1/summaries/verdict'];
 
 /** MUT-362: Settings › Billing — session-only, naming no X-Mutaba3a-Profile (the person pays, like /v1/me). */
-const BILLING_OPERATIONS = ['GET /v1/billing', 'POST /v1/billing/checkout-session', 'POST /v1/billing/portal-session', 'GET /v1/billing/yearly-switch', 'POST /v1/billing/yearly-switch'];
+const BILLING_OPERATIONS = [
+  'GET /v1/billing',
+  'POST /v1/billing/checkout-session',
+  'POST /v1/billing/portal-session',
+  'GET /v1/billing/yearly-switch',
+  'POST /v1/billing/yearly-switch',
+  'GET /v1/billing/retention',
+  'POST /v1/billing/pause',
+  'DELETE /v1/billing/pause',
+  'POST /v1/billing/cancellation',
+  'DELETE /v1/billing/cancellation',
+  'POST /v1/billing/stay-offer',
+];
 
 /** MUT-434: the consent page and Connected apps — the portal's cookie session only (no device session, no key). */
 const AGENT_CONSENT_OPERATIONS = ['GET /v1/oauth/requests/{requestId}', 'POST /v1/oauth/requests/{requestId}/decision', 'GET /v1/oauth/grants', 'DELETE /v1/oauth/grants/{grantId}'];

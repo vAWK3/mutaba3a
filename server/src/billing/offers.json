@@ -1,3 +1,4 @@
 [
-  { "id": "launch-2026", "couponId": "mtb3a_launch_yearly_2026", "interval": "year", "tier": "freelancer" }
+  { "id": "launch-2026", "couponId": "mtb3a_launch_yearly_2026", "interval": "year", "tier": "freelancer" },
+  { "id": "stay-2026", "couponId": "mtb3a_stay_monthly_50", "kind": "stay", "interval": "month", "tier": "freelancer" }
 ]

@@ -56,6 +56,8 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'account_setup_tokens.userId': 'delete',
   'billing_accounts.userId': 'delete',
   'entitlement_grants.userId': 'delete',
+  // MUT-532: the person's pauses, stay offer, cancels and switches (also ON DELETE CASCADE).
+  'billing_retention_events.userId': 'delete',
   'inbox_entries.userId': 'delete',
   'memberships.userId': 'delete',
   'passkeys.userId': 'delete',

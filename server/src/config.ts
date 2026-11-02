@@ -187,6 +187,8 @@ const envSchema = z.object({
    * live QA run owns its coupon. Refused where API_KEY_ENVIRONMENT is live.
    */
   BILLING_OFFER_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
+  /** MUT-532: QA only, the same rule for the cancel flow's stay coupon (offers.json `stay`). Refused where live. */
+  BILLING_STAY_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**
@@ -332,6 +334,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (config.BILLING_OFFER_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
     throw new ConfigError('Invalid configuration:\n  BILLING_OFFER_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
+  }
+  if (config.BILLING_STAY_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
+    throw new ConfigError('Invalid configuration:\n  BILLING_STAY_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
   }
   receiptReadingConfig(config);
   if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {

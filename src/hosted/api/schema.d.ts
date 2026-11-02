@@ -13046,6 +13046,598 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the cancel flow may offer instead of cancelling
+         * @description Read when the person presses Cancel plan. `pause`: 1–3 months from the paid period’s end, for an active monthly list plan with one paid invoice and no pause in the last 12 months. `stayOffer`: the stay coupon (offers.json `stay`), once per person ever, for an active monthly list plan with no discount; amounts per Stripe’s rounding. Either is null when it isn’t open.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The flow’s offers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BillingRetention"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause the plan for 1–3 months instead of cancelling
+         * @description From the paid period’s end Stripe voids each invoice (nothing is charged) and the person’s records are read-only, never locked; billing restarts on its own on `until`. Once in 12 months, monthly list plans only. Audited `billing.pause_scheduled` on each profile the person owns.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PauseRequest"];
+                };
+            };
+            responses: {
+                /** @description Booked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PauseResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Undo a pause still to come, or resume now
+         * @description Before the pause starts it is undone and charges nothing (it doesn’t use up the year’s pause). Once it runs, Resume now restarts the plan today: one full month is charged today and it renews monthly from today. A declined card leaves the plan past due while Stripe retries it. Audited `billing.pause_ended`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Ended */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PauseEndResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/cancellation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel the plan at the end of the paid period
+         * @description The plan stays on until the period it was paid for ends; then the person’s records are read-only, never deleted. Stripe keeps the reason (`cancellation_details.feedback`) and the comment. A founder price runs on a subscription schedule, which Stripe won’t cancel this way (NOTHING_TO_CANCEL, MANAGED_BY_SCHEDULE). Audited `billing.cancel_scheduled`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancellationRequest"];
+                };
+            };
+            responses: {
+                /** @description Cancelling */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CancellationResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Keep my plan: take a cancel back
+         * @description Clears a cancel at the period end, MTB3A’s or the Customer Portal’s, so the plan renews as before. Audited `billing.cancel_undone`.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Kept */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CancellationResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/stay-offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take the stay offer instead of cancelling
+         * @description Puts the stay coupon on the plan: the next invoices are discounted for the coupon’s months, then the list price again. Once per person, ever; claimed before Stripe is asked, so a double press or a retry can’t give it twice. The plan stays on. Audited `billing.stay_offer_applied`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StayOfferRequest"];
+                };
+            };
+            responses: {
+                /** @description Applied */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StayOfferResult"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/receipts/read": {
         parameters: {
             query?: never;
@@ -19183,6 +19775,7 @@ export interface components {
                 tier: "FREELANCER" | "FIRM" | null;
                 /** Format: date-time */
                 until: string | null;
+                paused?: boolean;
             } | null;
         };
         /** @enum {string} */
@@ -22421,6 +23014,12 @@ export interface components {
                 offer: {
                     id: string;
                 } | null;
+                pause: {
+                    /** Format: date-time */
+                    from: string;
+                    /** Format: date-time */
+                    until: string | null;
+                } | null;
             } | null;
             canManage: boolean;
             trial: {
@@ -22509,6 +23108,66 @@ export interface components {
             /** Format: date-time */
             prorationDate: string;
             expectedAmountDue: number;
+        };
+        BillingRetention: {
+            /** Format: date-time */
+            endsOn: string | null;
+            pause: {
+                options: {
+                    months: number;
+                    /** Format: date-time */
+                    from: string;
+                    /** Format: date-time */
+                    until: string;
+                }[];
+            } | null;
+            stayOffer: {
+                percentOff: number;
+                months: number;
+                /** @enum {string} */
+                currency: "ILS" | "USD";
+                monthlyAmount: number;
+                listAmount: number;
+            } | null;
+        };
+        PauseResult: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            until: string;
+        };
+        PauseRequest: {
+            months: 1 | 2 | 3;
+            /** @enum {string} */
+            reason: "too_expensive" | "unused" | "missing_features" | "switched_service" | "too_complex" | "low_quality" | "customer_service" | "other";
+        };
+        PauseEndResult: {
+            /** @enum {string} */
+            resumed: "cancelled" | "now";
+            /** @enum {string|null} */
+            payment: "charged" | "failed" | "needs-action" | null;
+            /** Format: uri */
+            hostedInvoiceUrl: string | null;
+        };
+        CancellationResult: {
+            /** Format: date-time */
+            endsOn: string | null;
+        };
+        CancellationRequest: {
+            /** @enum {string} */
+            reason: "too_expensive" | "unused" | "missing_features" | "switched_service" | "too_complex" | "low_quality" | "customer_service" | "other";
+            comment?: string;
+        };
+        StayOfferResult: {
+            percentOff: number;
+            months: number;
+            /** @enum {string} */
+            currency: "ILS" | "USD";
+            monthlyAmount: number;
+        };
+        StayOfferRequest: {
+            /** @enum {string} */
+            reason: "too_expensive" | "unused" | "missing_features" | "switched_service" | "too_complex" | "low_quality" | "customer_service" | "other";
         };
         ReceiptReadJobResult: {
             /**
@@ -22988,6 +23647,7 @@ export interface components {
             tier: "FREELANCER" | "FIRM" | null;
             /** Format: date-time */
             until: string | null;
+            paused: boolean;
         };
         OperatorAccountStatusResponse: components["schemas"]["UserStatusResponse"] & {
             sessionsRevoked: number;

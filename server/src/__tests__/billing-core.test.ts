@@ -70,14 +70,14 @@ describe('GET /v1/me billing (AC3)', () => {
   it('reports each profile’s entitlement: a person provisioned after the backfill has no coverage yet', async () => {
     const h = harness();
     const u = await person(h);
-    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'READ_ONLY', source: 'NONE', tier: null, until: null });
+    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'READ_ONLY', source: 'NONE', tier: null, until: null, paused: false });
   });
 
   it('follows a grant, a Stripe subscription and the trial, with ISO timestamps', async () => {
     const h = harness();
     const u = await person(h);
     await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 2 * DAY));
-    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date(NOW.getTime() + 12 * DAY).toISOString() });
+    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date(NOW.getTime() + 12 * DAY).toISOString(), paused: false });
 
     const periodEnd = new Date(NOW.getTime() + 20 * DAY);
     await h.store.billing.saveAccount({ stripeCustomerId: 'cus_A1', userId: u.userId, country: 'IL', currency: 'ILS', at: NOW, linkAudit: [] });
@@ -95,7 +95,7 @@ describe('GET /v1/me billing (AC3)', () => {
       at: NOW,
       audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null },
     });
-    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: periodEnd.toISOString() });
+    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: periodEnd.toISOString(), paused: false });
 
     await h.app.request('/admin/v1/billing/grants', json({ userId: u.userId, tier: 'FREELANCER', reason: 'pilot' }, admin));
     expect(billingOf(await u.me(), u.personalId)).toMatchObject({ state: 'ACTIVE', source: 'OPERATOR' });
@@ -106,7 +106,7 @@ describe('GET /v1/me billing (AC3)', () => {
     const firm = await operatorFirm(h);
     const u = await person(h, firm.id);
     await h.store.integrations.connect({ organizationId: firm.id, provider: 'MALAFAT', externalTenantId: `t-${++seq}`, displayName: 'Firm', connectedByApiKeyId: null, at: NOW } as Loose);
-    expect(billingOf(await u.me(), firm.id)).toEqual({ state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null });
+    expect(billingOf(await u.me(), firm.id)).toEqual({ state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null, paused: false });
   });
 
   it('is null in the portal’s signed-out mode (no billing applies)', async () => {

@@ -176,6 +176,7 @@ describe('GET /v1/billing (MUT-362)', () => {
       cancelAtPeriodEnd: false,
       renewsAtListPrice: true,
       offer: null,
+      pause: null,
     });
   });
 

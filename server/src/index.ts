@@ -69,7 +69,7 @@ const stripe = config.STRIPE_SECRET_KEY
       webhookGateway: stripeGateway(WEBHOOK_BUDGET),
       reconcileGateway: stripeGateway(RECONCILE_BUDGET),
       // MUT-525 (R6): a QA run's own coupon is read uncached, so creating or deleting it shows at once.
-      checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date(), ...(config.BILLING_OFFER_COUPON_ID ? { couponTtlMs: 0 } : {}) }),
+      checkoutGateway: createCheckoutGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET, now: () => new Date(), ...(config.BILLING_OFFER_COUPON_ID || config.BILLING_STAY_COUPON_ID ? { couponTtlMs: 0 } : {}) }),
       // MUT-333 (D14): the same key, which also needs Write on Subscriptions to end them when an account closes.
       accountGateway: createAccountStripeGateway({ secretKey: config.STRIPE_SECRET_KEY, ...CHECKOUT_BUDGET }),
       // MUT-531: the same key's Write on Subscriptions (MUT-333 D14) also changes a person's own plan.
@@ -221,7 +221,7 @@ const app = createApp({
   publicFxIpLimiter,
   stripe,
   // MUT-525 (D12, R6): offers.json, or the QA run's own coupon on a test server.
-  offers: offersFor(config.BILLING_OFFER_COUPON_ID),
+  offers: offersFor(config.BILLING_OFFER_COUPON_ID, config.BILLING_STAY_COUPON_ID),
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
   oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter, agentPersonLimiter } : null,
   stripeWebhookIpLimiter,

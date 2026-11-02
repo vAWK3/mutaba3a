@@ -2922,3 +2922,7 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: telemetry starts only through its gate, decided twice (ADR-236)
 **Where**: `src/lib/telemetry/telemetryGate.ts` (pure; vite.config.ts and the page), `src/lib/telemetry/pageTelemetry.ts`, `server/src/observability/telemetry-gate.ts`.
 **Rule**: a new Sentry or PostHog start (or any other telemetry SDK) asks the gate, never a key alone. On the web the build decides first (a tool that is off is compiled out with its key) and the page decides again from its own host, because one build answers on several hosts. The overrides are `SENTRY_ENABLED` / `POSTHOG_ENABLED` in every app; dev and QA scripts set them false, never production deploys. Every event carries `environment`.
+
+## Pattern: claim the once-rule in our store before the Stripe write; release only when Stripe definitely didn't act (MUT-532 R3)
+**Where**: `server/src/routes/billing-plan.ts` (`settleClaim`, POST `/v1/billing/pause` and `/v1/billing/stay-offer`), `billing.claimRetentionEvent`.
+**Rule**: a "once per person" or "once a year" promise that ends in a Stripe write is claimed first (a unique index, or a re-check under a row lock), then Stripe is asked. On failure: a refusal Stripe will repeat releases the claim; a timeout re-reads Stripe and releases only if nothing applied (and counts the press as done if it did); if the re-read fails too, the claim stays and is logged for the operator. Never release on "any error": a retry would give the thing twice.

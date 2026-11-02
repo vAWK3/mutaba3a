@@ -28,6 +28,46 @@
 
 ---
 
+## [Unreleased] - 2026-11-02 — Pause instead of cancel, the stay offer and MTB3A's own cancel flow (MUT-532, ADR-240)
+
+**Why:** MUT-528 D5/D6. People who would cancel get a seasonal break or half price for two months first, and Stripe's
+Customer Portal could neither offer them in Arabic nor apply "once a year" / "once per person".
+
+### Added
+- Migration `20261103120000_mut532_pause_retention`: `billing_subscriptions.pausedFrom` / `pauseResumesAt`, and
+  `billing_retention_events` (PAUSE, STAY_OFFER, CANCEL, YEARLY_SWITCH; one STAY_OFFER per person, a partial unique index).
+- `server/src/billing/retention.ts`: `cycleBoundaryAfter` (Stripe's monthly clamp), `pauseOptionsOf` (monthly list,
+  1 paid invoice, once in 12 months), `stayOfferOf` (once ever, no discount, repeating Freelancer-only coupon),
+  `CANCELLATION_REASONS`.
+- `plan-gateway.ts`: `schedulePause`, `endPause` (undo, or Resume now: restart today + the month as its own invoice),
+  `cancelAtPeriodEnd`, `keepPlan`, `applyCoupon`; `planOf` reads the anchor, price, coupons, pause and schedule.
+- Routes (`routes/billing-plan.ts`, contract 1.97.0-mut532): GET `/v1/billing/retention`, POST/DELETE
+  `/v1/billing/pause`, POST/DELETE `/v1/billing/cancellation`, POST `/v1/billing/stay-offer`; all `open` at the gate,
+  audited `billing.pause_scheduled`, `.pause_ended`, `.cancel_scheduled`, `.cancel_undone`, `.stay_offer_applied`.
+  GET `/v1/billing` `subscription.pause`; `/v1/me` entitlement and 402 details `paused`.
+- `offers.json` gains `kind` and the stay entry `mtb3a_stay_monthly_50`; `BILLING_STAY_COUPON_ID` (QA only, refused live).
+- Portal: `?step=cancel` (`BillingCancelFlow`, `useCancelFlow`): Why? → Pause instead? → the stay offer → Confirm
+  cancel; status panels Pause booked / Paused until with Don't pause and Resume now (a confirm says what it charges);
+  Keep my plan on a plan that ends; Cancel plan on list-price plans. LapseGate's paused banner (Resume now, Download,
+  no Subscribe). The You page's Billing row says Paused. Copy from plan §6, ar + en.
+- Release-QA: `@portal-live.billing.pause`, `.pause-resume-now`, `.pause-once-a-year`, `.stay-offer`,
+  `.cancel-reason`; `@portal.billing.paused-banner`, `.cancel-rtl-375`; `manage` rewritten (Stripe's portal shows no cancel).
+
+### Changed
+- Mirror and entitlement: a running pause (Stripe keeps the status `active`) is READ_ONLY · STRIPE, `paused`, until
+  it restarts; never LOCKED; Malafat and grants still win. A pause set outside MTB3A reads as paused from the start
+  (`PAUSE_NOT_OURS`). The 402 message for a paused profile says it is paused, not ended.
+- `manageNote` loses "or cancel"; the switch line hides during a pause or while the stay offer runs (D13).
+- MUT-531's switch records a `YEARLY_SWITCH` event.
+
+### Technical
+- The sandbox spike (`qa/support/mut532-pause-spike.mjs`, `.claude/designs/mut-532-pause-spike-result.md`).
+- `billing-live.mjs` makes a per-run stay coupon and turns the sandbox Customer Portal's cancel off;
+  `livePortal.ts` `payingUntilSoon` / `waitUntilPast` (a pause runs on the server's real clock).
+- The portal's `BillingEntitlement` is `/v1/me`'s own shape (`paused` optional for older servers).
+
+---
+
 ## [Unreleased] - 2026-11-02 — Switch from monthly to yearly in Billing, from the 2nd payment (MUT-531, ADR-238)
 
 **Why:** MUT-528 D4. Yearly payers stay much longer than monthly ones, and Stripe's Customer Portal can't gate a

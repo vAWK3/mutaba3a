@@ -2450,6 +2450,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `yearlySwitchLineOf` — `src/hosted/data/billingView.ts`: the switch line, only on an active monthly plan the server says may switch.
 - Server: `yearlySwitchOf` / `yearlySavingsOf` / `listMonthlyCurrencyOf` (`server/src/billing/retention.ts`); `PlanGateway` (`server/src/billing/stripe/plan-gateway.ts`, fake `FakePlanGateway`); `billingPlanRoutes` (`server/src/routes/billing-plan.ts`).
 
+### Pause, stay offer and cancel — MUT-532 (ADR-240)
+- `CancelBody` / `CancelFooter` — `src/hosted/components/BillingCancelFlow.tsx`: Billing's `?step=cancel` body (Why? with `RadioCards` and a comment, Pause instead? with the months as `RadioCards`, the stay offer, Confirm cancel as `InPlaceConfirm`) and its pinned footer per step. State in `useCancelFlow` (`src/hosted/components/useCancelFlow.ts`): the retention query, the phase, reason/comment/months, the pause, stay and cancel mutations, `failure`; `CANCEL_REASONS`, `CANCEL_COMMENT_MAX`.
+- `PlanChanges` (inside `BillingDrawer.tsx`): Don't pause, Resume now (an `InPlaceConfirm` with today's charge), Keep my plan and the Cancel plan link under Manage billing.
+- `pauseOf` / `canCancelOf` / `canKeepOf` / `monthPriceOf` — `src/hosted/data/billingView.ts`; panels `pauseScheduled` and `paused`. `lapseNoticeOf` gives `{ kind: 'paused', until }` (`src/hosted/data/trialPrompt.ts`); `PausedNote` in `LapseGate.tsx`.
+- `billingRetentionQuery`, `usePausePlan`, `useEndPause`, `useCancelPlan`, `useKeepPlan`, `useTakeStayOffer` — `src/hosted/data/billingQueries.ts`.
+- Server: `cycleBoundaryAfter` / `pauseOptionsOf` / `stayOfferOf` / `pauseCounts` / `CANCELLATION_REASONS` (`server/src/billing/retention.ts`); `pauseOf` (`server/src/billing/stripe/mirror.ts`); `pausedNow` (`server/src/billing/entitlement.ts`); `PlanGateway.schedulePause/endPause/cancelAtPeriodEnd/keepPlan/applyCoupon` (fake: `FakePlanGateway.failNextWrite/failNextAfterApplying`); `stayEntryOf` (`offer.ts`); store `billing.retentionEventsOf/claimRetentionEvent/releaseRetentionEvent/endRetentionEventEarly`.
+
 ### Expense VAT — MUT-302 (ADR-231)
 - `ExpenseVatRow` — `src/hosted/components/expenseForm/ExpenseVatRow.tsx`: the firm-only collapsed VAT row (`.form-disclosure`) on the shared expense fields: "No VAT recorded" or the VAT inside the amount; open, treatment `Select`, Standard rate, net and VAT preview (`<bdi>`). Props `form`, `idPrefix`, `readOnly`, `hint`. Rendered by `HostedExpenseFields` when `firm`.
 - `vatPreview` / `percentToBasisPoints` / `basisPointsToPercent` / `VAT_TREATMENTS` — `src/hosted/lib/expenseVat.ts`: display-only port of the server split, held by the shared case table.

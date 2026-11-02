@@ -362,6 +362,11 @@ export const STORE_ACCESS: StoreAccess = {
     factsFor: 'sessionOnly',
     // MUT-362: Settings › Billing reads the person's own account; the route passes the session's user, never a parameter.
     summaryOf: 'sessionOnly',
+    // MUT-532: the person's own pause, stay offer and cancel; the route passes the session's user, never a parameter.
+    retentionEventsOf: 'sessionOnly',
+    claimRetentionEvent: 'sessionOnly',
+    releaseRetentionEvent: 'sessionOnly',
+    endRetentionEventEarly: 'sessionOnly',
     setTrialStart: 'operator',
     // MUT-419: the daily trial-mail run (the job and the operator), on the unguarded store.
     trialMailCandidates: 'operator',

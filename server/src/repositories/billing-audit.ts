@@ -7,7 +7,7 @@ import type { AuditEventInput, BillingSubscriptionRecord, JsonObject, Subscripti
  */
 type Mirrored = Pick<
   BillingSubscriptionRecord,
-  'billingAccountId' | 'tier' | 'organizationId' | 'status' | 'currentPeriodEnd' | 'cancelAtPeriodEnd' | 'priceLookupKey' | 'founderUntil'
+  'billingAccountId' | 'tier' | 'organizationId' | 'status' | 'currentPeriodEnd' | 'cancelAtPeriodEnd' | 'priceLookupKey' | 'founderUntil' | 'pausedFrom' | 'pauseResumesAt'
 >;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
@@ -22,6 +22,8 @@ function mirrored(sub: Mirrored): JsonObject {
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     priceLookupKey: sub.priceLookupKey,
     founderUntil: iso(sub.founderUntil),
+    // MUT-532: present only while a pause is set, so rows from before pauses existed read the same.
+    ...(sub.pausedFrom || sub.pauseResumesAt ? { pausedFrom: iso(sub.pausedFrom), pauseResumesAt: iso(sub.pauseResumesAt) } : {}),
   };
 }
 

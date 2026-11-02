@@ -77,5 +77,5 @@ function resolve({ organization, malafatConnected }: ProfileForBilling, facts: B
 
 /** The wire shape on `/v1/me` (BillingEntitlementSchema): ISO timestamps. */
 export function serializeEntitlement(entitlement: Entitlement) {
-  return { state: entitlement.state, source: entitlement.source, tier: entitlement.tier, until: entitlement.until?.toISOString() ?? null };
+  return { state: entitlement.state, source: entitlement.source, tier: entitlement.tier, until: entitlement.until?.toISOString() ?? null, paused: entitlement.paused === true };
 }

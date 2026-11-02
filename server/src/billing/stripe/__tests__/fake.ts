@@ -4,7 +4,7 @@ import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
-import type { LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
+import type { EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 
 /**
@@ -234,7 +234,13 @@ export class FakeCheckoutGateway implements CheckoutGateway {
 
   /** The launch coupon as D1 shapes it: 50% once on the Freelancer product, redeemable until `redeemBy`. */
   withLaunchCoupon(redeemBy: Date, id = 'mtb3a_launch_yearly_2026', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'once', redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'once', durationInMonths: null, redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    return this;
+  }
+
+  /** MUT-532 (D11): the stay coupon: 50% off the next 2 invoices on the Freelancer product. */
+  withStayCoupon(id = 'mtb3a_stay_monthly_50', over: Partial<CouponFact> = {}): this {
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'repeating', durationInMonths: 2, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
     return this;
   }
 
@@ -356,9 +362,83 @@ export class FakePlanGateway implements PlanGateway {
 
   /** A live monthly list-price subscription, as Stripe would hold it. */
   withPlan(id: string, customer: string, over: Partial<LivePlan> = {}, paidInvoices = 2): this {
-    this.plans.set(id, { id, customer, status: 'active', itemId: `si_${id}`, lookupKey: 'freelancer_list_monthly_ils', cancelAtPeriodEnd: false, currentPeriodEnd: null, discounted: false, paused: false, clockNow: null, ...over });
+    this.plans.set(id, {
+      id,
+      customer,
+      status: 'active',
+      itemId: `si_${id}`,
+      lookupKey: 'freelancer_list_monthly_ils',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+      discounted: false,
+      paused: false,
+      clockNow: null,
+      billingCycleAnchor: new Date('2026-10-02T09:00:00Z'),
+      price: { id: 'price_ils_m', currency: 'ils', productId: FAKE_FREELANCER_PRODUCT, unitAmount: 2900, taxBehavior: 'exclusive' },
+      couponIds: [],
+      pause: null,
+      automaticTax: true,
+      managedBySchedule: false,
+      ...over,
+    });
     this.paid.set(id, paidInvoices);
     return this;
+  }
+
+  /** MUT-532: each pause, end, cancel, keep and coupon write, in order. */
+  readonly writes: string[] = [];
+  /** MUT-532 (D7): what Resume now's charge does. */
+  resumeOutcome: EndPauseResult = { outcome: 'charged' };
+  private applyThenFail = false;
+  private writeFailure: StripeGatewayError | null = null;
+
+  /** R3: the next write is made in Stripe, but its answer times out. */
+  failNextAfterApplying(): void {
+    this.applyThenFail = true;
+  }
+
+  /** The next write fails before Stripe makes it: a refusal with a code, else a timeout. */
+  failNextWrite(code: string | null = null): void {
+    this.writeFailure = new StripeGatewayError({ code, type: code === null ? 'StripeConnectionError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null });
+  }
+
+  private written(write: string, apply: (plan: LivePlan) => void, subscriptionId: string): LivePlan {
+    this.calls.push(write);
+    this.failing();
+    const refused = this.writeFailure;
+    this.writeFailure = null;
+    if (refused) throw refused;
+    const plan = this.plans.get(subscriptionId);
+    if (!plan) throw new StripeGatewayError({ code: 'resource_missing', type: 'StripeInvalidRequestError', requestId: 'req_fake', transient: false });
+    apply(plan);
+    this.writes.push(write);
+    if (this.applyThenFail) {
+      this.applyThenFail = false;
+      throw new StripeGatewayError({ code: null, type: 'StripeConnectionError', requestId: null, transient: true });
+    }
+    return plan;
+  }
+
+  async schedulePause(input: { subscriptionId: string; from: Date; resumesAt: Date; months: number }): Promise<void> {
+    this.written(`pause:${input.subscriptionId}:${input.months}:${input.from.toISOString()}:${input.resumesAt.toISOString()}`, (plan) => Object.assign(plan, { paused: true, pause: { from: input.from, resumesAt: input.resumesAt } }), input.subscriptionId);
+  }
+
+  async endPause(input: { subscriptionId: string; mode: 'undo' | 'now' }): Promise<EndPauseResult> {
+    this.written(`end-pause:${input.subscriptionId}:${input.mode}`, (plan) => Object.assign(plan, { paused: false, pause: null }), input.subscriptionId);
+    return input.mode === 'undo' ? { outcome: 'undone' } : this.resumeOutcome;
+  }
+
+  async cancelAtPeriodEnd(input: { subscriptionId: string; feedback: string; comment: string | null }): Promise<{ endsOn: Date | null }> {
+    const plan = this.written(`cancel:${input.subscriptionId}:${input.feedback}:${input.comment ?? ''}`, (p) => Object.assign(p, { cancelAtPeriodEnd: true }), input.subscriptionId);
+    return { endsOn: plan.currentPeriodEnd };
+  }
+
+  async keepPlan(subscriptionId: string): Promise<void> {
+    this.written(`keep:${subscriptionId}`, (plan) => Object.assign(plan, { cancelAtPeriodEnd: false }), subscriptionId);
+  }
+
+  async applyCoupon(subscriptionId: string, couponId: string): Promise<void> {
+    this.written(`coupon:${subscriptionId}:${couponId}`, (plan) => Object.assign(plan, { discounted: true, couponIds: [...plan.couponIds, couponId] }), subscriptionId);
   }
 
   failNext(code: string | null = null): void {

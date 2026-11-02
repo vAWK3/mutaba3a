@@ -8,10 +8,14 @@ import { CHECKOUT_SESSION_TTL_SECONDS, type BillingCurrency, type BillingInterva
  * here is an amount or a date. Pure: the route reads the coupon and the person's subscriptions; this decides.
  */
 
+/** MUT-532: `launch` is MUT-525's offer at Checkout; `stay` is the cancel flow's (D11). The file's default is `launch`. */
+export type OfferKind = 'launch' | 'stay';
+
 export interface OfferEntry {
   /** A stable campaign name, for analytics and the subscription's `mutaba3a_offer` metadata. */
   id: string;
   couponId: string;
+  kind: OfferKind;
   interval: BillingInterval;
   tier: 'freelancer';
 }
@@ -23,6 +27,8 @@ export interface CouponFact {
   percentOff: number | null;
   amountOff: number | null;
   duration: string;
+  /** MUT-532: how many invoices a `repeating` coupon discounts; null for any other duration. */
+  durationInMonths: number | null;
   redeemBy: Date | null;
   /** Null: the coupon applies to any product. */
   appliesToProducts: string[] | null;
@@ -53,12 +59,17 @@ export function parseOffers(raw: unknown): OfferEntry[] {
       if (!ok(entry[name])) throw new Error(`offers.json: offer ${i} ${name} ${rule}`);
       return entry[name] as string;
     };
-    return {
+    const kind = (entry['kind'] === undefined ? 'launch' : field('kind', (v) => v === 'launch' || v === 'stay', 'must be "launch" or "stay"')) as OfferKind;
+    const offer = {
       id: field('id', (v) => typeof v === 'string' && OFFER_ID.test(v), 'must be lower-case letters, digits and dashes'),
       couponId: field('couponId', (v) => typeof v === 'string' && COUPON_ID.test(v), 'must be a Stripe coupon id'),
+      kind,
       interval: field('interval', (v) => v === 'month' || v === 'year', 'must be "month" or "year"') as BillingInterval,
       tier: field('tier', (v) => v === 'freelancer', 'must be "freelancer"') as 'freelancer',
     };
+    // MUT-532 (D10/D11): a stay coupon on a yearly plan would halve a renewal; it is monthly only.
+    if (kind === 'stay' && offer.interval !== 'month') throw new Error(`offers.json: offer ${i} interval must be "month" for a stay offer`);
+    return offer;
   });
   if (new Set(entries.map((e) => e.id)).size !== entries.length) throw new Error('offers.json: an offer id is a duplicate');
   return entries;
@@ -68,12 +79,25 @@ export function parseOffers(raw: unknown): OfferEntry[] {
 export const OFFERS: readonly OfferEntry[] = parseOffers(offersFile);
 
 /**
- * R6: a non-production server may name its own coupon (BILLING_OFFER_COUPON_ID, refused on a live key environment),
- * so each QA run owns its coupon. It replaces the list with one yearly entry under the first offer's name.
+ * R6: a non-production server may name its own coupons (BILLING_OFFER_COUPON_ID, MUT-532's BILLING_STAY_COUPON_ID;
+ * both refused on a live key environment), so each QA run owns its coupons. Each replaces its kind's entries with one,
+ * under that kind's first name: a yearly launch offer, a monthly stay offer.
  */
-export function offersFor(couponOverride: string | undefined): readonly OfferEntry[] {
-  if (!couponOverride) return OFFERS;
-  return [{ id: OFFERS[0]?.id ?? 'launch-2026', couponId: couponOverride, interval: 'year', tier: 'freelancer' }];
+export function offersFor(couponOverride: string | undefined, stayCouponOverride?: string): readonly OfferEntry[] {
+  if (!couponOverride && !stayCouponOverride) return OFFERS;
+  const nameOf = (kind: OfferKind, fallback: string) => OFFERS.find((e) => e.kind === kind)?.id ?? fallback;
+  const launch: OfferEntry[] = couponOverride
+    ? [{ id: nameOf('launch', 'launch-2026'), couponId: couponOverride, kind: 'launch', interval: 'year', tier: 'freelancer' }]
+    : OFFERS.filter((e) => e.kind === 'launch');
+  const stay: OfferEntry[] = stayCouponOverride
+    ? [{ id: nameOf('stay', 'stay-2026'), couponId: stayCouponOverride, kind: 'stay', interval: 'month', tier: 'freelancer' }]
+    : OFFERS.filter((e) => e.kind === 'stay');
+  return [...launch, ...stay];
+}
+
+/** MUT-532 (D11): the cancel flow's stay offer entry, if the list has one. */
+export function stayEntryOf(entries: readonly OfferEntry[]): OfferEntry | null {
+  return entries.find((e) => e.kind === 'stay') ?? null;
 }
 
 /** Every product the catalog sells: the coupon must be restricted to these (D1, D3). */
@@ -104,7 +128,7 @@ export async function resolveOffer(
   freelancerProducts: ReadonlySet<string>,
   now: Date,
 ): Promise<Offer | null> {
-  for (const entry of entries.filter((e) => e.interval === interval)) {
+  for (const entry of entries.filter((e) => e.kind === 'launch' && e.interval === interval)) {
     const offer = offerFromCoupon(entry, await readCoupon(entry.couponId), freelancerProducts, now);
     if (offer) return offer;
   }

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { BillingEntitlement, BillingOffer, BillingOverview } from '../../api/client';
 import {
   billingViewOf,
+  canCancelOf,
+  canKeepOf,
   checkoutRouteOf,
   currencyOfCountry,
   daysLeft,
@@ -9,6 +11,7 @@ import {
   firstChargeOf,
   isConfirmed,
   isSellable,
+  monthPriceOf,
   offerAnalyticsName,
   offerFor,
   profilesListOf,
@@ -324,5 +327,61 @@ describe('yearlySwitchLineOf (MUT-531 AC2)', () => {
     expect(yearlySwitchLineOf(overview({ subscription: sub({ status: 'past_due' }), yearlySwitch: line }))).toBeNull();
     expect(yearlySwitchLineOf(overview({ subscription: sub(), yearlySwitch: null }))).toBeNull();
     expect(yearlySwitchLineOf(overview({ subscription: null, yearlySwitch: line }))).toBeNull();
+  });
+});
+
+describe('MUT-532: the pause panels and the plan’s own changes (D6–D8)', () => {
+  const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}) => ({
+    tier: 'FREELANCER' as const,
+    status: 'active',
+    interval: 'month' as const,
+    currency: 'ILS',
+    currentPeriodEnd: iso(12),
+    cancelAtPeriodEnd: false,
+    renewsAtListPrice: true,
+    offer: null,
+    pause: null,
+    ...over,
+  });
+  const view = (over: Partial<NonNullable<BillingOverview['subscription']>>) => billingViewOf(overview({ subscription: sub(over) }), [], NOW);
+
+  it('a pause still to come is booked; a running one is paused until it restarts; after it, active again', () => {
+    expect(view({ pause: { from: iso(12), until: iso(72) } }).panel).toEqual({ kind: 'pauseScheduled', from: iso(12), until: iso(72) });
+    expect(view({ pause: { from: iso(-1), until: iso(40) } }).panel).toEqual({ kind: 'paused', until: iso(40) });
+    expect(view({ pause: { from: iso(-1), until: null } }).panel).toEqual({ kind: 'paused', until: null });
+    expect(view({ pause: { from: iso(-40), until: iso(-1) } }).panel).toMatchObject({ kind: 'active' });
+    expect(view({ pause: { from: iso(-1), until: iso(40) } }).action).toBe('manage');
+  });
+
+  it('a cancel wins over a pause: the plan ends', () => {
+    expect(view({ cancelAtPeriodEnd: true, pause: { from: iso(-1), until: iso(40) } }).panel).toMatchObject({ kind: 'ending' });
+  });
+
+  it('Cancel plan: a list-price plan that renews and isn\'t pausing; never a founder price', () => {
+    expect(canCancelOf({ subscription: sub() })).toBe(true);
+    expect(canCancelOf({ subscription: sub({ status: 'trialing' }) })).toBe(true);
+    expect(canCancelOf({ subscription: sub({ renewsAtListPrice: false }) })).toBe(false);
+    expect(canCancelOf({ subscription: sub({ cancelAtPeriodEnd: true }) })).toBe(false);
+    expect(canCancelOf({ subscription: sub({ pause: { from: iso(3), until: iso(40) } }) })).toBe(false);
+    expect(canCancelOf({ subscription: sub({ status: 'past_due' }) })).toBe(false);
+    expect(canCancelOf({ subscription: null })).toBe(false);
+  });
+
+  it('Keep my plan: a list-price plan that is cancelling', () => {
+    expect(canKeepOf({ subscription: sub({ cancelAtPeriodEnd: true }) })).toBe(true);
+    expect(canKeepOf({ subscription: sub() })).toBe(false);
+    expect(canKeepOf({ subscription: sub({ cancelAtPeriodEnd: true, renewsAtListPrice: false }) })).toBe(false);
+  });
+
+  it('Resume now charges the catalog\'s month in the plan\'s currency', () => {
+    expect(monthPriceOf(overview({ subscription: sub() }))).toEqual({ minor: 3900, currency: 'ILS' });
+    expect(monthPriceOf(overview({ subscription: sub({ currency: 'USD' }) }))).toEqual({ minor: 1000, currency: 'USD' });
+    expect(monthPriceOf(overview({ subscription: sub(), catalog: { ILS: null, USD: null } }))).toBeNull();
+  });
+
+  it('no switch-to-yearly line while a pause is set', () => {
+    const line = { currency: 'ILS' as const, savings: 7800 };
+    expect(yearlySwitchLineOf({ yearlySwitch: line, subscription: sub() })).toEqual(line);
+    expect(yearlySwitchLineOf({ yearlySwitch: line, subscription: sub({ pause: { from: iso(3), until: iso(40) } }) })).toBeNull();
   });
 });

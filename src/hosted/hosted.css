@@ -1196,6 +1196,10 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* MUT-531: the switch line sits under Manage billing, a separate offer, never a second primary. */
 .hp-billing-switch { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; padding-block-start: var(--space-3); border-block-start: 1px solid var(--border); }
 .hp-billing-switch-due { font-weight: 600; }
+/* MUT-532: the plan's own changes (Don't pause, Resume now, Keep my plan, Cancel plan), under Manage billing. */
+.hp-billing-changes { display: flex; flex-direction: column; gap: var(--space-2); align-items: stretch; }
+.hp-billing-changes:empty { display: none; }
+.hp-billing-cancel-link { display: inline-flex; align-items: center; min-block-size: 44px; color: var(--text-secondary); }
 .hp-billing .btn { min-block-size: 44px; }
 .hp-billing .select { min-block-size: 44px; }
 /* The column's gap sets the rhythm; a banner's own margin would add to it. */

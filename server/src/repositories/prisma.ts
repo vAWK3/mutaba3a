@@ -18,6 +18,7 @@ import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange, resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { applyTrialPromptAction, resolveTrialPrompt } from '../billing/trial-prompt.js';
+import { pauseCounts } from '../billing/retention.js';
 import { applyPasskeyNotNow, resolvePasskeyPrompt } from '../auth/passkey-prompt.js';
 import type { TermsLocale } from '../legal.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
@@ -2691,7 +2692,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     saveSubscription: async (input) => {
       const { stripeCustomerId, at, audit, ...given } = input;
-      const fields = { ...given, offerId: given.offerId ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null };
       const attempt = () =>
         translate(() =>
           this.prisma.$transaction(async (tx) => {
@@ -2731,6 +2732,32 @@ export class PrismaLedgerStore implements LedgerStore {
       });
     },
     pruneStripeEvents: async (before) => (await this.prisma.stripeEvent.deleteMany({ where: { receivedAt: { lt: before } } })).count,
+    retentionEventsOf: async (userId) => this.prisma.billingRetentionEvent.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+    claimRetentionEvent: async (input) => {
+      const { at, noPauseSince, ...fields } = input;
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            if (fields.kind === 'PAUSE' && noPauseSince) {
+              // R6: two tabs pausing at once queue here; the second sees the first's claim and is refused.
+              await tx.$queryRaw`SELECT id FROM users WHERE id = ${fields.userId}::uuid FOR UPDATE`;
+              const pauses = await tx.billingRetentionEvent.findMany({ where: { userId: fields.userId, kind: 'PAUSE', startsAt: { gt: noPauseSince } } });
+              if (pauses.some((event) => pauseCounts(event, noPauseSince))) throw new StateConflict('billing_retention_event', 'TAKEN');
+            }
+            return tx.billingRetentionEvent.create({ data: { ...fields, createdAt: at } });
+          }),
+        );
+      } catch (err) {
+        // The one-stay-offer-per-person index (rule 2): a double press or a retry never claims it twice.
+        if (err instanceof UniqueViolation) throw new StateConflict('billing_retention_event', 'TAKEN');
+        throw err;
+      }
+    },
+    releaseRetentionEvent: async (id) => (await this.prisma.billingRetentionEvent.deleteMany({ where: { id } })).count > 0,
+    endRetentionEventEarly: async (id, at) => {
+      const { count } = await this.prisma.billingRetentionEvent.updateMany({ where: { id }, data: { endedEarlyAt: at } });
+      return count > 0 ? this.prisma.billingRetentionEvent.findUnique({ where: { id } }) : null;
+    },
   };
 
   /**
@@ -2813,6 +2840,7 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.inboxEntry.deleteMany({ where: { userId } });
         await tx.userIdempotencyKey.deleteMany({ where: { userId } });
         await tx.entitlementGrant.deleteMany({ where: { userId } });
+        await tx.billingRetentionEvent.deleteMany({ where: { userId } });
         await tx.billingSubscription.deleteMany({ where: { billingAccount: { userId } } });
         await tx.billingAccount.deleteMany({ where: { userId } });
         await tx.signupReview.deleteMany({ where: { userId } });

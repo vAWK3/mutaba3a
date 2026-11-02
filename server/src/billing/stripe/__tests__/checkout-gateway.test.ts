@@ -261,6 +261,7 @@ describe('CheckoutGateway coupons (MUT-525 D6, R6, R7)', () => {
       percentOff: 50,
       amountOff: null,
       duration: 'once',
+      durationInMonths: null,
       redeemBy: new Date(1801000000 * 1000),
       appliesToProducts: ['prod_FREELANCER'],
     });

@@ -6,7 +6,7 @@ import { StateConflict } from '../../repositories/memory.js';
 import { BUSINESS_TAX_NUMBER_KEY } from '../checkout.js';
 import type { CheckoutGateway } from './checkout-gateway.js';
 import { StripeGatewayError, type Fetched, type StripeGateway } from './gateway.js';
-import { customerIdOf, mirrorOf, stateOf, subscriptionIdOfInvoice, type MirrorError, type MirrorNote } from './mirror.js';
+import { customerIdOf, mirrorOf, pauseOf, stateOf, subscriptionIdOfInvoice, type MirrorError, type MirrorNote } from './mirror.js';
 
 /**
  * MUT-360 (§2.3, ADR-165): Stripe → billing_accounts / billing_subscriptions. One path, `syncSubscription`, serves
@@ -156,6 +156,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     const stored = await store.billing.getSubscription(sub.id);
     if (!stored) return { subscriptionId: sub.id, outcome: 'error', reachesNobody: true };
     const state = stateOf(sub);
+    const pause = pauseOf(sub);
     const payer = (await store.billing.getAccount(stripeCustomerId))?.userId ?? null;
     const { profileIds } = await reachedProfiles(payer, stored.organizationId, [], null);
     const { outcome } = await store.billing.saveSubscription({
@@ -171,6 +172,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       priceLookupKey: stored.priceLookupKey,
       founderUntil: stored.founderUntil,
       offerId: stored.offerId,
+      // MUT-532: a pause is state, like the status: never frozen out with the tier.
+      pausedFrom: pause.pausedFrom,
+      pauseResumesAt: pause.pauseResumesAt,
       stripeUpdatedAt: fetchedAt,
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },

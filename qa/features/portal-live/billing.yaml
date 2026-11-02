@@ -106,7 +106,7 @@ features:
       - In the last 3 days it shows again ("بقي يومان من تجربتك المجانية") with no way to hide it
       - Once a card is on file the banner is gone (AC3)
   - id: manage
-    title: Manage billing opens Stripe's Customer Portal; cancelling keeps the plan until the period ends
+    title: Manage billing opens Stripe's Customer Portal for the card and invoices; cancelling is MTB3A's own
     tier: core
     paths:
       - server/src/billing/entitlement.ts
@@ -114,11 +114,11 @@ features:
     steps:
       - Sign in as a person with a paid monthly subscription and open Billing
       - Press Manage billing
-      - In Stripe's portal, cancel the plan and return to Mutaba3a
+      - In Stripe's portal, look for a way to cancel, then return to MTB3A
     expect:
       - The drawer shows Active and the renewal date before, and Stripe's Customer Portal opens on Manage billing (AC3)
-      - Back in the portal (?portal=returned) the drawer refetches until the webhook lands, then says "Your plan ends on <date>" with the Ending chip
-      - Access stays until then; /v1/me still reports the profile ACTIVE, paid by Stripe (AC3)
+      - "Stripe's portal offers no cancel (MUT-532 D8: off in its configuration); the note under Manage billing reads \"Change your card or see invoices, on Stripe's page (in English).\""
+      - Back in the portal (?portal=returned) the plan is still Active; /v1/me still reports the profile ACTIVE, paid by Stripe
   - id: manage-ended
     title: After the cancelled period ends the account is read-only and Subscribe comes back
     tier: secondary
@@ -254,3 +254,81 @@ features:
       - Open Billing
     expect:
       - Billing shows Active and Manage billing with no switch line, and GET /v1/billing/yearly-switch answers 409 SWITCH_NOT_AVAILABLE (TOO_EARLY)
+  # MUT-532 (ADR-240): pause instead of cancel, the stay offer and MTB3A's own cancel flow. A pause runs on the server's
+  # real clock while Stripe runs on a test clock, so the pause flows start a subscription whose paid month ends a
+  # couple of minutes from now (payingUntilSoon). The stay coupon is this run's own (BILLING_STAY_COUPON_ID).
+  - id: pause
+    title: Pause instead of cancelling - booked from the paid month's end, read-only while it runs, back on its own
+    tier: core
+    paths:
+      - src/hosted/components/BillingCancelFlow.tsx
+      - src/hosted/components/useCancelFlow.ts
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/data/trialPrompt.ts
+      - server/src/billing/entitlement.ts
+      - server/src/billing/gate.ts
+      - server/src/billing/stripe/mirror.ts
+      - server/src/billing/stripe/sync.ts
+      - server/src/routes/billing-plan.ts
+      - server/src/billing/retention.ts
+      - server/src/billing/stripe/plan-gateway.ts
+    steps:
+      - A monthly subscriber whose paid month ends in two minutes opens Billing and presses Cancel plan
+      - Pick "I don't use it enough" and press Continue
+      - On Pause instead of cancelling?, pick 2 months and press Pause my plan
+      - The paid month ends (the sandbox clock passes it, and the real one too)
+      - Open the profile, try to add an expense, and download the records
+      - Two months on, Stripe restarts billing on its own
+    expect:
+      - The step offers 1, 2 or 3 months, each with its restart date, and says the pause starts when the paid month ends and is once a year
+      - Billing then says "Your plan pauses on <date>" with the Pause booked chip and Don't pause; Stripe holds pause_collection void until an hour before the restart
+      - Once the month ends Stripe voids the invoice (₪0), Billing says "Paused until <date>", and the profile's banner says the plan is paused until then, with Resume now and Download, never Subscribe
+      - Adding is refused (402, paused); the records export still answers; nothing is LOCKED
+      - At the restart Stripe charges ₪29.00, the pause is gone and the profile is Active again
+  - id: pause-resume-now
+    title: Resume now during a pause - a month charged today, writable again
+    tier: secondary
+    paths:
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/components/InPlaceConfirm.tsx
+    steps:
+      - A monthly subscriber has paused for a month, and the pause is running
+      - Open Billing and press Resume now
+      - Read what it charges today and press Resume now again
+    expect:
+      - The confirm says "You pay ₪29.00 today, and your plan renews monthly from today."
+      - Stripe charges ₪29.00 today as its own invoice, the pause is gone and the plan renews monthly from today
+      - Billing shows the plan Active and adding works again
+  - id: pause-once-a-year
+    title: A second Cancel within 12 months of a pause offers no pause
+    tier: secondary
+    steps:
+      - A monthly subscriber paused, and resumed
+      - Open Billing, press Cancel plan, pick a reason and press Continue
+    expect:
+      - The next step is the stay offer, not the pause; GET /v1/billing/retention answers pause null
+  - id: stay-offer
+    title: The stay offer - half price for 2 months, once per person ever
+    tier: core
+    steps:
+      - A monthly subscriber opens Billing and presses Cancel plan
+      - Pick "It costs too much", Continue, then No, keep cancelling on the pause
+      - On the stay offer press Keep my plan at ₪14.50
+      - The next month is invoiced
+      - Press Cancel plan again, pick a reason, Continue, then No, keep cancelling
+    expect:
+      - The offer reads "Stay with 50% off for 2 months" and "You pay ₪14.50 a month instead of ₪29.00, then ₪29.00 a month again"
+      - Billing says "Done. Your next 2 months are ₪14.50 each."; Stripe holds this run's stay coupon on the plan
+      - The next invoice is ₪14.50
+      - The second time there is no stay offer, only Confirm cancel (rule 2)
+  - id: cancel-reason
+    title: Cancel with a reason - the plan stays on to the period end, and Keep my plan takes it back
+    tier: core
+    steps:
+      - A monthly subscriber opens Billing and presses Cancel plan
+      - Pick "I'm moving to another tool" and write a comment, Continue
+      - No, keep cancelling on the pause, then No, cancel my plan on the stay offer
+      - Press Keep my plan
+    expect:
+      - Billing says "Your plan ends on <date>" with the Ending chip; Stripe holds cancel_at_period_end with feedback switched_service and the comment
+      - Keep my plan brings back "Freelancer, renews <date>"; Stripe no longer cancels

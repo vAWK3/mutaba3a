@@ -34,9 +34,43 @@ describe('mirrorOf (MUT-360)', () => {
         priceLookupKey: 'freelancer_founder_monthly_ils',
         founderUntil: null,
         offerId: null,
+        pausedFrom: null,
+        pauseResumesAt: null,
         currency: 'ILS',
       },
       notes: [],
+    });
+  });
+
+  describe('a pause (MUT-532 §2.3, R4: pause_collection keeps the status active)', () => {
+    const resumesAt = 1801571149;
+    const pausedSub = (pause: Record<string, unknown> | null, metadata: Record<string, string> = {}) => subscription({ pause_collection: pause, metadata });
+
+    it('reads MTB3A\'s own pause: from the metadata, until Stripe\'s resumes_at', () => {
+      expect(mirrorOf(pausedSub({ behavior: 'void', resumes_at: resumesAt }, { mutaba3a_pause_from: '2026-12-02T13:25:49.000Z', mutaba3a_pause_months: '2' }), new Map())).toEqual({
+        ok: expect.objectContaining({ status: 'active', pausedFrom: new Date('2026-12-02T13:25:49.000Z'), pauseResumesAt: new Date(resumesAt * 1000) }),
+        notes: [],
+      });
+    });
+
+    it('ignores the metadata Stripe leaves behind once it resumed', () => {
+      expect(mirrorOf(pausedSub(null, { mutaba3a_pause_from: '2026-12-02T13:25:49.000Z' }), new Map())).toMatchObject({ ok: { pausedFrom: null, pauseResumesAt: null }, notes: [] });
+    });
+
+    it('reads a pause set outside MTB3A as paused from the start, and says so (never silently ACTIVE)', () => {
+      for (const metadata of [{}, { mutaba3a_pause_from: 'soon' }, { mutaba3a_pause_from: new Date((resumesAt + 60) * 1000).toISOString() }]) {
+        expect(mirrorOf(pausedSub({ behavior: 'void', resumes_at: resumesAt }, metadata), new Map())).toEqual({
+          ok: expect.objectContaining({ pausedFrom: new Date(0), pauseResumesAt: new Date(resumesAt * 1000) }),
+          notes: ['PAUSE_NOT_OURS'],
+        });
+      }
+    });
+
+    it('reads a pause with no resume date as paused until someone resumes it', () => {
+      expect(mirrorOf(pausedSub({ behavior: 'keep_as_draft', resumes_at: null }, { mutaba3a_pause_from: '2026-12-02T13:25:49.000Z' }), new Map())).toEqual({
+        ok: expect.objectContaining({ pausedFrom: new Date('2026-12-02T13:25:49.000Z'), pauseResumesAt: null }),
+        notes: ['PAUSE_NOT_OURS'],
+      });
     });
   });
 

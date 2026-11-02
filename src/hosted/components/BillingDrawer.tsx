@@ -8,10 +8,23 @@ import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { Language } from '../../lib/i18n/types';
 import { trackPortal } from '../analytics/portalAnalytics';
-import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type YearlySwitchResult } from '../api/client';
-import { billingQuery, billingReturnPath, CONFIRM_POLL_LIMIT_MS, CONFIRM_POLL_MS, useOpenBillingPortal, useStartCheckout } from '../data/billingQueries';
+import { ApiError, apiErrorReason, type BillingOverview, type BillingYearlySwitch, type PauseEndResult, type YearlySwitchResult } from '../api/client';
+import {
+  assertStripeUrl,
+  billingQuery,
+  billingReturnPath,
+  CONFIRM_POLL_LIMIT_MS,
+  CONFIRM_POLL_MS,
+  stripeNavigation,
+  useEndPause,
+  useKeepPlan,
+  useOpenBillingPortal,
+  useStartCheckout,
+} from '../data/billingQueries';
 import {
   billingViewOf,
+  canCancelOf,
+  canKeepOf,
   checkoutRouteOf,
   currencyOfCountry,
   daysLeft,
@@ -19,6 +32,7 @@ import {
   firstChargeOf,
   isConfirmed,
   isSellable,
+  monthPriceOf,
   offerAnalyticsName,
   offerDay,
   offerFor,
@@ -42,7 +56,10 @@ import { Amount, Banner } from './billingParts';
 import { formatMinor, sentence } from './billingText';
 import { SwitchBody, SwitchFooter } from './BillingSwitchBody';
 import { useSwitchStep } from './useSwitchStep';
+import { CancelBody, CancelFooter } from './BillingCancelFlow';
+import { useCancelFlow, type CancelOutcome } from './useCancelFlow';
 import { Drawer } from './Drawer';
+import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { OfferTopLine } from './OfferTopLine';
 import { RadioCards } from './RadioCards';
 
@@ -55,7 +72,7 @@ import { RadioCards } from './RadioCards';
  * and skippable; adding one goes to Subscribe, which carries the rest of the trial into Stripe (ADR-170 R-D2).
  */
 
-export type BillingStep = 'subscribe' | 'welcome' | 'switch';
+export type BillingStep = 'subscribe' | 'welcome' | 'switch' | 'cancel';
 
 /** ADR-160 D3: the free trial's length, for the welcome's "has started" wording (the server's TRIAL_DAYS). */
 const TRIAL_LENGTH_DAYS = 14;
@@ -66,13 +83,15 @@ export interface BillingDrawerProps {
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
   /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
-  onStep: (step: 'subscribe' | 'switch' | undefined, replace?: boolean) => void;
+  onStep: (step: 'subscribe' | 'switch' | 'cancel' | undefined, replace?: boolean) => void;
   onClose: () => void;
 }
 
 type Tone = 'mint' | 'butter' | 'rose' | 'lavender';
 type Phase = 'confirming' | 'done' | 'slow' | null;
 type Failure = 'needsHelp' | 'alreadySubscribed' | 'tooMany' | 'changed' | 'sessionFailed' | null;
+/** MUT-532: the change the status view waits for the webhook to mirror after a press. */
+type Awaiting = 'pause' | 'noPause' | 'cancel' | 'noCancel';
 
 /** One drawer frame for every state: switching loading → content, or status → Subscribe, swaps its body, never the frame. */
 export function BillingDrawer({ step, checkout, portalReturned = false, onStep, onClose }: BillingDrawerProps) {
@@ -96,12 +115,40 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
     }, [onStep]),
   );
   usePollBilling(switched !== null && billing.data?.subscription?.interval !== 'year', useCallback(() => setSwitched((s) => s), []));
+  // MUT-532: the cancel flow is its own step too; what it ended in is said on the status view, which waits for the
+  // webhook to mirror the change (a pause, a cancel), like the switch.
+  const [outcome, setOutcome] = useState<CancelOutcome | null>(null);
+  const [awaiting, setAwaiting] = useState<Awaiting | null>(null);
+  const cancelling = step === 'cancel' && billing.data !== undefined;
+  const cancelFlow = useCancelFlow(
+    step === 'cancel',
+    useCallback(
+      (done: CancelOutcome) => {
+        setOutcome(done);
+        setAwaiting(done.kind === 'paused' ? 'pause' : done.kind === 'cancelled' ? 'cancel' : null);
+        onStep(undefined);
+      },
+      [onStep],
+    ),
+  );
+  // Render-time adjustment, not an effect (react-hooks v7): the poll ends once the mirror shows the change.
+  if (awaiting !== null && billing.data && mirrored(awaiting, billing.data)) setAwaiting(null);
+  usePollBilling(awaiting !== null, useCallback(() => setAwaiting(null), []));
   // Review: the step is on screen (loading included), so the shell's one offer is spent: closing it while billing
   // loads never has the shell open it again on this page.
   useEffect(() => {
     if (step === 'welcome') takeTrialWelcomeOffer();
   }, [step]);
-  const title = step === 'subscribe' ? t('hosted.billing.subscribe.title') : step === 'switch' ? t('hosted.billing.switch.title') : welcomeTitle ? t('hosted.billing.welcome.title') : t('hosted.billing.title');
+  const title =
+    step === 'subscribe'
+      ? t('hosted.billing.subscribe.title')
+      : step === 'switch'
+        ? t('hosted.billing.switch.title')
+        : step === 'cancel'
+          ? t('hosted.billing.cancel.action')
+          : welcomeTitle
+            ? t('hosted.billing.welcome.title')
+            : t('hosted.billing.title');
 
   let body;
   if (billing.isPending) {
@@ -128,10 +175,27 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
     body = <WelcomeBody welcome={welcome} />;
   } else if (switching) {
     body = <SwitchBody step={switchStep} />;
+  } else if (cancelling) {
+    body = <CancelBody flow={cancelFlow} onBack={() => onStep(undefined)} />;
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
   } else {
-    body = <StatusView billing={billing.data} phase={phase} cancelled={checkout === 'cancelled'} switched={switched} onSubscribe={() => onStep('subscribe')} onSwitch={() => onStep('switch')} />;
+    body = (
+      <StatusView
+        billing={billing.data}
+        phase={phase}
+        cancelled={checkout === 'cancelled'}
+        switched={switched}
+        outcome={outcome}
+        onSubscribe={() => onStep('subscribe')}
+        onSwitch={() => onStep('switch')}
+        onCancelPlan={() => {
+          setOutcome(null);
+          onStep('cancel');
+        }}
+        onAwait={setAwaiting}
+      />
+    );
   }
 
   return (
@@ -139,11 +203,36 @@ export function BillingDrawer({ step, checkout, portalReturned = false, onStep, 
       title={title}
       onClose={welcome.open ? welcome.skip : onClose}
       closeLabel={t('common.close')}
-      footer={welcome.open ? <WelcomeFooter welcome={welcome} /> : subscribing ? <SubscribeFooter form={subscribe} /> : switching ? <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} /> : undefined}
+      footer={
+        welcome.open ? (
+          <WelcomeFooter welcome={welcome} />
+        ) : subscribing ? (
+          <SubscribeFooter form={subscribe} />
+        ) : switching ? (
+          <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} />
+        ) : cancelling ? (
+          <CancelFooter flow={cancelFlow} />
+        ) : undefined
+      }
     >
       {body}
     </Drawer>
   );
+}
+
+/** MUT-532: the mirror shows what a press asked Stripe for. */
+function mirrored(awaiting: Awaiting, billing: BillingOverview): boolean {
+  const sub = billing.subscription;
+  switch (awaiting) {
+    case 'pause':
+      return Boolean(sub?.pause);
+    case 'noPause':
+      return !sub?.pause;
+    case 'cancel':
+      return sub?.cancelAtPeriodEnd === true;
+    case 'noCancel':
+      return sub?.cancelAtPeriodEnd !== true;
+  }
 }
 
 /**
@@ -197,15 +286,21 @@ function StatusView({
   phase,
   cancelled,
   switched,
+  outcome,
   onSubscribe,
   onSwitch,
+  onCancelPlan,
+  onAwait,
 }: {
   billing: BillingOverview;
   phase: Phase;
   cancelled: boolean;
   switched: YearlySwitchResult | null;
+  outcome: CancelOutcome | null;
   onSubscribe: () => void;
   onSwitch: () => void;
+  onCancelPlan: () => void;
+  onAwait: (awaiting: Awaiting) => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -251,6 +346,10 @@ function StatusView({
       {phase === 'slow' && <Banner tone="info" text={t('hosted.billing.states.slow')} live={false} />}
       {cancelled && phase === null && <Banner tone="info" text={t('hosted.billing.states.cancelled')} live={false} />}
       {switched && <SwitchedBanner result={switched} language={language} />}
+      {/* MUT-532 (§6): the stay offer says what the next months cost; a pause and a cancel show in the panel itself. */}
+      {outcome?.kind === 'stayed' && (
+        <Banner tone="ok" text={sentence(t, 'hosted.billing.stay.done', { price: <Amount minor={outcome.result.monthlyAmount} currency={outcome.result.currency} language={language} /> })} />
+      )}
 
       {phase === 'confirming' ? (
         <div className="hp-billing-status">
@@ -272,6 +371,8 @@ function StatusView({
 
       {/* MUT-531 (AC2): the switch line under Manage billing, from the 2nd paid invoice of a monthly list price. */}
       {settled && !switched && switchLine && <SwitchLine yearlySwitch={switchLine} language={language} onSwitch={onSwitch} />}
+      {/* MUT-532: the plan's own changes, in MTB3A: undo a pause or resume, take a cancel back, or cancel. */}
+      {settled && <PlanChanges billing={billing} panel={view.panel} onCancelPlan={onCancelPlan} onAwait={onAwait} />}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
       {list.length > 0 && <ProfilesList profiles={list} />}
       {coOwnsOthers && <p className="hp-billing-fine">{t('hosted.billing.coOwnedNote')}</p>}
@@ -373,6 +474,20 @@ function panelCopy(
         headline: k('headline.ending', { date: day(panel.endsAt) }),
         context: k('context.ending'),
       };
+    case 'pauseScheduled':
+      return {
+        chip: k('chip.pausing'),
+        tone: 'butter',
+        headline: k('headline.pauseScheduled', { date: day(panel.from) }),
+        context: panel.until ? k('context.pauseScheduled', { until: day(panel.until) }) : null,
+      };
+    case 'paused':
+      return {
+        chip: k('chip.paused'),
+        tone: 'lavender',
+        headline: k('headline.paused', { date: day(panel.until) }),
+        context: k('context.paused', { date: day(panel.until) }),
+      };
     case 'grace':
       return {
         chip: k('chip.grace'),
@@ -454,6 +569,90 @@ function SwitchLine({ yearlySwitch, language, onSwitch }: { yearlySwitch: Billin
       </div>
     </div>
   );
+}
+
+/**
+ * MUT-532 (D7, D8): Don't pause before a pause starts, Resume now while it runs (a confirm says what it charges
+ * today), Keep my plan on a plan that ends, and Cancel plan, which opens the cancel flow.
+ */
+function PlanChanges({ billing, panel, onCancelPlan, onAwait }: { billing: BillingOverview; panel: BillingPanel; onCancelPlan: () => void; onAwait: (awaiting: Awaiting) => void }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const endPause = useEndPause();
+  const keep = useKeepPlan();
+  const { open, ask, cancel, close, triggerRef } = useConfirmStep();
+  const failure = failureOf(endPause.error ?? keep.error);
+  const approveUrl = approveUrlOf(endPause.data);
+  const month = monthPriceOf(billing);
+  const ended = (result: PauseEndResult) => {
+    close();
+    // A charge that went through, or failed and is retried, both end the pause; one waiting on the bank shows its page.
+    if (result.payment !== 'needs-action') onAwait('noPause');
+  };
+  return (
+    <div className="hp-billing-changes">
+      {failure && <FailureBanner failure={failure} />}
+      {approveUrl && (
+        <div>
+          <Button variant="secondary" onClick={() => stripeNavigation.assign(approveUrl)}>
+            {t('hosted.billing.switch.approve')}
+          </Button>
+        </div>
+      )}
+      {panel.kind === 'pauseScheduled' && (
+        <div>
+          <Button variant="secondary" onClick={() => endPause.mutate(undefined, { onSuccess: ended })} isLoading={endPause.isPending} keepLabelWhileLoading>
+            {t('hosted.billing.action.dontPause')}
+          </Button>
+        </div>
+      )}
+      {panel.kind === 'paused' &&
+        (open && month ? (
+          <InPlaceConfirm
+            variant="primary"
+            message={sentence(t, 'hosted.billing.pause.resumeConfirm', { month: <Amount minor={month.minor} currency={month.currency} language={language} /> })}
+            cancelLabel={t('hosted.billing.switch.notNow')}
+            confirmLabel={t('hosted.billing.action.resumeNow')}
+            busy={endPause.isPending}
+            cancelWhileBusy={false}
+            onCancel={cancel}
+            onConfirm={() => endPause.mutate(undefined, { onSuccess: ended })}
+          />
+        ) : (
+          <div>
+            <Button ref={triggerRef} onClick={ask}>
+              {t('hosted.billing.action.resumeNow')}
+            </Button>
+          </div>
+        ))}
+      {canKeepOf(billing) && (
+        <div>
+          <Button variant="secondary" onClick={() => keep.mutate(undefined, { onSuccess: () => onAwait('noCancel') })} isLoading={keep.isPending} keepLabelWhileLoading>
+            {t('hosted.billing.cancel.keep')}
+          </Button>
+        </div>
+      )}
+      {canCancelOf(billing) && (
+        <div>
+          <button type="button" className="hp-link-button hp-billing-cancel-link" onClick={onCancelPlan}>
+            {t('hosted.billing.cancel.action')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** R2's rule for Resume now: Stripe's page to approve a charge the bank holds, only ever a stripe.com URL. */
+function approveUrlOf(result: PauseEndResult | undefined): string | null {
+  const url = result?.payment === 'needs-action' ? result.hostedInvoiceUrl : null;
+  if (!url) return null;
+  try {
+    assertStripeUrl(url);
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 function SwitchedBanner({ result, language }: { result: YearlySwitchResult; language: Language }) {
@@ -576,6 +775,7 @@ function entitlementPanel(profile: BillingProfile): BillingPanel {
       : e.state === 'LOCKED'
         ? { kind: 'locked' }
         : { kind: 'trialEnded', lockAt: e.until };
+  if (e.source === 'STRIPE' && e.paused === true) return { kind: 'paused', until: e.until };
   if (e.source === 'STRIPE') return e.state === 'READ_ONLY' ? { kind: 'lapsed' } : { kind: 'active', renewsAt: e.until ?? '', interval: null };
   return { kind: 'none' };
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.96.0-mut303
+  version: 1.97.0-mut532
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -465,6 +465,8 @@ components:
               type: string
               nullable: true
               format: date-time
+            paused:
+              type: boolean
           required:
             - state
             - source
@@ -9028,6 +9030,20 @@ components:
                   type: string
               required:
                 - id
+            pause:
+              type: object
+              nullable: true
+              properties:
+                from:
+                  type: string
+                  format: date-time
+                until:
+                  type: string
+                  nullable: true
+                  format: date-time
+              required:
+                - from
+                - until
           required:
             - tier
             - status
@@ -9037,6 +9053,7 @@ components:
             - cancelAtPeriodEnd
             - renewsAtListPrice
             - offer
+            - pause
         canManage:
           type: boolean
         trial:
@@ -9297,6 +9314,209 @@ components:
       required:
         - prorationDate
         - expectedAmountDue
+      additionalProperties: false
+    BillingRetention:
+      type: object
+      properties:
+        endsOn:
+          type: string
+          nullable: true
+          format: date-time
+        pause:
+          type: object
+          nullable: true
+          properties:
+            options:
+              type: array
+              items:
+                type: object
+                properties:
+                  months:
+                    type: integer
+                    minimum: 1
+                    maximum: 3
+                  from:
+                    type: string
+                    format: date-time
+                  until:
+                    type: string
+                    format: date-time
+                required:
+                  - months
+                  - from
+                  - until
+          required:
+            - options
+        stayOffer:
+          type: object
+          nullable: true
+          properties:
+            percentOff:
+              type: number
+              minimum: 0
+              exclusiveMinimum: true
+              maximum: 100
+            months:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
+            currency:
+              type: string
+              enum:
+                - ILS
+                - USD
+            monthlyAmount:
+              type: integer
+              minimum: 0
+            listAmount:
+              type: integer
+              minimum: 0
+              exclusiveMinimum: true
+          required:
+            - percentOff
+            - months
+            - currency
+            - monthlyAmount
+            - listAmount
+      required:
+        - endsOn
+        - pause
+        - stayOffer
+    PauseResult:
+      type: object
+      properties:
+        from:
+          type: string
+          format: date-time
+        until:
+          type: string
+          format: date-time
+      required:
+        - from
+        - until
+    PauseRequest:
+      type: object
+      properties:
+        months:
+          anyOf:
+            - type: number
+              enum:
+                - 1
+            - type: number
+              enum:
+                - 2
+            - type: number
+              enum:
+                - 3
+        reason:
+          type: string
+          enum:
+            - too_expensive
+            - unused
+            - missing_features
+            - switched_service
+            - too_complex
+            - low_quality
+            - customer_service
+            - other
+      required:
+        - months
+        - reason
+      additionalProperties: false
+    PauseEndResult:
+      type: object
+      properties:
+        resumed:
+          type: string
+          enum:
+            - cancelled
+            - now
+        payment:
+          type: string
+          nullable: true
+          enum:
+            - charged
+            - failed
+            - needs-action
+            - null
+        hostedInvoiceUrl:
+          type: string
+          nullable: true
+          format: uri
+      required:
+        - resumed
+        - payment
+        - hostedInvoiceUrl
+    CancellationResult:
+      type: object
+      properties:
+        endsOn:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - endsOn
+    CancellationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - too_expensive
+            - unused
+            - missing_features
+            - switched_service
+            - too_complex
+            - low_quality
+            - customer_service
+            - other
+        comment:
+          type: string
+          maxLength: 500
+      required:
+        - reason
+      additionalProperties: false
+    StayOfferResult:
+      type: object
+      properties:
+        percentOff:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 100
+        months:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+        currency:
+          type: string
+          enum:
+            - ILS
+            - USD
+        monthlyAmount:
+          type: integer
+          minimum: 0
+      required:
+        - percentOff
+        - months
+        - currency
+        - monthlyAmount
+    StayOfferRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+            - too_expensive
+            - unused
+            - missing_features
+            - switched_service
+            - too_complex
+            - low_quality
+            - customer_service
+            - other
+      required:
+        - reason
       additionalProperties: false
     ReceiptReadJobResult:
       type: object
@@ -10527,11 +10747,14 @@ components:
           type: string
           nullable: true
           format: date-time
+        paused:
+          type: boolean
       required:
         - state
         - source
         - tier
         - until
+        - paused
     OperatorAccountStatusResponse:
       allOf:
         - $ref: "#/components/schemas/UserStatusResponse"
@@ -20594,6 +20817,370 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: "CONFLICT; `details.reason` is SWITCH_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, TOO_EARLY, NO_PRICE), AMOUNT_CHANGED (a fresh preview differs, or the proration date is stale; nothing was charged), PAYMENT_FAILED (the plan stays monthly), or PAYMENT_NEEDS_ACTION (`details.hostedInvoiceUrl`: Stripe’s page to approve it)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/retention:
+    get:
+      tags:
+        - Billing
+      summary: What the cancel flow may offer instead of cancelling
+      description: "Read when the person presses Cancel plan. `pause`: 1–3 months from the paid period’s end, for an active monthly list plan with one paid invoice and no pause in the last 12 months. `stayOffer`: the stay coupon (offers.json `stay`), once per person ever, for an active monthly list plan with no discount; amounts per Stripe’s rounding. Either is null when it isn’t open."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The flow’s offers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingRetention"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/pause:
+    post:
+      tags:
+        - Billing
+      summary: Pause the plan for 1–3 months instead of cancelling
+      description: From the paid period’s end Stripe voids each invoice (nothing is charged) and the person’s records are read-only, never locked; billing restarts on its own on `until`. Once in 12 months, monthly list plans only. Audited `billing.pause_scheduled` on each profile the person owns.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PauseRequest"
+      responses:
+        "200":
+          description: Booked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PauseResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Billing
+      summary: Undo a pause still to come, or resume now
+      description: "Before the pause starts it is undone and charges nothing (it doesn’t use up the year’s pause). Once it runs, Resume now restarts the plan today: one full month is charged today and it renews monthly from today. A declined card leaves the plan past due while Stripe retries it. Audited `billing.pause_ended`."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PauseEndResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/cancellation:
+    post:
+      tags:
+        - Billing
+      summary: Cancel the plan at the end of the paid period
+      description: The plan stays on until the period it was paid for ends; then the person’s records are read-only, never deleted. Stripe keeps the reason (`cancellation_details.feedback`) and the comment. A founder price runs on a subscription schedule, which Stripe won’t cancel this way (NOTHING_TO_CANCEL, MANAGED_BY_SCHEDULE). Audited `billing.cancel_scheduled`.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancellationRequest"
+      responses:
+        "200":
+          description: Cancelling
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancellationResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Billing
+      summary: "Keep my plan: take a cancel back"
+      description: Clears a cancel at the period end, MTB3A’s or the Customer Portal’s, so the plan renews as before. Audited `billing.cancel_undone`.
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Kept
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancellationResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/stay-offer:
+    post:
+      tags:
+        - Billing
+      summary: Take the stay offer instead of cancelling
+      description: "Puts the stay coupon on the plan: the next invoices are discounted for the coupon’s months, then the list price again. Once per person, ever; claimed before Stripe is asked, so a double press or a retry can’t give it twice. The plan stays on. Audited `billing.stay_offer_applied`."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StayOfferRequest"
+      responses:
+        "200":
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StayOfferResult"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is PAUSE_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, TOO_EARLY, ONCE_A_YEAR, NO_PERIOD), NOT_PAUSED, NOTHING_TO_CANCEL (`details.why`: NO_SUBSCRIPTION, NOT_ACTIVE, CANCELLING, MANAGED_BY_SCHEDULE), NOT_CANCELLING, or STAY_OFFER_NOT_AVAILABLE (`details.why`: NO_SUBSCRIPTION, NOT_MONTHLY_LIST, NOT_ACTIVE, CANCELLING, PAUSED, DISCOUNTED, ALREADY_HAD, NO_COUPON, NO_PRICE)"
           content:
             application/json:
               schema:
