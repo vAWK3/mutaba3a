@@ -668,10 +668,11 @@ test('Pause instead of cancelling - booked from the paid month’s end, read-onl
     return sub.pause_collection.resumes_at as number;
   });
   await step('The paid month ends: Stripe voids the invoice, and Billing says paused until the restart', async () => {
-    await advanceClock(clockId, periodEnd + 60);
+    // Stripe finalizes a cycle's invoice about an hour after making it; the pause voids it then (the spike).
+    await advanceClock(clockId, periodEnd + 2 * HOUR_S);
     await waitUntilPast(periodEnd);
-    await expect.poll(async () => (await invoicesOf(customerId)).length, { timeout: 60_000, intervals: [2_000] }).toBe(2);
-    expect((await stripeApi('GET', 'invoices', { customer: customerId, limit: '1' })).data[0].status).toBe('void');
+    await expect.poll(async () => (await stripeApi('GET', 'invoices', { customer: customerId, limit: '1' })).data[0]?.status, { timeout: 60_000, intervals: [2_000] }).toBe('void');
+    expect(await invoicesOf(customerId)).toHaveLength(2);
     await page.goto(`/p/${person.personalId}?billing=true`);
     await expect(page.getByRole('dialog', { name: 'Billing' }).getByRole('heading', { name: /^Paused until / })).toBeVisible({ timeout: 45_000 });
   });
