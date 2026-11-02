@@ -108,11 +108,18 @@ export type BillingOverview = Schemas['BillingOverview'];
 export type BillingOffer = Schemas['BillingOffer'];
 export type CheckoutSessionRequest = Schemas['CheckoutSessionRequest'];
 export type BillingRedirect = Schemas['BillingRedirect'];
-export type BillingEntitlement = Schemas['BillingEntitlement'];
+/** A profile's entitlement as /v1/me sends it (MUT-532's `paused` is absent from an older server). */
+export type BillingEntitlement = NonNullable<HostedProfile['billing']>;
 /** MUT-531: the switch to yearly: its line on GET /v1/billing, Stripe's preview and the switch's answer. */
 export type BillingYearlySwitch = Schemas['BillingYearlySwitch'];
 export type YearlySwitchPreview = Schemas['YearlySwitchPreview'];
 export type YearlySwitchResult = Schemas['YearlySwitchResult'];
+export type BillingRetention = Schemas['BillingRetention'];
+export type PauseResult = Schemas['PauseResult'];
+export type PauseEndResult = Schemas['PauseEndResult'];
+export type CancellationResult = Schemas['CancellationResult'];
+export type StayOfferResult = Schemas['StayOfferResult'];
+export type CancellationReason = Schemas['CancellationRequest']['reason'];
 /** MUT-460: the operator console's signup reviews (MUT-459's /v1/operator). */
 export type SignupReview = Schemas['SignupReview'];
 export type OperatorSignupReviewList = Schemas['OperatorSignupReviewList'];
@@ -610,6 +617,13 @@ export const api = {
   /** MUT-531: what switching to yearly charges today, then the switch at that preview's proration date. */
   yearlySwitchPreview: (options: { signal?: AbortSignal } = {}) => request<YearlySwitchPreview>('GET', '/v1/billing/yearly-switch', { signal: options.signal }),
   switchToYearly: (body: Schemas['YearlySwitchRequest']) => request<YearlySwitchResult>('POST', '/v1/billing/yearly-switch', { body }),
+  /** MUT-532: the cancel flow: what it may offer, pause, Resume now, cancel, Keep my plan, the stay offer. */
+  billingRetention: (options: { signal?: AbortSignal } = {}) => request<BillingRetention>('GET', '/v1/billing/retention', { signal: options.signal }),
+  pausePlan: (body: Schemas['PauseRequest']) => request<PauseResult>('POST', '/v1/billing/pause', { body }),
+  endPause: () => request<PauseEndResult>('DELETE', '/v1/billing/pause'),
+  cancelPlan: (body: Schemas['CancellationRequest']) => request<CancellationResult>('POST', '/v1/billing/cancellation', { body }),
+  keepPlan: () => request<CancellationResult>('DELETE', '/v1/billing/cancellation'),
+  takeStayOffer: (body: Schemas['StayOfferRequest']) => request<StayOfferResult>('POST', '/v1/billing/stay-offer', { body }),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

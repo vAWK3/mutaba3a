@@ -81,6 +81,8 @@ function useBillingRowText(row: BillingRow | null): string | null {
       return t('hosted.billing.gate.readOnlyTitle');
     case 'locked':
       return t('hosted.billing.chip.locked');
+    case 'paused':
+      return t('hosted.billing.chip.paused');
   }
 }
 

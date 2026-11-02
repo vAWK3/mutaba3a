@@ -266,7 +266,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect(await within(dialog).findByText('Billed monthly.')).toBeInTheDocument();
     const manage = within(dialog).getByRole('button', { name: 'Manage billing' });
-    expect(manage.nextElementSibling).toHaveTextContent("Change your card, see invoices or cancel, on Stripe's page (in English).");
+    expect(manage.nextElementSibling).toHaveTextContent("Change your card or see invoices, on Stripe's page (in English).");
   });
 
   it('a first payment still pending (incomplete) is its own state, with Manage billing (review)', async () => {
@@ -691,5 +691,140 @@ describe('MUT-531: switch to yearly in the drawer (AC1–AC3, D1, R2)', () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(monthly()), entitlement: paid, locale: 'ar' });
     expect(await screen.findByText(/انتقل إلى الدفع السنوي ووفّر/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'انتقل إلى السنوي' })).toBeInTheDocument();
+  });
+});
+
+describe('MUT-532: pause instead of cancel, the stay offer and MTB3A’s own cancel (D6–D8, D11)', () => {
+  const sub = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}) => ({
+    tier: 'FREELANCER' as const,
+    status: 'active',
+    interval: 'month' as const,
+    currency: 'ILS',
+    currentPeriodEnd: iso(12),
+    cancelAtPeriodEnd: false,
+    renewsAtListPrice: true,
+    offer: null,
+    pause: null,
+    ...over,
+  });
+  const plan = (over: Partial<NonNullable<BillingOverview['subscription']>> = {}) => overview({ subscription: sub(over), canManage: true });
+  const RETENTION = {
+    endsOn: iso(12),
+    pause: { options: [1, 2, 3].map((months) => ({ months, from: iso(12), until: iso(12 + 30 * months) })) },
+    stayOffer: { percentOff: 50, months: 2, currency: 'ILS', monthlyAmount: 1950, listAmount: 3900 },
+  };
+  const paid = ent('ACTIVE', 'STRIPE', iso(12));
+
+  async function openCancel(routes: Record<string, Handler>, billing: Handler = () => ok(plan())) {
+    const opened = portal(`/p/${ORG_B}?billing=true`, { billing, entitlement: paid, routes: { 'GET /v1/billing/retention': () => ok(RETENTION), ...routes } });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await opened.user.click(await within(dialog).findByRole('button', { name: 'Cancel plan' }));
+    const step = await screen.findByRole('dialog', { name: 'Cancel plan' });
+    return { ...opened, step };
+  }
+
+  it('Cancel plan opens the Why? step in the drawer; Continue waits for a reason', async () => {
+    const { router, step } = await openCancel({});
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true&step=cancel`);
+    expect(within(step).getByRole('heading', { name: 'Why are you cancelling?' })).toHaveFocus();
+    expect(within(step).getAllByRole('radio')).toHaveLength(8);
+    expect(within(step).getByRole('button', { name: 'Continue' })).toBeDisabled();
+  });
+
+  it('pause instead: the reason and the months go to the server, and the drawer goes back to the status view', async () => {
+    let paused = false;
+    const { user, api, step, router } = await openCancel(
+      { 'POST /v1/billing/pause': () => ((paused = true), ok({ from: RETENTION.pause.options[1]!.from, until: RETENTION.pause.options[1]!.until })) },
+      () => ok(plan(paused ? { pause: { from: iso(12), until: iso(72) } } : {})),
+    );
+    await user.click(within(step).getByRole('radio', { name: "I don't use it enough" }));
+    await user.click(within(step).getByRole('button', { name: 'Continue' }));
+    expect(await within(step).findByRole('heading', { name: 'Pause instead of cancelling?' })).toHaveFocus();
+    expect(within(step).getByText('You can pause once a year.')).toBeInTheDocument();
+    await user.click(within(step).getByRole('radio', { name: /^2 months, restarts on/ }));
+    await user.click(within(step).getByRole('button', { name: 'Pause my plan' }));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/pause')?.body).toEqual({ months: 2, reason: 'unused' });
+    const back = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(back).findByRole('heading', { name: /^Your plan pauses on/ })).toBeInTheDocument();
+    expect(within(back).getByText('Pause booked')).toBeInTheDocument();
+    expect(within(back).getByRole('button', { name: "Don't pause" })).toBeInTheDocument();
+    expect(within(back).queryByRole('button', { name: 'Cancel plan' })).toBeNull();
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true`);
+  });
+
+  it('declining the pause shows the stay offer; taking it keeps the plan at half price', async () => {
+    const { user, api, step } = await openCancel({ 'POST /v1/billing/stay-offer': () => ok({ percentOff: 50, months: 2, currency: 'ILS', monthlyAmount: 1950 }) });
+    await user.click(within(step).getByRole('radio', { name: 'It costs too much' }));
+    await user.click(within(step).getByRole('button', { name: 'Continue' }));
+    await user.click(await within(step).findByRole('button', { name: 'No, keep cancelling' }));
+    expect(await within(step).findByRole('heading', { name: 'Stay with 50% off for 2 months' })).toHaveFocus();
+    expect(within(step).getByText((_, el) => el?.tagName === 'P' && /a month instead of/.test(el.textContent ?? ''))).toHaveTextContent('You pay ₪19.50 a month instead of ₪39.00, then ₪39.00 a month again. You can still cancel any time.');
+    await user.click(within(step).getByRole('button', { name: 'Keep my plan at ₪19.50' }));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/stay-offer')?.body).toEqual({ reason: 'too_expensive' });
+    const back = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(back).findByText(/Your next 2 months are/)).toHaveTextContent('Done. Your next 2 months are ₪19.50 each.');
+  });
+
+  it('declining the stay offer is the cancel: the reason and comment go to Stripe, and the plan says when it ends', async () => {
+    let cancelled = false;
+    const { user, api, step } = await openCancel(
+      { 'POST /v1/billing/cancellation': () => ((cancelled = true), ok({ endsOn: iso(12) })) },
+      () => ok(plan(cancelled ? { cancelAtPeriodEnd: true } : {})),
+    );
+    await user.click(within(step).getByRole('radio', { name: "I'm moving to another tool" }));
+    await user.type(within(step).getByRole('textbox', { name: /Anything else/ }), '  Going with a spreadsheet  ');
+    await user.click(within(step).getByRole('button', { name: 'Continue' }));
+    await user.click(await within(step).findByRole('button', { name: 'No, keep cancelling' }));
+    await user.click(await within(step).findByRole('button', { name: 'No, cancel my plan' }));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/cancellation')?.body).toEqual({ reason: 'switched_service', comment: 'Going with a spreadsheet' });
+    const back = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(back).findByRole('heading', { name: /^Your plan ends on/ })).toBeInTheDocument();
+    expect(within(back).getByRole('button', { name: 'Keep my plan' })).toBeInTheDocument();
+  });
+
+  it('with no offers (a yearly plan), Why? leads to Confirm cancel; Keep my plan there goes back', async () => {
+    const { user, api, step, router } = await openCancel({ 'GET /v1/billing/retention': () => ok({ endsOn: iso(200), pause: null, stayOffer: null }) }, () => ok(plan({ interval: 'year', currentPeriodEnd: iso(200) })));
+    await user.click(within(step).getByRole('radio', { name: 'Something else' }));
+    await user.click(within(step).getByRole('button', { name: 'Continue' }));
+    expect(await within(step).findByRole('heading', { name: 'Cancel your plan?' })).toBeInTheDocument();
+    expect(within(step).getByText(/Your plan stays on until/)).toHaveTextContent(/Nothing is deleted\.$/);
+    await user.click(within(step).getByRole('button', { name: 'Keep my plan' }));
+    expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true`);
+    expect(api.calls.some((c) => c.url.pathname === '/v1/billing/cancellation')).toBe(false);
+  });
+
+  it('a paused plan says until when, with Resume now confirming what it charges today', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true`, {
+      billing: () => ok(plan({ pause: { from: iso(-3), until: iso(40) } })),
+      entitlement: { ...ent('READ_ONLY', 'STRIPE', iso(40)), paused: true },
+      routes: { 'DELETE /v1/billing/pause': () => ok({ resumed: 'now', payment: 'charged', hostedInvoiceUrl: null }) },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: /^Paused until/ })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Cancel plan' })).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Resume now' }));
+    expect(within(dialog).getByText(/You pay .* today/)).toHaveTextContent('You pay ₪39.00 today, and your plan renews monthly from today.');
+    await user.click(within(within(dialog).getByRole('group')).getByRole('button', { name: 'Resume now' }));
+    await vi.waitFor(() => expect(api.calls.some((c) => c.method === 'DELETE' && c.url.pathname === '/v1/billing/pause')).toBe(true));
+  });
+
+  it('a founder price has no Cancel plan in MTB3A (Stripe won’t cancel a schedule this way)', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(plan({ renewsAtListPrice: false })), entitlement: paid });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ });
+    expect(within(dialog).queryByRole('button', { name: 'Cancel plan' })).toBeNull();
+  });
+
+  it('Manage billing no longer says you cancel on Stripe’s page', async () => {
+    portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(plan()), entitlement: paid });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByText("Change your card or see invoices, on Stripe's page (in English).")).toBeInTheDocument();
+  });
+
+  it('reads in Arabic first', async () => {
+    const opened = portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(plan()), entitlement: paid, locale: 'ar', routes: { 'GET /v1/billing/retention': () => ok(RETENTION) } });
+    const dialog = await screen.findByRole('dialog', { name: 'الاشتراك' });
+    await opened.user.click(await within(dialog).findByRole('button', { name: 'إلغاء الاشتراك' }));
+    expect(await screen.findByRole('heading', { name: 'لماذا تريد الإلغاء؟' })).toBeInTheDocument();
   });
 });

@@ -96,6 +96,8 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
     );
   }
 
+  if (notice.kind === 'paused') return <PausedNote notice={notice} resumable={coverage?.covered !== false} />;
+
   const body =
     notice.source === 'TRIAL' && notice.locksAt
       ? t('hosted.billing.gate.readOnlyTrial', { date: formatInstant(notice.locksAt, language, browserTimezone()) })
@@ -109,6 +111,36 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
         <OfferAboveSubscribe coverage={coverage} />
         <div className="hp-lapse-banner-actions">
           <SubscribeAction coverage={coverage} size="sm" />
+          <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
+            {t('hosted.billing.gate.download')}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * MUT-532: a paused plan is read-only until it restarts on its own. It says so, never "your subscription has ended",
+ * and offers no Subscribe or offer line: Resume now lives in Billing, with what it charges today.
+ */
+function PausedNote({ notice, resumable }: { notice: Extract<LapseNotice, { kind: 'paused' }>; resumable: boolean }) {
+  const t = useT();
+  const { language } = useLanguage();
+  const drawers = useAccountDrawers();
+  return (
+    <section className="hp-banner hp-banner-info hp-lapse-banner" aria-label={t('hosted.billing.gate.label')}>
+      <LockIcon />
+      <div className="hp-lapse-banner-body">
+        <p className="hp-lapse-banner-title">{t('hosted.billing.chip.paused')}</p>
+        <p>{t('hosted.billing.gate.readOnlyPaused', { date: notice.until ? formatInstant(notice.until, language, browserTimezone()) : '' })}</p>
+        <div className="hp-lapse-banner-actions">
+          {/* Only the person whose plan it is can resume it (a co-owner's profile is paid by its creator). */}
+          {resumable && (
+            <Button variant="primary" size="sm" onClick={() => drawers.openBilling()}>
+              {t('hosted.billing.action.resumeNow')}
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
             {t('hosted.billing.gate.download')}
           </Button>

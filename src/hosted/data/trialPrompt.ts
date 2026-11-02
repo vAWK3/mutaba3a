@@ -23,7 +23,9 @@ export type TrialNotice =
   /** MUT-361: reads and the export only. `locksAt`: the day an unpaid trial locks; null for a payer, who never locks. */
   | { kind: 'read-only'; source: BillingEntitlement['source']; locksAt: string | null }
   /** MUT-361: only Subscribe and Download my records. */
-  | { kind: 'locked' };
+  | { kind: 'locked' }
+  /** MUT-532: read-only because the person paused their plan, until it restarts on its own (`until`). */
+  | { kind: 'paused'; until: string | null };
 
 export type LapseNotice = Exclude<TrialNotice, { kind: 'trial' }>;
 
@@ -54,6 +56,7 @@ export function lapseNoticeOf(me: Pick<Me, 'billingStanding'>, profile: Pick<Hos
   if (billing.state === 'GRACE') return { kind: 'grace' };
   const gate = billingGateOf(me, profile);
   if (gate === 'locked') return { kind: 'locked' };
+  if (gate === 'read-only' && billing.paused === true) return { kind: 'paused', until: billing.until };
   if (gate === 'read-only') return { kind: 'read-only', source: billing.source, locksAt: billing.source === 'TRIAL' ? billing.until : null };
   return null;
 }

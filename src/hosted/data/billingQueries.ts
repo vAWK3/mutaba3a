@@ -1,5 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, type BillingRedirect, type CheckoutSessionRequest, type YearlySwitchPreview } from '../api/client';
+import { api, ApiError, type BillingRedirect, type CancellationReason, type CheckoutSessionRequest, type YearlySwitchPreview } from '../api/client';
 import { ME_KEY } from '../session/me';
 
 /**
@@ -101,3 +101,34 @@ export function useSwitchToYearly() {
     onSettled: refresh,
   });
 }
+
+/** MUT-532: what the cancel flow may offer instead, read when Cancel plan is pressed. Never cached: Stripe's state now. */
+export const billingRetentionQuery = queryOptions({
+  queryKey: [...BILLING_KEY, 'retention'] as const,
+  queryFn: ({ signal }) => api.billingRetention({ signal }),
+  staleTime: 0,
+  gcTime: 0,
+  retry: false,
+});
+
+/**
+ * MUT-532: one mutation per press in the cancel flow and the status view (pause, Don't pause / Resume now, cancel,
+ * Keep my plan, the stay offer). Billing and /v1/me are read again either way: the webhook mirrors the change, or a
+ * refusal means the drawer's view is stale.
+ */
+function usePlanChange<TVariables, TResult>(mutationFn: (variables: TVariables) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
+  });
+}
+
+export const usePausePlan = () => usePlanChange((body: { months: 1 | 2 | 3; reason: CancellationReason }) => api.pausePlan(body));
+export const useEndPause = () => usePlanChange(() => api.endPause());
+export const useCancelPlan = () => usePlanChange((body: { reason: CancellationReason; comment?: string }) => api.cancelPlan(body));
+export const useKeepPlan = () => usePlanChange(() => api.keepPlan());
+export const useTakeStayOffer = () => usePlanChange((body: { reason: CancellationReason }) => api.takeStayOffer(body));

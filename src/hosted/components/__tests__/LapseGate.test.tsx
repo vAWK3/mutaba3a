@@ -236,3 +236,23 @@ describe('MUT-525: the launch offer above Subscribe (DD13)', () => {
     expect(await screen.findByText(/^عرض الإطلاق: خصم 50% على سنتك الأولى في الاشتراك السنوي، حتى /)).toBeInTheDocument();
   });
 });
+
+describe('MUT-532: a paused plan', () => {
+  it('says the plan is paused until it restarts, with Resume now and Download, never Subscribe or "ended"', async () => {
+    const { user, router } = portal(`/p/${ORG_B}`, { billing: { ...ent('READ_ONLY', 'STRIPE', iso(40)), paused: true } });
+    const banner = await screen.findByRole('region', { name: 'Your plan' });
+    expect(within(banner).getByText('Paused')).toBeInTheDocument();
+    expect(within(banner).getByText(/Your plan is paused until/)).toHaveTextContent(/adding and changing come back when it restarts\.$/);
+    expect(within(banner).queryByText(/has ended/)).toBeNull();
+    expect(within(banner).queryByRole('button', { name: 'Subscribe' })).toBeNull();
+    expect(within(banner).getByRole('button', { name: 'Download my records' })).toBeInTheDocument();
+    await user.click(within(banner).getByRole('button', { name: 'Resume now' }));
+    expect(locationOf(router)).toContain('billing=true');
+  });
+
+  it('offers no Resume now on a profile someone else pays for', async () => {
+    portal(`/p/${ORG_B}`, { billing: { ...ent('READ_ONLY', 'STRIPE', iso(40)), paused: true }, covered: [] });
+    const banner = await screen.findByRole('region', { name: 'Your plan' });
+    await waitFor(() => expect(within(banner).queryByRole('button', { name: 'Resume now' })).toBeNull());
+  });
+});

@@ -1215,7 +1215,9 @@
         "locked": "Locked",
         "covered": "Covered",
         "help": "Needs a hand",
-        "pending": "Payment pending"
+        "pending": "Payment pending",
+        "paused": "Paused",
+        "pausing": "Pause booked"
       },
       "headline": {
         "trialDaysLeft": {
@@ -1236,7 +1238,9 @@
         "ownedByOthers": "Your profiles are covered by their owners",
         "none": "Subscribe to keep adding records",
         "pending": "Your first payment hasn't gone through yet",
-        "activeTrial": "Card added. Your first charge is on {date}"
+        "activeTrial": "Card added. Your first charge is on {date}",
+        "pauseScheduled": "Your plan pauses on {date}",
+        "paused": "Paused until {date}"
       },
       "context": {
         "trial": "After that your records stay readable and downloadable, but you can't add new ones until you subscribe.",
@@ -1257,15 +1261,19 @@
         "activeMonth": "Billed monthly.",
         "activeYear": "Billed yearly.",
         "activeTrial": "Your free trial continues until then. Cancel any time before it from Manage billing.",
-        "renewsAt": "Renews at {list} on {date}."
+        "renewsAt": "Renews at {list} on {date}.",
+        "pauseScheduled": "Billing restarts on its own on {until}.",
+        "paused": "Your records are read-only until then: you can see and download everything. Billing restarts on its own on {date}."
       },
       "action": {
         "subscribe": "Subscribe",
         "manage": "Manage billing",
         "payInPortal": "Pay in Manage billing",
-        "contactUs": "Contact us"
+        "contactUs": "Contact us",
+        "dontPause": "Don't pause",
+        "resumeNow": "Resume now"
       },
-      "manageNote": "Change your card, see invoices or cancel, on Stripe's page (in English).",
+      "manageNote": "Change your card or see invoices, on Stripe's page (in English).",
       "plan": {
         "name": "Freelancer",
         "or": "or",
@@ -1353,7 +1361,8 @@
         "lockedNotYours": "This profile is locked because the person who created it hasn't subscribed. Nothing is deleted, and you can still download its records.",
         "drawerNote": "This profile is read-only, so nothing here can be changed.",
         "refused": "This profile is read-only now. Subscribe to add or change records.",
-        "newProfileBlocked": "Subscribe to add a profile: your plan has ended."
+        "newProfileBlocked": "Subscribe to add a profile: your plan has ended.",
+        "readOnlyPaused": "Your plan is paused until {date}. You can see and download everything; adding and changing come back when it restarts."
       },
       "switch": {
         "line": "Switch to yearly and save {amount} a year",
@@ -1384,6 +1393,51 @@
       },
       "done": {
         "offerApplied": "You're subscribed. Launch offer applied."
+      },
+      "cancel": {
+        "action": "Cancel plan",
+        "whyTitle": "Why are you cancelling?",
+        "whyHint": "Your answer helps us make MTB3A better.",
+        "reason": {
+          "too_expensive": "It costs too much",
+          "unused": "I don't use it enough",
+          "missing_features": "It's missing something I need",
+          "switched_service": "I'm moving to another tool",
+          "too_complex": "It's hard to use",
+          "low_quality": "It doesn't work well",
+          "customer_service": "I didn't get the help I needed",
+          "other": "Something else"
+        },
+        "comment": "Anything else you'd like to tell us? (optional)",
+        "continue": "Continue",
+        "confirmTitle": "Cancel your plan?",
+        "confirmBody": "Your plan stays on until {date}. After that your records stay readable and downloadable. Nothing is deleted.",
+        "confirm": "Cancel plan",
+        "keep": "Keep my plan"
+      },
+      "pause": {
+        "title": "Pause instead of cancelling?",
+        "body": "Take 1 to 3 months off and pay nothing. Everything stays readable and downloadable, and your plan restarts on its own on the date you pick.",
+        "option": {
+          "one": "1 month, restarts on {date}",
+          "other": "{count} months, restarts on {date}"
+        },
+        "startsNote": "The pause starts on {date}, when the month you paid for ends.",
+        "onceNote": "You can pause once a year.",
+        "confirm": "Pause my plan",
+        "decline": "No, keep cancelling",
+        "resumeConfirm": "You pay {month} today, and your plan renews monthly from today."
+      },
+      "stay": {
+        "title": {
+          "one": "Stay with {percent}% off for 1 month",
+          "other": "Stay with {percent}% off for {count} months"
+        },
+        "body": "You pay {price} a month instead of {list}, then {list} a month again. You can still cancel any time.",
+        "onceNote": "A one-time offer. If you cancel, your plan ends on {date}.",
+        "accept": "Keep my plan at {price}",
+        "decline": "No, cancel my plan",
+        "done": "Done. Your next 2 months are {price} each."
       }
     },
     "selfService": {

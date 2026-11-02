@@ -16,6 +16,10 @@ export type BillingPanel =
   | { kind: 'activeTrial'; firstChargeAt: string }
   | { kind: 'pending' }
   | { kind: 'ending'; endsAt: string }
+  /** MUT-532: a pause booked from the paid period's end; billing restarts on its own on `until` (null: no end set). */
+  | { kind: 'pauseScheduled'; from: string; until: string | null }
+  /** MUT-532: the pause runs: the records are read-only, never locked, until `until`. */
+  | { kind: 'paused'; until: string | null }
   | { kind: 'grace' }
   | { kind: 'unpaid' }
   | { kind: 'needsHelp' }
@@ -72,22 +76,27 @@ export function isSellable(billing: Pick<BillingOverview, 'configured' | 'catalo
 }
 
 export function billingViewOf(billing: BillingOverview, profiles: readonly BillingProfile[], now: Date): BillingView {
-  const fromSubscription = billing.subscription ? subscriptionPanel(billing.subscription) : null;
+  const fromSubscription = billing.subscription ? subscriptionPanel(billing.subscription, now) : null;
   const { panel, action } = fromSubscription ?? profilePanel(profiles, billing, now);
   return { panel, action, openSoon: action === 'subscribe' && !isSellable(billing) };
 }
 
 /** The subscription decides while it exists; a cancelled or abandoned one hands over to the profiles. */
-function subscriptionPanel(sub: Subscription): { panel: BillingPanel; action: BillingAction | null } | null {
+function subscriptionPanel(sub: Subscription, now: Date): { panel: BillingPanel; action: BillingAction | null } | null {
   switch (sub.status) {
     case 'incomplete':
       return { panel: { kind: 'pending' }, action: 'manage' };
     case 'active':
-    case 'trialing':
+    case 'trialing': {
       if (sub.cancelAtPeriodEnd) return { panel: { kind: 'ending', endsAt: sub.currentPeriodEnd }, action: 'manage' };
+      // MUT-532: Stripe keeps a paused plan `active`; the mirror's pause says which side of its start we are on.
+      const pause = pauseOf(sub);
+      if (pause && now < new Date(pause.from)) return { panel: { kind: 'pauseScheduled', from: pause.from, until: pause.until }, action: 'manage' };
+      if (pause && (pause.until === null || now < new Date(pause.until))) return { panel: { kind: 'paused', until: pause.until }, action: 'manage' };
       // MUT-418: a card added in the trial keeps the rest of it; Stripe's first charge is the trial's end (the period end).
       if (sub.status === 'trialing') return { panel: { kind: 'activeTrial', firstChargeAt: sub.currentPeriodEnd }, action: 'manage' };
       return { panel: { kind: 'active', renewsAt: sub.currentPeriodEnd, interval: sub.interval }, action: 'manage' };
+    }
     case 'past_due':
       return { panel: { kind: 'grace' }, action: 'manage' };
     case 'unpaid':
@@ -124,6 +133,34 @@ function profilePanel(profiles: readonly BillingProfile[], billing: BillingOverv
     default:
       return { panel: { kind: 'none' }, action: 'subscribe' };
   }
+}
+
+/** MUT-532: the subscription's pause; a server older than MUT-532 sends none. */
+export function pauseOf(sub: Pick<Subscription, 'pause'>): { from: string; until: string | null } | null {
+  return sub.pause ?? null;
+}
+
+/**
+ * MUT-532 (D8): Cancel plan opens MTB3A's own flow on a plan that renews at a list price and isn't pausing. A founder
+ * price runs on a subscription schedule, which Stripe won't cancel this way (the server refuses it too).
+ */
+export function canCancelOf(billing: Pick<BillingOverview, 'subscription'>): boolean {
+  const sub = billing.subscription;
+  return sub !== null && (sub.status === 'active' || sub.status === 'trialing') && !sub.cancelAtPeriodEnd && pauseOf(sub) === null && sub.renewsAtListPrice;
+}
+
+/** MUT-532 (D8): Keep my plan undoes a cancel at the period end, ours or the Customer Portal's. */
+export function canKeepOf(billing: Pick<BillingOverview, 'subscription'>): boolean {
+  const sub = billing.subscription;
+  return sub !== null && (sub.status === 'active' || sub.status === 'trialing') && sub.cancelAtPeriodEnd && sub.renewsAtListPrice;
+}
+
+/** MUT-532 (D7): what Resume now charges today: a month at the catalog's price in the plan's currency. */
+export function monthPriceOf(billing: Pick<BillingOverview, 'subscription' | 'catalog'>): { minor: number; currency: 'ILS' | 'USD' } | null {
+  const currency = billing.subscription?.currency;
+  if (currency !== 'ILS' && currency !== 'USD') return null;
+  const pair = billing.catalog[currency];
+  return pair ? { minor: pair.month, currency } : null;
 }
 
 /** DR3: the per-profile list earns its place only when the profiles' billing differs. */
@@ -190,7 +227,7 @@ export const OFFER_TIME_ZONE = 'Asia/Jerusalem';
 export function yearlySwitchLineOf(billing: Pick<BillingOverview, 'yearlySwitch' | 'subscription'>): BillingYearlySwitch | null {
   const line = (billing.yearlySwitch ?? null) as BillingYearlySwitch | null;
   const sub = billing.subscription;
-  if (!line || !sub || sub.status !== 'active' || sub.cancelAtPeriodEnd || sub.interval !== 'month') return null;
+  if (!line || !sub || sub.status !== 'active' || sub.cancelAtPeriodEnd || sub.interval !== 'month' || pauseOf(sub) !== null) return null;
   return line;
 }
 
