@@ -252,9 +252,27 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(14);
+    // 14 → 15 (MUT-303) runs next and touches only vendors.
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.exps.values()]).toEqual([...maps.exps.values()]);
     expect([...after.maps.exps.values()][0]).toMatchObject({ amountMinor: 11_700n, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('14 → 15 (MUT-303): vendors gain a null currency and VAT default, learned from their next expense, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'sami@studio.ps', displayName: 'Sami', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-sami', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.vendors.resolve({ organizationId: org.id, name: 'Bezeq' }, AT);
+    const { maps } = store.snapshot();
+    const DEFAULT_FIELDS = ['lastCurrency', 'lastVatTreatment', 'lastVatRateBasisPoints'];
+    const vendors = new Map([...maps.vendors].map(([id, v]) => [id, Object.fromEntries(Object.entries(v).filter(([field]) => !DEFAULT_FIELDS.includes(field)))]));
+    const before: StoredSnapshot = { formatVersion: 14, stateVersion: 4, savedAt: AT, maps: { ...maps, vendors } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(15);
+    expect([...after.maps.vendors.values()]).toEqual([...maps.vendors.values()]);
+    expect([...after.maps.vendors.values()][0]).toMatchObject({ canonicalName: 'Bezeq', lastCurrency: null, lastVatTreatment: null, lastVatRateBasisPoints: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
