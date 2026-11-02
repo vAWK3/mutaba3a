@@ -46,6 +46,17 @@ describe('mirrorOf (MUT-360)', () => {
     expect(mirrorOf(subscription({ metadata: { mutaba3a_offer: 'x'.repeat(41) } }), new Map())).toMatchObject({ ok: { offerId: null } });
   });
 
+  it('keeps the tier and status through a switch to yearly: only the price and the period move (MUT-531 AC4)', () => {
+    const freelancer = product('prod_F', 'freelancer');
+    const before = mirrorOf(subscription({}, [item(freelancer, 1796083200, 'freelancer_list_monthly_ils')]), new Map());
+    const after = mirrorOf(subscription({}, [item(freelancer, 1825027200, 'freelancer_list_yearly_ils')]), new Map());
+    expect(after).toEqual({
+      ok: { ...('ok' in before ? before.ok : {}), priceLookupKey: 'freelancer_list_yearly_ils', currentPeriodEnd: new Date(1825027200 * 1000) },
+      notes: [],
+    });
+    expect(after).toMatchObject({ ok: { tier: 'FREELANCER', status: 'active', offerId: null } });
+  });
+
   it('takes the tier from product metadata, never the amount, and resolves an unexpanded product from the list', () => {
     const listed = subscription({}, [item('prod_FIRM', 1796083200, 'firm_founder_monthly_usd')]);
     const products = new Map([['prod_FIRM', product('prod_FIRM', 'firm')]]);
