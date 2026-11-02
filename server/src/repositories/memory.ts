@@ -214,7 +214,7 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 13 (MUT-443): `pays` gained `reversalReasonCode`.
  * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 14;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 15;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -2615,6 +2615,9 @@ export class MemoryLedgerStore implements LedgerStore {
         phone: input.phone?.trim() || null,
         email: input.email?.trim() || null,
         lastCategoryId: null,
+        lastCurrency: null,
+        lastVatTreatment: null,
+        lastVatRateBasisPoints: null,
         lastUsedAt: at,
         version: 1,
         createdAt: at,
@@ -2629,6 +2632,9 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!v || v.organizationId !== organizationId) return;
       const category = change.categoryId ? this.expCats.get(change.categoryId) : undefined;
       if (category && category.organizationId === organizationId && !isAutomaticOtherCategory(category.name)) v.lastCategoryId = category.id;
+      if (change.currency) v.lastCurrency = change.currency;
+      if (change.vat && 'set' in change.vat) Object.assign(v, { lastVatTreatment: change.vat.set.treatment, lastVatRateBasisPoints: change.vat.set.rateBasisPoints });
+      else if (change.vat && v.lastVatTreatment === change.vat.clearIf.treatment && v.lastVatRateBasisPoints === change.vat.clearIf.rateBasisPoints) Object.assign(v, { lastVatTreatment: null, lastVatRateBasisPoints: null });
       v.lastUsedAt = at;
     },
     getById: async (organizationId, id) => {

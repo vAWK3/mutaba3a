@@ -1,6 +1,6 @@
 import { todayFor } from '../agreements/compose.js';
 import { ApiError } from '../errors.js';
-import { assertCategoryChoosable, expenseOccurredOn, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
+import { assertCategoryChoosable, expenseOccurredOn, learnedFromNew, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { NO_EXPENSE_VAT } from '../expenses/vat.js';
 import type { CreateExpenseInput, ExpenseRecord, InboxEntryRecord, LedgerStore, Organization } from '../repositories/ports.js';
 import type { VendorDetails } from '../schemas.js';
@@ -77,7 +77,7 @@ export async function commitInboxExpenseFiling(
   const expense = await withResolvedVendor(store, organization.id, prepared.expense, prepared.vendorDetails, now);
   const filed = await withCategoryForeignKey(() => store.inboxEntries.fileAsExpense({ userId, inboxEntryId: entry.id, kind: 'EXPENSE', expense }, now));
   if (filed.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such inbox entry');
-  await touchExpenseVendor(store, filed.expense, now);
+  await touchExpenseVendor(store, filed.expense, now, learnedFromNew(filed.expense));
 
   await store.audit.append({
     organizationId: organization.id,

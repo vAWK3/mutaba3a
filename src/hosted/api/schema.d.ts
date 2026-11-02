@@ -13391,13 +13391,13 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description The receipt */
+                /** @description The receipt, with its vendor's defaults (MUT-303) */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["ExpenseReceipt"];
+                        "application/json": components["schemas"]["ReceiptDetail"];
                     };
                 };
                 /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
@@ -21967,7 +21967,13 @@ export interface components {
             exact: boolean;
             /** Format: uuid */
             lastCategoryId: string | null;
+            lastCurrency: components["schemas"]["Currency"] & unknown;
+            lastVat: components["schemas"]["VendorVat"];
         };
+        VendorVat: {
+            treatment: components["schemas"]["VatTreatment"];
+            rateBasisPoints: number;
+        } | null;
         IncomeCaptureResponse: components["schemas"]["IncomeResponse"] & {
             receivedCount?: number;
         };
@@ -22334,6 +22340,15 @@ export interface components {
             toReview: number;
             filed: number;
         };
+        ReceiptDetail: components["schemas"]["ExpenseReceipt"] & {
+            vendorDefaults: components["schemas"]["ReceiptVendorDefaults"];
+        };
+        ReceiptVendorDefaults: {
+            /** Format: uuid */
+            vendorId: string;
+            currency: components["schemas"]["Currency"] & unknown;
+            vat: components["schemas"]["VendorVat"];
+        } | null;
         ApproveReceiptResponse: {
             expense: components["schemas"]["Expense"];
             receipt: components["schemas"]["ExpenseReceipt"];

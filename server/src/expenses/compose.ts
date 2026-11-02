@@ -3,7 +3,7 @@ import type { IsoDate } from '../dates.js';
 import type { ApiError } from '../errors.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
-import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch } from '../repositories/ports.js';
+import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch, VendorLearning, VendorVat } from '../repositories/ports.js';
 import type { VendorDetails } from '../schemas.js';
 import { expenseVat, storedExpenseVat, type ExpenseVatInput } from './vat.js';
 
@@ -195,11 +195,37 @@ export async function withResolvedVendor<T extends { vendor?: string | null }>(s
  * answer 5xx. That would release the Idempotency-Key and a retry would record the expense twice. A missed touch
  * only leaves the vendor's last use and default as they were; the next write sets them.
  */
-export async function touchExpenseVendor(store: LedgerStore, expense: ExpenseRecord, at: Date): Promise<void> {
+export async function touchExpenseVendor(store: LedgerStore, expense: ExpenseRecord, at: Date, learning: VendorLearning = {}): Promise<void> {
   if (!expense.vendorId) return;
   try {
-    await store.vendors.touch(expense.organizationId, expense.vendorId, { categoryId: expense.categoryId }, at);
+    await store.vendors.touch(expense.organizationId, expense.vendorId, { categoryId: expense.categoryId, ...learning }, at);
   } catch {
     // Nothing to undo: see above.
   }
+}
+
+/** MUT-303: an expense's VAT as a vendor default, or null when it carries none. */
+function vatOf(expense: ExpenseRecord): VendorVat | null {
+  return expense.vatTreatment && expense.vatRateBasisPoints !== null ? { treatment: expense.vatTreatment, rateBasisPoints: expense.vatRateBasisPoints } : null;
+}
+
+/** MUT-303 (D1, D2): a new expense (create, approve, filing, MCP) teaches its currency, and its VAT when it carries one. */
+export function learnedFromNew(expense: ExpenseRecord): VendorLearning {
+  const vat = vatOf(expense);
+  return { currency: expense.currency, ...(vat ? { vat: { set: vat } } : {}) };
+}
+
+/**
+ * MUT-303 (R7, R8): a PATCH teaches only what it changed. The portal resends `vendor` on every save, so a typo fix on
+ * an old expense must not reset the default to that expense's currency. Removing VAT forgets the default only while it
+ * is still the VAT removed (`clearIf`, applied in the store's own write).
+ */
+export function learnedFromPatch(existing: ExpenseRecord, updated: ExpenseRecord, body: { vat?: unknown }): VendorLearning {
+  const learning: VendorLearning = {};
+  if (updated.currency !== existing.currency) learning.currency = updated.currency;
+  const before = vatOf(existing);
+  const after = vatOf(updated);
+  if (body.vat !== undefined && after) learning.vat = { set: after };
+  else if (body.vat === null && before) learning.vat = { clearIf: before };
+  return learning;
 }

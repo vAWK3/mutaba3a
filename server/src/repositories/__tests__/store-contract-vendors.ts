@@ -113,6 +113,27 @@ export function describeLedgerStoreVendorsContract(name: string, makeStore: () =
       expect((await store.vendors.getById(w.a.id, v.id))!.lastUsedAt).toEqual(at(5));
     });
 
+    it('MUT-303: touch learns a currency and a VAT, keeps them when not told, and clears VAT only while it still matches', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const v = (await store.vendors.resolve({ organizationId: w.a.id, name: 'Bezeq' }, at(1)))!;
+      expect(v).toMatchObject({ lastCurrency: null, lastVatTreatment: null, lastVatRateBasisPoints: null });
+      const vat16 = { treatment: 'STANDARD_RATED' as const, rateBasisPoints: 1600 };
+
+      await store.vendors.touch(w.a.id, v.id, { categoryId: null, currency: 'EUR', vat: { set: vat16 } }, at(2));
+      expect(await store.vendors.getById(w.a.id, v.id)).toMatchObject({ lastCurrency: 'EUR', lastVatTreatment: 'STANDARD_RATED', lastVatRateBasisPoints: 1600 });
+      await store.vendors.touch(w.a.id, v.id, { categoryId: null }, at(3));
+      expect(await store.vendors.getById(w.a.id, v.id)).toMatchObject({ lastCurrency: 'EUR', lastVatRateBasisPoints: 1600 });
+      // A stale clear (another VAT than the default) keeps it; the matching one forgets it.
+      await store.vendors.touch(w.a.id, v.id, { categoryId: null, vat: { clearIf: { treatment: 'STANDARD_RATED', rateBasisPoints: 1700 } } }, at(4));
+      expect((await store.vendors.getById(w.a.id, v.id))!.lastVatRateBasisPoints).toBe(1600);
+      await store.vendors.touch(w.a.id, v.id, { categoryId: null, vat: { clearIf: vat16 } }, at(5));
+      expect(await store.vendors.getById(w.a.id, v.id)).toMatchObject({ lastCurrency: 'EUR', lastVatTreatment: null, lastVatRateBasisPoints: null });
+      // Another profile can't teach it.
+      await store.vendors.touch(w.b.id, v.id, { categoryId: null, currency: 'USD' }, at(6));
+      expect((await store.vendors.getById(w.a.id, v.id))!.lastCurrency).toBe('EUR');
+    });
+
     it('a profile type change drops every vendor’s remembered category with the old categories', async () => {
       const store = await makeStore();
       const { user, personalOrganization: personal } = await store.users.create({ email: `t-${unique()}@firm.ps`, displayName: 'Rana', passwordHash: 'x', locale: 'en', personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: at(0) });

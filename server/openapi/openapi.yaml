@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.94.0-mut525
+  version: 1.95.0-mut303
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -8377,6 +8377,12 @@ components:
           type: string
           nullable: true
           format: uuid
+        lastCurrency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+            - nullable: true
+        lastVat:
+          $ref: "#/components/schemas/VendorVat"
       required:
         - id
         - name
@@ -8386,6 +8392,21 @@ components:
         - email
         - exact
         - lastCategoryId
+        - lastCurrency
+        - lastVat
+    VendorVat:
+      type: object
+      nullable: true
+      properties:
+        treatment:
+          $ref: "#/components/schemas/VatTreatment"
+        rateBasisPoints:
+          type: integer
+          minimum: 0
+          maximum: 10000
+      required:
+        - treatment
+        - rateBasisPoints
     IncomeCaptureResponse:
       allOf:
         - $ref: "#/components/schemas/IncomeResponse"
@@ -9322,6 +9343,32 @@ components:
         - toReview
         - filed
       description: READY receipts in the library, per filing status
+    ReceiptDetail:
+      allOf:
+        - $ref: "#/components/schemas/ExpenseReceipt"
+        - type: object
+          properties:
+            vendorDefaults:
+              $ref: "#/components/schemas/ReceiptVendorDefaults"
+          required:
+            - vendorDefaults
+    ReceiptVendorDefaults:
+      type: object
+      nullable: true
+      properties:
+        vendorId:
+          type: string
+          format: uuid
+        currency:
+          allOf:
+            - $ref: "#/components/schemas/Currency"
+            - nullable: true
+        vat:
+          $ref: "#/components/schemas/VendorVat"
+      required:
+        - vendorId
+        - currency
+        - vat
     ApproveReceiptResponse:
       type: object
       properties:
@@ -20736,11 +20783,11 @@ paths:
           in: path
       responses:
         "200":
-          description: The receipt
+          description: The receipt, with its vendor's defaults (MUT-303)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ExpenseReceipt"
+                $ref: "#/components/schemas/ReceiptDetail"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:
