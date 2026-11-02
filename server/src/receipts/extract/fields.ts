@@ -1,8 +1,12 @@
-import { COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, TOTAL } from './keywords.js';
+import { type Buyer, PHONE_NUMBER, REGISTRATION_NUMBER } from './buyer.js';
+import { COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
 import { countMatches } from './normalize.js';
 import type { Row } from './types.js';
 
-/** MUT-441: the vendor's details on a receipt: registration no., phone, email, name. Pure. */
+/**
+ * MUT-441: the vendor's details on a receipt: registration no., phone, email, name. Pure. MUT-514: never from a
+ * bill-to block's rows, and never a number that is the buyer's (`Buyer`), wherever on the receipt it is printed.
+ */
 
 export interface Reading<T> {
   value: T;
@@ -26,34 +30,33 @@ export function isValidIsraeliRegistration(digits: string): boolean {
   return sum % 10 === 0;
 }
 
-const REGISTRATION_NUMBER = /(?<!\d)\d(?:[\s-]?\d){7,8}(?!\d)/g;
 const RULE_REGISTRATION = 0.9;
 
 /** A registration number after its label (on the label's row or the next), whose check digit holds. A failing one is no answer. */
-export function readRegistration(rows: readonly Row[]): Reading<string> | null {
+export function readRegistration(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
   for (let i = 0; i < rows.length; i += 1) {
-    if (!hasKeyword(rows[i]!.folded, REGISTRATION)) continue;
-    for (const row of [rows[i]!, rows[i + 1]].filter((r): r is Row => r !== undefined)) {
+    if (!hasKeyword(rows[i]!.folded, REGISTRATION) || buyer.rows.has(rows[i]!)) continue;
+    for (const row of [rows[i]!, rows[i + 1]].filter((r): r is Row => r !== undefined && !buyer.rows.has(r))) {
       for (const match of row.text.matchAll(REGISTRATION_NUMBER)) {
         // An eight-digit dealer number is a nine-digit ID printed without its leading zero.
         const digits = match[0].replace(/\D/g, '').padStart(ISRAELI_REGISTRATION_DIGITS, '0');
-        if (isValidIsraeliRegistration(digits)) return { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
+        if (isValidIsraeliRegistration(digits) && !buyer.has(digits)) return { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
       }
     }
   }
   return null;
 }
 
-const PHONE_NUMBER = /(?:\+|00)\d{3}[\s-]?\d{1,2}[\s-]?\d{3}[\s-]?\d{4}(?!\d)|(?<!\d)0\d{1,2}[\s-]?\d{3}[\s-]?\d{4}(?!\d)|(?<![\d*])\*\d{4}(?!\d)/;
+const PHONE_NUMBERS = new RegExp(PHONE_NUMBER.source, 'g');
 const RULE_PHONE_LABELLED = 0.85;
 const RULE_PHONE_BARE = 0.65;
 
 /** A phone number: one after a phone label first; else the first that looks like one, less sure. Never on a registration row. */
-export function readPhone(rows: readonly Row[]): Reading<string> | null {
+export function readPhone(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
   let bare: Reading<string> | null = null;
   for (const row of rows) {
-    if (hasKeyword(row.folded, REGISTRATION)) continue;
-    const match = PHONE_NUMBER.exec(row.text);
+    if (hasKeyword(row.folded, REGISTRATION) || buyer.rows.has(row)) continue;
+    const match = [...row.text.matchAll(PHONE_NUMBERS)].find((m) => !buyer.has(m[0]));
     if (!match) continue;
     const value = match[0].trim().slice(0, 40);
     if (hasKeyword(row.folded, PHONE)) return { value, rule: RULE_PHONE_LABELLED, conf: row.conf };
@@ -79,6 +82,12 @@ const VENDOR_MAX_LENGTH = 60;
 const VENDOR_MAX_DIGIT_SHARE = 0.25;
 const RULE_VENDOR = 0.7;
 const RULE_VENDOR_COMPANY = 0.85;
+/** MUT-514 (O1): a street and house number between words (`הגפן 22 רמת גן`): an address line, not a name. */
+const ADDRESS = /^[\p{L}"'.\s-]+\s\d{1,4}[\s,-]+[\p{L}"'.\s-]*\p{L}[\p{L}"'.\s-]*$/u;
+
+function looksLikeAddress(row: Row): boolean {
+  return hasKeyword(row.folded, STREET) || (ADDRESS.test(row.text) && !hasKeyword(row.folded, COMPANY));
+}
 
 function looksLikeName(row: Row): boolean {
   const compact = row.text.replace(/\s/g, '');
@@ -89,11 +98,17 @@ function looksLikeName(row: Row): boolean {
   return ![NOT_VENDOR, REGISTRATION, PHONE, DATE_LABEL, TOTAL, NOT_TOTAL].some((set) => hasKeyword(row.folded, set));
 }
 
-/** The first of the top rows that reads as a name (not a title, a number, a date or a contact line); surer with a company form. */
-export function readVendor(rows: readonly Row[]): Reading<string> | null {
+/**
+ * The first of the top rows that reads as a name (not a title, a number, a date or a contact line); surer with a
+ * company form. Never a bill-to row (MUT-514).
+ */
+export function readVendor(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
   for (const row of rows.slice(0, VENDOR_ROWS)) {
     // MUT-504: a top row longer than a name is two columns OCR joined; the rows under it are its address, not a name.
     if (row.text.length > VENDOR_MAX_LENGTH) return null;
+    if (buyer.rows.has(row)) continue;
+    // MUT-514 (OV-8): an address before any name: the name was not read, and a row under it would be a guess.
+    if (looksLikeAddress(row)) return null;
     if (!looksLikeName(row)) continue;
     const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').trim();
     if (!value) continue;

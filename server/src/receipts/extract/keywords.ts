@@ -31,6 +31,8 @@ export const SUBTOTAL = keywords(
   'סה"כ סכומים', 'סכומים ב', 'חייב במע"מ', 'חייב מע"מ',
   'المجموع الفرعي', 'قبل الضريبة', 'غير شامل',
   'subtotal', 'sub total', 'sub-total', 'before vat', 'before tax', 'excl', 'excluding',
+  // MUT-514: the pre-VAT amount, as English and Arabic tax invoices label it.
+  'total to vat', 'amount before vat', 'net amount', 'المبلغ قبل الضريبة',
 );
 
 /**
@@ -46,13 +48,36 @@ export const DISCOUNT = keywords('הנחה', 'הנחות', 'חסכת', 'חיסכ
 export const NOT_TOTAL = [...SUBTOTAL, ...DISCOUNT, ...keywords('פריטים', 'כמות', 'عدد الأصناف', 'الكمية', 'total items', 'items', 'qty', 'quantity')];
 
 /** A VAT line that is really the total including VAT. */
-export const INCLUSIVE = keywords('כולל', 'כולל מע"מ', 'شامل', 'شامل الضريبة', 'incl', 'including', 'inc. vat');
+export const INCLUSIVE = keywords('כולל', 'כולל מע"מ', 'شامل', 'شامل الضريبة', 'incl', 'including', 'inc. vat', 'inc. tax');
 
 export const VAT = keywords('מע"מ', 'מעמ', 'ضريبة القيمة المضافة', 'الضريبة', 'ضريبة', 'ض.ق.م', 'vat', 'tax');
 
-export const CASH = keywords('מזומן', 'שולם', 'نقدا', 'نقدي', 'المدفوع', 'مدفوع', 'cash', 'tendered', 'paid');
+/** Cash handed over: more than the total when change is given. */
+export const TENDERED = keywords('מזומן', 'نقدا', 'نقدي', 'cash', 'tendered');
+/** What was paid. On a total-labelled row ("סה"כ שולם", "total paid") it is the total, not cash tendered (MUT-514). */
+export const PAID = keywords('שולם', 'المدفوع', 'مدفوع', 'paid');
+export const CASH = [...TENDERED, ...PAID];
 
 export const CHANGE = keywords('עודף', 'الباقي', 'المتبقي', 'الفكة', 'باقي', 'change');
+
+/** MUT-514: a tip or service charge, a part added on top: never the total. */
+export const TIP = keywords('תשר', 'טיפ', 'service charge', 'tip', 'gratuity', 'بقشيش', 'خدمة');
+
+/**
+ * MUT-514 (OV-7): one instalment of a card payment, never the total: a labelled part, or a count above one
+ * (`תשלומים: 3`, `2 מתוך 3`). A single payment (`מס' תשלומים: 1`) is an ordinary card slip.
+ */
+const INSTALLMENT_PART = keywords('תשלום ראשון', 'תשלום נוסף', 'installment', 'قسط');
+const INSTALLMENT_COUNT = /(?:תשלומים|installments|اقساط)\s*:?\s*(\d{1,2})(?!\d)|(?<!\d)\d{1,2}\s*מתוך\s*(\d{1,2})(?!\d)/u;
+
+export function isInstallment(folded: string): boolean {
+  if (hasKeyword(folded, INSTALLMENT_PART)) return true;
+  const count = INSTALLMENT_COUNT.exec(folded);
+  return count !== null && Number(count[1] ?? count[2]) > 1;
+}
+
+/** MUT-514 (T1): what is still to pay ("יתרה"): a labelled amount, though not a total label of its own. */
+export const BALANCE = keywords('יתרה', 'יתרה לתשלום', 'balance', 'الرصيد');
 
 export const DATE_LABEL = keywords('תאריך', 'التاريخ', 'تاريخ', 'date');
 
@@ -66,6 +91,8 @@ export const REGISTRATION = keywords(
   'ח.פ', 'ח"פ', 'חפ', 'ע.מ', 'ע"מ', 'עוסק מורשה', 'עוסק פטור', "מס' עוסק", 'מספר עוסק', 'מס עוסק', 'ח.צ', 'ע.ר',
   'مشتغل مرخص', 'المشتغل', 'رقم مشتغل', 'رقم الشركة', 'مشتغل',
   'vat no', 'vat reg', 'reg no', 'reg. no', 'company no', 'business no', 'tax id', 'osek',
+  // MUT-514: the English for עוסק מורשה.
+  'authorized dealer', 'dealer no',
 );
 
 export const PHONE = keywords('טל', "טל'", 'טלפון', 'נייד', 'פלאפון', 'هاتف', 'تلفون', 'جوال', 'ت', 'tel', 'phone', 'mobile', 'mob');
@@ -79,3 +106,22 @@ export const NOT_VENDOR = keywords(
 
 /** A company form in a name: the vendor line is surer when it carries one. */
 export const COMPANY = keywords('בע"מ', 'חברת', 'ltd', 'inc', 'llc', 'gmbh', 'co.', 'شركة', 'ش.م', 'ذ.م.م', 'م.خ.م');
+
+/**
+ * MUT-514 (D6, D10): a bill-to label. The rows it heads name the customer, whose numbers are never the vendor's.
+ * `السيداة` is how OCR prints `السيد/ة`.
+ */
+export const CUSTOMER = keywords(
+  'לכבוד', 'לקוח', 'שם לקוח', 'עבור', 'ת.ז',
+  'bill to', 'billed to', 'customer', 'sold to', 'to:',
+  'السيد', 'السيدة', 'السيد/ة', 'السيداة', 'السادة', 'العميل', 'الزبون', 'رقم الهوية',
+);
+
+/** MUT-514 (R9): phrases that hold a CUSTOMER word but head no bill-to block: a copy's title, a customer number, payee details. */
+export const NOT_CUSTOMER = keywords('העתק לקוח', 'customer copy', 'מספר לקוח', "מס' לקוח", 'מס.לקוח', 'pay to', 'payable to');
+
+/** MUT-514 (O1): a street, the start of an address line. */
+export const STREET = keywords("רח'", 'רחוב', "שד'", 'شارع', 'street', 'st.', 'road', 'rd.');
+
+/** MUT-514: column headings of an item table; a row with two of them is the table's header. */
+export const TABLE_COLUMN = keywords('תיאור', 'פריט', 'כמות', 'מחיר', 'סכום', 'description', 'item', 'qty', 'quantity', 'price', 'amount', 'الوصف', 'الصنف', 'الكمية', 'السعر', 'المبلغ');
