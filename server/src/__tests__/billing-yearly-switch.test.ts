@@ -242,6 +242,17 @@ describe('POST /v1/billing/yearly-switch (D1, D4, R2)', () => {
     expect(h.plan.switches).toEqual([]);
   });
 
+  it('on a sandbox test clock, previews and switches at the clock’s time, not the server’s', async () => {
+    const h = harness();
+    const u = await person(h);
+    const { id } = await subscribed(h, u.userId);
+    const clock = new Date('2026-10-15T12:00:00Z');
+    h.plan.plans.set(id, { ...h.plan.plans.get(id)!, clockNow: clock });
+    expect((await read(await u.preview())).prorationDate).toBe(clock.toISOString());
+    expect((await u.switch({ prorationDate: clock.toISOString(), expectedAmountDue: 27100 })).status).toBe(200);
+    expect(h.plan.switches[0]!.prorationDate).toEqual(clock);
+  });
+
   it('takes only the two fields it needs', async () => {
     const h = harness();
     const u = await person(h);

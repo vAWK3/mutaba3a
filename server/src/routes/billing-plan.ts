@@ -100,7 +100,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       const now = c.get('now')();
       await limit(c, options.limiter, user.id, now);
       const { plan, live, decision } = await switchOf(user, now);
-      const prorationDate = new Date(Math.floor(now.getTime() / 1000) * 1000);
+      const prorationDate = new Date(Math.floor(subscriptionNow(live, now).getTime() / 1000) * 1000);
       const { amountDue, currency } = await preview(user, plan, live, decision.yearly.id, prorationDate);
       if (currency !== decision.currency) throw notAvailable('NO_PRICE');
       return c.json({ amountDue, currency: decision.currency, yearlyAmount: decision.yearly.unitAmount, renewsOn: aYearAfter(prorationDate).toISOString(), prorationDate: prorationDate.toISOString() }, 200);
@@ -127,9 +127,9 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
       const now = c.get('now')();
       await limit(c, options.limiter, user.id, now);
       const prorationDate = new Date(body.prorationDate);
-      const age = now.getTime() - prorationDate.getTime();
-      if (age > PRORATION_DATE_MAX_AGE_MS || age < -CLOCK_SKEW_MS) throw planConflict('AMOUNT_CHANGED');
       const { plan, live, decision } = await switchOf(user, now);
+      const age = subscriptionNow(live, now).getTime() - prorationDate.getTime();
+      if (age > PRORATION_DATE_MAX_AGE_MS || age < -CLOCK_SKEW_MS) throw planConflict('AMOUNT_CHANGED');
       const again = await preview(user, plan, live, decision.yearly.id, prorationDate);
       if (again.amountDue !== body.expectedAmountDue || again.currency !== decision.currency) throw planConflict('AMOUNT_CHANGED');
       const result = await viaStripe(
@@ -149,6 +149,11 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
   );
 
   return app;
+}
+
+/** Stripe prorates on the subscription's own clock: a sandbox test clock's time in QA, the server's otherwise. */
+function subscriptionNow(live: LivePlan, now: Date): Date {
+  return live.clockNow ?? now;
 }
 
 function requirePlan(plan: PlanGateway | null): PlanGateway {

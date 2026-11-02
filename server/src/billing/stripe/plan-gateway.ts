@@ -36,6 +36,11 @@ export interface LivePlan {
   currentPeriodEnd: Date | null;
   discounted: boolean;
   paused: boolean;
+  /**
+   * A sandbox test clock's frozen time, else null. Stripe prorates on the subscription's own clock, so the switch's
+   * proration date is this one when it is set (QA's test clocks) and the server's time otherwise.
+   */
+  clockNow: Date | null;
 }
 
 export interface SwitchInput {
@@ -100,7 +105,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
 
   return {
     async planOf(subscriptionId) {
-      const sub = await wrapped(() => stripe.subscriptions.retrieve(subscriptionId));
+      const sub = await wrapped(() => stripe.subscriptions.retrieve(subscriptionId, { expand: ['test_clock'] }));
       const item = sub.items.data[0];
       if (!item) throw new StripeGatewayError({ code: 'no_items', type: 'UnexpectedResponse', requestId: null, transient: false });
       const state = stateOf(sub);
@@ -114,6 +119,7 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
         currentPeriodEnd: state.currentPeriodEnd,
         discounted: (sub.discounts ?? []).length > 0,
         paused: sub.pause_collection !== null && sub.pause_collection !== undefined,
+        clockNow: typeof sub.test_clock === 'object' && sub.test_clock !== null ? new Date(sub.test_clock.frozen_time * 1000) : null,
       };
     },
     async paidInvoiceCount(subscriptionId, { fresh = false } = {}) {

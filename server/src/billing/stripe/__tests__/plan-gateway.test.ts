@@ -50,9 +50,18 @@ describe('PlanGateway.planOf', () => {
       currentPeriodEnd: new Date(1_792_000_000 * 1000),
       discounted: true,
       paused: true,
+      clockNow: null,
     });
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions/sub_1']);
+    expect(seen[0]!.query.get('expand[0]')).toBe('test_clock');
     expect(seen[0]!.headers.get('stripe-version')).toBe(STRIPE_API_VERSION);
+  });
+});
+
+describe('PlanGateway.planOf on a sandbox test clock', () => {
+  it('reads the clock’s frozen time, which the switch prorates at', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 200, body: subscription({ test_clock: { id: 'clock_1', object: 'test_helpers.test_clock', frozen_time: 1_790_000_000 } }) }));
+    expect((await gateway.planOf('sub_1')).clockNow).toEqual(new Date(1_790_000_000 * 1000));
   });
 });
 

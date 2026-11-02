@@ -354,7 +354,7 @@ export class FakePlanGateway implements PlanGateway {
 
   /** A live monthly list-price subscription, as Stripe would hold it. */
   withPlan(id: string, customer: string, over: Partial<LivePlan> = {}, paidInvoices = 2): this {
-    this.plans.set(id, { id, customer, status: 'active', itemId: `si_${id}`, lookupKey: 'freelancer_list_monthly_ils', cancelAtPeriodEnd: false, currentPeriodEnd: null, discounted: false, paused: false, ...over });
+    this.plans.set(id, { id, customer, status: 'active', itemId: `si_${id}`, lookupKey: 'freelancer_list_monthly_ils', cancelAtPeriodEnd: false, currentPeriodEnd: null, discounted: false, paused: false, clockNow: null, ...over });
     this.paid.set(id, paidInvoices);
     return this;
   }
