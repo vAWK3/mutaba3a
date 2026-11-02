@@ -2,8 +2,8 @@
 
 Epic MUT-528 (pricing program), build order step 5. Planned 2026-11-02 on `feature/mut-533-534-card-failed-comeback`
 (worktree `.claude/worktrees/mut-533-534`, from local main cb083870). One plan, two stories, built and merged in order:
-MUT-533 first, then MUT-534. **Status: awaiting Basel's approval of the ▲ decisions and the copy deck (§6).** The eng
-review (§10, R1–R15) is folded in.
+MUT-533 first, then MUT-534. **Status: APPROVED by Basel on 2026-11-02: the product decisions (marked "Basel") and the copy deck (§6) as
+written. He declined card digits in mail.** The eng review (§10, R1–R15) is folded in.
 
 ## 0. Neighbourhood
 
@@ -34,11 +34,11 @@ review (§10, R1–R15) is folded in.
   `renewal-mail.ts`: candidates from the mirror, Stripe decides, the send log keeps each key once, a 200 s budget, a
   dry run, a job door and an admin door.
 
-## 1. Design decisions (recommendations; ▲ = Basel decides)
+## 1. Design decisions (Basel answered the product ones on 2026-11-02, marked "Basel")
 
 ### MUT-533: failed-card mail
 
-- **D1 ▲ An hourly job, not a send inside the webhook.** `POST /jobs/v1/billing/card-failed-mail`, Cloud Scheduler at
+- **D1 An hourly job, not a send inside the webhook.** `POST /jobs/v1/billing/card-failed-mail`, Cloud Scheduler at
   `7 * * * *` (Jerusalem): the first mail goes out within the hour of the mirror turning `past_due`. *Why not the
   webhook:* it must answer Stripe within 4 s; a slow or failed send would delay the 200 or be lost, and the reminder
   needs a job anyway. If a webhook is missed, the nightly reconcile mirrors `past_due` and the next run catches up.
@@ -54,16 +54,16 @@ review (§10, R1–R15) is folded in.
     reminder can't wait for "3 days before the end".
   - Nothing for a paid, voided or uncollectible invoice, a subscription no longer `past_due`, or a payment that
     **needs the customer to authenticate** (3-D Secure, `requires_action`, R9): Stripe's own "confirm your payment"
-    mail handles that and stays on.
-- **D3 ▲ The retry window is config, matching Stripe's dashboard:** `BILLING_RETRY_WINDOW_DAYS`, one of 7, 14, 21 or
+    mail handles that and stays on (Basel).
+- **D3 The retry window is config, matching Stripe's dashboard:** `BILLING_RETRY_WINDOW_DAYS`, one of 7, 14, 21 or
   28 (default 14 = Stripe's default "8 tries within 2 weeks"); 28 is the cap so every key outlives it in the send log
   (R2, R13). A Terraform variable; the operator step confirms dashboard and variable agree.
-- **D4 ▲ What the mail says:** what failed (the plan's payment, the card's last 4 digits when Stripe has them), that
+- **D4 What the mail says (Basel: no card digits):** what failed (the plan's payment), that
   the account stays fully open while Stripe retries, and one button to update the card. The reminder says the plan
   ends "within N days" at most (N = days to the window's end, an upper bound) and what follows: read-only while the
-  lapse gate is on, just "your plan ends" while it is off. No amount, no date, no card brand or expiry. **ADR-159 §5
-  override log entry:** the last 4 digits may appear in these two mails only.
-- **D5 ▲ The button opens Billing; Billing's past-due panel goes straight to Stripe's card form.** A Customer Portal
+  lapse gate is on, just "your plan ends" while it is off. No amount, no date, no card details at all:
+  Basel declined the last-4-digits exception, so ADR-159 §5 holds for these two mails unchanged.
+- **D5 (Basel: yes) The button opens Billing; Billing's past-due panel goes straight to Stripe's card form.** A Customer Portal
   URL expires in minutes, so the mail links to `/?billing=true`. The `grace` panel's action becomes **Update card**:
   a portal session with `flow_data: { type: 'payment_method_update', after_completion: redirect to
   ?billing=true&portal=returned }` (R10), so the existing return poll runs. The spike checks that the new card
@@ -77,7 +77,7 @@ review (§10, R1–R15) is folded in.
 
 ### MUT-534: the come-back offer
 
-- **D8 ▲ The coupon is an amount off, held by Stripe:** `mtb3a_comeback_first_month`, **₪20 off, with a USD
+- **D8 The coupon is an amount off, held by Stripe:** `mtb3a_comeback_first_month`, **₪20 off, with a USD
   currency option of $6**, `duration: once`, Freelancer product only, no end date. First month back = monthly list
   less that: **₪9 / $3**; a yearly comeback gets the same amount off its first invoice: **₪270 / $84**. No amount in
   the code: the server reads the coupon (with `applies_to` and `currency_options` expanded) and the catalog. A coupon
@@ -87,20 +87,20 @@ review (§10, R1–R15) is folded in.
 - **D9 `offers.json` gains `kind: "comeback"`** (one entry `"comeback-2026"`, no `interval`: it applies to both),
   with `BILLING_COMEBACK_COUPON_ID` as the QA override (refused on a live key, like R6). `offersFor` takes an options
   object. `resolveOffer` stays launch-only. No second offer machinery.
-- **D10 ▲ A lapse is Stripe ending a Freelancer subscription that took money:** status `canceled`, `ended_at` set,
+- **D10 A lapse is Stripe ending a Freelancer subscription that took money:** status `canceled`, `ended_at` set,
   at least one invoice with money (a trial that ended unpaid is not a lapse). The mirror gains
   `billing_subscriptions.endedAt` from `ended_at` (also in `keepStatus` and the change audit, R7). The operator step
   confirms that, when retries run out, Stripe **cancels** (its default). **A lapsed Firm payer gets no come-back
-  offer** (R8: it would sell them Freelancer at ₪9); Firm isn't sold yet.
-- **D11 ▲ Two mails, each in a two-week window:** `day-30` while 30–44 days have passed since the end, `day-90` while
+  offer** (Basel; R8: it would sell them Freelancer at ₪9); Firm isn't sold yet.
+- **D11 (Basel: day 30 and day 90) Two mails, each in a two-week window:** `day-30` while 30–44 days have passed since the end, `day-90` while
   90–104 days have. Only the current stage is sent. Daily at 10:30 Jerusalem.
-- **D12 ▲ "Offered" is a durable row, written by the job** (R2, R5): before sending a stage the job claims a
+- **D12 (Basel: the offer opens with our mail) "Offered" is a durable row, written by the job** (R2, R5): before sending a stage the job claims a
   `billing_retention_events` row of new kind `COMEBACK_OFFERED` (`reason` = the stage; unique per person and stage, a
   partial index, ADR-240's claim-then-act with release on a definite failure). That row is the once-ever record of
   the mail (the send log forgets after 30 days), and it **opens the offer**: Billing and Checkout offer the come-back
   price only to someone with such a row. The job is where the Stripe facts are checked (took money, not covered), so
   GET `/v1/billing` stays cheap.
-- **D13 ▲ Who (one rule, `comebackEligibility`, used by the job, GET and Checkout):**
+- **D13 Who (one rule, `comebackEligibility`, used by the job, GET and Checkout):**
   - nothing running: `checkoutRefusalOf` passes first (R6: `unpaid`, `paused` refuse Checkout, so they never see it);
   - their latest money-taking Freelancer subscription ended 30 or more days ago;
   - no subscription of theirs ever carried the come-back offer (`offerId`, ignoring `incomplete` /
@@ -110,15 +110,15 @@ review (§10, R1–R15) is folded in.
   - not closing their account.
 
   Once open, the offer has no end date: it stays until used. It can't stack with the launch offer (that one needs
-  someone who never subscribed). **Lapsed founders are eligible** ▲: Checkout sells only list prices, so they come
+  someone who never subscribed). **Lapsed founders are eligible** (Basel): Checkout sells only list prices, so they come
   back at ₪9 then ₪29, not on top of a founder price.
-- **D14 ▲ Billing shows it and Checkout checks what was shown** (the MUT-525 pattern): GET `/v1/billing` gains
+- **D14 (Basel: yes) Billing shows it and Checkout checks what was shown** (the MUT-525 pattern): GET `/v1/billing` gains
   `comeback: { id, firstMonth: {ILS, USD}, firstYear: {ILS, USD} } | null` (eligible people only); the Subscribe step
   shows the welcome-back line for the chosen interval; Checkout sends `expectedOffer: "comeback-2026"` and the server
   decides again on mirror + Stripe with a fresh coupon read. A stale one answers 409 with the existing reason
   `OFFER_ENDED` plus `details.offer` (R11; the message becomes offer-neutral), never a silent full price. The pay page
   gets an ar + en line above Pay (a monthly or yearly wording; `offerSubmitMessage` stops assuming a year).
-- **D15 ▲ Mail may name the come-back price** (ADR-159 §5 override log): the first month, the monthly list price
+- **D15 Mail may name the come-back price** (Basel approved; ADR-159 §5 override log): the first month, the monthly list price
   after it, the first year and the yearly list price, in the currency of the person's last subscription. No money
   records, no dates.
 
@@ -129,18 +129,16 @@ review (§10, R1–R15) is folded in.
 - **`server/src/billing/card-failed-mail.ts` (new):** `cardFailedStageOf(episode, now, windowDays)` (pure, D2) and
   `runCardFailedMail(options)` shaped like `runRenewalMail` (skips `gone`, `not-past-due`, `settled`,
   `needs-authentication`, `no-stage`, `suppressed`; `failed` per row on a throw; summary; dry run; 200 s budget).
-- **`plan-gateway.ts`:** `failedPaymentOf(subscriptionId)` = `subscriptions.retrieve` (status, `default_payment_method`)
+- **`plan-gateway.ts`:** `failedPaymentOf(subscriptionId)` = `subscriptions.retrieve` (status)
   then `invoices.list({ subscription, status: 'open' })`, then `invoices.retrieve(oldest, { expand:
   ['payments.data.payment.payment_intent'] })` (4 levels; a 5-level expand from the subscription is refused, R1).
-  Returns `{ status, invoiceId, attemptCount, nextPaymentAttempt, firstFailedAt, needsAuthentication, last4 }`; last4
-  from the intent's `last_payment_error.payment_method.card`, else the subscription's default payment method.
+  Returns `{ status, invoiceId, attemptCount, nextPaymentAttempt, firstFailedAt, needsAuthentication }`.
   `firstFailedAt` per the spike (`status_transitions.finalized_at` or the first payment's `created`).
   `createPortalSession` (checkout-gateway) takes an optional card flow with its return URL.
 - **Store:** `billing.pastDueCandidates()` (ports, memory, Prisma): `status = 'past_due'`, linked ACTIVE payer not
   closing (the `offerRenewalCandidates` filter), oldest first.
-- **Mail:** `card-failed` (`{ last4: string | null, updateLink }`) and `card-failed-reminder`
-  (`{ last4, daysLeft, readOnlyAfter, updateLink }`) in `email/ports.ts` (+ `RECIPIENT_CAP_EXEMPT`) and
-  `templates/copy.ts`; the ports comment gains the override.
+- **Mail:** `card-failed` (`{ updateLink }`) and `card-failed-reminder` (`{ daysLeft, readOnlyAfter, updateLink }`)
+  in `email/ports.ts` (+ `RECIPIENT_CAP_EXEMPT`) and `templates/copy.ts`.
 - **Routes:** `routes/card-failed-mail.ts` (job door with `X-Job-Token`, counts only; admin door with rows), mounted in
   `app.ts`; `npm run billing:card-failed-mail [-- --dry-run]`. `routes/billing.ts`: `PortalSessionRequestSchema`
   gains `flow?: 'card'`; the return path does the D5 fallback only if the spike needs it.
@@ -186,7 +184,7 @@ Live sandbox, memory mailer, outbox via `GET /admin/v1/dev-outbox`. A test clock
 spike), so each flow starts its clock far enough back that "today" is the day under test: no time override.
 
 - `card-failed-mail` (core): a monthly subscriber's renewal declines (`4000 0000 0000 0341`); run the job; one Arabic
-  mail naming •••• 0341, no amount; its button opens Billing on the past-due panel; **Update card** opens Stripe's
+  mail, with no amount and no card details; its button opens Billing on the past-due panel; **Update card** opens Stripe's
   card form; a good card pays the open invoice and Billing is Active.
 - `card-failed-reminder`: the first failure was 8 days ago (window 14); run the job twice; exactly one reminder; a
   third run sends nothing (2 mails for the invoice, no more).
@@ -202,13 +200,13 @@ spike), so each flow starts its clock far enough back that "today" is the day un
 
 **Step 0, the spike (sandbox, test clocks; needs Basel's screen awake for the Keychain):** (a) the Smart Retries
 timeline: attempt times, `next_payment_attempt`, cancel at the last attempt or the window's end, and which timestamp
-is the first failure; (b) where last4 is, and the 4-level expand; (c) the portal's card flow on a Checkout-made
+is the first failure; (b) the 4-level expand; (c) the portal's card flow on a Checkout-made
 past_due subscription: does it set the subscription's default and pay the open invoice; (d) a declined Resume-now
 invoice: past_due, Smart Retries, cancel when they run out; (e) the coupon: ₪20 with a $6 option, `once`, Freelancer,
 automatic tax: $3 + tax monthly, $84 yearly, and whether the dashboard can make the currency option; (f) 3-D Secure
 renewal with failed-payment mails off: what Stripe still sends; (g) `ended_at` after cancel-at-period-end and after
 retries run out, and metadata on `incomplete_expired`; (h) a cancelled ILS customer re-subscribing in USD.
-Results go to `.claude/designs/mut-533-534-spike-result.md`; a surprise that changes a ▲ decision goes back to Basel.
+Results go to `.claude/designs/mut-533-534-spike-result.md`; a surprise that changes one of Basel's decisions goes back to him.
 
 **MUT-533**
 1. `card-failed-mail.test.ts`: the stage table (first only within 72 h; reminder at the midpoint and not a minute
@@ -216,7 +214,7 @@ Results go to `.claude/designs/mut-533-534-spike-result.md`; a surprise that cha
    the oldest open invoice is the episode; a second open invoice adds nothing); the run (≤ 2 mails per invoice over
    many runs, suppressed, dry run, budget, one Stripe failure costs one row); a test that every Stripe expand has at
    most 4 levels.
-2. `templates.test.ts`: both templates ar + en, no amount or currency, last 4 only in these two, "within N days"
+2. `templates.test.ts`: both templates ar + en, no amount, currency or card digits, "within N days"
    plurals, gate-off wording. Config test (7/14/21/28 only).
 3. Store tests (memory and `test:db`) for `pastDueCandidates`; route tests (job token, admin rows, `flow` →
    `flow_data` with the return URL).
@@ -239,7 +237,7 @@ Results go to `.claude/designs/mut-533-534-spike-result.md`; a surprise that cha
 Verification per story (Node 22, through `heavy`): `npm run lint`, `npm run typecheck`, `npm run test:run`,
 `npm run build`; the server's `typecheck`, `lint`, `openapi:check`, `test`, `test:db`; `release-qa lint`.
 
-## 6. Copy deck (ar first, then en): **Basel approves before the build**
+## 6. Copy deck (ar first, then en): **approved by Basel 2026-11-02**
 
 **`card-failed` (MUT-533, first mail)**
 | Part | ar | en |
@@ -247,8 +245,7 @@ Verification per story (Node 22, through `heavy`): `npm run lint`, `npm run type
 | subject | لم تنجح عملية الدفع ببطاقتك | Your card didn't go through |
 | preheader | يبقى حسابك في متابعة مفتوحًا بالكامل بينما نحاول مجددًا. | Your MTB3A account stays fully open while we try again. |
 | headline | لم نتمكن من تحصيل دفعتك | We couldn't take your payment |
-| intro 1 (with last 4) | رفض البنك دفعة اشتراكك في متابعة بالبطاقة المنتهية بـ {last4}. | Your bank declined the payment for your MTB3A plan on the card ending in {last4}. |
-| intro 1 (without) | رفض البنك دفعة اشتراكك في متابعة. | Your bank declined the payment for your MTB3A plan. |
+| intro 1 | رفض البنك دفعة اشتراكك في متابعة. | Your bank declined the payment for your MTB3A plan. |
 | intro 2 | لن يتوقف شيء: يبقى حسابك مفتوحًا بالكامل بينما يحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة. | Nothing stops: your account stays fully open while Stripe tries the card again over the next few days. |
 | action | حدّث البطاقة | Update card |
 | outro | حدّثتها بالفعل؟ فلا حاجة لأي إجراء، وستنجح المحاولة القادمة. ردّ على هذه الرسالة إن احتجت إلى مساعدة. | Already updated it? Then there's nothing to do, and the next try will go through. Reply to this email if you need help. |
@@ -259,7 +256,7 @@ Verification per story (Node 22, through `heavy`): `npm run lint`, `npm run type
 | subject | ما زالت عملية الدفع ببطاقتك لا تنجح | Your card still isn't going through |
 | preheader | حدّث البطاقة ليبقى حسابك مفتوحًا. | Update it to keep your account open. |
 | headline | لم تُحصَّل دفعتك بعد | Your payment still hasn't gone through |
-| intro 1 | حاولنا مجددًا مع البطاقة المنتهية بـ {last4}، وما زال البنك يرفضها. (without: حاولنا مجددًا، وما زال البنك يرفض الدفعة.) | We tried the card ending in {last4} again, and your bank still declines it. (without: We tried again, and your bank still declines the payment.) |
+| intro 1 | حاولنا مجددًا، وما زال البنك يرفض الدفعة. | We tried again, and your bank still declines the payment. |
 | intro 2 (gate on) | إن لم تُحدَّث، ينتهي اشتراكك خلال {N أيام} على الأكثر ويصبح حسابك للقراءة فقط. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت. | If it isn't updated, your plan ends within {N days} at most, and your account becomes read-only. Your records stay, and you can download them any time. |
 | intro 2 (gate off) | إن لم تُحدَّث، ينتهي اشتراكك خلال {N أيام} على الأكثر. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت. | If it isn't updated, your plan ends within {N days} at most. Your records stay, and you can download them any time. |
 | action | حدّث البطاقة | Update card |
@@ -337,7 +334,7 @@ Verification per story (Node 22, through `heavy`): `npm run lint`, `npm run type
 | R5 | HIGH | GET can't afford Stripe/coverage reads per poll | D12 job writes the row; GET trusts it |
 | R6 | MED | `unpaid` / `paused` refuse Checkout; GET would show an offer Checkout refuses | D13 `checkoutRefusalOf` first; GET⇒Checkout test |
 | R7 | MED | `offerId` on never-paid subscriptions; Stripe re-check can't see metadata; `endedAt` audit | D13; `SubscriptionState` gains fields |
-| R8 | MED | Firm lapsers, founders, currency mismatch | D10 no Firm; D13 founders ▲; D8 Checkout currency; QA `comeback-usd` |
+| R8 | MED | Firm lapsers, founders, currency mismatch | D10 no Firm; D13 founders (Basel: eligible); D8 Checkout currency; QA `comeback-usd` |
 | R9 | MED | 3-D Secure failures aren't "declined" and get no retry | D2 skip; §7 keep Stripe's confirm mail |
 | R10 | MED | Portal flow returns to the portal home; subscription default card | D5 redirect + spike + fallback |
 | R11 | MED | `OFFER_ENDED` message is launch-specific; yearly-only submit line; positional args | D14; D9 options object |
