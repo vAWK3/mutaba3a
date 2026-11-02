@@ -265,6 +265,38 @@ Do each step only when the one before it checks out. Nothing changes for anyone 
 **Test-mode checks (Basel).** In test mode, check whether the UK account can charge in ILS and whether ILS can
 settle as ILS. Add a USD bank account for USD settlement.
 
+### 1.8 The launch offer (MUT-525, ADR-237)
+
+The campaign is one Stripe coupon; the server names its id (`server/src/billing/offers.json`) and reads it.
+
+- **Create it** (Products › Coupons › New, in the Mutaba3a account), after before-release.md's MUT-525 steps 1–3:
+  - **ID** `mtb3a_launch_yearly_2026`; **Name** `Launch offer · عرض الإطلاق` (Stripe's page shows it).
+  - **Percentage discount** 50%; **Duration** Once (the D5 spike: a `once` coupon skips the ₪0 trial invoice and
+    discounts the first paid one, `.claude/designs/mut-525-d5-spike-result.md`).
+  - **Apply to specific products:** the Freelancer product only. A coupon on any other product, or none, is no offer.
+  - **Redemption limits › Limit the date range:** Basel's end date. Set it to **00:59 Asia/Jerusalem on the day
+    after the last day**: the portal ends the offer an hour before `redeem_by` (a Checkout stays payable for an
+    hour), so it shows "until <last day>" and stops at 23:59 that day. No usage limit; reaching one would end it.
+- **Check it:** within 10 minutes GET `/v1/billing` for a trialist shows `offer` (before-release step 5).
+- **End it early:** delete the coupon. The offer disappears from the portal and the trial mails within 10 minutes,
+  with no deploy; subscriptions that already have it keep their first-year discount.
+- **Count it:** the coupon's page in Stripe lists its redemptions; PostHog has `billing_offer_shown` and
+  `billing_checkout_started` with `offer` (contract 2.6.0).
+- **Renewal notices:** about 30 days before each campaign subscription's first renewal the daily job mails its payer
+  the day and the new yearly price. `npm --prefix server run billing:renewal-mail -- --dry-run --url "$URL"` lists
+  who it would mail and why the others are skipped.
+- **Support reply** for a trialist who added a card before the launch (they are `trialing`, so the offer can't apply):
+
+  > EN: Thanks for subscribing early. The launch offer applies to people who start a yearly plan without a
+  > subscription, so it isn't on yours. If you'd like it, reply and we'll apply the first-year discount to your
+  > yearly plan by hand.
+  >
+  > AR: شكرًا لاشتراكك المبكر. عرض الإطلاق لمن يبدأ اشتراكًا سنويًا دون اشتراك سابق، لذلك لا يظهر في اشتراكك. إن
+  > أردته، ردّ على هذه الرسالة وسنطبّق خصم السنة الأولى على اشتراكك السنوي يدويًا.
+
+  **By hand (Basel decides each one):** in Stripe, open the subscription; if it is monthly, switch it to the yearly
+  list price first; then **Add coupon** → `mtb3a_launch_yearly_2026`. Never add it to a founder price.
+
 ## 2. Reset a password
 
 There's no "forgot password" form (ADR-037). The person emails support (§6), and you reply with a
