@@ -24,6 +24,8 @@
  * MUT-532: the stay offer's coupon is this run's too (BILLING_STAY_COUPON_ID, 50% off 2 months on the Freelancer
  * product), made when the env starts and deleted when it stops. The sandbox Customer Portal's cancel is turned off, as
  * live's is after the web release (pilot-runbook 3a): cancelling is MTB3A's own flow.
+ *
+ * MUT-534: the come-back coupon is this run's too (BILLING_COMEBACK_COUPON_ID, ₪20 / $6 off once), made and deleted likewise.
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -71,6 +73,17 @@ export async function ensureStayCoupon(key, id = STAY_COUPON_ID) {
   const existing = await stripe(key, 'GET', `coupons/${id}`);
   if (existing.status !== 404) return existing.json;
   const params = { id, name: 'Stay offer · عرض البقاء', percent_off: '50', duration: 'repeating', duration_in_months: '2', 'applies_to[products][0]': PRODUCT_ID };
+  return (await stripe(key, 'POST', 'coupons', params)).json;
+}
+
+/** MUT-534: this run's come-back coupon id. */
+export const COMEBACK_COUPON_ID = `qa_back_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** MUT-534 (D8): the come-back coupon as the runbook makes it live: ₪20 off (a $6 option) the first invoice, Freelancer only. */
+export async function ensureComebackCoupon(key, id = COMEBACK_COUPON_ID) {
+  const existing = await stripe(key, 'GET', `coupons/${id}`);
+  if (existing.status !== 404) return existing.json;
+  const params = { id, name: 'Welcome back · عرض العودة', amount_off: '2000', currency: 'ils', 'currency_options[usd][amount_off]': '600', duration: 'once', 'applies_to[products][0]': PRODUCT_ID };
   return (await stripe(key, 'POST', 'coupons', params)).json;
 }
 
@@ -220,6 +233,7 @@ async function main() {
   ensureDatabase();
   await ensureCatalog(key);
   await ensureStayCoupon(key);
+  await ensureComebackCoupon(key);
   const whsec = webhookSecret(key);
 
   const children = [];
@@ -241,6 +255,7 @@ async function main() {
     // MUT-525: never leave this run's coupon in the shared sandbox.
     deleteOfferCoupon(key).catch(() => undefined);
     deleteOfferCoupon(key, STAY_COUPON_ID).catch(() => undefined);
+    deleteOfferCoupon(key, COMEBACK_COUPON_ID).catch(() => undefined);
     setTimeout(() => process.exit(code), 1500).unref();
   };
   process.on('SIGINT', () => stop());
@@ -269,6 +284,7 @@ async function main() {
       BILLING_OFFER_COUPON_ID: OFFER_COUPON_ID,
       // MUT-532: this run's stay coupon, read uncached.
       BILLING_STAY_COUPON_ID: STAY_COUPON_ID,
+      BILLING_COMEBACK_COUPON_ID: COMEBACK_COUPON_ID,
       // MUT-418: the trial flows start at a real signup: the memory mailer (read through GET /admin/v1/dev-outbox), the
       // fixture domain checker (business.example opens at once) and the always-pass Turnstile test secret
       // (config.ts's development default). Each spec sends its own X-Forwarded-For, so the per-IP budget never adds up.
@@ -288,7 +304,7 @@ async function main() {
   });
 
   mkdirSync(path.join(ROOT, 'qa', '.state'), { recursive: true });
-  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN, offerCouponId: OFFER_COUPON_ID, stayCouponId: STAY_COUPON_ID }, null, 2));
+  writeFileSync(path.join(ROOT, 'qa', '.state', 'portal-live.json'), JSON.stringify({ apiOrigin: API_ORIGIN, portalOrigin: PORTAL_ORIGIN, adminToken: ADMIN_TOKEN, offerCouponId: OFFER_COUPON_ID, stayCouponId: STAY_COUPON_ID, comebackCouponId: COMEBACK_COUPON_ID }, null, 2));
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
