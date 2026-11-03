@@ -56,10 +56,11 @@ export interface ReceiptReaderOptions {
 }
 
 /**
- * MUT-514: the server reader's generation. 2: no confidently wrong VAT, totals, bill-to numbers or dates. One constant
- * for the stamp and for `receipts:reread --reader-below`, so they can't drift.
+ * MUT-514: the server reader's generation. 2: no confidently wrong VAT, totals, bill-to numbers or dates. 3 (MUT-540):
+ * pages turned upright, PDF pages sized by area, card slips under their label. One constant for the stamp and for
+ * `receipts:reread --reader-below`, so they can't drift.
  */
-export const SERVER_READER_GENERATION = 2;
+export const SERVER_READER_GENERATION = 3;
 
 /** The reader version a server read stamps when it added a field (MUT-441 plan, "Merge rule"). */
 export function serverReaderVersion(engine: string): string {

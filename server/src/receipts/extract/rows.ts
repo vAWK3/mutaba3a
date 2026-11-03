@@ -1,6 +1,8 @@
+import { amountsIn, moneyIn } from './amounts.js';
+import { withoutCurrencyMarks } from './currency.js';
 import { countMatches, foldForMatch, LATIN_LETTER, normalizeText, RTL_LETTER } from './normalize.js';
 import type { KeywordSet } from './keywords.js';
-import { hasKeyword } from './keywords.js';
+import { CARD_SLIP, hasKeyword, SUBTOTAL, TOTAL, UNIT, VAT } from './keywords.js';
 import type { OcrLine, Row, RowPart } from './types.js';
 
 /** Two boxes share a row when their vertical overlap is at least this share of the shorter one. */
@@ -41,9 +43,91 @@ function toRow(draft: RowDraft): Row | null {
   return { text, folded: foldForMatch(text), conf: Math.min(...draft.segments.map((s) => s.conf)), parts };
 }
 
+/** MUT-540 (E1, E3): the labels whose amount matters to the money read: a total, a card slip, a subtotal or the VAT. */
+const MONEY_LABEL: KeywordSet = [...TOTAL, ...CARD_SLIP, ...SUBTOTAL, ...VAT];
+
+/**
+ * MUT-540 (E1, D11): a thermal printer's decimal point that OCR read as a comma (`184,36`). Two digits after a comma
+ * are never a thousands group. Only on money-label and amount-only rows: a litres or price-per-litre row
+ * (`35,12 ליטרים`, `סה"כ ליטרים 35,12`, `המחיר לליטר 7,31`) keeps its comma, so it never becomes an amount the total's
+ * arithmetic would use.
+ */
+const COMMA_DECIMAL = /(?<![\d,.])(\d{1,6}),(\d{2})(?![\d,])/g;
+
+/** MUT-540 (E3): a label and the amount printed under it are one line when the gap is at most this many row heights. */
+const LABEL_GAP_ROWS = 1.5;
+/** MUT-540 (review): an amount OCR garbled with letter O's (`3OO.OO`): still an amount, so the label has its own. */
+const GARBLED_AMOUNT = /[0-9O]+[.,][0-9O]{2}(?![0-9O])/;
+
+/** A money label's row: a total, card-slip, subtotal or VAT label, never one naming a quantity's unit (litres). */
+function isMoneyLabel(row: Row): boolean {
+  return hasKeyword(row.folded, MONEY_LABEL) && !hasKeyword(row.folded, UNIT);
+}
+
+/** MUT-540 (review): the label row prints an amount of its own: any decimal, whole or garbled one, or a whole number of
+ * two digits or more. A single digit beside a thermal label is a speck. */
+function hasOwnAmount(row: Row): boolean {
+  return GARBLED_AMOUNT.test(row.text) || amountsIn(row.text, null).some((a) => a.decimal || a.minor >= 1000n);
+}
+
+interface PlacedRow {
+  row: Row;
+  top: number;
+  bottom: number;
+}
+
+/** MUT-540 (E3): whether the row holds nothing but numbers, separators and currency marks (`184,36`, `63.25 ש"ח`). */
+function isAmountOnly(row: Row): boolean {
+  return /\d/.test(row.text) && !/[^\d.,:*\s-]/u.test(withoutCurrencyMarks(row.folded));
+}
+
+function withCommaDecimals(row: Row): Row {
+  const fix = (text: string) => text.replace(COMMA_DECIMAL, '$1.$2');
+  return { ...row, text: fix(row.text), folded: fix(row.folded), parts: row.parts.map((p) => ({ ...p, text: fix(p.text), folded: fix(p.folded) })) };
+}
+
+/**
+ * MUT-540 (E3, D12): a money label printed alone, with its amount on the line under it (a card slip's `סכום עסקה :`
+ * over `184.36`), becomes one row, label then amount. Only when the label row has no decimal amount of its own (a bare
+ * digit beside a thermal label is a speck) and the next row holds exactly one decimal amount and nothing else: a VAT
+ * table's header over its row of numbers stays two rows.
+ */
+function joinLabelAbove(placed: readonly PlacedRow[]): Row[] {
+  const out: Row[] = [];
+  // MUT-540 (review): an amount-only row that joined no label, just above this one: the amounts ride higher than their
+  // labels (a tilted or curled photo), so the row under this label is the next label's amount, not this one's.
+  let orphanAbove: PlacedRow | null = null;
+  for (let i = 0; i < placed.length; i += 1) {
+    const current = placed[i]!;
+    const { row, top, bottom } = current;
+    const next = placed[i + 1];
+    const ridingHigh = orphanAbove !== null && top - orphanAbove.bottom <= LABEL_GAP_ROWS * (bottom - top);
+    const joins =
+      next !== undefined &&
+      isMoneyLabel(row) &&
+      !hasOwnAmount(row) &&
+      !ridingHigh &&
+      isAmountOnly(next.row) &&
+      moneyIn(next.row.text, null, false).length === 1 &&
+      next.top - bottom <= LABEL_GAP_ROWS * (bottom - top);
+    if (!joins) {
+      out.push(row);
+      orphanAbove = isAmountOnly(row) ? current : null;
+      continue;
+    }
+    orphanAbove = null;
+    const text = `${row.text} ${next.row.text}`;
+    out.push({ text, folded: foldForMatch(text), conf: Math.min(row.conf, next.row.conf), parts: [...row.parts, ...next.row.parts] });
+    i += 1;
+  }
+  return out;
+}
+
 /**
  * MUT-441: OCR boxes into rows in reading order. Boxes that overlap vertically are one row (a label box and its
  * amount box sit apart on the same printed line), its boxes in logical order for its script; rows top to bottom.
+ * MUT-540: a comma decimal on a money-label or amount-only row is read as a point (E1), and a money label printed
+ * alone joins the amount on the line under it (E3).
  */
 export function orderedRows(lines: readonly OcrLine[]): Row[] {
   const drafts: RowDraft[] = [];
@@ -57,7 +141,14 @@ export function orderedRows(lines: readonly OcrLine[]): Row[] {
       row.bottom = Math.max(row.bottom, span.bottom);
     } else drafts.push({ ...span, segments: [line] });
   }
-  return drafts.sort((a, b) => a.top - b.top).flatMap((d) => toRow(d) ?? []);
+  const placed = drafts
+    .sort((a, b) => a.top - b.top)
+    .flatMap((d): PlacedRow[] => {
+      const row = toRow(d);
+      if (!row) return [];
+      return [{ row: isMoneyLabel(row) || isAmountOnly(row) ? withCommaDecimals(row) : row, top: d.top, bottom: d.bottom }];
+    });
+  return joinLabelAbove(placed);
 }
 
 /** A PDF's text layer: one row per line, in its own order, at full confidence (it is the document's text, not a reading). */

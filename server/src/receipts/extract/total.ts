@@ -1,7 +1,7 @@
 import type { Currency } from '../../money.js';
 import { moneyIn } from './amounts.js';
 import { isConfident } from './confidence.js';
-import { BALANCE, CARD_SLIP, CASH, CHANGE, DISCOUNT, hasKeyword, INCLUSIVE, isInstallment, type KeywordSet, NOT_TOTAL, PAID, REGISTRATION, SUBTOTAL, TENDERED, TIP, TIP_APART, TOTAL, VAT } from './keywords.js';
+import { BALANCE, CARD_SLIP, CASH, CHANGE, DEPOSIT, DISCOUNT, hasKeyword, INCLUSIVE, isInstallment, type KeywordSet, NOT_TOTAL, PAID, REGISTRATION, SUBTOTAL, OTHER_TENDER, REFUND, TENDERED, TIP, TIP_APART, TOTAL, UNIT, VAT } from './keywords.js';
 import { confOf, labelConf } from './rows.js';
 import type { Row } from './types.js';
 
@@ -71,7 +71,8 @@ const isTotalPaid = (row: Row) => hasKeyword(row.folded, TOTAL) && hasKeyword(ro
  */
 const isPart = (row: Row) =>
   (hasKeyword(row.folded, TIP) && !(hasKeyword(row.folded, TOTAL) && (hasKeyword(row.folded, INCLUSIVE) || hasKeyword(row.folded, TIP_APART)))) || isInstallment(row.folded);
-const isTotalLabelled = (row: Row) => (hasKeyword(row.folded, TOTAL) || hasKeyword(row.folded, CARD_SLIP)) && !hasKeyword(row.folded, NOT_TOTAL) && !isVatRow(row);
+// MUT-540 (review): a row naming a unit (litres, a price per litre) holds a quantity or a unit price, never the total.
+const isTotalLabelled = (row: Row) => (hasKeyword(row.folded, TOTAL) || hasKeyword(row.folded, CARD_SLIP)) && !hasKeyword(row.folded, NOT_TOTAL) && !hasKeyword(row.folded, UNIT) && !isVatRow(row);
 const isSubtotalRow = (row: Row) => hasKeyword(row.folded, SUBTOTAL) && !isVatRow(row) && !ZERO_RATE.test(row.text);
 
 /** What a receipt's rows are, for the total: decided once per receipt, as a "total paid" row depends on the others. */
@@ -237,7 +238,22 @@ function confirmation(total: bigint, parts: Parts): 'guided' | 'loose' | null {
   return null;
 }
 
-function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | null): MoneyReading | null {
+/**
+ * MUT-540 (E4, D6/D8): a card slip printed once is the total when nothing on the receipt says the payment was split: it
+ * is the receipt's only card slip, no other total-labelled amount is printed, nothing is refunded, cancelled or paid as a
+ * deposit, no row gives change, and no other tender (cash, a voucher, a cheque, Bit, points, another card) or balance
+ * left to pay shows an amount other than the slip's. Then a till receipt whose own total lines OCR garbled still reads its total.
+ */
+function isLoneCardSlip(rows: readonly Row[], parts: Parts, row: Row, minor: bigint, exponent: number | null): boolean {
+  if (!hasKeyword(row.folded, CARD_SLIP)) return false;
+  // Another tender (cash, a voucher, a cheque, another card…) with an amount other than the slip's paid part of it.
+  // A balance left to pay is part payment too (`יתרה 1500.00` beside a 500.00 slip).
+  const otherPayment = (r: Row) => r !== row && (hasKeyword(r.folded, TENDERED) || hasKeyword(r.folded, OTHER_TENDER) || hasKeyword(r.folded, BALANCE)) && moneyIn(r.text, exponent, parts.integers).some((m) => m !== minor);
+  const splitSign = (r: Row) => hasKeyword(r.folded, CHANGE) || hasKeyword(r.folded, REFUND) || hasKeyword(r.folded, DEPOSIT) || otherPayment(r);
+  return rows.filter((r) => hasKeyword(r.folded, CARD_SLIP)).length === 1 && parts.labelled.every((c) => c.row === row) && !rows.some(splitSign);
+}
+
+function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | null, loneCardSlip: boolean): MoneyReading | null {
   const candidates = parts.labelled;
   // A total-labelled amount that a larger total-labelled one equals plus another amount the receipt prints (its VAT,
   // a service charge) is a subtotal whose own label OCR misread.
@@ -252,10 +268,13 @@ function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | nu
   for (const { row, minor } of candidates) {
     if (isSubtotal(minor) || isPreDiscount(minor)) continue;
     const confirmed = confirmation(minor, parts);
-    // A card slip alone can be one of two in a split payment: it is the total only when the receipt agrees with it.
-    if (!hasKeyword(row.folded, TOTAL) && confirmed === null && rowsPrinting(parts, minor) < MIN_REPEAT_ROWS) continue;
+    // A card slip alone can be one of two in a split payment: it is the total only when the receipt agrees with it, or
+    // when nothing on it says the payment was split (MUT-540, E4).
+    const agreed = confirmed !== null || rowsPrinting(parts, minor) >= MIN_REPEAT_ROWS || (loneCardSlip && isLoneCardSlip(rows, parts, row, minor, exponent));
+    if (!hasKeyword(row.folded, TOTAL) && !agreed) continue;
     const rule = confirmed === 'guided' ? RULE_LABELLED_CONFIRMED : confirmed === 'loose' ? RULE_LABELLED_LOOSELY_CONFIRMED : RULE_LABELLED;
-    const conf = Math.min(amountConf(row, minor, exponent, parts.integers), labelConf(row, TOTAL));
+    // MUT-540: a card slip's label is its own box's, not the least sure speck on its row.
+    const conf = Math.min(amountConf(row, minor, exponent, parts.integers), labelConf(row, hasKeyword(row.folded, TOTAL) ? TOTAL : CARD_SLIP));
     const better = !best || rule * conf > best.rule * best.conf || (rule * conf === best.rule * best.conf && minor > best.minor);
     if (better) best = { minor, rule, conf, row };
   }
@@ -439,14 +458,19 @@ function readRate(parts: Parts, vat: MoneyReading | null, total: MoneyReading | 
   return agrees ? { basisPoints: rate, rule: RULE_VAT_RATE, conf: vat.conf } : null;
 }
 
+export interface MoneyOptions {
+  /** MUT-540 (D8): a lone card slip may be the total (E4). On by default; the benchmark turns it off to measure it alone. */
+  loneCardSlip?: boolean | undefined;
+}
+
 /** `knownRates`: the VAT rates of the receipt's currency (`knownVatRates`), for a receipt that prints none. */
-export function readMoney(rows: readonly Row[], exponent: number | null, knownRates: readonly number[] = []): MoneyFields {
+export function readMoney(rows: readonly Row[], exponent: number | null, knownRates: readonly number[] = [], options: MoneyOptions = {}): MoneyFields {
   const parts = partsOf(rows, exponent, knownRates);
   const largest = largestReadings(rows, parts);
   const total = isStatement(rows, parts, exponent)
     ? null
     : firstSure([
-        { read: () => labelledTotal(rows, parts, exponent), binding: true },
+        { read: () => labelledTotal(rows, parts, exponent, options.loneCardSlip ?? true), binding: true },
         { read: () => guidedTotal(parts), binding: true },
         { read: () => votedTotal(parts), binding: false },
         { read: () => sumOfTwo(largest, parts), binding: false },

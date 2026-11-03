@@ -52,6 +52,7 @@ MODELS = [
     ("PP-OCRv5 mobile text detection (ch_PP-OCRv5_det_mobile.onnx)", "Apache-2.0", "PaddleOCR, via RapidOCR's ONNX conversion"),
     ("PP-OCRv5 mobile Arabic recognition (arabic_PP-OCRv5_rec_mobile.onnx)", "Apache-2.0", "PaddleOCR, via RapidOCR's ONNX conversion"),
     ("tessdata_fast 4.1.0 ara, heb, eng", "Apache-2.0", "github.com/tesseract-ocr/tessdata_fast"),
+    ("tessdata_fast 4.1.0 osd (orientation and script detection, MUT-540)", "Apache-2.0", "github.com/tesseract-ocr/tessdata_fast"),
     ("tessdata_best 4.1.0 ara, heb, eng (only when built with TESSDATA_VARIANT=best)", "Apache-2.0", "github.com/tesseract-ocr/tessdata_best"),
     ("tesseract-ocr 5 (Debian package, the binary and libtesseract)", "Apache-2.0", "github.com/tesseract-ocr/tesseract"),
 ]

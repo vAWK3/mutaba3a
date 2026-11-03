@@ -16,6 +16,8 @@ export interface ExtractOptions {
   receivedOn?: string | undefined;
   /** MUT-514 (D6): the organization's own phone and ID numbers, learned from earlier receipts' bill-to blocks. */
   buyerIds?: readonly string[] | undefined;
+  /** MUT-540 (D8): a lone card slip may be the total. On unless false; only the benchmark turns it off. */
+  loneCardSlip?: boolean | undefined;
 }
 
 /**
@@ -49,9 +51,10 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
 
   // The currency sets the money's scale, and the total's row is where it is most often printed: read the total once
   // without a scale to find that row, then read the money again in the currency's own.
-  const totalRow = readMoney(rows, null).total?.row ?? null;
+  const moneyOptions = { loneCardSlip: options.loneCardSlip };
+  const totalRow = readMoney(rows, null, [], moneyOptions).total?.row ?? null;
   const currency = readCurrency(rows, totalRow) ?? inferFromDecimals(rows);
-  const money = readMoney(rows, exponentOf(currency), knownVatRates(currency?.code ?? null));
+  const money = readMoney(rows, exponentOf(currency), knownVatRates(currency?.code ?? null), moneyOptions);
   const date = readDate(rows, dateWindow(options.receivedOn));
   const buyer = buyerOf(rows, options.buyerIds);
   const vendor = readVendor(rows, buyer);

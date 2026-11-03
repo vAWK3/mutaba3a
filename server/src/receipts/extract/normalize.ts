@@ -48,9 +48,23 @@ const VAT_MISREAD = /(^|[^\p{L}])מצ"מ(?![\p{L}])/gu;
 const BEFORE_VAT_MISREAD = /(^|[^\p{L}])(לפנ|לל)'(?=\s*מע"מ)/gu;
 
 /**
+ * MUT-540 (E2): the same thermal yod read as a geresh inside a word (`סכום ע'סקה` for `סכום עיסקה`). A geresh between
+ * two Hebrew letters is a yod, except after the letters Hebrew writes a geresh after to spell another sound: ג ז צ ת in
+ * loanwords (ג'ינס, צ'יפס) and ח ד ט ר in Arabic names (ח'ליל, ד'אוד). A geresh ending a word (מס', רח') stays.
+ */
+const YOD_MISREAD = /(?<![א-ת])([א-ת]*[אבהויכךלמםנןסעפףץקש])'(?=[א-ת])/gu;
+
+/**
+ * MUT-540 (review): abbreviations a geresh ends (מס' עוסק, טל' נייד, רח' הרצל, יח'); OCR often drops the space after
+ * it, and folding its geresh to a yod would glue it to the next word (`מסיעוסק`), losing that word's label.
+ */
+const GERESH_ABBREVIATIONS = new Set(['מס', 'מספ', 'טל', 'רח', 'יח', 'מח', 'פל', 'שכ', 'גב', 'ת"ז']);
+
+/**
  * For keyword matching only: lower case, Arabic diacritics out, alef variants (آ أ إ) to ا, the lam-meem order a
  * PDF text layer can produce (`املشتغل` for `المشتغل`, MUT-253 spike) put back at a word start, VAT's common
- * misread `מצ"מ` put back as `מע"מ` (MUT-504), and `לפנ'`/`לל'` before it as `לפני`/`ללא` (MUT-514).
+ * misread `מצ"מ` put back as `מע"מ` (MUT-504), `לפנ'`/`לל'` before it as `לפני`/`ללא` (MUT-514), and a geresh inside
+ * a word as the yod it is (MUT-540).
  */
 export function foldForMatch(text: string): string {
   return text
@@ -59,7 +73,8 @@ export function foldForMatch(text: string): string {
     .replace(/[آأإ]/g, 'ا')
     .replace(/(^|[^\p{L}])امل/gu, '$1الم')
     .replace(VAT_MISREAD, '$1מע"מ')
-    .replace(BEFORE_VAT_MISREAD, (_m, start: string, word: string) => `${start}${word === 'לפנ' ? 'לפני' : 'ללא'}`);
+    .replace(BEFORE_VAT_MISREAD, (_m, start: string, word: string) => `${start}${word === 'לפנ' ? 'לפני' : 'ללא'}`)
+    .replace(YOD_MISREAD, (whole, word: string) => (GERESH_ABBREVIATIONS.has(word) ? whole : `${word}י`));
 }
 
 /** Letters of right-to-left scripts (Hebrew, Arabic). */

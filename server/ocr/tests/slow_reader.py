@@ -14,7 +14,7 @@ class SlowReader:
     def warm_up(self) -> None:
         return None
 
-    def read(self, body: bytes, content_type: str, hint: str) -> dict:
+    def read(self, body: bytes, content_type: str, hint: str, time_left: float | None = None) -> dict:
         if body == b"slow":
             time.sleep(10)
         if body == b"crash":

@@ -20,7 +20,7 @@ SETTINGS = Settings(worker="inline")
 def _engines_missing() -> str | None:
     if not tesseract_available():
         return "tesseract is not on PATH (brew install tesseract, or run in the image)"
-    for path in (SETTINGS.det_model, SETTINGS.rec_model, *(SETTINGS.tessdata_dir / f"{l}.traineddata" for l in ("ara", "heb", "eng"))):
+    for path in (SETTINGS.det_model, SETTINGS.rec_model, *(SETTINGS.tessdata_dir / f"{l}.traineddata" for l in ("ara", "heb", "eng", "osd"))):
         if not path.is_file():
             return f"model {path.name} missing: run python fetch_models.py"
     return None

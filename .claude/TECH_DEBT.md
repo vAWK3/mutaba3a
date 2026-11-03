@@ -18,6 +18,22 @@
 
 ## Open Debt
 
+### TD-303: A split payment whose other half OCR lost can fill the card slip as the total
+**Status**: Accepted (MUT-540, 2026-11-03; ADR-244 decision 4, Basel's D6/D8)
+- **What:** a card slip printed once is the total when nothing on the receipt shows a split (another slip, cash, change, another tender or a balance with another amount, a deposit, a refund). The receipts that need the rule are the ones whose own total lines OCR garbled, so a split payment whose other tender line OCR also lost reads its card part as the whole, at about 0.76.
+- **Why it's acceptable:** Basel chose it over leaving every garbled card-slip receipt empty (D6, kept in D8). Synthetic rows cover every split sign the reviews found; the real bench has no split payment, so it can't measure this.
+- **Fix:** watch it in MUT-514's D12 production check and MUT-541's approval counts; once approvals show a case, require positive confirmation (litres × price per litre, VAT at the rate).
+
+### TD-304: Orientation thresholds and the torn-outline rule are tuned on a small set
+**Status**: Open (MUT-540, 2026-11-03; ADR-244)
+- **What:** `min_confident_chars` 80, `turn_gain` 1.25, `min_turn_gain_chars` 20, `sideways_keep` 0.8, and the 6°/2° torn-edge rule were set on the synthetic photos turned four ways and one real sideways photo (Maxi), the same receipts the bench then checks: nothing held out. An upside-down page whose first read still scores 80 confident characters or more is never turned.
+- **Fix:** recheck them on MUT-541's approved receipts once there are some, and on any new sideways or upside-down production photo.
+
+### TD-305: A turned photo pays two full reads
+**Status**: Open (MUT-540, 2026-11-03; ADR-244)
+- **What:** a sideways photo is read once as it is, then turned, prepared again and read again: about 9 s for the 4032×3024 Maxi photo on this Mac, against about 2 s for an upright one. The deadline guard skips the retry rather than time out, so the worst case is the first read.
+- **Fix:** if production reads show it (`turned`, `orientMs`, `orientSkipped` in the sidecar log), read a downscaled probe first, or run OSD before the first read when the page is a photo whose lines are tall.
+
 ### TD-299: Resume now is three Stripe writes, not one
 **Status**: Accepted (MUT-532, 2026-11-02; ADR-240 decision 6)
 - **What:** Resume now restarts the cycle (and clears the pause), then adds the month's invoice item, then creates, finalizes and pays the invoice. If Stripe fails after the first write, the person is unpaused and writable with the month uncharged until the next cycle; their retry answers NOT_PAUSED. The idempotency keys make a retry within the minute safe, not a later one.
@@ -66,8 +82,9 @@
 - **What:** an Israeli toll bill prints its issuer's ח"פ (512475203) beside a sister company's (513927285); the reader takes the first valid one after a label, which can be the sister's. A Jordanian eVisa's vendor is read as its header ("The Hashemite Kingdom of Jordan") rather than the issuing directorate. Neither is an AC1 field. MUT-514 adds one OCR limit: a single misread digit on a clean, labelled date (bench 3-p31, an Arabic `2026/09/13` read as `08`) that nothing on the receipt can check; a 0.9 confidence floor on Arabic dates would have emptied a correct one (D7), so it is accepted here.
 - **Fix:** prefer the registration number on the same row as the vendor's name (or a "בע"מ" line), and score vendor candidates against a learned vendor (MUT-254) before suggesting one.
 
-### TD-293: The real-receipt bench is one person's eye-read of 48 receipts
-**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02)
+### TD-293: The real-receipt bench is one person's eye-read of 54 receipts
+**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02; MUT-540 2026-11-03)
+- **MUT-540:** the 6 production receipts not on disk were copied read-only from the production bucket (Basel's D3) as `prod-<id>` with truth read by eye (`receivedOn` 2026-10-31; the Abu Shukri and Beit Jala images as `scanned`, the phone's Scans). Paz Afek was already 2026-10-29-p07. 3-p15 gains the corporation number it prints (the same pharmacy's as the Maxi photo). Backups in `receipt-bench/.mut540/`. For Basel to confirm.
 - **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 48 receipts since MUT-514. MUT-514 changed it three ways, for Basel to confirm: `receivedOn` (the scan day, 2026-10-29) on every receipt; 3-p35's phone accepts either of the vendor's two printed numbers (R6); p02 gains the dealer number it prints (the same vendor's as 3-p21). Truth values may now be lists. The three production Paz receipts the plan meant to add are not in the folder yet.
 - **Fix:** Basel checks the manifest and adds receipts (more Arabic ones especially); raise AC2's bar as the set grows.
 

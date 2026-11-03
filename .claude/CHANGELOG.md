@@ -91,6 +91,34 @@ is lost. Basel approved the plan and copy on 2026-11-02 (`.claude/designs/mut-53
 - Release-QA: `@portal-live.billing.card-failed-mail` (pays with a good card on Stripe's page), `.card-failed-reminder`,
   `.card-failed-3ds`. Spike:
   `qa/support/mut533-534-spike.mjs`, `.claude/designs/mut-533-534-spike-result.md`.
+
+## [Unreleased] - 2026-11-03 — Receipt reading: sideways photos, card slips under their label, amounts one engine drops (MUT-540, ADR-244)
+
+**Why:** of the first 7 production reads, the total was right 3 times and the date 3 of 6: a photo lying at 90° read
+2 lines, a Paz card slip's amount sat under its label, an Arabic total and a Hebrew date were dropped in the OCR merge.
+
+### Fixed
+- `server/ocr/app/orientation.py` (new), `pipeline.py`, `worker.py`, `engines.py`: a page read poorly or in tall boxes
+  asks Tesseract OSD for its turn, is turned, prepared again and read once more; the turned read is kept only when it
+  reads clearly better (shape-aware); skipped near the 30 s deadline, never fails the read. `OCR_ORIENTATION=0` off.
+  `fetch_models.py` pins `osd.traineddata` (tessdata_fast 4.1.0); `check_licenses.py`, `LICENSES.md`.
+- `server/ocr/app/preprocess.py`: a receipt that runs off the photo with its other edge torn on a slant is cut out
+  upright instead of warped (the warp tilted level text).
+- `server/ocr/app/merge.py`: an amount PP-OCR's Arabic model dropped from a winning line is kept from Tesseract; on a
+  Hebrew page, the sure whole-word dates and amounts in a RapidOCR box with invented letters help the Tesseract line
+  they overlap most.
+- `server/src/receipts/extract/`: a comma decimal on money-label and amount-only rows (`rows.ts`); a thermal yod read
+  as a geresh (`normalize.ts`); a money label joins the single amount under it (`rows.ts`); a card slip printed once
+  is the total when nothing shows a split payment, a refund or a deposit (`total.ts`); plene slip spellings,
+  `OTHER_TENDER`, `REFUND`, `DEPOSIT`, `UNIT`, `מס' תאגיד` (`keywords.ts`).
+- `server/src/receipts/reading/reader.ts`: reader generation 3; before-release.md gets the re-read step.
+
+### Technical
+- Bench: `run.py` sends `scanned` for the phone's Scans (as the API does) and passes `--no-lone-slip`; the real bench
+  holds the 6 production receipts (never committed). 0 fields lost vs main; real total 34 (32), date 34 (32), reg. no. 13 (11), wrong and confident 7 (7); synthetic as main, warm p95 1.14 s.
+- Not shipped: sizing PDF pages by area (T2) lost 31 fields against main (ADR-244 decision 6).
+- TD-303 (a split payment's lost half), TD-304 (thresholds tuned on a small set), TD-305 (a turned photo pays two reads).
+
 ## [Unreleased] - 2026-11-02 — Receipt reading: no confidently wrong VAT, totals, bill-to numbers or dates (MUT-514, ADR-241)
 
 **Why:** 18 wrong-and-confident fields on 32 new real scans, and every Paz fuel receipt in production filled its

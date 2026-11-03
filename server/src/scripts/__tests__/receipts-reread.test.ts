@@ -101,13 +101,13 @@ describe('receipts:reread (MUT-514)', () => {
 
   it('drops only the server-read fields; nothing left is no suggestion', () => {
     expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), currency: f('ILS', 'pdf-text') })).toBeNull();
-    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-2', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-3', date: f('2026-10-01', 'qr') });
   });
 
   it('a vendor-list name goes with the registration number it was looked up by (qa-reconcile review)', () => {
     const named = { readerVersion: 'server-ocr-x-1', registrationNo: f('123456782'), vendorName: { value: 'Old Vendor', source: 'vendor' as const, confidence: 1 }, date: f('2026-10-01', 'qr') };
-    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-2', date: f('2026-10-01', 'qr') });
-    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-2', registrationNo: f('123456782', 'qr') });
+    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-3', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-3', registrationNo: f('123456782', 'qr') });
   });
 
   it('a re-read that adds nothing is not picked again, and a generation above the current reader is refused (qa-reconcile review)', async () => {
@@ -118,6 +118,6 @@ describe('receipts:reread (MUT-514)', () => {
     await rereadReceipts(w.store, { readerBelow: 2, apply: true, now: LATER });
     await w.reader.readOne(before.id);
     expect((await rereadReceipts(w.store, { readerBelow: 2, apply: false, now: LATER })).planned).toEqual([]);
-    await expect(rereadReceipts(w.store, { readerBelow: 3, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
+    await expect(rereadReceipts(w.store, { readerBelow: 4, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
   });
 });

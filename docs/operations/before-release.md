@@ -69,6 +69,10 @@ record the date where the item says.
   - Add `--apply` to reset them; the 5-minute sweep reads them again. Each is audited `expense_receipt.reread_requested`. Fields the server read (`ocr`, `pdf-text`) are replaced; QR and vendor-list fields, approved and filed receipts are untouched.
   - It picks only receipts whose suggestion still carries the server reader version. One a client filled after the server read (`phone-…`) is not picked; correct those by hand at review.
   - Delete this item once it has run, and record the date on MUT-514.
+- **MUT-540's reader (generation 3: pages turned upright, PDF pages sized by area, card slips under their label).** The `receipt-ocr` image (new `osd.traineddata`, about 10.6 MB) and the API (stamp `server-ocr-rapid-tess-3`) ship in the same `make release server` apply. After the apply has fully rolled out both services:
+  - `DATABASE_URL=… npm --prefix server run receipts:reread -- --reader-below 3` lists the To-review receipts read by generation 1 or 2 (this one run also covers MUT-514's item above if it hasn't run yet). Then add `--apply`.
+  - A receipt read during the apply itself, by the new API but the old `receipt-ocr`, is stamped 3 with the old OCR and isn't picked. The window is the apply's few minutes on the one pilot account; MUT-514's D12 check of the next ~15 reads catches one by eye.
+  - Delete this item once it has run, and record the date on MUT-540.
 
 ## web
 

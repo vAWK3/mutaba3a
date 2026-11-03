@@ -18,6 +18,10 @@ from .text import visual_to_logical
 #: Tesseract: page segmentation 6 (one uniform block) and the LSTM engine, as the MUT-253 spike measured.
 TESS_PSM = 6
 TESS_OEM = 1
+#: MUT-540: OSD reads the prepared page scaled to this long side (it needs letter shapes, not full resolution).
+OSD_LONG_SIDE = 1_600
+#: OSD's own floor is 50 characters; a short receipt has fewer sure ones, so it tries from this many.
+OSD_MIN_CHARACTERS = 10
 
 
 @dataclass
@@ -85,7 +89,7 @@ class TesseractReader:
 
         if not tesseract_available():
             raise FileNotFoundError("tesseract is not on PATH")
-        for lang in ("ara", "heb", "eng"):
+        for lang in ("ara", "heb", "eng", *(("osd",) if settings.orientation else ())):
             if not (settings.tessdata_dir / f"{lang}.traineddata").is_file():
                 raise FileNotFoundError(f"missing {lang}.traineddata; run fetch_models.py")
         self._tess = pytesseract
@@ -93,6 +97,16 @@ class TesseractReader:
         # process reads one receipt at a time, so setting it here is safe.
         os.environ["TESSDATA_PREFIX"] = str(settings.tessdata_dir)
         os.environ["OMP_THREAD_LIMIT"] = "1"
+
+    def osd(self, gray: np.ndarray) -> int:
+        """MUT-540: how far the page is turned counter-clockwise (0, 90, 180 or 270), by Tesseract's orientation model.
+        Raises on a page with too little text to tell; the caller keeps its first read then."""
+        import cv2
+
+        scale = min(1.0, OSD_LONG_SIDE / max(gray.shape))
+        small = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA) if scale < 1 else gray
+        data = self._tess.image_to_osd(small, config=f"--psm 0 --dpi 300 -c min_characters_to_try={OSD_MIN_CHARACTERS}", output_type=self._tess.Output.DICT)
+        return int(data["rotate"])
 
     def read(self, gray: np.ndarray, lang: str) -> list[Segment]:
         """One Tesseract pass; its words grouped back into its own lines."""

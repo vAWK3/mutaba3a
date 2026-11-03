@@ -62,6 +62,16 @@ class Settings:
     #: A prepared page whose short side is under this is upscaled (up to 2x); 0 never upscales. Kept: without the
     #: upscale, Arabic photo dates fell from 12/14 to 6/14 on the benchmark.
     upscale_below: int = UPSCALE_BELOW_SHORT_SIDE
+    #: MUT-540 (D4): turn a page read on its side or upside down (orientation.py). `OCR_ORIENTATION=0` turns it off.
+    orientation: bool = True
+    #: A first read with fewer confident characters than this asks OSD for the turn (about 3 of 48 real receipts).
+    min_confident_chars: int = 80
+    #: D9: a turned read wins on more than this times the first read's score...
+    turn_gain: float = 1.25
+    #: ...and at least this many more confident characters.
+    min_turn_gain_chars: int = 20
+    #: D9: an upright turned read replaces a sideways-shaped first read unless it scores under this share of it.
+    sideways_keep: float = 0.8
 
     @property
     def tessdata_dir(self) -> Path:
@@ -92,4 +102,5 @@ def load_settings() -> Settings:
         parallel=os.environ.get("OCR_PARALLEL", "1" if Settings.parallel else "0") == "1",
         script_pick_scale=_env_float("OCR_SCRIPT_PICK_SCALE", Settings.script_pick_scale),
         upscale_below=_env_int("OCR_UPSCALE_BELOW", UPSCALE_BELOW_SHORT_SIDE),
+        orientation=os.environ.get("OCR_ORIENTATION", "1") == "1",
     )

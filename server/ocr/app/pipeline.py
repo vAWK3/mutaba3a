@@ -20,6 +20,7 @@ from .config import Settings
 from .decode import decode
 from .engines import RapidReader, Segment, TesseractReader
 from .merge import merge
+from .orientation import reorient, turn
 from .preprocess import prepare
 from .text import pdf_text_to_logical, script_of
 
@@ -80,7 +81,33 @@ class Reader:
         self.rapid.read(blank)
         self.tess.read(blank, "eng")
 
-    def read(self, body: bytes, content_type: str, hint: str) -> dict[str, Any]:
+    def _read_page(self, gray: np.ndarray, timings: dict[str, int]) -> tuple[list[Segment], str]:
+        """Both engines over one prepared page, the better reading of each line kept, and the page's script."""
+        if self.settings.parallel:
+            pending = self._pool.submit(self._read_tess, gray)
+            t = time.perf_counter()
+            rapid = self.rapid.read(gray)
+            timings["rapidMs"] += _ms(t)
+            (script, tess), tess_ms = pending.result()
+        else:
+            t = time.perf_counter()
+            rapid = self.rapid.read(gray)
+            timings["rapidMs"] += _ms(t)
+            (script, tess), tess_ms = self._read_tess(gray)
+        timings["tessMs"] += tess_ms
+        return merge(rapid, tess, script), script
+
+    def _prepare(self, page: np.ndarray, hint: str, flat: bool) -> np.ndarray:
+        return prepare(page, hint, flat=flat, upscale_below=self.settings.upscale_below)
+
+    def _read_turned(self, page: np.ndarray, deg: int, hint: str, flat: bool, timings: dict[str, int]) -> tuple[np.ndarray, list[Segment], str]:
+        """MUT-540: the decoded page turned upright and prepared again, then read."""
+        gray = self._prepare(turn(page, deg), hint, flat)
+        return (gray, *self._read_page(gray, timings))
+
+    def read(self, body: bytes, content_type: str, hint: str, time_left: float | None = None) -> dict[str, Any]:
+        """`time_left`: seconds until the request's deadline (MUT-540, D10), so a page's orientation retry is skipped
+        rather than run into it; None (tests, the benchmark's inline worker) for no bound."""
         started = time.perf_counter()
         decoded = decode(body, content_type)
         decode_ms = _ms(started)
@@ -90,26 +117,26 @@ class Reader:
 
         lines: list[dict[str, Any]] = []
         offset = 0.0
-        timings = {"decodeMs": decode_ms, "prepareMs": 0, "rapidMs": 0, "tessMs": 0}
+        timings = {"decodeMs": decode_ms, "prepareMs": 0, "rapidMs": 0, "tessMs": 0, "orientMs": 0}
+        turns = {"turned": 0, "orientSkipped": 0}
         scripts: list[str] = []
-        for page in decoded.pages:
+        for index, page in enumerate(decoded.pages):
+            started_page = time.perf_counter()
+            gray = self._prepare(page, hint, decoded.flat)
+            timings["prepareMs"] += _ms(started_page)
+            segments, script = self._read_page(gray, timings)
+            first_s = time.perf_counter() - started_page
+            # MUT-540: a page read on its side or upside down is turned and read once more (orientation.py).
             t = time.perf_counter()
-            gray = prepare(page, hint, flat=decoded.flat, upscale_below=self.settings.upscale_below)
-            timings["prepareMs"] += _ms(t)
-            if self.settings.parallel:
-                pending = self._pool.submit(self._read_tess, gray)
-                t = time.perf_counter()
-                rapid = self.rapid.read(gray)
-                timings["rapidMs"] += _ms(t)
-                (script, tess), tess_ms = pending.result()
-            else:
-                t = time.perf_counter()
-                rapid = self.rapid.read(gray)
-                timings["rapidMs"] += _ms(t)
-                (script, tess), tess_ms = self._read_tess(gray)
-            timings["tessMs"] += tess_ms
+            budget_s = None if time_left is None else time_left - (time.perf_counter() - started)
+            page_read = reorient(gray, segments, script, lambda deg: self._read_turned(page, deg, hint, decoded.flat, timings), self.tess.osd, budget_s=budget_s, first_s=first_s, settings=self.settings, pages_left=len(decoded.pages) - index - 1)
+            if page_read.outcome != "upright":
+                timings["orientMs"] += _ms(t)
+            turns["turned"] += page_read.outcome == "turned"
+            turns["orientSkipped"] += page_read.outcome == "skipped"
+            gray, script = page_read.gray, page_read.script
             scripts.append(script)
-            for seg in merge(rapid, tess, script):
+            for seg in page_read.segments:
                 x0, y0, x1, y1 = seg.box
                 line: dict[str, Any] = {
                     "text": seg.text[:MAX_LINE_CHARS],
@@ -125,7 +152,7 @@ class Reader:
         lines = lines[:MAX_LINES]
         log.info(
             "read",
-            extra={"stats": {"engine": ENGINE_OCR, "pages": decoded.page_count, "lines": len(lines), "scripts": scripts, "hint": hint, **timings, "totalMs": _ms(started)}},
+            extra={"stats": {"engine": ENGINE_OCR, "pages": decoded.page_count, "lines": len(lines), "scripts": scripts, "hint": hint, **turns, **timings, "totalMs": _ms(started)}},
         )
         return {"engine": ENGINE_OCR, "lines": lines, "pages": decoded.page_count}
 

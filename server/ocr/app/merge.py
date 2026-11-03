@@ -58,6 +58,10 @@ def _is_number_fragment(text: str) -> bool:
 
 #: An amount with its decimals: a whole number already, never the first half of one (MUT-504: "61.8361.83").
 _COMPLETE_AMOUNT = re.compile(r"\d+[.,]\d{2,3}")
+#: MUT-540: a date as receipts print it (14/03/2026, 14.03.26).
+_DATE = re.compile(r"\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}")
+#: MUT-540: punctuation a number may carry at a word's edge ("14/03/2026:", "(63.25)").
+_WORD_PUNCTUATION = ":;,|()[]\"'"
 
 
 def join_number_fragments(segments: list[Segment]) -> list[Segment]:
@@ -134,7 +138,7 @@ def _x_overlap(a: Segment, b: Segment) -> bool:
     return overlap_share((a.box[0], a.box[2]), (b.box[0], b.box[2])) >= SAME_ROW_OVERLAP
 
 
-def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
+def _hebrew_line(line: Segment, rapid_digits: list[Segment], lettered: frozenset[int] = frozenset()) -> list[Segment]:
     """A Tesseract line on a Hebrew page, with RapidOCR's digit readings of it (MUT-504).
 
     Tesseract reads the Hebrew; RapidOCR, which has no Hebrew model, reads the digits better (bold totals and dates
@@ -158,12 +162,42 @@ def _hebrew_line(line: Segment, rapid_digits: list[Segment]) -> list[Segment]:
     if not taken:
         return [line]
     letters = [w for w in kept if not _has_digit(w.text)]
-    digits = [w for w in kept if _has_digit(w.text) and not any(_x_overlap(w, r) for r in taken)]
+    # MUT-540: a lettered RapidOCR box's numbers (`lettered`, ids) span its whole box; under it, a sure digit word
+    # stays unless the box read that same number again.
+    digits = [w for w in kept if _has_digit(w.text) and not any(_x_overlap(w, r) and (id(r) not in lettered or w.text in r.text.split()) for r in taken)]
     out = sorted(taken, key=lambda r: r.box[0])
     out[:0] = [Segment(w.text, w.conf, (w.box[0], line.box[1], w.box[2], line.box[3])) for w in digits]
     if letters:
         box = (min(w.box[0] for w in letters), line.box[1], max(w.box[2] for w in letters), line.box[3])
         out.insert(0, Segment(" ".join(w.text for w in letters), _mean_conf(letters), box))
+    return out
+
+
+def _dropped_amounts(nearby: list[Segment], line: Segment) -> list[Segment]:
+    """MUT-540: the amounts a Tesseract line read that RapidOCR, whose reading of the line won, dropped. PP-OCR's
+    Arabic model drops the digits of a mixed line ("المجموع الكلي: 88.50" read as the words alone, its box still
+    spanning the amount), so Tesseract's complete amount words stay beside the line at their own confidence. Only when
+    no RapidOCR row the line overlaps (`nearby`, claimed by an earlier line or not) holds a complete amount: then
+    RapidOCR read it, and Tesseract's copy is a second, maybe misread, reading (86.50 for 88.50)."""
+    if any(_COMPLETE_AMOUNT.search(r.text) for r in nearby):
+        return []
+    return [Segment(w.text, w.conf, (w.box[0], line.box[1], w.box[2], line.box[3])) for w in line.words if _COMPLETE_AMOUNT.search(w.text)]
+
+
+def _sure_numbers_in_lettered(rapid: list[Segment]) -> list[Segment]:
+    """MUT-540: on a Hebrew page, the dates and complete amounts in a sure RapidOCR box that also holds letters. Its
+    Arabic model invents the Hebrew letters but reads the digits ("מסוף 09:12 14/03/2026" as "g1on 09:12 14/03/2026" at
+    0.92). They stay together as one segment in the box they were read in, spaces between (two segments sharing a box
+    would be joined as number fragments, "14/03/202663.25"); the letters never count."""
+    out: list[Segment] = []
+    for seg in rapid:
+        if seg.conf < SURE_DIGITS or not any(ch.isalpha() for ch in seg.text):
+            continue
+        # Only a number standing as its own word: one glued into a code ("ab1-02.11.47-$3") is no date (bench p11).
+        tokens = [w.strip(_WORD_PUNCTUATION) for w in seg.text.split()]
+        numbers = [t for t in tokens if _DATE.fullmatch(t) or _COMPLETE_AMOUNT.fullmatch(t)]
+        if numbers:
+            out.append(Segment(" ".join(numbers), seg.conf, seg.box))
     return out
 
 
@@ -173,33 +207,50 @@ def merge(rapid: list[Segment], tess: list[Segment], page_script: str) -> list[S
     On a Hebrew page Tesseract is the reader; RapidOCR adds digit lines Tesseract missed, and its sure digits replace
     Tesseract's unsure ones on a line both read (`_hebrew_line`, MUT-504). Otherwise each
     Tesseract line is weighed against every RapidOCR row it overlaps (a tilted line can be two RapidOCR rows) that
-    no earlier line claimed. A Tesseract line whose rows were all claimed already is a second reading of a line that
+    no earlier line claimed; when RapidOCR's reading wins, the amounts it dropped and Tesseract read stay beside it
+    (`_dropped_amounts`, MUT-540). A Tesseract line whose rows were all claimed already is a second reading of a line that
     is decided, so it is dropped.
     """
     hebrew = page_script == "hebr"
+    tess_lines = sorted((s for s in tess if _useful(s)), key=lambda s: s.box[1])
+    lettered_for: dict[int, list[Segment]] = {}
+    lettered_ids: frozenset[int] = frozenset()
     if hebrew:
         # PP-OCR has no Hebrew model: on a Hebrew page its Arabic recogniser turns Hebrew into invented letters. Only
         # its letter-free readings (amounts, dates, phone numbers) are kept, and only for lines Tesseract didn't see.
+        # MUT-540: the sure dates and amounts inside a box its invented letters share help only the Tesseract line
+        # they overlap most, as that line's digits; they never form a row, so they never claim (and drop) a line.
+        lettered = _sure_numbers_in_lettered(rapid)
+        lettered_ids = frozenset(id(s) for s in lettered)
+        for number in lettered:
+            span = (number.box[1], number.box[3])
+            best = max(tess_lines, key=lambda t: overlap_share((t.box[1], t.box[3]), span), default=None)
+            if best is not None and overlap_share((best.box[1], best.box[3]), span) >= SAME_ROW_OVERLAP:
+                lettered_for.setdefault(id(best), []).append(number)
         rapid = [s for s in rapid if not any(ch.isalpha() for ch in s.text)]
     rapid_rows = group_rows([s for s in rapid if _useful(s)])
     claimed: set[int] = set()
     kept: list[Row] = []
-    for seg in sorted((s for s in tess if _useful(s)), key=lambda s: s.box[1]):
+    for seg in tess_lines:
         t_row = Row(seg.box[1], seg.box[3], [seg])
         overlapping = [i for i, r in enumerate(rapid_rows) if overlap_share((t_row.top, t_row.bottom), (r.top, r.bottom)) >= SAME_ROW_OVERLAP]
+        extra = lettered_for.get(id(seg), [])
         if not overlapping:
-            kept.append(t_row)
+            kept.append(Row(t_row.top, t_row.bottom, _hebrew_line(seg, extra, lettered_ids)) if extra else t_row)
             continue
         free = [i for i in overlapping if i not in claimed]
         if not free:
             continue
         claimed.update(free)
         if hebrew:
-            digits = sorted((s for i in free for s in rapid_rows[i].segments), key=lambda s: s.box[0])
-            kept.append(Row(t_row.top, t_row.bottom, _hebrew_line(seg, digits)))
+            digits = sorted([*(s for i in free for s in rapid_rows[i].segments), *extra], key=lambda s: s.box[0])
+            kept.append(Row(t_row.top, t_row.bottom, _hebrew_line(seg, digits, lettered_ids)))
             continue
         joined = Row(min(rapid_rows[i].top for i in free), max(rapid_rows[i].bottom for i in free), [s for i in free for s in rapid_rows[i].segments])
-        kept.append(_better(joined, t_row))
+        better = _better(joined, t_row)
+        if better is joined:
+            joined.segments.extend(_dropped_amounts([s for i in overlapping for s in rapid_rows[i].segments], seg))
+        kept.append(better)
     kept.extend(r for i, r in enumerate(rapid_rows) if i not in claimed)
     kept.sort(key=lambda r: r.top)
     return [s for r in kept for s in r.segments]
