@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import type { SubscriptionState } from '../checkout.js';
+import { OFFER_METADATA_KEY, type SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
 import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
@@ -160,7 +160,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const page = await wrapped(() => stripe.subscriptions.list({ customer, status: 'all', limit: SUBSCRIPTIONS_PAGE }));
       return page.data.flatMap((sub) => {
         const currentPeriodEnd = periodEndOf(sub);
-        return currentPeriodEnd ? [{ status: sub.status, currentPeriodEnd }] : [];
+        return currentPeriodEnd ? [{ status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
       });
     },
     async expireOpenCheckouts(customer) {

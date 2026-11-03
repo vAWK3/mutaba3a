@@ -194,12 +194,12 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   }
 
   /** Stripe's own subscriptions per customer (review: Checkout asks Stripe, not only the mirror). */
-  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date }[]>();
+  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date; offerId?: string | null }[]>();
   /** Open Checkout sessions per customer, and the ones expired. */
   readonly openCheckouts = new Map<string, number>();
   expiredCheckouts = 0;
 
-  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date }[]> {
+  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date; offerId?: string | null }[]> {
     this.take(`subscriptions:${customer}`);
     return this.stripeSubscriptions.get(customer) ?? [];
   }

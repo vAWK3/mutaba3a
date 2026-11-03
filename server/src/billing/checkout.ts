@@ -75,6 +75,8 @@ export const TRIAL_CARRY_MIN_MS = 48 * 60 * 60 * 1000;
 export interface SubscriptionState {
   status: string;
   currentPeriodEnd: Date;
+  /** MUT-534 (R7): the offer its Checkout carried (`metadata.mutaba3a_offer`), from Stripe's own list; absent from the mirror's. */
+  offerId?: string | null;
 }
 
 export type CheckoutRefusal =
@@ -106,9 +108,12 @@ export interface CheckoutInput {
 export interface AppliedOffer {
   id: string;
   couponId: string;
-  /** Minor units of the price's own currency: the first year after the discount, and the list price it renews at. */
+  /** Minor units of the price's own currency: the first period after the discount, and the list price after it. */
   firstAmount: number;
   listAmount: number;
+  /** MUT-534: `comeback` takes an amount off the first month or year; absent is MUT-525's launch offer (a first year). */
+  kind?: 'launch' | 'comeback';
+  interval?: BillingInterval;
 }
 
 export interface PersonBilling {
@@ -262,6 +267,16 @@ export function offerSubmitMessage(offer: AppliedOffer, currency: BillingCurrenc
   const price = ISOLATE(formatMinor(offer.firstAmount, currency));
   const list = ISOLATE(formatMinor(offer.listAmount, currency));
   const [arNote, enNote] = CHECKOUT_SUBMIT_MESSAGE.split('\n\n');
+  // MUT-534 (plan §6, approved): the come-back line names the first month or year and the price after it, no date.
+  if (offer.kind === 'comeback') {
+    const yearly = offer.interval === 'year';
+    return [
+      yearly ? `عرض العودة: ${price} لسنتك الأولى، ثم ${list} سنويًا.` : `عرض العودة: ${price} لشهرك الأول، ثم ${list} شهريًا.`,
+      arNote,
+      yearly ? `Welcome-back offer: ${price} for your first year, then ${list} a year.` : `Welcome-back offer: ${price} for your first month, then ${list} a month.`,
+      enNote,
+    ].join('\n\n');
+  }
   return [
     `عرض الإطلاق: ${price} عن سنتك الأولى، ثم يتجدد بسعر ${list} سنويًا ابتداءً من ${ISOLATE(payPageDay(renewsOn, 'ar'))}.`,
     arNote,

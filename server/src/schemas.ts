@@ -548,6 +548,19 @@ export const StayOfferResultSchema = z
   .openapi('StayOfferResult');
 
 /** MUT-362: Settings › Billing in one read (GET /v1/billing). */
+const PerCurrencyAmountSchema = z.object({ ILS: z.number().int().nullable(), USD: z.number().int().nullable() });
+
+/** MUT-534 (D14): minor units per currency, Stripe's arithmetic (the list price less the coupon's amount); null where it isn't sold. */
+export const BillingComebackSchema = z
+  .object({
+    id: z.string(),
+    firstMonth: PerCurrencyAmountSchema,
+    listMonth: PerCurrencyAmountSchema,
+    firstYear: PerCurrencyAmountSchema,
+    listYear: PerCurrencyAmountSchema,
+  })
+  .openapi('BillingComeback');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -590,6 +603,8 @@ export const BillingOverviewSchema = z
     offer: z.union([BillingOfferSchema, z.null()]),
     /** MUT-531: the switch to yearly, once the shown subscription may switch (a monthly list price, 2 paid invoices); else null. */
     yearlySwitch: z.union([BillingYearlySwitchSchema, z.null()]),
+    /** MUT-534: the come-back offer once the come-back mail offered it and the person still may have it; else null. Additive since 1.99.0-mut534. */
+    comeback: z.union([BillingComebackSchema, z.null()]),
   })
   .openapi('BillingOverview');
 

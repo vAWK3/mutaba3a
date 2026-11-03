@@ -110,6 +110,7 @@ describe('GET /v1/billing (MUT-362)', () => {
       offer: null,
       // MUT-531: no subscription, so no switch to yearly.
       yearlySwitch: null,
+      comeback: null,
     });
   });
 
@@ -496,7 +497,7 @@ describe('the launch offer (MUT-525)', () => {
     h.checkout.coupons.clear();
     const res = await u.post(CHECKOUT, yearly({ expectedOffer: 'launch-2026' }));
     expect(res.status).toBe(409);
-    expect((await read(res)).error.details).toEqual({ reason: 'OFFER_ENDED' });
+    expect((await read(res)).error.details).toEqual({ reason: 'OFFER_ENDED', offer: 'launch-2026' });
     expect(h.checkout.checkoutSessions).toHaveLength(0);
     const again = await u.post(CHECKOUT, yearly());
     expect(again.status).toBe(200);
@@ -682,6 +683,86 @@ describe('POST /v1/billing/card-retry (MUT-533 D5)', () => {
   it('signed out is 401', async () => {
     const h = harness({ plan: new FakePlanGateway() });
     expect((await h.app.request(RETRY, { method: 'POST', headers: { 'content-type': 'application/json', ...SAME_ORIGIN }, body: '{}' })).status).toBe(401);
+  });
+});
+
+describe('the come-back offer in Billing and at Checkout (MUT-534 D12–D14)', () => {
+  const comeback = () => {
+    const h = harness();
+    h.checkout.withComebackCoupon();
+    return h;
+  };
+  /** A paid Freelancer plan Stripe ended `daysAgo` days ago, mirrored; `offered`: the job mailed a stage (the record that opens it). */
+  async function lapsed(h: Harness, userId: string, opts: { daysAgo?: number; offered?: boolean } = {}) {
+    const customer = `cus_${++seq}`;
+    await h.store.billing.saveAccount({ stripeCustomerId: customer, userId, country: 'IL', currency: 'ILS', at: NOW, linkAudit: [] });
+    const sub = `sub_${++seq}`;
+    const endedAt = new Date(NOW.getTime() - (opts.daysAgo ?? 35) * DAY);
+    await h.store.billing.saveSubscription({ stripeCustomerId: customer, stripeSubscriptionId: sub, tier: 'FREELANCER', organizationId: null, status: 'canceled', currentPeriodEnd: endedAt, cancelAtPeriodEnd: false, priceLookupKey: 'freelancer_list_monthly_ils', founderUntil: null, endedAt, stripeUpdatedAt: NOW, at: NOW, audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null } });
+    if (opts.offered !== false) await h.store.billing.claimRetentionEvent({ userId, stripeSubscriptionId: sub, kind: 'COMEBACK_OFFERED', reason: 'day-30', months: null, startsAt: null, endsAt: null, at: NOW });
+    h.checkout.stripeSubscriptions.set(customer, [{ status: 'canceled', currentPeriodEnd: endedAt }]);
+    return customer;
+  }
+
+  it('GET says what the first month and first year back cost, per currency, only once the job has offered it', async () => {
+    const h = comeback();
+    const u = await person(h);
+    await lapsed(h, u.userId, { offered: false });
+    expect((await read(await u.get())).comeback).toBeNull();
+    const v = await person(h);
+    await lapsed(h, v.userId);
+    expect((await read(await v.get())).comeback).toMatchObject({ id: 'comeback-2026', firstMonth: { ILS: 1900 }, listMonth: { ILS: 3900 }, firstYear: { ILS: 37000 }, listYear: { ILS: 39000 } });
+  });
+
+  it('a monthly Checkout carries the come-back coupon (read fresh), names it in the metadata and the pay-page line, audited', async () => {
+    const h = comeback();
+    const u = await person(h);
+    await lapsed(h, u.userId);
+    const res = await u.post(CHECKOUT, checkoutBody({ expectedOffer: 'comeback-2026' }));
+    expect(res.status).toBe(200);
+    const params = h.checkout.checkoutSessions.at(-1)!;
+    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month' }]);
+    expect(params.subscription_data).toMatchObject({ metadata: { mutaba3a_offer: 'comeback-2026' } });
+    const message = (params.custom_text?.submit as { message: string } | undefined)?.message ?? '';
+    expect(message).toContain('عرض العودة: \u2068₪19\u2069 لشهرك الأول، ثم \u2068₪39\u2069 شهريًا.');
+    expect(message).toContain('Welcome-back offer: \u2068₪19\u2069 for your first month, then \u2068₪39\u2069 a month.');
+    expect(h.checkout.couponReads).toContain('fresh:mtb3a_comeback_first_month');
+    expect((await billingAudit(h, u.personalId)).at(-1)!.metadata).toMatchObject({ offer: 'comeback-2026' });
+  });
+
+  it('a yearly Checkout takes the same amount off its first invoice', async () => {
+    const h = comeback();
+    const u = await person(h);
+    await lapsed(h, u.userId);
+    expect((await u.post(CHECKOUT, checkoutBody({ interval: 'year', expectedOffer: 'comeback-2026' }))).status).toBe(200);
+    const params = h.checkout.checkoutSessions.at(-1)!;
+    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month' }]);
+    expect((params.custom_text?.submit as { message: string }).message).toContain('Welcome-back offer: \u2068₪370\u2069 for your first year, then \u2068₪390\u2069 a year.');
+  });
+
+  it('never twice: Stripe already holding a paid subscription that carried it is full price, and a stale drawer gets 409 OFFER_ENDED', async () => {
+    const h = comeback();
+    const u = await person(h);
+    const customer = await lapsed(h, u.userId);
+    h.checkout.stripeSubscriptions.set(customer, [{ status: 'canceled', currentPeriodEnd: NOW, offerId: 'comeback-2026' }]);
+    const res = await u.post(CHECKOUT, checkoutBody({ expectedOffer: 'comeback-2026' }));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toEqual({ reason: 'OFFER_ENDED', offer: 'comeback-2026' });
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect(h.checkout.checkoutSessions.at(-1)).not.toHaveProperty('discounts');
+  });
+
+  it('a lapse too recent, or no coupon in Stripe, is full price', async () => {
+    const h = comeback();
+    const u = await person(h);
+    await lapsed(h, u.userId, { daysAgo: 10 });
+    expect((await read(await u.get())).comeback).toBeNull();
+    expect((await u.post(CHECKOUT, checkoutBody())).status).toBe(200);
+    expect(h.checkout.checkoutSessions.at(-1)).not.toHaveProperty('discounts');
+    const none = harness();
+    const v = await person(none);
+    await lapsed(none, v.userId);
+    expect((await read(await v.get())).comeback).toBeNull();
   });
 });
 

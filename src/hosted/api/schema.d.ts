@@ -12594,7 +12594,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.
          */
         get: {
             parameters: {
@@ -19323,6 +19323,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/comeback-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily come-back mails (Cloud Scheduler)
+         * @description Mails each person whose latest paid Freelancer plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are still there, and the first month back costs the list price less the come-back coupon. Each stage is recorded once per person, ever, and that record opens the offer at Checkout. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComebackMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/comeback-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the come-back mails now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per lapsed person: the stage it mails or why not. `dryRun` mails and records nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ComebackMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description BILLING_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -23288,6 +23424,7 @@ export interface components {
             coveredProfileIds: string[];
             offer: components["schemas"]["BillingOffer"] | unknown;
             yearlySwitch: components["schemas"]["BillingYearlySwitch"] | unknown;
+            comeback: components["schemas"]["BillingComeback"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -23306,6 +23443,25 @@ export interface components {
             /** @enum {string} */
             currency: "ILS" | "USD";
             savings: number | null;
+        };
+        BillingComeback: {
+            id: string;
+            firstMonth: {
+                ILS: number | null;
+                USD: number | null;
+            };
+            listMonth: {
+                ILS: number | null;
+                USD: number | null;
+            };
+            firstYear: {
+                ILS: number | null;
+                USD: number | null;
+            };
+            listYear: {
+                ILS: number | null;
+                USD: number | null;
+            };
         };
         BillingRedirect: {
             /** Format: uri */
@@ -24202,6 +24358,59 @@ export interface components {
             action: "send" | "skip";
             /** @enum {string|null} */
             skip: "gone" | "not-past-due" | "settled" | "needs-authentication" | "no-stage" | "suppressed" | null;
+            /**
+             * @description The mailer's answer, or failed; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        ComebackMailSummary: {
+            dryRun: boolean;
+            /** @description People whose latest paid plan Stripe ended in one of the windows */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description This stage was already recorded for the person */
+            duplicate: number;
+            /** @description Due but not sent (its record released): Stripe or the mailer failed, mail off, capped, refused or suppressed */
+            notSent: number;
+            skipped: {
+                paying: number;
+                noLapse: number;
+                tooSoon: number;
+                firm: number;
+                alreadyHad: number;
+                stayOfferRecent: number;
+                covered: number;
+                noStage: number;
+                alreadyMailed: number;
+                neverPaid: number;
+                /** @description No running come-back coupon (missing, or not shaped as an amount off once) */
+                noOffer: number;
+                noPrice: number;
+                suppressed: number;
+            };
+            /** @description The time budget ran out; the next run continues */
+            incomplete: boolean;
+        };
+        ComebackMailRun: {
+            summary: components["schemas"]["ComebackMailSummary"];
+            rows: components["schemas"]["ComebackMailRow"][];
+        };
+        ComebackMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            stripeSubscriptionId: string;
+            /** @enum {string|null} */
+            stage: "day-30" | "day-90" | null;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}

@@ -76,8 +76,8 @@ describe('CheckoutGateway before a Checkout (MUT-362 review: no double charge)',
     const sub = (status: string, end: number) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end }]) });
     const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([sub('active', 1796083200), sub('canceled', 1790000000)]) }));
     expect(await gateway.subscriptionsOf('cus_MINE')).toEqual([
-      { status: 'active', currentPeriodEnd: new Date(1796083200 * 1000) },
-      { status: 'canceled', currentPeriodEnd: new Date(1790000000 * 1000) },
+      { status: 'active', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
+      { status: 'canceled', currentPeriodEnd: new Date(1790000000 * 1000), offerId: null },
     ]);
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions']);
     expect(seen[0]!.query.get('customer')).toBe('cus_MINE');

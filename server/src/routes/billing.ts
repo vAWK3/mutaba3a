@@ -19,6 +19,8 @@ import {
 } from '../billing/checkout.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
 import { offerOrNothing } from '../billing/offer-read.js';
+import { comebackRefusalOf, type ComebackOffer } from '../billing/comeback.js';
+import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { trialTimelineOf } from '../billing/entitlement.js';
 import { SWITCH_AFTER_PAID_INVOICES, yearlySwitchOf } from '../billing/retention.js';
@@ -101,7 +103,9 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         `cached for ${CATALOG_TTL_MS / MINUTE_MS} minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. ` +
         '`coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. ' +
         '`offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it ' +
-        '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end.',
+        '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. ' +
+        '`comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back ' +
+        'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
@@ -115,6 +119,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const now = c.get('now')();
       const shown = currentSubscription(summary.subscriptions, now);
       const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
+      const comeback = options.checkout ? await comebackFor(store, user.id, summary.subscriptions, now, offers, options.checkout, options.logger, false) : null;
       const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalog, now, options.logger, c.get('requestId')) : null;
       return c.json(
         {
@@ -127,6 +132,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           coveredProfileIds: covered.map((p) => p.id),
           offer: offer ? offerView(offer, offerEligible(offer, summary.subscriptions, offer.interval), catalog) : null,
           yearlySwitch,
+          comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
         },
         200,
       );
@@ -178,9 +184,17 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           if (stillRefused) throw refusalError(stillRefused);
           // MUT-525 (OV-4): the offer is decided only now, on the mirror and Stripe together (D2), from a fresh coupon read (D6).
           const offer = body.interval === 'year' ? await offerOrNothing(checkout, offers, catalog, now, true, options.logger, c.get('requestId')) : null;
-          const applied = offerEligible(offer, everSubscribed, body.interval) ? appliedOffer(offer!, catalog, plan.currency, body.interval) : null;
+          let applied = offerEligible(offer, everSubscribed, body.interval) ? appliedOffer(offer!, catalog, plan.currency, body.interval) : null;
+          // MUT-534 (D13, D14): otherwise the come-back offer, on the mirror's facts and Stripe's own list (R7), from a fresh coupon.
+          if (!applied) {
+            const back = await comebackFor(store, user.id, summary.subscriptions, now, offers, checkout, options.logger, true);
+            const usedInStripe = back !== null && inStripe.some((s) => s.offerId === back.id && !NEVER_PAID.has(s.status));
+            if (back && !usedInStripe) applied = comebackApplied(back, plan.currency, body.interval);
+          }
           // DD4: the drawer showed an offer that no longer applies: no silent full price, the person decides again.
-          if (body.expectedOffer && applied?.id !== body.expectedOffer) throw refusalError('OFFER_ENDED');
+          if (body.expectedOffer && applied?.id !== body.expectedOffer) {
+            throw new ApiError('CONFLICT', CONFLICT_MESSAGES.OFFER_ENDED, { reason: 'OFFER_ENDED', offer: body.expectedOffer });
+          }
           const final = applied ? planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt, offer: applied }, person, options.countries, catalog) : plan;
           if (!final.ok) throw refusalError(final.code);
           // Only the newest Checkout can be paid: another tab's, or an abandoned one, can't charge a second time.
@@ -299,7 +313,7 @@ const CONFLICT_MESSAGES: Record<Exclude<Refusal, 'VALIDATION_FAILED' | 'COUNTRY_
   COVERED_BY_GRANT: 'Your account is covered by MTB3A; there is nothing to pay',
   NO_BILLING_ACCOUNT: 'There is no billing account to manage yet',
   BILLING_ACCOUNT_NEEDS_HELP: 'We could not open billing for your account; please contact us',
-  OFFER_ENDED: 'The launch offer has ended; the yearly plan is at its regular price',
+  OFFER_ENDED: 'The offer you saw no longer applies; nothing was charged',
 };
 
 export function requireCheckout(checkout: CheckoutGateway | null): CheckoutGateway {
@@ -343,6 +357,26 @@ async function catalogOrNothing(checkout: CheckoutGateway, logger: Pick<Logger, 
     logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'billing catalog unavailable; prices hidden');
     return NO_CATALOG;
   }
+}
+
+/** MUT-534: a Checkout that never took money doesn't use the come-back offer up (R7). */
+const NEVER_PAID: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expired']);
+
+/**
+ * MUT-534 (D12, D13): the come-back offer this person may have now, or null. Nothing to read for someone who never had a
+ * plan end (GET /v1/billing is polled); otherwise their facts, the rule (the job's record opens it) and the coupon.
+ */
+async function comebackFor(store: LedgerStore, userId: string, subscriptions: readonly BillingSubscriptionRecord[], now: Date, offers: readonly OfferEntry[], checkout: CheckoutGateway, logger: Pick<Logger, 'warn'>, fresh: boolean): Promise<ComebackOffer | null> {
+  if (!subscriptions.some((s) => s.status === 'canceled')) return null;
+  if (comebackRefusalOf(await comebackFactsOf(store, userId, now, offers), now, { requireOffered: true })) return null;
+  return comebackOfferOrNothing(checkout, offers, logger, { fresh });
+}
+
+/** MUT-534 (D8): the come-back amounts for this Checkout's currency and interval; null where it has none. */
+function comebackApplied(offer: ComebackOffer, currency: 'ILS' | 'USD', interval: BillingInterval): AppliedOffer | null {
+  const first = interval === 'year' ? offer.firstYear[currency] : offer.firstMonth[currency];
+  const list = interval === 'year' ? offer.listYear[currency] : offer.listMonth[currency];
+  return first === null || list === null ? null : { id: offer.id, couponId: offer.couponId, firstAmount: first, listAmount: list, kind: 'comeback', interval };
 }
 
 /** D4: what the offer adds to this Checkout, in the price's own currency. */
