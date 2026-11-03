@@ -1,4 +1,12 @@
 {
+  "0.3.3": {
+    "en": [
+      "Our privacy policy now says where your records live: in Google Cloud's europe-west1 region, in Belgium, along with our daily backups."
+    ],
+    "ar": [
+      "توضّح سياسة الخصوصية الآن مكان حفظ سجلاتك: في منطقة europe-west1 لدى Google Cloud في بلجيكا، ومعها نسخنا الاحتياطية اليومية."
+    ]
+  },
   "0.3.2": {
     "en": [
       "Onboarding"
