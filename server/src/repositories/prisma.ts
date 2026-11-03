@@ -2728,7 +2728,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     saveSubscription: async (input) => {
       const { stripeCustomerId, at, audit, ...given } = input;
-      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null };
       const attempt = () =>
         translate(() =>
           this.prisma.$transaction(async (tx) => {
@@ -2784,7 +2784,7 @@ export class PrismaLedgerStore implements LedgerStore {
           }),
         );
       } catch (err) {
-        // The one-stay-offer-per-person index (rule 2): a double press or a retry never claims it twice.
+        // The one-stay-offer-per-person index (rule 2), and MUT-534's one-come-back-stage-per-person: never claimed twice.
         if (err instanceof UniqueViolation) throw new StateConflict('billing_retention_event', 'TAKEN');
         throw err;
       }

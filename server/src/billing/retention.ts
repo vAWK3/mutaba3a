@@ -80,7 +80,7 @@ export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
 /** Stripe's own limit on `cancellation_details.comment`. */
 export const CANCELLATION_COMMENT_MAX = 500;
 
-export type RetentionKind = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
+export type RetentionKind = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH' | 'COMEBACK_OFFERED';
 
 /** The subscription Billing shows, as Stripe holds it now. */
 export interface RetentionSubject extends SwitchSubscription {

@@ -27,6 +27,11 @@ export interface MirrorFields {
   pausedFrom: Date | null;
   /** MUT-532: when Stripe resumes collecting; null with no pause set, or a pause with no end. */
   pauseResumesAt: Date | null;
+  /**
+   * MUT-534 (D10): when Stripe ended it (`ended_at`); null while it runs. After failed retries this is weeks before the
+   * period end, so a lapse is timed from here, never from `currentPeriodEnd`.
+   */
+  endedAt: Date | null;
   /** The account's currency (billing_accounts.currency): ILS for Israel, USD elsewhere. */
   currency: 'ILS' | 'USD';
 }
@@ -75,6 +80,7 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       offerId: offerIdOf(sub.metadata?.['mutaba3a_offer']),
       pausedFrom: pause.pausedFrom,
       pauseResumesAt: pause.pauseResumesAt,
+      endedAt: typeof sub.ended_at === 'number' ? new Date(sub.ended_at * 1000) : null,
       currency,
     },
     notes,

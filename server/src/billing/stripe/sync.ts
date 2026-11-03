@@ -175,6 +175,8 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       // MUT-532: a pause is state, like the status: never frozen out with the tier.
       pausedFrom: pause.pausedFrom,
       pauseResumesAt: pause.pauseResumesAt,
+      // MUT-534: an end is state too, like the status.
+      endedAt: typeof sub.ended_at === 'number' ? new Date(sub.ended_at * 1000) : null,
       stripeUpdatedAt: fetchedAt,
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },

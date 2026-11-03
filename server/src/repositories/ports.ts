@@ -2151,6 +2151,8 @@ export interface BillingSubscriptionRecord {
   pausedFrom: Date | null;
   /** MUT-532: when Stripe resumes collecting; null with none set, or a pause with no end. */
   pauseResumesAt: Date | null;
+  /** MUT-534 (D10): when Stripe ended it (`ended_at`); null while it runs. */
+  endedAt: Date | null;
   stripeUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2258,6 +2260,8 @@ export interface SaveBillingSubscriptionInput {
   /** MUT-532: the pause Stripe holds. Absent is null. */
   pausedFrom?: Date | null;
   pauseResumesAt?: Date | null;
+  /** MUT-534: when Stripe ended it. Absent is null. */
+  endedAt?: Date | null;
   /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
   at: Date;
@@ -2302,7 +2306,7 @@ export interface PastDueCandidate {
 }
 
 /** MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
-export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
+export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH' | 'COMEBACK_OFFERED';
 
 export interface BillingRetentionEventRecord {
   id: string;

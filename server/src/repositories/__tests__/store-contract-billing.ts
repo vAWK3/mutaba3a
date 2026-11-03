@@ -460,6 +460,26 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.billing.retentionEventsOf(user.id)).toEqual([]);
     });
 
+    it('MUT-534 (D12): a come-back offer is offered once per person per stage, ever, even claimed at the same moment', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const offered = (reason: string) => ({ userId: user.id, stripeSubscriptionId: 'sub_lapsed', kind: 'COMEBACK_OFFERED' as const, reason, months: null, startsAt: null, endsAt: null, at: at(5) });
+      const results = await Promise.allSettled([store.billing.claimRetentionEvent(offered('day-30')), store.billing.claimRetentionEvent(offered('day-30'))]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.find((r) => r.status === 'rejected')).toMatchObject({ reason: { name: 'StateConflict', reason: 'TAKEN' } });
+      await expect(store.billing.claimRetentionEvent(offered('day-90'))).resolves.toMatchObject({ kind: 'COMEBACK_OFFERED', reason: 'day-90' });
+    });
+
+    it('MUT-534 (D10): keeps when Stripe ended a subscription; absent is null', async () => {
+      const store = await makeStore();
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, null));
+      const ended = { ...subscription(customer), status: 'canceled', endedAt: at(40) };
+      expect((await store.billing.saveSubscription(ended)).subscription.endedAt).toEqual(at(40));
+      expect((await store.billing.getSubscription(ended.stripeSubscriptionId))?.endedAt).toEqual(at(40));
+      expect((await store.billing.saveSubscription(subscription(customer))).subscription.endedAt).toBeNull();
+    });
+
     it('a second stay offer for a person is TAKEN, even claimed at the same moment (MUT-532 rule 2)', async () => {
       const store = await makeStore();
       const { user } = await store.users.create(userInput());

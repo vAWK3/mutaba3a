@@ -3360,7 +3360,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
       const { stripeCustomerId, at, audit, ...given } = input;
       void stripeCustomerId; // matched above; the subscription row stores the account id instead
-      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null };
       const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
       if (existing && existing.stripeUpdatedAt > input.stripeUpdatedAt) return { subscription: { ...existing }, outcome: 'stale' as const };
       const before = existing ? { ...existing } : null;
@@ -3391,6 +3391,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!this.people.has(input.userId)) throw new ForeignKeyViolation('billing_retention_events.userId');
       const mine = [...this.retentionEvents.values()].filter((e) => e.userId === input.userId);
       if (input.kind === 'STAY_OFFER' && mine.some((e) => e.kind === 'STAY_OFFER')) throw new StateConflict('billing_retention_event', 'TAKEN');
+      // MUT-534 (D12): each come-back stage once per person, ever (the partial unique index in Postgres).
+      if (input.kind === 'COMEBACK_OFFERED' && mine.some((e) => e.kind === 'COMEBACK_OFFERED' && e.reason === input.reason)) throw new StateConflict('billing_retention_event', 'TAKEN');
       const since = input.noPauseSince;
       if (input.kind === 'PAUSE' && since && mine.some((e) => pauseCounts(e, since))) throw new StateConflict('billing_retention_event', 'TAKEN');
       const { at, noPauseSince: _since, ...fields } = input;
