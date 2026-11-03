@@ -1395,6 +1395,11 @@
         "ended": "The launch offer has ended.",
         "endedPrice": "The launch offer has ended. The yearly price is {list}."
       },
+      "comeback": {
+        "monthly": "Welcome back: your first month is {first}, then {list} a month.",
+        "yearly": "Welcome back: your first year is {first}, then {list} a year.",
+        "ended": "The welcome-back price no longer applies. Please check the price again."
+      },
       "done": {
         "offerApplied": "You're subscribed. Launch offer applied."
       },

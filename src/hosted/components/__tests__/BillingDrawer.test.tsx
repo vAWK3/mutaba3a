@@ -860,3 +860,41 @@ describe('MUT-532: pause instead of cancel, the stay offer and MTB3A’s own can
     expect(await screen.findByRole('heading', { name: 'لماذا تريد الإلغاء؟' })).toBeInTheDocument();
   });
 });
+
+describe('Billing drawer: the welcome-back price (MUT-534 D14)', () => {
+  const CATALOG = { ILS: { month: 2900, year: 29000 }, USD: { month: 900, year: 9000 } };
+  const back = { id: 'comeback-2026', firstMonth: { ILS: 900, USD: 300 }, listMonth: { ILS: 2900, USD: 900 }, firstYear: { ILS: 27000, USD: 8400 }, listYear: { ILS: 29000, USD: 9000 } };
+  const checkoutBodies = (api: ReturnType<typeof portal>['api']) => api.calls.filter((c) => c.url.pathname === '/v1/billing/checkout-session').map((c) => c.body);
+  /** The innermost element whose whole text matches: amounts are their own <bdi>, so the sentence spans elements. */
+  const whole = (pattern: RegExp) => (_: string, el: Element | null) => !!el && pattern.test(el.textContent ?? '') && [...el.children].every((child) => !pattern.test(child.textContent ?? ''));
+
+  it('once a country sets the currency, says the first month back and the price after; Continue names the offer', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => ok(overview({ catalog: CATALOG, comeback: back } as Partial<BillingOverview>)),
+      routes: { 'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/cs_test_back' }) },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    expect(within(step).queryByText(/^Welcome back/)).not.toBeInTheDocument();
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    expect(await within(step).findByText(whole(/^Welcome back: your first month is ₪9\.00, then ₪29\.00 a month\.$/))).toBeInTheDocument();
+    await user.click(within(step).getByRole('radio', { name: /^Yearly/ }));
+    expect(await within(step).findByText(whole(/^Welcome back: your first year is ₪270\.00, then ₪290\.00 a year\.$/))).toBeInTheDocument();
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(checkoutBodies(api)).toEqual([{ interval: 'year', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}`, expectedOffer: 'comeback-2026' }]);
+  });
+
+  it('a 409 OFFER_ENDED for it says the price no longer applies, and the next Continue carries none', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true&step=subscribe`, {
+      billing: () => ok(overview({ catalog: CATALOG, comeback: back } as Partial<BillingOverview>)),
+      routes: { 'POST /v1/billing/checkout-session': () => fail(409, 'CONFLICT', { reason: 'OFFER_ENDED', offer: 'comeback-2026' }) },
+    });
+    const step = await screen.findByRole('dialog', { name: 'Subscribe to Freelancer' });
+    await user.selectOptions(await within(step).findByRole('combobox', { name: 'Billing address country' }), 'IL');
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(await within(step).findByText('The welcome-back price no longer applies. Please check the price again.')).toBeInTheDocument();
+    expect(within(step).queryByText(/^Welcome back:/)).not.toBeInTheDocument();
+    await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
+    expect(checkoutBodies(api).at(-1)).not.toHaveProperty('expectedOffer');
+  });
+});
+

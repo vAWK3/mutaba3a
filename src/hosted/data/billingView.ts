@@ -1,3 +1,4 @@
+import type { Schemas } from '../api/client';
 import type { BillingEntitlement, BillingOffer, BillingOverview, BillingYearlySwitch } from '../api/client';
 import type { Language } from '../../lib/i18n/types';
 import { formatInstant, todayInZone } from '../format/dates';
@@ -230,6 +231,14 @@ export function yearlySwitchLineOf(billing: Pick<BillingOverview, 'yearlySwitch'
   const sub = billing.subscription;
   if (!line || !sub || sub.status !== 'active' || sub.cancelAtPeriodEnd || sub.interval !== 'month' || pauseOf(sub) !== null) return null;
   return line;
+}
+
+/**
+ * MUT-534 (D14): the come-back offer the server says this person may have. The generated type is `BillingComeback |
+ * unknown` (a nullable union); a server older than MUT-534 sends nothing.
+ */
+export function comebackOfferOf(billing: Partial<Pick<BillingOverview, 'comeback'>> | undefined): Schemas['BillingComeback'] | null {
+  return ((billing?.comeback ?? null) as Schemas['BillingComeback'] | null) ?? null;
 }
 
 export function eligibleOfferOf(billing: Pick<BillingOverview, 'offer' | 'catalog'>): BillingOffer | null {
