@@ -1035,3 +1035,17 @@ test('The come-back offer in dollars - a shekel payer coming back from abroad se
   });
 });
 
+test('The come-back offer at day 90 - the second mail, its own subject, still ₪9 the first month back', { tag: '@portal-live.billing.comeback-day-90' }, async ({ step }) => {
+  const person = await provisionPerson('ar', 'back90');
+  await step('A monthly subscriber paid once; the plan ended 91 days ago', async () => {
+    const lapse = await paidLapse(person, 91);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+  });
+  await step('The daily job runs: the day-90 mail, in Arabic, names the price in its subject', async () => {
+    const mail = await comebackMailed(person);
+    expect(mail.locale).toBe('ar');
+    expect(mail.subject).toBe('عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
+    expect(mail.text).toContain('سجلاتك ما زالت هنا');
+  });
+});
+

@@ -423,4 +423,14 @@ features:
       - Open the mail's button and pick the United Kingdom
     expect:
       - Subscribe says "Welcome back - your first month is $3.00, then $9.00 a month."; Stripe's page carries the come-back coupon in dollars
+  - id: comeback-day-90
+    title: The come-back offer at day 90 - the second mail, its own subject, still ₪9 the first month back
+    tier: secondary
+    paths:
+      - server/src/billing/comeback-mail.ts
+    steps:
+      - A monthly subscriber in Arabic paid once, and the plan ended 91 days ago
+      - The daily come-back job runs
+    expect:
+      - One mail in Arabic, "عُد إلى متابعة بـ ₪9 لشهرك الأول", saying the records are still there
 
