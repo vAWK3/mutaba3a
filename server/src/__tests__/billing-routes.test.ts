@@ -529,7 +529,7 @@ describe('the launch offer (MUT-525)', () => {
     const customer = await linkSubscription(h, u.userId, 'active', 'freelancer_list_yearly_ils');
     const sub = (await h.store.billing.summaryOf(u.userId)).subscriptions[0]!;
     await h.store.billing.saveSubscription({ ...sub, stripeCustomerId: customer, offerId: 'launch-2026', stripeUpdatedAt: new Date(NOW.getTime() + 1), at: NOW, audit: { profileIds: [], source: 'webhook', eventId: null, requestId: null } });
-    expect((await read(await u.get())).subscription).toMatchObject({ renewsAtListPrice: true, offer: { id: 'launch-2026' } });
+    expect((await read(await u.get())).subscription).toMatchObject({ renewsAtListPrice: true, offer: { id: 'launch-2026', kind: 'launch' } });
     const founder = harness();
     const f = await person(founder);
     await linkSubscription(founder, f.userId, 'active', 'freelancer_founder_yearly_ils');

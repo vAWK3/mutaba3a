@@ -22,7 +22,7 @@ import type { OfferEntry } from './offer.js';
 export const COMEBACK_MAIL_TIME_BUDGET_MS = 200_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'firm' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed';
+export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'firm' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-profile' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed';
 
 export interface ComebackMailRow {
   userId: string;
@@ -43,7 +43,7 @@ export interface ComebackMailSummary {
   sent: number;
   duplicate: number;
   notSent: number;
-  skipped: Record<'paying' | 'noLapse' | 'tooSoon' | 'firm' | 'alreadyHad' | 'stayOfferRecent' | 'covered' | 'noStage' | 'alreadyMailed' | 'neverPaid' | 'noOffer' | 'noPrice' | 'suppressed', number>;
+  skipped: Record<'paying' | 'noLapse' | 'tooSoon' | 'firm' | 'alreadyHad' | 'stayOfferRecent' | 'covered' | 'noProfile' | 'noStage' | 'alreadyMailed' | 'neverPaid' | 'noOffer' | 'noPrice' | 'suppressed', number>;
   incomplete: boolean;
 }
 
@@ -75,6 +75,7 @@ const REFUSAL_SKIP: Record<Exclude<ComebackRefusal, 'NOT_OFFERED'>, ComebackSkip
   ALREADY_HAD: 'already-had',
   STAY_OFFER_RECENT: 'stay-offer-recent',
   COVERED: 'covered',
+  NO_PROFILE: 'no-profile',
 };
 
 export async function runComebackMail(options: ComebackRunOptions): Promise<{ summary: ComebackMailSummary; rows: ComebackMailRow[] }> {
@@ -113,7 +114,8 @@ export async function runComebackMail(options: ComebackRunOptions): Promise<{ su
         }
       }
     } catch (err) {
-      options.logger.error({ err, stripeSubscriptionId }, 'come-back mail failed for one person; the next run tries again');
+      // Review: the claim id lets the operator release a record a crash left behind (its mail never went out).
+      options.logger.error({ err, stripeSubscriptionId, claimId }, 'come-back mail failed for one person; the next run tries again');
       if (claimId) await store.billing.releaseRetentionEvent(claimId).catch(() => undefined);
       row.action = 'send';
       row.skip = null;
@@ -190,6 +192,7 @@ function summarize(rows: readonly ComebackMailRow[], dryRun: boolean, incomplete
       alreadyHad: skipped('already-had'),
       stayOfferRecent: skipped('stay-offer-recent'),
       covered: skipped('covered'),
+      noProfile: skipped('no-profile'),
       noStage: skipped('no-stage'),
       alreadyMailed: skipped('already-mailed'),
       neverPaid: skipped('never-paid'),

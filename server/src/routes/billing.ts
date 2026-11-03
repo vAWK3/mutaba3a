@@ -19,7 +19,7 @@ import {
 } from '../billing/checkout.js';
 import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEntry } from '../billing/offer.js';
 import { offerOrNothing } from '../billing/offer-read.js';
-import { comebackRefusalOf, type ComebackOffer } from '../billing/comeback.js';
+import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } from '../billing/comeback.js';
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { trialTimelineOf } from '../billing/entitlement.js';
@@ -359,6 +359,9 @@ async function catalogOrNothing(checkout: CheckoutGateway, logger: Pick<Logger, 
   }
 }
 
+/** MUT-534: the come-back offer's ids, as a subscription's `offerId` names them. */
+const COMEBACK_IDS: ReadonlySet<string> = new Set(OFFERS.filter((e) => e.kind === 'comeback').map((e) => e.id));
+
 /** MUT-534: a Checkout that never took money doesn't use the come-back offer up (R7). */
 const NEVER_PAID: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expired']);
 
@@ -367,8 +370,9 @@ const NEVER_PAID: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expir
  * plan end (GET /v1/billing is polled); otherwise their facts, the rule (the job's record opens it) and the coupon.
  */
 async function comebackFor(store: LedgerStore, userId: string, subscriptions: readonly BillingSubscriptionRecord[], now: Date, offers: readonly OfferEntry[], checkout: CheckoutGateway, logger: Pick<Logger, 'warn'>, fresh: boolean): Promise<ComebackOffer | null> {
-  if (!subscriptions.some((s) => s.status === 'canceled')) return null;
-  if (comebackRefusalOf(await comebackFactsOf(store, userId, now, offers), now, { requireOffered: true })) return null;
+  // Review: the subscriptions in hand settle most refusals; only someone they let through costs the other reads.
+  if (comebackSubscriptionRefusalOf(subscriptions, COMEBACK_IDS, now)) return null;
+  if (comebackRefusalOf(await comebackFactsOf(store, userId, now, offers, { subscriptions }), now, { requireOffered: true })) return null;
   return comebackOfferOrNothing(checkout, offers, logger, { fresh });
 }
 
@@ -483,7 +487,8 @@ function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     // MUT-525 DD3: a list price renews at the catalog's amount, which the drawer names; a founder price never shows one.
     renewsAtListPrice: sub.priceLookupKey !== null && ALL_GA_LOOKUP_KEYS.includes(sub.priceLookupKey),
-    offer: sub.offerId ? { id: sub.offerId } : null,
+    // MUT-534 (review): which offer it carried, so the drawer never calls a come-back subscription a launch offer.
+    offer: sub.offerId ? { id: sub.offerId, kind: COMEBACK_IDS.has(sub.offerId) ? ('comeback' as const) : ('launch' as const) } : null,
     pause: sub.pausedFrom ? { from: sub.pausedFrom.toISOString(), until: sub.pauseResumesAt?.toISOString() ?? null } : null,
   } as const;
 }

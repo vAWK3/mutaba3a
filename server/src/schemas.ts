@@ -577,7 +577,9 @@ export const BillingOverviewSchema = z
         /** MUT-525 DD3: on a GA list price (`freelancer_list_*`), so it renews at the catalog's amount; false for a founder price. */
         renewsAtListPrice: z.boolean(),
         /** MUT-525 DD10b: the launch offer the subscription's Checkout carried. */
-        offer: z.object({ id: z.string() }).nullable(),
+        offer: z
+          .object({ id: z.string(), kind: z.enum(['launch', 'comeback']).openapi({ description: 'MUT-534: which offer the Checkout carried. Additive since 1.99.0-mut534.' }) })
+          .nullable(),
         /**
          * MUT-532: a pause, as the mirror holds it: from the paid period's end (`from`) until billing restarts on its own
          * (`until`; null: no end set). Before `from` it is booked; from then the records are read-only. Null: none.
@@ -794,6 +796,7 @@ export const ComebackMailSummarySchema = z
       alreadyHad: z.number().int(),
       stayOfferRecent: z.number().int(),
       covered: z.number().int(),
+      noProfile: z.number().int(),
       noStage: z.number().int(),
       alreadyMailed: z.number().int(),
       neverPaid: z.number().int(),
@@ -814,7 +817,7 @@ export const ComebackMailRowSchema = z
     stage: z.enum(['day-30', 'day-90']).nullable(),
     action: z.enum(['send', 'skip']),
     skip: z
-      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed'])
+      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-profile', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed'])
       .nullable(),
     outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
   })

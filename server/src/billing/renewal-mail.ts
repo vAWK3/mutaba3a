@@ -4,6 +4,7 @@ import type { Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import type { LedgerStore, UserLocale } from '../repositories/ports.js';
 import { ALL_GA_LOOKUP_KEYS } from './checkout.js';
+import { OFFERS, type OfferEntry } from './offer.js';
 import { jerusalemDayOf } from './offer-read.js';
 
 /**
@@ -71,6 +72,8 @@ export interface RenewalMailRunOptions {
   /** Billing in the portal (`/?billing=true`), where the person cancels or changes the plan. */
   manageLink: string;
   dryRun: boolean;
+  /** The offers whose subscriptions this notice is for: the launch ones (MUT-534: never the come-back offer). */
+  offers?: readonly OfferEntry[];
   elapsedMs?: () => number;
   budgetMs?: number;
 }
@@ -80,7 +83,10 @@ export async function runRenewalMail(options: RenewalMailRunOptions): Promise<{ 
   const started = performance.now();
   const elapsed = options.elapsedMs ?? (() => performance.now() - started);
   const budget = options.budgetMs ?? RENEWAL_MAIL_TIME_BUDGET_MS;
-  const candidates = await store.billing.offerRenewalCandidates({ endsAfter: now, endsUpTo: new Date(now.getTime() + RENEWAL_NOTICE_DAYS * DAY_MS) });
+  // MUT-534 (review): a come-back subscription carries an offer id too, but its first invoice, not a first year, was
+  // discounted: only launch-offer subscriptions are told their offer year ends.
+  const launchIds = new Set((options.offers ?? OFFERS).filter((e) => e.kind === 'launch').map((e) => e.id));
+  const candidates = (await store.billing.offerRenewalCandidates({ endsAfter: now, endsUpTo: new Date(now.getTime() + RENEWAL_NOTICE_DAYS * DAY_MS) })).filter((c) => launchIds.has(c.offerId));
 
   const rows: RenewalMailRow[] = [];
   let incomplete = false;

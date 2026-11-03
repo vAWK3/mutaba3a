@@ -585,12 +585,25 @@ describe('MUT-525: the launch offer in the drawer (DD2–DD10, R3)', () => {
     let calls = 0;
     const paid = offered({
       offer: null,
-      subscription: { tier: 'FREELANCER', status: 'active', interval: 'year', currency: 'ILS', currentPeriodEnd: iso(365), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: { id: 'launch-2026' } },
+      subscription: { tier: 'FREELANCER', status: 'active', interval: 'year', currency: 'ILS', currentPeriodEnd: iso(365), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: { id: 'launch-2026', kind: 'launch' } },
       canManage: true,
     });
     portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? offered() : paid) });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect((await within(dialog).findAllByText("You're subscribed. Launch offer applied.", {}, { timeout: 4000 })).length).toBeGreaterThan(0);
+  });
+
+  it('MUT-534 (review): back from Stripe on the come-back offer it says subscribed, never "Launch offer applied"', async () => {
+    let calls = 0;
+    const paid = offered({
+      offer: null,
+      subscription: { tier: 'FREELANCER', status: 'active', interval: 'month', currency: 'ILS', currentPeriodEnd: iso(30), cancelAtPeriodEnd: false, renewsAtListPrice: true, offer: { id: 'comeback-2026', kind: 'comeback' } },
+      canManage: true,
+    });
+    portal(`/p/${ORG_B}?billing=true&checkout=success`, { billing: () => ok(++calls === 1 ? offered() : paid) });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect((await within(dialog).findAllByText("You're subscribed. Thank you.", {}, { timeout: 4000 })).length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText("You're subscribed. Launch offer applied.")).not.toBeInTheDocument();
   });
 
   it('a list-price subscriber reads what it renews at; a founder price and a cancelled plan keep today’s copy (DD3)', async () => {

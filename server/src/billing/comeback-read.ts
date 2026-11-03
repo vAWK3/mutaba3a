@@ -16,8 +16,19 @@ export type ComebackStore = Pick<LedgerStore, 'billing' | 'memberships' | 'organ
  * subscriptions, their retention events, and whether Malafat or an operator grant covers one of their own profiles (the
  * trial mail's `covered`).
  */
-export async function comebackFactsOf(store: ComebackStore, userId: string, now: Date, offers: readonly OfferEntry[] = OFFERS): Promise<ComebackFacts> {
-  const [summary, events, profiles] = await Promise.all([store.billing.summaryOf(userId), store.billing.retentionEventsOf(userId), memberProfilesForBilling(store, userId)]);
+export async function comebackFactsOf(
+  store: ComebackStore,
+  userId: string,
+  now: Date,
+  offers: readonly OfferEntry[] = OFFERS,
+  known?: { subscriptions: ComebackFacts['subscriptions'] },
+): Promise<ComebackFacts> {
+  // Review: a caller that already read the person's subscriptions (GET /v1/billing) passes them in.
+  const [subscriptions, events, profiles] = await Promise.all([
+    known ? Promise.resolve(known.subscriptions) : store.billing.summaryOf(userId).then((s) => s.subscriptions),
+    store.billing.retentionEventsOf(userId),
+    memberProfilesForBilling(store, userId),
+  ]);
   const own = profiles.filter((p) => profileOwnerOf(p.organization) === userId);
   const entitlements = own.length > 0 ? await entitlementsFor(store, own, now) : new Map();
   const covered = own.some((p) => {
@@ -25,7 +36,7 @@ export async function comebackFactsOf(store: ComebackStore, userId: string, now:
     return source === 'MALAFAT' || source === 'OPERATOR';
   });
   const comeback = comebackEntryOf(offers);
-  return { subscriptions: summary.subscriptions, events, covered, comebackOfferIds: new Set(comeback ? [comeback.id] : []) };
+  return { subscriptions, events, covered, ownsProfile: own.length > 0, comebackOfferIds: new Set(comeback ? [comeback.id] : []) };
 }
 
 /**

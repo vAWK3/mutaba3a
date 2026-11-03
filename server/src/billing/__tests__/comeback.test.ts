@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalog } from '../checkout.js';
-import { comebackOfferOf, comebackRefusalOf, comebackStageOf, type ComebackFacts } from '../comeback.js';
+import { comebackOfferOf, comebackRefusalOf, comebackStageOf, comebackSubscriptionRefusalOf, type ComebackFacts } from '../comeback.js';
 import type { ComebackOfferEntry, CouponFact } from '../offer.js';
 
 /**
@@ -76,9 +76,22 @@ describe('comebackStageOf (D11): two two-week windows', () => {
   });
 });
 
+describe('comebackSubscriptionRefusalOf: the checks the subscriptions alone settle (review: GET reads nothing more for them)', () => {
+  const sub = (over: Partial<ComebackFacts['subscriptions'][number]> = {}) => ({ status: 'canceled', tier: 'FREELANCER' as const, endedAt: ago(35), offerId: null, ...over });
+  it('paying, no lapse, too soon, Firm and already had it are refused from the subscriptions alone; otherwise nothing yet', () => {
+    const ids = new Set(['comeback-2026']);
+    expect(comebackSubscriptionRefusalOf([sub(), { ...sub(), status: 'active', endedAt: null }], ids, NOW)).toBe('PAYING');
+    expect(comebackSubscriptionRefusalOf([], ids, NOW)).toBe('NO_LAPSE');
+    expect(comebackSubscriptionRefusalOf([sub({ endedAt: ago(3) })], ids, NOW)).toBe('TOO_SOON');
+    expect(comebackSubscriptionRefusalOf([sub({ tier: 'FIRM' })], ids, NOW)).toBe('FIRM');
+    expect(comebackSubscriptionRefusalOf([sub({ offerId: 'comeback-2026' })], ids, NOW)).toBe('ALREADY_HAD');
+    expect(comebackSubscriptionRefusalOf([sub()], ids, NOW)).toBeNull();
+  });
+});
+
 describe('comebackRefusalOf (D12, D13)', () => {
   const lapsed = (over: Partial<ComebackFacts['subscriptions'][number]> = {}) => ({ status: 'canceled', tier: 'FREELANCER' as const, endedAt: ago(35), offerId: null, ...over });
-  const facts = (over: Partial<ComebackFacts> = {}): ComebackFacts => ({ subscriptions: [lapsed()], events: [], covered: false, comebackOfferIds: new Set(['comeback-2026']), ...over });
+  const facts = (over: Partial<ComebackFacts> = {}): ComebackFacts => ({ subscriptions: [lapsed()], events: [], covered: false, ownsProfile: true, comebackOfferIds: new Set(['comeback-2026']), ...over });
   const event = (kind: 'STAY_OFFER' | 'COMEBACK_OFFERED' | 'PAUSE', createdAt: Date, reason: string | null = null) => ({ kind, createdAt, reason });
 
   it('a Freelancer lapse 30+ days ago, nothing running, never had it: eligible (for the job); GET and Checkout also need it offered', () => {
@@ -113,5 +126,7 @@ describe('comebackRefusalOf (D12, D13)', () => {
     expect(comebackRefusalOf(facts({ events: [event('STAY_OFFER', ago(300))] }), NOW, { requireOffered: false })).toBe('STAY_OFFER_RECENT');
     expect(comebackRefusalOf(facts({ events: [event('STAY_OFFER', ago(400))] }), NOW, { requireOffered: false })).toBeNull();
     expect(comebackRefusalOf(facts({ covered: true }), NOW, { requireOffered: false })).toBe('COVERED');
+    // Review: Checkout would refuse someone who owns no profile (NOTHING_TO_COVER), so they're never offered it.
+    expect(comebackRefusalOf(facts({ ownsProfile: false }), NOW, { requireOffered: false })).toBe('NO_PROFILE');
   });
 });

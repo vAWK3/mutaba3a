@@ -83,11 +83,28 @@ export interface ComebackFacts {
   events: readonly Pick<BillingRetentionEventRecord, 'kind' | 'createdAt' | 'reason'>[];
   /** One of their profiles is covered by Malafat or an operator grant. */
   covered: boolean;
+  /** They own a profile a payment would cover (Checkout refuses NOTHING_TO_COVER otherwise). */
+  ownsProfile: boolean;
   /** The come-back entries' ids (offers.json), as subscriptions carry them in `mutaba3a_offer`. */
   comebackOfferIds: ReadonlySet<string>;
 }
 
-export type ComebackRefusal = 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALREADY_HAD' | 'STAY_OFFER_RECENT' | 'COVERED' | 'NOT_OFFERED';
+export type ComebackRefusal = 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALREADY_HAD' | 'STAY_OFFER_RECENT' | 'COVERED' | 'NO_PROFILE' | 'NOT_OFFERED';
+
+/**
+ * D13 (review): the refusals the person's subscriptions alone settle, so GET /v1/billing, polled after a return from
+ * Stripe, reads events and coverage only for someone these let through.
+ */
+export function comebackSubscriptionRefusalOf(subscriptions: ComebackFacts['subscriptions'], comebackOfferIds: ReadonlySet<string>, now: Date): 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALREADY_HAD' | null {
+  if (subscriptions.some((s) => !ENDED_STATUSES.has(s.status))) return 'PAYING';
+  const lapses = subscriptions.filter((s) => s.status === 'canceled' && s.endedAt !== null).sort((a, b) => b.endedAt!.getTime() - a.endedAt!.getTime());
+  const latest = lapses[0];
+  if (!latest) return 'NO_LAPSE';
+  if (latest.tier === 'FIRM') return 'FIRM';
+  if (now.getTime() - latest.endedAt!.getTime() < COMEBACK_AFTER_DAYS * DAY_MS) return 'TOO_SOON';
+  if (subscriptions.some((s) => s.offerId !== null && comebackOfferIds.has(s.offerId) && !NEVER_PAID_STATUSES.has(s.status))) return 'ALREADY_HAD';
+  return null;
+}
 
 /**
  * D12, D13: the first refusal that applies. The job (`requireOffered: false`) also checks with Stripe that the lapsed
@@ -95,18 +112,14 @@ export type ComebackRefusal = 'PAYING' | 'NO_LAPSE' | 'TOO_SOON' | 'FIRM' | 'ALR
  * record, which is what opens the offer.
  */
 export function comebackRefusalOf(facts: ComebackFacts, now: Date, options: { requireOffered: boolean }): ComebackRefusal | null {
-  const { subscriptions, events } = facts;
-  if (subscriptions.some((s) => !ENDED_STATUSES.has(s.status))) return 'PAYING';
-  const lapses = subscriptions.filter((s) => s.status === 'canceled' && s.endedAt !== null).sort((a, b) => b.endedAt!.getTime() - a.endedAt!.getTime());
-  const latest = lapses[0];
-  if (!latest) return 'NO_LAPSE';
-  if (latest.tier === 'FIRM') return 'FIRM';
-  if (now.getTime() - latest.endedAt!.getTime() < COMEBACK_AFTER_DAYS * DAY_MS) return 'TOO_SOON';
-  if (subscriptions.some((s) => s.offerId !== null && facts.comebackOfferIds.has(s.offerId) && !NEVER_PAID_STATUSES.has(s.status))) return 'ALREADY_HAD';
+  const { events } = facts;
+  const bySubscriptions = comebackSubscriptionRefusalOf(facts.subscriptions, facts.comebackOfferIds, now);
+  if (bySubscriptions) return bySubscriptions;
   const staySince = new Date(now);
   staySince.setUTCMonth(staySince.getUTCMonth() - STAY_OFFER_BLOCKS_MONTHS);
   if (events.some((e) => e.kind === 'STAY_OFFER' && e.createdAt > staySince)) return 'STAY_OFFER_RECENT';
   if (facts.covered) return 'COVERED';
+  if (!facts.ownsProfile) return 'NO_PROFILE';
   if (options.requireOffered && !events.some((e) => e.kind === 'COMEBACK_OFFERED')) return 'NOT_OFFERED';
   return null;
 }

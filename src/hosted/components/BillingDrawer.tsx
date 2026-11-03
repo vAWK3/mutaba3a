@@ -336,7 +336,8 @@ function StatusView({
   const offer = eligibleOfferOf(billing);
   const switchLine = yearlySwitchLineOf(billing);
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
-  const subscribed = billing.subscription?.offer ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
+  // MUT-534: only the launch offer says so here; a come-back Checkout (or a server older than 1.99.0) reads by its kind.
+  const subscribed = billing.subscription?.offer && billing.subscription.offer.kind !== 'comeback' ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
   const announcement =
     phase === 'confirming'
       ? t('hosted.billing.states.confirming')

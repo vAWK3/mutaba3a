@@ -9028,8 +9028,15 @@ components:
               properties:
                 id:
                   type: string
+                kind:
+                  type: string
+                  enum:
+                    - launch
+                    - comeback
+                  description: "MUT-534: which offer the Checkout carried. Additive since 1.99.0-mut534."
               required:
                 - id
+                - kind
             pause:
               type: object
               nullable: true
@@ -11713,6 +11720,8 @@ components:
               type: integer
             covered:
               type: integer
+            noProfile:
+              type: integer
             noStage:
               type: integer
             alreadyMailed:
@@ -11734,6 +11743,7 @@ components:
             - alreadyHad
             - stayOfferRecent
             - covered
+            - noProfile
             - noStage
             - alreadyMailed
             - neverPaid
@@ -11802,6 +11812,7 @@ components:
             - already-had
             - stay-offer-recent
             - covered
+            - no-profile
             - no-stage
             - already-mailed
             - never-paid

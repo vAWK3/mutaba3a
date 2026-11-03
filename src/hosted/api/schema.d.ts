@@ -23387,6 +23387,11 @@ export interface components {
                 renewsAtListPrice: boolean;
                 offer: {
                     id: string;
+                    /**
+                     * @description MUT-534: which offer the Checkout carried. Additive since 1.99.0-mut534.
+                     * @enum {string}
+                     */
+                    kind: "launch" | "comeback";
                 } | null;
                 pause: {
                     /** Format: date-time */
@@ -24383,6 +24388,7 @@ export interface components {
                 alreadyHad: number;
                 stayOfferRecent: number;
                 covered: number;
+                noProfile: number;
                 noStage: number;
                 alreadyMailed: number;
                 neverPaid: number;
@@ -24410,7 +24416,7 @@ export interface components {
             /** @enum {string} */
             action: "send" | "skip";
             /** @enum {string|null} */
-            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
+            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}
