@@ -360,6 +360,29 @@ access (GRACE). MTB3A mails them itself, in their language, from an hourly job (
   > AR: رفض البنك دفعة اشتراكك في متابعة، لكن لم يتوقف شيء: سيحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة.
   > لإصلاح ذلك الآن، افتح الاشتراك (أنت › الحساب › الاشتراك) واضغط «حدّث البطاقة».
 
+### 1.11 The come-back offer (MUT-534, ADR-243)
+
+A person whose paid Freelancer plan ended keeps their records read-only forever. 30 and 90 days after the end, MTB3A
+mails them (`mutaba3a-comeback-mail`, daily at 10:30): the records are still there, and the first month back is ₪9 / $3
+(then the list price), or a first year ₪270 / $84. The price is Stripe's coupon `mtb3a_comeback_first_month` (₪20 / $6
+off the first invoice, once) taken off the list price.
+
+- **Only our mail opens it.** Each stage the job mails is recorded (`billing_retention_events`, `COMEBACK_OFFERED`); Billing
+  and Checkout offer the price only to someone with that record. Cancelling and rejoining a week later is full price.
+- **Once per person, ever.** Never to someone who already came back on it, a lapsed Firm payer, anyone covered by Malafat or
+  an operator grant, anyone who took the stay offer in the last 12 months, or anyone closing their account.
+- **Check who it would mail:** `npm run billing:comeback-mail -- --dry-run --url "$URL"` (each lapsed person and the stage,
+  or why not: paying, too-soon, firm, already-had, stay-offer-recent, covered, no-stage, already-mailed, never-paid,
+  no-offer, no-price, suppressed).
+- **End it early:** delete the coupon in Stripe; nothing is offered or mailed until it exists again (`no-offer`).
+- **Support reply** for "I didn't get the ₪9 price":
+
+  > EN: The welcome-back price is for people whose paid plan ended at least 30 days ago, once per person, and it applies
+  > on its own at Checkout once our welcome-back email has gone out. Reply with your account email and we'll check.
+  >
+  > AR: سعر العودة لمن انتهى اشتراكه المدفوع قبل 30 يومًا على الأقل، مرة واحدة لكل شخص، ويُطبَّق تلقائيًا عند الدفع بعد
+  > أن تصلك رسالة العودة منّا. ردّ ببريد حسابك وسنتحقق.
+
 ## 2. Reset a password
 
 There's no "forgot password" form (ADR-037). The person emails support (§6), and you reply with a

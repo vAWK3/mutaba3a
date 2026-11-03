@@ -28,6 +28,31 @@
 
 ---
 
+## [Unreleased] - 2026-11-03 — The come-back offer: ₪9 / $3 for the first month back (MUT-534, ADR-243)
+
+**Why:** MUT-528 D7. A lapsed payer keeps their records forever; this gives them a reason to come back. Basel approved
+the plan and copy on 2026-11-02 (`.claude/designs/mut-533-534-card-failed-comeback-plan.md`).
+
+### Added
+- Migrations `20261104120000_mut534_comeback` (`billing_subscriptions.endedAt` + `(status, endedAt)` index,
+  `COMEBACK_OFFERED`) and `20261104120100_mut534_comeback_stage_index` (once per person per stage).
+- `offers.json` `kind: "comeback"` (`mtb3a_comeback_first_month`, no interval); `CouponFact.amountOffIn`;
+  `BILLING_COMEBACK_COUPON_ID` (QA only, refused live); `offersFor` takes an options object.
+- `server/src/billing/comeback.ts` (`comebackOfferOf`, `comebackStageOf`, `comebackRefusalOf`), `comeback-read.ts`
+  (`comebackFactsOf`, `comebackOfferOrNothing`), `comeback-mail.ts` (`runComebackMail`: claim the stage, mail it,
+  release the claim if it didn't go out). Store `billing.comebackCandidates`.
+- Template `comeback-offer` (ar + en, approved copy; its prices allowed by ADR-243).
+- Routes `POST /jobs/v1/billing/comeback-mail` (daily, Terraform behind `comeback_mail_enabled`, default off) and
+  `POST /admin/v1/billing/comeback-mail` (`npm run billing:comeback-mail [-- --dry-run]`).
+- GET `/v1/billing` `comeback`; Checkout applies the coupon on either interval with the pay-page line and the
+  `expectedOffer` handshake (409 `OFFER_ENDED`, `details.offer`). Contract 1.99.0-mut534.
+- Portal: the Subscribe step's welcome-back line and its refusal banner (ar + en).
+- Release-QA: `@portal-live.billing.comeback-offer` (core), `.comeback-yearly`, `.comeback-usd`.
+
+### Changed
+- The mirror keeps `endedAt` (also in `keepStatus` and the change audit). Stripe's subscription list carries `offerId`.
+- The `OFFER_ENDED` message no longer assumes the launch offer.
+
 ## [Unreleased] - 2026-11-02 — Our own failed-card mail, ar + en (MUT-533, ADR-242)
 
 **Why:** MUT-528 D10. Stripe's failed-payment emails are English only; a card that fails is the commonest way a payer
