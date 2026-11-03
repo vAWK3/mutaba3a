@@ -41,6 +41,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'GET /v1/billing': 'open',
   'POST /v1/billing/checkout-session': 'open',
   'POST /v1/billing/portal-session': 'open',
+  // MUT-533 (D5): paying a past-due invoice is how GRACE ends.
+  'POST /v1/billing/card-retry': 'open',
   // MUT-531: changing one's own plan moves money, never a record.
   'GET /v1/billing/yearly-switch': 'open',
   'POST /v1/billing/yearly-switch': 'open',

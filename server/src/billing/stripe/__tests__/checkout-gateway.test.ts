@@ -124,6 +124,15 @@ describe('CheckoutGateway sessions (MUT-362 §2.2)', () => {
     expect(seen[0]!.form.get('locale')).toBe('auto');
   });
 
+  it('MUT-533 (D5): the card flow opens straight on Stripe’s card form and comes back to the drawer when done', async () => {
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: { id: 'bps_2', object: 'billing_portal.session', url: 'https://billing.stripe.com/p/session/test_2' } }));
+    await gateway.createPortalSession({ customer: 'cus_MINE', returnUrl: 'https://portal.example/?billing=true&portal=returned', flow: 'card' });
+    expect(seen[0]!.form.get('flow_data[type]')).toBe('payment_method_update');
+    expect(seen[0]!.form.get('flow_data[after_completion][type]')).toBe('redirect');
+    expect(seen[0]!.form.get('flow_data[after_completion][redirect][return_url]')).toBe('https://portal.example/?billing=true&portal=returned');
+    expect(seen[0]!.form.get('return_url')).toBe('https://portal.example/?billing=true&portal=returned');
+  });
+
   it('a session without a URL is a gateway error, never an empty redirect', async () => {
     const { gateway } = gatewayWith(() => ({ status: 200, body: { id: 'cs_test_2', object: 'checkout.session', url: null } }));
     await expect(gateway.createCheckoutSession({ customer: 'cus_MINE', mode: 'subscription' })).rejects.toBeInstanceOf(StripeGatewayError);

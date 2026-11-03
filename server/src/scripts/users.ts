@@ -26,6 +26,7 @@ import { FEATURES } from '../features.js';
  *   npm run signups:review -- --decline rana@gmail.com          (deletes the empty account, mails them)
  *   npm run billing:trial-mail [-- --dry-run]                   (MUT-419: today's trial reminders, or who they would mail)
  *   npm run billing:renewal-mail [-- --dry-run]                 (MUT-525: today's launch-offer renewal notices, or who they would mail)
+ *   npm run billing:card-failed-mail [-- --dry-run]             (MUT-533: this hour's failed-card mails, or who they would mail)
  *   npm run accounts:purge [-- --dry-run]                       (MUT-333: delete closed accounts whose 30 days ran out, or see which)
  *   npm run feature:grant  -- --email nour@firm.ps --feature agent_access   (MUT-433: turn a per-user flag on)
  *   npm run feature:revoke -- --email nour@firm.ps --feature agent_access
@@ -55,7 +56,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'billing-card-failed-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -89,6 +90,7 @@ const USAGE = [
   '  billing-uncovered  (MUT-361: profiles the lapse gate holds read-only or locked, with their active people; run before turning BILLING_GATE on)',
   '  billing-trial-mail [--dry-run]   (MUT-419: npm run billing:trial-mail; the daily job does the same)',
   '  billing-renewal-mail [--dry-run] (MUT-525: npm run billing:renewal-mail; the daily job does the same)',
+  '  billing-card-failed-mail [--dry-run] (MUT-533: npm run billing:card-failed-mail; the hourly job does the same)',
   '          mails each person in days 11-30 of an unpaid trial the reminder for their stage, once per stage;',
   '          --dry-run: lists who would get what (and why others are skipped), and mails nothing',
   '  accounts-purge [--dry-run]   (MUT-333: npm run accounts:purge; the hourly job does the same)',
@@ -447,6 +449,17 @@ const BILLING_HANDLERS: Record<Extract<Command, `billing-${string}`>, (ctx: Hand
     type Summary = { due: number; sent: number; duplicate: number; notSent: number; incomplete: boolean; skipped: Record<string, number> };
     const { summary: s, rows } = await client.call<{ summary: Summary; rows: Row[] }>('POST', '/admin/v1/billing/renewal-mail', { dryRun });
     for (const r of rows) out(`${r.action === 'skip' ? `skip (${r.skip})` : dryRun ? 'would send' : r.outcome}  ${r.renewsAt.slice(0, 10)}  ${r.stripeSubscriptionId}  ${r.email}`);
+    const skipped = `skipped ${Object.entries(s.skipped).map(([k, n]) => `${n} ${k}`).join(', ')}.`;
+    if (s.incomplete) out('Stopped at its time budget; run it again to continue.');
+    out(dryRun ? `Dry run: ${s.due} would be mailed; ${skipped}` : `Sent ${s.sent}, already sent ${s.duplicate}, not sent ${s.notSent}; ${skipped}`);
+  },
+  // MUT-533: this hour's failed-card mails, or (--dry-run) who they would mail.
+  'billing-card-failed-mail': async ({ client, flag, out }) => {
+    const dryRun = flag('dry-run');
+    type Row = { email: string; stripeSubscriptionId: string; stage: string | null; action: 'send' | 'skip'; skip: string | null; outcome: string | null };
+    type Summary = { due: number; sent: number; duplicate: number; notSent: number; incomplete: boolean; skipped: Record<string, number> };
+    const { summary: s, rows } = await client.call<{ summary: Summary; rows: Row[] }>('POST', '/admin/v1/billing/card-failed-mail', { dryRun });
+    for (const r of rows) out(`${r.action === 'skip' ? `skip (${r.skip})` : dryRun ? `would send ${r.stage}` : `${r.outcome} ${r.stage}`}  ${r.stripeSubscriptionId}  ${r.email}`);
     const skipped = `skipped ${Object.entries(s.skipped).map(([k, n]) => `${n} ${k}`).join(', ')}.`;
     if (s.incomplete) out('Stopped at its time budget; run it again to continue.');
     out(dryRun ? `Dry run: ${s.due} would be mailed; ${skipped}` : `Sent ${s.sent}, already sent ${s.duplicate}, not sent ${s.notSent}; ${skipped}`);

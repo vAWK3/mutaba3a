@@ -150,6 +150,9 @@ export default {
         'src/hosted/components/LapseGate.tsx',
         'server/src/billing/entitlement.ts',
         'server/src/billing/stripe/mirror.ts',
+        // MUT-533: our own failed-card mail (the hourly job) and the past-due panel's Update card.
+        'server/src/billing/card-failed-mail.ts',
+        'server/src/routes/card-failed-mail.ts',
       ],
       // support/billing-live.mjs: the Keychain sandbox key, a migrated QA database, the sandbox catalog,
       // `stripe listen`, the API on :8790 and the portal on :5176 (8787-8789 are other sessions' dev APIs).

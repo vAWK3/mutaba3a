@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-02 — Our own failed-card mail, ar + en (MUT-533, ADR-242)
+
+**Why:** MUT-528 D10. Stripe's failed-payment emails are English only; a card that fails is the commonest way a payer
+is lost. Basel approved the plan and copy on 2026-11-02 (`.claude/designs/mut-533-534-card-failed-comeback-plan.md`).
+
+### Added
+- `server/src/billing/card-failed-mail.ts`: `cardFailedStageOf` (first within 72 h of the first failure; one reminder
+  from the retry window's midpoint while a retry is booked; nothing for 3-D Secure) and `runCardFailedMail`.
+- `plan-gateway.ts` `failedPaymentOf`: the oldest open attempted invoice, at 4 expand levels (the spike).
+- Store `billing.pastDueCandidates()` (memory, Prisma; operator-only in the guard).
+- Templates `card-failed`, `card-failed-reminder` (ar + en, no amount or card details), cap-exempt, existing art.
+- Routes `POST /jobs/v1/billing/card-failed-mail` (hourly Scheduler job, Terraform) and
+  `POST /admin/v1/billing/card-failed-mail` (`npm run billing:card-failed-mail [-- --dry-run]`).
+- `BILLING_RETRY_WINDOW_DAYS` (7|14|21|28, default 14; Terraform `billing_retry_window_days`).
+- POST `/v1/billing/portal-session` `flow: 'card'` (Stripe's payment-method-update flow). Contract 1.98.0-mut533.
+- Portal: a past-due plan's action is Update card, straight to Stripe's card form; back from it (`?portal=card`) the
+  drawer calls POST `/v1/billing/card-retry` once, which pays the past-due invoice on the new card (Stripe's form alone
+  waits for its next retry). `plan-gateway.ts` `retryPayment`; audited `billing.payment_retried`.
+- Release-QA: `@portal-live.billing.card-failed-mail` (pays with a good card on Stripe's page), `.card-failed-reminder`,
+  `.card-failed-3ds`. Spike:
+  `qa/support/mut533-534-spike.mjs`, `.claude/designs/mut-533-534-spike-result.md`.
 ## [Unreleased] - 2026-11-02 — Receipt reading: no confidently wrong VAT, totals, bill-to numbers or dates (MUT-514, ADR-241)
 
 **Why:** 18 wrong-and-confident fields on 32 new real scans, and every Paz fuel receipt in production filled its

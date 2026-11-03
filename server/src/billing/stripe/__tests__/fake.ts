@@ -4,8 +4,9 @@ import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
-import type { EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
+import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
+import type { FailedPaymentFacts } from '../../card-failed-mail.js';
 
 /**
  * MUT-360: Stripe in memory for sync and route tests. Holds the current state of customers, subscriptions and
@@ -130,7 +131,7 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   /** Customers by id, with the person their metadata names. */
   readonly customers = new Map<string, { email: string; userId: string }>();
   readonly checkoutSessions: Stripe.Checkout.SessionCreateParams[] = [];
-  readonly portalSessions: { customer: string; returnUrl: string }[] = [];
+  readonly portalSessions: { customer: string; returnUrl: string; flow?: 'card' }[] = [];
   readonly calls: string[] = [];
   private failures: StripeGatewayError[] = [];
   private pricesFail = false;
@@ -186,7 +187,7 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return { url: `https://checkout.stripe.com/c/pay/cs_test_${this.checkoutSessions.length}` };
   }
 
-  async createPortalSession(input: { customer: string; returnUrl: string }): Promise<{ url: string }> {
+  async createPortalSession(input: { customer: string; returnUrl: string; flow?: 'card' }): Promise<{ url: string }> {
     this.take(`portal:${input.customer}`);
     this.portalSessions.push(input);
     return { url: `https://billing.stripe.com/p/session/test_${this.portalSessions.length}` };
@@ -439,6 +440,22 @@ export class FakePlanGateway implements PlanGateway {
 
   async applyCoupon(subscriptionId: string, couponId: string): Promise<void> {
     this.written(`coupon:${subscriptionId}:${couponId}`, (plan) => Object.assign(plan, { discounted: true, couponIds: [...plan.couponIds, couponId] }), subscriptionId);
+  }
+
+  /** MUT-533 (D5): what `retryPayment` answers, and the invoices it was asked to pay. */
+  retryOutcome: CardRetryResult = { outcome: 'paid', hostedInvoiceUrl: null };
+  readonly retries: { invoiceId: string; attemptCount: number }[] = [];
+  async retryPayment(invoiceId: string, attemptCount: number): Promise<CardRetryResult> {
+    this.calls.push(`retry:${invoiceId}`);
+    this.retries.push({ invoiceId, attemptCount });
+    return this.retryOutcome;
+  }
+
+  /** MUT-533: what `failedPaymentOf` answers per subscription; unknown is null (Stripe doesn't have it). */
+  readonly failedPayments = new Map<string, FailedPaymentFacts>();
+  async failedPaymentOf(subscriptionId: string): Promise<FailedPaymentFacts | null> {
+    this.calls.push(`failedPayment:${subscriptionId}`);
+    return this.failedPayments.get(subscriptionId) ?? null;
   }
 
   failNext(code: string | null = null): void {

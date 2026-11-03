@@ -196,6 +196,7 @@ const app = createApp({
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
+  retryWindowDays: config.BILLING_RETRY_WINDOW_DAYS,
   passwordHasher: createArgon2Hasher({
     memoryKiB: config.ARGON2_MEMORY_KIB,
     timeCost: config.ARGON2_TIME_COST,

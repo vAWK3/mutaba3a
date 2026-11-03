@@ -6,6 +6,14 @@ record the date where the item says.
 
 ## server
 
+- **MUT-533 (API 1.98.0-mut533, ADR-242): MTB3A's own failed-card mail, ar + en.** No migration. The release adds the hourly `card_failed_mail` Cloud Scheduler job (minute 7; created only where `mailer = "resend"` and `stripe_enabled`). **In this order:**
+  1. **Before the API deploy:** in the live Stripe dashboard, Settings › Billing › Revenue recovery: read the Smart Retries policy and set `billing_retry_window_days` in `production.tfvars` to its window (7, 14, 21 or 28 days; Stripe's default "8 tries within 2 weeks" is 14, the variable's default). If the dashboard's window is "1 month", choose 28: the send log keeps 30 days, so nothing longer is allowed, and the reminder's "within N days at most" then reads 2–3 days short. Confirm "If all retries for a payment fail" is **Cancel the subscription** (MUT-534 counts only cancelled subscriptions as lapsed). Confirm the Customer Portal allows updating the payment method (it does today). The restricted key already has what the job reads (Read on Subscriptions and Invoices; the invoice's payment intent, which MUT-531 reads too).
+  2. Release the API (`make release server`, Terraform applies the job).
+  3. **After the first hourly run** (check `npm run billing:card-failed-mail -- --dry-run --url "$URL"` answers): Settings › Billing › Subscriptions and emails › Manage failed payments: turn **off** the customer email for failed card payments. Keep **on** the email that asks customers to confirm a payment (3-D Secure): MTB3A doesn't send that one. Check in the sandbox: a declined renewal sends one MTB3A mail and nothing from Stripe.
+  4. Then the web half (`## web` below). Delete this item when both halves are done, and record the dates on MUT-533.
+
+- **MUT-533 (ADR-242): a past-due plan's Update card.** Release the server first (its MUT-533 item above). Nothing to set: Billing's past-due panel opens Stripe's card form directly. Check: in the sandbox, a past-due plan's Billing shows Update card and it lands on Stripe's card form. Delete this item and record the date on MUT-533.
+
 - **MUT-532 (API 1.97.0-mut532, ADR-240): pause instead of cancel, the stay offer and MTB3A's own cancel.** The release migrates `20261103120000_mut532_pause_retention` (two nullable `billing_subscriptions` columns and the `billing_retention_events` table; additive). No new job. **In this order:**
   1. **Before the API deploy:** on the live restricted key, confirm **Write on Subscriptions** (MUT-333 added it) and add **Write on Invoices** (and **Invoice items**, where Stripe lists them apart): Resume now charges the month as its own invoice. Without them pause and cancel still work, but Resume now answers 409 BILLING_ACCOUNT_NEEDS_HELP and logs a permission error. **Read on Coupons** (MUT-525) serves the stay coupon.
   2. Release the server (`make release server`).

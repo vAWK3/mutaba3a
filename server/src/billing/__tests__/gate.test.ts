@@ -72,7 +72,7 @@ describe('standingRefuses (person-level and path-profile routes)', () => {
 
 describe('PERSON_LEVEL_GATE', () => {
   it('keeps identity, sessions, billing and leaving a co-owned profile open', () => {
-    for (const endpoint of ['GET /v1/me', 'POST /v1/me/password', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'DELETE /v1/device-sessions/current', 'GET /v1/billing', 'POST /v1/billing/checkout-session', 'POST /v1/billing/portal-session', 'DELETE /v1/profiles/:profileId/owners/:userId']) {
+    for (const endpoint of ['GET /v1/me', 'POST /v1/me/password', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'DELETE /v1/device-sessions/current', 'GET /v1/billing', 'POST /v1/billing/checkout-session', 'POST /v1/billing/portal-session', 'POST /v1/billing/card-retry', 'DELETE /v1/profiles/:profileId/owners/:userId']) {
       expect(PERSON_LEVEL_GATE[endpoint], endpoint).toBe('open');
     }
   });

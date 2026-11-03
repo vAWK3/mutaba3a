@@ -83,6 +83,9 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'account-declined': { mood: 'goodbye', header: 'empty-state', chip: 'info' },
   'account-closing': { mood: 'goodbye', header: 'destructive-confirmation', chip: 'delete' },
   'offer-renewing-soon': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
+  // MUT-533: the existing art only (no new pictures): Stripe trying again, then the plan's end.
+  'card-failed': { mood: 'trial', header: 'spot-schedule', chip: 'schedule' },
+  'card-failed-reminder': { mood: 'trial', header: 'spot-lock', chip: 'lock' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

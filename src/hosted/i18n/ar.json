@@ -1323,6 +1323,7 @@
       "action": {
         "subscribe": "اشترك",
         "manage": "إدارة الدفع",
+        "updateCard": "حدّث البطاقة",
         "payInPortal": "ادفع من «إدارة الدفع»",
         "contactUs": "راسلنا",
         "dontPause": "تراجع عن الإيقاف",

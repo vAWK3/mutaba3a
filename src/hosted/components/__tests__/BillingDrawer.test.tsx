@@ -292,6 +292,38 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     expect(await within(dialog).findByRole('heading', { name: /^Your plan ends on/ })).toBeInTheDocument();
   });
 
+  it('MUT-533 (D5): past due → Update card opens Stripe’s card form directly', async () => {
+    const { user, api } = portal(`/p/${ORG_B}?billing=true`, {
+      billing: () => ok(subscribed({ status: 'past_due' })),
+      entitlement: ent('GRACE', 'STRIPE', iso(30)),
+      routes: { 'POST /v1/billing/portal-session': () => ok({ url: 'https://billing.stripe.com/p/session/test_2' }) },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(within(dialog).queryByRole('button', { name: 'Manage billing' })).not.toBeInTheDocument();
+    await user.click(await within(dialog).findByRole('button', { name: 'Update card' }));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/portal-session')?.body).toEqual({ returnPath: `/p/${ORG_B}`, flow: 'card' });
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session/test_2'));
+  });
+
+  it('MUT-533 (D5): back from the card form, it asks once for the past-due invoice to be paid, then reads billing again', async () => {
+    let reads = 0;
+    const { api } = portal(`/p/${ORG_B}?billing=true&portal=card`, {
+      billing: () => ok(++reads <= 1 ? subscribed({ status: 'past_due' }) : subscribed()),
+      entitlement: ent('GRACE', 'STRIPE', iso(30)),
+      routes: { 'POST /v1/billing/card-retry': () => ok({ outcome: 'paid', hostedInvoiceUrl: null }) },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Billing' });
+    expect(await within(dialog).findByRole('heading', { name: /^Freelancer, renews/ }, { timeout: 4000 })).toBeInTheDocument();
+    expect(api.calls.filter((c) => c.url.pathname === '/v1/billing/card-retry')).toHaveLength(1);
+  });
+
+  it('back from Manage billing (not the card form) it pays nothing', async () => {
+    const { api } = portal(`/p/${ORG_B}?billing=true&portal=returned`, { billing: () => ok(subscribed({ status: 'past_due' })), entitlement: ent('GRACE', 'STRIPE', iso(30)) });
+    await screen.findByRole('dialog', { name: 'Billing' });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(api.calls.some((c) => c.url.pathname === '/v1/billing/card-retry')).toBe(false);
+  });
+
   it('unpaid → Pay in Manage billing', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(subscribed({ status: 'unpaid' })), entitlement: ent('READ_ONLY', 'STRIPE') });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });

@@ -73,6 +73,27 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(found).toEqual([{ stripeSubscriptionId: due.stripeSubscriptionId, offerId: 'launch-2026', currentPeriodEnd: at(20), userId: user.id, email: user.email, locale: user.locale }]);
     });
 
+    it('pastDueCandidates: past_due subscriptions with a linked active payer, oldest first (MUT-533)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, user.id));
+      const save = (over: Record<string, unknown>) => store.billing.saveSubscription({ ...subscription(customer), ...over });
+      const later = (await save({ status: 'past_due', currentPeriodEnd: at(30) })).subscription;
+      const sooner = (await save({ status: 'past_due', currentPeriodEnd: at(20) })).subscription;
+      await save({ status: 'active' });
+      await save({ status: 'unpaid' });
+      const unlinked = `cus_${unique()}`;
+      await store.billing.saveAccount(account(unlinked, null));
+      const orphan = (await store.billing.saveSubscription({ ...subscription(unlinked), status: 'past_due' })).subscription;
+      const found = await store.billing.pastDueCandidates();
+      expect(found.filter((c) => c.userId === user.id)).toEqual([
+        { stripeSubscriptionId: sooner.stripeSubscriptionId, userId: user.id, email: user.email, locale: user.locale },
+        { stripeSubscriptionId: later.stripeSubscriptionId, userId: user.id, email: user.email, locale: user.locale },
+      ]);
+      expect(found.some((c) => c.stripeSubscriptionId === orphan.stripeSubscriptionId)).toBe(false);
+    });
+
     it('keeps the offer a subscription’s Checkout carried; absent is none (MUT-525 DD10b)', async () => {
       const store = await makeStore();
       const customer = `cus_${unique()}`;

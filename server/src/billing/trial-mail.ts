@@ -33,7 +33,7 @@ export const TRIAL_REMINDER_DAYS = 3;
 export const TRIAL_MAIL_TIME_BUDGET_MS = 200_000;
 /**
  * Why someone isn't mailed. `paying`: a Stripe subscription resolves one of their own profiles, whether they pay now
- * or paid and lapsed (paid-lapse mail is Stripe's dunning, out of scope). `covered`: Malafat or an operator grant.
+ * or paid and lapsed (a failed payment is MUT-533's own mail, card-failed-mail.ts). `covered`: Malafat or an operator grant.
  */
 export type TrialMailSkip = 'paying' | 'covered' | 'other-profiles' | 'suppressed' | 'gate-off';
 

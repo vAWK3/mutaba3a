@@ -53,6 +53,8 @@ locals {
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
   # MUT-525: the launch-offer renewal notices need mail and Stripe; they announce a price, not the lapse gate.
   renewal_mail_enabled = var.mailer == "resend" && var.stripe_enabled
+  # MUT-533: the hourly failed-card mails need mail and Stripe (its open invoices decide who is mailed).
+  card_failed_mail_enabled = var.mailer == "resend" && var.stripe_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -665,6 +667,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-533 (D3): the Smart Retries window the failed-card reminder is timed in; 14 (Stripe's default) stays unset.
+        dynamic "env" {
+          for_each = var.billing_retry_window_days == 14 ? {} : { BILLING_RETRY_WINDOW_DAYS = tostring(var.billing_retry_window_days) }
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
         dynamic "env" {
           for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
@@ -1013,6 +1024,37 @@ resource "google_cloud_scheduler_job" "renewal_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/renewal-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-533 (ADR-242, D1): the hourly failed-card mails, our own ar + en in place of Stripe's English one. At minute 7,
+# so a first failure is mailed within the hour. Only with mail and Stripe on (its open invoices decide). The run stops
+# itself at about 200 s; each stage of each failed invoice is mailed once, so retries and a missed hour are safe.
+resource "google_cloud_scheduler_job" "card_failed_mail" {
+  count = local.card_failed_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-card-failed-mail${local.suffix}"
+  region           = var.region
+  description      = "Hourly failed-card mails (MUT-533)."
+  schedule         = "7 * * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/card-failed-mail"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

@@ -332,3 +332,49 @@ features:
     expect:
       - Billing says "Your plan ends on <date>" with the Ending chip; Stripe holds cancel_at_period_end with feedback switched_service and the comment
       - Keep my plan brings back "Freelancer, renews <date>"; Stripe no longer cancels
+  - id: card-failed-mail
+    title: A declined renewal - one Arabic mail within the hour, no amount or card; Update card opens Stripe's card form
+    tier: core
+    paths:
+      - server/src/billing/card-failed-mail.ts
+      - server/src/routes/card-failed-mail.ts
+      - server/src/billing/stripe/plan-gateway.ts
+      - server/src/email/templates/copy.ts
+      - server/src/email/templates/look.ts
+      - server/src/email/ports.ts
+      - src/hosted/data/billingQueries.ts
+      - src/hosted/data/filters.ts
+      - src/hosted/shell/AccountDrawers.tsx
+    steps:
+      - A monthly subscriber in Arabic has a renewal that declines, and Stripe starts retrying
+      - The hourly failed-card job runs, then runs again
+      - Open the mail's button, signed in
+      - Press Update card, enter a good card on Stripe's page and save it
+    expect:
+      - One mail, in Arabic, "لم تنجح عملية الدفع ببطاقتك", saying the account stays fully open while Stripe retries; no amount, no currency, no card digits
+      - The second run sends nothing new
+      - Billing opens on "لم نتمكن من تحصيل دفعتك الأخيرة" with حدّث البطاقة (Update card) as the button
+      - Update card opens Stripe's own card form (the Customer Portal's payment-method flow)
+      - Saving a good card brings the person back to Billing, which asks Stripe to pay the open invoice on it now (Stripe's card form alone waits for its next retry); the plan is Active again
+  - id: card-failed-reminder
+    title: A declined renewal a week on - exactly one reminder, then nothing more for that invoice
+    tier: secondary
+    paths:
+      - server/src/billing/card-failed-mail.ts
+    steps:
+      - A monthly subscriber's renewal first declined over a week ago, and Stripe is still retrying
+      - The hourly failed-card job runs three times
+    expect:
+      - Exactly one mail, the reminder "Your card still isn't going through", saying the plan ends within N days at most; no first mail (only the current stage is sent)
+      - Further runs send nothing more for the invoice (never more than two mails per failed invoice)
+  - id: card-failed-3ds
+    title: A renewal the bank wants confirmed (3-D Secure) - no MTB3A mail; Stripe's own confirm-payment mail covers it
+    tier: secondary
+    paths:
+      - server/src/billing/card-failed-mail.ts
+      - server/src/billing/stripe/plan-gateway.ts
+    steps:
+      - A monthly subscriber's renewal needs the person to confirm it with their bank (3-D Secure)
+      - The hourly failed-card job runs
+    expect:
+      - The job skips the plan as needing authentication and mails nothing; Stripe's own confirm-payment email (kept on) asks the person

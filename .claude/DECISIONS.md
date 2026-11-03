@@ -6320,3 +6320,21 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The buyer as a number seen with three or more vendors (the plan's first D-Q1 B). Rejected (R3): a chain's head office qualifies at once.
 - Re-queue by nulling the whole suggestion (D4). Rejected (R1, OV-4): it drops phone-sent fields, and a receipt first claimed over 30 minutes ago would FAIL 'exhausted' on its next claim.
 - A total − subtotal VAT under 20% with no rate check. Rejected (R2): it fills service charges and deposits as VAT.
+## ADR-242: MTB3A Sends Its Own Failed-Card Mail, ar + en, From an Hourly Job; Stripe's Goes Off (MUT-533, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-11-02: plan `.claude/designs/mut-533-534-card-failed-comeback-plan.md` D1–D7 and the §6 copy; eng review R1–R15). Built 2026-11-02. Part of MUT-528 (D10).
+
+**Context:** Stripe's failed-payment emails are English only, and failed cards are a large share of subscription churn. The webhook already mirrors `invoice.payment_failed` as `past_due` (GRACE), but nothing told the person in their language.
+
+**Decision:**
+1. **An hourly job, not a send in the webhook** (`/jobs/v1/billing/card-failed-mail`, minute 7, Terraform; operator door `/admin/v1/billing/card-failed-mail`, `npm run billing:card-failed-mail`). The webhook keeps its 4 s budget; a missed webhook is caught by the nightly reconcile and the next run.
+2. **One dunning episode per subscription:** its oldest open invoice with an attempt. Its first failure is the invoice's `status_transitions.finalized_at` (the spike: the first attempt happens at finalization). Read as subscription → open invoices → that invoice with `payments.data.payment.payment_intent` (4 expand levels; 5 from the subscription are refused).
+3. **Two stages, keyed on the invoice in the send log** (`card-failed:<invoice>:first|reminder`), only the current one sent: `first` within 72 h of the first failure; `reminder` from the retry window's midpoint (at least 3 days in) while Stripe has a retry booked. The 72 h limit and a window capped at 28 days keep every key inside the send log's 30 days, so an invoice never gets more than two mails.
+4. **`BILLING_RETRY_WINDOW_DAYS`** (7, 14, 21 or 28; default 14 = Stripe's "8 tries within 2 weeks") mirrors the dashboard's Smart Retries policy, which the API doesn't expose. The reminder says the plan ends "within N days at most", read-only only while the lapse gate is on.
+5. **No amount and no card details** (Basel declined the last 4 digits): ADR-159 §5 holds unchanged for both mails.
+6. **3-D Secure is Stripe's:** a payment waiting for the person to confirm (intent `requires_action`, no retry booked) gets no MTB3A mail; Stripe's confirm-payment email stays on.
+7. **Update card:** the mail opens Billing; the past-due panel's action is Update card, a Customer Portal session with `flow_data.type = payment_method_update` that redirects back to the drawer (`?portal=card`). POST `/v1/billing/portal-session` takes `flow: 'card'`. Stripe's card form makes the new card the customer's default (and clears the subscription's own) but pays nothing until its next retry (QA, 2026-11-03), so on that return the drawer calls POST `/v1/billing/card-retry` once: when the shown plan is past_due with an open failed invoice, Stripe pays it now on the new card (`invoices.pay`, keyed on the invoice and its attempt count), answering `paid`, `declined`, `needs-action` (Stripe's invoice page) or `nothing-due`; audited `billing.payment_retried`. Contract 1.98.0-mut533.
+
+**Consequences:** 24 runs a day; one indexed query each, then three Stripe reads per past_due subscription. No migration. Operator steps (before-release.md): match `billing_retry_window_days` to the dashboard and confirm the retries end in a cancel; after the API release, turn off Stripe's failed-payment customer email, keeping the 3-D Secure one.
+
+**Alternatives considered:** sending in the webhook (delays Stripe's 200, loses a failed send, still needs a job for the reminder); keying on `latest_invoice` (misses the invoice whose last retry ends the plan, and doubles the mails when a renewal lands mid-dunning); a reminder "3 days before the end" (Smart Retries may give up before the window ends); naming the card's last digits (declined by Basel).

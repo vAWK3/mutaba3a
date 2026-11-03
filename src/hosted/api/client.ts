@@ -619,6 +619,8 @@ export const api = {
   billing: (options: { signal?: AbortSignal } = {}) => request<BillingOverview>('GET', '/v1/billing', { signal: options.signal }),
   startCheckout: (body: CheckoutSessionRequest) => request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body }),
   openBillingPortal: (body: Schemas['PortalSessionRequest']) => request<BillingRedirect>('POST', '/v1/billing/portal-session', { body }),
+  /** MUT-533 (D5): back from Stripe's card form, pay the past-due invoice on the card just saved. */
+  retryCardPayment: () => request<Schemas['CardRetryResponse']>('POST', '/v1/billing/card-retry'),
   /** MUT-531: what switching to yearly charges today, then the switch at that preview's proration date. */
   yearlySwitchPreview: (options: { signal?: AbortSignal } = {}) => request<YearlySwitchPreview>('GET', '/v1/billing/yearly-switch', { signal: options.signal }),
   switchToYearly: (body: Schemas['YearlySwitchRequest']) => request<YearlySwitchResult>('POST', '/v1/billing/yearly-switch', { body }),

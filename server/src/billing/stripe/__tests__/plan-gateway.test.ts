@@ -286,3 +286,82 @@ describe('PlanGateway.applyCoupon (D11)', () => {
     expect(seen[0]!.headers.get('idempotency-key')).toBe('mut532-stay-sub_1-mtb3a_stay_monthly_50');
   });
 });
+
+describe('PlanGateway.failedPaymentOf (MUT-533 D2)', () => {
+  const openInvoice = (id: string, created: number, over: Record<string, unknown> = {}) => ({
+    id,
+    object: 'invoice',
+    status: 'open',
+    created,
+    attempted: true,
+    attempt_count: 2,
+    next_payment_attempt: 1_792_500_000,
+    status_transitions: { finalized_at: created + 3600 },
+    ...over,
+  });
+  const withIntent = (id: string, status: string) => ({ id, object: 'invoice', payments: list([{ payment: { payment_intent: { id: 'pi_1', object: 'payment_intent', status } } }]) });
+
+  it('the oldest open invoice a payment was attempted on is the episode; its first attempt is when it was finalized', async () => {
+    const { gateway, seen } = gatewayWith((request) => {
+      if (request.path === '/v1/subscriptions/sub_1') return { status: 200, body: subscription({ status: 'past_due' }) };
+      if (request.path === '/v1/invoices') return { status: 200, body: list([openInvoice('in_new', 1_792_000_000), openInvoice('in_old', 1_789_000_000), openInvoice('in_draft', 1_788_000_000, { attempted: false })]) };
+      return { status: 200, body: withIntent('in_old', 'requires_payment_method') };
+    });
+    expect(await gateway.failedPaymentOf('sub_1')).toEqual({
+      status: 'past_due',
+      episode: { invoiceId: 'in_old', attemptCount: 2, nextPaymentAttempt: new Date(1_792_500_000_000), firstFailedAt: new Date(1_789_003_600_000), needsAuthentication: false },
+    });
+    expect(seen.map(route)).toEqual(['GET /v1/subscriptions/sub_1', 'GET /v1/invoices', 'GET /v1/invoices/in_old']);
+    expect(seen[1]!.query.get('subscription')).toBe('sub_1');
+    expect(seen[1]!.query.get('status')).toBe('open');
+    // R1: Stripe refuses more than 4 levels; the intent is read from the invoice, never from the subscription.
+    const expand = seen[2]!.query.get('expand[0]')!;
+    expect(expand).toBe('payments.data.payment.payment_intent');
+    expect(expand.split('.').length).toBeLessThanOrEqual(4);
+  });
+
+  it('a payment the bank wants confirmed (3-D Secure) says so; no retry is booked for it', async () => {
+    const { gateway } = gatewayWith((request) => {
+      if (request.path === '/v1/subscriptions/sub_1') return { status: 200, body: subscription({ status: 'past_due' }) };
+      if (request.path === '/v1/invoices') return { status: 200, body: list([openInvoice('in_9', 1_789_000_000, { attempt_count: 0, next_payment_attempt: null })]) };
+      return { status: 200, body: withIntent('in_9', 'requires_action') };
+    });
+    expect((await gateway.failedPaymentOf('sub_1'))?.episode).toMatchObject({ invoiceId: 'in_9', needsAuthentication: true, nextPaymentAttempt: null });
+  });
+
+  it('a subscription no longer past_due costs one read; no open attempted invoice is no episode', async () => {
+    const active = gatewayWith(() => ({ status: 200, body: subscription({ status: 'active' }) }));
+    expect(await active.gateway.failedPaymentOf('sub_1')).toEqual({ status: 'active', episode: null });
+    expect(active.seen).toHaveLength(1);
+    const settled = gatewayWith((request) => (request.path === '/v1/invoices' ? { status: 200, body: list([]) } : { status: 200, body: subscription({ status: 'past_due' }) }));
+    expect(await settled.gateway.failedPaymentOf('sub_1')).toEqual({ status: 'past_due', episode: null });
+  });
+
+  it('a subscription Stripe no longer has is null', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such subscription' } } }));
+    expect(await gateway.failedPaymentOf('sub_1')).toBeNull();
+  });
+});
+
+describe('PlanGateway.retryPayment (MUT-533 D5)', () => {
+  it('pays the open invoice on the customer’s default card, once per attempt count (a double press replays)', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: { id: 'in_1', object: 'invoice', status: 'paid' } }));
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'paid', hostedInvoiceUrl: null });
+    expect(seen.map(route)).toEqual(['POST /v1/invoices/in_1/pay']);
+    expect(seen[0]!.headers.get('idempotency-key')).toBe('mut533-card-retry-in_1-3');
+  });
+
+  it('a declined card is an outcome, not an error', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 402, body: { error: { type: 'card_error', code: 'card_declined', message: 'Your card was declined.' } } }));
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'declined', hostedInvoiceUrl: null });
+  });
+
+  it('a payment the bank wants confirmed comes back with Stripe’s invoice page', async () => {
+    const { gateway } = gatewayWith((request) =>
+      request.method === 'POST'
+        ? { status: 402, body: { error: { type: 'card_error', code: 'invoice_payment_intent_requires_action', message: 'Action required' } } }
+        : { status: 200, body: { id: 'in_1', object: 'invoice', hosted_invoice_url: 'https://invoice.stripe.com/i/acct_1/in_1' } },
+    );
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'needs-action', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_1' });
+  });
+});

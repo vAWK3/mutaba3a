@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { CATALOG_FAILURE_TTL_MS, CATALOG_TTL_MS } from './checkout-gateway.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
 import { PAUSE_FROM_METADATA, PAUSE_MONTHS_METADATA, pauseOf, periodEndOf, stateOf } from './mirror.js';
+import type { FailedPaymentFacts } from '../card-failed-mail.js';
 import { SWITCH_AFTER_PAID_INVOICES, type CancellationReason } from '../retention.js';
 
 /**
@@ -45,7 +46,22 @@ export interface PlanGateway {
   keepPlan(subscriptionId: string): Promise<void>;
   /** MUT-532 (D11): the stay coupon on the subscription; the next invoices carry it. */
   applyCoupon(subscriptionId: string, couponId: string): Promise<void>;
+  /**
+   * MUT-533 (D2): a past_due subscription's dunning episode, its oldest open invoice a payment was attempted on, with
+   * when that first failed (its finalization: the spike saw the first attempt there) and whether the bank wants the
+   * person to confirm. Null when Stripe no longer has the subscription. One read for anything not past_due.
+   */
+  failedPaymentOf(subscriptionId: string): Promise<FailedPaymentFacts | null>;
+  /**
+   * MUT-533 (D5): pays an open invoice now, on the customer's default card. Stripe's card form sets the new card as the
+   * customer's default but pays nothing until its next retry (QA, 2026-11-03), so the drawer asks for this on the way
+   * back. Keyed on the invoice and its attempt count: a double press replays the first answer; after a failed try the
+   * count has moved on and a new card can be tried. A decline or a bank that wants the person to confirm is an outcome.
+   */
+  retryPayment(invoiceId: string, attemptCount: number): Promise<CardRetryResult>;
 }
+
+export type CardRetryResult = { outcome: 'paid' | 'declined' | 'needs-action'; hostedInvoiceUrl: string | null };
 
 export type EndPauseResult = { outcome: 'undone' } | { outcome: 'charged' } | { outcome: 'payment-failed' } | { outcome: 'payment-needs-action'; hostedInvoiceUrl: string | null };
 
@@ -108,6 +124,8 @@ export interface PlanGatewayOptions {
 }
 
 const INVOICE_PAGE = 5;
+/** MUT-533: a past_due monthly plan has at most a few open invoices (one a month while Stripe retries). */
+const OPEN_INVOICE_PAGE = 10;
 const PAYMENT_ACTION_STATUSES: ReadonlySet<string> = new Set(['requires_action', 'requires_confirmation']);
 
 type CountEntry = { at: number; count: number } | { at: number; failure: StripeGatewayError };
@@ -251,6 +269,47 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
     async applyCoupon(subscriptionId, couponId) {
       // Once per subscription and coupon, ever (rule 2): a retry within Stripe's 24 h replays the first answer.
       await wrapped(() => stripe.subscriptions.update(subscriptionId, { discounts: [{ coupon: couponId }] }, { idempotencyKey: `mut532-stay-${subscriptionId}-${couponId}` }));
+    },
+    async retryPayment(invoiceId, attemptCount) {
+      try {
+        const invoice = await wrapped(() => stripe.invoices.pay(invoiceId, {}, { idempotencyKey: `mut533-card-retry-${invoiceId}-${attemptCount}` }));
+        return { outcome: invoice.status === 'paid' ? 'paid' : 'declined', hostedInvoiceUrl: null };
+      } catch (err) {
+        if (!(err instanceof StripeGatewayError)) throw err;
+        if (err.code === 'invoice_payment_intent_requires_action') {
+          const invoice = await wrapped(() => stripe.invoices.retrieve(invoiceId));
+          return { outcome: 'needs-action', hostedInvoiceUrl: invoice.hosted_invoice_url ?? null };
+        }
+        if (err.code === 'card_declined' || err.type === 'StripeCardError') return { outcome: 'declined', hostedInvoiceUrl: null };
+        throw err;
+      }
+    },
+    async failedPaymentOf(subscriptionId) {
+      let sub: Stripe.Subscription;
+      try {
+        sub = await wrapped(() => stripe.subscriptions.retrieve(subscriptionId));
+      } catch (err) {
+        if (err instanceof StripeGatewayError && err.code === 'resource_missing') return null;
+        throw err;
+      }
+      if (sub.status !== 'past_due') return { status: sub.status, episode: null };
+      const open = await wrapped(() => stripe.invoices.list({ subscription: subscriptionId, status: 'open', limit: OPEN_INVOICE_PAGE }));
+      const oldest = open.data.filter((inv) => inv.attempted).sort((a, b) => a.created - b.created)[0];
+      if (!oldest?.id) return { status: sub.status, episode: null };
+      // R1: four levels from the invoice; from the subscription it would be five, which Stripe refuses.
+      const invoice = await wrapped(() => stripe.invoices.retrieve(oldest.id!, { expand: ['payments.data.payment.payment_intent'] }));
+      const intents = (invoice.payments?.data ?? []).map((p) => p.payment?.payment_intent).filter((pi): pi is Stripe.PaymentIntent => typeof pi === 'object' && pi !== null);
+      const finalizedAt = oldest.status_transitions?.finalized_at ?? oldest.created;
+      return {
+        status: sub.status,
+        episode: {
+          invoiceId: oldest.id,
+          attemptCount: oldest.attempt_count,
+          nextPaymentAttempt: typeof oldest.next_payment_attempt === 'number' ? new Date(oldest.next_payment_attempt * 1000) : null,
+          firstFailedAt: new Date(finalizedAt * 1000),
+          needsAuthentication: intents.some((pi) => PAYMENT_ACTION_STATUSES.has(pi.status)),
+        },
+      };
     },
   };
 

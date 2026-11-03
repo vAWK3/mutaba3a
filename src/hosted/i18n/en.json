@@ -1271,6 +1271,7 @@
       "action": {
         "subscribe": "Subscribe",
         "manage": "Manage billing",
+        "updateCard": "Update card",
         "payInPortal": "Pay in Manage billing",
         "contactUs": "Contact us",
         "dontPause": "Don't pause",

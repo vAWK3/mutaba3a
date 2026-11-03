@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.97.0-mut532
+  version: 1.98.0-mut533
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9252,9 +9252,32 @@ components:
           type: string
           maxLength: 200
           description: "Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin."
+        flow:
+          type: string
+          enum:
+            - card
+          description: "MUT-533: `card` opens Stripe's card form directly (a past-due plan's Update card) and comes back to the drawer when done. Additive since 1.98.0-mut533."
       required:
         - returnPath
       additionalProperties: false
+    CardRetryResponse:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum:
+            - paid
+            - declined
+            - needs-action
+            - nothing-due
+        hostedInvoiceUrl:
+          type: string
+          nullable: true
+          format: uri
+          description: Stripe's invoice page when the bank wants the person to confirm; null otherwise
+      required:
+        - outcome
+        - hostedInvoiceUrl
     YearlySwitchPreview:
       type: object
       properties:
@@ -11460,6 +11483,133 @@ components:
         - locale
         - stripeSubscriptionId
         - renewsAt
+        - action
+        - skip
+        - outcome
+    CardFailedMailSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        checked:
+          type: integer
+          description: past_due subscriptions with a linked active payer
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: This stage of this invoice was already mailed
+        notSent:
+          type: integer
+          description: "Due but not sent: Stripe or the mailer failed, mail off, capped, refused or suppressed"
+        skipped:
+          type: object
+          properties:
+            gone:
+              type: integer
+            notPastDue:
+              type: integer
+            settled:
+              type: integer
+            needsAuthentication:
+              type: integer
+              description: The bank wants the person to confirm; Stripe mails them
+            noStage:
+              type: integer
+              description: Between the first mail and the reminder, or past both
+            suppressed:
+              type: integer
+          required:
+            - gone
+            - notPastDue
+            - settled
+            - needsAuthentication
+            - noStage
+            - suppressed
+        incomplete:
+          type: boolean
+          description: The time budget ran out; the next run continues
+      required:
+        - dryRun
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - skipped
+        - incomplete
+    CardFailedMailRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/CardFailedMailSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardFailedMailRow"
+      required:
+        - summary
+        - rows
+    CardFailedMailRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        stripeSubscriptionId:
+          type: string
+        stage:
+          type: string
+          nullable: true
+          enum:
+            - first
+            - reminder
+            - null
+        action:
+          type: string
+          enum:
+            - send
+            - skip
+        skip:
+          type: string
+          nullable: true
+          enum:
+            - gone
+            - not-past-due
+            - settled
+            - needs-authentication
+            - no-stage
+            - suppressed
+            - null
+        outcome:
+          type: string
+          nullable: true
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+            - null
+          description: The mailer's answer, or failed; null on a skip or a dry run
+      required:
+        - userId
+        - email
+        - locale
+        - stripeSubscriptionId
+        - stage
         - action
         - skip
         - outcome
@@ -20665,7 +20815,7 @@ paths:
       tags:
         - Billing
       summary: Open the Stripe Customer Portal (card, invoices, cancel at period end)
-      description: Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns.
+      description: "Needs a Stripe customer linked to the person (409 NO_BILLING_ACCOUNT otherwise). Audited `billing.portal_opened` on each profile the person owns. MUT-533: `flow: card` opens Stripe's card form directly and comes back to the drawer once the card is saved."
       security:
         - session: []
         - deviceSession: []
@@ -20682,6 +20832,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BillingRedirect"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/card-retry:
+    post:
+      tags:
+        - Billing
+      summary: Pay the past-due invoice now, on the card just saved
+      description: "MUT-533 (D5): Stripe's card form makes the new card the customer's default but pays nothing until its next retry, so the drawer calls this once on its way back (`?portal=card`). When the plan Billing shows is past_due with an open failed invoice, Stripe is asked to pay that invoice now, keyed on the invoice and its attempt count (a double press replays). `paid`, `declined` (the plan stays past due and Stripe keeps retrying), `needs-action` (Stripe’s invoice page, where the bank’s check happens) or `nothing-due` (nothing charged). Audited `billing.payment_retried` with the outcome. Additive since 1.98.0-mut533."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: What Stripe did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardRetryResponse"
         "401":
           description: No valid session
           content:
@@ -24707,6 +24915,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RenewalMailRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/card-failed-mail:
+    post:
+      tags:
+        - Billing
+      summary: Hourly failed-card mails (Cloud Scheduler)
+      description: "Mails the payer of each past_due subscription in their language: within 72 hours of the first failed attempt, that access stays open while Stripe retries, with a link to update the card; and one reminder from the retry window's midpoint while a retry is booked. Stripe’s open invoices decide. Never more than two mails per failed invoice; a second run sends nothing new. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardFailedMailSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/card-failed-mail:
+    post:
+      tags:
+        - Admin
+      summary: Run the failed-card mails now, or see who they would mail
+      description: "The same run as the hourly job, for the operator, with one row per past_due subscription: the stage it mails or why not (gone, not-past-due, settled, needs-authentication, no-stage, suppressed). `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardFailedMailRun"
         "401":
           description: Missing or invalid admin token
           content:

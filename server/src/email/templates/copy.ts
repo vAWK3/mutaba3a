@@ -458,6 +458,69 @@ const offerRenewingSoon: Copy<'offer-renewing-soon'> = {
   },
 };
 
+/**
+ * MUT-533 (plan §6, copy approved by Basel 2026-11-02): a renewal payment failed; Stripe is retrying. No amount and no
+ * card details: Basel declined naming the card's last digits, so ADR-159 §5 holds for both mails unchanged.
+ */
+const cardFailed: Copy<'card-failed'> = {
+  en: ({ updateLink }) => ({
+    subject: "Your card didn't go through",
+    preheader: 'Your MTB3A account stays fully open while we try again.',
+    headline: "We couldn't take your payment",
+    intro: [
+      ['Your bank declined the payment for your MTB3A plan.'],
+      ['Nothing stops: your account stays fully open while Stripe tries the card again over the next few days.'],
+    ],
+    action: { label: 'Update card', href: updateLink },
+    outro: [["Already updated it? Then there's nothing to do, and the next try will go through. Reply to this email if you need help."]],
+  }),
+  ar: ({ updateLink }) => ({
+    subject: 'لم تنجح عملية الدفع ببطاقتك',
+    preheader: 'يبقى حسابك في متابعة مفتوحًا بالكامل بينما نحاول مجددًا.',
+    headline: 'لم نتمكن من تحصيل دفعتك',
+    intro: [
+      ['رفض البنك دفعة اشتراكك في متابعة.'],
+      ['لن يتوقف شيء: يبقى حسابك مفتوحًا بالكامل بينما يحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة.'],
+    ],
+    action: { label: 'حدّث البطاقة', href: updateLink },
+    outro: [['حدّثتها بالفعل؟ فلا حاجة لأي إجراء، وستنجح المحاولة القادمة. ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+  }),
+};
+
+/** MUT-533: the one reminder. "At most": Stripe may give up before the window ends. Read-only only while the gate is on. */
+const cardFailedReminder: Copy<'card-failed-reminder'> = {
+  en: ({ daysLeft, readOnlyAfter, updateLink }) => ({
+    subject: 'Your card still isn’t going through',
+    preheader: 'Update it to keep your account open.',
+    headline: 'Your payment still hasn’t gone through',
+    intro: [
+      ['We tried again, and your bank still declines the payment.'],
+      [
+        readOnlyAfter
+          ? `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most, and your account becomes read-only. Your records stay, and you can download them any time.`
+          : `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most. Your records stay, and you can download them any time.`,
+      ],
+    ],
+    action: { label: 'Update card', href: updateLink },
+    outro: [['Reply to this email if you need help.']],
+  }),
+  ar: ({ daysLeft, readOnlyAfter, updateLink }) => ({
+    subject: 'ما زالت عملية الدفع ببطاقتك لا تنجح',
+    preheader: 'حدّث البطاقة ليبقى حسابك مفتوحًا.',
+    headline: 'لم تُحصَّل دفعتك بعد',
+    intro: [
+      ['حاولنا مجددًا، وما زال البنك يرفض الدفعة.'],
+      [
+        readOnlyAfter
+          ? `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر ويصبح حسابك للقراءة فقط. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`
+          : `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`,
+      ],
+    ],
+    action: { label: 'حدّث البطاقة', href: updateLink },
+    outro: [['ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+  }),
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -474,4 +537,6 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'account-closing': accountClosing,
   'passkey-added': passkeyAdded,
   'offer-renewing-soon': offerRenewingSoon,
+  'card-failed': cardFailed,
+  'card-failed-reminder': cardFailedReminder,
 };

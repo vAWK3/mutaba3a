@@ -41,6 +41,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'account-closing': { deleteOn: { year: 2026, month: 11, day: 23 }, signInLink: SAMPLE_SIGN_IN },
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: SAMPLE_SIGN_IN },
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
+  'card-failed': { updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
+  'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
 };
 const SAMPLE_RECIPIENT = 'rana@example.com';
 /** Rendered with this origin, then rewritten to a relative path so the files open offline. */

@@ -279,3 +279,36 @@ export function setTrialStartedDaysAgo(userId: string, daysAgo: number): void {
   const sql = `UPDATE users SET "trialStartedAt" = now() - interval '${Number(daysAgo)} days' WHERE id = '${userId.replace(/[^0-9a-f-]/g, '')}'`;
   execFileSync('docker', ['exec', DB.container, 'psql', '-U', 'mutaba3a', '-d', DB.database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
 }
+
+/** MUT-533: what the memory mailer "sent" to an address, oldest first. */
+export async function outboxOf(email: string): Promise<Array<{ template: string; locale: string; subject: string; text: string; html: string }>> {
+  const { apiOrigin, adminToken } = liveState();
+  const res = await fetch(`${apiOrigin}/admin/v1/dev-outbox?to=${encodeURIComponent(email)}`, { headers: { 'x-admin-token': adminToken } });
+  return ((await res.json()) as { mails: Array<{ template: string; locale: string; subject: string; text: string; html: string }> }).mails;
+}
+
+/** MUT-533: runs a mail job now, as the operator's `npm run billing:…-mail` does, through the admin door. */
+export async function runMailJob(job: 'card-failed-mail', dryRun = false): Promise<Json> {
+  const { apiOrigin, adminToken } = liveState();
+  const res = await fetch(`${apiOrigin}/admin/v1/billing/${job}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ dryRun }) });
+  expect(res.status, `${job} ${await res.clone().text()}`).toBe(200);
+  return res.json();
+}
+
+/**
+ * MUT-533: a monthly subscriber whose renewal declined `failedAgoS` seconds ago, on a test clock started in the past
+ * (MUT-531's spike): paid with a good card, then switched to Stripe's always-declining test card before the renewal
+ * (or `pm_card_authenticationRequired`, a card whose bank always wants the person to confirm).
+ */
+export async function declinedRenewal(person: LivePerson, failedAgoS: number, failingCard = 'pm_card_chargeCustomerFail'): Promise<{ customerId: string; clockId: string; subscriptionId: string }> {
+  const nowS = Math.floor(Date.now() / 1000);
+  const startAt = nowS - failedAgoS - 31 * 24 * 60 * 60;
+  const { customerId, clockId } = await customerOnClock(person, startAt);
+  const subscriptionId = await subscribeByApi(customerId);
+  const declining = await stripeApi('POST', `payment_methods/${failingCard}/attach`, { customer: customerId });
+  await stripeApi('POST', `subscriptions/${subscriptionId}`, { default_payment_method: declining.id });
+  const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
+  // Past the renewal and its first attempt (an hour after the invoice), and no further than now less a minute.
+  await advanceClock(clockId, Math.min(sub.items.data[0].current_period_end + 2 * 60 * 60, nowS - 60));
+  return { customerId, clockId, subscriptionId };
+}

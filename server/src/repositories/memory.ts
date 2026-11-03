@@ -3251,6 +3251,15 @@ export class MemoryLedgerStore implements LedgerStore {
             : [];
         })
         .sort((a, b) => a.currentPeriodEnd.getTime() - b.currentPeriodEnd.getTime() || a.stripeSubscriptionId.localeCompare(b.stripeSubscriptionId)),
+    pastDueCandidates: async () =>
+      [...this.billingSubs.values()]
+        .filter((sub) => sub.status === 'past_due')
+        .sort((a, b) => a.currentPeriodEnd.getTime() - b.currentPeriodEnd.getTime() || a.stripeSubscriptionId.localeCompare(b.stripeSubscriptionId))
+        .flatMap((sub) => {
+          const payer = this.billingAccounts.get(sub.billingAccountId)?.userId ?? null;
+          const person = payer ? this.people.get(payer) : undefined;
+          return person && person.status === 'ACTIVE' && !person.closure ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, userId: payer!, email: person.email, locale: person.locale }] : [];
+        }),
     createGrant: async (input) => {
       if ((input.userId === null) === (input.organizationId === null)) throw new StateConflict('entitlement_grant', 'ONE_TARGET');
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');

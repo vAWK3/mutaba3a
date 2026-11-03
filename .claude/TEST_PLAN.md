@@ -4351,3 +4351,23 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - **Portal:** `billingView.test.ts` — the pause panels around their dates, a cancel over a pause, `canCancelOf`, `canKeepOf`, `monthPriceOf`, no switch line during a pause. `BillingDrawer.test.tsx` — Cancel plan → Why? (focus, 8 reasons, Continue waits); pause → status "Your plan pauses on", Pause booked, Don't pause, no Cancel plan; decline pause → stay offer → accept → done banner; decline stay = cancel with the trimmed comment → ending + Keep my plan; no offers → Confirm cancel, Keep my plan goes back; Resume now's confirm with ₪39.00 (the fake catalog) and its DELETE; no Cancel plan on a founder price; the new manage note; Arabic. `LapseGate.test.tsx` — the paused banner (Resume now, Download, no Subscribe, never "ended"), no Resume now on someone else's profile.
 - **Release-QA (portal, stubbed), both PASSED 2026-11-02:** `@portal.billing.paused-banner`, `@portal.billing.cancel-rtl-375` (Arabic, 375 px, why → pause → stay → confirm, no sideways scroll; screenshots attached).
 - **Release-QA (portal-live, Stripe sandbox):** `@portal-live.billing.pause` (a plan whose paid month ends two minutes out: Cancel → reason → 2 months → booked; the clock and the real time pass the period end → voided invoice, Paused until, the banner, 402 `paused`, the export answers; two months on Stripe charges ₪29.00 and the profile is Active), `.pause-resume-now`, `.pause-once-a-year`, `.stay-offer` (₪14.50 next invoice; no stay step the second time), `.cancel-reason` (Stripe's `cancellation_details`, Keep my plan), `.manage` rewritten (no cancel in Stripe's portal), `.yearly-switch` re-run.
+
+## MUT-533 — our own failed-card mail, ar + en (ADR-242)
+
+- `server/src/billing/__tests__/card-failed-mail.test.ts`: the stage table (first within 72 h; reminder at the window's
+  midpoint, never sooner than 3 days, never with no retry booked; settled, not past_due, 3-D Secure, gone → none; days
+  left an upper bound, at least 1) and the run (≤ 2 mails per invoice over many runs, only the current stage, a new
+  invoice its own keys, gate-off wording, suppressed, dry run, one Stripe failure costs one row, the time budget).
+- `plan-gateway.test.ts` `failedPaymentOf`: the oldest open attempted invoice, `finalized_at` as the first failure, the
+  4-level expand (R1), 3-D Secure, one read when not past_due, a missing subscription is null.
+- `checkout-gateway.test.ts` and `billing-routes.test.ts`: the portal session's `flow: card` (`flow_data` with the
+  redirect back), 422 for any other flow. `routes-card-failed-mail.test.ts`: job token, counts only, the configured
+  window and gate wording, the admin dry run. Store contract `pastDueCandidates` (memory + Prisma `test:db`).
+- Mail: `templates.test.ts` / `mailer.test.ts` render both templates in ar + en with no amount, currency or card digits.
+- Portal: `billingView.test.ts` (past_due → `updateCard`), `BillingDrawer.test.tsx` (Update card asks for `flow: card`).
+- `plan-gateway.test.ts` `retryPayment` (paid, declined, needs-action, the idempotency key) and `billing-routes.test.ts`
+  POST `/v1/billing/card-retry` (pays once, audited; nothing-due cases charge nothing); `BillingDrawer.test.tsx`: back
+  from the card form it asks once, back from Manage billing never.
+- Release-QA (portal-live, Stripe sandbox): `card-failed-mail` (core, saves a good card on Stripe's page and the invoice
+  is paid), `card-failed-reminder`, `card-failed-3ds`.
+
