@@ -187,6 +187,12 @@ variable "min_build_check_disabled" {
   default     = false
 }
 
+variable "maintenance_mode" {
+  description = "MUT-551 (release gate RF-2): the phone app's maintenance switch. true sets MAINTENANCE_MODE=true and every phone request answers 503 MAINTENANCE (the app shows its maintenance screen) until it's off. false (default) sends nothing. A change ships only when the release names it: ALLOW_MIN_BUILD_CHANGE=MAINTENANCE_MODE."
+  type        = bool
+  default     = false
+}
+
 variable "sentry_state_bucket" {
   description = "MUT-148: the GCS bucket holding the Sentry stack's state. null (default) = <project_id>-terraform-state, the bucket both stacks use (DEPLOYMENT.md §1.3)."
   type        = string

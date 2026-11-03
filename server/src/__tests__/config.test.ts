@@ -312,6 +312,14 @@ describe('loadConfig — minimum app version (MUT-293)', () => {
     expect(() => loadConfig({ ...base, MIN_BUILD_CHECK_DISABLED: value })).toThrow(/MIN_BUILD_CHECK_DISABLED/);
   });
 
+  // MUT-551: the phone maintenance switch reads like the kill switch: only "true" is on.
+  it('reads MAINTENANCE_MODE: off by default, on only for "true"', () => {
+    expect(loadConfig({ ...base }).MAINTENANCE_MODE).toBe(false);
+    expect(loadConfig({ ...base, MAINTENANCE_MODE: 'true' }).MAINTENANCE_MODE).toBe(true);
+    expect(loadConfig({ ...base, MAINTENANCE_MODE: 'false' }).MAINTENANCE_MODE).toBe(false);
+    expect(() => loadConfig({ ...base, MAINTENANCE_MODE: '1' })).toThrow(/MAINTENANCE_MODE/);
+  });
+
   it.each([
     ['IOS_MIN_BUILD', '0'],
     ['IOS_MIN_BUILD', '-1'],

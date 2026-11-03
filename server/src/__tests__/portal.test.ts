@@ -251,4 +251,13 @@ describe('portal serving — enabled', () => {
     expect(api.headers.get('content-security-policy')).toBe(expected);
     expect(portalPage.headers.get('content-security-policy')).toBe(expected);
   });
+
+  it('keeps the portal and API out of search indexes, with the basic security headers (MUT-551, WO-3, WX-4)', async () => {
+    for (const res of [await app.request('/health'), await app.request('/v1/me'), await app.request('/')]) {
+      expect(res.headers.get('x-robots-tag')).toBe('noindex');
+      expect(res.headers.get('strict-transport-security')).toBe('max-age=31536000');
+      expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(res.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    }
+  });
 });

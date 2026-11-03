@@ -597,7 +597,7 @@ describe('deploy.sh wires the site-key guard (MUT-368)', () => {
  * (local.min_build_env) and what the service has is refused unless ALLOW_MIN_BUILD_CHANGE names it: a stale copy can
  * drop a floor, re-raise a bad one after an incident, or switch the kill switch off or on.
  */
-const MIN_BUILD_NAMES = ['IOS_MIN_BUILD', 'ANDROID_MIN_BUILD', 'IOS_RECOMMENDED_BUILD', 'ANDROID_RECOMMENDED_BUILD', 'MIN_BUILD_CHECK_DISABLED'] as const;
+const MIN_BUILD_NAMES = ['IOS_MIN_BUILD', 'ANDROID_MIN_BUILD', 'IOS_RECOMMENDED_BUILD', 'ANDROID_RECOMMENDED_BUILD', 'MIN_BUILD_CHECK_DISABLED', 'MAINTENANCE_MODE'] as const;
 type MinBuildValues = Partial<Record<(typeof MIN_BUILD_NAMES)[number], string>>;
 type MinBuildOpts = {
   plan?: MinBuildValues; // what local.min_build_env holds in this checkout (absent = not sent)
@@ -668,6 +668,9 @@ describe('guard_min_build_release (MUT-471, deploy.sh steps 0, 3 and 4)', { time
     ['drops a recommended build', { live: { ANDROID_MIN_BUILD: '12', ANDROID_RECOMMENDED_BUILD: '13' }, plan: { ANDROID_MIN_BUILD: '12' } }, 'ANDROID_RECOMMENDED_BUILD', 'android_recommended_build', '13', 'unset'],
     ['drops the kill switch', { live: { IOS_MIN_BUILD: '9', MIN_BUILD_CHECK_DISABLED: 'true' }, plan: { IOS_MIN_BUILD: '9' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'true', 'unset'],
     ['turns the kill switch on', { live: {}, plan: { MIN_BUILD_CHECK_DISABLED: 'true' } }, 'MIN_BUILD_CHECK_DISABLED', 'min_build_check_disabled', 'unset', 'true'],
+    // MUT-551: a stale copy still in maintenance would take every phone down; ending maintenance is named too.
+    ['turns maintenance on', { live: {}, plan: { MAINTENANCE_MODE: 'true' } }, 'MAINTENANCE_MODE', 'maintenance_mode', 'unset', 'true'],
+    ['ends maintenance', { live: { MAINTENANCE_MODE: 'true' }, plan: {} }, 'MAINTENANCE_MODE', 'maintenance_mode', 'true', 'unset'],
   ] as const)('refuses a release that %s unless it is named, and names the variable', (_what, values, name, tfvar, from, to) => {
     const change = `${name}: production has ${from === 'unset' ? 'none' : from}, this checkout would ${to === 'unset' ? 'remove it' : `set ${to}`}`;
     const r = minBuildGuard(values);
