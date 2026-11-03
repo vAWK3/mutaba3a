@@ -68,7 +68,7 @@
 
 ### TD-293: The real-receipt bench is one person's eye-read of 48 receipts
 **Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02)
-- **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 48 receipts since MUT-514. MUT-514 changed it three ways, for Basel to confirm: `receivedOn` (the scan day, 2026-10-29) on every receipt; 3-p35's phone accepts either of the vendor's two printed numbers (R6); p02 gains the dealer number it prints (040999237, the same vendor's as 3-p21). Truth values may now be lists. The three production Paz receipts the plan meant to add are not in the folder yet.
+- **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 48 receipts since MUT-514. MUT-514 changed it three ways, for Basel to confirm: `receivedOn` (the scan day, 2026-10-29) on every receipt; 3-p35's phone accepts either of the vendor's two printed numbers (R6); p02 gains the dealer number it prints (the same vendor's as 3-p21). Truth values may now be lists. The three production Paz receipts the plan meant to add are not in the folder yet.
 - **Fix:** Basel checks the manifest and adds receipts (more Arabic ones especially); raise AC2's bar as the set grows.
 
 ### TD-292: A summary block can name a retired currency

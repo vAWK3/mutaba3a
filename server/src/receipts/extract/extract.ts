@@ -72,6 +72,14 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
     email: email ? field(email.value, email.rule, email.conf) : undefined,
   };
   const filled = Object.fromEntries(Object.entries(suggestion).filter(([, v]) => v !== undefined)) as unknown as ReceiptSuggestion;
-  const vendorIdentifiers = [filled.registrationNo?.value, filled.phone?.value].flatMap((v) => (v ? [normalizeIdentifier(v)] : []));
-  return { suggestion: filled, buyerIdentifiers: buyer.ownIdentifiers, vendorIdentifiers };
+  return { suggestion: filled, buyerIdentifiers: buyer.ownIdentifiers, vendorIdentifiers: vendorIdentifiersOf(rows) };
+}
+
+/**
+ * R9: the numbers this receipt shows as the vendor's outside its own bill-to blocks, read without the learned buyer
+ * numbers: a number a misfired block once taught is still seen as a vendor's here, so the memory unlearns it.
+ */
+function vendorIdentifiersOf(rows: Parameters<typeof buyerOf>[0]): string[] {
+  const ownBlocks = buyerOf(rows);
+  return [readRegistration(rows, ownBlocks), readPhone(rows, ownBlocks)].flatMap((r) => (r && isConfident(r.rule * r.conf) ? [normalizeIdentifier(r.value)] : []));
 }

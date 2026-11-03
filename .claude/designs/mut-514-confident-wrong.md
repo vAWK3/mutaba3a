@@ -76,7 +76,7 @@ All in `server/src/receipts/extract/` unless named; the extractor stays pure (no
 - A misread labelled total loses to a balance the arithmetic confirms (T1).
 - `לכבוד … ע.מ.: X`, `טל' לקוח: Y`, `السيد/ة … ` followed by a bare mobile, and a number repeated outside the block: never the vendor's (B1, B2). `buyerIds` given: never filled.
 - With `receivedOn` 2026-10-29, a date of 2020-07-29 is left out and a date of 2025-12-01 is kept. `!1-03-2026` is left out (D1, D2).
-- A street-and-number line is never the vendor (O1). `Authorized Dealer #: 040999237` is not a phone (O2).
+- A street-and-number line is never the vendor (O1). `Authorized Dealer #: <number>` is not a phone (O2).
 - The existing extract and merge tests stay green (regression). If D-Q4 = A: a CLI test over the in-memory store (replaces old-reader suggestions, keeps `approved`, skips filed and approved ones, dry-run writes nothing).
 - If D-Q1 = B: the store method gets a test against the Postgres `test:db` suite, plus an in-memory fake.
 
@@ -309,6 +309,20 @@ there too, else a follow-up ticket. Recorded on MUT-514 as its last AC check.
 - OV-11: `buyerIdentifiers` stores digits only, is never in the API or logs, is deleted with the receipt, and the buyer
   set is applied only on the expense-receipt reading path (never on MUT-506 issued invoices, where the organization is the
   vendor). Privacy policy wording unchanged: the numbers are already on the stored receipt image.
+
+### R10 amended (2026-11-03): the re-read command is back
+Basel, in session "PM intake picture/amount accuracy": "Keep the fixed command" — supersedes D11 ("Drop it, fix 6 by
+hand"). The fixed design avoids R1's and OV-4's traps:
+- `resetForReread` is one guarded UPDATE (READY, live, To review, unapproved, not PENDING, at the read version). It
+  drops only the fields the server read (`ocr`, `pdf-text`), keeps QR and vendor-list fields, and restarts the read
+  state (PENDING now, readAttempts 0, readFirstClaimedAt null, no lease), so the 30-minute give-up clock of the first
+  read can't FAIL it 'exhausted'. The 5-minute sweep reads it: no dispatcher in the CLI.
+- `npm --prefix server run receipts:reread -- --reader-below 2 [--apply]`: dry run by default (ids, field names and
+  sources, no values); `--apply` audits `expense_receipt.reread_requested` (ADMIN). Only uploaders who still hold
+  `receipt_reading`. Candidates are receipts whose `readerVersion` is still `server-ocr-*-N`, N < below: merge.ts
+  hands the version to whichever writer added a field last, so one a client filled after the read is not picked.
+- `SERVER_READER_GENERATION` is one constant for the stamp and the CLI. before-release.md: run it only after the -2
+  API is fully rolled out.
 
 Approval readiness: PASS (R1 withdrawn by D11; R2 D5; R3 D6 + D10; R4 required proof of D1; R5 D7; R6 factual; R7 D8;
 R8 D9; R9 D10; R10 D11; R11 D12).

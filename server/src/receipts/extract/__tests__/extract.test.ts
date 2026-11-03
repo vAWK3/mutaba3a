@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ReceiptSuggestion } from '../../../repositories/ports.js';
 import { ReceiptSuggestionSchema } from '../../../schemas.js';
-import { extractReceipt, isConfident, MIN_FIELD_CONFIDENCE } from '../extract.js';
+import { extractReceipt, isConfident, MIN_FIELD_CONFIDENCE, readReceipt } from '../extract.js';
 import { isValidIsraeliRegistration } from '../fields.js';
 import { foldForMatch, normalizeText } from '../normalize.js';
 import { orderedRows } from '../rows.js';
@@ -439,6 +439,12 @@ describe('MUT-514: no confidently wrong fields', () => {
       expect(value(s, 'vatMinor')).toBe('2690');
     });
 
+    it('a Paz-shaped fuel receipt (production replica): the glued before-VAT row, a misread VAT row next to it, the to-pay row', () => {
+      const s = read(receipt(['פז חברת נפט בע"מ', 'משאבה: 3', 'סה"כ לפנ\' מע"מ265.38 ש"ח', 'מע"מ להוצ רכב 47.71', 'סה"כ לתשלום 313.15']));
+      expect(value(s, 'totalMinor')).toBe('31315');
+      expect(value(s, 'vatMinor')).toBe('4777');
+    });
+
     it('a fuel receipt with no total: subtotal + a misread VAT is never filled as the total, and the VAT stays empty', () => {
       const s = read(receipt(['תחנת דלק הגליל', 'סה"כ לפנ\' מע"מ149.47 ש"ח', 'מע"מ להוצ רכב 26.98']));
       expect(value(s, 'totalMinor')).toBeUndefined();
@@ -584,9 +590,86 @@ describe('MUT-514: no confidently wrong fields', () => {
     });
 
     it('an "Authorized Dealer #" is a registration number, not a phone', () => {
-      const s = read(receipt(['Computer House', 'Authorized Dealer #: 040999237', 'Total 10.00']));
+      const s = read(receipt(['Office Corner', 'Authorized Dealer #: 034567891', 'Total 10.00']));
       expect(value(s, 'phone')).toBeUndefined();
-      expect(value(s, 'registrationNo')).toBe('040999237');
+      expect(value(s, 'registrationNo')).toBe('034567891');
+    });
+  });
+
+  /** The pre-landing review (2026-11-03, a specialist and an adversarial reviewer): each reproduced break, as a row. */
+  describe('pre-landing review: never a new wrong field (MUT-514)', () => {
+    const BUYER_PHONE = '052-9876543';
+
+    it('"total paid" beside change is the cash handed over when another total is printed, or when paid + change is not', () => {
+      expect(value(read(receipt(['Cafe', 'Latte 15.40', 'Total 15.40', 'Total paid 20.00', 'Change 4.60'])), 'totalMinor')).toBe('1540');
+      expect(value(read(receipt(['קיוסק', 'סה"כ 15.40', 'סה"כ שולם 20.00', 'מזומן 20.00', 'עודף 4.60'])), 'totalMinor')).toBe('1540');
+      expect(value(read(receipt(['مقهى', 'المجموع 15.40', 'المجموع المدفوع 20.00', 'الباقي 4.60'])), 'totalMinor')).toBe('1540');
+    });
+
+    it('an exact subtotal + VAT beats a total an agorot rounding confirms; a JOD total is never half a dinar off', () => {
+      expect(value(read(receipt(['חנות', 'סה"כ לפני מע"מ 100.00', 'מע"מ 18.00', 'סה"כ 118.00', 'לתשלום 118.40', '₪'])), 'totalMinor')).toBe('11800');
+      expect(value(read(receipt(['متجر', 'المجموع قبل الضريبة 10.000', 'ضريبة 1.600', 'الإجمالي 11.600', 'المبلغ المستحق 12.000 د.أ'])), 'totalMinor')).toBe('11600');
+    });
+
+    it("a card's balance after paying the total, or the total plus 18%, is never taken for the total", () => {
+      expect(value(read(receipt(['קפה', 'קפה 50.00', 'סה"כ 50.00', 'יתרה בכרטיס 59.00', '₪'])), 'totalMinor')).toBe('5000');
+      expect(value(read(receipt(['Shop', 'Item A 50.00', 'Item B 50.00', 'Total 100.00', 'Balance 118.00', '₪'])), 'totalMinor')).toBe('10000');
+    });
+
+    it('a tip, delivery fee or service charge the size of the VAT is never total − subtotal\'s VAT', () => {
+      expect(value(read(receipt(['Cafe Roma', 'Subtotal 100.00', 'Tip 18.00', 'Total 118.00 ₪'])), 'vatMinor')).toBeUndefined();
+      expect(value(read(receipt(['Cafe Roma', 'Subtotal 100.00', 'Delivery 18.00', 'Total 118.00 ₪'])), 'vatMinor')).toBeUndefined();
+      expect(value(read(receipt(['Cafe Roma', 'Subtotal 100.00', 'VAT 18% 15.25', 'Tip 18.00', 'Total 118.00 ₪'])), 'vatMinor')).toBeUndefined();
+    });
+
+    it("once a labelled phone or registration no. is the buyer's, nothing unlabelled after it is offered", () => {
+      const s = read(receipt(['משרד עו"ד כהן', `לכבוד: חברת אלפא טל: ${BUYER_PHONE}`, 'תאריך 01/11/2026', 'איש קשר דנה 052-1234567', 'סה"כ 118.00']));
+      expect(value(s, 'phone')).toBeUndefined();
+      const learned = readWith(receipt(['Acme Ltd', `VAT no ${REG_VALID_DEALER}`, `Supplier ref: Reg no ${REG_VALID_COMPANY}`, 'Total 118.00']), { buyerIds: [REG_VALID_DEALER] });
+      expect(value(learned, 'registrationNo')).toBeUndefined();
+    });
+
+    it('a bill-to block heading the receipt leaves the vendor empty, never the row under it', () => {
+      expect(value(read(receipt(['לכבוד', 'חברת אלפא בע"מ', 'תאריך 01/11/2026', 'פרויקט שיפוץ', 'סה"כ 10.00'])), 'vendorName')).toBeUndefined();
+      expect(value(read(receipt(['Bill to: Beta Corp', 'Item 10.00', 'Consulting services'])), 'vendorName')).toBeUndefined();
+    });
+
+    it("an exempt dealer's own ID (עוסק פטור ת.ז) stays theirs, and is never learned as the buyer's", () => {
+      const r = readReceipt({ lines: receipt(['יוסי צלם', `עוסק פטור ת.ז ${REG_VALID_DEALER}`, 'טל 050-1234567', 'תאריך: 28/10/2026', 'צילום 500.00', 'סה"כ 500.00']) }, { readerVersion: READER });
+      expect(value(r.suggestion, 'registrationNo')).toBe(REG_VALID_DEALER);
+      expect(value(r.suggestion, 'phone')).toBe('050-1234567');
+      expect(r.buyerIdentifiers).toEqual([]);
+    });
+
+    it("a customer-service footer and a walk-in customer are not bill-to blocks", () => {
+      expect(value(read(receipt(['ACME LTD', 'Coffee 12.00', 'Total 12.00', 'Customer service', '03-5551234'])), 'phone')).toBe('03-5551234');
+      expect(value(read(receipt(['קפה הנמל', 'לקוח: מזדמן', 'טל 03-5551234', 'סה"כ 12.00'])), 'phone')).toBe('03-5551234');
+    });
+
+    it("a number taught by a misfired block is still reported as the vendor's, so the memory can unlearn it (R9)", () => {
+      const r = readReceipt({ lines: receipt(['ACME LTD', 'Tel 03-5551234', 'Coffee 12.00', 'Total 12.00']) }, { readerVersion: READER, buyerIds: ['035551234'] });
+      expect(value(r.suggestion, 'phone')).toBeUndefined();
+      expect(r.vendorIdentifiers).toEqual(['035551234']);
+    });
+
+    it('a shop name with a number in it heads the receipt and is read (Studio 54 Bar)', () => {
+      expect(value(read(receipt(['Studio 54 Bar', 'Total 10.00'])), 'vendorName')).toBe('Studio 54 Bar');
+      expect(value(read(receipt(['מאפיית 24 שעות', 'סה"כ 10.00'])), 'vendorName')).toBe('מאפיית 24 שעות');
+    });
+
+    it('a total that says the tip is not in it is still the total', () => {
+      expect(value(read(receipt(['Bistro', 'Total (tip not included) 50.00'])), 'totalMinor')).toBe('5000');
+      const s = read(receipt(['Bistro', 'Pasta 42.37', 'VAT 7.63', 'Total before tip ₪50.00']));
+      expect(value(s, 'totalMinor')).toBe('5000');
+      expect(value(s, 'vatMinor')).toBe('763');
+    });
+
+    it("a split payment's card slips don't make the VAT implausible (its share is of the largest labelled total)", () => {
+      expect(value(read(receipt(['מחסני הגפן', 'סכום עסקה 50.00', 'סכום עסקה 68.00', 'סה"כ לפני מע"מ 100.00', 'מע"מ 18% 18.00', 'לתשלום 118.00'])), 'vatMinor')).toBe('1800');
+    });
+
+    it('a page count (עמוד 1 מתוך 2) is not an instalment', () => {
+      expect(value(read(receipt(['Shop', 'סה"כ 50.00 עמוד 1 מתוך 2'])), 'totalMinor')).toBe('5000');
     });
   });
 });

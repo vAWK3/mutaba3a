@@ -1,7 +1,7 @@
 import type { Currency } from '../../money.js';
 import { moneyIn } from './amounts.js';
 import { isConfident } from './confidence.js';
-import { BALANCE, CARD_SLIP, CASH, CHANGE, DISCOUNT, hasKeyword, INCLUSIVE, isInstallment, type KeywordSet, NOT_TOTAL, PAID, REGISTRATION, SUBTOTAL, TENDERED, TIP, TOTAL, VAT } from './keywords.js';
+import { BALANCE, CARD_SLIP, CASH, CHANGE, DISCOUNT, hasKeyword, INCLUSIVE, isInstallment, type KeywordSet, NOT_TOTAL, PAID, REGISTRATION, SUBTOTAL, TENDERED, TIP, TIP_APART, TOTAL, VAT } from './keywords.js';
 import { confOf, labelConf } from './rows.js';
 import type { Row } from './types.js';
 
@@ -63,19 +63,47 @@ export function knownVatRates(currency: Currency | null): readonly number[] {
 }
 
 const isVatRow = (row: Row) => hasKeyword(row.folded, VAT) && !hasKeyword(row.folded, INCLUSIVE) && !hasKeyword(row.folded, NOT_TOTAL) && !hasKeyword(row.folded, REGISTRATION) && !/invoice|חשבונית|فاتورة/.test(row.folded);
-/** MUT-514 (T2): "סה"כ שולם", "total paid": the amount paid, which is the total; not cash handed over. */
+/** "סה"כ שולם", "total paid": what was paid. Whether that is the total or cash handed over depends on the receipt (`rowKinds`). */
 const isTotalPaid = (row: Row) => hasKeyword(row.folded, TOTAL) && hasKeyword(row.folded, PAID) && !hasKeyword(row.folded, TENDERED) && !hasKeyword(row.folded, CHANGE);
-const isPayment = (row: Row) => (hasKeyword(row.folded, CASH) || hasKeyword(row.folded, CHANGE)) && !isTotalPaid(row);
-/** MUT-514 (T3, OV-7): a tip or one instalment: a part of what was paid, never the total. */
-const isPart = (row: Row) => hasKeyword(row.folded, TIP) || isInstallment(row.folded);
 /**
- * MUT-514: rows whose amounts are never the total and never vote for one: tips, instalments, cash tendered, change. A
- * card slip stays (OV-7: "סכום עסקה" beside a payment count), and so does a total that says it includes the tip.
+ * MUT-514 (T3, OV-7): a tip or one instalment: a part of what was paid, never the total. A total that says the tip is
+ * in it, or not in it ("Total before tip"), is still a total.
  */
-const neverTotal = (row: Row) =>
-  (isPart(row) || hasKeyword(row.folded, TENDERED) || hasKeyword(row.folded, CHANGE)) && !hasKeyword(row.folded, CARD_SLIP) && !isTotalPaid(row) && !(hasKeyword(row.folded, TOTAL) && hasKeyword(row.folded, INCLUSIVE));
-const isTotalRow = (row: Row) => (hasKeyword(row.folded, TOTAL) || hasKeyword(row.folded, CARD_SLIP)) && !hasKeyword(row.folded, NOT_TOTAL) && !isVatRow(row) && !isPayment(row) && !neverTotal(row);
+const isPart = (row: Row) =>
+  (hasKeyword(row.folded, TIP) && !(hasKeyword(row.folded, TOTAL) && (hasKeyword(row.folded, INCLUSIVE) || hasKeyword(row.folded, TIP_APART)))) || isInstallment(row.folded);
+const isTotalLabelled = (row: Row) => (hasKeyword(row.folded, TOTAL) || hasKeyword(row.folded, CARD_SLIP)) && !hasKeyword(row.folded, NOT_TOTAL) && !isVatRow(row);
 const isSubtotalRow = (row: Row) => hasKeyword(row.folded, SUBTOTAL) && !isVatRow(row) && !ZERO_RATE.test(row.text);
+
+/** What a receipt's rows are, for the total: decided once per receipt, as a "total paid" row depends on the others. */
+interface RowKinds {
+  /** A total-labelled row (or a card slip) that may give the total. */
+  isTotal(row: Row): boolean;
+  /** Cash handed over or change. */
+  isPayment(row: Row): boolean;
+  /**
+   * MUT-514: amounts never the total and never voting for one: tips, instalments, cash tendered, change. A card slip
+   * stays (OV-7: "סכום עסקה" beside a payment count).
+   */
+  neverTotal(row: Row): boolean;
+}
+
+/**
+ * MUT-514 (T2): a "total paid" row is the total (`סה"כ שולם 70.00`, change 30.00, the 100.00 handed over printed apart)
+ * only when no other row is total-labelled and, with change printed, paid + change is printed too; otherwise it is
+ * the cash handed over (`Total 15.40`, `Total paid 20.00`, `Change 4.60`).
+ */
+function rowKinds(rows: readonly Row[], exponent: number | null): RowKinds {
+  const printed = new Set(rows.flatMap((row) => moneyIn(row.text, exponent, false)));
+  const integers = printed.size === 0;
+  const amountsOf = (row: Row) => moneyIn(row.text, exponent, integers);
+  const plainPayment = (row: Row) => (hasKeyword(row.folded, CASH) || hasKeyword(row.folded, CHANGE)) && !isTotalPaid(row);
+  const otherTotal = rows.some((row) => isTotalLabelled(row) && !isTotalPaid(row) && !plainPayment(row) && amountsOf(row).length > 0);
+  const change = rows.filter((row) => hasKeyword(row.folded, CHANGE)).flatMap(amountsOf)[0] ?? null;
+  const paidIsTotal = (row: Row) => !otherTotal && (change === null || amountsOf(row).some((paid) => printed.has(paid + change)));
+  const isPayment = (row: Row) => plainPayment(row) || (isTotalPaid(row) && !paidIsTotal(row));
+  const neverTotal = (row: Row) => (isPart(row) || hasKeyword(row.folded, TENDERED) || hasKeyword(row.folded, CHANGE) || (isTotalPaid(row) && !paidIsTotal(row))) && !hasKeyword(row.folded, CARD_SLIP);
+  return { isTotal: (row) => isTotalLabelled(row) && !isPayment(row) && !neverTotal(row), isPayment, neverTotal };
+}
 
 const last = (values: readonly bigint[]): bigint | null => values[values.length - 1] ?? null;
 const max = (values: readonly bigint[]): bigint | null => (values.length ? values.reduce((a, b) => (a > b ? a : b)) : null);
@@ -87,8 +115,8 @@ const vatOf = (vat: bigint, base: bigint, rate: number) => near(vat * BASIS, bas
 const vatIn = (vat: bigint, total: bigint, rate: number) => near(vat * (BASIS + BigInt(rate)), total * BigInt(rate), ROUNDING * (BASIS + BigInt(rate)));
 /** MUT-514 (AC3): a VAT is less than the total it is part of, and at most MAX_VAT_SHARE_PERCENT of it. */
 const plausibleVat = (vat: bigint, total: bigint) => vat < total && vat * 100n <= total * MAX_VAT_SHARE_PERCENT;
-/** MUT-514 (OV-6): half a unit of the currency in minor units: an agorot rounding line (עיגול) moves a total this much. */
-const halfUnit = (exponent: number | null) => 5n * 10n ** BigInt(Math.max((exponent ?? 2) - 1, 0));
+/** MUT-514 (OV-6): an agorot rounding line (עיגול) moves a total this many minor units at most (50 agorot, 50 fils). */
+const ROUNDING_LINE = 50n;
 
 /** How sure the reader was of `minor` on the row: the box it was printed in (MUT-504), else the row's least. */
 function amountConf(row: Row, minor: bigint, exponent: number | null, integers: boolean): number {
@@ -139,6 +167,7 @@ interface Parts {
   voting: Parts['all'];
   /** The largest amount of each total-labelled row: the labelled totals the receipt prints. */
   labelled: Array<{ row: Row; minor: bigint }>;
+  kinds: RowKinds;
   /** Whether a bare integer on a labelled row may be money: only when the receipt prints no decimal amount at all. */
   integers: boolean;
 }
@@ -150,17 +179,20 @@ function vatRateOn(row: Row): number | null {
 }
 
 function partsOf(rows: readonly Row[], exponent: number | null, knownRates: readonly number[]): Parts {
+  const kinds = rowKinds(rows, exponent);
   const all = rows.flatMap((row) => moneyIn(row.text, exponent, false).map((minor) => ({ minor, conf: amountConf(row, minor, exponent, false), row })));
   // A receipt that prints its money with decimals and shows a bare integer on a labelled row has lost a decimal point
   // to OCR (MUT-441 benchmark: "15.01" read as 15001); taking it as whole units would fill a wrong amount.
   const integers = all.length === 0;
-  const labelled = rows.filter(isTotalRow).flatMap((row) => {
+  const labelled = rows.filter(kinds.isTotal).flatMap((row) => {
     const minor = max(moneyIn(row.text, exponent, integers));
     return minor === null ? [] : [{ row, minor }];
   });
-  // MUT-514 (R8): a VAT row's amount must be a plausible VAT of every labelled total the receipt prints, else the row
-  // is another amount on a VAT-labelled row (the total, or the amount before VAT) and the next VAT row is read.
-  const plausible = (minor: bigint) => labelled.every((t) => plausibleVat(minor, t.minor));
+  // MUT-514 (R8): a VAT row's amount must be less than every labelled total the receipt prints and a plausible share
+  // of the largest (a split payment's card slips are smaller), else the row is another amount on a VAT-labelled row
+  // (the total, or the amount before VAT) and the next VAT row is read.
+  const largestLabelled = max(labelled.map((t) => t.minor));
+  const plausible = (minor: bigint) => labelled.every((t) => minor < t.minor) && (largestLabelled === null || plausibleVat(minor, largestLabelled));
   const vat = firstAmount(rows, (r) => isVatRow(r) && !ZERO_RATE.test(r.text), VAT, exponent, integers, (r) => hasKeyword(r.folded, TOTAL), plausible);
   const subtotal = firstAmount(rows, isSubtotalRow, SUBTOTAL, exponent, integers);
   const rateBasisPoints = vat ? vatRateOn(vat.row) : (rows.filter(isVatRow).map(vatRateOn).find((r) => r !== null) ?? null);
@@ -172,24 +204,29 @@ function partsOf(rows: readonly Row[], exponent: number | null, knownRates: read
     vat,
     rateBasisPoints,
     rates: printedRate !== null ? [printedRate] : knownRates,
-    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH) && !isTotalPaid(r), CASH, exponent, integers),
+    cash: firstAmount(rows, (r) => hasKeyword(r.folded, CASH) && kinds.isPayment(r), CASH, exponent, integers),
     change: firstAmount(rows, (r) => hasKeyword(r.folded, CHANGE), CHANGE, exponent, integers),
     all,
-    voting: all.filter((a) => !neverTotal(a.row)),
+    voting: all.filter((a) => !kinds.neverTotal(a.row)),
     labelled,
+    kinds,
     integers,
   };
 }
 
 /**
  * Whether the receipt's own parts add up to `total`: 'guided' by their labels (subtotal + VAT, cash − change, the VAT
- * at its rate, or MUT-514's subtotal at the rate within an agorot rounding), 'loose' by any two other amounts, or not.
+ * at its rate, MUT-514's subtotal at the rate), 'loose' by any two other amounts or by the subtotal at the rate within
+ * an agorot rounding line (OV-6: never flips a total, never beats an exact match), or not.
  */
-function confirmation(total: bigint, parts: Parts, exponent: number | null): 'guided' | 'loose' | null {
+function confirmation(total: bigint, parts: Parts): 'guided' | 'loose' | null {
+  const subtotal = parts.subtotal?.minor;
+  const atRate = (within: bigint) => subtotal !== undefined && parts.rates.some((rate) => near(subtotal * (BASIS + BigInt(rate)), total * BASIS, within * BASIS));
   if (parts.subtotal && parts.vat && near(parts.subtotal.minor + parts.vat.minor, total)) return 'guided';
   if (parts.cash && parts.change && near(parts.cash.minor - parts.change.minor, total)) return 'guided';
   if (parts.vat && parts.rates.some((rate) => vatIn(parts.vat!.minor, total, rate))) return 'guided';
-  if (parts.subtotal && parts.rates.some((rate) => near(parts.subtotal!.minor * (BASIS + BigInt(rate)), total * BASIS, halfUnit(exponent) * BASIS))) return 'guided';
+  if (atRate(ROUNDING)) return 'guided';
+  if (atRate(ROUNDING_LINE)) return 'loose';
   const others = [...new Set(parts.all.map((a) => a.minor))].filter((a) => a !== total);
   if (others.length > MAX_PAIRWISE_AMOUNTS) return null;
   for (let i = 0; i < others.length; i += 1) {
@@ -206,13 +243,15 @@ function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | nu
   // a service charge) is a subtotal whose own label OCR misread.
   // A total-labelled amount that another one plus a printed discount equals is the amount before the discount (MUT-504).
   const discounts = new Set(rows.filter((r) => hasKeyword(r.folded, DISCOUNT)).flatMap((r) => moneyIn(r.text, exponent, parts.integers)));
+  // MUT-514: not change either (`Total 15.40` beside the 20.00 handed over and its 4.60 change).
+  const payments = new Set(rows.filter(parts.kinds.isPayment).flatMap((r) => moneyIn(r.text, exponent, parts.integers)));
   const printed = new Set([...parts.all.map((a) => a.minor), ...(parts.vat ? [parts.vat.minor] : [])]);
-  const isSubtotal = (minor: bigint) => candidates.some((c) => c.minor > minor && printed.has(c.minor - minor) && !discounts.has(c.minor - minor));
+  const isSubtotal = (minor: bigint) => candidates.some((c) => c.minor > minor && printed.has(c.minor - minor) && !discounts.has(c.minor - minor) && !payments.has(c.minor - minor));
   const isPreDiscount = (minor: bigint) => [...discounts].some((d) => candidates.some((c) => c.minor === minor - d));
   let best: MoneyReading | null = null;
   for (const { row, minor } of candidates) {
     if (isSubtotal(minor) || isPreDiscount(minor)) continue;
-    const confirmed = confirmation(minor, parts, exponent);
+    const confirmed = confirmation(minor, parts);
     // A card slip alone can be one of two in a split payment: it is the total only when the receipt agrees with it.
     if (!hasKeyword(row.folded, TOTAL) && confirmed === null && rowsPrinting(parts, minor) < MIN_REPEAT_ROWS) continue;
     const rule = confirmed === 'guided' ? RULE_LABELLED_CONFIRMED : confirmed === 'loose' ? RULE_LABELLED_LOOSELY_CONFIRMED : RULE_LABELLED;
@@ -226,17 +265,19 @@ function labelledTotal(rows: readonly Row[], parts: Parts, exponent: number | nu
 
 /**
  * MUT-514 (T1, R8): a labelled total the receipt's arithmetic doesn't confirm loses to a different labelled amount
- * (on a total or balance row) that it does: by the labelled parts, or as a printed amount plus its VAT at the rate
- * (a misread total beside its balance, `1050 + 18% = 1239`). With none, the unconfirmed one stands.
+ * (on a total or balance row) that it does: by the labelled parts, or as an item amount plus its VAT at the rate (a
+ * misread total beside its balance, `1050 + 18% = 1239`). A labelled total is never that base: a card's balance after
+ * paying the total is not the total. With none, the unconfirmed one stands.
  */
 function confirmedAlternative(rows: readonly Row[], parts: Parts, exponent: number | null, best: MoneyReading, skip: (minor: bigint) => boolean): MoneyReading | null {
-  const printed = [...new Set(parts.all.map((a) => a.minor))];
-  const plusVat = (minor: bigint) => printed.some((base) => base < minor && parts.rates.some((rate) => near(base * (BASIS + BigInt(rate)), minor * BASIS, ROUNDING * BASIS)));
-  const labelledRows = rows.filter((row) => isTotalRow(row) || (hasKeyword(row.folded, BALANCE) && !neverTotal(row) && !isPayment(row)));
+  const totals = new Set(parts.labelled.map((t) => t.minor));
+  const bases = [...new Set(parts.all.map((a) => a.minor))].filter((base) => !totals.has(base));
+  const plusVat = (minor: bigint) => bases.some((base) => base < minor && parts.rates.some((rate) => near(base * (BASIS + BigInt(rate)), minor * BASIS, ROUNDING * BASIS)));
+  const labelledRows = rows.filter((row) => parts.kinds.isTotal(row) || (hasKeyword(row.folded, BALANCE) && !parts.kinds.neverTotal(row) && !parts.kinds.isPayment(row)));
   for (const row of labelledRows) {
     for (const minor of moneyIn(row.text, exponent, parts.integers)) {
       if (minor === best.minor || skip(minor)) continue;
-      if (confirmation(minor, parts, exponent) !== 'guided' && !plusVat(minor)) continue;
+      if (confirmation(minor, parts) !== 'guided' && !plusVat(minor)) continue;
       const conf = Math.min(amountConf(row, minor, exponent, parts.integers), labelConf(row, hasKeyword(row.folded, BALANCE) ? BALANCE : TOTAL));
       return { minor, rule: RULE_LABELLED_CONFIRMED, conf, row };
     }
@@ -291,7 +332,7 @@ function largestReadings(rows: readonly Row[], parts: Parts): { minor: bigint; r
   if (minor === null) return null;
   const readings = parts.all.filter((a) => a.minor === minor);
   // MUT-514: nor when it is printed as a tip or an instalment (three equal parts are not a total printed three times).
-  if (readings.some((a) => isPayment(a.row) || neverTotal(a.row))) return null;
+  if (readings.some((a) => parts.kinds.isPayment(a.row) || parts.kinds.neverTotal(a.row))) return null;
   return { minor, readings, rows: rowsPrinting(parts, minor) };
 }
 
@@ -314,8 +355,8 @@ function sumOfTwo(largest: ReturnType<typeof largestReadings>, parts: Parts): Mo
 }
 
 /** MUT-504: a statement lists a total per month; picking one would be a wrong total. */
-function isStatement(rows: readonly Row[], exponent: number | null): boolean {
-  const totals = new Set(rows.filter(isTotalRow).flatMap((row) => moneyIn(row.text, exponent, false).slice(-1)));
+function isStatement(rows: readonly Row[], parts: Parts, exponent: number | null): boolean {
+  const totals = new Set(rows.filter(parts.kinds.isTotal).flatMap((row) => moneyIn(row.text, exponent, false).slice(-1)));
   return totals.size >= STATEMENT_TOTALS;
 }
 
@@ -340,11 +381,12 @@ function firstSure(rules: ReadonlyArray<{ read: () => MoneyReading | null; bindi
   let fallback: MoneyReading | null = null;
   const bound: MoneyReading[] = [];
   const sure = (reading: MoneyReading | null): reading is MoneyReading => reading !== null && isConfident(reading.rule * reading.conf);
+  const disagrees = (reading: MoneyReading, other: MoneyReading | null) => sure(other) && !near(other.minor, reading.minor);
   for (const [i, { read, binding }] of rules.entries()) {
     const reading = read();
     if (sure(reading)) {
-      const contradicted = !bound.every((b) => near(b.minor, reading.minor)) || (!binding && rules.slice(i + 1).some((later) => !later.binding && ((other) => sure(other) && !near(other.minor, reading.minor))(later.read())));
-      return contradicted ? fallback : reading;
+      const looserDisagrees = !binding && rules.slice(i + 1).some((later) => !later.binding && disagrees(reading, later.read()));
+      return bound.every((b) => near(b.minor, reading.minor)) && !looserDisagrees ? reading : fallback;
     }
     if (reading && binding) bound.push(reading);
     fallback ??= reading;
@@ -368,9 +410,11 @@ function readVat(parts: Parts, total: MoneyReading | null, exponent: number | nu
   const printedTotal = total && total.row !== null ? total : null;
   const subtotal = parts.subtotal;
   const read = parts.vat;
+  // A tip, a delivery fee or a service charge the size of the VAT is printed on its own row: then the difference is it.
+  const printedApart = (minor: bigint) => parts.all.some((a) => a.minor === minor && !isVatRow(a.row) && vatRateOn(a.row) === null);
   if (printedTotal && subtotal && printedTotal.minor > subtotal.minor) {
     const derived = printedTotal.minor - subtotal.minor;
-    if (plausibleVat(derived, printedTotal.minor) && parts.rates.some((rate) => vatOf(derived, subtotal.minor, rate))) {
+    if (plausibleVat(derived, printedTotal.minor) && !printedApart(derived) && parts.rates.some((rate) => vatOf(derived, subtotal.minor, rate))) {
       if (read && near(read.minor, derived)) return { minor: read.minor, rule: RULE_VAT_CONFIRMED, conf: read.conf, row: read.row };
       return { minor: derived, rule: RULE_VAT_DERIVED, conf: Math.min(printedTotal.conf, subtotal.conf), row: null };
     }
@@ -399,7 +443,7 @@ function readRate(parts: Parts, vat: MoneyReading | null, total: MoneyReading | 
 export function readMoney(rows: readonly Row[], exponent: number | null, knownRates: readonly number[] = []): MoneyFields {
   const parts = partsOf(rows, exponent, knownRates);
   const largest = largestReadings(rows, parts);
-  const total = isStatement(rows, exponent)
+  const total = isStatement(rows, parts, exponent)
     ? null
     : firstSure([
         { read: () => labelledTotal(rows, parts, exponent), binding: true },

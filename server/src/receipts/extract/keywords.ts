@@ -62,6 +62,8 @@ export const CHANGE = keywords('עודף', 'الباقي', 'المتبقي', 'ا
 
 /** MUT-514: a tip or service charge, a part added on top: never the total. */
 export const TIP = keywords('תשר', 'טיפ', 'service charge', 'tip', 'gratuity', 'بقشيش', 'خدمة');
+/** A total that says the tip is not in it ("Total before tip", "tip not included"). */
+export const TIP_APART = keywords('before tip', 'excluding tip', 'not included', 'לפני תשר', 'ללא תשר', 'לא כולל');
 
 /**
  * MUT-514 (OV-7): one instalment of a card payment, never the total: a labelled part, or a count above one
@@ -69,10 +71,12 @@ export const TIP = keywords('תשר', 'טיפ', 'service charge', 'tip', 'gratui
  */
 const INSTALLMENT_PART = keywords('תשלום ראשון', 'תשלום נוסף', 'installment', 'قسط');
 const INSTALLMENT_COUNT = /(?:תשלומים|installments|اقساط)\s*:?\s*(\d{1,2})(?!\d)|(?<!\d)\d{1,2}\s*מתוך\s*(\d{1,2})(?!\d)/u;
+/** "עמוד 1 מתוך 2": a page count, not a payment's. */
+const PAGE_COUNT = /(?:עמוד|דף|page|صفحة)\s*:?\s*\d{1,2}\s*(?:מתוך|of|من)\s*\d{1,2}/u;
 
 export function isInstallment(folded: string): boolean {
   if (hasKeyword(folded, INSTALLMENT_PART)) return true;
-  const count = INSTALLMENT_COUNT.exec(folded);
+  const count = INSTALLMENT_COUNT.exec(folded.replace(PAGE_COUNT, ' '));
   return count !== null && Number(count[1] ?? count[2]) > 1;
 }
 
@@ -109,16 +113,22 @@ export const COMPANY = keywords('בע"מ', 'חברת', 'ltd', 'inc', 'llc', 'gmb
 
 /**
  * MUT-514 (D6, D10): a bill-to label. The rows it heads name the customer, whose numbers are never the vendor's.
- * `السيداة` is how OCR prints `السيد/ة`.
+ * `السيداة` is how OCR prints `السيد/ة`. Not `ת.ז`: an exempt dealer (עוסק פטור) registers under their own ID.
  */
 export const CUSTOMER = keywords(
-  'לכבוד', 'לקוח', 'שם לקוח', 'עבור', 'ת.ז',
+  'לכבוד', 'לקוח', 'שם לקוח', 'עבור',
   'bill to', 'billed to', 'customer', 'sold to', 'to:',
   'السيد', 'السيدة', 'السيد/ة', 'السيداة', 'السادة', 'العميل', 'الزبون', 'رقم الهوية',
 );
 
-/** MUT-514 (R9): phrases that hold a CUSTOMER word but head no bill-to block: a copy's title, a customer number, payee details. */
-export const NOT_CUSTOMER = keywords('העתק לקוח', 'customer copy', 'מספר לקוח', "מס' לקוח", 'מס.לקוח', 'pay to', 'payable to');
+/**
+ * MUT-514 (R9): phrases that hold a CUSTOMER word but head no bill-to block: a copy's title, a customer number, payee
+ * details, the vendor's customer service, a walk-in customer.
+ */
+export const NOT_CUSTOMER = keywords(
+  'העתק לקוח', 'customer copy', 'מספר לקוח', "מס' לקוח", 'מס.לקוח', 'pay to', 'payable to',
+  'customer service', 'customer care', 'customer support', 'לקוח מזדמן', 'לקוח: מזדמן', 'שירות לקוחות',
+);
 
 /** MUT-514 (O1): a street, the start of an address line. */
 export const STREET = keywords("רח'", 'רחוב', "שד'", 'شارع', 'street', 'st.', 'road', 'rd.');

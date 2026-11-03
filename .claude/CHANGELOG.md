@@ -56,6 +56,23 @@ defaults (MUT-303). An empty field is fine.
   rescore; `--server` for a main baseline; `--compare` per-field gate (exit 1 on a lost hit); list truths; the real
   table in `summary.md`.
 
+- `npm --prefix server run receipts:reread -- --reader-below 2 [--apply]` (`src/scripts/receipts-reread.ts`; D11
+  reversed by Basel 2026-11-03): resets To-review, unapproved receipts an older server reader filled
+  (`expenseReceipts.listServerReadToReview` / `resetForReread`, one guarded UPDATE): server-read fields dropped, QR and
+  vendor-list kept, read state restarted for the sweep; dry run by default, audited `expense_receipt.reread_requested`.
+  `SERVER_READER_GENERATION` shared with the stamp. `docs/operations/before-release.md`: run it after the roll-out.
+
+### Pre-landing review (2026-11-03, specialist + adversarial)
+- A "total paid" row is the cash handed over when another total is printed, or when paid + change isn't; change
+  amounts never make a total a subtotal; an agorot-rounding match (50 minor units) is loose, never beating an exact one;
+  a balance is confirmed only from an item amount plus VAT, never from a labelled total; total − subtotal is not the VAT
+  when the difference is printed on its own row (a tip, delivery, service charge); the VAT's 20% share is of the
+  largest labelled total; a page count is no instalment; a total that says the tip is apart stays a total.
+- Buyer memory: `ת.ז` is not a bill-to label (an exempt dealer's own ID); customer-service lines and a walk-in
+  customer are not blocks; `vendorIdentifiers` are read without the learned set, so a mislearned number is unlearned;
+  after a labelled buyer phone or registration no., nothing else is offered; a block heading the receipt leaves the
+  vendor empty; the address shape counts only below the first row.
+
 ### Result
 - Real 48 (rescore of the 2026-10-29 reads, `--compare` main: 0 lost): amount 29/46 (26), date 29/47 (29), VAT 8/24
   (6), wrong and confident 4 (20): the three TD-294 fields and 3-p31's one-digit date (D7, TD-294). Synthetic: 0 wrong,
