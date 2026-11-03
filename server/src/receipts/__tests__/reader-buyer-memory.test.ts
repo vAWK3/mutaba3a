@@ -58,7 +58,7 @@ describe('receipt reader buyer memory (MUT-514)', () => {
     const r = await h.get(id);
     expect(r.readIdentifiers).toEqual({ buyer: expect.arrayContaining([REG_VALID_COMPANY, '0529876543']), vendor: [REG_VALID_DEALER] });
     expect(r.suggested?.readerVersion).toBe(serverReaderVersion('rapid-tess'));
-    expect(serverReaderVersion('rapid-tess')).toBe('server-ocr-rapid-tess-2');
+    expect(serverReaderVersion('rapid-tess')).toBe('server-ocr-rapid-tess-3');
     expect(r.suggested?.registrationNo?.value).toBe(REG_VALID_DEALER);
     expect(r.suggested?.phone).toBeUndefined();
   });

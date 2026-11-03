@@ -31,7 +31,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OMP_THREAD_LIMIT=1
 
 # Tesseract 5 for the binary only: its packaged language data is removed, and TESSDATA_PREFIX points at our pinned
-# ara, heb and eng (models/tessdata/<variant>), so the image holds exactly those three.
+# ara, heb and eng (models/tessdata/<variant>), so the image holds exactly those three, plus osd for orientation
+# (MUT-540).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tesseract-ocr \
  && rm -f /usr/share/tesseract-ocr/*/tessdata/*.traineddata \

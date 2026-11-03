@@ -17,6 +17,17 @@ const SUPPORTED: ReadonlyArray<[Currency, readonly string[], KeywordSet]> = [
 const UNSUPPORTED: KeywordSet = wordSet('sar', 'aed', 'qar', 'bhd', 'omr', 'kwd', 'gbp', 'egp', 'ر.س', 'ريال', 'درهم', 'جنيه');
 const UNSUPPORTED_SYMBOLS = ['£', 'د.إ'];
 
+/** MUT-540 (E3): every currency mark above, symbol or word, as one pattern over folded text. */
+const MARKS = new RegExp(
+  SUPPORTED.flatMap(([, symbols, words]) => [...symbols.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), ...words.map((w) => w.source)]).join('|'),
+  'gu',
+);
+
+/** MUT-540 (E3): a row's folded text with the currency marks it names taken out (₪, ש"ח, NIS…). */
+export function withoutCurrencyMarks(folded: string): string {
+  return folded.replace(MARKS, ' ');
+}
+
 export function currenciesOn(row: Row): { supported: Currency[]; unsupported: boolean } {
   const supported = SUPPORTED.filter(([, symbols, words]) => symbols.some((s) => row.text.includes(s)) || hasKeyword(row.folded, words)).map(([code]) => code);
   // `$` inside "US$" or a dollar sign next to a dinar marker still counts once each; a row naming two is ambiguous.

@@ -20,6 +20,12 @@ WHOLE_FRAME_SHARE = 0.97
 MIN_SKEW_DEG, MAX_SKEW_DEG = 0.5, 15.0
 #: Share of near-black or near-white pixels from which an image counts as already binary.
 BINARY_SHARE = 0.97
+#: MUT-540: a quad edge whose two corners both lie this close to the same border of the frame (a share of the frame's
+#: longer side) is the frame's edge: the receipt runs off the photo there.
+FRAME_EDGE_SHARE = 0.01
+#: MUT-540: a frame edge whose opposite edge leans more than this (degrees) away from it: that one is a torn slant, not
+#: the paper's outline, and warping to the pair would tilt level text.
+MAX_EDGE_DISAGREE_DEG = 6.0
 
 
 def to_gray(rgb: np.ndarray) -> np.ndarray:
@@ -51,11 +57,42 @@ def find_receipt_quad(gray: np.ndarray) -> np.ndarray | None:
     return _order(approx.reshape(4, 2).astype(np.float32) / scale)
 
 
+def _edge_deg(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.degrees(np.arctan2(b[1] - a[1], b[0] - a[0])))
+
+
+def slants_off_frame(quad: np.ndarray, shape: tuple[int, ...]) -> bool:
+    """MUT-540: whether the receipt runs off the photo at one edge (the quad's edge is the frame's) while the opposite
+    edge leans more than MAX_EDGE_DISAGREE_DEG from it: the sideways Maxi photo, cut by the frame at the bottom and torn
+    on a 9-degree slant at the top. Warping to that pair tilts level text. A receipt cut by the frame at both ends, or
+    a sheet inside the frame, keystoned or not, is warped as before."""
+    h, w = shape[:2]
+    margin = FRAME_EDGE_SHARE * max(h, w) + 2
+    on_border = (
+        lambda p: p[0] <= margin,
+        lambda p: p[0] >= w - 1 - margin,
+        lambda p: p[1] <= margin,
+        lambda p: p[1] >= h - 1 - margin,
+    )
+    tl, tr, br, bl = quad
+    # Each edge with its opposite, both drawn in the same direction.
+    pairs = (((tl, tr), (bl, br)), ((bl, br), (tl, tr)), ((tl, bl), (tr, br)), ((tr, br), (tl, bl)))
+    return any(
+        any(near(a) and near(b) for near in on_border) and abs(_edge_deg(a, b) - _edge_deg(c, d)) > MAX_EDGE_DISAGREE_DEG
+        for (a, b), (c, d) in pairs
+    )
+
+
 def perspective(gray: np.ndarray) -> np.ndarray:
     quad = find_receipt_quad(gray)
     h, w = gray.shape[:2]
     if quad is None or cv2.contourArea(quad) > WHOLE_FRAME_SHARE * h * w:
         return gray
+    if slants_off_frame(quad, gray.shape):
+        # MUT-540: not the paper's outline: cut the paper out upright, without the warp that would tilt its text.
+        x, y, bw, bh = cv2.boundingRect(quad.astype(np.int32))
+        x, y = max(0, x), max(0, y)
+        return gray[y : min(h, y + bh), x : min(w, x + bw)]
     tl, tr, br, bl = quad
     width = int(max(np.linalg.norm(tr - tl), np.linalg.norm(br - bl)))
     height = int(max(np.linalg.norm(bl - tl), np.linalg.norm(br - tr)))
@@ -117,6 +154,7 @@ def fit_size(gray: np.ndarray, upscale_below: int = config.UPSCALE_BELOW_SHORT_S
         factor = config.MAX_WORK_SIDE / max(h, w)
         return cv2.resize(gray, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
     return gray
+
 
 
 def prepare(rgb: np.ndarray, hint: str, flat: bool = False, upscale_below: int = config.UPSCALE_BELOW_SHORT_SIDE) -> np.ndarray:

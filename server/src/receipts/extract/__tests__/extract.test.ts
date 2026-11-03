@@ -673,3 +673,152 @@ describe('MUT-514: no confidently wrong fields', () => {
     });
   });
 });
+
+describe('MUT-540: card slips, comma decimals and labels above their amount', () => {
+  const total = (rows: Parameters<typeof receipt>[0]) => value(read(receipt(rows)), 'totalMinor');
+  const texts = (rows: Parameters<typeof receipt>[0]) => orderedRows(receipt(rows)).map((r) => r.text);
+
+  describe('E1 (D11): a comma before two digits is a decimal point, on labelled and amount-only rows only', () => {
+    it('reads "184,36" under a card-slip label, and a comma decimal on a total row', () => {
+      expect(total(['תחנת דלק', '03/02/26 09:14', 'סכום עסקה', '184,36'])).toBe('18436');
+      expect(total(['Shop', 'סה"כ לתשלום 63,25 ש"ח'])).toBe('6325');
+    });
+
+    it('never turns a fuel quantity or a price per litre into the total, even on a "סה"כ" or "המחיר" row (review)', () => {
+      expect(total(['תחנת דלק', 'המחיר לליטר 7,31', 'סכום עסקה 184,36'])).toBe('18436');
+      expect(total(['תחנת דלק', 'ליטרים: 35,12', 'המחיר לליטר: 7,31', 'סכום עסקה :', '184,36'])).toBe('18436');
+      expect(total(['תחנת דלק', 'סה"כ ליטרים 35,12', 'סכום עסקה 184,36'])).toBe('18436');
+      expect(total(['תחנת דלק', 'סה"כ ליטרים 35,12'])).toBeUndefined();
+    });
+
+    it('leaves a thousands group alone, and a comma on a litres or price-per-litre row stays a comma', () => {
+      expect(total(['Shop', 'Total 1,234.00'])).toBe('123400');
+      expect(texts(['תחנת דלק', 'כמות: 35,12 ליטרים', '7,31 ש"ח לליטר', 'סכום עסקה', '184,36'])).toEqual(['תחנת דלק', 'כמות: 35,12 ליטרים', '7,31 ש"ח לליטר', 'סכום עסקה 184.36']);
+    });
+  });
+
+  describe('E2: a thermal yod read as a geresh inside a word', () => {
+    it("folds ע'סקה to עיסקה, and the plene card-slip spellings are card slips", () => {
+      expect(foldForMatch("סכום ע'סקה")).toBe('סכום עיסקה');
+      expect(total(['תחנת דלק', '03/02/26 09:14', "סכום ע'סקה :", '184,36'])).toBe('18436');
+      expect(total(['תחנת דלק', 'סכום עיסקה :', '227.90'])).toBe('22790');
+      expect(total(['בית מרקחת', 'סכום העסקה', '63.25'])).toBe('6325');
+    });
+
+    it("keeps the geresh of an abbreviation OCR glued to the next word (מס'עוסק, טל'נייד), so its labels still match", () => {
+      for (const glued of ["מס'עוסק מורשה", "טל'נייד", "רח'הרצל", "יח'2"]) expect(foldForMatch(glued)).toBe(glued);
+      expect(value(read(receipt(['ACME', `מס'עוסק מורשה ${REG_VALID_DEALER}`, 'סה"כ 10.00'])), 'registrationNo')).toBe(REG_VALID_DEALER);
+    });
+
+    it("keeps a geresh after the loanword and transliteration letters (ג'ינס, צ'יפס, ח'ליל, ד'אוד) and at a word's end", () => {
+      for (const word of ["ג'ינס", "צ'יפס", "ז'קט", "ת'ומס", "ח'ליל", "ד'אוד", "ט'אהר", "ר'אמי", "מס' שובר"]) expect(foldForMatch(word)).toBe(word);
+    });
+  });
+
+  describe('a corporation number (תאגיד מס., an amuta or company) is a registration number', () => {
+    it("reads it, also with the yod after ג read as a geresh", () => {
+      expect(value(read(receipt(['בית מרקחת', `תאגיד מס. ${REG_VALID_COMPANY}`, 'לתשלום 63.25'])), 'registrationNo')).toBe(REG_VALID_COMPANY);
+      expect(value(read(receipt(['בית מרקחת', `תאג'ד מס. ${REG_VALID_COMPANY}`, 'לתשלום 63.25'])), 'registrationNo')).toBe(REG_VALID_COMPANY);
+    });
+
+    it('a water corporation\'s name ("תאגיד המים") is no registration label (review)', () => {
+      expect(value(read(receipt(['מי אביבים תאגיד המים', 'חשבון תקופתי', 'סה"כ לתשלום 120.00'])), 'vendorName')).toBe('מי אביבים תאגיד המים');
+      expect(value(read(receipt(['תאגיד מי רעננה 09-7654321', 'סה"כ 10.00'])), 'registrationNo')).toBeUndefined();
+      expect(value(read(receipt(['תאגיד המים והביוב', `מספר צרכן ${REG_VALID_DEALER}`, 'סה"כ 10.00'])), 'registrationNo')).toBeUndefined();
+    });
+  });
+
+  describe('E3 (D12): a label row joins the row under it when that row holds exactly one amount', () => {
+    it('joins a slip label and its amount; not a label with its own amount, an item row, a far amount or a VAT table', () => {
+      expect(texts(['סכום עסקה :', '184.36'])).toEqual(['סכום עסקה : 184.36']);
+      // OCR specks around a thermal label: a bare digit beside it is no amount of its own, a stray comma before the amount none either.
+      expect(texts(["5 סכום ע'סקה + -", ', 184,36'])).toEqual(["5 סכום ע'סקה + - , 184.36"]);
+      expect(total(['תחנת דלק', "5 סכום ע'סקה + -", ', 184,36'])).toBe('18436');
+      expect(texts(['Total 50.00', '12.00'])).toEqual(['Total 50.00', '12.00']);
+      expect(texts(['סה"כ', 'Coffee 12.00'])).toEqual(['סה"כ', 'Coffee 12.00']);
+      expect(texts(['סה"כ', '', '', '184.36'])).toEqual(['סה"כ', '184.36']);
+      expect(texts(['מע"מ לפני מע"מ סה"כ', '18% 156.24 28.12 184.36'])).toEqual(['מע"מ לפני מע"מ סה"כ', '18% 156.24 28.12 184.36']);
+    });
+
+    it('joins only a total, card-slip, subtotal or VAT label: an item name above its price stays apart', () => {
+      expect(texts(['Coffee', '12.00'])).toEqual(['Coffee', '12.00']);
+    });
+
+    it('never joins when the amounts ride higher than their labels (a tilted or curled photo): each would take the next one (review)', () => {
+      // Each amount box sits 16 px above its label box: too little overlap to share a row, so amount rows interleave.
+      const rows = [
+        { text: 'מכולת השכונה', x: 150, y: 0 },
+        { text: 'סה"כ לפני מע"מ', x: 250, y: 30 }, { text: '100.00', x: 10, y: 14 },
+        { text: 'מע"מ 18%', x: 250, y: 60 }, { text: '18.00', x: 10, y: 44 },
+        { text: 'סה"כ לתשלום', x: 250, y: 90 }, { text: '118.00', x: 10, y: 74 },
+        { text: 'מזומן', x: 250, y: 120 }, { text: '200.00', x: 10, y: 104 },
+        { text: 'עודף', x: 250, y: 150 }, { text: '82.00', x: 10, y: 134 },
+      ];
+      const lines = rows.map(({ text, x, y }) => ({ text, conf: 0.95, box: [x, 20 + y, x + 12 * text.length, 44 + y] as [number, number, number, number] }));
+      expect(value(read(lines), 'totalMinor')).not.toBe('20000');
+    });
+
+    it('joins two label-over-amount pairs in a row, and a tall label box over its amount (bench: a thermal slip)', () => {
+      expect(texts(['סה"כ :', '100.00', 'מע"מ :', '18.00'])).toEqual(['סה"כ : 100.00', 'מע"מ : 18.00']);
+      // The label box 71 px tall, its amount's box starting 48 px under its top (the two overlap too little to share a row).
+      const lines = [
+        { text: "5 סכום ע'סקה + -", conf: 0.75, box: [298, 2670, 730, 2741] as [number, number, number, number] },
+        { text: '184,36', conf: 0.96, box: [476, 2718, 625, 2772] as [number, number, number, number] },
+      ];
+      expect(orderedRows(lines).map((r) => r.text)).toEqual(["5 סכום ע'סקה + - 184.36"]);
+    });
+
+    it('never joins under a label row that already has an amount, whole or garbled (review)', () => {
+      expect(texts(['סה"כ לתשלום 250', '38.14'])).toEqual(['סה"כ לתשלום 250', '38.14']);
+      expect(texts(['סכום עסקה : 3OO.OO', '100.00'])).toEqual(['סכום עסקה : 3OO.OO', '100.00']);
+      expect(texts(['סה"כ 1,250', '3.50'])).toEqual(['סה"כ 1,250', '3.50']);
+    });
+  });
+
+  describe('E4 (D6/D8): a card slip printed once is the total when nothing on the receipt says the payment was split', () => {
+    it('takes the lone slip', () => {
+      expect(total(['תחנת דלק', '03/02/26 09:14', 'סכום עסקה 184.36'])).toBe('18436');
+    });
+
+    it('never takes it beside cash, change, a second slip, a voucher or gift card; another labelled total wins', () => {
+      expect(total(['תחנת דלק', 'סכום עסקה 120.40', 'מזומן 100.00'])).not.toBe('12040');
+      expect(total(['תחנת דלק', 'סכום עסקה 120.40', 'עודף 4.60'])).not.toBe('12040');
+      expect(total(['Store', 'סכום עסקה 120.40', 'סכום עסקה 100.00'])).not.toBe('12040');
+      expect(total(['Store', 'סכום עסקה 120.40', 'תו קנייה 100.00'])).not.toBe('12040');
+      expect(total(['Store', 'סכום עסקה 120.40', 'Gift card 100.00'])).not.toBe('12040');
+      expect(total(['Store', 'סכום עסקה 120.40', 'סה"כ לתשלום 184.36'])).toBe('18436');
+    });
+
+    it("is as sure as the slip label's box and the amount's box, not an unsure speck beside them", () => {
+      expect(total(['תחנת דלק', [{ text: '184.36', x: 10, conf: 0.95 }, { text: '~', x: 150, conf: 0.3 }, { text: 'סכום עסקה', x: 250, conf: 0.9 }]])).toBe('18436');
+    });
+
+    it("a slip number (מס' שובר) is not a voucher payment", () => {
+      expect(total(['תחנת דלק', "מס' שובר : 12345678", 'סכום עסקה 184.36'])).toBe('18436');
+    });
+
+    it('never takes it beside any other tender: a voucher, credit note, cheque, Bit, points, a second card (review)', () => {
+      for (const tender of ['תו קניה 100.00', 'שובר זיכוי 100.00', "צ'ק 100.00", 'המחאה 100.00', 'ביט 100.00', 'מימוש נקודות 100.00', 'BuyMe 100.00', 'אשראי 100.00', 'شيك 100.00']) {
+        expect(total(['סופר', 'סכום עסקה 120.40', tender]), tender).not.toBe('12040');
+      }
+    });
+
+    it("a tender line equal to the slip is the same payment, not a split; a card's credit type has no amount", () => {
+      expect(total(['סופר', 'אשראי: רגיל', 'סכום עסקה 120.40', 'אשראי 120.40'])).toBe('12040');
+    });
+
+    it('never takes a deposit or a part payment that leaves a balance (review)', () => {
+      expect(total(['מוסך', 'סכום עסקה 500.00', 'יתרה 1500.00'])).not.toBe('50000');
+      expect(total(['מוסך', 'מקדמה', 'סכום עסקה 500.00'])).not.toBe('50000');
+    });
+
+    it('never takes a refund or cancellation slip (review)', () => {
+      for (const kind of ['עסקת זיכוי', 'ביטול עסקה', 'החזר כספי', 'Refund']) expect(total(['חנות בגדים', kind, 'סכום עסקה 249.90']), kind).toBeUndefined();
+    });
+
+    it('can be switched off, so the bench can measure the rule alone', () => {
+      const s = extractReceipt({ lines: receipt(['תחנת דלק', 'סכום עסקה 184.36']) }, { readerVersion: READER, loneCardSlip: false });
+      expect(value(s, 'totalMinor')).toBeUndefined();
+    });
+  });
+});

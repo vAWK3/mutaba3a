@@ -10,7 +10,7 @@ import re
 
 import pytest
 
-from conftest import fixture_bytes, needs_engines, post
+from conftest import FIXTURES, fixture_bytes, needs_engines, post
 
 pytestmark = needs_engines
 
@@ -70,6 +70,36 @@ def test_scanned_hint_skips_the_perspective_step_and_still_reads(client):
     res = post(client, *fixture_bytes("syn-025-en-photo.jpg"), hint="scanned")
     assert res.status_code == 200
     assert any("52.470" in line["text"] for line in res.json()["lines"])
+
+
+def turned(name: str, deg: int) -> bytes:
+    """MUT-540: the fixture photographed lying on its side or upside down, with no EXIF turn to say so."""
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.open(FIXTURES / name).convert("RGB").rotate(deg, expand=True).save(out, "JPEG", quality=92)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize("deg", [90, 270])
+@pytest.mark.parametrize("name", ["syn-001-ar-photo.jpg", "syn-009-he-photo.jpg", "syn-025-en-photo.jpg"])
+def test_a_photo_lying_on_its_side_is_turned_upright_and_read(client, name, deg):
+    total, date = EXPECTED[name]
+    res = post(client, turned(name, deg), "image/jpeg", hint="photo")
+    assert res.status_code == 200
+    texts = [line["text"] for line in res.json()["lines"]]
+    assert any(total in t for t in texts), f"total {total} not read"
+    assert any(re.search(date, t) for t in texts), "date not read"
+
+
+def test_an_upright_photo_never_asks_for_its_orientation(client, monkeypatch):
+    from app.engines import TesseractReader
+
+    monkeypatch.setattr(TesseractReader, "osd", lambda self, gray: pytest.fail("OSD ran on an upright, well-read photo"))
+    for name in ("syn-001-ar-photo.jpg", "syn-009-he-photo.jpg", "syn-025-en-photo.jpg"):
+        assert post(client, *fixture_bytes(name), hint="photo").status_code == 200
 
 
 def test_healthz(client):

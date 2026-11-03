@@ -37,9 +37,35 @@ export const SUBTOTAL = keywords(
 
 /**
  * MUT-504: the card slip's amount on an Israeli till receipt. It is what was paid, but a split payment prints two, so
- * it counts as the total only when the receipt agrees (`total.ts`).
+ * it counts as the total only when the receipt agrees, or when nothing on it says the payment was split (MUT-540,
+ * `total.ts`).
  */
-export const CARD_SLIP = keywords('סכום עסקה', 'סכום חיוב');
+export const CARD_SLIP = keywords('סכום עסקה', 'סכום חיוב', /* MUT-540: as Paz and pharmacy slips spell it */ 'סכום עיסקה', 'סכום העסקה', 'סכום העיסקה');
+
+/**
+ * MUT-540 (D8): another way of paying part of the bill (a voucher or gift card, a credit note, a cheque, Bit or
+ * PayBox, points, another card): beside it, a card slip may be only the rest. Counts only on a row with an amount
+ * other than the slip's (a slip's own "מס' שובר" and "אשראי: רגיל" carry none; "אשראי 120.40" beside a 120.40 slip
+ * is the same payment).
+ */
+export const OTHER_TENDER = keywords(
+  'תו קנייה', 'תו קניה', 'תווי קנייה', 'תווי קניה', 'שובר מתנה', 'שובר זיכוי', 'כרטיס מתנה', 'גיפט קארד', 'buyme',
+  "צ'ק", 'צק', 'שיק', 'המחאה', 'ביט', 'פייבוקס', 'bit', 'paybox', 'נקודות', 'אשראי',
+  'gift card', 'voucher', 'cheque', 'points', 'credit',
+  'قسيمة', 'بطاقة هدية', 'شيك', 'آجل', 'نقاط',
+);
+
+/** MUT-540 (review): a deposit or advance: its card slip pays part of a bill, never the whole of it. */
+export const DEPOSIT = keywords('מקדמה', 'מקדמות', 'דמי רצינות', 'deposit', 'advance payment', 'down payment', 'عربون', 'دفعة مقدمة', 'دفعة أولى');
+
+/** MUT-540 (review): a refund or a cancelled sale: its card slip is money back, never an expense's total. */
+export const REFUND = keywords('זיכוי', 'עסקת זיכוי', 'ביטול', 'ביטול עסקה', 'החזר', 'החזר כספי', 'refund', 'void', 'استرجاع', 'مرتجع', 'إرجاع', 'إلغاء');
+
+/**
+ * MUT-540 (review): a quantity's unit: litres, kilograms, a price per one. A row naming one carries a quantity or a
+ * unit price, never the total, even on a "סה"כ ליטרים" or "המחיר לליטר" row.
+ */
+export const UNIT = keywords('ליטר', 'ליטרים', 'לליטר', 'ק"ג', 'לק"ג', "ליח'", 'ליחידה', 'litre', 'litres', 'liter', 'liters', 'per litre', 'per liter', 'kg', 'لتر', 'لترات', 'كغ');
 
 /** MUT-504: a discount line. Its amount is never the total, and a discount makes the largest amount a pre-discount one. */
 export const DISCOUNT = keywords('הנחה', 'הנחות', 'חסכת', 'חיסכון', 'خصم', 'تخفيض', 'discount', 'savings', 'you saved');
@@ -97,6 +123,9 @@ export const REGISTRATION = keywords(
   'vat no', 'vat reg', 'reg no', 'reg. no', 'company no', 'business no', 'tax id', 'osek',
   // MUT-514: the English for עוסק מורשה.
   'authorized dealer', 'dealer no',
+  // MUT-540: a corporation's (an amuta's, a company's) number, also with its thermal yod after ג read as a geresh,
+  // which the fold keeps for loanwords (ג'ינס). Only as a number's label: "תאגיד המים" is a water company's name.
+  "מס' תאגיד", 'מספר תאגיד', 'תאגיד מס', "תאג'ד מס",
 );
 
 export const PHONE = keywords('טל', "טל'", 'טלפון', 'נייד', 'פלאפון', 'هاتف', 'تلفون', 'جوال', 'ت', 'tel', 'phone', 'mobile', 'mob');

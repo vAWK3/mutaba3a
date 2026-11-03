@@ -254,10 +254,18 @@ def real_items(folder: Path) -> tuple[list[dict], bool]:
 
 
 def hint_for(item: dict) -> str | None:
-    return None if item["path"].suffix.lower() == ".pdf" else "photo"
+    """As the API sends it (reader.ts): no hint for a PDF, `scanned` for the phone's Scan (MUT-540: the production Scans
+    on the real bench), `photo` for everything else."""
+    if item["path"].suffix.lower() == ".pdf":
+        return None
+    return "scanned" if item.get("kind") == "scanned" else "photo"
 
 
 # ── extractor ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+#: MUT-540 (D8): extra flags for the extractor script, e.g. `--no-lone-slip` to measure the lone card-slip rule alone.
+EXTRACT_FLAGS: list[str] = []
 
 
 def extract(reads: list[dict], work: Path, server: Path = SERVER_DIR, buyer_memory: bool = False) -> dict[str, dict]:
@@ -265,7 +273,7 @@ def extract(reads: list[dict], work: Path, server: Path = SERVER_DIR, buyer_memo
     reads_path = work / "reads.json"
     reads_path.write_text(json.dumps(reads, ensure_ascii=False), encoding="utf-8")
     out = subprocess.run(
-        [str(server / "node_modules/.bin/tsx"), "src/scripts/receipt-bench-extract.ts", str(reads_path), *(["--buyer-memory"] if buyer_memory else [])],
+        [str(server / "node_modules/.bin/tsx"), "src/scripts/receipt-bench-extract.ts", str(reads_path), *(["--buyer-memory"] if buyer_memory else []), *EXTRACT_FLAGS],
         cwd=server,
         capture_output=True,
         check=True,
@@ -393,8 +401,11 @@ def main() -> int:
     ap.add_argument("--real-detail", action="store_true", help="write per-receipt field results into the real folder (never into --out)")
     ap.add_argument("--rescore", type=Path, help="an earlier run's output folder: re-run only the extractor over its reads.json")
     ap.add_argument("--server", type=Path, default=SERVER_DIR, help="the server/ folder whose extractor runs (a main checkout's, for a baseline)")
+    ap.add_argument("--no-lone-slip", action="store_true", help="run the extractor without MUT-540's lone card-slip rule (E4), to measure it alone")
     ap.add_argument("--compare", type=Path, help="an earlier run's output folder: list every field right there and not now; exit 1 if any (MUT-514 D8)")
     args = ap.parse_args()
+    if args.no_lone_slip:
+        EXTRACT_FLAGS.append("--no-lone-slip")
     if args.rescore:
         return rescore(args)
 

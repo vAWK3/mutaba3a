@@ -16,6 +16,7 @@ into `tests/fixtures/bidi_reference.json` outside this environment.
 | PP-OCRv5 mobile text detection, `ch_PP-OCRv5_det_mobile.onnx` (5.0 MB) | Apache-2.0 | PaddleOCR (PaddlePaddle), ONNX conversion by RapidAI/RapidOCR v3.10.0 (modelscope.cn) |
 | PP-OCRv5 mobile Arabic recognition, `arabic_PP-OCRv5_rec_mobile.onnx` (8.0 MB; reads Arabic, Latin, digits) | Apache-2.0 | as above |
 | tessdata_fast 4.1.0: `ara`, `heb`, `eng` (6.2 MB, the default) | Apache-2.0 | github.com/tesseract-ocr/tessdata_fast |
+| tessdata_fast 4.1.0: `osd`, orientation and script detection (10.6 MB, in each variant's folder; MUT-540) | Apache-2.0 | github.com/tesseract-ocr/tessdata_fast |
 | tessdata_best 4.1.0: `ara`, `heb`, `eng` (30 MB, only with `TESSDATA_VARIANT=best`) | Apache-2.0 | github.com/tesseract-ocr/tessdata_best |
 | Tesseract 5 (Debian `tesseract-ocr`: the binary and libtesseract; its own language data is removed) | Apache-2.0 | github.com/tesseract-ocr/tesseract |
 | Leptonica (pulled in by tesseract-ocr) | BSD-2-Clause-style (Leptonica licence) | leptonica.org |

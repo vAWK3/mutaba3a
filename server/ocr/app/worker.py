@@ -46,9 +46,9 @@ def _serve(conn, settings: Settings, factory: str) -> None:  # runs in the child
             msg = conn.recv()
         except EOFError:
             return
-        _, body, content_type, hint = msg
+        _, body, content_type, hint, time_left = msg
         try:
-            conn.send(("ok", reader.read(body, content_type, hint)))
+            conn.send(("ok", reader.read(body, content_type, hint, time_left=time_left)))
         except Refusal as refusal:
             conn.send(("refused", refusal.code))
         except Exception as exc:  # noqa: BLE001 - the type only; its message may quote the file
@@ -111,7 +111,8 @@ class ProcessWorker:
                 raise Refusal("timeout")
             assert self._conn is not None
             try:
-                self._conn.send(("read", body, content_type, hint))
+                # MUT-540 (D10): the reader learns the time left, so an orientation retry never runs into the deadline.
+                self._conn.send(("read", body, content_type, hint, max(0.0, deadline - time.monotonic())))
                 remaining = deadline - time.monotonic()
                 if not self._conn.poll(max(0.0, remaining)):
                     log.warning("read timed out; restarting the worker", extra={"stats": {"timeoutS": round(timeout, 2)}})
@@ -174,7 +175,7 @@ class InlineWorker:
 
         def work() -> None:
             try:
-                result.update(self._reader.read(body, content_type, hint))
+                result.update(self._reader.read(body, content_type, hint, time_left=timeout))
             except BaseException as exc:  # noqa: BLE001
                 error.append(exc)
 

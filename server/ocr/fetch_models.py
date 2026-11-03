@@ -3,7 +3,7 @@
 Build time and local setup only: the Dockerfile runs it while building the image, so the running service never
 downloads anything (AC4). The app itself never imports this file.
 
-    python fetch_models.py                 # RapidOCR models + tessdata fast
+    python fetch_models.py                 # RapidOCR models + tessdata fast (+ osd, MUT-540)
     python fetch_models.py --tessdata best # RapidOCR models + tessdata best
     python fetch_models.py --tessdata all  # both tessdata variants (the benchmark compares them)
 """
@@ -40,11 +40,17 @@ TESS_SHA = {
 }
 
 
+#: MUT-540: Tesseract's orientation and script model (`--psm 0`), the tessdata_fast 4.1.0 file, in every variant's folder
+#: (Tesseract reads it from TESSDATA_PREFIX, which is the variant's folder).
+OSD = (TESSDATA.format(variant="fast", lang="osd"), "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff")
+
+
 def files(variants: list[str]) -> list[tuple[str, str, str]]:
     out = list(COMMON)
     for variant in variants:
         for lang, sha in TESS_SHA[variant].items():
             out.append((f"tessdata/{variant}/{lang}.traineddata", TESSDATA.format(variant=variant, lang=lang), sha))
+        out.append((f"tessdata/{variant}/osd.traineddata", *OSD))
     return out
 
 

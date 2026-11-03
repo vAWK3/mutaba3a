@@ -4165,6 +4165,17 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Benchmark | `server/ocr/bench/run.py` (manual) | AC1 per language on the synthetic set, AC6 warm p95 and cold start; `.claude/designs/mut-441-bench.md` |
 | Browser | `qa/specs/portal-selfservice/receipts.spec.ts` `@portal-selfservice.receipts.server-reading` | on the live dev API with the real sidecar: upload a photo, the card says "Reading…", the review page says "Reading the receipt…", then 52.470 JOD and 2026-06-25 fill in, marked from the receipt |
 
+## MUT-540 — sideways photos, card slips under their label, amounts one engine drops (ADR-244)
+| Level | Where | What it proves |
+|---|---|---|
+| Unit (pytest) | `server/ocr/tests/test_orientation.py` | the score and the triggers (few sure characters, tall boxes, specks ignored); the turn undoes OSD's counter-clockwise report (gray and RGB); OSD failure or a non-quarter turn keeps the first read; D9's keep rule (strict gain, 20 characters, sideways-vs-upright 0.8×); one OSD call and one re-read; the deadline reserve with pages still to read; a failing turned read keeps the first; `OCR_ORIENTATION=0` |
+| Golden (pytest, engines) | `server/ocr/tests/test_golden.py` | syn-001/009/025 (ar, he, en) turned 90° and 270° with no EXIF read their total and date; an upright photo never calls OSD |
+| Unit (pytest) | `server/ocr/tests/test_units.py` "MUT-540" | the frame-slant rule (a receipt torn on a slant and cut by the frame is cut out, not warped; cut at both ends, keystoned, or turned inside the frame: warped); the Arabic dropped amount kept, never twice (also from a row an earlier line claimed); Hebrew lettered boxes: whole-word dates and amounts only, never glued, never claiming a line (p16's date), a sure Tesseract digit word stays; settings defaults and env |
+| Unit (vitest) | `server/src/receipts/extract/__tests__/extract.test.ts` "MUT-540" | E1 on labelled and amount-only rows, never litres or price-per-litre rows, thousands kept; E2 the yod fold and its exceptions (loanwords, Arabic names, glued abbreviations); E3 the join and every refusal (own amount whole/decimal/O-garbled, item row, far row, VAT table, riding-high amounts, two pairs in a row, a tall label box); E4 the lone slip and every split sign (cash, change, second slip, voucher, credit note, cheque, Bit, points, another card, Arabic cheque, balance, deposit, refund, cancel), a tender equal to the slip, the switch; `מס' תאגיד` labels and `תאגיד המים` not |
+| Unit (vitest) | `reader-buyer-memory.test.ts`, `receipts-reread.test.ts` | the stamp `-3`; `--reader-below 4` refused |
+| Licences | `check_licenses.py` (AC7 test) | the osd row |
+| Benchmark | `server/ocr/bench/run.py --real-detail --port 8197 --compare <main>` (+ `--rescore … --no-lone-slip`, `--env OCR_ORIENTATION=0`) | the D8 gate on 50 synthetic + 54 real receipts: 0 fields lost vs main; real total 34 (32), date 34 (32), reg. no. 13 (11), wrong and confident 7 (7); synthetic as main, warm p95 1.14 s. |
+
 ## MUT-514 — no confidently wrong receipt fields (ADR-241)
 | Level | Where | What it proves |
 |---|---|---|

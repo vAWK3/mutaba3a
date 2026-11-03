@@ -6,7 +6,7 @@ import type { OcrLine } from '../receipts/extract/types.js';
 /**
  * MUT-441 benchmark (server/ocr/bench/run.py): runs the API's real extractor over the sidecar's responses.
  *
- *   tsx src/scripts/receipt-bench-extract.ts <reads.json> [--buyer-memory]
+ *   tsx src/scripts/receipt-bench-extract.ts <reads.json> [--buyer-memory] [--no-lone-slip]
  *
  * Input: [{ id, result: { engine, lines, pdfText? }, receivedOn? }]. Output (stdout): [{ id, suggestion }], the same
  * ReceiptSuggestion the read job would merge. MUT-514: `receivedOn` is passed as the upload day, and with
@@ -26,10 +26,12 @@ if (!path) {
   process.exit(2);
 }
 const buyerMemory = process.argv.includes('--buyer-memory');
+/** MUT-540 (D8): without the lone card-slip rule, so the benchmark can measure it alone. */
+const loneCardSlip = !process.argv.includes('--no-lone-slip');
 const reads = JSON.parse(readFileSync(path, 'utf8')) as BenchRead[];
 const earlier: ReadIdentifiers[] = [];
 const out = reads.map(({ id, result, receivedOn }) => {
-  const reading = readReceipt({ lines: result.lines ?? [], pdfText: result.pdfText ?? null }, { readerVersion: `bench-${result.engine}`, receivedOn, buyerIds: buyerMemory ? learnedBuyerIds(earlier) : [] });
+  const reading = readReceipt({ lines: result.lines ?? [], pdfText: result.pdfText ?? null }, { readerVersion: `bench-${result.engine}`, receivedOn, buyerIds: buyerMemory ? learnedBuyerIds(earlier) : [], loneCardSlip });
   earlier.push({ buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers });
   return { id, suggestion: reading.suggestion };
 });
