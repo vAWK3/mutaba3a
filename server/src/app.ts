@@ -313,6 +313,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     c.header('X-Request-Id', c.get('requestId'));
     c.header('Cache-Control', 'no-store');
     c.header('Content-Security-Policy', PORTAL_CSP);
+    // Web release standard (MUT-551): the portal and API host stays out of search indexes (WO-3), and the basic
+    // transport and content headers (WX-4). HTTPS only in production, so HSTS is a year; this host only.
+    c.header('X-Robots-Tag', 'noindex');
+    c.header('Strict-Transport-Security', 'max-age=31536000');
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     const started = Date.now();
     await next();
     deps.logger.info(

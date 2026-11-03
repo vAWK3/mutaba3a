@@ -39,3 +39,14 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Web release standard (MUT-551) WX-4: the basic security headers on every page of the website. No CSP yet (the
+# landing loads PostHog, Sentry and Turnstile; a report-only CSP first is its own ticket), and never
+# Cross-Origin-Opener-Policy (MUT-291, netlify-no-coop.test.ts). Netlify adds HSTS itself.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
