@@ -53,6 +53,9 @@ the plan and copy on 2026-11-02 (`.claude/designs/mut-533-534-card-failed-comeba
 ### Changed
 - The mirror keeps `endedAt` (also in `keepStatus` and the change audit). Stripe's subscription list carries `offerId`.
 - The `OFFER_ENDED` message no longer assumes the launch offer.
+- The launch renewal notice (MUT-525) takes only launch-offer subscriptions: a come-back one also carries an offer id.
+- GET `/v1/billing` `subscription.offer` gains `kind` (`launch` | `comeback`); the drawer says "Launch offer applied"
+  only for the launch offer.
 
 ## [Unreleased] - 2026-11-02 — Our own failed-card mail, ar + en (MUT-533, ADR-242)
 
