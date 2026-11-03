@@ -269,7 +269,10 @@ export default {
 
   env: {
     // Isolated checkout so a QA run never touches your working tree or dev server.
-    worktree: { path: '.claude/worktrees/qa-release', copy: [], install: 'npm ci --prefer-offline' },
+    // The install covers server/ too: the portal builds import the server's routes (@hono/zod-openapi, hono/*,
+    // @mut/local-backend, @mut/records-export), so a fresh QA worktree without server/node_modules ran nothing
+    // (api-v0.15.0 release QA run 1, 2026-11-03).
+    worktree: { path: '.claude/worktrees/qa-release', copy: [], install: 'npm ci --prefer-offline && npm --prefix server ci --prefer-offline' },
     // ADR-236: nothing a QA run does reaches Sentry or PostHog (the apps above override this only with dummy keys)
     vars: { ...TELEMETRY_OFF },
     up: [],
