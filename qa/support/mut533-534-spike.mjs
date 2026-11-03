@@ -107,10 +107,10 @@ try {
   // (c) the portal's card flow
   const portal = await api('POST', 'billing_portal/sessions', {
     customer: declined.cus.id,
-    return_url: 'https://app.mtb3a.com/?billing=true',
+    return_url: 'https://portal.example.test/?billing=true',
     'flow_data[type]': 'payment_method_update',
     'flow_data[after_completion][type]': 'redirect',
-    'flow_data[after_completion][redirect][return_url]': 'https://app.mtb3a.com/?billing=true&portal=returned',
+    'flow_data[after_completion][redirect][return_url]': 'https://portal.example.test/?billing=true&portal=returned',
   }, { allowError: true });
   console.log('(c) portal payment_method_update session:', portal.error ? `refused: ${portal.error.message}` : 'created');
 
