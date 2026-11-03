@@ -144,6 +144,7 @@ import type {
   ApprovedReceiptFields,
   ExpenseReceiptRecord,
   ExpenseReceiptRepository,
+  ReadIdentifiers,
   ReceiptSuggestion,
   ExpenseRecord,
   ExpenseRepository,
@@ -2346,13 +2347,14 @@ export class PrismaLedgerStore implements LedgerStore {
       const end = (status: 'DONE' | 'FAILED' | 'SKIPPED', failReason: string | null) => ({ readStatus: status, readLeaseUntil: null, readFailReason: failReason });
       const live = { id, readStatus: 'PENDING' as const, deletedAt: null, filingStatus: 'TO_REVIEW' as const };
       const failReason = outcome.status === 'FAILED' ? outcome.failReason : null;
+      const identifiers = outcome.status === 'DONE' && outcome.identifiers ? { readIdentifiers: outcome.identifiers as unknown as Prisma.InputJsonValue } : {};
       const { count } =
         outcome.status === 'DONE' && outcome.suggested
           ? await this.prisma.expenseReceipt.updateMany({
               where: { ...live, version: expectedVersion },
-              data: { ...end('DONE', null), suggested: outcome.suggested as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
+              data: { ...end('DONE', null), ...identifiers, suggested: outcome.suggested as unknown as Prisma.InputJsonValue, version: { increment: 1 } },
             })
-          : await this.prisma.expenseReceipt.updateMany({ where: live, data: end(outcome.status, failReason) });
+          : await this.prisma.expenseReceipt.updateMany({ where: live, data: { ...end(outcome.status, failReason), ...identifiers } });
       const row = await this.prisma.expenseReceipt.findUnique({ where: { id } });
       if (!row) return { kind: 'not_found' };
       if (count === 1) return { kind: 'saved', record: toExpenseReceipt(row) };
@@ -2372,6 +2374,29 @@ export class PrismaLedgerStore implements LedgerStore {
           take: limit,
         })
       ).map(toExpenseReceipt),
+    listServerReadToReview: async () =>
+      (
+        await this.prisma.expenseReceipt.findMany({
+          where: { status: 'READY', deletedAt: null, filingStatus: 'TO_REVIEW', approved: { equals: Prisma.DbNull }, readStatus: { not: 'PENDING' }, suggested: { path: ['readerVersion'], string_starts_with: 'server-ocr-' } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      ).map(toExpenseReceipt),
+    resetForReread: async (id, expectedVersion, suggested, now) => {
+      const { count } = await this.prisma.expenseReceipt.updateMany({
+        where: { id, version: expectedVersion, status: 'READY', deletedAt: null, filingStatus: 'TO_REVIEW', approved: { equals: Prisma.DbNull }, readStatus: { not: 'PENDING' } },
+        data: {
+          suggested: suggested ? (suggested as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+          version: { increment: 1 },
+          readStatus: 'PENDING',
+          readRequestedAt: now,
+          readAttempts: 0,
+          readFirstClaimedAt: null,
+          readLeaseUntil: null,
+          readFailReason: null,
+        },
+      });
+      return count === 1;
+    },
     markBacklogPending: async (scope, now) => {
       const candidates = await this.prisma.expenseReceipt.findMany({
         where: { uploadedByUserId: scope.userId, ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
@@ -3266,7 +3291,12 @@ async function replaceCategories(tx: Tx, organizationId: string, preset: readonl
  */
 /** The row as the port types it: the two JSON columns carry `ReceiptSuggestion` / `ApprovedReceiptFields` (validated on the way in). */
 function toExpenseReceipt(row: Prisma.ExpenseReceiptGetPayload<object>): ExpenseReceiptRecord {
-  return { ...row, suggested: row.suggested as unknown as ReceiptSuggestion | null, approved: row.approved as unknown as ApprovedReceiptFields | null };
+  return {
+    ...row,
+    suggested: row.suggested as unknown as ReceiptSuggestion | null,
+    approved: row.approved as unknown as ApprovedReceiptFields | null,
+    readIdentifiers: row.readIdentifiers as unknown as ReadIdentifiers | null,
+  };
 }
 
 function toExpenseReceiptOrNull(row: Prisma.ExpenseReceiptGetPayload<object> | null): ExpenseReceiptRecord | null {

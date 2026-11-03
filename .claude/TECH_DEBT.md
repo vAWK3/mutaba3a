@@ -62,13 +62,13 @@
 - **Fix:** remove all six bindings when MUT-521 retires the forwarder and the project holds nothing of MTB3A's (`gcloud projects remove-iam-policy-binding malafat-production --member=user:barmajiyatltd@gmail.com --role=… --account=bsader@gmail.com`).
 
 ### TD-294: A Kvish 6 bill's registration number and a government document's vendor can be wrong
-**Status**: Open (MUT-504, 2026-10-29; ADR-229)
-- **What:** an Israeli toll bill prints its issuer's ח"פ (512475203) beside a sister company's (513927285); the reader takes the first valid one after a label, which can be the sister's. A Jordanian eVisa's vendor is read as its header ("The Hashemite Kingdom of Jordan") rather than the issuing directorate. Neither is an AC1 field, and the reader is still dark.
+**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02, ADR-241)
+- **What:** an Israeli toll bill prints its issuer's ח"פ (512475203) beside a sister company's (513927285); the reader takes the first valid one after a label, which can be the sister's. A Jordanian eVisa's vendor is read as its header ("The Hashemite Kingdom of Jordan") rather than the issuing directorate. Neither is an AC1 field. MUT-514 adds one OCR limit: a single misread digit on a clean, labelled date (bench 3-p31, an Arabic `2026/09/13` read as `08`) that nothing on the receipt can check; a 0.9 confidence floor on Arabic dates would have emptied a correct one (D7), so it is accepted here.
 - **Fix:** prefer the registration number on the same row as the vendor's name (or a "בע"מ" line), and score vendor candidates against a learned vendor (MUT-254) before suggesting one.
 
-### TD-293: The real-receipt bench is one person's eye-read of 16 receipts
-**Status**: Open (MUT-504, 2026-10-29; ADR-229)
-- **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 11 Hebrew, 4 English or JOD, 1 Arabic. AC2's 6/10 is provisional on so few.
+### TD-293: The real-receipt bench is one person's eye-read of 48 receipts
+**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02)
+- **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 48 receipts since MUT-514. MUT-514 changed it three ways, for Basel to confirm: `receivedOn` (the scan day, 2026-10-29) on every receipt; 3-p35's phone accepts either of the vendor's two printed numbers (R6); p02 gains the dealer number it prints (the same vendor's as 3-p21). Truth values may now be lists. The three production Paz receipts the plan meant to add are not in the folder yet.
 - **Fix:** Basel checks the manifest and adds receipts (more Arabic ones especially); raise AC2's bar as the set grows.
 
 ### TD-292: A summary block can name a retired currency

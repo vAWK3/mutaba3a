@@ -42,9 +42,15 @@ export function normalizeText(text: string): string {
 const VAT_MISREAD = /(^|[^\p{L}])מצ"מ(?![\p{L}])/gu;
 
 /**
+ * MUT-514: a thermal font's final י and א read as a geresh before VAT (`לפנ' מע"מ`, `לל' מע"מ`, the amount often glued
+ * on): "before VAT" and "without VAT". Only before מע"מ, where no other word is spelled so.
+ */
+const BEFORE_VAT_MISREAD = /(^|[^\p{L}])(לפנ|לל)'(?=\s*מע"מ)/gu;
+
+/**
  * For keyword matching only: lower case, Arabic diacritics out, alef variants (آ أ إ) to ا, the lam-meem order a
- * PDF text layer can produce (`املشتغل` for `المشتغل`, MUT-253 spike) put back at a word start, and VAT's common
- * misread `מצ"מ` put back as `מע"מ` (MUT-504).
+ * PDF text layer can produce (`املشتغل` for `المشتغل`, MUT-253 spike) put back at a word start, VAT's common
+ * misread `מצ"מ` put back as `מע"מ` (MUT-504), and `לפנ'`/`לל'` before it as `לפני`/`ללא` (MUT-514).
  */
 export function foldForMatch(text: string): string {
   return text
@@ -52,7 +58,8 @@ export function foldForMatch(text: string): string {
     .replace(ARABIC_DIACRITICS, '')
     .replace(/[آأإ]/g, 'ا')
     .replace(/(^|[^\p{L}])امل/gu, '$1الم')
-    .replace(VAT_MISREAD, '$1מע"מ');
+    .replace(VAT_MISREAD, '$1מע"מ')
+    .replace(BEFORE_VAT_MISREAD, (_m, start: string, word: string) => `${start}${word === 'לפנ' ? 'לפני' : 'ללא'}`);
 }
 
 /** Letters of right-to-left scripts (Hebrew, Arabic). */

@@ -117,6 +117,49 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       expect(await store.expenseReceipts.finishRead(empty.id, empty.version, { status: 'DONE' })).toMatchObject({ kind: 'saved', record: { readStatus: 'DONE', suggested: null, version: empty.version } });
     });
 
+    it('MUT-514: finishRead DONE keeps the read\'s identifiers, with or without a suggestion; the library page carries them back', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      expect((await store.expenseReceipts.getById(w.a.id, (await w.pending()).id))?.readIdentifiers ?? null).toBeNull();
+      const withFields = await w.pending();
+      const ids = { buyer: ['0529876543', '520022732'], vendor: ['123456782'] };
+      expect(await store.expenseReceipts.finishRead(withFields.id, withFields.version, { status: 'DONE', suggested: read, identifiers: ids })).toMatchObject({ kind: 'saved', record: { readIdentifiers: ids, version: withFields.version + 1 } });
+      const nothingAdded = await w.pending();
+      expect(await store.expenseReceipts.finishRead(nothingAdded.id, 999, { status: 'DONE', identifiers: { buyer: [], vendor: ['035551234'] } })).toMatchObject({ kind: 'saved', record: { readIdentifiers: { buyer: [], vendor: ['035551234'] } } });
+      const page = await store.expenseReceipts.list(w.a.id, {}, { limit: 200, cursor: null });
+      expect(page.items.find((r) => r.id === withFields.id)?.readIdentifiers).toEqual(ids);
+      // A failed read writes none.
+      const failing = await w.pending();
+      await store.expenseReceipts.finishRead(failing.id, failing.version, { status: 'FAILED', failReason: 'unreadable' });
+      expect((await store.expenseReceipts.getById(w.a.id, failing.id))?.readIdentifiers ?? null).toBeNull();
+    });
+
+    it('MUT-514: listServerReadToReview and resetForReread: a server-read To-review receipt read again from scratch, guarded', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const r = await w.pending();
+      await store.expenseReceipts.claimRead(r.id, at(10), LEASE);
+      await store.expenseReceipts.finishRead(r.id, r.version, { status: 'DONE', suggested: read });
+      const phoneLast = await w.pending();
+      await store.expenseReceipts.claimRead(phoneLast.id, at(10), LEASE);
+      await store.expenseReceipts.finishRead(phoneLast.id, phoneLast.version, { status: 'DONE', suggested: { ...read, readerVersion: 'phone-1' } });
+      const inFlight = await w.pending();
+      const ids = (await store.expenseReceipts.listServerReadToReview()).map((x) => x.id);
+      expect(ids).toContain(r.id);
+      expect(ids).not.toContain(phoneLast.id);
+      expect(ids).not.toContain(inFlight.id);
+      const done = (await store.expenseReceipts.getById(w.a.id, r.id))!;
+      expect(await store.expenseReceipts.resetForReread(r.id, done.version - 1, null, at(99))).toBe(false);
+      const kept = { readerVersion: read.readerVersion, date: { value: '2026-10-28', source: 'qr' as const, confidence: 1 } };
+      expect(await store.expenseReceipts.resetForReread(r.id, done.version, kept, at(99))).toBe(true);
+      const after = (await store.expenseReceipts.getById(w.a.id, r.id))!;
+      expect(after).toMatchObject({ suggested: kept, version: done.version + 1, readStatus: 'PENDING', readRequestedAt: at(99), readAttempts: 0, readFirstClaimedAt: null, readLeaseUntil: null });
+      // PENDING now: neither listed nor reset again.
+      expect((await store.expenseReceipts.listServerReadToReview()).map((x) => x.id)).not.toContain(r.id);
+      expect(await store.expenseReceipts.resetForReread(r.id, after.version, null, at(100))).toBe(false);
+      expect((await store.expenseReceipts.listPendingForSweep(at(100), 100)).map((x) => x.id)).toContain(r.id);
+    });
+
     it('F8: a deleted or FILED receipt becomes SKIPPED and is given no suggestion', async () => {
       const store = await makeStore();
       const w = await world(store);

@@ -47,6 +47,11 @@ record the date where the item says.
   - A rollback (`make rollback-server`) pins `receipt-ocr` to the target commit's image, or keeps the running one when that commit has none (F6). To switch reading off, set `server_ocr_enabled = false` and release: the service, queue and job are destroyed and receipts stay unread (`readStatus` untouched). `ocr_min_instances = 1` keeps one warm (about $50–70 a month) if pilots find the first read slow (R4).
   - **Rolling back to an API from before MUT-441** (one with no `/jobs/v1/receipts/read`): first switch reading off, set `server_ocr_enabled = false` and apply, or at least pause the sweep, `gcloud scheduler jobs pause receipt-read-sweep --location=europe-west1`. Otherwise the older API answers the 5-minute sweep (and any queued `receipt-reads` task) with 401/404/503 every time, Cloud Tasks retries, and the MUT-328 error alerts fire for nothing. Resume it (`gcloud scheduler jobs resume receipt-read-sweep --location=europe-west1`) once an API with MUT-441 is back.
   - Delete this item once TD-278 is measured, and record the date on MUT-441.
+- **MUT-514's re-read of the receipts the old reader filled** (reader `server-ocr-rapid-tess-1`; 6 To-review receipts on the pilot account as of 2026-11-03). After the API with MUT-514 (reader `-2`, migration `20261103180000_mut514_receipt_read_identifiers`) is fully rolled out, and only then (an older instance would read them again with the old rules):
+  - `DATABASE_URL=… npm --prefix server run receipts:reread -- --reader-below 2` lists them (ids, field names and sources, no values) and writes nothing.
+  - Add `--apply` to reset them; the 5-minute sweep reads them again. Each is audited `expense_receipt.reread_requested`. Fields the server read (`ocr`, `pdf-text`) are replaced; QR and vendor-list fields, approved and filed receipts are untouched.
+  - It picks only receipts whose suggestion still carries the server reader version. One a client filled after the server read (`phone-…`) is not picked; correct those by hand at review.
+  - Delete this item once it has run, and record the date on MUT-514.
 
 ## web
 
