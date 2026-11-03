@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-03 — Release gates cap vitest at 3 workers; the QA worktree installs server/ too
+
+**Why:** two api-v0.15.0 gate runs failed on a loaded, shared Mac. Uncapped vitest ran about 10 workers, and 5 s
+timeouts failed in `customer-statement`, `income-routes`, `agreements/reduce`, `rollback` and `gcp-identity` (plus
+`project-move`'s 60 s spawnSync). Each of those files passes on its own. The same release's first QA run brought no
+env up: a fresh `.claude/worktrees/qa-release` had no `server/node_modules`, and the portal builds import server code.
+
+### Technical
+- `Makefile`: `VITEST_MAX_WORKERS ?= 3`, exported to every recipe, so `check-web`, `check-server`, `release-web`
+  and `release-server` (and `check`) run vitest with at most 3 workers. Vitest reads the variable itself. A value in
+  the environment or on the command line wins. Test: `scripts/__tests__/makefile-vitest-workers.test.ts`.
+- `qa/qa.config.mjs`: `env.worktree.install` also runs `npm --prefix server ci --prefer-offline`. (In place from a
+  feature worktree, release-qa still installs only when the root has no `node_modules`.)
+
 ## [Unreleased] - 2026-11-02 — Receipt reading: no confidently wrong VAT, totals, bill-to numbers or dates (MUT-514, ADR-241)
 
 **Why:** 18 wrong-and-confident fields on 32 new real scans, and every Paz fuel receipt in production filled its

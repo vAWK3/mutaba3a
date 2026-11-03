@@ -36,6 +36,13 @@ RELEASE_BRANCH ?= main
 ENVIRONMENT    ?= production
 NODE_MAJOR_REQUIRED ?= 22
 
+# Vitest workers for every recipe here: the check-* and release-* gates. Uncapped, vitest starts about one per core,
+# and on a Mac shared by several sessions the 5 s test timeouts then fail under load (api-v0.15.0, 2026-11-03:
+# two gate runs failed, the capped third passed). Vitest reads VITEST_MAX_WORKERS itself, so the web and server
+# suites both follow it. A value in the environment or on the command line wins: `VITEST_MAX_WORKERS=6 make check`.
+VITEST_MAX_WORKERS ?= 3
+export VITEST_MAX_WORKERS
+
 # Operator config for the server deploy (GCP_PROJECT_ID, TF_STATE_BUCKET, …).
 # Git-ignored; template at deploy.env.example. Plain KEY=value lines, no quotes.
 # A value passed on the make command line wins over the file.
