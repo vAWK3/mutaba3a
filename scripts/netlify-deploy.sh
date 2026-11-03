@@ -1,27 +1,41 @@
 #!/usr/bin/env bash
 #
-# Deploys the web app to Netlify from this checkout.
+# Deploys the website (Netlify) through the release gate (~/Work/tools/release-gate,
+# web standard; MUT-551). The gate is the only thing that deploys it:
 #
-#   scripts/netlify-deploy.sh 0.4.2      # build HEAD here, publish it to production
+#   scripts/netlify-deploy.sh production   # make deploy web / make release web
+#   scripts/netlify-deploy.sh preview      # make deploy-preview: a smoked draft, never published
+#   scripts/netlify-deploy.sh check        # make deploy-check: the deploy's preflight only, deploys nothing
 #
-# Git builds are stopped on the mutaba3a Netlify site ("Stop builds"), so a push
-# to main deploys nothing: every push used to be a production deploy, and those
-# spent the Barmajiyat team's Netlify credits. Only this script deploys, from
-# `make release web` and `make deploy web`.
+# A production deploy: the gate's preflight (WD-1 Netlify Git builds off, WD-2 no
+# raw deploy call, WD-3 clean local main), then HEAD of local main is checked out
+# clean under the temp dir and built there through the heavy queue (netlify.toml's
+# build command: build:web + the bundle guard), uploaded as a Netlify draft and
+# smoked (release/gate.config.mjs, surface "web"), then deployed to production
+# from the same checkout and smoked again on the production domain. A failure
+# after the switch prints the rollback command; nothing rolls back on its own.
 #
-# The CLI runs netlify.toml's build command here (build:web + the bundle guard)
-# with CONTEXT=production and the site's Netlify env vars. SENTRY_AUTH_TOKEN is a
-# secret var Netlify never hands to the CLI, so it comes from the environment or
-# the release-kit Keychain item, as in release-server.
+# Git builds are stopped on the mutaba3a Netlify site, so a push to main deploys
+# nothing. SENTRY_AUTH_TOKEN is a secret var Netlify never hands to the CLI, so it
+# comes from the environment or the release-kit Keychain item, as in release-server.
+# Production never ships with telemetry off (WD-5): SENTRY_ENABLED and
+# POSTHOG_ENABLED are unset for the gate.
 
 set -euo pipefail
 
-C_GREEN=$'\033[0;32m'; C_YELLOW=$'\033[1;33m'; C_RED=$'\033[0;31m'; C_NC=$'\033[0m'
+C_RED=$'\033[0;31m'; C_NC=$'\033[0m'
 
-VERSION="${1:?usage: $0 <version>}"
-SITE="${NETLIFY_SITE:?NETLIFY_SITE is not set (the Makefile sets it)}"
+MODE="${1:?usage: $0 production|preview|check}"
+RELEASE_GATE="${RELEASE_GATE:-node $HOME/Work/tools/release-gate/bin/release-gate.mjs}"
 KEYCHAIN_SERVICE="${SENTRY_TOKEN_KEYCHAIN_SERVICE:-release-kit}"
 KEYCHAIN_ACCOUNT="${SENTRY_TOKEN_KEYCHAIN_ACCOUNT:-barmajiyat/SENTRY_AUTH_TOKEN}"
+
+case "$MODE" in
+  check)
+    exec $RELEASE_GATE web mini-crm web --env production --dry-run ;;
+  production|preview) ;;
+  *) printf 'usage: %s production|preview|check\n' "$0" >&2; exit 2 ;;
+esac
 
 if ! command -v netlify >/dev/null 2>&1; then
   printf '%snetlify CLI is not installed: npm i -g netlify-cli, then netlify login%s\n' "$C_RED" "$C_NC" >&2
@@ -38,12 +52,4 @@ if [[ -z "${SENTRY_AUTH_TOKEN:-}" ]]; then
   export SENTRY_AUTH_TOKEN
 fi
 
-SHA="$(git rev-parse --short HEAD)"
-printf '\nDeploying web v%s (%s) to Netlify production\n' "$VERSION" "$SHA"
-
-if ! netlify deploy --prod --site "$SITE" --message "web v$VERSION ($SHA)"; then
-  printf '\n%sThe Netlify deploy failed; the live site is unchanged. Retry with: make deploy web%s\n' "$C_YELLOW" "$C_NC" >&2
-  exit 1
-fi
-
-printf '\n%s✓ web v%s is live on Netlify%s\n' "$C_GREEN" "$VERSION" "$C_NC"
+exec env -u SENTRY_ENABLED -u POSTHOG_ENABLED $RELEASE_GATE web mini-crm web --env "$MODE"

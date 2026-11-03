@@ -1,7 +1,10 @@
 # Mutaba3a release entry points.
 #
-#   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x> → netlify deploy)
+#   make release web      Netlify frontend  (bump → gates → commit → push main → tag web-v<x> → gated deploy)
 #   make deploy web       redeploy what is on origin/main to Netlify, no version bump
+#   make deploy-check     the website deploy's release-gate preflight only; deploys nothing
+#   make deploy-preview   build HEAD and smoke it on a Netlify draft; never published
+#   make release-check    report only: each web surface's smoke list against production as it is now
 #   make release server   Cloud Run API + hosted portal (bump → gates → deploy.sh → tag api-v<x>)
 #   make release full     web, then server — each gated and confirmed on its own
 #
@@ -11,8 +14,10 @@
 # is built, committed, pushed or rolled.
 #
 # Netlify's Git builds are stopped for this site, so pushing to main deploys
-# nothing: only `make release web` and `make deploy web` publish the web app
-# (scripts/netlify-deploy.sh).
+# nothing: only `make release web` and `make deploy web` publish the website, and
+# both go through the release gate (scripts/netlify-deploy.sh → release-gate web
+# mini-crm web; release/gate.config.mjs, MUT-551): a clean build of local main,
+# a Netlify draft smoked first, then production, smoked again.
 #
 # Run `make doctor` any time for a read-only report of the same checks.
 #
@@ -113,8 +118,10 @@ export MUTABA3A_TURNSTILE_SITE_KEY
 # Looked up only when the portal has a DSN: with no DSN the build needs no token.
 SENTRY_TOKEN_KEYCHAIN_SERVICE := release-kit
 SENTRY_TOKEN_KEYCHAIN_ACCOUNT := barmajiyat/SENTRY_AUTH_TOKEN
-# The mutaba3a site on the Barmajiyat Netlify team. scripts/netlify-deploy.sh deploys to it; preflight checks it.
+# The mutaba3a site on the Barmajiyat Netlify team. The release gate deploys to it (release/gate.config.mjs names
+# the same id); preflight checks it.
 NETLIFY_SITE ?= 95c9c629-63d0-4850-9b73-7d80199b8d75
+RELEASE_GATE ?= node $(HOME)/Work/tools/release-gate/bin/release-gate.mjs
 export NETLIFY_SITE SENTRY_TOKEN_KEYCHAIN_SERVICE SENTRY_TOKEN_KEYCHAIN_ACCOUNT
 
 C_BOLD  := \033[1m
@@ -155,6 +162,7 @@ endif
 CI_REMINDER = printf '\n$(C_YEL)Reminder: CI runs only when started. Run it on what you just pushed: make ci %s$(C_OFF)\n\n'
 
 .PHONY: help release release-web release-server release-full rollback-server ci create deploy deploy-web \
+        deploy-check deploy-preview release-check \
         preflight-web preflight-server doctor \
         check-web check-server check check-e2e qa-view \
         bump-web bump-server \
@@ -166,6 +174,9 @@ help:
 	@printf '$(C_BOLD)Mutaba3a — release$(C_OFF)\n\n'
 	@printf '  $(C_GREEN)make release web$(C_OFF)       release the frontend: bump, push to $(RELEASE_BRANCH), deploy to Netlify\n'
 	@printf '  $(C_GREEN)make deploy web$(C_OFF)        redeploy origin/$(RELEASE_BRANCH) to Netlify (no bump; a push alone deploys nothing)\n'
+	@printf '  $(C_GREEN)make deploy-check$(C_OFF)      the website deploy'"'"'s release-gate preflight only (deploys nothing)\n'
+	@printf '  $(C_GREEN)make deploy-preview$(C_OFF)    build HEAD and smoke it on a Netlify draft (never published)\n'
+	@printf '  $(C_GREEN)make release-check$(C_OFF)     report only: each web surface'"'"'s smoke list against production\n'
 	@printf '  $(C_GREEN)make release server$(C_OFF)    deploy the API + hosted portal to Cloud Run ($(ENVIRONMENT))\n'
 	@printf '  $(C_GREEN)make release full$(C_OFF)      web, then server — each gated and confirmed on its own\n'
 	@printf '  $(C_DIM)  after a terms bump: make release web, then make release server$(C_OFF)\n'
@@ -230,7 +241,19 @@ deploy-web: preflight-web
 	fi
 	@version=$$(node -p "require('./package.json').version"); \
 	if ! scripts/confirm.sh "Deploy web v$$version ($$(git rev-parse --short HEAD)) to Netlify production?"; then exit 0; fi; \
-	scripts/netlify-deploy.sh "$$version"
+	scripts/netlify-deploy.sh production
+
+# Release gate (MUT-551): the website deploy without publishing anything.
+deploy-check:
+	@scripts/netlify-deploy.sh check
+
+deploy-preview:
+	@scripts/netlify-deploy.sh preview
+
+# Report only (never deploys, never blocks): WD-1, WD-2 and each surface's smoke list on production as it is now.
+# The portal and API are on Cloud Run (server/scripts/deploy.sh), which the gate has no adapter for yet.
+release-check:
+	@for surface in web portal api; do $(RELEASE_GATE) web mini-crm "$$surface" --check; done
 
 # ---------------------------------------------------------------------------
 # Accounts — operator-issued, no signup (ADR-037, TD-018). Both flows are
@@ -334,7 +357,7 @@ bump-server:
 # release web — gates run before the bump so a failure leaves the version
 # untouched; the build runs after, with the new version baked in. Netlify does
 # not build on push (its Git builds are stopped), so after the push and tag
-# scripts/netlify-deploy.sh builds HEAD here and publishes it.
+# scripts/netlify-deploy.sh has the release gate build HEAD in a clean checkout and publish it.
 # ---------------------------------------------------------------------------
 
 release-web: preflight-web
@@ -359,7 +382,7 @@ release-web: preflight-web
 	fi; \
 	printf '\n$(C_BOLD)About to deploy the web app$(C_OFF)\n'; \
 	printf '  version   %s\n' "$$version"; \
-	printf '  branch    %s → origin, then netlify deploy --prod\n' '$(RELEASE_BRANCH)'; \
+	printf '  branch    %s → origin, then the release gate deploys it to Netlify\n' '$(RELEASE_BRANCH)'; \
 	printf '  commits   %s ahead of origin, plus the version bump\n' \
 	  "$$(git rev-list --count origin/$(RELEASE_BRANCH)..HEAD 2>/dev/null || echo '?')"; \
 	scripts/ci-reminder.sh web; \
@@ -373,7 +396,7 @@ release-web: preflight-web
 	git push origin $(RELEASE_BRANCH); \
 	scripts/tag-release.sh web "$$version" --push; \
 	printf '\n$(C_GREEN)✓ v%s pushed to %s$(C_OFF)\n' "$$version" '$(RELEASE_BRANCH)'; \
-	scripts/netlify-deploy.sh "$$version"; \
+	scripts/netlify-deploy.sh production; \
 	printf '$(C_DIM)Hard-reload the site and confirm the version in Settings.$(C_OFF)\n'; \
 	printf '\n$(C_BOLD)Live OAuth client document (MUT-387)$(C_OFF)\n'; \
 	oauth_ok=1; npm run --silent release:oauth-client || oauth_ok=0; \
@@ -410,7 +433,7 @@ release-server: preflight-server
 	printf '  region      %s\n' "$${GCP_REGION:-unset}"; \
 	printf '  acting as   %s\n' "$${GCP_ACCOUNT:-the default gcloud account and ADC on this machine}"; \
 	printf '  environment %s\n' '$(ENVIRONMENT)'; \
-	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → prisma migrate deploy\n  → terraform apply → smoke. Migrations are forward-only.$(C_OFF)\n'; \
+	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → run the Prisma migrations\n  → apply Terraform → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \
 	scripts/before-release.sh server; \
 	token="$${SENTRY_AUTH_TOKEN:-}"; \
