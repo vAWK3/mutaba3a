@@ -298,7 +298,9 @@ guard_turnstile_site_key() {
 # (the precondition in main.tf), so both are named. SKIP_MIN_BUILD_GUARD=1 skips the guard, only for when it can't
 # read terraform or Cloud Run itself. Fails closed. In a rollback, rollback_infra_gate has already refused any env
 # change, so ALLOW_MIN_BUILD_CHANGE never helps one through.
-MIN_BUILD_ENV_NAMES="IOS_MIN_BUILD ANDROID_MIN_BUILD IOS_RECOMMENDED_BUILD ANDROID_RECOMMENDED_BUILD MIN_BUILD_CHECK_DISABLED"
+# MUT-551: the maintenance switch (MAINTENANCE_MODE, every phone request 503) is guarded the same way: a stale copy
+# that still has maintenance_mode = true would take every phone down on the next release.
+MIN_BUILD_ENV_NAMES="IOS_MIN_BUILD ANDROID_MIN_BUILD IOS_RECOMMENDED_BUILD ANDROID_RECOMMENDED_BUILD MIN_BUILD_CHECK_DISABLED MAINTENANCE_MODE"
 
 # guard_min_build_release <suffix> <service> <region> <project> <terraform args…>
 guard_min_build_release() {
@@ -323,7 +325,7 @@ guard_min_build_release() {
     | terraform console ${GUARD_VAR_ARGS[@]+"${GUARD_VAR_ARGS[@]}"})" \
     || die "could not evaluate local.min_build_env with terraform console (above); refusing to release on a guess"
   plan="$(sed -n '1{s/"//g;p;}' <<<"${plan}")"
-  [[ "${plan}" =~ ^(([1-9][0-9]*|unset)\ ){4}(true|unset)$ ]] \
+  [[ "${plan}" =~ ^(([1-9][0-9]*|unset)\ ){4}(true|unset)\ (true|unset)$ ]] \
     || die "terraform console gave '${plan}' for the minimum builds (${MIN_BUILD_ENV_NAMES}); refusing to release on a guess"
 
   local json err rc=0
@@ -354,7 +356,7 @@ guard_min_build_release() {
   read -r -a live_v <<<"${live}"
   for name in ${MIN_BUILD_ENV_NAMES}; do
     want="${plan_v[i]}"; have="${live_v[i]:-?}"; i=$((i + 1))
-    [[ "${have}" == "?" || ( "${name}" != "MIN_BUILD_CHECK_DISABLED" && ! "${have}" =~ ^([1-9][0-9]*|unset)$ ) ]] \
+    [[ "${have}" == "?" || ( "${name}" != "MIN_BUILD_CHECK_DISABLED" && "${name}" != "MAINTENANCE_MODE" && ! "${have}" =~ ^([1-9][0-9]*|unset)$ ) ]] \
       && die "could not read ${service}'s ${name} (not a build number of at least 1, or not a plain value); refusing to release on a guess"
     [[ "${want}" == "${have}" ]] && continue
     from="${have}"; [[ "${have}" == "unset" ]] && from="none"

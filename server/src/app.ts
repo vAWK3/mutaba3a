@@ -6,6 +6,7 @@ import { createApiShell } from './app-shell.js';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
 import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { requireMinimumBuild, type MinimumBuildConfig } from './auth/minimum-build.js';
+import { requireNotInMaintenance } from './auth/maintenance.js';
 import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, LEGACY_CARRY_OVER_PATH, SIGN_IN_POLICY, SignInThrottle, isViaFrontDoor } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
@@ -131,6 +132,8 @@ export interface AppDependencies {
   publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
   minimumBuild?: MinimumBuildConfig | null;
+  /** MUT-551: MAINTENANCE_MODE. True = every phone request (X-App-Platform) answers 503 MAINTENANCE. Absent = off. */
+  maintenance?: boolean;
   /**
    * MUT-360: Stripe, one gateway per budget (D7: the webhook answers fast, reconcile is patient). Null or absent = the
    * webhook and both reconcile routes answer 503 BILLING_NOT_CONFIGURED. MUT-362: `checkoutGateway` is the write door
@@ -335,6 +338,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   let routeAccess: RouteAccessIndex | undefined;
   // Built on first request, after every route below has registered its OpenAPI definition. Shared with requireMinimumBuild (MUT-293) so both answer "is this route public" from the one index.
   const resolveRouteAccess = (): RouteAccessIndex => (routeAccess ??= buildRouteAccessIndex(app.openAPIRegistry.definitions, app.routes));
+  app.use('/v1/*', requireNotInMaintenance({ on: deps.maintenance ?? false, logger: deps.logger }));
   app.use(
     '/v1/*',
     requireMinimumBuild({
@@ -666,6 +670,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
         'PATCH routes require `If-Match: <version>` (optimistic concurrency).',
         '',
         'Minimum app version (MUT-293): a phone client sends `X-App-Platform: ios|android` and `X-App-Build: <int>` on every request. Below the configured floor for that platform, every endpoint except sign-in (`POST /v1/sessions`, `POST /v1/device-sessions`) and `/health` answers 426 APP_UPDATE_REQUIRED with `details: { platform, minimumBuild }`. Between the floor and the configured recommended build, the request still succeeds but carries `X-Update-Available: true` and `X-Recommended-Build: <int>`. A request with no `X-App-Platform` header (the portal, or any build older than this contract version) is untouched — this is scoped to the phone API only, not enforced against it.',
+        '',
+        'Maintenance (MUT-551): while the server\'s maintenance switch is on, every request carrying `X-App-Platform` answers 503 MAINTENANCE, sign-in included, before the minimum-build check. The portal and API keys are untouched.',
         '',
         `409 CONFLICT responses carry details.reason, one of: ${CONFLICT_REASONS.join(', ')}.`,
         '',

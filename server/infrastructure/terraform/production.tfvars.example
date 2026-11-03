@@ -76,3 +76,7 @@ live_label          = false
 # android_recommended_build = 13
 # ios_min_build             = 8
 # min_build_check_disabled  = true
+
+# Phone maintenance switch (MUT-551): every phone request answers 503 MAINTENANCE and the app shows its maintenance
+# screen. Ships with ALLOW_MIN_BUILD_CHANGE=MAINTENANCE_MODE; delete the line (absent is off) to end it the same way.
+# maintenance_mode = true

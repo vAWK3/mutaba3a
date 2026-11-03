@@ -251,6 +251,7 @@ const app = createApp({
     android: { min: config.ANDROID_MIN_BUILD, recommended: config.ANDROID_RECOMMENDED_BUILD },
     disabled: config.MIN_BUILD_CHECK_DISABLED,
   },
+  maintenance: config.MAINTENANCE_MODE,
 });
 if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_DRIVER=local: attachments are stored on this machine (dev and QA only)');
 else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
@@ -270,6 +271,7 @@ if (!reporter.enabled) {
     ? `error reports are off here (NODE_ENV=${config.NODE_ENV}, SENTRY_ENABLED=${config.SENTRY_ENABLED ?? 'unset'}); errors are logged but not reported`
     : 'SENTRY_DSN is not set; errors are logged but not reported');
 }
+if (config.MAINTENANCE_MODE) logger.warn('MAINTENANCE_MODE is on; every phone request answers 503 MAINTENANCE');
 if (!webauthn) logger.info('WEBAUTHN_RP_ID is not set; passkey routes answer 404');
 if (!config.APPLE_TEAM_ID) logger.warn('APPLE_TEAM_ID/APPLE_BUNDLE_ID/ANDROID_PACKAGE_NAME/ANDROID_SHA256_FINGERPRINTS are not set; no app-association files served');
 

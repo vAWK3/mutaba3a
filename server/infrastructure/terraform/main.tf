@@ -77,6 +77,8 @@ locals {
       ANDROID_RECOMMENDED_BUILD = var.android_recommended_build
     } : name => tostring(build) if build != null },
     var.min_build_check_disabled ? { MIN_BUILD_CHECK_DISABLED = "true" } : {},
+    # MUT-551: the phone app's maintenance switch, guarded with the floors (release-guard.sh).
+    var.maintenance_mode ? { MAINTENANCE_MODE = "true" } : {},
   )
 
   # MUT-487 (R2): the new project keeps its jobs paused until the cutover; behind the forwarder the old ones would

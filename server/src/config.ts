@@ -125,6 +125,8 @@ const envSchema = z.object({
   /** Instant kill switch for the minimum-build gate, independent of the floor values — a misconfigured floor is undone by flipping this, not editing/redeploying the floor itself. */
   // MUT-457: only "true" turns it on (never z.coerce.boolean, which reads "false" as true and switched the gate off).
   MIN_BUILD_CHECK_DISABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-551 (release gate RF-2): the phone app's maintenance switch. Only "true" turns it on: every phone request answers 503 MAINTENANCE. */
+  MAINTENANCE_MODE: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
    * MUT-326 (ADR-155 D3): the custom domain's front door proves itself with this secret
    * (Secret Manager, written by server/infrastructure/frontdoor). Needs PORTAL_ORIGIN.

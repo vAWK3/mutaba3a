@@ -102,6 +102,8 @@ export const ERROR_CODES = {
   FX_RATES_UNAVAILABLE: 503,
   /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */
   APP_UPDATE_REQUIRED: 426,
+  /** MUT-551 (release gate RF-2): MAINTENANCE_MODE is on; every phone request (X-App-Platform) answers this until it's off. */
+  MAINTENANCE: 503,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;
