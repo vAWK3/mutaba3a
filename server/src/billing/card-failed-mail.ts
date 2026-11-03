@@ -14,7 +14,7 @@ import type { LedgerStore, UserLocale } from '../repositories/ports.js';
  * retry ends the plan. A renewal invoice that arrives while it is still open joins the episode. Two stages, each sent
  * once per invoice through the send log (`card-failed:<invoice>:first|reminder`), and only the current one:
  *
- *   first     within FIRST_MAIL_WITHIN_HOURS of the first failure   what failed, access stays open, Update card
+ *   first     within FIRST_MAIL_WITHIN_HOURS of the first failure, while a retry is booked   what failed, access stays open, Update card
  *   reminder  from the retry window's midpoint, while a retry is booked   the plan ends within N days at most
  *
  * The first mail stops being current after 72 hours and the window is at most 28 days, so no key can be pruned from
@@ -63,7 +63,9 @@ export function cardFailedStageOf(facts: FailedPaymentFacts | null, now: Date, w
   const failedAt = episode.firstFailedAt.getTime();
   const reminderAt = failedAt + Math.max(REMINDER_NOT_BEFORE_DAYS * DAY_MS, (windowDays * DAY_MS) / 2);
   const t = now.getTime();
-  if (t >= reminderAt && episode.nextPaymentAttempt !== null) {
+  // Both mails say Stripe will try again: with no retry booked (a no-retry policy, the last try already failed) neither is true.
+  if (episode.nextPaymentAttempt === null) return { skip: 'no-stage' };
+  if (t >= reminderAt) {
     const daysLeft = Math.max(1, Math.ceil((failedAt + windowDays * DAY_MS - t) / DAY_MS));
     return { stage: 'reminder', invoiceId: episode.invoiceId, daysLeft };
   }

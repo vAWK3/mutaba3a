@@ -50,8 +50,9 @@ describe('cardFailedStageOf (MUT-533 D2)', () => {
     expect(cardFailedStageOf(failing({ firstFailedAt: ago(9 * DAY) }), NOW, 7)).toEqual({ stage: 'reminder', invoiceId: 'in_1', daysLeft: 1 });
   });
 
-  it('no reminder once Stripe has no retry booked', () => {
+  it('nothing once Stripe has no retry booked: neither the reminder nor a first mail that would promise one (review)', () => {
     expect(cardFailedStageOf(failing({ firstFailedAt: ago(8 * DAY), nextPaymentAttempt: null }), NOW, WINDOW)).toEqual({ skip: 'no-stage' });
+    expect(cardFailedStageOf(failing({ nextPaymentAttempt: null }), NOW, WINDOW)).toEqual({ skip: 'no-stage' });
   });
 
   it('nothing when the subscription is no longer past_due, the invoice settled, or the bank wants the person to confirm', () => {

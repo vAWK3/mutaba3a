@@ -288,23 +288,24 @@ export async function outboxOf(email: string): Promise<Array<{ template: string;
 }
 
 /** MUT-533: runs a mail job now, as the operator's `npm run billing:…-mail` does, through the admin door. */
-export async function runMailJob(job: 'card-failed-mail'): Promise<Json> {
+export async function runMailJob(job: 'card-failed-mail', dryRun = false): Promise<Json> {
   const { apiOrigin, adminToken } = liveState();
-  const res = await fetch(`${apiOrigin}/admin/v1/billing/${job}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ dryRun: false }) });
+  const res = await fetch(`${apiOrigin}/admin/v1/billing/${job}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ dryRun }) });
   expect(res.status, `${job} ${await res.clone().text()}`).toBe(200);
   return res.json();
 }
 
 /**
  * MUT-533: a monthly subscriber whose renewal declined `failedAgoS` seconds ago, on a test clock started in the past
- * (MUT-531's spike): paid with a good card, then switched to Stripe's always-declining test card before the renewal.
+ * (MUT-531's spike): paid with a good card, then switched to Stripe's always-declining test card before the renewal
+ * (or `pm_card_authenticationRequired`, a card whose bank always wants the person to confirm).
  */
-export async function declinedRenewal(person: LivePerson, failedAgoS: number): Promise<{ customerId: string; clockId: string; subscriptionId: string }> {
+export async function declinedRenewal(person: LivePerson, failedAgoS: number, failingCard = 'pm_card_chargeCustomerFail'): Promise<{ customerId: string; clockId: string; subscriptionId: string }> {
   const nowS = Math.floor(Date.now() / 1000);
   const startAt = nowS - failedAgoS - 31 * 24 * 60 * 60;
   const { customerId, clockId } = await customerOnClock(person, startAt);
   const subscriptionId = await subscribeByApi(customerId);
-  const declining = await stripeApi('POST', 'payment_methods/pm_card_chargeCustomerFail/attach', { customer: customerId });
+  const declining = await stripeApi('POST', `payment_methods/${failingCard}/attach`, { customer: customerId });
   await stripeApi('POST', `subscriptions/${subscriptionId}`, { default_payment_method: declining.id });
   const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
   // Past the renewal and its first attempt (an hour after the invoice), and no further than now less a minute.

@@ -881,9 +881,37 @@ test('A declined renewal - one Arabic mail within the hour, no amount or card; U
     await page.waitForURL(/billing\.stripe\.com/, { timeout: 45_000 });
     await expect(page.locator('iframe[name^="__privateStripeFrame"]').first()).toBeVisible({ timeout: 45_000 });
   });
-  await step('Stripe still holds the subscription past due with its open invoice, our mail named nothing of the card', async () => {
-    const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
-    expect(sub.status).toBe('past_due');
+  await step('Enter a good card and save it: Stripe brings the person back to Billing', async () => {
+    const card = page.frameLocator('iframe[name^="__privateStripeFrame"]').first();
+    await card.locator('input[name="number"]').fill('4242424242424242');
+    await card.locator('input[name="expiry"]').fill('12 / 34');
+    await card.locator('input[name="cvc"]').fill('123');
+    const postal = card.locator('input[name="postalCode"]');
+    if (await postal.isVisible().catch(() => false)) await postal.fill('9100000');
+    await page.getByRole('button', { name: /^(Add|Save|Update|إضافة|حفظ|تحديث)/ }).last().click();
+    await page.waitForURL(/portal=returned/, { timeout: 60_000 });
+  });
+  await step('The open invoice is paid on the new card, and Billing shows the plan Active again', async () => {
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${subscriptionId}`)).status, { timeout: 90_000 }).toBe('active');
+    const back = page.getByRole('dialog', { name: 'الاشتراك' });
+    await expect(back.getByText('لم نتمكن من تحصيل دفعتك الأخيرة')).toBeHidden({ timeout: 45_000 });
+    await expect(back.getByRole('button', { name: 'حدّث البطاقة' })).toBeHidden();
+  });
+});
+
+test('A renewal the bank wants confirmed (3-D Secure) - no MTB3A mail; Stripe’s own confirm-payment mail covers it', { tag: '@portal-live.billing.card-failed-3ds' }, async ({ step }) => {
+  const person = await provisionPerson('en', 'card3ds');
+  await step('A monthly subscriber’s renewal needs the person to confirm it with their bank', async () => {
+    const pending = await declinedRenewal(person, 2 * 60 * 60, 'pm_card_authenticationRequired');
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${pending.subscriptionId}`)).status, { timeout: 60_000 }).toBe('past_due');
+  });
+  await step('The hourly job runs: it sees the plan and skips it as needing authentication, and mails nothing', async () => {
+    await expect.poll(async () => {
+      const { rows } = await runMailJob('card-failed-mail', true);
+      return rows.find((r: { email: string }) => r.email === person.email)?.skip ?? null;
+    }, { timeout: 60_000 }).toBe('needs-authentication');
+    await runMailJob('card-failed-mail');
+    expect((await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed'))).toHaveLength(0);
   });
 });
 
