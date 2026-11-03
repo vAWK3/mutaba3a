@@ -16,3 +16,5 @@ with three customers, plus one coupon. Everything was deleted at the end. Plan Â
 Consequences for the build: none of Basel's decisions change. `firstFailedAt` = `status_transitions.finalized_at`
 (fallback `created`). The episode is the oldest open invoice with `attempted: true`; the 3-D Secure case is told apart
 by the intent's status, not by the attempt count.
+
+**Later (QA, 2026-11-03):** (e) holds for invoice previews only. A Checkout Session in USD refuses that coupon: "The coupon default currency (ils) does not match the line item currency (usd)." MUT-534 therefore ships one coupon per currency (`mtb3a_comeback_first_month_ils` â‚ª20, `_usd` $6). Also: (c) the card form sets the customer's default card and clears the subscription's own, but pays nothing until the next retry; MUT-533's `POST /v1/billing/card-retry` pays the open invoice on the way back.

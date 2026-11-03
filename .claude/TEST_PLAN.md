@@ -4382,3 +4382,19 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Release-QA (portal-live, Stripe sandbox): `card-failed-mail` (core, saves a good card on Stripe's page and the invoice
   is paid), `card-failed-reminder`, `card-failed-3ds`.
 
+## MUT-534 — the come-back offer (ADR-243)
+
+- `server/src/billing/__tests__/comeback.test.ts`: the coupon's shape and prices (₪9/$3, ₪270/$84 from ₪20/$6; percent,
+  repeating, an amount at or above the month, other products, gone → none); the stages at 29/30/44/89/90/104 days; every
+  refusal (running, no lapse, too soon, Firm, already had it, an abandoned Checkout doesn't count, the 12-month stay rule,
+  covered, not yet offered).
+- `comeback-mail.test.ts`: mails the stage once in the person's language and records it; day 90 in dollars; skips
+  never-paid, Firm, stay, granted, between windows, suppressed; no offer mails nobody; dry run records nothing; a failed
+  send releases the record and the next run sends.
+- `offer.test.ts` (comeback kind, no interval, overrides), `checkout-gateway.test.ts` (amount per currency),
+  `mirror.test.ts` and the store contract (`endedAt`, `comebackCandidates`, once per person per stage, memory + Prisma),
+  `routes-comeback-mail.test.ts` (doors, prices from the catalog less the coupon), `billing-routes.test.ts` (GET
+  `comeback` only once offered; Checkout monthly and yearly; Stripe's own record; stale `expectedOffer` → 409).
+- Portal `BillingDrawer.test.tsx`: the welcome-back line per interval and currency, `expectedOffer`, the refusal banner.
+- Release-QA (portal-live, Stripe sandbox): `comeback-offer` (core), `comeback-yearly`, `comeback-usd`.
+

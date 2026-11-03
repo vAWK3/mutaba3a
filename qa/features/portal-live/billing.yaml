@@ -378,3 +378,59 @@ features:
       - The hourly failed-card job runs
     expect:
       - The job skips the plan as needing authentication and mails nothing; Stripe's own confirm-payment email (kept on) asks the person
+  - id: comeback-offer
+    title: The come-back offer - mailed 30 days after a paid plan ended; the first month back is ₪9, then ₪29
+    tier: core
+    paths:
+      - server/src/billing/comeback.ts
+      - server/src/billing/comeback-mail.ts
+      - server/src/billing/comeback-read.ts
+      - server/src/routes/comeback-mail.ts
+      - server/src/billing/offer.ts
+      - server/src/billing/offers.json
+      - server/src/routes/billing.ts
+      - server/src/billing/checkout.ts
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/data/billingView.ts
+    steps:
+      - A monthly subscriber paid once, and the plan ended 31 days ago
+      - The daily come-back job runs
+      - Open the mail's button, signed in, and pick Israel
+      - Continue to payment and pay
+      - The job runs again
+    expect:
+      - One mail, "Your MTB3A records are still here", saying the records are still there and "Come back for ₪9 for your first month, then ₪29 a month"
+      - Subscribe says "Welcome back - your first month is ₪9.00, then ₪29.00 a month."
+      - Stripe's page says the welcome-back price, and the first invoice takes ₪20 off ₪29
+      - Once back, Billing offers it no more and the job mails nothing more
+  - id: comeback-yearly
+    title: The come-back offer on Yearly - the same ₪20 off the first year, ₪270 then ₪290
+    tier: secondary
+    paths:
+      - server/src/billing/comeback.ts
+    steps:
+      - A monthly subscriber paid once, the plan ended 31 days ago, and the job mailed them
+      - Open the mail's button, pick Israel and Yearly, and pay
+    expect:
+      - Subscribe says "Welcome back - your first year is ₪270.00, then ₪290.00 a year."; the first invoice takes ₪20 off ₪290
+  - id: comeback-usd
+    title: The come-back offer in dollars - a shekel payer coming back from abroad sees and pays $3.00, then $9.00
+    tier: secondary
+    paths:
+      - server/src/billing/comeback.ts
+    steps:
+      - A shekel subscriber paid once, the plan ended 31 days ago, and the job mailed them
+      - Open the mail's button and pick the United Kingdom
+    expect:
+      - Subscribe says "Welcome back - your first month is $3.00, then $9.00 a month."; Stripe's page carries the come-back coupon in dollars
+  - id: comeback-day-90
+    title: The come-back offer at day 90 - the second mail, its own subject, still ₪9 the first month back
+    tier: secondary
+    paths:
+      - server/src/billing/comeback-mail.ts
+    steps:
+      - A monthly subscriber in Arabic paid once, and the plan ended 91 days ago
+      - The daily come-back job runs
+    expect:
+      - One mail in Arabic, "عُد إلى متابعة بـ ₪9 لشهرك الأول", saying the records are still there
+

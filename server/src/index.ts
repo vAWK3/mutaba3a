@@ -222,7 +222,7 @@ const app = createApp({
   publicFxIpLimiter,
   stripe,
   // MUT-525 (D12, R6): offers.json, or the QA run's own coupon on a test server.
-  offers: offersFor(config.BILLING_OFFER_COUPON_ID, config.BILLING_STAY_COUPON_ID),
+  offers: offersFor({ launch: config.BILLING_OFFER_COUPON_ID, stay: config.BILLING_STAY_COUPON_ID, comeback: config.BILLING_COMEBACK_COUPON_ID_ILS && config.BILLING_COMEBACK_COUPON_ID_USD ? { ILS: config.BILLING_COMEBACK_COUPON_ID_ILS, USD: config.BILLING_COMEBACK_COUPON_ID_USD } : undefined }),
   jobToken: config.MUTABA3A_JOB_TOKEN ?? null,
   oauth: config.OAUTH_DERIVE_KEY ? { deriveKey: config.OAUTH_DERIVE_KEY, limiters: oauthLimiters, agentLimiter, agentPersonLimiter } : null,
   stripeWebhookIpLimiter,

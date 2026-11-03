@@ -42,6 +42,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: SAMPLE_SIGN_IN },
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
   'card-failed': { updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
+  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=subscribe` },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
 };
 const SAMPLE_RECIPIENT = 'rana@example.com';

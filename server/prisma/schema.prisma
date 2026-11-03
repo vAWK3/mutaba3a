@@ -1575,6 +1575,8 @@ model BillingSubscription {
   pausedFrom           DateTime?
   /// MUT-532: Stripe's `pause_collection.resumes_at`; null with a pause set means paused until someone resumes it.
   pauseResumesAt       DateTime?
+  /// MUT-534: when Stripe ended it (`ended_at`); null while it runs. A lapse is timed from here, not the period end.
+  endedAt              DateTime?
   /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
   stripeUpdatedAt      DateTime
   createdAt            DateTime       @default(now())
@@ -1582,6 +1584,7 @@ model BillingSubscription {
 
   @@index([billingAccountId])
   @@index([organizationId])
+  @@index([status, endedAt])
   @@map("billing_subscriptions")
 }
 
@@ -1590,6 +1593,8 @@ enum BillingRetentionKind {
   STAY_OFFER
   CANCEL
   YEARLY_SWITCH
+  /// MUT-534: a come-back stage was mailed (`reason` = the stage); it is what opens the offer.
+  COMEBACK_OFFERED
 }
 
 /// MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened, for the once-a-year pause and the

@@ -194,12 +194,12 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   }
 
   /** Stripe's own subscriptions per customer (review: Checkout asks Stripe, not only the mirror). */
-  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date }[]>();
+  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date; offerId?: string | null }[]>();
   /** Open Checkout sessions per customer, and the ones expired. */
   readonly openCheckouts = new Map<string, number>();
   expiredCheckouts = 0;
 
-  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date }[]> {
+  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date; offerId?: string | null }[]> {
     this.take(`subscriptions:${customer}`);
     return this.stripeSubscriptions.get(customer) ?? [];
   }
@@ -235,13 +235,21 @@ export class FakeCheckoutGateway implements CheckoutGateway {
 
   /** The launch coupon as D1 shapes it: 50% once on the Freelancer product, redeemable until `redeemBy`. */
   withLaunchCoupon(redeemBy: Date, id = 'mtb3a_launch_yearly_2026', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'once', durationInMonths: null, redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null }, duration: 'once', durationInMonths: null, redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
     return this;
   }
 
   /** MUT-532 (D11): the stay coupon: 50% off the next 2 invoices on the Freelancer product. */
   withStayCoupon(id = 'mtb3a_stay_monthly_50', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'repeating', durationInMonths: 2, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null }, duration: 'repeating', durationInMonths: 2, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    return this;
+  }
+
+  /** MUT-534 (D8): the come-back coupons: ₪20 and $6 off the first invoice, one per currency, Freelancer only, no end. */
+  withComebackCoupon(over: Partial<CouponFact> = {}): this {
+    const base = { valid: true, percentOff: null, duration: 'once', durationInMonths: null, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT] };
+    this.coupons.set('mtb3a_comeback_first_month_ils', { id: 'mtb3a_comeback_first_month_ils', ...base, amountOff: 2000, amountOffIn: { ILS: 2000, USD: null }, ...over });
+    this.coupons.set('mtb3a_comeback_first_month_usd', { id: 'mtb3a_comeback_first_month_usd', ...base, amountOff: 600, amountOffIn: { ILS: null, USD: 600 }, ...over });
     return this;
   }
 

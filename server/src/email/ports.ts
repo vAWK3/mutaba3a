@@ -9,7 +9,8 @@ import type { UserLocale } from '../repositories/ports.js';
  * (ADR-159 §5, pinned by templates.test.ts). One exception (MUT-333, ADR-188 override log): `account-closing` names
  * the day the account is deleted, a calendar day and never a money date. MUT-525 (ADR-237 override log): the trial
  * mails may name the launch offer's percent and last day, and `offer-renewing-soon` names the subscription's own
- * yearly price and renewal day, because a renewal notice must state them. Money records still never appear.
+ * yearly price and renewal day, because a renewal notice must state them. MUT-534 (ADR-243 override log):
+ * `comeback-offer` names the come-back prices. Money records still never appear.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -29,6 +30,7 @@ export const TEMPLATE_IDS = [
   'offer-renewing-soon',
   'card-failed',
   'card-failed-reminder',
+  'comeback-offer',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -65,6 +67,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   // the address must not cap away the mail that keeps their plan running.
   'card-failed',
   'card-failed-reminder',
+  // MUT-534: the daily run sends each stage once per person, ever.
+  'comeback-offer',
 ]);
 
 export interface TemplateVars {
@@ -116,6 +120,12 @@ export interface TemplateVars {
    * sooner), worded "within N days at most"; `readOnlyAfter` says the lapse gate is on, so an ended plan is read-only.
    */
   'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; updateLink: string };
+  /**
+   * MUT-534 (ADR-243 overrides ADR-159 §5 for this mail): 30 or 90 days after a paid plan ended. The prices are minor
+   * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;
+   * `subscribeLink` opens Billing's Subscribe step.
+   */
+  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string };
 }
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */

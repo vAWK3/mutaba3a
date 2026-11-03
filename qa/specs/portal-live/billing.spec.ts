@@ -10,6 +10,7 @@ import {
   invoicesOf,
   liveState,
   outboxOf,
+  paidLapse,
   payCheckoutByApi,
   payingUntilSoon,
   provisionPerson,
@@ -937,3 +938,114 @@ test('A declined renewal a week on - exactly one reminder, then nothing more for
     expect((await outboxOf(person.email)).filter((m) => m.template.startsWith('card-failed'))).toHaveLength(1);
   });
 });
+
+/*
+ * MUT-534 (ADR-243): the come-back offer. A paid monthly plan ended 31 days ago on a sandbox clock started in the past;
+ * the daily job is run through its operator door; this run's come-back coupon is ₪20 / $6 off the first invoice.
+ */
+async function comebackMailed(person: Awaited<ReturnType<typeof provisionPerson>>) {
+  await expect.poll(async () => {
+    await runMailJob('comeback-mail');
+    return (await outboxOf(person.email)).filter((m) => m.template === 'comeback-offer').length;
+  }, { timeout: 90_000 }).toBe(1);
+  return (await outboxOf(person.email)).find((m) => m.template === 'comeback-offer')!;
+}
+
+async function comebackCheckout(page: import('@playwright/test').Page, mail: { html: string }, country: string, yearly: boolean) {
+  const link = /href="([^"]*step=subscribe[^"]*)"/.exec(mail.html)?.[1];
+  expect(link).toBeTruthy();
+  await page.goto(link!.replace(/&amp;/g, '&'));
+  const sheet = page.getByRole('dialog', { name: 'Subscribe to Freelancer' });
+  await sheet.getByRole('combobox', { name: 'Billing address country' }).selectOption(country);
+  if (yearly) await sheet.getByRole('radio', { name: /^Yearly/ }).click();
+  return sheet;
+}
+
+test('The come-back offer - mailed 30 days after a paid plan ended; the first month back is ₪9, then ₪29', { tag: '@portal-live.billing.comeback-offer' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'back');
+  const { customerId } = await step('A monthly subscriber paid once; the plan ended 31 days ago', async () => {
+    const lapse = await paidLapse(person, 31);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+    return lapse;
+  });
+  const mail = await step('The daily job runs: one mail, the records are still here, ₪9 the first month back', async () => {
+    const m = await comebackMailed(person);
+    expect(m.subject).toBe('Your MTB3A records are still here');
+    expect(m.text).toContain('Come back for ₪9 for your first month, then ₪29 a month. Prefer a year? Your first year is ₪270, then ₪290.');
+    return m;
+  });
+  await signIn(page, person);
+  const sheet = await step('Open the mail’s button: Subscribe says welcome back, ₪9.00 then ₪29.00 a month', async () => {
+    const s = await comebackCheckout(page, mail, 'IL', false);
+    await expect(s.getByText(/^Welcome back: your first month is ₪9\.00, then ₪29\.00 a month\.$/)).toBeVisible({ timeout: 45_000 });
+    return s;
+  });
+  await step('Continue to payment: Stripe’s page says the welcome-back price; the first invoice takes ₪20 off ₪29', async () => {
+    await sheet.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 45_000 });
+    const { submitMessage } = await payCheckoutByApi(page, person, 'freelancer_list_monthly_ils', { offerId: 'comeback-2026' });
+    expect(submitMessage).toContain('Welcome-back offer: \u2068₪9\u2069 for your first month, then \u2068₪29\u2069 a month.');
+    await expect.poll(async () => (await invoicesOf(customerId)).at(-1), { timeout: 60_000 }).toMatchObject({ subtotal: 2900, discount: 2000 });
+  });
+  await step('Once back, the offer is gone and the job mails nothing more', async () => {
+    await expect.poll(async () => (await (await page.request.get('/v1/billing')).json()).comeback, { timeout: 60_000 }).toBeNull();
+    await runMailJob('comeback-mail');
+    expect((await outboxOf(person.email)).filter((m) => m.template === 'comeback-offer')).toHaveLength(1);
+  });
+});
+
+test('The come-back offer on Yearly - the same ₪20 off the first year, ₪270 then ₪290', { tag: '@portal-live.billing.comeback-yearly' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'backyear');
+  const { customerId } = await step('A monthly subscriber paid once; the plan ended 31 days ago, and the job mailed them', async () => {
+    const lapse = await paidLapse(person, 31);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+    return lapse;
+  });
+  const mail = await comebackMailed(person);
+  await signIn(page, person);
+  await step('Pick Yearly: welcome back, ₪270.00 the first year, then ₪290.00', async () => {
+    const sheet = await comebackCheckout(page, mail, 'IL', true);
+    await expect(sheet.getByText(/^Welcome back: your first year is ₪270\.00, then ₪290\.00 a year\.$/)).toBeVisible({ timeout: 45_000 });
+    await sheet.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 45_000 });
+  });
+  await step('Stripe charges the first year less ₪20', async () => {
+    await payCheckoutByApi(page, person, 'freelancer_list_yearly_ils', { offerId: 'comeback-2026' });
+    await expect.poll(async () => (await invoicesOf(customerId)).at(-1), { timeout: 60_000 }).toMatchObject({ subtotal: 29000, discount: 2000 });
+  });
+});
+
+test('The come-back offer in dollars - a shekel payer coming back from abroad sees and pays $3.00, then $9.00', { tag: '@portal-live.billing.comeback-usd' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'backusd');
+  await step('A shekel subscriber paid once; the plan ended 31 days ago, and the job mailed them', async () => {
+    const lapse = await paidLapse(person, 31);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+  });
+  const mail = await comebackMailed(person);
+  await signIn(page, person);
+  await step('Pick a country outside Israel: the welcome-back price is in dollars', async () => {
+    const sheet = await comebackCheckout(page, mail, 'GB', false);
+    await expect(sheet.getByText(/^Welcome back: your first month is \$3\.00, then \$9\.00 a month\.$/)).toBeVisible({ timeout: 45_000 });
+    await sheet.getByRole('button', { name: 'Continue to payment' }).click();
+    await page.waitForURL(/checkout\.stripe\.com/, { timeout: 45_000 });
+  });
+  await step('Stripe’s page carries the come-back coupon in dollars', async () => {
+    const { submitMessage } = await payCheckoutByApi(page, person, 'freelancer_list_monthly_usd', { offerId: 'comeback-2026' });
+    expect(submitMessage).toContain('Welcome-back offer: \u2068$3\u2069 for your first month, then \u2068$9\u2069 a month.');
+  });
+});
+
+test('The come-back offer at day 90 - the second mail, its own subject, still ₪9 the first month back', { tag: '@portal-live.billing.comeback-day-90' }, async ({ step }) => {
+  const person = await provisionPerson('ar', 'back90');
+  await step('A monthly subscriber paid once; the plan ended 91 days ago', async () => {
+    const lapse = await paidLapse(person, 91);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+  });
+  await step('The daily job runs: the day-90 mail, in Arabic, names the price in its subject', async () => {
+    const mail = await comebackMailed(person);
+    expect(mail.locale).toBe('ar');
+    expect(mail.subject).toBe('عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
+    expect(mail.text).toContain('سجلاتك ما زالت هنا');
+  });
+});
+

@@ -200,6 +200,7 @@ const stayCoupon = (over: Partial<CouponFact> = {}): CouponFact => ({
   valid: true,
   percentOff: 50,
   amountOff: null,
+  amountOffIn: { ILS: null, USD: null },
   duration: 'repeating',
   durationInMonths: 2,
   redeemBy: null,

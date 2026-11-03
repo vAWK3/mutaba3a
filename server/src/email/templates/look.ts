@@ -86,6 +86,8 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   // MUT-533: the existing art only (no new pictures): Stripe trying again, then the plan's end.
   'card-failed': { mood: 'trial', header: 'spot-schedule', chip: 'schedule' },
   'card-failed-reminder': { mood: 'trial', header: 'spot-lock', chip: 'lock' },
+  // MUT-534: the existing art only: the way back up.
+  'comeback-offer': { mood: 'hello', header: 'milestone-firm', chip: 'success' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

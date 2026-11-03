@@ -36,10 +36,16 @@ describe('mirrorOf (MUT-360)', () => {
         offerId: null,
         pausedFrom: null,
         pauseResumesAt: null,
+        endedAt: null,
         currency: 'ILS',
       },
       notes: [],
     });
+  });
+
+  it('MUT-534 (D10): keeps when Stripe ended it, which after failed retries is weeks before the period end', () => {
+    const ended = mirrorOf(subscription({ status: 'canceled', ended_at: 1795000000 }), new Map());
+    expect('ok' in ended && ended.ok).toMatchObject({ status: 'canceled', endedAt: new Date(1795000000 * 1000), currentPeriodEnd: new Date(1796083200 * 1000) });
   });
 
   describe('a pause (MUT-532 §2.3, R4: pause_collection keeps the status active)', () => {

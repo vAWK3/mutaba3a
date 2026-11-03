@@ -2602,6 +2602,19 @@ export class PrismaLedgerStore implements LedgerStore {
         return user ? [{ stripeSubscriptionId: s.stripeSubscriptionId, offerId: s.offerId!, currentPeriodEnd: s.currentPeriodEnd, userId: user.id, email: user.email, locale: user.locale as UserLocale }] : [];
       });
     },
+    comebackCandidates: async ({ endedAfter, endedUpTo }) => {
+      const subs = await this.prisma.billingSubscription.findMany({
+        where: { status: 'canceled', endedAt: { gt: endedAfter, lte: endedUpTo }, billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },
+        select: { stripeSubscriptionId: true, endedAt: true, tier: true, billingAccount: { select: { currency: true, user: { select: { id: true, email: true, locale: true } } } } },
+        orderBy: [{ endedAt: 'asc' }, { stripeSubscriptionId: 'asc' }],
+      });
+      return subs.flatMap((s) => {
+        const user = s.billingAccount.user;
+        return user && s.endedAt
+          ? [{ stripeSubscriptionId: s.stripeSubscriptionId, endedAt: s.endedAt, tier: s.tier, currency: s.billingAccount.currency as 'ILS' | 'USD', userId: user.id, email: user.email, locale: user.locale as UserLocale }]
+          : [];
+      });
+    },
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({
         where: { status: 'past_due', billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },
@@ -2728,7 +2741,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     saveSubscription: async (input) => {
       const { stripeCustomerId, at, audit, ...given } = input;
-      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null };
       const attempt = () =>
         translate(() =>
           this.prisma.$transaction(async (tx) => {
@@ -2784,7 +2797,7 @@ export class PrismaLedgerStore implements LedgerStore {
           }),
         );
       } catch (err) {
-        // The one-stay-offer-per-person index (rule 2): a double press or a retry never claims it twice.
+        // The one-stay-offer-per-person index (rule 2), and MUT-534's one-come-back-stage-per-person: never claimed twice.
         if (err instanceof UniqueViolation) throw new StateConflict('billing_retention_event', 'TAKEN');
         throw err;
       }

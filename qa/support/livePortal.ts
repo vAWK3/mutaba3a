@@ -18,6 +18,8 @@ interface LiveState {
   offerCouponId: string;
   /** MUT-532: this run's stay coupon id, which the API reads; made when the env starts. */
   stayCouponId: string;
+  /** MUT-534: this run's come-back coupon ids, one per currency, which the API reads; made when the env starts. */
+  comebackCouponIds: { ILS: string; USD: string };
 }
 
 const STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.state', 'portal-live.json');
@@ -201,7 +203,7 @@ export async function fillStripeCheckout(page: Page, opts: { name: string; count
  * (TD-201), so the subscription is made on the customer this Checkout was opened for, with the price it sells.
  * Checks the session first: our person's own customer (D3), subscription mode, the lookup key.
  */
-export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey: string, opts: { trialEnd?: number } = {}): Promise<void> {
+export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey: string, opts: { trialEnd?: number; offerId?: string } = {}): Promise<{ subscriptionId: string; submitMessage: string }> {
   const sessionId = /\/(cs_test_[A-Za-z0-9]+)/.exec(page.url())?.[1];
   expect(sessionId, 'a Checkout Session in the page URL').toBeTruthy();
   const session = await stripeApi('GET', `checkout/sessions/${sessionId}`, { 'expand[]': 'line_items' });
@@ -212,9 +214,10 @@ export async function payCheckoutByApi(page: Page, person: LivePerson, lookupKey
   // MUT-525: a Checkout carrying the launch coupon puts it and the offer's name (the server's subscription_data, which
   // a retrieved session doesn't show) on the subscription, as paying on the page would.
   const coupon = session.discounts?.[0]?.coupon as string | undefined;
-  await subscribeByApi(session.customer, lookupKey, opts.trialEnd, coupon, coupon ? { mutaba3a_offer: 'launch-2026' } : {});
+  const subscriptionId = await subscribeByApi(session.customer, lookupKey, opts.trialEnd, coupon, coupon ? { mutaba3a_offer: opts.offerId ?? 'launch-2026' } : {});
   await stripeApi('POST', `checkout/sessions/${sessionId}/expire`);
   await page.goto(session.success_url);
+  return { subscriptionId, submitMessage: session.custom_text?.submit?.message ?? '' };
 }
 
 // ---- MUT-418: people who start at a real signup, so their free trial is the one the redeem starts ----------------
@@ -288,7 +291,7 @@ export async function outboxOf(email: string): Promise<Array<{ template: string;
 }
 
 /** MUT-533: runs a mail job now, as the operator's `npm run billing:…-mail` does, through the admin door. */
-export async function runMailJob(job: 'card-failed-mail', dryRun = false): Promise<Json> {
+export async function runMailJob(job: 'card-failed-mail' | 'comeback-mail', dryRun = false): Promise<Json> {
   const { apiOrigin, adminToken } = liveState();
   const res = await fetch(`${apiOrigin}/admin/v1/billing/${job}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ dryRun }) });
   expect(res.status, `${job} ${await res.clone().text()}`).toBe(200);
@@ -312,3 +315,18 @@ export async function declinedRenewal(person: LivePerson, failedAgoS: number, fa
   await advanceClock(clockId, Math.min(sub.items.data[0].current_period_end + 2 * 60 * 60, nowS - 60));
   return { customerId, clockId, subscriptionId };
 }
+
+/**
+ * MUT-534: a person whose monthly plan took one payment and then ended `endedDaysAgo` days ago, on a test clock started
+ * in the past: paid once, cancelled at the period end, the clock run past it.
+ */
+export async function paidLapse(person: LivePerson, endedDaysAgo: number): Promise<{ customerId: string; clockId: string; subscriptionId: string }> {
+  const nowS = Math.floor(Date.now() / 1000);
+  const { customerId, clockId } = await customerOnClock(person, nowS - (endedDaysAgo + 31) * 24 * 60 * 60);
+  const subscriptionId = await subscribeByApi(customerId);
+  await stripeApi('POST', `subscriptions/${subscriptionId}`, { cancel_at_period_end: 'true' });
+  const sub = await stripeApi('GET', `subscriptions/${subscriptionId}`);
+  await advanceClock(clockId, Math.min(sub.items.data[0].current_period_end + 2 * 60 * 60, nowS - 60));
+  return { customerId, clockId, subscriptionId };
+}
+

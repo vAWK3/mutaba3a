@@ -60,6 +60,7 @@ const vars = {
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: false, updateLink: 'https://portal.example.test/?billing=true' },
+  'comeback-offer': { stage: 'day-30', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
 } as const;
 let seq = 0;
 const signup = (to: string) => ({ to, template: 'finish-signup' as const, locale: 'en' as const, vars: vars['finish-signup'], idempotencyKey: `signup-${++seq}` });

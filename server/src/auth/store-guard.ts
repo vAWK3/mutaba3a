@@ -376,6 +376,8 @@ export const STORE_ACCESS: StoreAccess = {
     offerRenewalCandidates: 'operator',
     // MUT-533: the hourly failed-card mail run.
     pastDueCandidates: 'operator',
+    // MUT-534: the daily come-back run.
+    comebackCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',

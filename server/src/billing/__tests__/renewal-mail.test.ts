@@ -79,6 +79,14 @@ function harness() {
 }
 
 describe('runRenewalMail (MUT-525 DD8)', () => {
+  it('MUT-534 (review): a subscription that came back on the come-back offer is never told its launch-offer year ends', async () => {
+    const h = harness();
+    const { user } = await h.subscriber({ renewsInDays: 25, offerId: 'comeback-2026' });
+    const { summary } = await h.run();
+    expect(summary).toMatchObject({ checked: 0, sent: 0 });
+    expect(h.outbox.list({ to: user.email })).toHaveLength(0);
+  });
+
   it('mails the payer once, about 30 days ahead: the day, the price the renewal charges, Manage billing', async () => {
     const h = harness();
     const { user, subscriptionId } = await h.subscriber({ renewsInDays: 25 });

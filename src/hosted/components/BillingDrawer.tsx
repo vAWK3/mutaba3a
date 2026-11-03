@@ -29,6 +29,7 @@ import {
   checkoutRouteOf,
   currencyOfCountry,
   daysLeft,
+  comebackOfferOf,
   eligibleOfferOf,
   firstChargeOf,
   isConfirmed,
@@ -335,7 +336,8 @@ function StatusView({
   const offer = eligibleOfferOf(billing);
   const switchLine = yearlySwitchLineOf(billing);
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
-  const subscribed = billing.subscription?.offer ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
+  // MUT-534: only the launch offer says so here; a come-back Checkout (or a server older than 1.99.0) reads by its kind.
+  const subscribed = billing.subscription?.offer && billing.subscription.offer.kind !== 'comeback' ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
   const announcement =
     phase === 'confirming'
       ? t('hosted.billing.states.confirming')
@@ -835,11 +837,23 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const offerShown = activeOffer !== null && (currency === null || offer !== null);
   /** The offer this Continue would carry: Yearly, in the chosen currency. */
   const applied = interval === 'year' ? offer : null;
-  const offerEnded: 'withPrice' | 'whileOpen' | null = refusedOffer !== null ? 'withPrice' : openedWith !== null && activeOffer === null ? 'whileOpen' : null;
+  /**
+   * MUT-534 (D14): the come-back price for the chosen interval and currency, when the server says the person may have it
+   * and the launch offer isn't what this Continue carries. Its amounts come from the server (ADR-004).
+   */
+  const offeredBack = comebackOfferOf(billing);
+  const comeback = offeredBack && offeredBack.id !== refusedOffer && !applied ? offeredBack : null;
+  const comebackPrice =
+    comeback && currency
+      ? { first: (interval === 'year' ? comeback.firstYear : comeback.firstMonth)[currency], list: (interval === 'year' ? comeback.listYear : comeback.listMonth)[currency] }
+      : null;
+  const comebackShown = comeback !== null && comebackPrice !== null && comebackPrice.first !== null && comebackPrice.list !== null;
+  const comebackEnded = refusedOffer !== null && refusedOffer === offeredBack?.id;
+  const offerEnded: 'withPrice' | 'whileOpen' | null = refusedOffer !== null && !comebackEnded ? 'withPrice' : openedWith !== null && activeOffer === null ? 'whileOpen' : null;
   const canContinue = route !== null && route !== 'contact-us' && pair !== null && !checkout.isPending;
   const submit = () => {
     if (!canContinue || !currency) return;
-    const expectedOffer = applied?.id ?? null;
+    const expectedOffer = applied?.id ?? (comebackShown ? comeback!.id : null);
     checkout.mutate(
       {
         interval,
@@ -872,6 +886,8 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
     offerShown,
     applied,
     offerEnded,
+    comebackPrice: comebackShown ? (comebackPrice as { first: number; list: number }) : null,
+    comebackEnded,
     canContinue,
     submit,
   };
@@ -945,8 +961,17 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
       <button type="button" className="hp-billing-back" onClick={onBack}>
         {t('hosted.billing.subscribe.back')}
       </button>
+      {/* MUT-534 (D14): the server refused the come-back price at Continue; nothing was charged. */}
+      {form.comebackEnded && <Banner tone="info" text={t('hosted.billing.comeback.ended')} />}
       {/* MUT-525 DD6: the offer reads first, before a country is picked; the step's order is unchanged. */}
       {offerShown && activeOffer && <OfferTopLine offer={activeOffer} place="drawer" endsToday />}
+      {/* MUT-534 (D14): the welcome-back price, once a country sets the currency it is in. */}
+      {form.comebackPrice && (
+        <Banner
+          tone="info"
+          text={sentence(t, `hosted.billing.comeback.${form.interval === 'year' ? 'yearly' : 'monthly'}`, { first: amount(form.comebackPrice.first), list: amount(form.comebackPrice.list) })}
+        />
+      )}
 
       <Select
         label={t('hosted.billing.subscribe.country')}

@@ -548,6 +548,19 @@ export const StayOfferResultSchema = z
   .openapi('StayOfferResult');
 
 /** MUT-362: Settings › Billing in one read (GET /v1/billing). */
+const PerCurrencyAmountSchema = z.object({ ILS: z.number().int().nullable(), USD: z.number().int().nullable() });
+
+/** MUT-534 (D14): minor units per currency, Stripe's arithmetic (the list price less the coupon's amount); null where it isn't sold. */
+export const BillingComebackSchema = z
+  .object({
+    id: z.string(),
+    firstMonth: PerCurrencyAmountSchema,
+    listMonth: PerCurrencyAmountSchema,
+    firstYear: PerCurrencyAmountSchema,
+    listYear: PerCurrencyAmountSchema,
+  })
+  .openapi('BillingComeback');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -564,7 +577,9 @@ export const BillingOverviewSchema = z
         /** MUT-525 DD3: on a GA list price (`freelancer_list_*`), so it renews at the catalog's amount; false for a founder price. */
         renewsAtListPrice: z.boolean(),
         /** MUT-525 DD10b: the launch offer the subscription's Checkout carried. */
-        offer: z.object({ id: z.string() }).nullable(),
+        offer: z
+          .object({ id: z.string(), kind: z.enum(['launch', 'comeback']).openapi({ description: 'MUT-534: which offer the Checkout carried. Additive since 1.99.0-mut534.' }) })
+          .nullable(),
         /**
          * MUT-532: a pause, as the mirror holds it: from the paid period's end (`from`) until billing restarts on its own
          * (`until`; null: no end set). Before `from` it is booked; from then the records are read-only. Null: none.
@@ -590,6 +605,8 @@ export const BillingOverviewSchema = z
     offer: z.union([BillingOfferSchema, z.null()]),
     /** MUT-531: the switch to yearly, once the shown subscription may switch (a monthly list price, 2 paid invoices); else null. */
     yearlySwitch: z.union([BillingYearlySwitchSchema, z.null()]),
+    /** MUT-534: the come-back offer once the come-back mail offered it and the person still may have it; else null. Additive since 1.99.0-mut534. */
+    comeback: z.union([BillingComebackSchema, z.null()]),
   })
   .openapi('BillingOverview');
 
@@ -761,6 +778,52 @@ export const CardFailedMailRowSchema = z
     outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
   })
   .openapi('CardFailedMailRow');
+
+/** MUT-534: the daily come-back mail's counts. */
+export const ComebackMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'People whose latest paid plan Stripe ended in one of the windows' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage was already recorded for the person' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent (its record released): Stripe or the mailer failed, mail off, capped, refused or suppressed' }),
+    skipped: z.object({
+      paying: z.number().int(),
+      noLapse: z.number().int(),
+      tooSoon: z.number().int(),
+      firm: z.number().int(),
+      alreadyHad: z.number().int(),
+      stayOfferRecent: z.number().int(),
+      covered: z.number().int(),
+      noProfile: z.number().int(),
+      noStage: z.number().int(),
+      alreadyMailed: z.number().int(),
+      neverPaid: z.number().int(),
+      noOffer: z.number().int().openapi({ description: 'No running come-back coupon (missing, or not shaped as an amount off once)' }),
+      noPrice: z.number().int(),
+      suppressed: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('ComebackMailSummary');
+
+export const ComebackMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stripeSubscriptionId: z.string(),
+    stage: z.enum(['day-30', 'day-90']).nullable(),
+    action: z.enum(['send', 'skip']),
+    skip: z
+      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-profile', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed'])
+      .nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
+  })
+  .openapi('ComebackMailRow');
+
+export const ComebackMailRunSchema = z.object({ summary: ComebackMailSummarySchema, rows: z.array(ComebackMailRowSchema) }).openapi('ComebackMailRun');
 
 export const CardFailedMailRunSchema = z.object({ summary: CardFailedMailSummarySchema, rows: z.array(CardFailedMailRowSchema) }).openapi('CardFailedMailRun');
 

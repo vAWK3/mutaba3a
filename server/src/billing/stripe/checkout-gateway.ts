@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import type { SubscriptionState } from '../checkout.js';
+import { OFFER_METADATA_KEY, type SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
 import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
@@ -98,7 +98,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
   async function readCoupon(id: string): Promise<CouponFact | null> {
     const at = options.now().getTime();
     try {
-      const found = await wrapped(() => stripe.coupons.retrieve(id, { expand: ['applies_to'] }));
+      const found = await wrapped(() => stripe.coupons.retrieve(id, { expand: ['applies_to', 'currency_options'] }));
       const coupon = found.valid ? couponFactOf(found) : null;
       coupons.set(id, { at, coupon });
       return coupon;
@@ -160,7 +160,7 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const page = await wrapped(() => stripe.subscriptions.list({ customer, status: 'all', limit: SUBSCRIPTIONS_PAGE }));
       return page.data.flatMap((sub) => {
         const currentPeriodEnd = periodEndOf(sub);
-        return currentPeriodEnd ? [{ status: sub.status, currentPeriodEnd }] : [];
+        return currentPeriodEnd ? [{ status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
       });
     },
     async expireOpenCheckouts(customer) {
@@ -245,6 +245,7 @@ function couponFactOf(coupon: Stripe.Coupon): CouponFact {
     valid: coupon.valid,
     percentOff: coupon.percent_off ?? null,
     amountOff: coupon.amount_off ?? null,
+    amountOffIn: { ILS: amountOffIn(coupon, 'ils'), USD: amountOffIn(coupon, 'usd') },
     duration: coupon.duration,
     durationInMonths: coupon.duration_in_months ?? null,
     redeemBy: typeof coupon.redeem_by === 'number' ? new Date(coupon.redeem_by * 1000) : null,
@@ -268,4 +269,11 @@ async function wrapped<T>(call: () => Promise<T>): Promise<T> {
   } catch (err) {
     throw toGatewayError(err);
   }
+}
+
+/** MUT-534 (D8): an amount-off coupon's amount in one currency: its own, else its currency option; null for none. */
+function amountOffIn(coupon: Stripe.Coupon, currency: 'ils' | 'usd'): number | null {
+  if (coupon.amount_off == null) return null;
+  if (coupon.currency === currency) return coupon.amount_off;
+  return coupon.currency_options?.[currency]?.amount_off ?? null;
 }

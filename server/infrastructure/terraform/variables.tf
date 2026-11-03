@@ -125,6 +125,12 @@ variable "billing_gate_enabled" {
   default     = true
 }
 
+variable "comeback_mail_enabled" {
+  description = "MUT-534 (ADR-243): creates the daily come-back mail job. Off (default) until the operator has read `npm run billing:comeback-mail -- --dry-run` after the release: the first run would mail everyone whose plan ended in a window."
+  type        = bool
+  default     = false
+}
+
 variable "billing_retry_window_days" {
   description = "MUT-533 (D3): the length of Stripe's Smart Retries window in days, as set in the Stripe dashboard (Settings › Billing › Revenue recovery): 7, 14, 21 or 28. The failed-card reminder goes at its midpoint. 14 (Stripe's default, 8 tries within 2 weeks) leaves BILLING_RETRY_WINDOW_DAYS unset."
   type        = number

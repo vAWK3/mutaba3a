@@ -30,6 +30,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
+  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
 };
 /** MUT-525: the launch offer line the trial mails carry while it runs (ADR-237). */
 const OFFER = { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } };
@@ -42,6 +43,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'trial-ending-soon': ['3'],
   'trial-locking-soon': ['2'],
   'card-failed-reminder': ['6'],
+  // MUT-534 (ADR-243, overriding ADR-159 §5): the come-back prices, longest first so none hides inside another.
+  'comeback-offer': ['₪290', '₪270', '₪29', '₪9'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
   'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
   // MUT-525 (ADR-237, overriding ADR-159 §5): a renewal notice must state its price and day.
@@ -260,6 +263,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 نوفمبر 2027' },
   'card-failed': { en: "Your card didn't go through", ar: 'لم تنجح عملية الدفع ببطاقتك' },
   'card-failed-reminder': { en: 'Your card still isn’t going through', ar: 'ما زالت عملية الدفع ببطاقتك لا تنجح' },
+  'comeback-offer': { en: 'Come back to MTB3A for ₪9 your first month', ar: 'عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
@@ -385,7 +389,7 @@ describe('MUT-468 frame', () => {
     const closing = renderMail('account-closing', 'ar', SAMPLE['account-closing'], FRAME);
     expect(closing.html).toContain('data-details');
     expect(closing.text).toContain(`يوم الحذف: ${mailDay(SAMPLE['account-closing'].deleteOn, 'ar')}`);
-    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon')) {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon' && t !== 'comeback-offer')) {
       expect(renderMail(id, 'en', SAMPLE[id] as never, FRAME).html).not.toContain('data-details');
     }
   });

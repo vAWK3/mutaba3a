@@ -9,6 +9,7 @@ import {
   offerView,
   parseOffers,
   stayEntryOf,
+  comebackEntryOf,
   productIdsOf,
   resolveOffer,
   type CouponFact,
@@ -27,6 +28,7 @@ const HOUR = 60 * 60 * 1000;
 const END = new Date('2027-02-01T22:59:00.000Z');
 const ENTRY: OfferEntry = { id: 'launch-2026', couponId: 'mtb3a_launch_yearly_2026', kind: 'launch', interval: 'year', tier: 'freelancer' };
 const STAY: OfferEntry = { id: 'stay-2026', couponId: 'mtb3a_stay_monthly_50', kind: 'stay', interval: 'month', tier: 'freelancer' };
+const COMEBACK: OfferEntry = { id: 'comeback-2026', couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' }, kind: 'comeback', tier: 'freelancer' };
 const PRODUCTS = new Set(['prod_FREELANCER']);
 const CATALOG: Catalog = {
   ILS: { month: { id: 'price_ils_m', unitAmount: 2900, productId: 'prod_FREELANCER' }, year: { id: 'price_ils_y', unitAmount: 29000, productId: 'prod_FREELANCER' } },
@@ -38,6 +40,7 @@ const coupon = (over: Partial<CouponFact> = {}): CouponFact => ({
   valid: true,
   percentOff: 50,
   amountOff: null,
+  amountOffIn: { ILS: null, USD: null },
   duration: 'once',
   durationInMonths: null,
   redeemBy: END,
@@ -46,8 +49,20 @@ const coupon = (over: Partial<CouponFact> = {}): CouponFact => ({
 });
 
 describe('offers.json (D12)', () => {
-  it('ships the launch offer, yearly, and the stay offer, monthly, on the Freelancer tier (MUT-532)', () => {
-    expect(OFFERS).toEqual([ENTRY, STAY]);
+  it('ships the launch offer, yearly, the stay offer, monthly, and the come-back offer, on the Freelancer tier (MUT-532, MUT-534)', () => {
+    expect(OFFERS).toEqual([ENTRY, STAY, COMEBACK]);
+    expect(comebackEntryOf(OFFERS)).toEqual(COMEBACK);
+    expect(comebackEntryOf([ENTRY, STAY])).toBeNull();
+  });
+
+  it('MUT-534 (D9): a come-back offer has no interval (it applies to both) and is never the launch offer', async () => {
+    expect(parseOffers([{ id: 'comeback-2026', kind: 'comeback', couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' }, tier: 'freelancer' }])).toEqual([COMEBACK]);
+    // One coupon per currency: Stripe's Checkout takes an amount off only in the coupon's own currency.
+    expect(() => parseOffers([{ id: 'comeback-2026', kind: 'comeback', couponIds: { ILS: 'mtb3a_comeback_first_month_ils' }, tier: 'freelancer' }])).toThrow(/couponIds/);
+    expect(() => parseOffers([{ ...COMEBACK, interval: 'month' }])).toThrow(/come-back offer has no interval/);
+    const read: string[] = [];
+    expect(await resolveOffer([COMEBACK], 'year', async (id) => (read.push(id), coupon({ id })), PRODUCTS, NOW)).toBeNull();
+    expect(read).toEqual([]);
   });
 
   it('reads an entry with no kind as a launch offer, and a stay offer only monthly (MUT-532)', () => {
@@ -55,7 +70,7 @@ describe('offers.json (D12)', () => {
     void _kind;
     expect(parseOffers([noKind])).toEqual([ENTRY]);
     expect(() => parseOffers([{ ...STAY, interval: 'year' }])).toThrow(/stay offer/);
-    expect(() => parseOffers([{ ...STAY, kind: 'comeback' }])).toThrow(/kind/);
+    expect(() => parseOffers([{ ...STAY, kind: 'welcome' }])).toThrow(/kind/);
     expect(stayEntryOf(OFFERS)).toEqual(STAY);
     expect(stayEntryOf([ENTRY])).toBeNull();
   });
@@ -69,11 +84,12 @@ describe('offers.json (D12)', () => {
     expect(() => parseOffers([ENTRY, ENTRY])).toThrow(/duplicate/);
   });
 
-  it('a non-production coupon id replaces the list with one yearly QA entry (R6)', () => {
-    expect(offersFor(undefined)).toBe(OFFERS);
-    expect(offersFor('qa_offer_abc')).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, STAY]);
-    expect(offersFor(undefined, 'qa_stay_abc')).toEqual([ENTRY, { ...STAY, couponId: 'qa_stay_abc' }]);
-    expect(offersFor('qa_offer_abc', 'qa_stay_abc')).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, { ...STAY, couponId: 'qa_stay_abc' }]);
+  it('a non-production coupon id replaces its kind with one QA entry (R6, MUT-534 comeback)', () => {
+    expect(offersFor({})).toBe(OFFERS);
+    expect(offersFor({ launch: 'qa_offer_abc' })).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, STAY, COMEBACK]);
+    expect(offersFor({ stay: 'qa_stay_abc' })).toEqual([ENTRY, { ...STAY, couponId: 'qa_stay_abc' }, COMEBACK]);
+    expect(offersFor({ comeback: { ILS: 'qa_back_ils', USD: 'qa_back_usd' } })).toEqual([ENTRY, STAY, { ...COMEBACK, couponIds: { ILS: 'qa_back_ils', USD: 'qa_back_usd' } }]);
+    expect(offersFor({ launch: 'qa_offer_abc', stay: 'qa_stay_abc' })).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, { ...STAY, couponId: 'qa_stay_abc' }, COMEBACK]);
   });
 
   it('never takes a stay coupon for the launch offer of a monthly Checkout (MUT-532)', async () => {

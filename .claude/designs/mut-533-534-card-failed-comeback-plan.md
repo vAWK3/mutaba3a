@@ -77,7 +77,7 @@ written. He declined card digits in mail.** The eng review (§10, R1–R15) is f
 
 ### MUT-534: the come-back offer
 
-- **D8 The coupon is an amount off, held by Stripe:** `mtb3a_comeback_first_month`, **₪20 off, with a USD
+- **D8 (built as two coupons, 2026-11-03: Stripe's Checkout refuses an amount-off coupon in another currency, currency options or not; `mtb3a_comeback_first_month_ils` ₪20 and `_usd` $6) The coupon is an amount off, held by Stripe:** `mtb3a_comeback_first_month`, **₪20 off, with a USD
   currency option of $6**, `duration: once`, Freelancer product only, no end date. First month back = monthly list
   less that: **₪9 / $3**; a yearly comeback gets the same amount off its first invoice: **₪270 / $84**. No amount in
   the code: the server reads the coupon (with `applies_to` and `currency_options` expanded) and the catalog. A coupon

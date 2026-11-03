@@ -2151,6 +2151,8 @@ export interface BillingSubscriptionRecord {
   pausedFrom: Date | null;
   /** MUT-532: when Stripe resumes collecting; null with none set, or a pause with no end. */
   pauseResumesAt: Date | null;
+  /** MUT-534 (D10): when Stripe ended it (`ended_at`); null while it runs. */
+  endedAt: Date | null;
   stripeUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2258,6 +2260,8 @@ export interface SaveBillingSubscriptionInput {
   /** MUT-532: the pause Stripe holds. Absent is null. */
   pausedFrom?: Date | null;
   pauseResumesAt?: Date | null;
+  /** MUT-534: when Stripe ended it. Absent is null. */
+  endedAt?: Date | null;
   /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
   at: Date;
@@ -2293,6 +2297,18 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
+/** MUT-534: a subscription Stripe ended, whose payer the come-back mail may reach. */
+export interface ComebackCandidate {
+  stripeSubscriptionId: string;
+  endedAt: Date;
+  tier: BillingTierRecord;
+  /** The billing account's currency, the one the mail names prices in. */
+  currency: 'ILS' | 'USD';
+  userId: string;
+  email: string;
+  locale: UserLocale;
+}
+
 /** MUT-533: a past_due subscription whose payer the failed-card mail may reach. */
 export interface PastDueCandidate {
   stripeSubscriptionId: string;
@@ -2302,7 +2318,7 @@ export interface PastDueCandidate {
 }
 
 /** MUT-532 (ADR-240): that a pause, a stay offer, a cancel or a switch happened; history and the once-rules only. */
-export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH';
+export type BillingRetentionKindRecord = 'PAUSE' | 'STAY_OFFER' | 'CANCEL' | 'YEARLY_SWITCH' | 'COMEBACK_OFFERED';
 
 export interface BillingRetentionEventRecord {
   id: string;
@@ -2353,6 +2369,11 @@ export interface BillingRepository {
    * end first: who the hourly failed-card mail looks at. Stripe's own invoices then decide.
    */
   pastDueCandidates(): Promise<PastDueCandidate[]>;
+  /**
+   * MUT-534: `canceled` subscriptions Stripe ended in (endedAfter, endedUpTo], paid by a linked ACTIVE person who isn't
+   * closing their account, oldest end first: who the daily come-back run looks at.
+   */
+  comebackCandidates(window: { endedAfter: Date; endedUpTo: Date }): Promise<ComebackCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

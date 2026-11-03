@@ -521,6 +521,53 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
   }),
 };
 
+/**
+ * MUT-534 (plan §6, copy approved by Basel 2026-11-02; ADR-243 overrides ADR-159 §5 for this mail): 30 and 90 days
+ * after a paid plan ended. The records are still there; the first month back costs the list price less the come-back
+ * coupon's amount. Only the subject differs between the two stages.
+ */
+const comebackOffer: Copy<'comeback-offer'> = {
+  en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink }) => {
+    const money = (amount: number) => formatMinor(amount, currency);
+    const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
+    return {
+      subject: stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`,
+      preheader: `Your first month back is ${first}, then ${month} a month.`,
+      headline: 'Your records are still here',
+      intro: [
+        ['Everything you kept in MTB3A is still in your account, and you can read and download it any time.'],
+        [`Come back for ${first} for your first month, then ${month} a month. Prefer a year? Your first year is ${year}, then ${yearly}.`],
+      ],
+      details: [
+        { label: 'First month back', value: first },
+        { label: 'Then', value: `${month} a month, plus VAT where it applies` },
+      ],
+      action: { label: 'Come back to MTB3A', href: subscribeLink },
+      outro: [["The price applies on its own when you subscribe; there's no code to enter. This offer is one time only."]],
+    };
+  },
+  ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink }) => {
+    // Isolated so each amount reads left to right inside Arabic (ADR-101).
+    const money = (amount: number) => `\u2068${formatMinor(amount, currency)}\u2069`;
+    const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
+    return {
+      subject: stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`,
+      preheader: `شهرك الأول عند العودة بـ ${first}، ثم ${month} شهريًا.`,
+      headline: 'سجلاتك ما زالت هنا',
+      intro: [
+        ['كل ما حفظته في متابعة ما زال في حسابك، ويمكنك قراءته وتنزيله في أي وقت.'],
+        [`عُد بـ ${first} لشهرك الأول، ثم ${month} شهريًا. تفضّل الاشتراك السنوي؟ سنتك الأولى بـ ${year}، ثم ${yearly}.`],
+      ],
+      details: [
+        { label: 'الشهر الأول عند العودة', value: first },
+        { label: 'بعد ذلك', value: `${month} شهريًا، وتُضاف ضريبة القيمة المضافة حيث تنطبق` },
+      ],
+      action: { label: 'عُد إلى متابعة', href: subscribeLink },
+      outro: [['يُطبَّق السعر تلقائيًا عند الاشتراك، دون أي رمز. هذا العرض مرة واحدة فقط.']],
+    };
+  },
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -539,4 +586,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'offer-renewing-soon': offerRenewingSoon,
   'card-failed': cardFailed,
   'card-failed-reminder': cardFailedReminder,
+  'comeback-offer': comebackOffer,
 };
