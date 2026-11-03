@@ -11613,6 +11613,160 @@ components:
         - action
         - skip
         - outcome
+    ComebackMailSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        checked:
+          type: integer
+          description: People whose latest paid plan Stripe ended in one of the windows
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: This stage was already recorded for the person
+        notSent:
+          type: integer
+          description: "Due but not sent (its record released): Stripe or the mailer failed, mail off, capped, refused or suppressed"
+        skipped:
+          type: object
+          properties:
+            paying:
+              type: integer
+            noLapse:
+              type: integer
+            tooSoon:
+              type: integer
+            firm:
+              type: integer
+            alreadyHad:
+              type: integer
+            stayOfferRecent:
+              type: integer
+            covered:
+              type: integer
+            noStage:
+              type: integer
+            alreadyMailed:
+              type: integer
+            neverPaid:
+              type: integer
+            noOffer:
+              type: integer
+              description: No running come-back coupon (missing, or not shaped as an amount off once)
+            noPrice:
+              type: integer
+            suppressed:
+              type: integer
+          required:
+            - paying
+            - noLapse
+            - tooSoon
+            - firm
+            - alreadyHad
+            - stayOfferRecent
+            - covered
+            - noStage
+            - alreadyMailed
+            - neverPaid
+            - noOffer
+            - noPrice
+            - suppressed
+        incomplete:
+          type: boolean
+          description: The time budget ran out; the next run continues
+      required:
+        - dryRun
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - skipped
+        - incomplete
+    ComebackMailRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/ComebackMailSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComebackMailRow"
+      required:
+        - summary
+        - rows
+    ComebackMailRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        stripeSubscriptionId:
+          type: string
+        stage:
+          type: string
+          nullable: true
+          enum:
+            - day-30
+            - day-90
+            - null
+        action:
+          type: string
+          enum:
+            - send
+            - skip
+        skip:
+          type: string
+          nullable: true
+          enum:
+            - paying
+            - no-lapse
+            - too-soon
+            - firm
+            - already-had
+            - stay-offer-recent
+            - covered
+            - no-stage
+            - already-mailed
+            - never-paid
+            - no-offer
+            - no-price
+            - suppressed
+            - null
+        outcome:
+          type: string
+          nullable: true
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+            - null
+          description: The mailer's answer, or failed; null on a skip or a dry run
+      required:
+        - userId
+        - email
+        - locale
+        - stripeSubscriptionId
+        - stage
+        - action
+        - skip
+        - outcome
     AccountPurgeSummary:
       type: object
       properties:
@@ -24987,6 +25141,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CardFailedMailRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/comeback-mail:
+    post:
+      tags:
+        - Billing
+      summary: Daily come-back mails (Cloud Scheduler)
+      description: "Mails each person whose latest paid Freelancer plan Stripe ended 30–44 or 90–104 days ago, in their language: their records are still there, and the first month back costs the list price less the come-back coupon. Each stage is recorded once per person, ever, and that record opens the offer at Checkout. Answers counts only. Always 200 once it ran; `incomplete` means its time budget ran out and the next run continues."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComebackMailSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: BILLING_NOT_CONFIGURED or JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/comeback-mail:
+    post:
+      tags:
+        - Admin
+      summary: Run the come-back mails now, or see who they would mail
+      description: "The same run as the daily job, for the operator, with one row per lapsed person: the stage it mails or why not. `dryRun` mails and records nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComebackMailRun"
         "401":
           description: Missing or invalid admin token
           content:

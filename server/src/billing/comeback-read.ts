@@ -1,6 +1,10 @@
+import type { Logger } from '../logger.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { LedgerStore } from '../repositories/ports.js';
-import type { ComebackFacts } from './comeback.js';
+import { ALL_GA_LOOKUP_KEYS, catalogFrom } from './checkout.js';
+import { comebackOfferOf, type ComebackFacts, type ComebackOffer } from './comeback.js';
+import type { CheckoutGateway } from './stripe/checkout-gateway.js';
+import { StripeGatewayError } from './stripe/gateway.js';
 import { entitlementsFor, memberProfilesForBilling } from './coverage.js';
 import { comebackEntryOf, OFFERS, type OfferEntry } from './offer.js';
 
@@ -22,4 +26,23 @@ export async function comebackFactsOf(store: ComebackStore, userId: string, now:
   });
   const comeback = comebackEntryOf(offers);
   return { subscriptions: summary.subscriptions, events, covered, comebackOfferIds: new Set(comeback ? [comeback.id] : []) };
+}
+
+/**
+ * MUT-534 (D8): the running come-back offer, from the coupon (cached) and the catalog. Any Stripe failure, a missing
+ * permission included, is no offer, warned: a promotion never stops anything else (ADR-237 D5).
+ */
+export async function comebackOfferOrNothing(checkout: CheckoutGateway, offers: readonly OfferEntry[], logger: Pick<Logger, 'warn'>, options: { fresh?: boolean } = {}): Promise<ComebackOffer | null> {
+  const entry = comebackEntryOf(offers);
+  if (!entry) return null;
+  try {
+    const catalog = catalogFrom(await checkout.pricesByLookupKey(ALL_GA_LOOKUP_KEYS));
+    const offer = comebackOfferOf(entry, await checkout.couponById(entry.couponId, { fresh: options.fresh ?? false }), catalog);
+    if (!offer) logger.warn({ couponId: entry.couponId }, 'come-back coupon missing or not shaped as an amount off once on the Freelancer product; no come-back offer');
+    return offer;
+  } catch (err) {
+    if (!(err instanceof StripeGatewayError)) throw err;
+    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId }, 'come-back offer unavailable; no come-back offer');
+    return null;
+  }
 }

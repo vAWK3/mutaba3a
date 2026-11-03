@@ -55,6 +55,8 @@ locals {
   renewal_mail_enabled = var.mailer == "resend" && var.stripe_enabled
   # MUT-533: the hourly failed-card mails need mail and Stripe (its open invoices decide who is mailed).
   card_failed_mail_enabled = var.mailer == "resend" && var.stripe_enabled
+  # MUT-534: the daily come-back mails need mail and Stripe, and the operator's go-ahead after a reviewed dry run.
+  comeback_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.comeback_mail_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -1055,6 +1057,38 @@ resource "google_cloud_scheduler_job" "card_failed_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/card-failed-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-534 (ADR-243, D11): the daily come-back mails, 30 and 90 days after a paid plan ended. At 10:30 Jerusalem time,
+# after the renewal notice. Only with mail and Stripe on, and once comeback_mail_enabled says the operator read a dry
+# run (the first run after endedAt is filled would mail everyone in a window). Each stage is recorded once per person,
+# ever, so retries and a missed day are safe.
+resource "google_cloud_scheduler_job" "comeback_mail" {
+  count = local.comeback_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-comeback-mail${local.suffix}"
+  region           = var.region
+  description      = "Daily come-back mails (MUT-534)."
+  schedule         = "30 10 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/comeback-mail"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

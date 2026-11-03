@@ -762,6 +762,51 @@ export const CardFailedMailRowSchema = z
   })
   .openapi('CardFailedMailRow');
 
+/** MUT-534: the daily come-back mail's counts. */
+export const ComebackMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'People whose latest paid plan Stripe ended in one of the windows' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage was already recorded for the person' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent (its record released): Stripe or the mailer failed, mail off, capped, refused or suppressed' }),
+    skipped: z.object({
+      paying: z.number().int(),
+      noLapse: z.number().int(),
+      tooSoon: z.number().int(),
+      firm: z.number().int(),
+      alreadyHad: z.number().int(),
+      stayOfferRecent: z.number().int(),
+      covered: z.number().int(),
+      noStage: z.number().int(),
+      alreadyMailed: z.number().int(),
+      neverPaid: z.number().int(),
+      noOffer: z.number().int().openapi({ description: 'No running come-back coupon (missing, or not shaped as an amount off once)' }),
+      noPrice: z.number().int(),
+      suppressed: z.number().int(),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
+  })
+  .openapi('ComebackMailSummary');
+
+export const ComebackMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    stripeSubscriptionId: z.string(),
+    stage: z.enum(['day-30', 'day-90']).nullable(),
+    action: z.enum(['send', 'skip']),
+    skip: z
+      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed'])
+      .nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
+  })
+  .openapi('ComebackMailRow');
+
+export const ComebackMailRunSchema = z.object({ summary: ComebackMailSummarySchema, rows: z.array(ComebackMailRowSchema) }).openapi('ComebackMailRun');
+
 export const CardFailedMailRunSchema = z.object({ summary: CardFailedMailSummarySchema, rows: z.array(CardFailedMailRowSchema) }).openapi('CardFailedMailRun');
 
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
