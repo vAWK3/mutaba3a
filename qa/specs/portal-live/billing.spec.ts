@@ -840,7 +840,7 @@ test('Cancel with a reason - the plan stays on to the period end, and Keep my pl
 });
 
 /*
- * MUT-533 (ADR-241): our own failed-card mail, ar + en. The renewal declines on Stripe's always-declining test card;
+ * MUT-533 (ADR-242): our own failed-card mail, ar + en. The renewal declines on Stripe's always-declining test card;
  * the hourly job is run through its operator door; the memory mailer's outbox is the inbox.
  */
 test('A declined renewal - one Arabic mail within the hour, no amount or card; Update card opens Stripe’s card form', { tag: '@portal-live.billing.card-failed-mail' }, async ({ page, step }) => {

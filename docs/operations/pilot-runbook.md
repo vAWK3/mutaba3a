@@ -335,7 +335,7 @@ The campaign is one Stripe coupon; the server names its id (`server/src/billing/
   **By hand (Basel decides each one):** in Stripe, open the subscription; if it is monthly, switch it to the yearly
   list price first; then **Add coupon** → `mtb3a_launch_yearly_2026`. Never add it to a founder price.
 
-### 1.10 The failed-card mail (MUT-533, ADR-241)
+### 1.10 The failed-card mail (MUT-533, ADR-242)
 
 When a renewal payment fails, Stripe keeps retrying (Smart Retries) and the plan is past due: the person keeps full
 access (GRACE). MTB3A mails them itself, in their language, from an hourly job (`mutaba3a-card-failed-mail`):

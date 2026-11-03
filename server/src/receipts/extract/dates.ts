@@ -44,6 +44,15 @@ const RULE_TWO_DIGIT_YEAR = 0.75;
 const SWAPPED_PENALTY = 0.1;
 const LABELLED_BONUS = 0.1;
 const RULE_CAP = 0.95;
+/**
+ * MUT-514 (D1): a receipt is uploaded at most this long after its date, and never before it (a day's slack for time
+ * zones). A date outside that window is an OCR misread of the year (2026 read as 2020).
+ */
+const MAX_RECEIPT_AGE_DAYS = 730;
+const FUTURE_SLACK_DAYS = 1;
+const DAY_MS = 86_400_000;
+/** MUT-514 (D2): glyphs OCR prints for a 1. One touching a date's first digit means that digit lost a 1 before it. */
+const ONE_GLYPH = /[!lI]$/;
 
 export interface DateReading {
   iso: string;
@@ -68,41 +77,61 @@ interface Found {
   rule: number;
   /** What was printed, to find the box it was read from. */
   printed: string;
+  /** What `text` has before a numeric date (for the glyph guard); null for a date with a month name. */
+  before: string | null;
 }
 
 function dateIn(text: string, folded: string): Found | null {
   const ymd = YMD.exec(text);
   if (ymd) {
     const found = iso(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
-    if (found) return { iso: found, rule: RULE_FULL, printed: ymd[0] };
+    if (found) return { iso: found, rule: RULE_FULL, printed: ymd[0], before: text.slice(0, ymd.index) };
   }
   const dmy = DMY.exec(text);
   if (dmy) {
     const [day, month, year] = [Number(dmy[1]), Number(dmy[2]), Number(dmy[3])];
     const rule = dmy[3]!.length === 4 ? RULE_FULL : RULE_TWO_DIGIT_YEAR;
     const found = iso(year, month, day);
-    if (found) return { iso: found, rule, printed: dmy[0] };
+    if (found) return { iso: found, rule, printed: dmy[0], before: text.slice(0, dmy.index) };
     const swapped = month > 12 ? iso(year, day, month) : null;
-    if (swapped) return { iso: swapped, rule: rule - SWAPPED_PENALTY, printed: dmy[0] };
+    if (swapped) return { iso: swapped, rule: rule - SWAPPED_PENALTY, printed: dmy[0], before: text.slice(0, dmy.index) };
   }
   const named = DAY_NAME_YEAR.exec(folded);
   if (named) {
     const found = iso(Number(named[3]), MONTH_BY_NAME.get(named[2]!) ?? 0, Number(named[1]));
-    if (found) return { iso: found, rule: named[3]!.length === 4 ? RULE_FULL : RULE_TWO_DIGIT_YEAR, printed: named[0] };
+    if (found) return { iso: found, rule: named[3]!.length === 4 ? RULE_FULL : RULE_TWO_DIGIT_YEAR, printed: named[0], before: null };
   }
   const english = NAME_DAY_YEAR.exec(folded);
   if (english) {
     const found = iso(Number(english[3]), MONTH_BY_NAME.get(english[1]!) ?? 0, Number(english[2]));
-    if (found) return { iso: found, rule: RULE_FULL, printed: english[0] };
+    if (found) return { iso: found, rule: RULE_FULL, printed: english[0], before: null };
   }
   return null;
 }
 
 interface Candidate extends DateReading {
   labelled: boolean;
+  /**
+   * MUT-514 (D1, D2): outside the upload window, or its first digit damaged. Never the answer, but it still counts
+   * when the dates disagree (OV-2): a bill that lists an older date is still a bill.
+   */
+  excluded: boolean;
 }
 
-function candidateOn(row: Row): Candidate | null {
+/** The days a receipt uploaded on `receivedOn` can be dated: [receivedOn − MAX_RECEIPT_AGE_DAYS, receivedOn + 1]. */
+export interface DateWindow {
+  from: string;
+  to: string;
+}
+
+export function dateWindow(receivedOn: string | undefined): DateWindow | null {
+  const at = receivedOn ? Date.parse(`${receivedOn}T00:00:00Z`) : Number.NaN;
+  if (Number.isNaN(at)) return null;
+  const day = (offset: number) => new Date(at + offset * DAY_MS).toISOString().slice(0, 10);
+  return { from: day(-MAX_RECEIPT_AGE_DAYS), to: day(FUTURE_SLACK_DAYS) };
+}
+
+function candidateOn(row: Row, window: DateWindow | null): Candidate | null {
   // MUT-504: a card's or a contract's validity date, and an invoice's due date, are never the receipt's.
   if (hasKeyword(row.folded, VALIDITY) || hasKeyword(row.folded, DUE)) return null;
   const found = dateIn(row.text.replace(DATE_RANGE, ' '), row.folded.replace(DATE_RANGE, ' '));
@@ -110,7 +139,9 @@ function candidateOn(row: Row): Candidate | null {
   const labelled = hasKeyword(row.folded, DATE_LABEL);
   const rule = Math.min(RULE_CAP, found.rule + (labelled ? LABELLED_BONUS : 0));
   const printed = foldForMatch(found.printed);
-  return { iso: found.iso, rule, conf: confOf(row, (part) => part.folded.includes(printed)), labelled };
+  const outside = window !== null && (found.iso < window.from || found.iso > window.to);
+  const damaged = found.before !== null && ONE_GLYPH.test(found.before);
+  return { iso: found.iso, rule, conf: confOf(row, (part) => part.folded.includes(printed)), labelled, excluded: outside || damaged };
 }
 
 const score = (c: DateReading) => c.rule * c.conf;
@@ -120,16 +151,16 @@ const surest = (candidates: readonly Candidate[]) => candidates.reduce<Candidate
  * The receipt's date. A sure date after a date label wins (an invoice's issue date over the dates it lists), unless
  * two sure labelled dates differ. With none, the surest date, but only when every date on the receipt is the same day
  * and the receipt prints no billing period: a bill or a statement lists many dates (trips, earlier payments), and
- * picking one would suggest a wrong date (MUT-504). The first wins a tie.
+ * picking one would suggest a wrong date (MUT-504). The first wins a tie. MUT-514: an excluded date (outside the upload
+ * window, or glyph-damaged) is never the answer, but it still counts as one of the dates that must agree.
  */
-export function readDate(rows: readonly Row[]): DateReading | null {
-  const candidates = rows.flatMap((row) => candidateOn(row) ?? []);
+export function readDate(rows: readonly Row[], window: DateWindow | null = null): DateReading | null {
+  const candidates = rows.flatMap((row) => candidateOn(row, window) ?? []);
   const sureLabelled = candidates.filter((c) => c.labelled && isConfident(score(c)));
-  if (sureLabelled.length) return new Set(sureLabelled.map((c) => c.iso)).size > 1 ? null : strip(surest(sureLabelled)!);
+  if (sureLabelled.length) return new Set(sureLabelled.map((c) => c.iso)).size > 1 ? null : strip(surest(sureLabelled.filter((c) => !c.excluded)));
   const bill = rows.some((row) => HAS_DATE_RANGE.test(row.text));
   if (bill || new Set(candidates.map((c) => c.iso)).size > 1) return null;
-  const best = surest(candidates);
-  return best ? strip(best) : null;
+  return strip(surest(candidates.filter((c) => !c.excluded)));
 }
 
-const strip = ({ iso, rule, conf }: Candidate): DateReading => ({ iso, rule, conf });
+const strip = (c: Candidate | null): DateReading | null => (c ? { iso: c.iso, rule: c.rule, conf: c.conf } : null);

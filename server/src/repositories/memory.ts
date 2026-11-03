@@ -2777,6 +2777,7 @@ export class MemoryLedgerStore implements LedgerStore {
         r.suggested = outcome.suggested;
         r.version += 1;
       }
+      if (outcome.status === 'DONE' && outcome.identifiers) r.readIdentifiers = outcome.identifiers;
       end(outcome.status, outcome.status === 'FAILED' ? outcome.failReason : null);
       return { kind: 'saved', record: { ...r } };
     },
@@ -2786,6 +2787,17 @@ export class MemoryLedgerStore implements LedgerStore {
         .sort((a, b) => (a.readRequestedAt?.getTime() ?? 0) - (b.readRequestedAt?.getTime() ?? 0) || a.id.localeCompare(b.id))
         .slice(0, limit)
         .map((r) => ({ ...r })),
+    listServerReadToReview: async () =>
+      [...this.expReceipts.values()]
+        .filter((r) => r.status === 'READY' && !r.deletedAt && r.filingStatus === 'TO_REVIEW' && r.approved === null && r.readStatus !== 'PENDING' && (r.suggested?.readerVersion ?? '').startsWith('server-ocr-'))
+        .sort(compareByCreatedAtThenId)
+        .map((r) => ({ ...r })),
+    resetForReread: async (id, expectedVersion, suggested, now) => {
+      const r = this.expReceipts.get(id);
+      if (!r || r.version !== expectedVersion || r.status !== 'READY' || r.deletedAt || r.filingStatus !== 'TO_REVIEW' || r.approved !== null || r.readStatus === 'PENDING') return false;
+      Object.assign(r, { suggested, version: r.version + 1, readStatus: 'PENDING', readRequestedAt: now, readAttempts: 0, readFirstClaimedAt: null, readLeaseUntil: null, readFailReason: null });
+      return true;
+    },
     markBacklogPending: async (scope, now) => {
       const moved: string[] = [];
       for (const r of this.expReceipts.values()) {

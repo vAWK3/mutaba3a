@@ -67,6 +67,7 @@
     "reconcile": "tsx src/scripts/reconcile.ts",
     "backfill:personal-categories": "tsx src/scripts/backfill-personal-expense-categories.ts",
     "backfill:vendors": "tsx src/scripts/backfill-vendors.ts",
+    "receipts:reread": "tsx src/scripts/receipts-reread.ts",
     "post-roll": "tsx src/scripts/post-roll.ts",
     "pre-roll": "tsx src/scripts/pre-roll.ts",
     "release-image": "tsx src/scripts/release-image.ts",

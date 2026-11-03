@@ -5,7 +5,7 @@ import type { Logger } from '../logger.js';
 import type { LedgerStore, UserLocale } from '../repositories/ports.js';
 
 /**
- * MUT-533 (plan D1–D7, ADR-241): our own "your card didn't go through" mail, ar + en, in place of Stripe's English one.
+ * MUT-533 (plan D1–D7, ADR-242): our own "your card didn't go through" mail, ar + en, in place of Stripe's English one.
  * Every hour (Cloud Scheduler, `POST /jobs/v1/billing/card-failed-mail`, or the operator's `npm --prefix server run
  * billing:card-failed-mail`) the payer of each `past_due` subscription in the mirror is looked at, and Stripe's open
  * invoices decide.

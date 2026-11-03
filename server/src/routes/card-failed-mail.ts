@@ -10,7 +10,7 @@ import type { LedgerStore } from '../repositories/ports.js';
 import { CardFailedMailRunSchema, CardFailedMailSummarySchema, ErrorEnvelopeSchema, TrialMailRequestSchema } from '../schemas.js';
 
 /**
- * MUT-533 (D1, ADR-241): the two doors to the hourly failed-card mail (billing/card-failed-mail.ts), shaped like the
+ * MUT-533 (D1, ADR-242): the two doors to the hourly failed-card mail (billing/card-failed-mail.ts), shaped like the
  * renewal notice's.
  *
  *   POST /jobs/v1/billing/card-failed-mail    Cloud Scheduler, hourly, X-Job-Token: counts only, no address in its logs

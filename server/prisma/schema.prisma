@@ -1431,6 +1431,9 @@ model ExpenseReceipt {
   /// A code only (`unreadable`, `timeout`, `exhausted`), never receipt text.
   readFailReason   String?             @db.VarChar(40)
   captureHint      ReceiptCaptureHint  @default(PHOTO)
+  /// MUT-514 (D6, D10): the last server read's phone and ID numbers, digits only, `{ buyer: [], vendor: [] }`: the
+  /// receipt's bill-to blocks and what it filled as the vendor's. The organization's buyer memory. Never in the API.
+  readIdentifiers  Json?
 
   /// The receipts of one expense.
   @@index([organizationId, expenseId, createdAt])

@@ -1033,7 +1033,7 @@ resource "google_cloud_scheduler_job" "renewal_mail" {
   depends_on = [google_project_service.apis]
 }
 
-# MUT-533 (ADR-241, D1): the hourly failed-card mails, our own ar + en in place of Stripe's English one. At minute 7,
+# MUT-533 (ADR-242, D1): the hourly failed-card mails, our own ar + en in place of Stripe's English one. At minute 7,
 # so a first failure is mailed within the hour. Only with mail and Stripe on (its open invoices decide). The run stops
 # itself at about 200 s; each stage of each failed invoice is mailed once, so retries and a missed hour are safe.
 resource "google_cloud_scheduler_job" "card_failed_mail" {

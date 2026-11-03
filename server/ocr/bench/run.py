@@ -12,10 +12,18 @@
    field is a confident one; an empty field is fine).
 
 Real receipts (--real, default ~/Work/Barmajiyat/Mutaba3a/receipt-bench): read when the folder exists. With a
-`manifest.json` there ({"receipts": [{"file", "lang", "kind"?, "truth": {totalMinor, date, currency, vendorName?}}]})
-they are scored and only aggregates are printed; without one, `manifest.draft.json` is written there with what the
-pipeline read, for a person to correct. `--real-detail` also writes `real-detail.json` there: each receipt's fields,
-what was read against the truth (MUT-504). Everything that holds a real receipt's text stays in that folder.
+`manifest.json` there ({"receipts": [{"file", "lang", "kind"?, "receivedOn"?, "truth": {totalMinor, date, currency,
+vendorName?}}]}) they are scored and only aggregates are printed; without one, `manifest.draft.json` is written there
+with what the pipeline read, for a person to correct. `--real-detail` also writes `real-detail.json` there: each
+receipt's fields, what was read against the truth (MUT-504). Everything that holds a real receipt's text stays in that
+folder. MUT-514: the real receipts are one organization's, read in the manifest's order (scan order) with the buyer
+numbers learned from the ones before (`--buyer-memory`), each with its `receivedOn` (the upload day). A truth value may
+be a list of accepted values (a vendor printing two phones).
+
+MUT-514 (D8), the per-field regression gate: `--compare <earlier --out/label folder>` lists every field, synthetic and
+real, that was right there and is not now, and exits 1 if there is one. `--rescore` re-runs only the extractor, over
+the earlier run's synthetic reads and the real folder's `reads.json` (no OCR), and `--server <dir>` picks whose
+extractor runs: a main checkout's `server/` gives the baseline to compare against.
 
 Outputs go to --out (default server/ocr/bench/out, git-ignored): reads.json and suggestions.json hold synthetic
 receipt text and are never committed; summary.md and summary.json hold aggregates only.
@@ -76,12 +84,17 @@ def vendor_matches(got: str, want: str) -> bool:
 
 
 def field_matches(name: str, got, want) -> bool:
+    if isinstance(want, list):
+        return any(field_matches(name, got, w) for w in want)
     if name == "vendorName":
         return vendor_matches(str(got), str(want))
     if name == "phone":
         return re.sub(r"\D", "", str(got)) == re.sub(r"\D", "", str(want))
     if name == "email":
         return str(got).strip().lower() == str(want).strip().lower()
+    if name == "registrationNo":
+        # An eight-digit dealer number is the nine-digit ID with its leading zero dropped (the extractor pads it).
+        return re.sub(r"\D", "", str(got)).lstrip("0") == re.sub(r"\D", "", str(want)).lstrip("0")
     return str(got) == str(want)
 
 
@@ -226,16 +239,17 @@ def synthetic_items(fixtures: Path) -> list[dict]:
 
 
 def real_items(folder: Path) -> tuple[list[dict], bool]:
+    """The real receipts, in the manifest's order (scan order, MUT-514: the buyer memory learns from earlier ones)."""
     files = sorted(p for p in folder.iterdir() if p.suffix.lower() in CONTENT_TYPES and p.is_file())
     manifest_path = folder / "manifest.json"
     if not manifest_path.is_file():
-        return [{"id": p.name, "path": p, "lang": None, "kind": "photo", "truth": None} for p in files], False
-    entries = {e["file"]: e for e in json.loads(manifest_path.read_text(encoding="utf-8"))["receipts"]}
+        return [{"id": p.name, "path": p, "lang": None, "kind": "photo", "truth": None, "receivedOn": None} for p in files], False
+    by_name = {p.name: p for p in files}
     items = []
-    for p in files:
-        e = entries.get(p.name)
-        if e and e.get("truth"):
-            items.append({"id": p.name, "path": p, "lang": LANG_GROUP.get(e.get("lang", ""), e.get("lang")), "kind": e.get("kind", "photo"), "truth": e["truth"]})
+    for e in json.loads(manifest_path.read_text(encoding="utf-8"))["receipts"]:
+        p = by_name.get(e["file"])
+        if p and e.get("truth"):
+            items.append({"id": p.name, "path": p, "lang": LANG_GROUP.get(e.get("lang", ""), e.get("lang")), "kind": e.get("kind", "photo"), "truth": e["truth"], "receivedOn": e.get("receivedOn")})
     return items, True
 
 
@@ -246,16 +260,35 @@ def hint_for(item: dict) -> str | None:
 # ── extractor ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 
-def extract(reads: list[dict], work: Path) -> dict[str, dict]:
+def extract(reads: list[dict], work: Path, server: Path = SERVER_DIR, buyer_memory: bool = False) -> dict[str, dict]:
+    """`reads` in order; with `buyer_memory` each read learns the buyer's numbers from the ones before it (MUT-514)."""
     reads_path = work / "reads.json"
     reads_path.write_text(json.dumps(reads, ensure_ascii=False), encoding="utf-8")
     out = subprocess.run(
-        [str(SERVER_DIR / "node_modules/.bin/tsx"), "src/scripts/receipt-bench-extract.ts", str(reads_path)],
-        cwd=SERVER_DIR,
+        [str(server / "node_modules/.bin/tsx"), "src/scripts/receipt-bench-extract.ts", str(reads_path), *(["--buyer-memory"] if buyer_memory else [])],
+        cwd=server,
         capture_output=True,
         check=True,
     )
     return {r["id"]: r["suggestion"] for r in json.loads(out.stdout)}
+
+
+def real_reads(items: list[dict], payloads: dict[str, dict]) -> list[dict]:
+    """The extractor's input for the real receipts read: scan order, each with its upload day."""
+    return [{"id": i["id"], "result": payloads[i["id"]], **({"receivedOn": i["receivedOn"]} if i.get("receivedOn") else {})} for i in items if i["id"] in payloads]
+
+
+def compare(before_dir: Path, synthetic: list[dict], real: list[dict]) -> list[str]:
+    """MUT-514 (D8): every field right in `before_dir`'s run and not right now, as `scope id field` lines."""
+    before = json.loads((before_dir / "summary.json").read_text(encoding="utf-8"))
+    lost = []
+    for scope, now_rows, then_rows in (("synthetic", synthetic, before.get("perFixture", [])), ("real", real, before.get("realPerReceipt", []))):
+        now = {r["id"]: r["scores"] for r in now_rows}
+        for row in then_rows:
+            for name, score in row["scores"].items():
+                if score["hit"] and not now.get(row["id"], {}).get(name, {}).get("hit"):
+                    lost.append(f"{scope} {row['id']} {name}")
+    return lost
 
 
 def write_real_detail(folder: Path, real: list[dict], suggestions: dict[str, dict]) -> None:
@@ -298,25 +331,53 @@ def table(agg: dict, title: str) -> str:
     return "\n".join(lines)
 
 
+def real_report(real_dir: Path, real: list[dict], suggestions: dict[str, dict], ms: dict[str, float], detail: bool) -> tuple[list[dict], dict]:
+    """The real receipts' per-receipt scores (booleans only, no receipt text) and aggregate; `detail` writes real-detail.json there."""
+    rows = [{"id": i["id"], "lang": i["lang"], "kind": i["kind"], "ms": ms.get(i["id"]), "scores": score_one(suggestions.get(i["id"], {}), i["truth"])} for i in real if i["id"] in suggestions]
+    if detail:
+        write_real_detail(real_dir, [i for i in real if i["id"] in suggestions], suggestions)
+    return rows, aggregate(rows)
+
+
+def gate(md: list[str], args: argparse.Namespace, synthetic: list[dict], real: list[dict]) -> int:
+    """`--compare`: append the lost fields to the report; 1 when any."""
+    if not args.compare:
+        return 0
+    lost = compare(args.compare, synthetic, real)
+    md += ["", f"Compared with {args.compare.name}: {len(lost)} field(s) right there and not now" + (":" if lost else ".")] + [f"- {line}" for line in lost]
+    return 1 if lost else 0
+
+
 def rescore(args: argparse.Namespace) -> int:
-    """The extractor and the scoring again over a synthetic run's saved reads (no OCR): for extractor changes."""
+    """The extractor and the scoring again over a run's saved reads (no OCR): for extractor changes. Real too, from the real folder's reads.json."""
     items = {i["id"]: i for i in synthetic_items(args.fixtures)}
     reads = json.loads((args.rescore / "reads.json").read_text(encoding="utf-8"))
     before = {r["id"]: r for r in json.loads((args.rescore / "summary.json").read_text(encoding="utf-8"))["perFixture"]}
     out = args.out / args.label
     out.mkdir(parents=True, exist_ok=True)
-    suggestions = extract(reads, out)
+    suggestions = extract(reads, out, args.server)
     rows = [
         {"id": r["id"], "lang": items[r["id"]]["lang"], "kind": items[r["id"]]["kind"], "ms": before[r["id"]]["ms"], "scores": score_one(suggestions.get(r["id"], {}), items[r["id"]]["truth"])}
         for r in reads
     ]
     agg = aggregate(rows)
+    real_dir = args.real.expanduser()
+    real_rows, real_agg = [], None
+    if not args.no_real and (real_dir / "reads.json").is_file() and (real_dir / "manifest.json").is_file():
+        real, _ = real_items(real_dir)
+        payloads = {r["id"]: r["result"] for r in json.loads((real_dir / "reads.json").read_text(encoding="utf-8"))}
+        real_suggestions = extract(real_reads(real, payloads), real_dir, args.server, buyer_memory=True)
+        real_rows, real_agg = real_report(real_dir, real, real_suggestions, {}, args.real_detail)
     (out / "suggestions.json").write_text(json.dumps(suggestions, ensure_ascii=False, indent=1), encoding="utf-8")
-    (out / "summary.json").write_text(json.dumps({"label": args.label, "rescoredFrom": str(args.rescore), "synthetic": agg, "perFixture": rows}, ensure_ascii=False, indent=1), encoding="utf-8")
+    summary = {"label": args.label, "rescoredFrom": str(args.rescore), "synthetic": agg, "perFixture": rows, "real": {"aggregate": real_agg}, "realPerReceipt": real_rows}
+    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
     md = [f"### {args.label} (extractor re-run over {args.rescore.name}'s reads)", "", table(agg["photo"], "Photos (AC1's bar, the spike's scope)"), "", table(agg["all"], "All kinds (photos, screenshots, PDFs)")]
+    if real_agg:
+        md += ["", table(real_agg["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+    status = gate(md, args, rows, real_rows)
     (out / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
-    return 0
+    return status
 
 
 def main() -> int:
@@ -331,6 +392,8 @@ def main() -> int:
     ap.add_argument("--no-real", action="store_true")
     ap.add_argument("--real-detail", action="store_true", help="write per-receipt field results into the real folder (never into --out)")
     ap.add_argument("--rescore", type=Path, help="an earlier run's output folder: re-run only the extractor over its reads.json")
+    ap.add_argument("--server", type=Path, default=SERVER_DIR, help="the server/ folder whose extractor runs (a main checkout's, for a baseline)")
+    ap.add_argument("--compare", type=Path, help="an earlier run's output folder: list every field right there and not now; exit 1 if any (MUT-514 D8)")
     args = ap.parse_args()
     if args.rescore:
         return rescore(args)
@@ -369,8 +432,9 @@ def main() -> int:
     ok = [t for t in timed if t["status"] == 200]
     syn_ok = [t for t in ok if t["item"] in items]
     real_ok = [t for t in ok if t["item"] in real]
-    suggestions = extract([{"id": t["item"]["id"], "result": t["payload"]} for t in syn_ok], out)
-    real_suggestions = extract([{"id": t["item"]["id"], "result": t["payload"]} for t in real_ok], real_dir) if real_ok else {}
+    suggestions = extract([{"id": t["item"]["id"], "result": t["payload"]} for t in syn_ok], out, args.server)
+    real_payloads = {t["item"]["id"]: t["payload"] for t in real_ok}
+    real_suggestions = extract(real_reads(real, real_payloads), real_dir, args.server, buyer_memory=True) if real_ok else {}
     (out / "suggestions.json").write_text(json.dumps(suggestions, ensure_ascii=False, indent=1), encoding="utf-8")
 
     rows = []
@@ -411,18 +475,20 @@ def main() -> int:
         }
         (real_dir / "manifest.draft.json").write_text(json.dumps(draft, ensure_ascii=False, indent=1), encoding="utf-8")
         real_summary["draftManifest"] = "written"
-    elif real:
-        real_rows = [
-            {"id": t["item"]["id"], "lang": t["item"]["lang"], "kind": t["item"]["kind"], "ms": t["ms"], "scores": score_one(real_suggestions.get(t["item"]["id"], {}), t["item"]["truth"])}
-            for t in timed
-            if t["item"] in real
-        ]
-        real_summary["aggregate"] = aggregate(real_rows)
-        if args.real_detail:
-            write_real_detail(real_dir, real, real_suggestions)
+    real_rows: list[dict] = []
+    if real and real_scored:
+        real_rows, real_summary["aggregate"] = real_report(real_dir, real, real_suggestions, {t["item"]["id"]: t["ms"] for t in real_ok}, args.real_detail)
 
     failures = [{"id": t["item"]["id"], "status": t["status"]} for t in timed if t["status"] != 200 and t["item"] in items]
-    summary = {"label": args.label, "synthetic": agg, "timing": timing, "real": real_summary, "failedRequests": failures, "perFixture": [{k: r[k] for k in ("id", "lang", "kind", "ms", "load1", "scores")} for r in rows]}
+    summary = {
+        "label": args.label,
+        "synthetic": agg,
+        "timing": timing,
+        "real": real_summary,
+        "failedRequests": failures,
+        "perFixture": [{k: r[k] for k in ("id", "lang", "kind", "ms", "load1", "scores")} for r in rows],
+        "realPerReceipt": real_rows,
+    }
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
 
     md = [
@@ -438,11 +504,14 @@ def main() -> int:
         "",
         f"Real receipts: folder {real_summary['folder']}, {real_summary['files']} files" + (", draft manifest written" if real_summary.get("draftManifest") else ""),
     ]
+    if real_summary.get("aggregate"):
+        md += ["", table(real_summary["aggregate"]["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
     if failures:
         md.append(f"Failed requests: {failures}")
+    status = gate(md, args, rows, real_rows)
     (out / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
-    return 0
+    return status
 
 
 if __name__ == "__main__":

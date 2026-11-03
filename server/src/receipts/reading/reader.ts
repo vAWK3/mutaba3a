@@ -1,8 +1,9 @@
 import type { AttachmentStorage } from '../../attachments/storage.js';
 import { hasFeature } from '../../features.js';
 import type { Logger } from '../../logger.js';
-import type { ExpenseReceiptRecord, FinishReadOutcome, LedgerStore, ReceiptReadRequest, ReceiptSuggestion } from '../../repositories/ports.js';
-import { extractReceipt } from '../extract/extract.js';
+import type { ExpenseReceiptRecord, FinishReadOutcome, LedgerStore, ReadIdentifiers, ReceiptReadRequest, ReceiptSuggestion } from '../../repositories/ports.js';
+import { learnedBuyerIds } from '../extract/buyer.js';
+import { readReceipt } from '../extract/extract.js';
 import { fillAbsent, isCompleteSuggestion } from '../extract/merge.js';
 import { OcrReadError, scrubbed, type OcrClient, type OcrReadErrorCode } from '../ocr-client.js';
 import type { ReadDispatcher } from './dispatcher.js';
@@ -20,6 +21,8 @@ export const READ_GIVE_UP_MS = 30 * 60_000;
 export const SWEEP_BATCH = 100;
 /** How many times a read merges again after the person edited the receipt under it. */
 const STALE_RETRIES = 3;
+/** MUT-514 (D6): the organization's latest receipts its buyer memory is learned from (one page of the library). */
+export const BUYER_MEMORY_RECEIPTS = 200;
 
 /** What the read job answers for one receipt. `retry` is the only one Cloud Tasks should retry (a 503). */
 export type ReadJobStatus = 'done' | 'skipped' | 'failed' | 'busy' | 'none' | 'retry';
@@ -52,9 +55,21 @@ export interface ReceiptReaderOptions {
   now: () => Date;
 }
 
+/**
+ * MUT-514: the server reader's generation. 2: no confidently wrong VAT, totals, bill-to numbers or dates. One constant
+ * for the stamp and for `receipts:reread --reader-below`, so they can't drift.
+ */
+export const SERVER_READER_GENERATION = 2;
+
 /** The reader version a server read stamps when it added a field (MUT-441 plan, "Merge rule"). */
 export function serverReaderVersion(engine: string): string {
-  return `server-ocr-${engine}-1`;
+  return `server-ocr-${engine}-${SERVER_READER_GENERATION}`;
+}
+
+/** The generation a server reader version names (`server-ocr-rapid-tess-1` → 1); null for any other reader. */
+export function serverReaderGeneration(readerVersion: string): number | null {
+  const match = /^server-ocr-.+-(\d+)$/.exec(readerVersion);
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -122,12 +137,13 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
    * Fill-absent onto what is stored now; a person's edit in between means merging again onto theirs. The vendor is
    * looked up on the profile the receipt is on now (MUT-503: it may have moved during the read).
    */
-  async function save(claimed: ExpenseReceiptRecord, raw: ReceiptSuggestion): Promise<{ status: ReadJobStatus; added: number }> {
+  async function save(claimed: ExpenseReceiptRecord, raw: ReceiptSuggestion, identifiers: ReadIdentifiers): Promise<{ status: ReadJobStatus; added: number }> {
     let current = claimed;
     for (let i = 0; i < STALE_RETRIES; i += 1) {
       const read = await withVendor(current, raw);
       const { merged, added } = fillAbsent(current.suggested, read);
-      const outcome: FinishReadOutcome = added.length > 0 ? { status: 'DONE', suggested: merged } : isCompleteSuggestion(current.suggested) ? { status: 'SKIPPED' } : { status: 'DONE' };
+      const outcome: FinishReadOutcome =
+        added.length > 0 ? { status: 'DONE', suggested: merged, identifiers } : isCompleteSuggestion(current.suggested) ? { status: 'SKIPPED' } : { status: 'DONE', identifiers };
       const result = await finishRead(current.id, current.version, outcome);
       if (result.kind === 'stale') {
         current = result.record;
@@ -140,12 +156,24 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return { status: 'retry', added: 0 };
   }
 
-  async function readFile(receipt: ExpenseReceiptRecord): Promise<{ read: ReceiptSuggestion; lines: number }> {
+  /**
+   * MUT-514 (D6, D10): the organization's own phone and ID numbers, from the bill-to blocks its latest receipts' reads
+   * found, less any number one of them read as the vendor's. Learned from reads, not approvals; this receipt's own
+   * earlier read is left out, so a re-read never feeds on itself.
+   */
+  async function buyerIds(receipt: ExpenseReceiptRecord): Promise<string[]> {
+    const page = await scrubbed('store_failed', () => receipts.list(receipt.organizationId, {}, { limit: BUYER_MEMORY_RECEIPTS, cursor: null }));
+    return learnedBuyerIds(page.items.flatMap((r) => (r.id !== receipt.id && r.readIdentifiers ? [r.readIdentifiers] : [])));
+  }
+
+  async function readFile(receipt: ExpenseReceiptRecord): Promise<{ read: ReceiptSuggestion; identifiers: ReadIdentifiers; lines: number }> {
     const body = await scrubbed('unavailable', () => storage.read(receipt.storageKey));
     if (!body) throw new OcrReadError('missing');
     const result = await ocr.read({ body, contentType: receipt.mimeType, hint: receipt.captureHint === 'SCANNED' ? 'scanned' : 'photo' });
-    const read = await scrubbed('extract_failed', () => extractReceipt({ lines: result.lines, pdfText: result.pdfText }, { readerVersion: serverReaderVersion(result.engine) }));
-    return { read, lines: result.lines.length };
+    const learned = await buyerIds(receipt);
+    const options = { readerVersion: serverReaderVersion(result.engine), receivedOn: receipt.receivedOn, buyerIds: learned };
+    const reading = await scrubbed('extract_failed', () => readReceipt({ lines: result.lines, pdfText: result.pdfText }, options));
+    return { read: reading.suggestion, identifiers: { buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers }, lines: result.lines.length };
   }
 
   /**
@@ -176,8 +204,8 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     // The grant was taken away, or the uploader left, since the receipt was queued.
     if (!(await holdsGrant(receipt)) || isCompleteSuggestion(receipt.suggested)) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }));
     try {
-      const { read, lines } = await readFile(receipt);
-      const saved = await save(receipt, read);
+      const { read, identifiers, lines } = await readFile(receipt);
+      const saved = await save(receipt, read, identifiers);
       return done(saved.status, { lines, added: saved.added });
     } catch (err) {
       const failure = err instanceof OcrReadError ? err : new OcrReadError('unavailable');

@@ -309,6 +309,9 @@ export const STORE_ACCESS: StoreAccess = {
     finishRead: 'operator',
     listPendingForSweep: 'operator',
     markBacklogPending: 'operator',
+    // MUT-514: the operator's re-read command (`receipts:reread`), across every profile.
+    listServerReadToReview: 'operator',
+    resetForReread: 'operator',
   },
   /**
    * MUT-66. Capturing is the person's own business, on no profile — hence

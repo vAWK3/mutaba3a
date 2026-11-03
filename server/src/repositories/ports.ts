@@ -3275,8 +3275,21 @@ export type ReceiptCaptureHint = 'SCANNED' | 'PHOTO';
 /** MUT-441: what `complete` sets with READY: PENDING (the server will read it) or SKIPPED (nothing to read for). */
 export type ReceiptReadRequest = 'PENDING' | 'SKIPPED';
 
-/** MUT-441: how a read ended. `failReason` is a code, never receipt text. */
-export type FinishReadOutcome = { status: 'DONE'; suggested?: ReceiptSuggestion } | { status: 'FAILED'; failReason: string } | { status: 'SKIPPED' };
+/**
+ * MUT-514 (D6, D10): the phone and ID numbers a server read found, digits only: in the receipt's bill-to blocks
+ * (`buyer`), and the ones it filled as the vendor's (`vendor`). The organization's buyer memory is learned from these.
+ * Server-only: never in the API, a records file or a log.
+ */
+export interface ReadIdentifiers {
+  buyer: string[];
+  vendor: string[];
+}
+
+/**
+ * MUT-441: how a read ended. `failReason` is a code, never receipt text. MUT-514: a DONE read also keeps its
+ * `identifiers`, whether or not it added a field.
+ */
+export type FinishReadOutcome = { status: 'DONE'; suggested?: ReceiptSuggestion; identifiers?: ReadIdentifiers } | { status: 'FAILED'; failReason: string } | { status: 'SKIPPED' };
 
 /** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED, so SKIPPED with nothing written; `not_pending`: someone ended it first. */
 export type FinishReadResult =
@@ -3298,6 +3311,8 @@ export interface ReceiptReadState {
   /** A code only (`unreadable`, `timeout`, `exhausted`), never receipt text. */
   readFailReason?: string | null;
   captureHint?: ReceiptCaptureHint;
+  /** MUT-514: what the last DONE server read found (`ReadIdentifiers`); null before one. */
+  readIdentifiers?: ReadIdentifiers | null;
 }
 
 /** A receipt file behind the M6 signed-URL pipeline, in its own table so Malafat's attachment routes can never reach it (MUT-42 D1). */
@@ -3458,6 +3473,19 @@ export interface ExpenseReceiptRepository {
    * requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
    */
   markBacklogPending(scope: { userId: string; organizationId?: string }, now: Date): Promise<string[]>;
+  /**
+   * MUT-514 (the re-read command): READY, live, To-review, unapproved receipts not being read now (not PENDING) whose
+   * suggestion a server reader stamped (`server-ocr-…`), any profile, oldest first. The caller picks the generations.
+   */
+  listServerReadToReview(): Promise<ExpenseReceiptRecord[]>;
+  /**
+   * MUT-514: ask for a receipt to be read afresh, in one guarded UPDATE: at `expectedVersion`, while it is still READY,
+   * live, To review, unapproved and not PENDING. `suggested` (the caller's, without the server-read fields) replaces
+   * the stored one and `version` moves; the read state starts over (PENDING requested `now`, no attempts, no first
+   * claim, no lease, no fail reason), so the sweep reads it and an old first claim can't give it up. False, writing
+   * nothing, when it changed meanwhile.
+   */
+  resetForReread(id: string, expectedVersion: number, suggested: ReceiptSuggestion | null, now: Date): Promise<boolean>;
   /**
    * MUT-270: READY, live receipts per expense, the same rule as `listByExpense`. Expenses with none are absent from
    * the map. The caller passes organizations the person belongs to; the expense ids come from those organizations.
