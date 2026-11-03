@@ -8,17 +8,28 @@ import { CHECKOUT_SESSION_TTL_SECONDS, type BillingCurrency, type BillingInterva
  * here is an amount or a date. Pure: the route reads the coupon and the person's subscriptions; this decides.
  */
 
-/** MUT-532: `launch` is MUT-525's offer at Checkout; `stay` is the cancel flow's (D11). The file's default is `launch`. */
-export type OfferKind = 'launch' | 'stay';
+/**
+ * MUT-532: `launch` is MUT-525's offer at Checkout; `stay` is the cancel flow's (D11). MUT-534 (D9): `comeback` is the
+ * first invoice back after a paid lapse, either interval. The file's default is `launch`.
+ */
+export type OfferKind = 'launch' | 'stay' | 'comeback';
 
-export interface OfferEntry {
+interface OfferEntryBase {
   /** A stable campaign name, for analytics and the subscription's `mutaba3a_offer` metadata. */
   id: string;
   couponId: string;
-  kind: OfferKind;
-  interval: BillingInterval;
   tier: 'freelancer';
 }
+/** A launch offer (yearly) or the stay offer (monthly): each is for one interval. */
+export interface IntervalOfferEntry extends OfferEntryBase {
+  kind: 'launch' | 'stay';
+  interval: BillingInterval;
+}
+/** MUT-534 (D9): the come-back offer takes the same amount off whichever interval the person comes back on. */
+export interface ComebackOfferEntry extends OfferEntryBase {
+  kind: 'comeback';
+}
+export type OfferEntry = IntervalOfferEntry | ComebackOfferEntry;
 
 /** What the gateway reads of a Stripe coupon (`applies_to` expanded). */
 export interface CouponFact {
@@ -27,6 +38,8 @@ export interface CouponFact {
   percentOff: number | null;
   amountOff: number | null;
   duration: string;
+  /** MUT-534 (D8): an amount-off coupon's amount per currency, its own `currency` and its `currency_options`. */
+  amountOffIn: { ILS: number | null; USD: number | null };
   /** MUT-532: how many invoices a `repeating` coupon discounts; null for any other duration. */
   durationInMonths: number | null;
   redeemBy: Date | null;
@@ -59,17 +72,21 @@ export function parseOffers(raw: unknown): OfferEntry[] {
       if (!ok(entry[name])) throw new Error(`offers.json: offer ${i} ${name} ${rule}`);
       return entry[name] as string;
     };
-    const kind = (entry['kind'] === undefined ? 'launch' : field('kind', (v) => v === 'launch' || v === 'stay', 'must be "launch" or "stay"')) as OfferKind;
-    const offer = {
+    const kind = (entry['kind'] === undefined ? 'launch' : field('kind', (v) => v === 'launch' || v === 'stay' || v === 'comeback', 'must be "launch", "stay" or "comeback"')) as OfferKind;
+    const base = {
       id: field('id', (v) => typeof v === 'string' && OFFER_ID.test(v), 'must be lower-case letters, digits and dashes'),
       couponId: field('couponId', (v) => typeof v === 'string' && COUPON_ID.test(v), 'must be a Stripe coupon id'),
-      kind,
-      interval: field('interval', (v) => v === 'month' || v === 'year', 'must be "month" or "year"') as BillingInterval,
       tier: field('tier', (v) => v === 'freelancer', 'must be "freelancer"') as 'freelancer',
     };
+    if (kind === 'comeback') {
+      // MUT-534 (D9): one amount off whichever interval the person comes back on; an interval would mean nothing.
+      if (entry['interval'] !== undefined) throw new Error(`offers.json: offer ${i}: a come-back offer has no interval`);
+      return { id: base.id, couponId: base.couponId, kind, tier: base.tier } satisfies ComebackOfferEntry;
+    }
+    const interval = field('interval', (v) => v === 'month' || v === 'year', 'must be "month" or "year"') as BillingInterval;
     // MUT-532 (D10/D11): a stay coupon on a yearly plan would halve a renewal; it is monthly only.
-    if (kind === 'stay' && offer.interval !== 'month') throw new Error(`offers.json: offer ${i} interval must be "month" for a stay offer`);
-    return offer;
+    if (kind === 'stay' && interval !== 'month') throw new Error(`offers.json: offer ${i} interval must be "month" for a stay offer`);
+    return { id: base.id, couponId: base.couponId, kind, interval, tier: base.tier } satisfies IntervalOfferEntry;
   });
   if (new Set(entries.map((e) => e.id)).size !== entries.length) throw new Error('offers.json: an offer id is a duplicate');
   return entries;
@@ -79,25 +96,29 @@ export function parseOffers(raw: unknown): OfferEntry[] {
 export const OFFERS: readonly OfferEntry[] = parseOffers(offersFile);
 
 /**
- * R6: a non-production server may name its own coupons (BILLING_OFFER_COUPON_ID, MUT-532's BILLING_STAY_COUPON_ID;
- * both refused on a live key environment), so each QA run owns its coupons. Each replaces its kind's entries with one,
- * under that kind's first name: a yearly launch offer, a monthly stay offer.
+ * R6: a non-production server may name its own coupons (BILLING_OFFER_COUPON_ID, MUT-532's BILLING_STAY_COUPON_ID,
+ * MUT-534's BILLING_COMEBACK_COUPON_ID; each refused on a live key environment), so each QA run owns its coupons. Each
+ * replaces its kind's entries with one, under that kind's first name: a yearly launch offer, a monthly stay offer, a
+ * come-back offer.
  */
-export function offersFor(couponOverride: string | undefined, stayCouponOverride?: string): readonly OfferEntry[] {
-  if (!couponOverride && !stayCouponOverride) return OFFERS;
+export function offersFor(overrides: { launch?: string | undefined; stay?: string | undefined; comeback?: string | undefined }): readonly OfferEntry[] {
+  if (!overrides.launch && !overrides.stay && !overrides.comeback) return OFFERS;
   const nameOf = (kind: OfferKind, fallback: string) => OFFERS.find((e) => e.kind === kind)?.id ?? fallback;
-  const launch: OfferEntry[] = couponOverride
-    ? [{ id: nameOf('launch', 'launch-2026'), couponId: couponOverride, kind: 'launch', interval: 'year', tier: 'freelancer' }]
-    : OFFERS.filter((e) => e.kind === 'launch');
-  const stay: OfferEntry[] = stayCouponOverride
-    ? [{ id: nameOf('stay', 'stay-2026'), couponId: stayCouponOverride, kind: 'stay', interval: 'month', tier: 'freelancer' }]
-    : OFFERS.filter((e) => e.kind === 'stay');
-  return [...launch, ...stay];
+  const ofKind = (kind: OfferKind) => OFFERS.filter((e) => e.kind === kind);
+  const launch: OfferEntry[] = overrides.launch ? [{ id: nameOf('launch', 'launch-2026'), couponId: overrides.launch, kind: 'launch', interval: 'year', tier: 'freelancer' }] : ofKind('launch');
+  const stay: OfferEntry[] = overrides.stay ? [{ id: nameOf('stay', 'stay-2026'), couponId: overrides.stay, kind: 'stay', interval: 'month', tier: 'freelancer' }] : ofKind('stay');
+  const comeback: OfferEntry[] = overrides.comeback ? [{ id: nameOf('comeback', 'comeback-2026'), couponId: overrides.comeback, kind: 'comeback', tier: 'freelancer' }] : ofKind('comeback');
+  return [...launch, ...stay, ...comeback];
 }
 
 /** MUT-532 (D11): the cancel flow's stay offer entry, if the list has one. */
-export function stayEntryOf(entries: readonly OfferEntry[]): OfferEntry | null {
-  return entries.find((e) => e.kind === 'stay') ?? null;
+export function stayEntryOf(entries: readonly OfferEntry[]): IntervalOfferEntry | null {
+  return entries.find((e): e is IntervalOfferEntry => e.kind === 'stay') ?? null;
+}
+
+/** MUT-534 (D9): the come-back offer entry, if the list has one. */
+export function comebackEntryOf(entries: readonly OfferEntry[]): ComebackOfferEntry | null {
+  return entries.find((e): e is ComebackOfferEntry => e.kind === 'comeback') ?? null;
 }
 
 /** Every product the catalog sells: the coupon must be restricted to these (D1, D3). */
@@ -109,7 +130,7 @@ export function productIdsOf(catalog: Catalog): Set<string> {
  * The offer a coupon makes, or null when it isn't one as D1 shapes it: valid, a percentage, `once`, a `redeem_by`
  * (OV-6), restricted to the Freelancer products only, and still at least a Checkout's TTL away from its end (R1).
  */
-export function offerFromCoupon(entry: OfferEntry, coupon: CouponFact | null, freelancerProducts: ReadonlySet<string>, now: Date): Offer | null {
+export function offerFromCoupon(entry: IntervalOfferEntry, coupon: CouponFact | null, freelancerProducts: ReadonlySet<string>, now: Date): Offer | null {
   if (!coupon || !coupon.valid || coupon.duration !== OFFER_DURATION || !coupon.redeemBy) return null;
   const percent = coupon.percentOff;
   if (percent === null || !(percent > 0 && percent <= 100)) return null;
@@ -128,7 +149,7 @@ export async function resolveOffer(
   freelancerProducts: ReadonlySet<string>,
   now: Date,
 ): Promise<Offer | null> {
-  for (const entry of entries.filter((e) => e.kind === 'launch' && e.interval === interval)) {
+  for (const entry of entries.filter((e): e is IntervalOfferEntry => e.kind === 'launch' && e.interval === interval)) {
     const offer = offerFromCoupon(entry, await readCoupon(entry.couponId), freelancerProducts, now);
     if (offer) return offer;
   }

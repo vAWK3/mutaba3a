@@ -235,13 +235,19 @@ export class FakeCheckoutGateway implements CheckoutGateway {
 
   /** The launch coupon as D1 shapes it: 50% once on the Freelancer product, redeemable until `redeemBy`. */
   withLaunchCoupon(redeemBy: Date, id = 'mtb3a_launch_yearly_2026', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'once', durationInMonths: null, redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null }, duration: 'once', durationInMonths: null, redeemBy, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
     return this;
   }
 
   /** MUT-532 (D11): the stay coupon: 50% off the next 2 invoices on the Freelancer product. */
   withStayCoupon(id = 'mtb3a_stay_monthly_50', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, duration: 'repeating', durationInMonths: 2, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    this.coupons.set(id, { id, valid: true, percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null }, duration: 'repeating', durationInMonths: 2, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+    return this;
+  }
+
+  /** MUT-534 (D8): the come-back coupon: ₪20 off (a $6 currency option) the first invoice, Freelancer only, no end. */
+  withComebackCoupon(id = 'mtb3a_comeback_first_month', over: Partial<CouponFact> = {}): this {
+    this.coupons.set(id, { id, valid: true, percentOff: null, amountOff: 2000, amountOffIn: { ILS: 2000, USD: 600 }, duration: 'once', durationInMonths: null, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
     return this;
   }
 

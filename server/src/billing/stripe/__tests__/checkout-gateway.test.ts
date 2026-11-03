@@ -262,13 +262,14 @@ describe('CheckoutGateway coupons (MUT-525 D6, R6, R7)', () => {
   });
   const missing = { status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such coupon' } } };
 
-  it('reads the coupon with applies_to expanded', async () => {
+  it('reads the coupon with applies_to and currency_options expanded', async () => {
     const { seen, gateway } = gatewayWith(() => ({ status: 200, body: coupon() }));
     expect(await gateway.couponById(COUPON)).toEqual({
       id: COUPON,
       valid: true,
       percentOff: 50,
       amountOff: null,
+      amountOffIn: { ILS: null, USD: null },
       duration: 'once',
       durationInMonths: null,
       redeemBy: new Date(1801000000 * 1000),
@@ -276,6 +277,14 @@ describe('CheckoutGateway coupons (MUT-525 D6, R6, R7)', () => {
     });
     expect(seen.map(route)).toEqual([`GET /v1/coupons/${COUPON}`]);
     expect(seen[0]!.query.get('expand[0]')).toBe('applies_to');
+    expect(seen[0]!.query.get('expand[1]')).toBe('currency_options');
+  });
+
+  it('MUT-534 (D8): an amount-off coupon reads its amount in each currency, its own and its currency options', async () => {
+    const body = coupon({ percent_off: null, amount_off: 2000, currency: 'ils', currency_options: { ils: { amount_off: 2000 }, usd: { amount_off: 600 } } });
+    expect(await gatewayWith(() => ({ status: 200, body })).gateway.couponById(COUPON)).toMatchObject({ amountOff: 2000, amountOffIn: { ILS: 2000, USD: 600 } });
+    const ilsOnly = coupon({ percent_off: null, amount_off: 2000, currency: 'ils' });
+    expect(await gatewayWith(() => ({ status: 200, body: ilsOnly })).gateway.couponById(COUPON)).toMatchObject({ amountOffIn: { ILS: 2000, USD: null } });
   });
 
   it('a coupon Stripe no longer has, or one no longer valid, is null', async () => {
