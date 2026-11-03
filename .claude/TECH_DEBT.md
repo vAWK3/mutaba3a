@@ -875,6 +875,7 @@
 **Priority**: Low
 **Impact**: v8 instrumentation makes the first full render of a heavy page, or a test that re-sorts a table several times, take 5–6 s. Six such tests take `SLOW_UNDER_COVERAGE` (`src/test/timeouts.ts`, 15 s). On 2026-10-16 the host's load average reached 40–100 (parallel sessions), and other tests then crossed 5 s too, for example `migration-v22.test.ts` "opens an empty v21 database" at 6.7 s. They passed on rerun. In the same loaded run, `ImportDataPage.test.tsx` "reuses the target profile's own client with the same email when merging" failed in 224 ms with two clients where it expects one. It passes alone, plain and under coverage, three runs out of three, which points to state left by a timed-out neighbour. The global timeout stays at 5 s on purpose.
 **Fix**: if web-ci.yml reports a coverage-only timeout, give that test `SLOW_UNDER_COVERAGE` (or shrink its seed). If several appear at once on CI, raise `testTimeout` for coverage runs only and record it in DECISIONS.
+**Update 2026-11-03**: the load half is mitigated for `make` gates: the Makefile caps vitest at 3 workers (`VITEST_MAX_WORKERS`), after uncapped api-v0.15.0 server gates failed 5 s timeouts under load twice. A bare `npm run test:run` / `npm --prefix server test` is still uncapped.
 
 ### TD-146: Setup-link rows are never pruned
 **Status**: Open
