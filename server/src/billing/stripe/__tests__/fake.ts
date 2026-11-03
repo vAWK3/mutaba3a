@@ -4,7 +4,7 @@ import type { AccountStripeGateway } from '../account-gateway.js';
 import type { CouponFact } from '../../offer.js';
 import type { RenewalFacts } from '../../renewal-mail.js';
 import type { CheckoutGateway, CheckoutPerson, PriceFact } from '../checkout-gateway.js';
-import type { EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
+import type { CardRetryResult, EndPauseResult, LivePlan, PlanGateway, SwitchInput, SwitchResult } from '../plan-gateway.js';
 import { InvalidStripeSignature, StripeGatewayError, type Fetched, type StripeGateway } from '../gateway.js';
 import type { FailedPaymentFacts } from '../../card-failed-mail.js';
 
@@ -440,6 +440,15 @@ export class FakePlanGateway implements PlanGateway {
 
   async applyCoupon(subscriptionId: string, couponId: string): Promise<void> {
     this.written(`coupon:${subscriptionId}:${couponId}`, (plan) => Object.assign(plan, { discounted: true, couponIds: [...plan.couponIds, couponId] }), subscriptionId);
+  }
+
+  /** MUT-533 (D5): what `retryPayment` answers, and the invoices it was asked to pay. */
+  retryOutcome: CardRetryResult = { outcome: 'paid', hostedInvoiceUrl: null };
+  readonly retries: { invoiceId: string; attemptCount: number }[] = [];
+  async retryPayment(invoiceId: string, attemptCount: number): Promise<CardRetryResult> {
+    this.calls.push(`retry:${invoiceId}`);
+    this.retries.push({ invoiceId, attemptCount });
+    return this.retryOutcome;
   }
 
   /** MUT-533: what `failedPaymentOf` answers per subscription; unknown is null (Stripe doesn't have it). */

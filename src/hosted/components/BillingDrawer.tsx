@@ -19,6 +19,7 @@ import {
   useEndPause,
   useKeepPlan,
   useOpenBillingPortal,
+  useRetryCardPayment,
   useStartCheckout,
 } from '../data/billingQueries';
 import {
@@ -82,6 +83,8 @@ export interface BillingDrawerProps {
   checkout: 'success' | 'cancelled' | undefined;
   /** Back from the Customer Portal (`?portal=returned`). */
   portalReturned?: boolean;
+  /** MUT-533 (D5): back from its card form (`?portal=card`): pay the past-due invoice on the new card, once. */
+  cardUpdated?: boolean;
   /** `replace`: the new step takes this one's history entry (the welcome never comes back on Back). */
   onStep: (step: 'subscribe' | 'switch' | 'cancel' | undefined, replace?: boolean) => void;
   onClose: () => void;
@@ -94,11 +97,12 @@ type Failure = 'needsHelp' | 'alreadySubscribed' | 'tooMany' | 'changed' | 'sess
 type Awaiting = 'pause' | 'noPause' | 'cancel' | 'noCancel';
 
 /** One drawer frame for every state: switching loading → content, or status → Subscribe, swaps its body, never the frame. */
-export function BillingDrawer({ step, checkout, portalReturned = false, onStep, onClose }: BillingDrawerProps) {
+export function BillingDrawer({ step, checkout, portalReturned = false, cardUpdated = false, onStep, onClose }: BillingDrawerProps) {
   const t = useT();
   const billing = useQuery(billingQuery);
   const phase = useCheckoutReturn(checkout, billing.data);
   usePortalReturn(portalReturned, billing.data);
+  useCardRetryOnReturn(cardUpdated);
   const subscribe = useSubscribeForm(billing.data);
   const subscribing = step === 'subscribe' && billing.data !== undefined;
   const welcome = useTrialWelcome(step === 'welcome', billing.data, onStep, onClose);
@@ -269,6 +273,17 @@ function useCheckoutReturn(checkout: BillingDrawerProps['checkout'], billing: Bi
  * Back from the Customer Portal the webhook can land after the first read (seen in release-QA: ~0.7 s late), so poll
  * quietly, stopping at the first change from what the drawer showed on return.
  */
+/** MUT-533 (D5): one payment attempt per return from the card form, never on a re-render. */
+function useCardRetryOnReturn(cardUpdated: boolean): void {
+  const { mutate } = useRetryCardPayment();
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!cardUpdated || asked.current) return;
+    asked.current = true;
+    mutate();
+  }, [cardUpdated, mutate]);
+}
+
 function usePortalReturn(returned: boolean, billing: BillingOverview | undefined): void {
   const [polling, setPolling] = useState(returned);
   const [shownOnReturn, setShownOnReturn] = useState<string | null>(null);

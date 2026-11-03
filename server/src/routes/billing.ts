@@ -30,7 +30,7 @@ import type { Logger } from '../logger.js';
 import { ownedProfilesOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { BillingRetentionEventRecord, BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
-import { BillingOverviewSchema, BillingRedirectSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
+import { BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
 
 /**
  * MUT-362 (plan §2.4, ADR-170): Settings › Billing. Signed in only, outside PORTAL_ROUTES (the signed-out portal has
@@ -40,11 +40,13 @@ import { BillingOverviewSchema, BillingRedirectSchema, CheckoutSessionRequestSch
  *   GET  /v1/billing                   the drawer's one read: subscription, trial, prices, country rules
  *   POST /v1/billing/checkout-session  a Stripe Checkout URL (eng review D3: the person's own customer, found or made)
  *   POST /v1/billing/portal-session    a Stripe Customer Portal URL for the linked customer
+ *   POST /v1/billing/card-retry        MUT-533 (D5): back from the card form, pay the past-due invoice on the new card
  */
 export const BILLING_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([
   'GET /v1/billing',
   'POST /v1/billing/checkout-session',
   'POST /v1/billing/portal-session',
+  'POST /v1/billing/card-retry',
 ]);
 
 /** Each session press can cost Stripe calls; ten a minute is far above any person's need. */
@@ -218,10 +220,54 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const summary = await store.billing.summaryOf(user.id);
       if (!summary.account) throw refusalError('NO_BILLING_ACCOUNT');
       const customer = summary.account.stripeCustomerId;
-      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true&portal=returned`, ...(flow ? { flow } : {}) }), user, customer, options.logger);
+      const { url } = await viaStripe(() => checkout.createPortalSession({ customer, returnUrl: `${returnUrl}?billing=true&portal=${flow === 'card' ? 'card' : 'returned'}`, ...(flow ? { flow } : {}) }), user, customer, options.logger);
       const profiles = await ownedProfilesOf(store, user.id);
       await auditOn(store, profiles, user, 'billing.portal_opened', {}, c.get('requestId'), options.logger);
       return c.json({ url }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/billing/card-retry',
+      tags: ['Billing'],
+      summary: 'Pay the past-due invoice now, on the card just saved',
+      description:
+        "MUT-533 (D5): Stripe's card form makes the new card the customer's default but pays nothing until its next retry, so the drawer " +
+        'calls this once on its way back (`?portal=card`). When the plan Billing shows is past_due with an open failed invoice, Stripe is asked ' +
+        'to pay that invoice now, keyed on the invoice and its attempt count (a double press replays). `paid`, `declined` (the plan stays past ' +
+        'due and Stripe keeps retrying), `needs-action` (Stripe’s invoice page, where the bank’s check happens) or `nothing-due` (nothing ' +
+        'charged). Audited `billing.payment_retried` with the outcome. Additive since 1.98.0-mut533.',
+      security: SESSION_ONLY,
+      responses: { 200: { description: 'What Stripe did', content: { 'application/json': { schema: CardRetryResponseSchema } } }, ...refusedResponses },
+    }),
+    async (c) => {
+      const { user } = c.get('identity');
+      const now = c.get('now')();
+      await limit(c, options.limiter, user.id, now);
+      const nothing = { outcome: 'nothing-due' as const, hostedInvoiceUrl: null };
+      const plan = options.plan;
+      if (!plan) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
+      const summary = await store.billing.summaryOf(user.id);
+      const shown = currentSubscription(summary.subscriptions, now);
+      if (!summary.account || !shown || shown.status !== 'past_due') return c.json(nothing, 200);
+      const customer = summary.account.stripeCustomerId;
+      const result = await viaStripe(
+        async () => {
+          const facts = await plan.failedPaymentOf(shown.stripeSubscriptionId);
+          if (!facts?.episode || facts.status !== 'past_due') return nothing;
+          return plan.retryPayment(facts.episode.invoiceId, facts.episode.attemptCount);
+        },
+        user,
+        customer,
+        options.logger,
+      );
+      if (result.outcome !== 'nothing-due') {
+        const profiles = await ownedProfilesOf(store, user.id);
+        await auditOn(store, profiles, user, 'billing.payment_retried', { outcome: result.outcome }, c.get('requestId'), options.logger);
+      }
+      return c.json(result, 200);
     },
   );
 

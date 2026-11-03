@@ -342,3 +342,26 @@ describe('PlanGateway.failedPaymentOf (MUT-533 D2)', () => {
     expect(await gateway.failedPaymentOf('sub_1')).toBeNull();
   });
 });
+
+describe('PlanGateway.retryPayment (MUT-533 D5)', () => {
+  it('pays the open invoice on the customer’s default card, once per attempt count (a double press replays)', async () => {
+    const { gateway, seen } = gatewayWith(() => ({ status: 200, body: { id: 'in_1', object: 'invoice', status: 'paid' } }));
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'paid', hostedInvoiceUrl: null });
+    expect(seen.map(route)).toEqual(['POST /v1/invoices/in_1/pay']);
+    expect(seen[0]!.headers.get('idempotency-key')).toBe('mut533-card-retry-in_1-3');
+  });
+
+  it('a declined card is an outcome, not an error', async () => {
+    const { gateway } = gatewayWith(() => ({ status: 402, body: { error: { type: 'card_error', code: 'card_declined', message: 'Your card was declined.' } } }));
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'declined', hostedInvoiceUrl: null });
+  });
+
+  it('a payment the bank wants confirmed comes back with Stripe’s invoice page', async () => {
+    const { gateway } = gatewayWith((request) =>
+      request.method === 'POST'
+        ? { status: 402, body: { error: { type: 'card_error', code: 'invoice_payment_intent_requires_action', message: 'Action required' } } }
+        : { status: 200, body: { id: 'in_1', object: 'invoice', hosted_invoice_url: 'https://invoice.stripe.com/i/acct_1/in_1' } },
+    );
+    expect(await gateway.retryPayment('in_1', 3)).toEqual({ outcome: 'needs-action', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_1' });
+  });
+});

@@ -889,7 +889,7 @@ test('A declined renewal - one Arabic mail within the hour, no amount or card; U
     const postal = card.locator('input[name="postalCode"]');
     if (await postal.isVisible().catch(() => false)) await postal.fill('9100000');
     await page.getByRole('button', { name: /^(Add|Save|Update|إضافة|حفظ|تحديث)/ }).last().click();
-    await page.waitForURL(/portal=returned/, { timeout: 60_000 });
+    await page.waitForURL(/portal=card/, { timeout: 60_000 });
   });
   await step('The open invoice is paid on the new card, and Billing shows the plan Active again', async () => {
     await expect.poll(async () => (await stripeApi('GET', `subscriptions/${subscriptionId}`)).status, { timeout: 90_000 }).toBe('active');

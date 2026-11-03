@@ -60,7 +60,7 @@ export function AccountDrawers() {
   // MUT-434: an account's, and only with agent_access (the drawer checks; the server refuses its list without it).
   if (drawers.state.connectClaude && !local) return <ConnectClaudeDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
-    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal === 'returned'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
+    return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }
   return null;
 }

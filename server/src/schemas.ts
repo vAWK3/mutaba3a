@@ -622,6 +622,14 @@ export const PortalSessionRequestSchema = z
   .strict()
   .openapi('PortalSessionRequest');
 
+/** MUT-533 (D5): what paying the past-due invoice on the new card did. */
+export const CardRetryResponseSchema = z
+  .object({
+    outcome: z.enum(['paid', 'declined', 'needs-action', 'nothing-due']),
+    hostedInvoiceUrl: z.string().url().nullable().openapi({ description: "Stripe's invoice page when the bank wants the person to confirm; null otherwise" }),
+  })
+  .openapi('CardRetryResponse');
+
 /** A Stripe-hosted page to send the browser to. */
 export const BillingRedirectSchema = z.object({ url: z.string().url() }).openapi('BillingRedirect');
 

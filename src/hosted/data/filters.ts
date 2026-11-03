@@ -331,8 +331,11 @@ export interface ProfileDrawerSearch {
   step?: 'subscribe' | 'welcome' | 'switch' | 'cancel';
   /** MUT-362: how the person came back from Stripe Checkout (its success_url / cancel_url). */
   checkout?: 'success' | 'cancelled';
-  /** MUT-362: back from Stripe's Customer Portal (its return_url), where a change may not be mirrored yet. */
-  portal?: 'returned';
+  /**
+   * MUT-362: back from Stripe's Customer Portal (its return_url), where a change may not be mirrored yet. MUT-533: `card`
+   * is back from its card form, so the past-due invoice is paid on the new card.
+   */
+  portal?: 'returned' | 'card';
 }
 export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'step', 'checkout', 'portal'] as const;
 
@@ -352,7 +355,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     connectClaude: flag(raw.connectClaude),
     step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' ? raw.step : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
-    portal: raw.portal === 'returned' ? 'returned' : undefined,
+    portal: raw.portal === 'returned' || raw.portal === 'card' ? raw.portal : undefined,
   });
 
 /** A page's search without the shell's keys, so no list ever sees them. */

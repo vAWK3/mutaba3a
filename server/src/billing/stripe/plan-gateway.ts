@@ -52,7 +52,16 @@ export interface PlanGateway {
    * person to confirm. Null when Stripe no longer has the subscription. One read for anything not past_due.
    */
   failedPaymentOf(subscriptionId: string): Promise<FailedPaymentFacts | null>;
+  /**
+   * MUT-533 (D5): pays an open invoice now, on the customer's default card. Stripe's card form sets the new card as the
+   * customer's default but pays nothing until its next retry (QA, 2026-11-03), so the drawer asks for this on the way
+   * back. Keyed on the invoice and its attempt count: a double press replays the first answer; after a failed try the
+   * count has moved on and a new card can be tried. A decline or a bank that wants the person to confirm is an outcome.
+   */
+  retryPayment(invoiceId: string, attemptCount: number): Promise<CardRetryResult>;
 }
+
+export type CardRetryResult = { outcome: 'paid' | 'declined' | 'needs-action'; hostedInvoiceUrl: string | null };
 
 export type EndPauseResult = { outcome: 'undone' } | { outcome: 'charged' } | { outcome: 'payment-failed' } | { outcome: 'payment-needs-action'; hostedInvoiceUrl: string | null };
 
@@ -260,6 +269,20 @@ export function createPlanGateway(options: PlanGatewayOptions): PlanGateway {
     async applyCoupon(subscriptionId, couponId) {
       // Once per subscription and coupon, ever (rule 2): a retry within Stripe's 24 h replays the first answer.
       await wrapped(() => stripe.subscriptions.update(subscriptionId, { discounts: [{ coupon: couponId }] }, { idempotencyKey: `mut532-stay-${subscriptionId}-${couponId}` }));
+    },
+    async retryPayment(invoiceId, attemptCount) {
+      try {
+        const invoice = await wrapped(() => stripe.invoices.pay(invoiceId, {}, { idempotencyKey: `mut533-card-retry-${invoiceId}-${attemptCount}` }));
+        return { outcome: invoice.status === 'paid' ? 'paid' : 'declined', hostedInvoiceUrl: null };
+      } catch (err) {
+        if (!(err instanceof StripeGatewayError)) throw err;
+        if (err.code === 'invoice_payment_intent_requires_action') {
+          const invoice = await wrapped(() => stripe.invoices.retrieve(invoiceId));
+          return { outcome: 'needs-action', hostedInvoiceUrl: invoice.hosted_invoice_url ?? null };
+        }
+        if (err.code === 'card_declined' || err.type === 'StripeCardError') return { outcome: 'declined', hostedInvoiceUrl: null };
+        throw err;
+      }
     },
     async failedPaymentOf(subscriptionId) {
       let sub: Stripe.Subscription;

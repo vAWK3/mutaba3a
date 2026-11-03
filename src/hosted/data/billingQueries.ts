@@ -53,6 +53,7 @@ async function checked(redirect: Promise<BillingRedirect>): Promise<BillingRedir
 }
 
 function leaveFor(redirect: BillingRedirect): void {
+  assertStripeUrl(redirect.url);
   stripeNavigation.assign(redirect.url);
 }
 
@@ -78,6 +79,25 @@ export function useOpenBillingPortal() {
     mutationFn: ({ returnPath, flow }: { returnPath: string; flow?: 'card' }) => checked(api.openBillingPortal({ returnPath, ...(flow ? { flow } : {}) })),
     onSuccess: leaveFor,
     onError,
+  });
+}
+
+/**
+ * MUT-533 (D5): Stripe's card form saves the card but pays nothing until its next retry, so the drawer asks for the
+ * past-due invoice to be paid on the way back. A bank that wants a confirmation sends the person to Stripe's invoice
+ * page; whatever happened, billing and /v1/me are read again (the return poll then follows the webhook).
+ */
+export function useRetryCardPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.retryCardPayment(),
+    onSuccess: (result) => {
+      if (result.outcome === 'needs-action' && result.hostedInvoiceUrl) leaveFor({ url: result.hostedInvoiceUrl });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_KEY });
+    },
   });
 }
 

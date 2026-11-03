@@ -9260,6 +9260,24 @@ components:
       required:
         - returnPath
       additionalProperties: false
+    CardRetryResponse:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum:
+            - paid
+            - declined
+            - needs-action
+            - nothing-due
+        hostedInvoiceUrl:
+          type: string
+          nullable: true
+          format: uri
+          description: Stripe's invoice page when the bank wants the person to confirm; null otherwise
+      required:
+        - outcome
+        - hostedInvoiceUrl
     YearlySwitchPreview:
       type: object
       properties:
@@ -20814,6 +20832,64 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BillingRedirect"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: more than 10 billing sessions a minute; `Retry-After` says when"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: "STRIPE_UNAVAILABLE: Stripe did not answer in time (a timeout, a rate limit, its own error); a retry may work"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/card-retry:
+    post:
+      tags:
+        - Billing
+      summary: Pay the past-due invoice now, on the card just saved
+      description: "MUT-533 (D5): Stripe's card form makes the new card the customer's default but pays nothing until its next retry, so the drawer calls this once on its way back (`?portal=card`). When the plan Billing shows is past_due with an open failed invoice, Stripe is asked to pay that invoice now, keyed on the invoice and its attempt count (a double press replays). `paid`, `declined` (the plan stays past due and Stripe keeps retrying), `needs-action` (Stripe’s invoice page, where the bank’s check happens) or `nothing-due` (nothing charged). Audited `billing.payment_retried` with the outcome. Additive since 1.98.0-mut533."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: What Stripe did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardRetryResponse"
         "401":
           description: No valid session
           content:

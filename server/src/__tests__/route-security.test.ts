@@ -112,6 +112,7 @@ const BILLING_OPERATIONS = [
   'GET /v1/billing',
   'POST /v1/billing/checkout-session',
   'POST /v1/billing/portal-session',
+  'POST /v1/billing/card-retry',
   'GET /v1/billing/yearly-switch',
   'POST /v1/billing/yearly-switch',
   'GET /v1/billing/retention',

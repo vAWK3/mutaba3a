@@ -4365,5 +4365,9 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
   window and gate wording, the admin dry run. Store contract `pastDueCandidates` (memory + Prisma `test:db`).
 - Mail: `templates.test.ts` / `mailer.test.ts` render both templates in ar + en with no amount, currency or card digits.
 - Portal: `billingView.test.ts` (past_due → `updateCard`), `BillingDrawer.test.tsx` (Update card asks for `flow: card`).
-- Release-QA (portal-live, Stripe sandbox): `card-failed-mail` (core), `card-failed-reminder`.
+- `plan-gateway.test.ts` `retryPayment` (paid, declined, needs-action, the idempotency key) and `billing-routes.test.ts`
+  POST `/v1/billing/card-retry` (pays once, audited; nothing-due cases charge nothing); `BillingDrawer.test.tsx`: back
+  from the card form it asks once, back from Manage billing never.
+- Release-QA (portal-live, Stripe sandbox): `card-failed-mail` (core, saves a good card on Stripe's page and the invoice
+  is paid), `card-failed-reminder`, `card-failed-3ds`.
 

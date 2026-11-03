@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import pino from 'pino';
 import { createApp, type AppDependencies } from '../app.js';
 import { parseBillingCountries } from '../billing/checkout.js';
-import { FakeCheckoutGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
+import { FakeCheckoutGateway, FakePlanGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
@@ -24,7 +24,7 @@ const NOW = new Date('2026-11-01T09:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
 const COUNTRIES = parseBillingCountries({ consumerCountries: ['IL', 'GB'], customTaxIdCountries: ['IL', 'JO'] });
 
-function harness(overrides: Partial<AppDependencies> & { stripeOff?: boolean; noPrices?: boolean } = {}) {
+function harness({ plan, ...overrides }: Partial<AppDependencies> & { stripeOff?: boolean; noPrices?: boolean; plan?: FakePlanGateway } = {}) {
   const store = new MemoryLedgerStore();
   const checkout = new FakeCheckoutGateway();
   if (!overrides.noPrices) checkout.withGaPrices();
@@ -39,7 +39,7 @@ function harness(overrides: Partial<AppDependencies> & { stripeOff?: boolean; no
     version: '0.1.0-test',
     now: () => NOW,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: true, trustedProxyHops: 1 },
-    stripe: overrides.stripeOff ? null : { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout },
+    stripe: overrides.stripeOff ? null : { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: checkout, ...(plan ? { planGateway: plan } : {}) },
     billingCountries: COUNTRIES,
     ...overrides,
   });
@@ -597,7 +597,7 @@ describe('POST /v1/billing/portal-session (MUT-362)', () => {
     const u = await person(h);
     const customer = await linkSubscription(h, u.userId);
     expect((await u.post(PORTAL, { returnPath: '/', flow: 'card' })).status).toBe(200);
-    expect(h.checkout.portalSessions).toEqual([{ customer, returnUrl: 'http://localhost?billing=true&portal=returned', flow: 'card' }]);
+    expect(h.checkout.portalSessions).toEqual([{ customer, returnUrl: 'http://localhost?billing=true&portal=card', flow: 'card' }]);
     expect((await u.post(PORTAL, { returnPath: '/', flow: 'invoices' })).status).toBe(422);
   });
 
@@ -629,3 +629,59 @@ describe('POST /v1/billing/portal-session (MUT-362)', () => {
     expect(statuses[10]).toBe(429);
   });
 });
+
+describe('POST /v1/billing/card-retry (MUT-533 D5)', () => {
+  const RETRY = '/v1/billing/card-retry';
+  const episode = (over: Record<string, unknown> = {}) => ({
+    status: 'past_due',
+    episode: { invoiceId: 'in_open', attemptCount: 2, nextPaymentAttempt: new Date(NOW.getTime() + DAY), firstFailedAt: new Date(NOW.getTime() - DAY), needsAuthentication: false, ...over },
+  });
+  async function pastDue(h: Harness, plan: FakePlanGateway, userId: string) {
+    await linkSubscription(h, userId, 'past_due');
+    const { subscriptions } = await h.store.billing.summaryOf(userId);
+    plan.failedPayments.set(subscriptions[0]!.stripeSubscriptionId, episode());
+  }
+
+  it('back from the card form, pays the open invoice on the new card once, audited; the answer says it went through', async () => {
+    const plan = new FakePlanGateway();
+    const h = harness({ plan });
+    const u = await person(h);
+    await pastDue(h, plan, u.userId);
+    const res = await u.post(RETRY, {});
+    expect(res.status).toBe(200);
+    expect(await read(res)).toEqual({ outcome: 'paid', hostedInvoiceUrl: null });
+    expect(plan.retries).toEqual([{ invoiceId: 'in_open', attemptCount: 2 }]);
+    expect((await billingAudit(h, u.personalId)).map((e) => [e.action, e.metadata])).toEqual([['billing.payment_retried', { outcome: 'paid' }]]);
+  });
+
+  it('a declined card or a bank that wants a confirmation is an answer, not an error', async () => {
+    const plan = new FakePlanGateway();
+    const h = harness({ plan });
+    const u = await person(h);
+    await pastDue(h, plan, u.userId);
+    plan.retryOutcome = { outcome: 'needs-action', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_open' };
+    expect(await read(await u.post(RETRY, {}))).toEqual({ outcome: 'needs-action', hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/in_open' });
+  });
+
+  it('nothing is charged when nothing is due: no plan, a plan that isn’t past due, or no open failed invoice', async () => {
+    const plan = new FakePlanGateway();
+    const h = harness({ plan });
+    const none = await person(h);
+    expect(await read(await none.post(RETRY, {}))).toEqual({ outcome: 'nothing-due', hostedInvoiceUrl: null });
+    const active = await person(h);
+    await linkSubscription(h, active.userId, 'active');
+    expect(await read(await active.post(RETRY, {}))).toEqual({ outcome: 'nothing-due', hostedInvoiceUrl: null });
+    const settled = await person(h);
+    await linkSubscription(h, settled.userId, 'past_due');
+    const { subscriptions } = await h.store.billing.summaryOf(settled.userId);
+    plan.failedPayments.set(subscriptions[0]!.stripeSubscriptionId, { status: 'past_due', episode: null });
+    expect(await read(await settled.post(RETRY, {}))).toEqual({ outcome: 'nothing-due', hostedInvoiceUrl: null });
+    expect(plan.retries).toEqual([]);
+  });
+
+  it('signed out is 401', async () => {
+    const h = harness({ plan: new FakePlanGateway() });
+    expect((await h.app.request(RETRY, { method: 'POST', headers: { 'content-type': 'application/json', ...SAME_ORIGIN }, body: '{}' })).status).toBe(401);
+  });
+});
+
