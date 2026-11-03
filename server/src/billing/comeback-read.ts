@@ -37,8 +37,12 @@ export async function comebackOfferOrNothing(checkout: CheckoutGateway, offers: 
   if (!entry) return null;
   try {
     const catalog = catalogFrom(await checkout.pricesByLookupKey(ALL_GA_LOOKUP_KEYS));
-    const offer = comebackOfferOf(entry, await checkout.couponById(entry.couponId, { fresh: options.fresh ?? false }), catalog);
-    if (!offer) logger.warn({ couponId: entry.couponId }, 'come-back coupon missing or not shaped as an amount off once on the Freelancer product; no come-back offer');
+    const read = (id: string) => checkout.couponById(id, { fresh: options.fresh ?? false });
+    const [ils, usd] = await Promise.all([read(entry.couponIds.ILS), read(entry.couponIds.USD)]);
+    const offer = comebackOfferOf(entry, { ILS: ils, USD: usd }, catalog);
+    if (!offer || offer.couponIds.ILS === null || offer.couponIds.USD === null) {
+      logger.warn({ couponIds: entry.couponIds }, 'a come-back coupon is missing or not shaped as an amount off once on the Freelancer product; that currency has no come-back offer');
+    }
     return offer;
   } catch (err) {
     if (!(err instanceof StripeGatewayError)) throw err;

@@ -18,8 +18,8 @@ interface LiveState {
   offerCouponId: string;
   /** MUT-532: this run's stay coupon id, which the API reads; made when the env starts. */
   stayCouponId: string;
-  /** MUT-534: this run's come-back coupon id, which the API reads; made when the env starts. */
-  comebackCouponId: string;
+  /** MUT-534: this run's come-back coupon ids, one per currency, which the API reads; made when the env starts. */
+  comebackCouponIds: { ILS: string; USD: string };
 }
 
 const STATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.state', 'portal-live.json');

@@ -364,8 +364,8 @@ access (GRACE). MTB3A mails them itself, in their language, from an hourly job (
 
 A person whose paid Freelancer plan ended keeps their records read-only forever. 30 and 90 days after the end, MTB3A
 mails them (`mutaba3a-comeback-mail`, daily at 10:30): the records are still there, and the first month back is ₪9 / $3
-(then the list price), or a first year ₪270 / $84. The price is Stripe's coupon `mtb3a_comeback_first_month` (₪20 / $6
-off the first invoice, once) taken off the list price.
+(then the list price), or a first year ₪270 / $84. The price is the list price less Stripe's come-back coupon for that
+currency (`mtb3a_comeback_first_month_ils`, ₪20, and `mtb3a_comeback_first_month_usd`, $6, off the first invoice, once).
 
 - **Only our mail opens it.** Each stage the job mails is recorded (`billing_retention_events`, `COMEBACK_OFFERED`); Billing
   and Checkout offer the price only to someone with that record. Cancelling and rejoining a week later is full price.
@@ -374,7 +374,7 @@ off the first invoice, once) taken off the list price.
 - **Check who it would mail:** `npm run billing:comeback-mail -- --dry-run --url "$URL"` (each lapsed person and the stage,
   or why not: paying, too-soon, firm, already-had, stay-offer-recent, covered, no-stage, already-mailed, never-paid,
   no-offer, no-price, suppressed).
-- **End it early:** delete the coupon in Stripe; nothing is offered or mailed until it exists again (`no-offer`).
+- **End it early:** delete both coupons in Stripe; nothing is offered or mailed until they exist again (`no-offer`).
 - **Support reply** for "I didn't get the ₪9 price":
 
   > EN: The welcome-back price is for people whose paid plan ended at least 30 days ago, once per person, and it applies

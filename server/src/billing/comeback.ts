@@ -32,7 +32,8 @@ type PerCurrency = Record<BillingCurrency, number | null>;
 
 export interface ComebackOffer {
   id: string;
-  couponId: string;
+  /** The coupon a Checkout in that currency carries; null where the currency has no come-back price. */
+  couponIds: Record<BillingCurrency, string | null>;
   /** Minor units per currency, Stripe's arithmetic (the list price less the amount off); null where it isn't sold. */
   firstMonth: PerCurrency;
   listMonth: PerCurrency;
@@ -40,23 +41,32 @@ export interface ComebackOffer {
   listYear: PerCurrency;
 }
 
-/** D8: valid, `once`, an amount off below the monthly price in each currency it names, Freelancer only. */
-export function comebackOfferOf(entry: ComebackOfferEntry, coupon: CouponFact | null, catalog: Catalog): ComebackOffer | null {
-  if (!coupon || !coupon.valid || coupon.duration !== COMEBACK_DURATION || coupon.percentOff !== null) return null;
-  const products = coupon.appliesToProducts;
+/**
+ * D8: per currency, its coupon must be valid, `once`, an amount off in that currency below the monthly price, and on the
+ * Freelancer product only. A currency whose coupon isn't has no come-back price; with none at all there is no offer.
+ */
+export function comebackOfferOf(entry: ComebackOfferEntry, coupons: Record<BillingCurrency, CouponFact | null>, catalog: Catalog): ComebackOffer | null {
   const freelancer = productIdsOf(catalog);
-  if (!products || products.length === 0 || !products.every((p) => freelancer.has(p))) return null;
-  const currencies = (Object.keys(catalog) as BillingCurrency[]).filter((c) => catalog[c] && coupon.amountOffIn[c] !== null);
+  const amountIn = (c: BillingCurrency): number | null => {
+    const coupon = coupons[c];
+    const pair = catalog[c];
+    if (!pair || !coupon || !coupon.valid || coupon.duration !== COMEBACK_DURATION || coupon.percentOff !== null) return null;
+    const products = coupon.appliesToProducts;
+    if (!products || products.length === 0 || !products.every((p) => freelancer.has(p))) return null;
+    const amount = coupon.amountOffIn[c];
+    // An amount that would make the first month free or negative isn't the offer D8 shapes.
+    return amount !== null && amount > 0 && amount < pair.month.unitAmount ? amount : null;
+  };
+  const amounts: PerCurrency = { ILS: amountIn('ILS'), USD: amountIn('USD') };
+  const currencies = (['ILS', 'USD'] as const).filter((c) => amounts[c] !== null);
   if (currencies.length === 0) return null;
-  // An amount that would make the first month free or negative isn't the offer D8 shapes.
-  if (currencies.some((c) => coupon.amountOffIn[c]! <= 0 || coupon.amountOffIn[c]! >= catalog[c]!.month.unitAmount)) return null;
   const per = (pick: (c: BillingCurrency) => number): PerCurrency => ({ ILS: currencies.includes('ILS') ? pick('ILS') : null, USD: currencies.includes('USD') ? pick('USD') : null });
   return {
     id: entry.id,
-    couponId: entry.couponId,
-    firstMonth: per((c) => catalog[c]!.month.unitAmount - coupon.amountOffIn[c]!),
+    couponIds: { ILS: amounts.ILS !== null ? entry.couponIds.ILS : null, USD: amounts.USD !== null ? entry.couponIds.USD : null },
+    firstMonth: per((c) => catalog[c]!.month.unitAmount - amounts[c]!),
     listMonth: per((c) => catalog[c]!.month.unitAmount),
-    firstYear: per((c) => catalog[c]!.year.unitAmount - coupon.amountOffIn[c]!),
+    firstYear: per((c) => catalog[c]!.year.unitAmount - amounts[c]!),
     listYear: per((c) => catalog[c]!.year.unitAmount),
   };
 }

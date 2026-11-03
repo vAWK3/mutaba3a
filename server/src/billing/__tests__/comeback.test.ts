@@ -10,17 +10,18 @@ import type { ComebackOfferEntry, CouponFact } from '../offer.js';
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2027-03-10T08:30:00Z');
 const ago = (days: number) => new Date(NOW.getTime() - days * DAY);
-const ENTRY: ComebackOfferEntry = { id: 'comeback-2026', couponId: 'mtb3a_comeback_first_month', kind: 'comeback', tier: 'freelancer' };
+const ENTRY: ComebackOfferEntry = { id: 'comeback-2026', couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' }, kind: 'comeback', tier: 'freelancer' };
 const CATALOG: Catalog = {
   ILS: { month: { id: 'price_ils_m', unitAmount: 2900, productId: 'prod_F' }, year: { id: 'price_ils_y', unitAmount: 29000, productId: 'prod_F' } },
   USD: { month: { id: 'price_usd_m', unitAmount: 900, productId: 'prod_F' }, year: { id: 'price_usd_y', unitAmount: 9000, productId: 'prod_F' } },
 };
+/** One coupon per currency (Stripe's Checkout takes an amount off only in the coupon's own currency). */
 const coupon = (over: Partial<CouponFact> = {}): CouponFact => ({
-  id: ENTRY.couponId,
+  id: ENTRY.couponIds.ILS,
   valid: true,
   percentOff: null,
   amountOff: 2000,
-  amountOffIn: { ILS: 2000, USD: 600 },
+  amountOffIn: { ILS: 2000, USD: null },
   duration: 'once',
   durationInMonths: null,
   redeemBy: null,
@@ -28,11 +29,14 @@ const coupon = (over: Partial<CouponFact> = {}): CouponFact => ({
   ...over,
 });
 
+const usd = (over: Partial<CouponFact> = {}) => coupon({ id: ENTRY.couponIds.USD, amountOff: 600, amountOffIn: { ILS: null, USD: 600 }, ...over });
+const both = (ils: Partial<CouponFact> = {}, dollars: Partial<CouponFact> = {}) => ({ ILS: coupon(ils), USD: usd(dollars) });
+
 describe('comebackOfferOf (D8)', () => {
   it('₪20 / $6 off once: ₪9 / $3 the first month back, ₪270 / $84 a first year, then the list prices', () => {
-    expect(comebackOfferOf(ENTRY, coupon(), CATALOG)).toEqual({
+    expect(comebackOfferOf(ENTRY, both(), CATALOG)).toEqual({
       id: 'comeback-2026',
-      couponId: 'mtb3a_comeback_first_month',
+      couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' },
       firstMonth: { ILS: 900, USD: 300 },
       listMonth: { ILS: 2900, USD: 900 },
       firstYear: { ILS: 27000, USD: 8400 },
@@ -40,19 +44,20 @@ describe('comebackOfferOf (D8)', () => {
     });
   });
 
-  it('a currency with no amount in the coupon has no come-back price; with none at all there is no offer', () => {
-    expect(comebackOfferOf(ENTRY, coupon({ amountOffIn: { ILS: 2000, USD: null } }), CATALOG)).toMatchObject({ firstMonth: { ILS: 900, USD: null } });
-    expect(comebackOfferOf(ENTRY, coupon({ amountOffIn: { ILS: null, USD: null } }), CATALOG)).toBeNull();
+  it('a currency whose coupon is missing or wrongly shaped has no come-back price; with none at all there is no offer', () => {
+    expect(comebackOfferOf(ENTRY, { ILS: coupon(), USD: null }, CATALOG)).toMatchObject({ firstMonth: { ILS: 900, USD: null }, couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: null } });
+    expect(comebackOfferOf(ENTRY, both({}, { amountOffIn: { ILS: 600, USD: null } }), CATALOG)).toMatchObject({ firstMonth: { ILS: 900, USD: null } });
+    expect(comebackOfferOf(ENTRY, { ILS: null, USD: null }, CATALOG)).toBeNull();
   });
 
   it('anything not shaped as D8 says is no offer: a percent, not once, an amount not below the month, other products, gone', () => {
-    expect(comebackOfferOf(ENTRY, coupon({ percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null } }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, coupon({ duration: 'repeating', durationInMonths: 2 }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, coupon({ amountOffIn: { ILS: 2900, USD: 600 } }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, coupon({ appliesToProducts: ['prod_F', 'prod_FIRM'] }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, coupon({ appliesToProducts: null }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, coupon({ valid: false }), CATALOG)).toBeNull();
-    expect(comebackOfferOf(ENTRY, null, CATALOG)).toBeNull();
+    const ilsOnly = (over: Partial<CouponFact>) => comebackOfferOf(ENTRY, { ILS: coupon(over), USD: null }, CATALOG);
+    expect(ilsOnly({ percentOff: 50, amountOff: null, amountOffIn: { ILS: null, USD: null } })).toBeNull();
+    expect(ilsOnly({ duration: 'repeating', durationInMonths: 2 })).toBeNull();
+    expect(ilsOnly({ amountOffIn: { ILS: 2900, USD: null } })).toBeNull();
+    expect(ilsOnly({ appliesToProducts: ['prod_F', 'prod_FIRM'] })).toBeNull();
+    expect(ilsOnly({ appliesToProducts: null })).toBeNull();
+    expect(ilsOnly({ valid: false })).toBeNull();
   });
 });
 

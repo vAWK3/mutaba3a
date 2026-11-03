@@ -721,13 +721,21 @@ describe('the come-back offer in Billing and at Checkout (MUT-534 D12–D14)', (
     const res = await u.post(CHECKOUT, checkoutBody({ expectedOffer: 'comeback-2026' }));
     expect(res.status).toBe(200);
     const params = h.checkout.checkoutSessions.at(-1)!;
-    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month' }]);
+    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month_ils' }]);
     expect(params.subscription_data).toMatchObject({ metadata: { mutaba3a_offer: 'comeback-2026' } });
     const message = (params.custom_text?.submit as { message: string } | undefined)?.message ?? '';
     expect(message).toContain('عرض العودة: \u2068₪19\u2069 لشهرك الأول، ثم \u2068₪39\u2069 شهريًا.');
     expect(message).toContain('Welcome-back offer: \u2068₪19\u2069 for your first month, then \u2068₪39\u2069 a month.');
-    expect(h.checkout.couponReads).toContain('fresh:mtb3a_comeback_first_month');
+    expect(h.checkout.couponReads).toContain('fresh:mtb3a_comeback_first_month_ils');
     expect((await billingAudit(h, u.personalId)).at(-1)!.metadata).toMatchObject({ offer: 'comeback-2026' });
+  });
+
+  it('a dollar Checkout carries the dollar coupon (Stripe takes an amount off only in the coupon’s own currency)', async () => {
+    const h = comeback();
+    const u = await person(h);
+    await lapsed(h, u.userId);
+    expect((await u.post(CHECKOUT, checkoutBody({ country: 'GB', expectedOffer: 'comeback-2026' }))).status).toBe(200);
+    expect(h.checkout.checkoutSessions.at(-1)!.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month_usd' }]);
   });
 
   it('a yearly Checkout takes the same amount off its first invoice', async () => {
@@ -736,7 +744,7 @@ describe('the come-back offer in Billing and at Checkout (MUT-534 D12–D14)', (
     await lapsed(h, u.userId);
     expect((await u.post(CHECKOUT, checkoutBody({ interval: 'year', expectedOffer: 'comeback-2026' }))).status).toBe(200);
     const params = h.checkout.checkoutSessions.at(-1)!;
-    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month' }]);
+    expect(params.discounts).toEqual([{ coupon: 'mtb3a_comeback_first_month_ils' }]);
     expect((params.custom_text?.submit as { message: string }).message).toContain('Welcome-back offer: \u2068₪370\u2069 for your first year, then \u2068₪390\u2069 a year.');
   });
 

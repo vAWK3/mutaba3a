@@ -245,9 +245,11 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this;
   }
 
-  /** MUT-534 (D8): the come-back coupon: ₪20 off (a $6 currency option) the first invoice, Freelancer only, no end. */
-  withComebackCoupon(id = 'mtb3a_comeback_first_month', over: Partial<CouponFact> = {}): this {
-    this.coupons.set(id, { id, valid: true, percentOff: null, amountOff: 2000, amountOffIn: { ILS: 2000, USD: 600 }, duration: 'once', durationInMonths: null, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT], ...over });
+  /** MUT-534 (D8): the come-back coupons: ₪20 and $6 off the first invoice, one per currency, Freelancer only, no end. */
+  withComebackCoupon(over: Partial<CouponFact> = {}): this {
+    const base = { valid: true, percentOff: null, duration: 'once', durationInMonths: null, redeemBy: null, appliesToProducts: [FAKE_FREELANCER_PRODUCT] };
+    this.coupons.set('mtb3a_comeback_first_month_ils', { id: 'mtb3a_comeback_first_month_ils', ...base, amountOff: 2000, amountOffIn: { ILS: 2000, USD: null }, ...over });
+    this.coupons.set('mtb3a_comeback_first_month_usd', { id: 'mtb3a_comeback_first_month_usd', ...base, amountOff: 600, amountOffIn: { ILS: null, USD: 600 }, ...over });
     return this;
   }
 

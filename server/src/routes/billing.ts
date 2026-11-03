@@ -376,7 +376,8 @@ async function comebackFor(store: LedgerStore, userId: string, subscriptions: re
 function comebackApplied(offer: ComebackOffer, currency: 'ILS' | 'USD', interval: BillingInterval): AppliedOffer | null {
   const first = interval === 'year' ? offer.firstYear[currency] : offer.firstMonth[currency];
   const list = interval === 'year' ? offer.listYear[currency] : offer.listMonth[currency];
-  return first === null || list === null ? null : { id: offer.id, couponId: offer.couponId, firstAmount: first, listAmount: list, kind: 'comeback', interval };
+  const couponId = offer.couponIds[currency];
+  return first === null || list === null || couponId === null ? null : { id: offer.id, couponId, firstAmount: first, listAmount: list, kind: 'comeback', interval };
 }
 
 /** D4: what the offer adds to this Checkout, in the price's own currency. */

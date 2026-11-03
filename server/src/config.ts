@@ -189,8 +189,9 @@ const envSchema = z.object({
   BILLING_OFFER_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
   /** MUT-532: QA only, the same rule for the cancel flow's stay coupon (offers.json `stay`). Refused where live. */
   BILLING_STAY_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
-  /** MUT-534 (D9): QA only, the same rule for the come-back coupon (offers.json `comeback`). Refused where live. */
-  BILLING_COMEBACK_COUPON_ID: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
+  /** MUT-534 (D9): QA only, the same rule for the come-back coupons (offers.json `comeback`), one per currency, set together. Refused where live. */
+  BILLING_COMEBACK_COUPON_ID_ILS: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
+  BILLING_COMEBACK_COUPON_ID_USD: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, 'must be a Stripe coupon id').optional(),
   /**
    * MUT-533 (D3): the length of Stripe's Smart Retries window, in days, as the dashboard sets it (7, 14, 21 or 28).
    * The failed-card reminder goes at its midpoint; 28 keeps every mail key inside the 30-day send log.
@@ -342,8 +343,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (config.BILLING_OFFER_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
     throw new ConfigError('Invalid configuration:\n  BILLING_OFFER_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
   }
-  if (config.BILLING_COMEBACK_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
-    throw new ConfigError('Invalid configuration:\n  BILLING_COMEBACK_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
+  if ((config.BILLING_COMEBACK_COUPON_ID_ILS || config.BILLING_COMEBACK_COUPON_ID_USD) && config.API_KEY_ENVIRONMENT === 'live') {
+    throw new ConfigError('Invalid configuration:\n  BILLING_COMEBACK_COUPON_ID_ILS/_USD: the QA coupon overrides are never set on a live server; the live offers are offers.json');
+  }
+  if (Boolean(config.BILLING_COMEBACK_COUPON_ID_ILS) !== Boolean(config.BILLING_COMEBACK_COUPON_ID_USD)) {
+    throw new ConfigError('Invalid configuration:\n  BILLING_COMEBACK_COUPON_ID_ILS/_USD: set both or neither');
   }
   if (config.BILLING_STAY_COUPON_ID && config.API_KEY_ENVIRONMENT === 'live') {
     throw new ConfigError('Invalid configuration:\n  BILLING_STAY_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');

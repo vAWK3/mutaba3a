@@ -20,7 +20,7 @@ const ago = (days: number) => new Date(NOW.getTime() - days * DAY);
 const SUBSCRIBE = 'https://portal.example.test/?billing=true&step=subscribe';
 const OFFER: ComebackOffer = {
   id: 'comeback-2026',
-  couponId: 'mtb3a_comeback_first_month',
+  couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' },
   firstMonth: { ILS: 900, USD: 300 },
   listMonth: { ILS: 2900, USD: 900 },
   firstYear: { ILS: 27000, USD: 8400 },

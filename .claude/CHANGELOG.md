@@ -36,8 +36,9 @@ the plan and copy on 2026-11-02 (`.claude/designs/mut-533-534-card-failed-comeba
 ### Added
 - Migrations `20261104120000_mut534_comeback` (`billing_subscriptions.endedAt` + `(status, endedAt)` index,
   `COMEBACK_OFFERED`) and `20261104120100_mut534_comeback_stage_index` (once per person per stage).
-- `offers.json` `kind: "comeback"` (`mtb3a_comeback_first_month`, no interval); `CouponFact.amountOffIn`;
-  `BILLING_COMEBACK_COUPON_ID` (QA only, refused live); `offersFor` takes an options object.
+- `offers.json` `kind: "comeback"` with one coupon per currency (`mtb3a_comeback_first_month_ils` / `_usd`: Stripe's
+  Checkout refuses an amount-off coupon in another currency, options or not), no interval; `CouponFact.amountOffIn`;
+  `BILLING_COMEBACK_COUPON_ID_ILS` / `_USD` (QA only, refused live); `offersFor` takes an options object.
 - `server/src/billing/comeback.ts` (`comebackOfferOf`, `comebackStageOf`, `comebackRefusalOf`), `comeback-read.ts`
   (`comebackFactsOf`, `comebackOfferOrNothing`), `comeback-mail.ts` (`runComebackMail`: claim the stage, mail it,
   release the claim if it didn't go out). Store `billing.comebackCandidates`.

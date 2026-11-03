@@ -17,17 +17,22 @@ export type OfferKind = 'launch' | 'stay' | 'comeback';
 interface OfferEntryBase {
   /** A stable campaign name, for analytics and the subscription's `mutaba3a_offer` metadata. */
   id: string;
-  couponId: string;
   tier: 'freelancer';
 }
 /** A launch offer (yearly) or the stay offer (monthly): each is for one interval. */
 export interface IntervalOfferEntry extends OfferEntryBase {
   kind: 'launch' | 'stay';
+  couponId: string;
   interval: BillingInterval;
 }
-/** MUT-534 (D9): the come-back offer takes the same amount off whichever interval the person comes back on. */
+/**
+ * MUT-534 (D9): the come-back offer takes the same amount off whichever interval the person comes back on. One coupon
+ * per currency: Stripe's Checkout refuses an amount-off coupon whose own currency isn't the price's, currency options
+ * or not (QA, 2026-11-03).
+ */
 export interface ComebackOfferEntry extends OfferEntryBase {
   kind: 'comeback';
+  couponIds: Record<BillingCurrency, string>;
 }
 export type OfferEntry = IntervalOfferEntry | ComebackOfferEntry;
 
@@ -75,18 +80,22 @@ export function parseOffers(raw: unknown): OfferEntry[] {
     const kind = (entry['kind'] === undefined ? 'launch' : field('kind', (v) => v === 'launch' || v === 'stay' || v === 'comeback', 'must be "launch", "stay" or "comeback"')) as OfferKind;
     const base = {
       id: field('id', (v) => typeof v === 'string' && OFFER_ID.test(v), 'must be lower-case letters, digits and dashes'),
-      couponId: field('couponId', (v) => typeof v === 'string' && COUPON_ID.test(v), 'must be a Stripe coupon id'),
       tier: field('tier', (v) => v === 'freelancer', 'must be "freelancer"') as 'freelancer',
     };
     if (kind === 'comeback') {
       // MUT-534 (D9): one amount off whichever interval the person comes back on; an interval would mean nothing.
       if (entry['interval'] !== undefined) throw new Error(`offers.json: offer ${i}: a come-back offer has no interval`);
-      return { id: base.id, couponId: base.couponId, kind, tier: base.tier } satisfies ComebackOfferEntry;
+      const ids = (entry['couponIds'] ?? {}) as Record<string, unknown>;
+      if (!(['ILS', 'USD'] as const).every((c) => typeof ids[c] === 'string' && COUPON_ID.test(ids[c] as string))) {
+        throw new Error(`offers.json: offer ${i} couponIds must name a Stripe coupon for ILS and for USD`);
+      }
+      return { id: base.id, kind, couponIds: { ILS: ids['ILS'] as string, USD: ids['USD'] as string }, tier: base.tier } satisfies ComebackOfferEntry;
     }
+    const couponId = field('couponId', (v) => typeof v === 'string' && COUPON_ID.test(v), 'must be a Stripe coupon id');
     const interval = field('interval', (v) => v === 'month' || v === 'year', 'must be "month" or "year"') as BillingInterval;
     // MUT-532 (D10/D11): a stay coupon on a yearly plan would halve a renewal; it is monthly only.
     if (kind === 'stay' && interval !== 'month') throw new Error(`offers.json: offer ${i} interval must be "month" for a stay offer`);
-    return { id: base.id, couponId: base.couponId, kind, interval, tier: base.tier } satisfies IntervalOfferEntry;
+    return { id: base.id, couponId, kind, interval, tier: base.tier } satisfies IntervalOfferEntry;
   });
   if (new Set(entries.map((e) => e.id)).size !== entries.length) throw new Error('offers.json: an offer id is a duplicate');
   return entries;
@@ -101,13 +110,13 @@ export const OFFERS: readonly OfferEntry[] = parseOffers(offersFile);
  * replaces its kind's entries with one, under that kind's first name: a yearly launch offer, a monthly stay offer, a
  * come-back offer.
  */
-export function offersFor(overrides: { launch?: string | undefined; stay?: string | undefined; comeback?: string | undefined }): readonly OfferEntry[] {
+export function offersFor(overrides: { launch?: string | undefined; stay?: string | undefined; comeback?: Record<BillingCurrency, string> | undefined }): readonly OfferEntry[] {
   if (!overrides.launch && !overrides.stay && !overrides.comeback) return OFFERS;
   const nameOf = (kind: OfferKind, fallback: string) => OFFERS.find((e) => e.kind === kind)?.id ?? fallback;
   const ofKind = (kind: OfferKind) => OFFERS.filter((e) => e.kind === kind);
   const launch: OfferEntry[] = overrides.launch ? [{ id: nameOf('launch', 'launch-2026'), couponId: overrides.launch, kind: 'launch', interval: 'year', tier: 'freelancer' }] : ofKind('launch');
   const stay: OfferEntry[] = overrides.stay ? [{ id: nameOf('stay', 'stay-2026'), couponId: overrides.stay, kind: 'stay', interval: 'month', tier: 'freelancer' }] : ofKind('stay');
-  const comeback: OfferEntry[] = overrides.comeback ? [{ id: nameOf('comeback', 'comeback-2026'), couponId: overrides.comeback, kind: 'comeback', tier: 'freelancer' }] : ofKind('comeback');
+  const comeback: OfferEntry[] = overrides.comeback ? [{ id: nameOf('comeback', 'comeback-2026'), couponIds: overrides.comeback, kind: 'comeback', tier: 'freelancer' }] : ofKind('comeback');
   return [...launch, ...stay, ...comeback];
 }
 

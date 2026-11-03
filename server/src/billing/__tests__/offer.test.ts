@@ -28,7 +28,7 @@ const HOUR = 60 * 60 * 1000;
 const END = new Date('2027-02-01T22:59:00.000Z');
 const ENTRY: OfferEntry = { id: 'launch-2026', couponId: 'mtb3a_launch_yearly_2026', kind: 'launch', interval: 'year', tier: 'freelancer' };
 const STAY: OfferEntry = { id: 'stay-2026', couponId: 'mtb3a_stay_monthly_50', kind: 'stay', interval: 'month', tier: 'freelancer' };
-const COMEBACK: OfferEntry = { id: 'comeback-2026', couponId: 'mtb3a_comeback_first_month', kind: 'comeback', tier: 'freelancer' };
+const COMEBACK: OfferEntry = { id: 'comeback-2026', couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' }, kind: 'comeback', tier: 'freelancer' };
 const PRODUCTS = new Set(['prod_FREELANCER']);
 const CATALOG: Catalog = {
   ILS: { month: { id: 'price_ils_m', unitAmount: 2900, productId: 'prod_FREELANCER' }, year: { id: 'price_ils_y', unitAmount: 29000, productId: 'prod_FREELANCER' } },
@@ -56,7 +56,9 @@ describe('offers.json (D12)', () => {
   });
 
   it('MUT-534 (D9): a come-back offer has no interval (it applies to both) and is never the launch offer', async () => {
-    expect(parseOffers([{ id: 'comeback-2026', couponId: 'mtb3a_comeback_first_month', kind: 'comeback', tier: 'freelancer' }])).toEqual([COMEBACK]);
+    expect(parseOffers([{ id: 'comeback-2026', kind: 'comeback', couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' }, tier: 'freelancer' }])).toEqual([COMEBACK]);
+    // One coupon per currency: Stripe's Checkout takes an amount off only in the coupon's own currency.
+    expect(() => parseOffers([{ id: 'comeback-2026', kind: 'comeback', couponIds: { ILS: 'mtb3a_comeback_first_month_ils' }, tier: 'freelancer' }])).toThrow(/couponIds/);
     expect(() => parseOffers([{ ...COMEBACK, interval: 'month' }])).toThrow(/come-back offer has no interval/);
     const read: string[] = [];
     expect(await resolveOffer([COMEBACK], 'year', async (id) => (read.push(id), coupon({ id })), PRODUCTS, NOW)).toBeNull();
@@ -86,7 +88,7 @@ describe('offers.json (D12)', () => {
     expect(offersFor({})).toBe(OFFERS);
     expect(offersFor({ launch: 'qa_offer_abc' })).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, STAY, COMEBACK]);
     expect(offersFor({ stay: 'qa_stay_abc' })).toEqual([ENTRY, { ...STAY, couponId: 'qa_stay_abc' }, COMEBACK]);
-    expect(offersFor({ comeback: 'qa_back_abc' })).toEqual([ENTRY, STAY, { ...COMEBACK, couponId: 'qa_back_abc' }]);
+    expect(offersFor({ comeback: { ILS: 'qa_back_ils', USD: 'qa_back_usd' } })).toEqual([ENTRY, STAY, { ...COMEBACK, couponIds: { ILS: 'qa_back_ils', USD: 'qa_back_usd' } }]);
     expect(offersFor({ launch: 'qa_offer_abc', stay: 'qa_stay_abc' })).toEqual([{ ...ENTRY, couponId: 'qa_offer_abc' }, { ...STAY, couponId: 'qa_stay_abc' }, COMEBACK]);
   });
 
