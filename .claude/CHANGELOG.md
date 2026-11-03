@@ -61,6 +61,11 @@ defaults (MUT-303). An empty field is fine.
   (`expenseReceipts.listServerReadToReview` / `resetForReread`, one guarded UPDATE): server-read fields dropped, QR and
   vendor-list kept, read state restarted for the sweep; dry run by default, audited `expense_receipt.reread_requested`.
   `SERVER_READER_GENERATION` shared with the stamp. `docs/operations/before-release.md`: run it after the roll-out.
+- qa-reconcile review fixes: a vendor-list name goes with the server-read registration no. it was looked up by (else the
+  old number's vendor stays beside the new number); what the reset keeps is stamped with the current generation, so a
+  re-read that rightly adds nothing isn't picked again; `--reader-below` above `SERVER_READER_GENERATION` is refused.
+  Left as is (low): a re-read within Cloud Tasks' ~1 h name window of the first read's task `<id>-0` waits for a later
+  sweep; the reset and its audit row are two writes.
 
 ### Pre-landing review (2026-11-03, specialist + adversarial)
 - A "total paid" row is the cash handed over when another total is printed, or when paid + change isn't; change

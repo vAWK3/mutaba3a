@@ -21,18 +21,19 @@ const OLD_READ: ReceiptSuggestion = { readerVersion: 'server-ocr-rapid-tess-1', 
 const PAZ = receipt(['תחנת דלק הגליל', 'סה"כ לפנ\' מע"מ149.47 ש"ח', 'מע"מ להוצ רכב 26.98', 'סה"כ לתשלום 176.37']);
 
 class OneOcr implements OcrClient {
+  constructor(private readonly lines: OcrResult['lines']) {}
   async read(): Promise<OcrResult> {
-    return { engine: 'rapid-tess', lines: PAZ, pages: 1 };
+    return { engine: 'rapid-tess', lines: this.lines, pages: 1 };
   }
 }
 
-async function world(granted = true) {
+async function world(granted = true, lines: OcrResult['lines'] = PAZ) {
   const store = new MemoryLedgerStore();
   const ORG = (await store.organizations.create({ name: 'Firm', slug: `reread-${Math.random().toString(36).slice(2, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' })).id;
   vi.spyOn(store.features, 'activeFor').mockResolvedValue(granted ? ['receipt_reading'] : []);
   const storage = new MemoryAttachmentStorage();
   const clock = { now: FIRST_READ };
-  const reader = createReceiptReader({ store, storage, ocr: new OneOcr(), dispatcher: { enqueue: async () => {} }, logger: pino({ level: 'silent' }), now: () => clock.now });
+  const reader = createReceiptReader({ store, storage, ocr: new OneOcr(lines), dispatcher: { enqueue: async () => {} }, logger: pino({ level: 'silent' }), now: () => clock.now });
   /** A To-review receipt the old reader read (claimed once, DONE) with `suggested`. */
   async function oldRead(suggested: ReceiptSuggestion = OLD_READ) {
     const r = await store.expenseReceipts.create({ organizationId: ORG, expenseId: null, filename: 'r.jpg', mimeType: 'image/jpeg', sizeBytes: 4, receivedOn: '2026-10-30', uploadedByUserId: USER, requestId: null }, FIRST_READ);
@@ -64,7 +65,7 @@ describe('receipts:reread (MUT-514)', () => {
     expect(r.reset).toEqual([before.id]);
     const reset = (await w.store.expenseReceipts.getById(w.ORG, before.id))!;
     expect(reset).toMatchObject({ readStatus: 'PENDING', readAttempts: 0, readFirstClaimedAt: null, readLeaseUntil: null, readRequestedAt: LATER, version: before.version + 1 });
-    expect(reset.suggested).toEqual({ readerVersion: 'server-ocr-rapid-tess-1', date: OLD_READ.date });
+    expect(reset.suggested).toEqual({ readerVersion: serverReaderVersion('rapid-tess'), date: OLD_READ.date });
     // The sweep asks for it; the read job reads it.
     expect((await w.store.expenseReceipts.listPendingForSweep(LATER, 10)).map((x) => x.id)).toEqual([before.id]);
     expect(await w.reader.readOne(before.id)).toBe('done');
@@ -100,6 +101,23 @@ describe('receipts:reread (MUT-514)', () => {
 
   it('drops only the server-read fields; nothing left is no suggestion', () => {
     expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), currency: f('ILS', 'pdf-text') })).toBeNull();
-    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-1', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-2', date: f('2026-10-01', 'qr') });
+  });
+
+  it('a vendor-list name goes with the registration number it was looked up by (qa-reconcile review)', () => {
+    const named = { readerVersion: 'server-ocr-x-1', registrationNo: f('123456782'), vendorName: { value: 'Old Vendor', source: 'vendor' as const, confidence: 1 }, date: f('2026-10-01', 'qr') };
+    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-2', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-2', registrationNo: f('123456782', 'qr') });
+  });
+
+  it('a re-read that adds nothing is not picked again, and a generation above the current reader is refused (qa-reconcile review)', async () => {
+    // The fixed reader finds nothing on this receipt it can be sure of.
+    const w = await world(true, receipt(['חנות']));
+    const before = await w.oldRead({ readerVersion: 'server-ocr-rapid-tess-1', vatMinor: f('14947'), date: f('2026-10-21', 'qr') });
+    w.clock.now = LATER;
+    await rereadReceipts(w.store, { readerBelow: 2, apply: true, now: LATER });
+    await w.reader.readOne(before.id);
+    expect((await rereadReceipts(w.store, { readerBelow: 2, apply: false, now: LATER })).planned).toEqual([]);
+    await expect(rereadReceipts(w.store, { readerBelow: 3, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
   });
 });

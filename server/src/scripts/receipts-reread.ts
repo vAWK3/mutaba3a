@@ -1,6 +1,6 @@
 import { hasFeature } from '../features.js';
 import { SUGGESTION_FIELDS, type SuggestionField } from '../receipts/extract/merge.js';
-import { serverReaderGeneration } from '../receipts/reading/reader.js';
+import { SERVER_READER_GENERATION, serverReaderGeneration } from '../receipts/reading/reader.js';
 import type { LedgerStore, ReceiptSuggestion, SuggestionSource } from '../repositories/ports.js';
 
 /**
@@ -30,7 +30,7 @@ export interface RereadPlanItem {
   readerVersion: string;
   /** Every field the suggestion holds now, with its source. */
   fields: Array<{ field: SuggestionField; source: SuggestionSource }>;
-  /** The fields the re-read drops (server-read). */
+  /** The fields the re-read drops (server-read, and a vendor-list name looked up by a server-read registration no.). */
   cleared: SuggestionField[];
 }
 
@@ -49,16 +49,24 @@ function fieldsOf(suggestion: ReceiptSuggestion): RereadPlanItem['fields'] {
   });
 }
 
-/** The suggestion without its server-read fields: null when nothing else is left. */
+/**
+ * The suggestion without its server-read fields: null when nothing else is left. A vendor-list name goes with the
+ * server-read registration no. it was looked up by (the read job never replaces a stored name). What is kept carries
+ * the current reader's version, so a re-read that rightly adds nothing is not picked again.
+ */
 export function withoutServerFields(suggestion: ReceiptSuggestion): ReceiptSuggestion | null {
+  const serverRead = (source: SuggestionSource) => SERVER_SOURCES.includes(source);
+  const dropsRegistration = suggestion.registrationNo !== undefined && serverRead(suggestion.registrationNo.source);
   const kept = Object.fromEntries(SUGGESTION_FIELDS.flatMap((field) => {
     const value = suggestion[field];
-    return value && !SERVER_SOURCES.includes(value.source) ? [[field, value]] : [];
+    return value && !serverRead(value.source) && !(dropsRegistration && value.source === 'vendor') ? [[field, value]] : [];
   }));
-  return Object.keys(kept).length > 0 ? ({ readerVersion: suggestion.readerVersion, ...kept } as ReceiptSuggestion) : null;
+  const readerVersion = suggestion.readerVersion.replace(/-\d+$/, `-${SERVER_READER_GENERATION}`);
+  return Object.keys(kept).length > 0 ? ({ readerVersion, ...kept } as ReceiptSuggestion) : null;
 }
 
 export async function rereadReceipts(store: LedgerStore, options: { readerBelow: number; apply: boolean; now: Date }): Promise<RereadResult> {
+  if (options.readerBelow > SERVER_READER_GENERATION) throw new Error(`--reader-below ${options.readerBelow} is above the current reader (generation ${SERVER_READER_GENERATION})`);
   const result: RereadResult = { planned: [], noGrant: [], reset: [] };
   for (const receipt of await store.expenseReceipts.listServerReadToReview()) {
     const suggestion = receipt.suggested;
@@ -69,10 +77,11 @@ export async function rereadReceipts(store: LedgerStore, options: { readerBelow:
       continue;
     }
     const fields = fieldsOf(suggestion);
-    const cleared = fields.filter((f) => SERVER_SOURCES.includes(f.source)).map((f) => f.field);
+    const kept = withoutServerFields(suggestion);
+    const cleared = fields.filter((f) => kept?.[f.field] === undefined).map((f) => f.field);
     result.planned.push({ id: receipt.id, organizationId: receipt.organizationId, readerVersion: suggestion.readerVersion, fields, cleared });
     if (!options.apply) continue;
-    if (!(await store.expenseReceipts.resetForReread(receipt.id, receipt.version, withoutServerFields(suggestion), options.now))) continue;
+    if (!(await store.expenseReceipts.resetForReread(receipt.id, receipt.version, kept, options.now))) continue;
     result.reset.push(receipt.id);
     await store.audit.append({
       organizationId: receipt.organizationId,
@@ -91,7 +100,7 @@ export async function rereadReceipts(store: LedgerStore, options: { readerBelow:
 function parseArgs(argv: readonly string[]): { readerBelow: number; apply: boolean } | null {
   const at = argv.indexOf('--reader-below');
   const readerBelow = at >= 0 ? Number(argv[at + 1]) : Number.NaN;
-  return Number.isInteger(readerBelow) && readerBelow > 1 ? { readerBelow, apply: argv.includes('--apply') } : null;
+  return Number.isInteger(readerBelow) && readerBelow > 1 && readerBelow <= SERVER_READER_GENERATION ? { readerBelow, apply: argv.includes('--apply') } : null;
 }
 
 const isMain = process.argv[1]?.endsWith('receipts-reread.ts') || process.argv[1]?.endsWith('receipts-reread.js');
@@ -101,7 +110,7 @@ if (isMain) {
   if (!url || !args) {
     console.error(
       [
-        'usage: DATABASE_URL=… npm run receipts:reread -- --reader-below <generation ≥ 2> [--apply]',
+        `usage: DATABASE_URL=… npm run receipts:reread -- --reader-below <2..${SERVER_READER_GENERATION}> [--apply]`,
         'Re-reads To-review, unapproved receipts a server reader older than the generation filled (dry run without --apply).',
         'Only receipts whose suggestion still carries the server reader version are picked; one a client filled last is not.',
         'Run it only once every API instance runs the new reader.',
