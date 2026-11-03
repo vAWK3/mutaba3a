@@ -2297,6 +2297,18 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
+/** MUT-534: a subscription Stripe ended, whose payer the come-back mail may reach. */
+export interface ComebackCandidate {
+  stripeSubscriptionId: string;
+  endedAt: Date;
+  tier: BillingTierRecord;
+  /** The billing account's currency, the one the mail names prices in. */
+  currency: 'ILS' | 'USD';
+  userId: string;
+  email: string;
+  locale: UserLocale;
+}
+
 /** MUT-533: a past_due subscription whose payer the failed-card mail may reach. */
 export interface PastDueCandidate {
   stripeSubscriptionId: string;
@@ -2357,6 +2369,11 @@ export interface BillingRepository {
    * end first: who the hourly failed-card mail looks at. Stripe's own invoices then decide.
    */
   pastDueCandidates(): Promise<PastDueCandidate[]>;
+  /**
+   * MUT-534: `canceled` subscriptions Stripe ended in (endedAfter, endedUpTo], paid by a linked ACTIVE person who isn't
+   * closing their account, oldest end first: who the daily come-back run looks at.
+   */
+  comebackCandidates(window: { endedAfter: Date; endedUpTo: Date }): Promise<ComebackCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

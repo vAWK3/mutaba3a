@@ -2602,6 +2602,19 @@ export class PrismaLedgerStore implements LedgerStore {
         return user ? [{ stripeSubscriptionId: s.stripeSubscriptionId, offerId: s.offerId!, currentPeriodEnd: s.currentPeriodEnd, userId: user.id, email: user.email, locale: user.locale as UserLocale }] : [];
       });
     },
+    comebackCandidates: async ({ endedAfter, endedUpTo }) => {
+      const subs = await this.prisma.billingSubscription.findMany({
+        where: { status: 'canceled', endedAt: { gt: endedAfter, lte: endedUpTo }, billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },
+        select: { stripeSubscriptionId: true, endedAt: true, tier: true, billingAccount: { select: { currency: true, user: { select: { id: true, email: true, locale: true } } } } },
+        orderBy: [{ endedAt: 'asc' }, { stripeSubscriptionId: 'asc' }],
+      });
+      return subs.flatMap((s) => {
+        const user = s.billingAccount.user;
+        return user && s.endedAt
+          ? [{ stripeSubscriptionId: s.stripeSubscriptionId, endedAt: s.endedAt, tier: s.tier, currency: s.billingAccount.currency as 'ILS' | 'USD', userId: user.id, email: user.email, locale: user.locale as UserLocale }]
+          : [];
+      });
+    },
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({
         where: { status: 'past_due', billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },

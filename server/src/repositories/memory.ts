@@ -3251,6 +3251,17 @@ export class MemoryLedgerStore implements LedgerStore {
             : [];
         })
         .sort((a, b) => a.currentPeriodEnd.getTime() - b.currentPeriodEnd.getTime() || a.stripeSubscriptionId.localeCompare(b.stripeSubscriptionId)),
+    comebackCandidates: async ({ endedAfter, endedUpTo }) =>
+      [...this.billingSubs.values()]
+        .filter((sub) => sub.status === 'canceled' && sub.endedAt !== null && sub.endedAt > endedAfter && sub.endedAt <= endedUpTo)
+        .sort((a, b) => a.endedAt!.getTime() - b.endedAt!.getTime() || a.stripeSubscriptionId.localeCompare(b.stripeSubscriptionId))
+        .flatMap((sub) => {
+          const account = this.billingAccounts.get(sub.billingAccountId);
+          const person = account?.userId ? this.people.get(account.userId) : undefined;
+          return account && person && person.status === 'ACTIVE' && !person.closure
+            ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, endedAt: sub.endedAt!, tier: sub.tier, currency: account.currency as 'ILS' | 'USD', userId: account.userId!, email: person.email, locale: person.locale }]
+            : [];
+        }),
     pastDueCandidates: async () =>
       [...this.billingSubs.values()]
         .filter((sub) => sub.status === 'past_due')

@@ -470,6 +470,26 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await expect(store.billing.claimRetentionEvent(offered('day-90'))).resolves.toMatchObject({ kind: 'COMEBACK_OFFERED', reason: 'day-90' });
     });
 
+    it('comebackCandidates: subscriptions Stripe ended in the window, with a linked active payer, oldest end first (MUT-534)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, user.id, { country: 'IL', currency: 'ILS' }));
+      const save = (over: Record<string, unknown>) => store.billing.saveSubscription({ ...subscription(customer), status: 'canceled', ...over });
+      const later = (await save({ endedAt: at(30) })).subscription;
+      const sooner = (await save({ endedAt: at(20) })).subscription;
+      await save({ endedAt: at(5) });
+      await save({ endedAt: at(50) });
+      await save({ status: 'active', endedAt: null });
+      const unlinked = `cus_${unique()}`;
+      await store.billing.saveAccount(account(unlinked, null));
+      const orphan = (await store.billing.saveSubscription({ ...subscription(unlinked), status: 'canceled', endedAt: at(25) })).subscription;
+      const found = await store.billing.comebackCandidates({ endedAfter: at(10), endedUpTo: at(40) });
+      const row = (s: { stripeSubscriptionId: string; tier: string }, endedAt: Date) => ({ stripeSubscriptionId: s.stripeSubscriptionId, endedAt, tier: s.tier, currency: 'ILS', userId: user.id, email: user.email, locale: user.locale });
+      expect(found.filter((c) => c.userId === user.id)).toEqual([row(sooner, at(20)), row(later, at(30))]);
+      expect(found.some((c) => c.stripeSubscriptionId === orphan.stripeSubscriptionId)).toBe(false);
+    });
+
     it('MUT-534 (D10): keeps when Stripe ended a subscription; absent is null', async () => {
       const store = await makeStore();
       const customer = `cus_${unique()}`;
