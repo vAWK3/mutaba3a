@@ -49,7 +49,7 @@ test('Before Stripe or the GA prices are set, Billing says subscriptions open so
  * MUT-361 (ADR-181): the lapse gate as the portal shows it. /v1/me carries each profile's billing and the person's
  * standing; Settings › Billing is stubbed so Subscribe can be offered. The server's own refusals run in portal-live.
  */
-type Billing = { state: 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED'; source: 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE'; tier: 'FREELANCER' | null; until: string | null };
+type Billing = { state: 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED'; source: 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE'; tier: 'FREELANCER' | null; until: string | null; paused?: boolean };
 const inDays = (days: number) => new Date(Date.now() + days * DAY).toISOString();
 const PHONE = { width: 375, height: 812 };
 
@@ -180,7 +180,7 @@ test('A cancelled subscription leaves the profile read-only for good, and says i
 
 test('On Owed, a running trial is one quiet line: the days left, Add a card and Hide for 3 days', { tag: '@portal.billing.trial-line' }, async ({ page, step }) => {
   const trialEnds = new Date(Date.now() + 9.5 * DAY).toISOString();
-  const personal = { ...office(OFFICE_A, 'Personal'), personalDefault: true, type: 'PERSONAL' as const, billing: { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnds } };
+  const personal = { ...office(OFFICE_A, 'Personal'), personalDefault: true, type: 'PERSONAL' as const, billing: { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnds } as Billing };
   const api = new FakeApi({ profiles: [personal] });
   const routeBilling = () =>
     page.route('**/v1/billing', (route) =>
@@ -242,7 +242,7 @@ function monthlyPlan(coveredProfileIds: string[], pause: { from: string; until: 
 }
 
 test('A paused plan’s profile says it is paused until it restarts, with Resume now, never “ended”', { tag: '@portal.billing.paused-banner' }, async ({ page, step }) => {
-  const billing = { state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: inDays(40), paused: true };
+  const billing: Billing = { state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: inDays(40), paused: true };
   const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), billing }], billingStanding: 'read-only', billing: monthlyPlan([OFFICE_A], { from: inDays(-3), until: inDays(40) }) });
   await api.open(page, `/p/${OFFICE_A}/expenses`);
   const banner = page.getByRole('region', { name: 'Your plan' });
@@ -266,7 +266,7 @@ test('A paused plan’s profile says it is paused until it restarts, with Resume
 
 test('The cancel flow reads right to left in Arabic on a 375px phone, every step', { tag: '@portal.billing.cancel-rtl-375' }, async ({ page, step }) => {
   await page.setViewportSize(PHONE);
-  const billing = { state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: inDays(12) };
+  const billing: Billing = { state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER', until: inDays(12) };
   const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'استوديو نور'), billing }], billingStanding: 'open', billing: monthlyPlan([OFFICE_A]) });
   await api.open(page, `/p/${OFFICE_A}?billing=true`, 'ar');
   const offers = {

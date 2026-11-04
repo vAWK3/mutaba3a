@@ -86,7 +86,7 @@ test('signed out on this device, the You page shows only what needs no account',
 test('on a 375px phone in Arabic, each part of the You page and the top bar fit without sideways scroll', { tag: '@portal.you.phone-rtl' }, async ({ page, step }) => {
   await page.setViewportSize(PHONE);
   const long = office(OFFICE_A, 'مكتب الحداد والشركاء للمحاماة والاستشارات القانونية');
-  const api = new FakeApi({ profiles: [long, office(OFFICE_B, 'Nour Accounting')], locale: 'ar' });
+  const api = new FakeApi({ profiles: [long, office(OFFICE_B, 'Nour Accounting')] });
   const noSidewaysScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
   await step('Open Payments on a profile with a long Arabic name: the bottom pill and the island fit', async () => {
