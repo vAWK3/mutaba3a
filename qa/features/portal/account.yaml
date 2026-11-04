@@ -40,7 +40,7 @@ features:
       - src/hosted/components/AppDownloadRows.tsx
       - src/content/download-config.ts
     steps:
-      - Open You › Account
+      - Open You › App
     expect:
       - '"Get the iPhone app" links to the App Store in a new tab with ct=mutaba3a-portal (MUT-155), and "Get the Android app", the last row, links to the Play Store listing in a new tab with utm_campaign=mutaba3a-portal'
   - id: close

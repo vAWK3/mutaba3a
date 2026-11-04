@@ -148,7 +148,8 @@ test('Adding a passkey mails the account owner', { tag: '@portal-selfservice.pas
     const mail = await mailTo(email, 'passkey-added');
     expect(mail.subject).toBe('A passkey was added to your MTB3A account');
     const rename = await page.getByRole('dialog', { name: 'Passkeys' }).getByRole('button', { name: /^Rename / }).getAttribute('aria-label');
-    expect(mail.text).toContain(`“${rename?.replace(/^Rename /, '')}”`);
+    // The mail frame (MUT-468) names the passkey in its details row, "Passkey: <name>", not in quotes.
+    expect(mail.text).toContain(`Passkey: ${rename?.replace(/^Rename /, '')}`);
     expect(mail.text).toContain('Not you? Sign in, change your password, then remove this passkey');
   });
 });

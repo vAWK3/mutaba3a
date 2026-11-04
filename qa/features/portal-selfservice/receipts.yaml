@@ -30,3 +30,19 @@ features:
       - The new To-review card says "Reading…"
       - The review page says "Reading the receipt…" and the expense form already works
       - The amount fills in as 52.470 JOD and the date as 2026-06-25, each marked "From the receipt", and "Reading the receipt…" goes away
+  # MUT-540 (ADR-244): a page read poorly is turned and read again. No flow yet: it needs a sideways receipt fixture
+  # (the bookshop photo turned 90°) and a first passing run on the live env before it can be recorded.
+  - id: sideways-photo
+    title: A receipt photographed on its side is turned and read; the review page fills in the amount and date
+    tier: secondary
+    tickets: [MUT-540]
+    paths:
+      - server/ocr/app/orientation.py
+      - server/ocr/app/pipeline.py
+      - server/ocr/app/preprocess.py
+    steps:
+      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Upload the bookshop receipt photo turned 90° (lying on its side)
+      - Open the new receipt and wait for the reading to finish
+    expect:
+      - The amount fills in as 52.470 JOD and the date as 2026-06-25, each marked "From the receipt", as for the upright photo

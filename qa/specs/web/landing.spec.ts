@@ -420,8 +420,9 @@ for (const language of ['en', 'ar'] as const) {
     { tag: '@web.landing.phone' },
     async ({ page, step }) => {
       const dict = (language === 'ar' ? ar : en).landing;
-      const copy = dict.phone as { title: string; hintLink: string; storesLabel: string; withAccount: string; store: Record<string, string> };
-      const platformNames = dict.hostedOffer.platform as { ios: string; android: string; comingSoon: string };
+      const copy = dict.phone as { title: string; hintLink: string; storesLabel: string; withAccount: string; store: Record<string, string>; platform: { ios: string; android: string; comingSoon: string } };
+      // The /hosted comparison page and its copy are gone (2026-10-25); the chapter names the platforms itself.
+      const platformNames = copy.platform;
       const chapter = page.locator('[data-part="phone"]');
       const stores = chapter.getByRole('list', { name: copy.storesLabel });
       const hintLink = chapter.getByRole('link', { name: copy.hintLink });
@@ -486,12 +487,14 @@ for (const language of ['en', 'ar'] as const) {
         await attachScreenshot(page, `phone-${language}-375`);
       });
 
-      await step('The underlined link in the hint opens /hosted', async () => {
-        await expect(hintLink).toHaveAttribute('href', '/hosted');
+      // While signup is closed (no portal answers here) the hint's link is Request an account, which goes to Get MTB3A
+      // and its request form; the open-signup door is covered by the MUT-369 tests below.
+      await step('The underlined link in the hint goes to Get MTB3A', async () => {
+        await expect(hintLink).toHaveAttribute('href', '#get-it');
         expect((await readColours(hintLink)).decoration).toBe('underline');
         await hintLink.click();
-        await expect(page).toHaveURL(/\/hosted$/);
-        await expect(page.locator('#hosted-title')).toBeVisible();
+        await expect(page).toHaveURL(/#get-it$/);
+        await expect(page.locator('#get-it-title')).toBeInViewport();
       });
     },
   );

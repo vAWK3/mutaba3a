@@ -10,6 +10,7 @@ paths:
   - src/hosted/local/**
   - src/hosted/session/mode.ts
   - src/hosted/session/localBackendContract.ts
+  - src/hosted/session/localStop.ts # MUT-286 review: the reload screen once the local backend stops
   - src/hosted/api/client.ts
 features:
   - id: first-visit

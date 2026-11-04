@@ -27,6 +27,8 @@ features:
       - src/pages/landing/components/PhoneSection.tsx
       - src/content/download-config.ts
     steps:
-      - On the landing page, press "See hosted accounts" in Get it
+      # The redesigned Get MTB3A (2026-10-25) has no /hosted link; its store tiles are the counted calls to action
+      - On the landing page, press "iPhone, on the App Store" in Get MTB3A
     expect:
-      - A landing_cta_clicked with cta hosted_offer goes to PostHog before /hosted opens
+      - The App Store listing opens in a new tab
+      - A landing_cta_clicked with cta app_store goes to PostHog

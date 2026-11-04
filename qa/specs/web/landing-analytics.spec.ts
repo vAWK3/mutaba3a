@@ -50,19 +50,28 @@ test('opening the landing sends one anonymous pageview and stores nothing', { ta
   });
 });
 
-test('pressing a counted call to action sends landing_cta_clicked', { tag: '@web.landing-analytics.cta' }, async ({ page, step, analytics }) => {
+test('pressing a counted call to action sends landing_cta_clicked', { tag: '@web.landing-analytics.cta' }, async ({ page, step, analytics, context }) => {
+  // The store listing opens in a new tab; answer it locally so a QA run never loads Apple's page.
+  await context.route('https://apps.apple.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<title>App Store (QA stand-in)</title>' }));
+
   await step('Open the landing page', async () => {
     await openLanding(page);
     await nextEvent(analytics, '$pageview');
   });
 
-  await step('Press "See hosted accounts" in Get it', async () => {
-    await page.locator('.landing-get-it-paid-cta').click();
-    await page.waitForURL('**/hosted');
+  await step('Press "iPhone, on the App Store" in Get MTB3A', async () => {
+    const getIt = page.locator('#get-it');
+    await getIt.scrollIntoViewIfNeeded();
+    const [listing] = await Promise.all([
+      page.waitForEvent('popup'),
+      getIt.getByRole('link', { name: /^iPhone, on the App Store/ }).click(),
+    ]);
+    await expect(listing).toHaveURL(/^https:\/\/apps\.apple\.com\//);
+    await listing.close();
   });
 
-  await step('landing_cta_clicked with cta hosted_offer was sent', async () => {
+  await step('landing_cta_clicked with cta app_store was sent', async () => {
     const click = await nextEvent(analytics, 'landing_cta_clicked');
-    expect(click.properties).toMatchObject({ cta: 'hosted_offer', surface: 'landing' });
+    expect(click.properties).toMatchObject({ cta: 'app_store', surface: 'landing' });
   });
 });

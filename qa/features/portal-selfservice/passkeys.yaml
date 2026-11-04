@@ -67,7 +67,7 @@ features:
     steps:
       - Sign in and add a passkey from You › Account › Passkeys
     expect:
-      - 'One "A passkey was added to your MTB3A account" mail arrives, naming the passkey'
+      - 'One "A passkey was added to your MTB3A account" mail arrives, naming the passkey in its "Passkey" row'
       - It says what to do if it wasn’t you
   # MUT-415: passkeys survive a password change and a recovery, so both go on to the passkey review.
   - id: review-after-password

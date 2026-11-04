@@ -122,11 +122,11 @@ features:
     tier: secondary
     legacy: [MUT-173]
     steps:
-      - Open the landing page, scroll past Get MTB3A to the phone chapter, read it and the two platform lines, press "See hosted accounts"; same in Arabic, also at 375 px
+      - Open the landing page, scroll past Get MTB3A to the phone chapter, read it and the two platform lines, press "Request an account" in its hint; same in Arabic, also at 375 px
     expect:
       - The chapter says the phone app is for logging and the portal, your hosted account in a browser, is where you see every client, what they owe and what they paid; it claims no reports
-      - Today both iPhone and Android link to their store listings, carrying the landing's campaign; a platform without a configured listing is named with "with your hosted account" or says "coming soon" instead, and a store link presses and keeps its colour like every landing control
-      - The laptop-and-phone picture stays whole, also on a phone; the underlined link opens /hosted
+      - Today both iPhone and Android link to their store listings, carrying the landing's campaign; a platform without a configured listing is named with "with your account" or says "coming soon" instead, and a store link presses and keeps its colour like every landing control
+      - The laptop-and-phone picture stays whole, also on a phone; the underlined link goes to Get MTB3A (#get-it)
   - id: malafat
     title: The Malafat band tells law firms and accounting offices that MTB3A connects to Malafat, and links to Malafat in the page's language (MUT-174)
     tier: secondary
