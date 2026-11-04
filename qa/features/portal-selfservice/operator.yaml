@@ -205,12 +205,12 @@ features:
     tickets: [MUT-462]
     steps:
       - On a 375 px phone, open their account and press Grant coverage
-      - Choose Freelancer, give the reason "QA pilot comp", choose 30 days, and grant with the passkey
+      - Choose Freelancer, give the reason "Pilot comp for Khatib Law", choose 30 days, and grant with the passkey
       - Revoke the grant and confirm
     expect:
       - The drawer and the account page fit a 375 px phone with no sideways scroll
       - The drawer opens at ?grant=new and closes after granting, with the toast "Coverage granted to <email>"
-      - The grant is listed as Freelancer · QA pilot comp, until a day 30 days out
+      - The grant is listed as Freelancer · Pilot comp for Khatib Law, until a day 30 days out
       - The CLI's own list shows the grant, granted by operator:<the operator's id>
       - After revoking, the row says Revoked and offers no Revoke; the CLI's list shows it revoked
   - id: feature-grant-revoke

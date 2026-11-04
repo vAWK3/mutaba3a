@@ -42,7 +42,7 @@ function freeAppRecordsFile(path: string) {
   const stamps = { createdAt: at, updatedAt: at };
   const [received, owed, spent] = [daysAgo(20), daysAgo(10), daysAgo(5)];
   const tables = {
-    businessProfiles: [{ id: 'qa-b1', name: 'QA Studio', defaultCurrency: 'ILS', isDefault: true, ...stamps }],
+    businessProfiles: [{ id: 'qa-b1', name: 'Haddad Design Studio', defaultCurrency: 'ILS', isDefault: true, ...stamps }],
     clients: [{ id: 'qa-c1', name: 'Amman Studio', profileId: 'qa-b1', ...stamps }],
     transactions: [
       { id: 'qa-t1', kind: 'income', status: 'paid', title: 'Logo', amountMinor: 10_000, currency: 'ILS', occurredAt: received, paidAt: received, clientId: 'qa-c1', profileId: 'qa-b1', ...stamps },

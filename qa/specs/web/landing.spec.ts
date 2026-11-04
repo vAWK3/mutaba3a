@@ -357,7 +357,7 @@ test('Get it takes a request through every state in its card: two fields a row, 
 
   await step('Fill in a name and email and send while the server fails: the answers stay and the alert shows beside Try again', async () => {
     answer = 500;
-    await page.getByLabel('Name', { exact: true }).fill('QA Visitor');
+    await page.getByLabel('Name', { exact: true }).fill('Lina Saleh');
     await page.getByLabel('Email', { exact: true }).fill('qa.visitor@example.test');
     await page.getByRole('button', { name: 'Send request' }).click();
     await expect(page.getByRole('alert')).toContainText("Couldn't send");

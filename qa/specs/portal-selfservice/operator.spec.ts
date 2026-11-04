@@ -393,10 +393,10 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
     await expect(page.getByRole('dialog', { name: 'Grant coverage' })).toBeVisible();
     await expectNoHorizontalOverflow(page, 'the grant drawer at 375 px');
   });
-  await step('Choose Freelancer, give the reason "QA pilot comp", choose 30 days, and grant with the passkey', async () => {
+  await step('Choose Freelancer, give the reason "Pilot comp for Khatib Law", choose 30 days, and grant with the passkey', async () => {
     const drawer = page.getByRole('dialog', { name: 'Grant coverage' });
     await drawer.getByRole('radio', { name: /Freelancer/ }).check();
-    await drawer.getByLabel('Reason').fill('QA pilot comp');
+    await drawer.getByLabel('Reason').fill('Pilot comp for Khatib Law');
     await drawer.getByRole('button', { name: '30 days' }).click();
     await drawer.getByRole('button', { name: 'Grant with passkey' }).click();
     await expect.poll(() => toastText(page)).toContain(`Coverage granted to ${person.email}`);
@@ -404,11 +404,11 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
     await expect(page).not.toHaveURL(/grant=new/);
   });
   await step('The grant is listed, and the CLI’s list shows it granted by the operator', async () => {
-    await expect(billing.getByText('Freelancer · QA pilot comp')).toBeVisible();
+    await expect(billing.getByText('Freelancer · Pilot comp for Khatib Law')).toBeVisible();
     await expect(billing.getByText(`Until ${dayIn(30)}`)).toBeVisible();
     await expectNoHorizontalOverflow(page, 'the account page with a grant at 375 px');
     const [grant] = await adminGrants(person.id);
-    expect(grant).toMatchObject({ reason: 'QA pilot comp', tier: 'FREELANCER', grantedBy: `operator:${op.id}`, revokedAt: null });
+    expect(grant).toMatchObject({ reason: 'Pilot comp for Khatib Law', tier: 'FREELANCER', grantedBy: `operator:${op.id}`, revokedAt: null });
   });
   await step('Revoke the grant and confirm: the row says Revoked, and the CLI’s list agrees', async () => {
     await billing.getByRole('button', { name: 'Revoke' }).click();
