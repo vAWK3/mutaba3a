@@ -51,13 +51,3 @@ export function ChartIcon() {
   );
 }
 
-/** MUT-562: the Client books corner, an open book. Decorative: the link's label says Client books. Placeholder until MUT-558's drawn icon. */
-export function ClientBooksIcon() {
-  return (
-    <svg className="hp-chart-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5" />
-      <path d="M12 6.5C14 5 17 4.5 20 5v13c-3-.5-6 0-8 1.5" />
-      <path d="M12 6.5v13" />
-    </svg>
-  );
-}

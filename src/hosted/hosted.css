@@ -1524,3 +1524,4 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-share-band-currency dd { margin: 0 var(--space-2) 0 0; font-weight: var(--weight-semibold); }
 .hp-share-filters { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); }
 .hp-share-view > .btn { align-self: center; }
+.hp-corner-icon { display: grid; place-items: center; }

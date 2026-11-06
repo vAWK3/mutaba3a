@@ -4,7 +4,8 @@ import { useT } from '../../lib/i18n/core';
 import { syncPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
-import { ChartIcon, ClientBooksIcon } from '../components/Icons';
+import { ChartIcon } from '../components/Icons';
+import { ClientBooksIcon } from '../../components/icons/generated';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { billingGateOf } from '../data/trialPrompt';
 import { showsClientBooks } from '../pages/client-books/clientBooksRules';
@@ -87,7 +88,10 @@ export function HostedShell({ profile, children, pill }: { profile: HostedProfil
             aria-label={t('hosted.clientBooks.corner')}
             aria-current={onDesk ? 'page' : undefined}
           >
-            <ClientBooksIcon />
+            {/* Decorative: the link's label says Client books (MUT-558's drawn icon) */}
+            <span aria-hidden="true" className="hp-corner-icon">
+              <ClientBooksIcon size={18} />
+            </span>
           </Link>
         )}
         <div className="hp-chrome-bar">

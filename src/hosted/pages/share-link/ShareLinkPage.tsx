@@ -39,22 +39,33 @@ export function ShareLinkPage() {
   return <ShareLink key={token} token={token} />;
 }
 
-/** `noindex` and `no-referrer` while the page is open (a receipt opened from it never names the page). */
+/**
+ * `noindex` (the portal's own, hosted.html; added here only if missing) and `no-referrer` while the page is open, in
+ * place of the portal's `same-origin`, so a receipt opened from it never names the page. Put back on leaving.
+ */
 function usePrivatePageMeta() {
   useEffect(() => {
-    const added = [
-      ['robots', 'noindex, nofollow'],
-      ['referrer', 'no-referrer'],
-    ].map(([name, content]) => {
-      const meta = document.createElement('meta');
-      meta.name = name;
-      meta.content = content;
-      meta.dataset.mut562 = 'share-link';
-      document.head.appendChild(meta);
-      return meta;
-    });
-    return () => added.forEach((meta) => meta.remove());
+    const restore = [setMeta('robots', 'noindex, nofollow', false), setMeta('referrer', 'no-referrer', true)];
+    return () => restore.forEach((undo) => undo());
   }, []);
+}
+
+/** Sets a `<meta name>`: an existing one is changed when `override`, kept otherwise; returns how to undo it. */
+function setMeta(name: string, content: string, override: boolean): () => void {
+  const existing = document.head.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (existing) {
+    if (!override) return () => undefined;
+    const before = existing.content;
+    existing.content = content;
+    return () => {
+      existing.content = before;
+    };
+  }
+  const meta = document.createElement('meta');
+  meta.name = name;
+  meta.content = content;
+  document.head.appendChild(meta);
+  return () => meta.remove();
 }
 
 function ShareLink({ token }: { token: string }) {
