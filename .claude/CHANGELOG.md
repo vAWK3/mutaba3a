@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-11-08 — The Accountant plan, server: free up to 3 client books, a paid plan for more (MUT-565, ADR-251)
+
+**Why:** epic MUT-558. Accountants pay for the clients past their free three; owners never pay for sharing. Server
+slice only, behind `ACCOUNTANT_PLAN` (off in production until live prices exist).
+
+### Added
+- `BillingTier` `ACCOUNTANT` (migrations `20261108120000_mut565_accountant_tier`, `…120100_mut565_accountant_grant_check`):
+  a Stripe product tagged `tier: accountant`, or a person-only operator grant. `billing/accountant-plan.ts` resolves it.
+- Accept caps under a row lock: 402 `ACCOUNTANT_PLAN_REQUIRED` (new code) leaves the invite pending; 409
+  `CLIENT_BOOKS_CEILING` past the paid ceiling. On lapse the 3 oldest clients stay readable; the rest answer 402 at the
+  accountant door. `/v1/me.clientBooks`, `needsPlan` on client rows, `GET /v1/billing.accountantPlan` (monthly prices).
+- Checkout `plan: accountant` (monthly, `accountant_list_monthly_{ils,usd}`, no trial, no offers); return paths
+  `/accountant-invite`, `/client-books/<id>`. Events 2.8.0: `accountant_plan_offer_shown`, `billing_checkout_started.plan`.
+- Config `ACCOUNTANT_PLAN`, `ACCOUNTANT_FREE_CLIENTS` (3), `ACCOUNTANT_PLAN_MAX_CLIENTS` (100). Runbook §1.12 (Stripe).
+
+### Changed
+- ACCOUNTANT facts never cover a profile: `resolveEntitlement` filters them, and every Billing reader (shown plan,
+  offers, come-back, switch, pause, cancel, card retry, Freelancer Checkout) reads profile-plan subscriptions only.
+  The come-back mail skips an ended Accountant plan. API 1.105.0-mut565.
+
+**Files:** `server/src/billing/{accountant-plan,entitlement,checkout,coverage,comeback-read,comeback-mail}.ts`,
+`billing/stripe/{mirror,checkout-gateway}.ts`, `routes/{accountants,billing,billing-plan,me,sessions,device-sessions}.ts`,
+`auth/{middleware,store-guard}.ts`, `accountants/grants.ts`, `operator/actions/billingGrants.ts`, `repositories/*`,
+`errors.ts`, `config.ts`, `schemas.ts`, `app.ts`, `app-shell.ts`, `prisma/`, `docs/analytics/events.json`,
+`docs/operations/pilot-runbook.md`.
+
 ## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
 
 **Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).

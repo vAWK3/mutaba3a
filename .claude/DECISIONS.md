@@ -6451,3 +6451,22 @@ Contract 1.104.0-mut575; migration `20261107130000_mut575_client_books`.
 
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 
+
+## ADR-251: The Accountant Plan Is a Person's Plan on the Billing Tables, Capped at Accept and Enforced at One Door (MUT-565, Epic MUT-558)
+
+**Status:** Accepted (2026-11-06; plan and eng review CLEARED, auto-decided P1–P10: `.claude/designs/MUT-565-accountant-plan.md`; defaults in Jira MUT-565 comments 13248/13249). Server built 2026-11-08; portal and phone are later rounds. Numbered 251 (MUT-314 holds 248, MUT-575 249, MUT-562 may take 250); re-check at merge.
+
+**Context:** accountants read clients' books through grants (ADR-245, ADR-249). They pay, owners never: free up to 3 client books, a paid plan for more. Billing (ADR-160) entitles a **profile**; this plan entitles a **person** to a capacity.
+
+**Decision:**
+1. **One more tier, its own resolver (P1).** `BillingTier` gains `ACCOUNTANT`: a Stripe product tagged `tier: accountant` mirrors as a `BillingSubscription` with no organization (`ACCOUNTANT_ORG_IGNORED` if metadata names one); a comp is an `EntitlementGrant {userId, tier: ACCOUNTANT}` (person only: 422 in the action, a CHECK in the database). `billing/accountant-plan.ts` `resolveAccountantPlan` → NONE / ACTIVE / GRACE / LAPSED with the profile rule order (live grant; covering subscription within period + 7 days, not paused; once paid → LAPSED).
+2. **The plan never reaches a profile.** `resolveEntitlement` drops ACCOUNTANT facts at its first line (`profileFacts`); every "the person's subscription" reader (Billing's shown plan, offers, come-back, yearly switch, pause, cancel, card retry, the Freelancer Checkout's refusals, Stripe's own list in the re-check) goes through `profilePlanSubscriptions`; the come-back mail skips ACCOUNTANT candidates. The plan does not unlock the accountant's own books.
+3. **Cap at accept, atomically (P3, P5).** With `ACCOUNTANT_PLAN` on, accept locks the accountant's user row, counts ACTIVE grants and at the cap writes nothing: 402 `ACCOUNTANT_PLAN_REQUIRED` `{freeLimit, active, inviteExpiresAt}`; the invite stays PENDING until it expires, so the client re-calls accept once paid (P2: no webhook auto-accept). With the plan, the ceiling (`ACCOUNTANT_PLAN_MAX_CLIENTS`, 100) answers 409 CONFLICT `CLIENT_BOOKS_CEILING`. 409 ACCOUNTANT_LIMIT keeps its owner-side meaning. Signup from an invite never caps; pending invites and share links never count.
+4. **Lapse is derived, at one door (P4).** Readable = the cap oldest ACTIVE grants by `acceptedAt`, then id (`readableClientIds`). `assertClientReadable` runs in `finishSessionAuth` right after the accountant method gate (so a write stays 403): the grant's rank is one indexed count; below `freeClients` no billing read; past it, the plan decides, else 402 `{profileId, freeLimit}`. Every accountant read passes there. Nothing is suspended; revokes, leaves and payments change the answer by themselves.
+5. **What clients see.** `/v1/me.clientBooks {count, freeLimit, cap, readable, plan}` beside `clients` (the plan from `/v1/me`'s one billing read; no price); rows gain `needsPlan`; `/v1/clients` stats are null on locked rows. `GET /v1/billing.accountantPlan` adds the interval, currency and the monthly price per currency (cached catalog), null with ACCOUNTANT_ACCESS off.
+6. **Checkout (P7, P8).** `POST /v1/billing/checkout-session` `plan: accountant`: monthly only (year → 422), lookup keys `accountant_list_monthly_{ils,usd}` on the Accountant product only, no trial carried, no offers, the same customer (two subscriptions), the same Stripe re-check and expiry of open Checkouts; refusals from ACCOUNTANT facts only. Return paths admit `/accountant-invite` and `/client-books(/<uuid>)`. The audit and the `billing_checkout_started` event carry `plan`. No price lives in code; the final price is open.
+7. **Ships dark (P6).** `ACCOUNTANT_PLAN` off (the default) = no cap, `clientBooks.cap` null; on in dev/QA; on in production only after live prices exist (pilot-runbook §1.12).
+
+Contract 1.105.0-mut565; migrations `20261108120000_mut565_accountant_tier`, `20261108120100_mut565_accountant_grant_check`; events 2.8.0.
+
+**Alternatives rejected:** a separate AccountantSubscription table and mirror (two webhook paths); per-client seats; suspending grants on lapse (status writes, a cron, drift); webhook auto-accept (held state); 409 ACCOUNTANT_LIMIT for the 4th client.

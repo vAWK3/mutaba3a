@@ -4460,3 +4460,14 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
   `well-known-routes.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
 
+## MUT-565 — Accountant plan, server (ADR-251)
+
+Full map: `.claude/designs/MUT-565-accountant-plan-tests.md` (the plan's 12 groups; 12 is the portal and phone rounds).
+- `server/src/billing/__tests__/accountant-plan.test.ts`: the resolver, the profile filter, the cap rule.
+- `server/src/__tests__/routes-accountant-plan.test.ts`: accept cap (402, pending kept, ceiling 409, flag off), the
+  door (3 oldest 200, every allowlisted GET 402, writes 403, no billing read under rank 3), rows and `/v1/me`,
+  the plan never on the personal profile, Checkout `plan: accountant`, person-only grants.
+- Store contract (memory; Prisma under `test:db`): `cap_reached` writes nothing, parallel accepts at 2 of 3,
+  `countActiveBefore`. `migration-mut565.test.ts`: the CHECK refuses an organization grant.
+- Mirror, `sellableFactOf`, Stripe's list tier, card-failed copy, closure ends both plans, come-back skips
+  ACCOUNTANT, events 2.8.0 pin; API 1.105.0-mut565 literals.

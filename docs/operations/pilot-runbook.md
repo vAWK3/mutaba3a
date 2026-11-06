@@ -197,7 +197,7 @@ npm run grant:user -- --url "$URL" --email <partner email> --organization-id <pr
 
 Do each step only when the one before it checks out. Nothing changes for anyone until step 5.
 
-1. **Catalogue.** Each Product has metadata `tier` = `freelancer` or `firm`, backfilled on Products that already
+1. **Catalogue.** Each Product has metadata `tier` = `freelancer`, `firm` or (MUT-565, §1.12) `accountant`, backfilled on Products that already
    exist. A subscription whose product has no tier is never mirrored (`UNKNOWN_TIER`). Prices carry the lookup keys
    `freelancer_founder_{monthly|yearly}_{ils|usd}` and `firm_founder_…`. Live amounts (MUT-528, 2026-10-31): Freelancer
    founder 2100 / 21000 ILS and 600 / 6000 USD; Firm founder 10900 / 109000 ILS and 3300 / 33000 USD; Firm list
@@ -382,6 +382,37 @@ currency (`mtb3a_comeback_first_month_ils`, ₪20, and `mtb3a_comeback_first_mon
   >
   > AR: سعر العودة لمن انتهى اشتراكه المدفوع قبل 30 يومًا على الأقل، مرة واحدة لكل شخص، ويُطبَّق تلقائيًا عند الدفع بعد
   > أن تصلك رسالة العودة منّا. ردّ ببريد حسابك وسنتحقق.
+
+### 1.12 The Accountant plan (MUT-565, ADR-251)
+
+An accountant reads up to 3 client books free; the Accountant plan (a person's plan, never a profile's) opens more,
+up to a ceiling of 100 (`ACCOUNTANT_PLAN_MAX_CLIENTS`; past it the accept answers "contact us"). The server ships
+dark: `ACCOUNTANT_PLAN` unset = no cap at all. Turn it on only once live prices exist, or accountants are stranded
+at the 4th client with no way to pay.
+
+**Sandbox (Basel, test mode; dev and QA).**
+
+1. Product **"MTB3A Accountant plan"**, metadata `tier = accountant`, the same tax code as the Freelancer product.
+2. Two prices on it, recurring monthly, interval count 1, `tax_behavior: exclusive`, active:
+   ILS **9900** (₪99, placeholder) lookup key `accountant_list_monthly_ils`; USD **2500** ($25, placeholder)
+   `accountant_list_monthly_usd`. No yearly price (monthly only at launch). A key on a product not tagged
+   `accountant` leaves the plan unsellable (`PRICES_NOT_SET`), never mischarges.
+3. Customer Portal configuration: cancel at period end allowed; if "switch plans" is on, the Accountant product is
+   **not** offered as a switch from Freelancer, nor the reverse.
+4. Restricted key and webhook endpoint: no change (prices read, Checkout write and the existing events cover it).
+5. dev/QA `server/.env`: `ACCOUNTANT_PLAN=true` (`.env.example` has it).
+
+**Live (before launch).** Basel sets the final price (open; ₪99 / $25 are placeholders, nothing in code names a
+price), then steps 1–4 in live mode, then `ACCOUNTANT_PLAN=true` on the production service and deploy.
+
+**Comps.** An operator grant on the **person**, never a profile (`billing:grant -- --email <e> --tier ACCOUNTANT
+--reason <text> [--expires …]`, or the console's billing grants); `--organization-id` with ACCOUNTANT is 422, and a
+CHECK refuses a raw insert. `billing:status` lists an ACCOUNTANT subscription beside the profile plans; it never
+covers the person's own profiles.
+
+**Lapse.** Nothing is suspended: the 3 oldest accepted clients stay readable, the rest answer 402
+`ACCOUNTANT_PLAN_REQUIRED` until the plan is back (or older clients end). A pending invite stays open for its 14
+days while the accountant subscribes; the portal accepts it again on the way back from Checkout.
 
 ## 2. Reset a password
 
