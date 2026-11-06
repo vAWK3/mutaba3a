@@ -169,6 +169,8 @@ async function main() {
       RECEIPTS_LIBRARY: 'true',
       // MUT-559: accountant access (the portal's invite and client screens, MUT-561..563).
       ACCOUNTANT_ACCESS: 'true',
+      // MUT-560: share links (the portal's link page and owner screens, MUT-561..563).
+      SHARE_LINKS: 'true',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });

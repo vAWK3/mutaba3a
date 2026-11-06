@@ -70,6 +70,12 @@ export const ERROR_CODES = {
    * invited address, mostly hidden, so the person can sign in with it.
    */
   INVITE_EMAIL_MISMATCH: 403,
+  /**
+   * MUT-560 (ADR-247): a share link refused to its visitor, who has no account: `details.reason` LOCKED (too many wrong
+   * PINs; the owner makes a new link), PIN_WRONG (with `details.attemptsLeft`) or VIEWER_LIMIT (3 devices have opened it).
+   * Every link that can't be used at all answers 404 NOT_FOUND, reason SHARE_LINK_UNAVAILABLE, the same for every cause.
+   */
+  SHARE_LINK_REFUSED: 403,
   /** MUT-434 (AC6): the person doesn't hold the per-user feature this needs (MUT-433, e.g. `agent_access`); `details.feature`. */
   FEATURE_NOT_ENABLED: 403,
   NOT_FOUND: 404,

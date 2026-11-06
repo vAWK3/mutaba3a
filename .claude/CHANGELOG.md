@@ -47,6 +47,28 @@ column waits for MUT-560 (slice B). Brief: `.claude/designs/MUT-561-sharing-page
 ### Changed
 - `scripts/icon-set.ts`: `parseSvg` takes the allowed attributes (scenes add dashes and rotations); `renderNode` exported.
 
+## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-247)
+
+**Why:** epic MUT-558. An owner shares a closed period (the last 1–3 complete months, or everything to date) with an
+accountant in one step, no account on either side. Server side only, behind `SHARE_LINKS` (off in production until
+MUT-561..563).
+
+### Added
+- Migration `20261107120000_mut560_share_links`: `share_links`, `share_link_viewers`, `ShareLinkPeriod`.
+- `shareLinks` repository (memory + Prisma, store contract), `shareLinkStoreGuard()`, `shareLinkAccess` (the seam
+  MUT-314's download calls), `share-links/period.ts`, `share-links/links.ts`, `access/view-touch.ts`.
+- Routes (`server/src/routes/share-links.ts`): `POST|GET /v1/profiles/{id}/share-links`,
+  `DELETE /v1/profiles/{id}/share-links/{linkId}`, `POST /v1/share-links/check|unlock|entries|summary|expense-receipts`.
+- `SHARE_LINKS`, `SHARE_LINKS_PER_PROFILE_MAX`; error code `SHARE_LINK_REFUSED` (LOCKED, PIN_WRONG, VIEWER_LIMIT);
+  reasons `SHARE_LINK_UNAVAILABLE` (404), `SHARE_VIEW_EXPIRED` (401), `SHARE_LINK_LIMIT` (409), `PIN_FORMAT` (422),
+  `SHARE_LINK_READ_ONLY` (403).
+
+### Changed
+- The dark-launch 404 middleware is one table (`ACCOUNTANT_ACCESS`, `SHARE_LINKS`); the accountant view throttle moved
+  to `access/view-touch.ts`; the owner gate is `ownedProfileOf` (personal-profile.ts), shared with MUT-559's routes.
+- The purge deletes a profile's links (`PURGE_PROFILE_TABLES`) and anonymizes a purged creator (`PURGE_USER_COLUMNS`).
+- Contract 1.102.0-mut560; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `SHARE_LINKS=true`.
+
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
 
 **Why:** epic MUT-558. An accountant reads a client's books without being a member of the profile; the owner can see

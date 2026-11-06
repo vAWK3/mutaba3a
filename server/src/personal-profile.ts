@@ -50,6 +50,18 @@ export function notOwner(): ApiError {
 }
 
 /**
+ * The profile at `profileId` if `userId` owns it (creator or co-owner, ownsProfile): 404 when they can't see it, else
+ * 403 NOT_OWNER. The owner gate of the routes that name a profile in their path (MUT-559 accountants, MUT-560 links).
+ */
+export async function ownedProfileOf(store: Pick<LedgerStore, 'memberships' | 'organizations'>, userId: string, profileId: string): Promise<Organization> {
+  const organization = await store.organizations.getById(profileId);
+  const membership = organization ? await store.memberships.find(userId, profileId) : null;
+  if (!organization || !membership) throw new ApiError('NOT_FOUND', 'Profile not found');
+  if (!ownsProfile(organization, userId, membership.role)) throw notOwner();
+  return organization;
+}
+
+/**
  * The profiles a person created (profileOwnerOf), out of the ones they are a member of: billing coverage (MUT-358)
  * follows the creator only, so a profile they co-own is left out (TD-193), as is a firm they only belong to. The
  * profiles are read in one tick: Prisma batches same-tick `findUnique` calls into a single query, so this is one

@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.100.0-mut559
+  version: 1.102.0-mut560
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, INVITE_EMAIL_MISMATCH, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -611,6 +611,7 @@ components:
                 - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
                 - INVITE_EMAIL_MISMATCH
+                - SHARE_LINK_REFUSED
                 - FEATURE_NOT_ENABLED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -12297,6 +12298,569 @@ components:
         - codes
         - tokens
         - clients
+    ShareLinkCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri
+          description: "The link, its token in the fragment. Shown only in this answer: only its hash is kept, so it can never be shown again."
+        period:
+          $ref: "#/components/schemas/ShareLinkPeriod"
+        from:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Last money date shown, inclusive.
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - url
+        - period
+        - from
+        - to
+        - expiresAt
+        - createdAt
+    ShareLinkPeriod:
+      type: string
+      enum:
+        - LAST_1_MONTH
+        - LAST_2_MONTHS
+        - LAST_3_MONTHS
+        - WHOLE_PROFILE
+      description: "LAST_1_MONTH, LAST_2_MONTHS, LAST_3_MONTHS: the last 1–3 complete calendar months before the day the link is made, in the profile’s timezone (made 2026-11-06, LAST_3_MONTHS = 2026-08-01 … 2026-10-31). WHOLE_PROFILE: everything up to and including that day. Frozen when the link is made."
+    CreateShareLinkRequest:
+      type: object
+      properties:
+        period:
+          $ref: "#/components/schemas/ShareLinkPeriod"
+        expiresInDays:
+          anyOf:
+            - type: number
+              enum:
+                - 1
+            - type: number
+              enum:
+                - 7
+            - type: number
+              enum:
+                - 30
+          description: "The link stops working this many days after it is made: 1, 7 or 30."
+        pin:
+          type: string
+          maxLength: 32
+          description: 4 to 8 digits; Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. Anything else answers 422 VALIDATION_FAILED, details.reason PIN_FORMAT.
+      required:
+        - period
+        - expiresInDays
+        - pin
+      additionalProperties: false
+    ShareLinkList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareLink"
+        limit:
+          type: integer
+          description: The most live links one profile may have (409 SHARE_LINK_LIMIT past it).
+      required:
+        - items
+        - limit
+    ShareLink:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          $ref: "#/components/schemas/ShareLinkPeriod"
+        from:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Last money date shown, inclusive.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        lastOpenedAt:
+          type: string
+          nullable: true
+          format: date-time
+          description: The last unlock, or a view (written at most hourly).
+        status:
+          type: string
+          enum:
+            - active
+            - locked
+            - expired
+            - revoked
+          description: "locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one. Locked, expired and revoked links stay in the list for 24 hours after `endedAt`, then drop out."
+        endedAt:
+          type: string
+          nullable: true
+          format: date-time
+          description: When it was revoked, locked or expired; null while active.
+        viewers:
+          type: integer
+          description: Devices that have opened it.
+        maxViewers:
+          type: integer
+        createdByName:
+          type: string
+          nullable: true
+          description: The owner who made it; null once their account is deleted.
+      required:
+        - id
+        - period
+        - from
+        - to
+        - createdAt
+        - expiresAt
+        - lastOpenedAt
+        - status
+        - endedAt
+        - viewers
+        - maxViewers
+        - createdByName
+    ShareLinkCheck:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - pin
+          description: The link can be opened with its PIN. Nothing about the profile or its owner is said before it.
+      required:
+        - state
+    ShareLinkCheckRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: The token from the link’s fragment.
+      required:
+        - token
+      additionalProperties: false
+    ShareLinkUnlock:
+      type: object
+      properties:
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
+        viewerExpiresAt:
+          type: string
+          format: date-time
+          description: 8 hours from now, or the link’s expiry if sooner; then the PIN again.
+        linkExpiresAt:
+          type: string
+          format: date-time
+        profileName:
+          type: string
+        ownerName:
+          type: string
+          nullable: true
+        period:
+          $ref: "#/components/schemas/ShareLinkPeriod"
+        from:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Last money date shown, inclusive.
+      required:
+        - viewerToken
+        - viewerExpiresAt
+        - linkExpiresAt
+        - profileName
+        - ownerName
+        - period
+        - from
+        - to
+    ShareLinkUnlockRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+        pin:
+          type: string
+          maxLength: 32
+          description: Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. A PIN that is not 4–8 digits counts as a wrong one.
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: "The viewer token this browser held for this link before, even if its access has ended: it keeps its place among the 3 devices."
+      required:
+        - token
+        - pin
+      additionalProperties: false
+    ShareLinkEntryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareLinkEntry"
+        nextCursor:
+          type: string
+          nullable: true
+      required:
+        - items
+        - nextCursor
+    ShareLinkEntry:
+      oneOf:
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - expense
+            createdAt:
+              type: string
+              format: date-time
+            expense:
+              $ref: "#/components/schemas/ShareLinkExpense"
+          required:
+            - kind
+            - createdAt
+            - expense
+        - type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - received
+            createdAt:
+              type: string
+              format: date-time
+            origin:
+              type: string
+              enum:
+                - capture
+                - integration
+            settlesOwed:
+              type: boolean
+              description: It paid toward one Owed entry (a settle).
+            replacesPayment:
+              type: boolean
+              description: It replaced a payment Malafat reversed.
+            income:
+              $ref: "#/components/schemas/ShareLinkIncome"
+          required:
+            - kind
+            - createdAt
+            - origin
+            - settlesOwed
+            - replacesPayment
+            - income
+    ShareLinkExpense:
+      type: object
+      properties:
+        key:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{22}$
+          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        title:
+          type: string
+          nullable: true
+        vendor:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+          description: The category’s name, a preset one in the request’s language (Accept-Language; Arabic by default); null when none.
+        client:
+          type: string
+          nullable: true
+          description: The client’s name; null when none.
+        project:
+          type: string
+          nullable: true
+          description: The project’s name; null when none.
+        notes:
+          type: string
+          nullable: true
+        vat:
+          $ref: "#/components/schemas/ExpenseVat"
+        receiptCount:
+          type: integer
+          minimum: 0
+          description: READY receipts attached
+      required:
+        - key
+        - occurredOn
+        - amount
+        - currency
+        - title
+        - vendor
+        - category
+        - client
+        - project
+        - notes
+        - vat
+        - receiptCount
+    ShareLinkIncome:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/IncomeKind"
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        status:
+          $ref: "#/components/schemas/IncomeStatus"
+        reversalReason:
+          type: string
+          nullable: true
+        reversalReasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        credited:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        key:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{22}$
+          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
+        client:
+          type: string
+          nullable: true
+          description: The client’s name; null when none.
+        project:
+          type: string
+          nullable: true
+          description: The project’s name; null when none.
+      required:
+        - kind
+        - amount
+        - currency
+        - occurredOn
+        - title
+        - notes
+        - dueDate
+        - status
+        - key
+        - client
+        - project
+    ShareLinkEntriesRequest:
+      type: object
+      properties:
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+          description: Page size, 1–100.
+        cursor:
+          type: string
+          description: Opaque `nextCursor` from the previous page.
+      required:
+        - viewerToken
+      additionalProperties: false
+    ShareLinkSummary:
+      type: object
+      properties:
+        from:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).
+        to:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Last money date shown, inclusive.
+        expenses:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              total:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              count:
+                type: integer
+              byCategory:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    category:
+                      type: string
+                      nullable: true
+                      description: The category’s name; null when none.
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - category
+                    - total
+                    - count
+              byClient:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    client:
+                      type: string
+                      nullable: true
+                      description: The client’s name; null when none.
+                    total:
+                      type: string
+                      pattern: ^-?\d+(\.\d+)?$
+                      description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+                    count:
+                      type: integer
+                  required:
+                    - client
+                    - total
+                    - count
+            required:
+              - currency
+              - total
+              - count
+              - byCategory
+              - byClient
+          description: Per currency, never summed across currencies; breakdowns by name.
+        received:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                $ref: "#/components/schemas/Currency"
+              total:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              count:
+                type: integer
+            required:
+              - currency
+              - total
+              - count
+          description: Received payments per currency (reversed ones left out), never summed across currencies.
+      required:
+        - from
+        - to
+        - expenses
+        - received
+    ShareLinkViewRequest:
+      type: object
+      properties:
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
+      required:
+        - viewerToken
+      additionalProperties: false
+    ShareLinkReceiptList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:
+                type: string
+              mimeType:
+                $ref: "#/components/schemas/AttachmentMimeType"
+              url:
+                type: string
+                format: uri
+              expiresAt:
+                type: string
+                format: date-time
+                description: At most 60 seconds away, and never past this viewer’s access or the link’s expiry.
+            required:
+              - filename
+              - mimeType
+              - url
+              - expiresAt
+      required:
+        - items
+    ShareLinkReceiptsRequest:
+      type: object
+      properties:
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
+        entryKey:
+          type: string
+          maxLength: 64
+          description: An expense’s `key` from POST /v1/share-links/entries.
+      required:
+        - viewerToken
+        - entryKey
+      additionalProperties: false
   parameters: {}
 paths:
   /health:
@@ -26071,6 +26635,392 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/share-links:
+    post:
+      tags:
+        - Profiles
+      summary: Make a one-time link to a period of this profile, opened with a PIN
+      description: "MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to 3 devices, until it expires (1, 7 or 30 days), is revoked, or locks after 5 wrong PINs. The answer's `url` is the only time the link is shown: share it with the PIN, separately. At most 10 live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShareLinkRequest"
+      responses:
+        "201":
+          description: Made
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkCreated"
+        "402":
+          description: "SUBSCRIPTION_LAPSED: the profile is locked"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: "READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile for you, or share links are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT, details.reason SHARE_LINK_LIMIT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: details.reason PIN_FORMAT (not 4–8 digits), or another field"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many links this hour"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Profiles
+      summary: "The share links on this profile: active, and those that ended in the last day"
+      description: MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      responses:
+        "200":
+          description: The links
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkList"
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile for you, or share links are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/share-links/{linkId}:
+    delete:
+      tags:
+        - Profiles
+      summary: Revoke a share link
+      description: MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: linkId
+          in: path
+      responses:
+        "204":
+          description: Revoked
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile, or no live link with that id on it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/check:
+    post:
+      tags:
+        - Share links
+      summary: Whether a share link opens, before its PIN
+      description: "MUT-560 (ADR-247). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock)."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkCheckRequest"
+      responses:
+        "200":
+          description: It opens with its PIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkCheck"
+        "403":
+          description: SHARE_LINK_REFUSED, details.reason LOCKED; or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/unlock:
+    post:
+      tags:
+        - Share links
+      summary: Open a share link with its PIN
+      description: "MUT-560 (ADR-247). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most 3 devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the 5th locks the link for everyone (LOCKED), viewers already in included."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkUnlockRequest"
+      responses:
+        "200":
+          description: Opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkUnlock"
+        "403":
+          description: SHARE_LINK_REFUSED, details.reason PIN_WRONG (attemptsLeft), LOCKED or VIEWER_LIMIT; or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT, details.reason SHARE_LINK_STALE_VIEWER: a parallel unlock from this device renewed its viewer token first; keep the token that answer holds (unlocking again with the old one counts as a new device)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/entries:
+    post:
+      tags:
+        - Share links
+      summary: The shared period’s entries, newest money date first
+      description: "MUT-560 (ADR-247). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkEntriesRequest"
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkEntryPage"
+        "401":
+          description: "UNAUTHENTICATED, details.reason SHARE_VIEW_EXPIRED: this viewer’s 8 hours have passed; unlock again with the PIN (and this viewer token, to keep its place)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many requests from this viewer"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/summary:
+    post:
+      tags:
+        - Share links
+      summary: The shared period’s totals, per currency
+      description: MUT-560 (ADR-247). At most 6 a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkViewRequest"
+      responses:
+        "200":
+          description: The totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkSummary"
+        "401":
+          description: "UNAUTHENTICATED, details.reason SHARE_VIEW_EXPIRED: this viewer’s 8 hours have passed; unlock again with the PIN (and this viewer token, to keep its place)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many requests from this viewer"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/expense-receipts:
+    post:
+      tags:
+        - Share links
+      summary: An expense’s receipts in the shared period, as short-lived download URLs
+      description: "MUT-560 (ADR-247). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkReceiptsRequest"
+      responses:
+        "200":
+          description: The receipts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkReceiptList"
+        "401":
+          description: "UNAUTHENTICATED, details.reason SHARE_VIEW_EXPIRED: this viewer’s 8 hours have passed; unlock again with the PIN (and this viewer token, to keep its place)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: the uniform SHARE_LINK_UNAVAILABLE, or no such expense in this link’s period"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many requests from this viewer"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: ATTACHMENTS_NOT_CONFIGURED
           content:
             application/json:
               schema:

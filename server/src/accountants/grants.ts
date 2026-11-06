@@ -3,7 +3,8 @@ import type { AccountantGrantRecord, AuditEventInput, LedgerStore, Organization 
 
 /**
  * MUT-559 (ADR-245): an owner shares one profile, read-only, with an accountant. The rules of a grant's life live
- * here: its lifetime and cap, how a grant is shown, the masked address, and the throttled "last viewed". Access itself
+ * here: its lifetime and cap, how a grant is shown and the masked address (the "last viewed" throttle is
+ * access/view-touch.ts, shared with share links). Access itself
  * is decided in one place, selectProfile (auth/middleware.ts); the routes are routes/accountants.ts.
  *
  * Kept free of Node-only imports: the memory store (which the portal's signed-out mode runs in the browser) and the
@@ -18,9 +19,6 @@ export const ACCOUNTANTS_PER_PROFILE_DEFAULT = 5;
 
 /** Invites one owner may send per hour, across their profiles (a refused one counts too). */
 export const ACCOUNTANT_INVITE_POLICY = { perUserPerHour: 20 } as const;
-
-/** `lastViewedAt` is written at most this often per grant, as sessions.touch is throttled. */
-export const ACCOUNTANT_VIEW_TOUCH_MS = 3_600_000;
 
 /** Counts toward the per-profile cap and blocks a second invite to the address: ACTIVE, or PENDING and unexpired. */
 export function isLiveGrant(grant: Pick<AccountantGrantRecord, 'status' | 'inviteExpiresAt'>, at: Date): boolean {
@@ -43,17 +41,6 @@ export function maskEmail(email: string): string {
 /** The invite link: the token rides in the fragment, which browsers never send (D3). */
 export function accountantInviteUrl(origin: string, token: string): string {
   return `${origin.replace(/\/+$/, '')}/accountant-invite#${token}`;
-}
-
-const utcDay = (at: Date) => at.toISOString().slice(0, 10);
-
-/**
- * Whether a request by the accountant stamps `lastViewedAt` (at most once an hour) and whether it is the first stamp
- * of its UTC day, which also writes an `accountant.viewed` audit row (at most one a day per grant).
- */
-export function accountantViewTouch(lastViewedAt: Date | null, now: Date): { touch: boolean; firstOfDay: boolean } {
-  if (lastViewedAt && now.getTime() - lastViewedAt.getTime() < ACCOUNTANT_VIEW_TOUCH_MS) return { touch: false, firstOfDay: false };
-  return { touch: true, firstOfDay: !lastViewedAt || utcDay(lastViewedAt) !== utcDay(now) };
 }
 
 export type GrantAuditAction = 'accountant.invited' | 'accountant.accepted' | 'accountant.revoked' | 'accountant.left' | 'accountant.viewed';

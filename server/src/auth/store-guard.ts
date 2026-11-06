@@ -2,7 +2,7 @@ import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
-import { accountantReadOnly, mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
+import { accountantReadOnly, shareLinkReadOnly, mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * The third layer of the writability matrix (hosted-portal.md §5, ADR-037
@@ -415,6 +415,22 @@ export const STORE_ACCESS: StoreAccess = {
     leave: 'sessionOnly',
     touchViewed: 'operator',
   },
+  /**
+   * MUT-560 (ADR-247): an owner creates, lists and revokes share links from their session (the route checks they own
+   * the profile). The public link routes and shareLinkAccess read and stamp on the store beneath any guard, so those
+   * methods are refused to every principal, like the accountant invite's public pair.
+   */
+  shareLinks: {
+    create: 'sessionOnly',
+    listRecentByOrganization: 'sessionOnly',
+    revoke: 'sessionOnly',
+    findByTokenDigest: 'operator',
+    findViewerByDigest: 'operator',
+    recordFailedPin: 'operator',
+    addOrRotateViewer: 'operator',
+    touchOpened: 'operator',
+    touchViewer: 'operator',
+  },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
@@ -517,12 +533,32 @@ export function agentStoreGuard(): StoreGuard {
  * stamp and SYSTEM catch-up posting run on the store beneath the guard (`unguarded`), as for every session.
  */
 export function accountantStoreGuard(): StoreGuard {
+  return readOnlyStoreGuard(new Set(), accountantReadOnly);
+}
+
+/**
+ * MUT-560 (ADR-247): the `sessionOnly` methods a share link's view routes read. The entries feed is classed
+ * `sessionOnly` (it reads across a person's memberships); a link reads it for its one profile, and it never writes
+ * (MUT-270 D2). Named, never derived: a method joins only by being listed here.
+ */
+export const SHARE_LINK_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'entries.settledOwedIds']);
+
+/**
+ * MUT-560 (ADR-247): the guard every share-link view request runs under, so even a mistaken write in a view handler
+ * throws 403 READ_ONLY_PROFILE (SHARE_LINK_READ_ONLY). Reads pass, and SHARE_LINK_SESSION_READS; nothing else. The
+ * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
+ */
+export function shareLinkStoreGuard(): StoreGuard {
+  return readOnlyStoreGuard(SHARE_LINK_SESSION_READS, shareLinkReadOnly);
+}
+
+function readOnlyStoreGuard(alsoReads: ReadonlySet<string>, refusal: () => ApiError): StoreGuard {
   return {
     assertCanCall(repo, method) {
       const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess> | undefined>)[repo]?.[method];
       if (!access) throw new Error(`Unclassified store method ${repo}.${method}`);
-      if (access === 'read' || (typeof access === 'object' && 'read' in access)) return;
-      throw accountantReadOnly();
+      if (access === 'read' || (typeof access === 'object' && 'read' in access) || alsoReads.has(`${repo}.${method}`)) return;
+      throw refusal();
     },
   };
 }

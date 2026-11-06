@@ -173,6 +173,11 @@ export function accountantReadOnly(): ApiError {
   return new ApiError('READ_ONLY_PROFILE', 'This profile was shared with you to read; only its owner can change it', { reason: 'ACCOUNTANT_READ_ONLY' });
 }
 
+/** MUT-560 (ADR-247): a write attempted below a share link's view routes (shareLinkStoreGuard). Never expected. */
+export function shareLinkReadOnly(): ApiError {
+  return new ApiError('READ_ONLY_PROFILE', 'A shared link only reads', { reason: 'SHARE_LINK_READ_ONLY' });
+}
+
 /** hosted-portal.md §5 layer 1: MALAFAT when the organization has a CONNECTED Malafat integration. */
 export async function profileWriterOf(store: Pick<LedgerStore, 'integrations'>, organizationId: string): Promise<ProfileWriter> {
   const malafat = await store.integrations.findByOrganizationAndProvider(organizationId, 'MALAFAT');

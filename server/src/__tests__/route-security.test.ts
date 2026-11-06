@@ -103,6 +103,9 @@ const ACCOUNTANT_OPERATIONS = [
   'DELETE /v1/clients/{profileId}',
 ];
 
+/** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
+const SHARE_LINK_OPERATIONS = ['POST /v1/profiles/{profileId}/share-links', 'GET /v1/profiles/{profileId}/share-links', 'DELETE /v1/profiles/{profileId}/share-links/{linkId}'];
+
 /** MUT-228: reference exchange rates — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
 const FX_OPERATIONS = ['GET /v1/fx-rates'];
 
@@ -178,6 +181,7 @@ const SESSION_OPERATIONS = [
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
   ...ACCOUNTANT_OPERATIONS,
+  ...SHARE_LINK_OPERATIONS,
   ...FX_OPERATIONS,
   ...ENTRIES_OPERATIONS,
   ...RECORDS_EXPORT_OPERATIONS,
@@ -238,7 +242,9 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   // MUT-115: passkey sign-in and its challenge, public like the password sign-in.
   'POST /v1/passkey-challenges', 'POST /v1/sessions/passkey', 'POST /v1/device-sessions/passkey',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
-  'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup'];
+  'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
+  // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
+  'POST /v1/share-links/check', 'POST /v1/share-links/unlock', 'POST /v1/share-links/entries', 'POST /v1/share-links/summary', 'POST /v1/share-links/expense-receipts'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
 const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
@@ -279,6 +285,8 @@ beforeAll(async () => {
     receiptsLibrary: true,
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
+    // MUT-560: and share links (SHARE_LINKS).
+    shareLinks: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
   operations = Object.entries(doc.paths)
@@ -378,7 +386,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -388,7 +396,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

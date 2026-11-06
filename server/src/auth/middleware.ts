@@ -6,7 +6,8 @@ import { ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountantGrantRecord, ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
-import { accountantViewTouch, grantAudit } from '../accountants/grants.js';
+import { grantAudit } from '../accountants/grants.js';
+import { viewTouch } from '../access/view-touch.js';
 import { isOAuthToken } from '../oauth/tokens.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
@@ -272,7 +273,7 @@ function assertAccountantMayCall(method: string, endpoint: string, access: Route
  */
 async function touchAccountantView(c: Context<AppEnv>, store: LedgerStore, grant: AccountantGrantRecord, userId: string): Promise<void> {
   const now = c.get('now')();
-  const { touch, firstOfDay } = accountantViewTouch(grant.lastViewedAt, now);
+  const { touch, firstOfDay } = viewTouch(grant.lastViewedAt, now);
   if (!touch) return;
   await store.accountantGrants.touchViewed({ grantId: grant.id, at: now, audit: firstOfDay ? [grantAudit(grant, 'accountant.viewed', userId, c.get('requestId'))] : [] });
 }

@@ -24,7 +24,7 @@ import type { CalendarDay, Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Logger } from '../logger.js';
-import { notOwner, ownsProfile, personalProfileFor } from '../personal-profile.js';
+import { ownedProfileOf, personalProfileFor } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountantGrantRecord, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import {
@@ -123,13 +123,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
   const app = new OpenAPIHono<AppEnv>();
 
   /** The profile at `profileId` if the caller owns it (creator or co-owner): 404 when they can't see it, else 403. */
-  async function ownedBy(user: UserRecord, profileId: string): Promise<Organization> {
-    const organization = await store.organizations.getById(profileId);
-    const membership = organization ? await store.memberships.find(user.id, profileId) : null;
-    if (!organization || !membership) throw new ApiError('NOT_FOUND', 'Profile not found');
-    if (!ownsProfile(organization, user.id, membership.role)) throw notOwner();
-    return organization;
-  }
+  const ownedBy = (user: UserRecord, profileId: string): Promise<Organization> => ownedProfileOf(store, user.id, profileId);
 
 
   async function grantView(grant: AccountantGrantRecord, now: Date) {

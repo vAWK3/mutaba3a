@@ -7,6 +7,7 @@ import type { IsoDate, IsoMonth, PaymentTerms } from '../dates.js';
 import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/contingency.js';
 import type { PricingBasis, VatTreatment } from '../vat.js';
 import type { CreditReasonCode } from '../payments/credit.js';
+import type { ShareLinkPeriod } from '../share-links/period.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -2578,6 +2579,117 @@ export interface LedgerStore {
   oauth: OAuthRepository;
   /** MUT-559 (ADR-245): read-only access an owner gives an accountant to one profile. Never a membership. */
   accountantGrants: AccountantGrantRepository;
+  /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
+  shareLinks: ShareLinkRepository;
+}
+
+// ---- MUT-560 (ADR-247): share links ------------------------------------------
+
+/** One share link. The token and the PIN are never stored: only the token's HMAC and the PIN's argon2id. */
+export interface ShareLinkRecord {
+  id: string;
+  organizationId: string;
+  /** The owner who created it; null once their account is deleted (the link stays, revocable by any owner). */
+  createdByUserId: string | null;
+  tokenDigest: string;
+  pinHash: string;
+  period: ShareLinkPeriod;
+  /** The resolved range, inclusive (share-links/period.ts); null = from the profile's first record. */
+  periodFrom: IsoDate | null;
+  periodTo: IsoDate;
+  expiresAt: Date;
+  failedPinAttempts: number;
+  lockedAt: Date | null;
+  revokedAt: Date | null;
+  lastOpenedAt: Date | null;
+  createdAt: Date;
+}
+
+/** A link with how many viewers it has (counted from viewer rows, never a copied column). */
+export interface ShareLinkWithViewers extends ShareLinkRecord {
+  viewers: number;
+}
+
+/** One browser that unlocked a link. */
+export interface ShareLinkViewerRecord {
+  id: string;
+  shareLinkId: string;
+  tokenDigest: string;
+  /** min(unlock + 8 h, link.expiresAt). */
+  accessExpiresAt: Date;
+  lastViewedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface CreateShareLinkInput {
+  /** Chosen by the caller: the PIN's hash input names it. */
+  id: string;
+  organizationId: string;
+  createdByUserId: string;
+  tokenDigest: string;
+  pinHash: string;
+  period: ShareLinkPeriod;
+  periodFrom: IsoDate | null;
+  periodTo: IsoDate;
+  expiresAt: Date;
+  at: Date;
+  /** The most live links (not revoked, unexpired at `at`) one profile may hold. */
+  max: number;
+  auditFor(link: ShareLinkRecord): AuditEventInput[];
+}
+
+export type CreateShareLinkResult = { kind: 'created'; link: ShareLinkRecord } | { kind: 'limit'; count: number };
+
+export interface AddShareLinkViewerInput {
+  linkId: string;
+  /** The digest of the viewer token the browser held before, if any: a viewer of this link with it keeps its slot. */
+  previousTokenDigest: string | null;
+  tokenDigest: string;
+  accessExpiresAt: Date;
+  at: Date;
+  /** The most viewers one link may have. */
+  max: number;
+  /** Written for a new viewer only, with its number (1..max). */
+  auditFor(viewer: ShareLinkViewerRecord, viewerNumber: number): AuditEventInput[];
+}
+
+export type AddShareLinkViewerResult =
+  | { kind: 'added'; viewer: ShareLinkViewerRecord; viewerNumber: number }
+  | { kind: 'rotated'; viewer: ShareLinkViewerRecord }
+  /** `previousTokenDigest` was given but no viewer of this link holds it (a parallel re-unlock rotated it first). */
+  | { kind: 'stale' }
+  | { kind: 'limit' }
+  | { kind: 'unusable' };
+
+export interface ShareLinkRepository {
+  /** One transaction under the profile's row lock: refuses at `max` live links (`limit`), else creates and audits. */
+  create(input: CreateShareLinkInput): Promise<CreateShareLinkResult>;
+  findByTokenDigest(tokenDigest: string): Promise<ShareLinkWithViewers | null>;
+  /** The viewer with this token digest and its link, or null. */
+  findViewerByDigest(tokenDigest: string): Promise<{ viewer: ShareLinkViewerRecord; link: ShareLinkRecord } | null>;
+  /**
+   * OW5: every link on the profile that was still unrevoked and unexpired at `since` (the owner's list shows ended links
+   * for a day; the route decides each one's state and whether it still shows), oldest first.
+   */
+  listRecentByOrganization(organizationId: string, since: Date): Promise<ShareLinkWithViewers[]>;
+  /**
+   * Atomic: one more wrong PIN on an unlocked link; the `maxAttempts`th locks it and writes `lockAudit(link)`.
+   * Null when the link is already locked (or gone), so parallel guesses can never count past `maxAttempts`.
+   */
+  recordFailedPin(input: { linkId: string; at: Date; maxAttempts: number; lockAudit(link: ShareLinkRecord): AuditEventInput[] }): Promise<{ failedPinAttempts: number; locked: boolean } | null>;
+  /**
+   * One transaction under the link's row lock: `unusable` unless the link is unrevoked, unlocked and unexpired at `at`;
+   * a viewer of this link holding `previousTokenDigest` is reused with the new token (`rotated`); a previous digest no
+   * viewer holds is `stale` and adds nothing; with no previous digest, a new viewer only below `max` (`limit` at it).
+   * Stamps the link's lastOpenedAt.
+   */
+  addOrRotateViewer(input: AddShareLinkViewerInput): Promise<AddShareLinkViewerResult>;
+  /** An owner ends a live link on their profile. Null when there is none to end (unknown, revoked or expired). */
+  revoke(input: { organizationId: string; linkId: string; at: Date; auditFor(link: ShareLinkRecord): AuditEventInput[] }): Promise<ShareLinkRecord | null>;
+  /** Stamps the link's lastOpenedAt (the caller throttles). */
+  touchOpened(input: { linkId: string; at: Date }): Promise<void>;
+  /** Stamps the viewer's lastViewedAt (the caller throttles). */
+  touchViewer(input: { viewerId: string; at: Date }): Promise<void>;
 }
 
 // ---- MUT-559 (ADR-245): accountant grants ------------------------------------
@@ -3691,6 +3803,8 @@ export interface FeedPageRequest {
   occurredBefore?: IsoDate;
   /** Logged at or after. */
   loggedSince?: Date;
+  /** MUT-560: only these kinds (all four when absent); the others' branches are never read. */
+  kinds?: ReadonlyArray<EntryRow['kind']>;
 }
 
 export interface FeedPage<T> {
