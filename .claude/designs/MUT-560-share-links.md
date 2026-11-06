@@ -304,6 +304,13 @@ Where the build follows the code rather than the plan's letter:
    profile or range never brings in an outside row (the bounds and the profile are always ANDed), and a logged-order
    cursor is 422; the key route flows run on Postgres under test:db (`routes-share-links-prisma.test.ts`).
 
+8. **Owner's list (OW5, Basel).** Live links plus those revoked, expired or locked within the last 24 hours, each with
+   `status` (active, locked, expired, revoked) and `endedAt`; a locked link drops out 24 hours after it locked
+   (revoked wins over locked, locked over expired). Repository: `listRecentByOrganization(since)`.
+9. **Visitor rows = the report's rows.** The feed and the totals hold only expenses and received payments (no Owed
+   entries, no conversions), as the period's Excel report (MUT-314). `entries.list` takes an optional `kinds` filter;
+   the other kinds' queries are never run.
+
 ## QA scenarios
 
 Server only: the user-visible flows (create → share → PIN → read → revoke) are the portal and phone stories
