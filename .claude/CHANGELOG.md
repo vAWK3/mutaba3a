@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — Accountant access per account: the operator's `accountant_access` feature (MUT-577, ADR-249 addendum)
+
+**Why:** Basel enables sharing for some accounts, not all, as with receipt reading.
+- `accountant_access` joins `FEATURES`; the operator console lists it (en/ar labels). Inviting an accountant and making
+  a share link need it (else the switched-off 404); listing and revoking don't; accountants and link visitors never do.
+  Turning it off stops new invites and links; existing ones keep working until revoked. `.env.example` documents the
+  production plan (switches on, `ACCOUNTANT_PLAN` off). Test harness people hold the feature unless `sharing: false`.
+- Files: `server/src/{features.ts, routes/accountants.ts, routes/share-links.ts}`, `server/.env.example`,
+  `src/hosted/i18n/{en,ar}.json`, tests `routes-accountant-access-feature.test.ts`, `user-features.test.ts`,
+  `routes-operator-billing-firms.test.ts`, `helpers/accountants.ts`.
+
 ## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
 
 **Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).

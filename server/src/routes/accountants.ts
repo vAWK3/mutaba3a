@@ -23,6 +23,7 @@ import { DOMAIN_LIST_NAMES, isListedDomain, loadDomainList } from '../email/doma
 import { domainOf } from '../email/domains/screen.js';
 import type { CalendarDay, Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
+import { hasFeature } from '../features.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Logger } from '../logger.js';
 import { ownedProfileOf, personalProfileFor } from '../personal-profile.js';
@@ -205,7 +206,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       responses: {
         201: { description: 'Invited (pending)', content: { 'application/json': { schema: AccountantGrantSchema } } },
         403: errorResponse('READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own'),
-        404: errorResponse('No such profile for you, or accountant access is off on this server'),
+        404: errorResponse('No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577)'),
         409: errorResponse('CONFLICT: details.reason ALREADY_INVITED or ACCOUNTANT_LIMIT'),
         422: errorResponse('VALIDATION_FAILED: not an address, or details.reason SELF_INVITE, or INVITE_ADDRESS_REFUSED (a disposable or relay address)'),
         429: errorResponse('RATE_LIMITED: too many invites this hour'),
@@ -213,6 +214,8 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
     }),
     async (c) => {
       const { user } = c.get('identity');
+      // MUT-577: inviting needs the operator's accountant_access feature, else the switched-off 404 (before any profile).
+      if (!(await hasFeature(store, user.id, 'accountant_access'))) throw new ApiError('NOT_FOUND', 'Not found');
       const { profileId } = c.req.valid('param');
       const body = c.req.valid('json');
       const organization = await ownedBy(user, profileId);

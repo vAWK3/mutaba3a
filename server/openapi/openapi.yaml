@@ -13952,7 +13952,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or accountant access is off on this server
+          description: No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:
@@ -26882,7 +26882,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or share links are off on this server
+          description: No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:

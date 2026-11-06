@@ -2114,6 +2114,11 @@
           "label": "Receipt reading",
           "sub": "Reads new receipts on our servers and fills in the date, total and vendor.",
           "confirmOff": "{email} loses receipt reading; receipts they add from now on aren't read."
+        },
+        "accountant_access": {
+          "label": "Accountant access",
+          "sub": "As an owner, they can invite an accountant to read a profile and make share links.",
+          "confirmOff": "{email} can't invite accountants or make new links; the ones they already shared keep working until they revoke them."
         }
       },
       "firms": {

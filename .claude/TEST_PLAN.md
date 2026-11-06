@@ -4461,3 +4461,10 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   `well-known-routes.test.ts`, `route-security.test.ts` (both new routes session-only), `writability-routes.test.ts`
   (40 session reads), `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
 
+## MUT-577 — accountant access per account (ADR-249 addendum)
+- `server/src/__tests__/routes-accountant-access-feature.test.ts`: off by default → invite and create-link 404 (the
+  switched-off answers), list OK, `/v1/me` without it; on → both work and `/v1/me.user.features` names it; turned off →
+  no new invite or link, the existing grant and link keep working, and the owner still revokes both; an accountant
+  needs no feature; the env switch still wins. `user-features.test.ts` and `routes-operator-billing-firms.test.ts`
+  list the feature.
+
