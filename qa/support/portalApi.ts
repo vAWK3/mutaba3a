@@ -491,7 +491,33 @@ export interface FakeApiSeed {
    * Absent: the server has ACCOUNTANT_ACCESS off, so /v1/me has no `clients` and every …/accountants call answers 404.
    */
   accountants?: Record<string, StubGrant[]>;
+  /** MUT-577: false withholds the person's `accountant_access` feature while the server has accountant access on. */
+  accountantAccess?: boolean;
+  /**
+   * MUT-561 slice B: each owned profile's share links (MUT-560), which turns share links on. Absent: SHARE_LINKS off,
+   * so every …/share-links call answers 404 and the Sharing page shows Accountants alone.
+   */
+  shareLinks?: Record<string, StubShareLink[]>;
 }
+
+/** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
+export interface StubShareLink {
+  id: string;
+  period: 'LAST_1_MONTH' | 'LAST_2_MONTHS' | 'LAST_3_MONTHS' | 'WHOLE_PROFILE';
+  from: string | null;
+  to: string;
+  createdAt: string;
+  expiresAt: string;
+  lastOpenedAt: string | null;
+  status: 'active' | 'locked' | 'expired' | 'revoked';
+  endedAt: string | null;
+  viewers: number;
+  maxViewers: number;
+  createdByName: string | null;
+}
+
+/** The most live share links one profile may have (the server's default). */
+export const SHARE_LINK_LIMIT = 3;
 
 /** MUT-561: one accountant grant as GET /v1/profiles/{id}/accountants lists it. */
 export interface StubGrant {
@@ -704,6 +730,10 @@ export class FakeApi {
   readonly libraryReceipts: StubLibraryReceipt[] | null;
   /** MUT-561: accountants per profile; null = accountant access off on this server. */
   readonly accountants: Map<string, StubGrant[]> | null;
+  /** MUT-577: the person's accountant_access feature (on unless the seed says false). */
+  readonly accountantAccess: boolean;
+  /** MUT-561: share links per profile; null = SHARE_LINKS off on this server. */
+  readonly shareLinks: Map<string, StubShareLink[]> | null;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -732,7 +762,9 @@ export class FakeApi {
     this.termsAccepted = seed.termsAccepted ?? true;
     this.closure = seed.closure ?? null;
     this.libraryReceipts = seed.receipts ? [...seed.receipts] : null;
+    this.accountantAccess = seed.accountantAccess ?? true;
     this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
+    this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
 
@@ -797,7 +829,8 @@ export class FakeApi {
     );
     return {
       ...body,
-      user: { ...body.user, closure: this.closure },
+      // MUT-577: seeding accountants also gives this person the operator's accountant_access feature
+      user: { ...body.user, closure: this.closure, ...(this.accountants && this.accountantAccess ? { features: [...body.user.features, 'accountant_access'] } : {}) },
       // MUT-559: present only while the server has accountant access on (the portal's gate, MUT-561 D8)
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
@@ -1080,6 +1113,42 @@ export class FakeApi {
   }
 
   /** MUT-561: MUT-559's owner routes, as the server answers them (one invite per address, the limit, never yourself). */
+  /** MUT-561 slice B: MUT-560's owner routes, as the server answers them (the PIN rule, the limit, whole months). */
+  private shareLinksAnswer(e: Logged, profile: StubProfile, linkId?: string) {
+    if (!this.shareLinks) return notFound();
+    if (!profile.owned) return json({ error: { code: 'READ_ONLY_PROFILE', message: 'Not an owner', details: { reason: 'NOT_OWNER' } } }, 403);
+    const list = this.shareLinks.get(profile.id) ?? [];
+    this.shareLinks.set(profile.id, list);
+    const live = () => list.filter((l) => l.status === 'active' || l.status === 'locked').length;
+    if (e.method === 'GET' && !linkId) return json({ items: list, limit: SHARE_LINK_LIMIT });
+    if (e.method === 'DELETE' && linkId) {
+      const link = list.find((l) => l.id === linkId && (l.status === 'active' || l.status === 'locked'));
+      if (!link) return notFound();
+      link.status = 'revoked';
+      link.endedAt = new Date().toISOString();
+      return { status: 204, body: '' };
+    }
+    if (e.method === 'POST' && !linkId) {
+      const body = (e.body ?? {}) as { period?: StubShareLink['period']; expiresInDays?: number; pin?: string };
+      const pin = String(body.pin ?? '').replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (d) => String((d.codePointAt(0) ?? 0) % 16));
+      if (!/^\d{4,8}$/.test(pin)) return json({ error: { code: 'VALIDATION_FAILED', message: 'PIN', details: { reason: 'PIN_FORMAT', field: 'pin' } } }, 422);
+      if (live() >= SHARE_LINK_LIMIT) return json({ error: { code: 'CONFLICT', message: 'limit', details: { reason: 'SHARE_LINK_LIMIT', limit: SHARE_LINK_LIMIT } } }, 409);
+      const now = new Date();
+      const today = todayInJerusalem();
+      const period = body.period ?? 'LAST_1_MONTH';
+      const months = { LAST_1_MONTH: 1, LAST_2_MONTHS: 2, LAST_3_MONTHS: 3, WHOLE_PROFILE: 0 }[period];
+      const [y, m] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
+      const from = months ? new Date(Date.UTC(y, m - 1 - months, 1)).toISOString().slice(0, 10) : null;
+      const to = months ? new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10) : today;
+      const id = this.nextId(0x5b);
+      const link: StubShareLink = { id, period, from, to, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + (body.expiresInDays ?? 7) * 86_400_000).toISOString(), lastOpenedAt: null, status: 'active', endedAt: null, viewers: 0, maxViewers: 3, createdByName: 'Nour Haddad' };
+      list.push(link);
+      const url = `http://127.0.0.1:5175/share#qaShareToken${id.slice(0, 8)}abcdefghijklmnopqrstuvwxyz`;
+      return json({ id, url, period, from, to, expiresAt: link.expiresAt, createdAt: link.createdAt }, 201);
+    }
+    return notFound();
+  }
+
   private accountantsAnswer(e: Logged, profile: StubProfile, grantId?: string) {
     const grants = this.accountants?.get(profile.id);
     if (!this.accountants) return notFound();
@@ -1121,6 +1190,7 @@ export class FakeApi {
     }
     if (!state) return notFound();
     if (sub === 'accountants') return this.accountantsAnswer(e, state.stub, subId);
+    if (sub === 'share-links') return this.shareLinksAnswer(e, state.stub, subId);
     if (e.method === 'POST' && sub === 'firm-request') {
       // MUT-300: idempotent like the server; the version stays put (eng review O3).
       state.stub = { ...state.stub, firmRequestedAt: state.stub.firmRequestedAt ?? FIRM_REQUESTED_AT };

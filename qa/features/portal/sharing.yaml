@@ -2,9 +2,9 @@ app: portal
 area: sharing
 title: Sharing a profile with your accountant (the owner's Sharing page)
 tier: secondary
-# MUT-561 (epic MUT-558, layout B): one profile's Sharing page, /p/:id/you/sharing. Slice A: the Accountants column,
-# the invite drawer and the empty page, on MUT-559's routes. The Links column (create-link, link-rows) comes with
-# MUT-560 (slice B). The live journey (invite → accept → stop) is MUT-562's portal-selfservice feature.
+# MUT-561 (epic MUT-558, layout B): one profile's Sharing page, /p/:id/you/sharing: the Accountants column and the
+# invite drawer on MUT-559's routes, the Links column, the New link drawer and its done pane on MUT-560's. The live
+# journey (invite → accept → stop) is MUT-562's portal-selfservice feature.
 paths:
   - src/hosted/pages/sharing/**
   - src/hosted/data/sharingQueries.ts
@@ -16,7 +16,7 @@ features:
   - id: entry
     title: Only an owner, on a server with accountant access, sees the way into Sharing
     tier: secondary
-    tickets: [MUT-561]
+    tickets: [MUT-561, MUT-577]
     paths:
       - src/hosted/pages/you/YouProfiles.tsx
       - src/hosted/components/ProfileEditForm.tsx
@@ -24,11 +24,13 @@ features:
       - Open You › Profiles as the owner of Studio
       - Go back to Profiles, open Manage profiles and edit Studio
       - Open You › Profiles on a firm profile you're only a member of
+      - Open You › Profiles as an owner without the accountant_access feature (MUT-577)
       - Open You › Profiles on a server with accountant access off
     expect:
       - The owner sees "Share with your accountant" under the profiles, with Studio's name, and it opens /p/<id>/you/sharing
       - Studio's edit pane has a Sharing row that opens the same page and closes the drawer
       - A member of a firm profile sees no such row, and the page's URL sends them back to You › Profiles
+      - Without the person's accountant_access feature (MUT-577) there is no row and the page's URL sends them back
       - With accountant access off there is no row and the page's URL sends the owner back too
   - id: accountants-list
     title: The Accountants column shows each accountant's state, when they last looked, and one action
@@ -42,7 +44,7 @@ features:
       - maya@ledger.co is Pending, "Sent … · ends …", with Cancel
       - h.audit@firm.com is Expired, "Not accepted within 14 days", with Invite again
       - Under the list, "Up to 5 accountants per profile."
-      - No Links column while share links are off (MUT-560)
+      - No Links column while share links are off (the list answers 404)
   - id: invite
     title: Invite an accountant by email, in the portal's language, with every refusal in its place
     tier: core
@@ -81,7 +83,7 @@ features:
     expect:
       - The scene (placeholder art until Claude Design's accountant-empty lands), "You haven't shared this profile yet"
       - The four points of what an accountant can and can't do
-      - Invite by email, and no link button while share links are off
+      - Invite by email, and no link button while share links are off (Create a link with a PIN when they are on)
   - id: layout
     title: In Arabic on a 375px phone the page is one column with no sideways scroll; on desktop it passes axe
     tier: secondary
@@ -89,10 +91,41 @@ features:
     paths:
       - src/hosted/hosted.css
     steps:
-      - On a 375px phone in Arabic, open Sharing with three accountants
+      - On a 375px phone in Arabic, open Sharing with three accountants and two links
       - Open the invite drawer
-      - On a desktop in English and dark mode, open Sharing
+      - On a desktop in English and dark mode, open Sharing with links
     expect:
       - The page is right to left, one column, nothing scrolls sideways; emails read left to right; actions sit under each row's text
       - The drawer fills the screen and its email field reads left to right
-      - On desktop the page has no axe violations
+      - On desktop the page shows two columns and has no axe violations
+  - id: create-link
+    title: Make a link with a PIN, see it once, copy it and a ready message that never holds the PIN
+    tier: core
+    tickets: [MUT-561]
+    steps:
+      - With usage counts on, open Sharing and press Create link
+      - Enter PIN 12
+      - Enter 4821, 7 days, last 3 months, and create it
+      - Copy link
+      - Copy message
+      - Press Done and reload
+    expect:
+      - The side drawer opens (?newLink=true); each period chip names its whole months; Whole profile has none
+      - A 2-digit PIN is refused under the field and nothing is sent
+      - The done pane shows "Your link is ready", the link once, and "Send the PIN separately"; share_link_created counts period and days, nothing else
+      - Copy link puts the URL on the clipboard
+      - Copy message is Basel's text (MUT-558 13244) with the profile, months, link and end date, and never the PIN
+      - After Done and a reload the URL is nowhere on the page and the list shows the new link at 0 / 3
+  - id: link-rows
+    title: Each link shows its months, end, last opening and viewers; locked and ended are marked; a live one turns off
+    tier: secondary
+    tickets: [MUT-561]
+    steps:
+      - Open Sharing with a live, a locked and an ended link
+      - Turn off the live link
+    expect:
+      - The live link reads Aug – Oct 2026, 2 / 3, opened yesterday, with Turn off
+      - The locked one reads Whole profile and Locked, never opened, with Turn off; the ended one reads Ended … with no action
+      - The note says what Locked means and that a link is never shown twice
+      - Turn off confirms in place (Cancel focused); confirming says "Link turned off", the row reads Ended and the server got the DELETE
+
