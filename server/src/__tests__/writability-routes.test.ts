@@ -177,8 +177,8 @@ describe('every route sits inside the matrix', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
-    // the customer statement (MUT-478) and the period totals (MUT-483).
-    expect(SESSION_READS.length).toBe(39);
+    // the customer statement (MUT-478), the period totals (MUT-483) and one profile's feed (MUT-575).
+    expect(SESSION_READS.length).toBe(40);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {

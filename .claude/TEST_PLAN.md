@@ -4458,5 +4458,6 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   `store-prisma-client-activity.test.ts` (2 queries for 10 clients); `migration-mut575.test.ts`.
 - Updated: accountant route matrix (`GET /v1/profile-entries` allowlisted by tags), both read-only guard tests
   (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
-  `well-known-routes.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
+  `well-known-routes.test.ts`, `route-security.test.ts` (both new routes session-only), `writability-routes.test.ts`
+  (40 session reads), `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
 
