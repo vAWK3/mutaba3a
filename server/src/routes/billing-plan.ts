@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { currentSubscription, type Catalog } from '../billing/checkout.js';
+import { profilePlanSubscriptions } from '../billing/entitlement.js';
 import { OFFERS, stayEntryOf, type OfferEntry } from '../billing/offer.js';
 import {
   cycleBoundaryAfter,
@@ -127,7 +128,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
     const checkout = requireCheckout(options.checkout);
     const plan = requirePlan(options.plan);
     const summary = await store.billing.summaryOf(user.id);
-    const shown = summary.account ? currentSubscription(summary.subscriptions, now) : undefined;
+    const shown = summary.account ? currentSubscription(profilePlanSubscriptions(summary.subscriptions), now) : undefined;
     if (!shown || !summary.account) throw notAvailable('NO_SUBSCRIPTION');
     const customer = summary.account.stripeCustomerId;
     const { live, paidInvoices, catalog } = await viaStripe(
@@ -223,7 +224,7 @@ export function billingPlanRoutes(store: LedgerStore, options: BillingPlanRouteO
   async function shownPlan(user: UserRecord, now: Date, refuse: () => ApiError) {
     const plan = requirePlan(options.plan);
     const summary = await store.billing.summaryOf(user.id);
-    const shown = summary.account ? currentSubscription(summary.subscriptions, now) : undefined;
+    const shown = summary.account ? currentSubscription(profilePlanSubscriptions(summary.subscriptions), now) : undefined;
     if (!shown || !summary.account) throw refuse();
     const customer = summary.account.stripeCustomerId;
     const live = await viaStripe(() => plan.planOf(shown.stripeSubscriptionId), user, customer, options.logger);

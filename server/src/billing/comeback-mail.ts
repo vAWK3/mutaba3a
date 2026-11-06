@@ -84,7 +84,8 @@ export async function runComebackMail(options: ComebackRunOptions): Promise<{ su
   const elapsed = options.elapsedMs ?? (() => performance.now() - started);
   const budget = options.budgetMs ?? COMEBACK_MAIL_TIME_BUDGET_MS;
   const window = { endedAfter: new Date(now.getTime() - COMEBACK_STAGES[1].toDays * DAY_MS), endedUpTo: new Date(now.getTime() - COMEBACK_STAGES[0].fromDays * DAY_MS) };
-  const people = latestPerPerson(await store.billing.comebackCandidates(window));
+  // MUT-565: an Accountant plan that ended is no come-back for the Freelancer plan (and has no offer of its own).
+  const people = latestPerPerson((await store.billing.comebackCandidates(window)).filter((c) => c.tier !== 'ACCOUNTANT'));
   const offer = people.length > 0 ? await options.stripe.offer() : null;
   if (people.length > 0 && !offer) options.logger.warn('come-back mail: no running come-back offer (check the coupon in offers.json); nobody is mailed');
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOG_FAILURE_TTL_MS, CATALOG_TTL_MS, CHECKOUT_BUDGET, INVOICE_TAX_NUMBER_FIELD, createCheckoutGateway } from '../checkout-gateway.js';
+import type Stripe from 'stripe';
+import { expectedTierOfLookupKey } from '../../checkout.js';
+import { CATALOG_FAILURE_TTL_MS, CATALOG_TTL_MS, CHECKOUT_BUDGET, INVOICE_TAX_NUMBER_FIELD, createCheckoutGateway, sellableFactOf } from '../checkout-gateway.js';
 import { STRIPE_API_VERSION, StripeGatewayError } from '../gateway.js';
 import { fakeStripe, type SeenRequest } from './fake-http.js';
 
@@ -73,11 +75,13 @@ describe('CheckoutGateway customer (MUT-362 eng review D3)', () => {
 
 describe('CheckoutGateway before a Checkout (MUT-362 review: no double charge)', () => {
   it('reads every subscription Stripe holds for the customer, whatever the mirror says', async () => {
-    const sub = (status: string, end: number) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end }]) });
-    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([sub('active', 1796083200), sub('canceled', 1790000000)]) }));
+    const sub = (status: string, end: number, lookupKey?: string) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end, ...(lookupKey ? { price: { id: 'price_1', lookup_key: lookupKey } } : {}) }]) });
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([sub('active', 1796083200), sub('canceled', 1790000000), sub('trialing', 1796083200, 'accountant_list_monthly_ils')]) }));
+    // MUT-565: the Accountant plan is told apart by its price's lookup key; anything else is a profile plan (null).
     expect(await gateway.subscriptionsOf('cus_MINE')).toEqual([
-      { status: 'active', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
-      { status: 'canceled', currentPeriodEnd: new Date(1790000000 * 1000), offerId: null },
+      { tier: null, status: 'active', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
+      { tier: null, status: 'canceled', currentPeriodEnd: new Date(1790000000 * 1000), offerId: null },
+      { tier: 'ACCOUNTANT', status: 'trialing', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
     ]);
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions']);
     expect(seen[0]!.query.get('customer')).toBe('cus_MINE');
@@ -372,5 +376,15 @@ describe('CheckoutGateway renewals (MUT-525 DD8)', () => {
   it('a subscription Stripe no longer has is null', async () => {
     const { gateway } = gatewayWith(() => ({ status: 404, body: { error: { type: 'invalid_request_error', code: 'resource_missing', message: 'No such subscription' } } }));
     expect(await gateway.renewalOf('sub_gone')).toBeNull();
+  });
+});
+
+describe('sellableFactOf: each plan’s keys on its own product (MUT-565, test 7)', () => {
+  const onProduct = (lookupKey: string, tier: string) => ({ ...price(lookupKey, 'ils', 9900, 'month'), product: { id: `prod_${tier}`, object: 'product', metadata: { tier } } }) as unknown as Stripe.Price;
+
+  it('an accountant key sells only on a product tagged accountant; a freelancer key only on freelancer', () => {
+    expect(sellableFactOf(onProduct('accountant_list_monthly_ils', 'accountant'), expectedTierOfLookupKey('accountant_list_monthly_ils'))).toMatchObject({ unitAmount: 9900, productId: 'prod_accountant' });
+    expect(sellableFactOf(onProduct('accountant_list_monthly_ils', 'freelancer'), expectedTierOfLookupKey('accountant_list_monthly_ils'))).toBeNull();
+    expect(sellableFactOf(onProduct('freelancer_list_monthly_ils', 'accountant'), expectedTierOfLookupKey('freelancer_list_monthly_ils'))).toBeNull();
   });
 });

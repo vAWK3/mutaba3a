@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { OFFER_METADATA_KEY, type SubscriptionState } from '../checkout.js';
+import { expectedTierOfLookupKey, OFFER_METADATA_KEY, type SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
 import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
@@ -77,7 +77,6 @@ export interface CheckoutGatewayOptions {
 const LOOKUP_PAGE = 10;
 const SUBSCRIPTIONS_PAGE = 20;
 const OPEN_SESSIONS_PAGE = 10;
-const SELLABLE_TIER = 'freelancer';
 
 type CatalogEntry = { at: number; prices: Map<string, PriceFact> } | { at: number; failure: StripeGatewayError };
 type CouponEntry = { at: number; coupon: CouponFact | null } | { at: number; failure: StripeGatewayError };
@@ -118,7 +117,8 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const page = await wrapped(() => stripe.prices.list({ lookup_keys: [...keys], active: true, limit: LOOKUP_PAGE, expand: ['data.product'] }));
       const prices = new Map<string, PriceFact>();
       for (const price of page.data) {
-        const fact = sellableFactOf(price);
+        // MUT-565: each key must sit on its own plan's product (accountant_* on the Accountant one).
+        const fact = price.lookup_key ? sellableFactOf(price, expectedTierOfLookupKey(price.lookup_key)) : null;
         if (fact && price.lookup_key) prices.set(price.lookup_key, fact);
       }
       cache.set(cacheKey, { at: options.now().getTime(), prices });
@@ -160,7 +160,10 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
       const page = await wrapped(() => stripe.subscriptions.list({ customer, status: 'all', limit: SUBSCRIPTIONS_PAGE }));
       return page.data.flatMap((sub) => {
         const currentPeriodEnd = periodEndOf(sub);
-        return currentPeriodEnd ? [{ status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
+        // MUT-565: the plan from the price's lookup key (a list can't expand the product): the Accountant plan's keys
+        // are ours alone, so anything else is a profile plan, as the Checkout refusals need to tell them apart.
+        const accountant = sub.items.data.some((item) => (item.price?.lookup_key ?? '').startsWith('accountant_'));
+        return currentPeriodEnd ? [{ tier: accountant ? ('ACCOUNTANT' as const) : null, status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
       });
     },
     async expireOpenCheckouts(customer) {
@@ -206,16 +209,17 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
 
 /**
  * Only a price the mirror and our copy can stand behind (review): a monthly or yearly one (Stripe's interval type is
- * open-ended), on a product tagged `tier: freelancer` (else mirrorOf refuses the paid subscription as UNKNOWN_TIER),
- * VAT-exclusive (we promise "Prices exclude VAT"), with an amount.
+ * open-ended), on a product tagged with the plan's tier (`freelancer`, or MUT-565's `accountant`; else mirrorOf
+ * would mirror the paid subscription as another plan, or refuse it as UNKNOWN_TIER), VAT-exclusive (we promise
+ * "Prices exclude VAT"), with an amount.
  */
-function sellableFactOf(price: Stripe.Price): PriceFact | null {
+export function sellableFactOf(price: Stripe.Price, expectedTier: 'freelancer' | 'accountant'): PriceFact | null {
   const interval = price.recurring?.interval === 'month' ? 'month' : price.recurring?.interval === 'year' ? 'year' : null;
   if (!interval || price.recurring?.interval_count !== 1) return null;
   if (typeof price.unit_amount !== 'number' || price.unit_amount <= 0) return null;
   if (price.tax_behavior !== 'exclusive') return null;
   const product = typeof price.product === 'object' && !('deleted' in price.product && price.product.deleted) ? (price.product as Stripe.Product) : null;
-  if ((product?.metadata?.['tier'] ?? '').trim().toLowerCase() !== SELLABLE_TIER) return null;
+  if ((product?.metadata?.['tier'] ?? '').trim().toLowerCase() !== expectedTier) return null;
   return { id: price.id, currency: price.currency.toUpperCase(), unitAmount: price.unit_amount, interval, productId: product!.id };
 }
 

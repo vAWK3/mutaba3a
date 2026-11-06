@@ -3,9 +3,15 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { setupLinkOrigin } from '../auth/account-setup.js';
 import {
+  accountantCatalogFrom,
+  accountantCheckoutRefusalOf,
+  ALL_ACCOUNTANT_LOOKUP_KEYS,
   ALL_GA_LOOKUP_KEYS,
   catalogFrom,
   checkoutRefusalOf,
+  planAccountantCheckout,
+  type AccountantCatalog,
+  type AccountantPersonBilling,
   currentSubscription,
   EVERY_COUNTRY,
   isReturnPath,
@@ -22,7 +28,8 @@ import { offerOrNothing } from '../billing/offer-read.js';
 import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } from '../billing/comeback.js';
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
-import { trialTimelineOf } from '../billing/entitlement.js';
+import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
+import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
 import { SWITCH_AFTER_PAID_INVOICES, yearlySwitchOf } from '../billing/retention.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
@@ -66,6 +73,8 @@ export interface BillingRouteOptions {
   offers?: readonly OfferEntry[];
   /** MUT-531: the plan door, for the paid-invoice count behind `yearlySwitch`. Null: no switch line. */
   plan?: PlanGateway | null;
+  /** MUT-565 (ACCOUNTANT_ACCESS): GET /v1/billing reports `accountantPlan`, and Checkout sells it. Absent = off. */
+  accountantAccess?: boolean;
 }
 
 export const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -73,6 +82,7 @@ const MINUTE_MS = 60 * 1000;
 /** Refusals Stripe will repeat however often it's asked: the operator's to fix, so never "try again". */
 const PERMANENT_STRIPE_ERRORS: ReadonlySet<string> = new Set(['StripeInvalidRequestError', 'StripePermissionError', 'StripeAuthenticationError', 'StripeIdempotencyError']);
 const NO_CATALOG: Catalog = { ILS: null, USD: null };
+const NO_ACCOUNTANT_CATALOG: AccountantCatalog = { ILS: null, USD: null };
 export const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 export const refusedResponses = {
   401: errorResponse('No valid session'),
@@ -117,9 +127,12 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         ownedProfilesOf(store, user.id),
       ]);
       const now = c.get('now')();
-      const shown = currentSubscription(summary.subscriptions, now);
+      // MUT-565 (ADR-251): everything below is the profile plan's; the Accountant plan has its own field.
+      const subscriptions = profilePlanSubscriptions(summary.subscriptions);
+      const shown = currentSubscription(subscriptions, now);
       const offer = options.checkout ? await offerOrNothing(options.checkout, offers, catalog, now, false, options.logger, c.get('requestId')) : null;
-      const comeback = options.checkout ? await comebackFor(store, user.id, summary.subscriptions, now, offers, options.checkout, options.logger, false) : null;
+      const comeback = options.checkout ? await comebackFor(store, user.id, subscriptions, now, offers, options.checkout, options.logger, false) : null;
+      const accountantPlan = options.accountantAccess ? await accountantPlanView(store, user.id, summary, now, options.checkout, options.logger, c.get('requestId')) : null;
       const yearlySwitch = shown && options.plan ? await yearlySwitchLine(store, user.id, options.plan, shown, catalog, now, options.logger, c.get('requestId')) : null;
       return c.json(
         {
@@ -130,9 +143,10 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
           countries: countriesView(options.countries),
           coveredProfileIds: covered.map((p) => p.id),
-          offer: offer ? offerView(offer, offerEligible(offer, summary.subscriptions, offer.interval), catalog) : null,
+          offer: offer ? offerView(offer, offerEligible(offer, subscriptions, offer.interval), catalog) : null,
           yearlySwitch,
           comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
+          accountantPlan,
         },
         200,
       );
@@ -164,8 +178,16 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       await limit(c, options.limiter, user.id, now);
       const checkout = requireCheckout(options.checkout);
       const returnUrl = returnUrlOf(c, body.returnPath, options.portalOrigin);
+      // MUT-565 (ADR-251): the Accountant plan's Checkout is its own path; nothing below applies to it.
+      if (body.plan === 'accountant') {
+        if (!options.accountantAccess) throw new ApiError('NOT_FOUND', 'Not found');
+        const url = await accountantCheckout(c, store, checkout, user, body, returnUrl, now, options);
+        return c.json({ url }, 200);
+      }
       const [summary, owned] = await Promise.all([store.billing.summaryOf(user.id), ownedWithEntitlements(store, user.id, now)]);
-      const person: PersonBilling = { subscriptions: summary.subscriptions, owned: owned.entitlements };
+      // MUT-565: only the profile plan's subscriptions; an Accountant plan never makes this one ALREADY_SUBSCRIBED.
+      const profileSubscriptions = profilePlanSubscriptions(summary.subscriptions);
+      const person: PersonBilling = { subscriptions: profileSubscriptions, owned: owned.entitlements };
       const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
       if (refusal) throw refusalError(refusal);
 
@@ -178,8 +200,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         async () => {
           const customer = linked ?? (await checkout.findOrCreateCustomer(personOf(user)));
           // Review: the mirror can be late (a slow webhook, a failed one), so Stripe's own word decides before money moves.
-          const inStripe = await checkout.subscriptionsOf(customer);
-          const everSubscribed = [...summary.subscriptions, ...inStripe];
+          const inStripe = profilePlanSubscriptions(await checkout.subscriptionsOf(customer));
+          const everSubscribed = [...person.subscriptions, ...inStripe];
           const stillRefused = checkoutRefusalOf({ ...body, now }, { ...person, subscriptions: everSubscribed }, options.countries);
           if (stillRefused) throw refusalError(stillRefused);
           // MUT-525 (OV-4): the offer is decided only now, on the mirror and Stripe together (D2), from a fresh coupon read (D6).
@@ -187,7 +209,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           let applied = offerEligible(offer, everSubscribed, body.interval) ? appliedOffer(offer!, catalog, plan.currency, body.interval) : null;
           // MUT-534 (D13, D14): otherwise the come-back offer, on the mirror's facts and Stripe's own list (R7), from a fresh coupon.
           if (!applied) {
-            const back = await comebackFor(store, user.id, summary.subscriptions, now, offers, checkout, options.logger, true);
+            const back = await comebackFor(store, user.id, profileSubscriptions, now, offers, checkout, options.logger, true);
             const usedInStripe = back !== null && inStripe.some((s) => s.offerId === back.id && !NEVER_PAID.has(s.status));
             if (back && !usedInStripe) applied = comebackApplied(back, plan.currency, body.interval);
           }
@@ -205,7 +227,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         linked,
         options.logger,
       );
-      const metadata = { interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: applied?.id ?? null };
+      const metadata = { plan: 'freelancer', interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: applied?.id ?? null };
       await auditOn(store, owned.profiles, user, 'billing.checkout_started', metadata, c.get('requestId'), options.logger);
       return c.json({ url }, 200);
     },
@@ -264,7 +286,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const plan = options.plan;
       if (!plan) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
       const summary = await store.billing.summaryOf(user.id);
-      const shown = currentSubscription(summary.subscriptions, now);
+      const shown = currentSubscription(profilePlanSubscriptions(summary.subscriptions), now);
       if (!summary.account || !shown || shown.status !== 'past_due') return c.json(nothing, 200);
       const customer = summary.account.stripeCustomerId;
       const result = await viaStripe(
@@ -476,7 +498,7 @@ function stayOfferRuns(events: readonly BillingRetentionEventRecord[], now: Date
   return events.some((e) => e.kind === 'STAY_OFFER' && (e.endsAt === null || e.endsAt > now));
 }
 
-function subscriptionView(sub: BillingSubscriptionRecord, currency: string) {
+function subscriptionView(sub: BillingSubscriptionRecord & { tier: Exclude<BillingSubscriptionRecord['tier'], 'ACCOUNTANT'> }, currency: string) {
   const interval = sub.priceLookupKey?.includes('_yearly_') ? 'year' : sub.priceLookupKey?.includes('_monthly_') ? 'month' : null;
   return {
     tier: sub.tier,
@@ -506,4 +528,96 @@ function trialView(startedAt: Date) {
 
 function amountsOf(pair: Catalog['ILS']) {
   return pair ? { month: pair.month.unitAmount, year: pair.year.unitAmount } : null;
+}
+
+/**
+ * MUT-565 (ADR-251): GET /v1/billing `accountantPlan`: the plan (one more billing read, for the person's grants), its
+ * subscription's interval and the account's currency, and the monthly price per currency (cached like the catalog;
+ * a Stripe failure hides the prices, never the read).
+ */
+async function accountantPlanView(
+  store: LedgerStore,
+  userId: string,
+  summary: { account: { currency: string } | null; subscriptions: readonly BillingSubscriptionRecord[] },
+  now: Date,
+  checkout: CheckoutGateway | null,
+  logger: Pick<Logger, 'warn' | 'error'>,
+  requestId: string,
+) {
+  const [facts, catalog] = await Promise.all([
+    store.billing.factsFor({ ownerUserIds: [userId], organizationIds: [] }),
+    checkout ? accountantCatalogOrNothing(checkout, logger, requestId) : NO_ACCOUNTANT_CATALOG,
+  ]);
+  const plan = resolveAccountantPlan(userId, facts, now);
+  const sub = currentSubscription(accountantPlanSubscriptions(summary.subscriptions), now);
+  return {
+    state: plan.state,
+    source: plan.source,
+    until: plan.until?.toISOString() ?? null,
+    cancelAtPeriodEnd: plan.cancelAtPeriodEnd,
+    interval: sub ? intervalOf(sub.priceLookupKey) : null,
+    currency: summary.account?.currency ?? null,
+    catalog: { ILS: catalog.ILS ? { month: catalog.ILS.month.unitAmount } : null, USD: catalog.USD ? { month: catalog.USD.month.unitAmount } : null },
+  };
+}
+
+async function accountantCatalogOf(checkout: CheckoutGateway): Promise<AccountantCatalog> {
+  return accountantCatalogFrom(await checkout.pricesByLookupKey(ALL_ACCOUNTANT_LOOKUP_KEYS));
+}
+
+async function accountantCatalogOrNothing(checkout: CheckoutGateway, logger: Pick<Logger, 'warn'>, requestId: string): Promise<AccountantCatalog> {
+  try {
+    return await accountantCatalogOf(checkout);
+  } catch (err) {
+    if (!(err instanceof StripeGatewayError)) throw err;
+    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'accountant plan catalog unavailable; prices hidden');
+    return NO_ACCOUNTANT_CATALOG;
+  }
+}
+
+function intervalOf(lookupKey: string | null): 'month' | 'year' | null {
+  return lookupKey?.includes('_yearly_') ? 'year' : lookupKey?.includes('_monthly_') ? 'month' : null;
+}
+
+/**
+ * MUT-565 (ADR-251, P7): a Checkout for the Accountant plan. The same customer as the Freelancer plan (one per person,
+ * two subscriptions), the same "ask Stripe first" re-check (filtered to this plan) and the same expiry of open
+ * Checkouts; monthly only, no trial carried over, no offers. Audited `billing.checkout_started` with `plan: accountant`.
+ */
+async function accountantCheckout(
+  c: Context<AppEnv>,
+  store: LedgerStore,
+  checkout: CheckoutGateway,
+  user: UserRecord,
+  body: { interval: BillingInterval; country: string; buyer: 'person' | 'business' },
+  returnUrl: string,
+  now: Date,
+  options: BillingRouteOptions,
+): Promise<string> {
+  const [summary, facts] = await Promise.all([store.billing.summaryOf(user.id), store.billing.factsFor({ ownerUserIds: [user.id], organizationIds: [] })]);
+  const person: AccountantPersonBilling = { subscriptions: accountantPlanSubscriptions(summary.subscriptions), grants: facts.grants.filter((g) => g.userId === user.id) };
+  const refusal = accountantCheckoutRefusalOf({ ...body, now }, person, options.countries);
+  if (refusal === 'VALIDATION_FAILED' && body.interval !== 'month') throw new ApiError('VALIDATION_FAILED', 'The Accountant plan is monthly', { field: 'interval' });
+  if (refusal) throw refusalError(refusal);
+  const catalog = await viaStripe(() => accountantCatalogOf(checkout), user, null, options.logger);
+  const input = { userId: user.id, ...body, returnUrl, now, trialEndsAt: null };
+  const plan = planAccountantCheckout(input, person, options.countries, catalog);
+  if (!plan.ok) throw refusalError(plan.code);
+  const linked = summary.account?.stripeCustomerId ?? null;
+  const { url } = await viaStripe(
+    async () => {
+      const customer = linked ?? (await checkout.findOrCreateCustomer(personOf(user)));
+      const inStripe = accountantPlanSubscriptions(await checkout.subscriptionsOf(customer));
+      const stillRefused = accountantCheckoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...person.subscriptions, ...inStripe] }, options.countries);
+      if (stillRefused) throw refusalError(stillRefused);
+      await checkout.expireOpenCheckouts(customer);
+      return checkout.createCheckoutSession({ ...plan.params, customer });
+    },
+    user,
+    linked,
+    options.logger,
+  );
+  const profiles = await ownedProfilesOf(store, user.id);
+  await auditOn(store, profiles, user, 'billing.checkout_started', { plan: 'accountant', interval: body.interval, currency: plan.currency, buyer: body.buyer, country: body.country, offer: null }, c.get('requestId'), options.logger);
+  return url;
 }

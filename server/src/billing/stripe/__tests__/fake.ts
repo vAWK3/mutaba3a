@@ -16,6 +16,8 @@ import type { FailedPaymentFacts } from '../../card-failed-mail.js';
 export const FAKE_WEBHOOK_SECRET = 'whsec_mut360_fake_endpoint';
 /** MUT-525: the product every fake GA price is on, which the launch coupon is restricted to. */
 export const FAKE_FREELANCER_PRODUCT = 'prod_FREELANCER';
+/** MUT-565: the Accountant plan's product (metadata tier=accountant). */
+export const FAKE_ACCOUNTANT_PRODUCT = 'prod_ACCOUNTANT';
 const signer = new Stripe('sk_test_mut360_fake', { telemetry: false });
 
 export class FakeStripeGateway implements StripeGateway {
@@ -147,6 +149,13 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this;
   }
 
+  /** MUT-565: the Accountant plan's monthly prices (the placeholder ₪99 / $25), on its own product. */
+  withAccountantPrices(): this {
+    this.prices.set('accountant_list_monthly_ils', { id: 'price_accountant_list_monthly_ils', currency: 'ILS', unitAmount: 9900, interval: 'month', productId: FAKE_ACCOUNTANT_PRODUCT });
+    this.prices.set('accountant_list_monthly_usd', { id: 'price_accountant_list_monthly_usd', currency: 'USD', unitAmount: 2500, interval: 'month', productId: FAKE_ACCOUNTANT_PRODUCT });
+    return this;
+  }
+
   /** A transient API error by default; with a code, Stripe's invalid-request error (with `param` when it names one). */
   failNext(code: string | null = null, param: string | null = code === 'resource_missing' ? 'customer' : null): void {
     this.failures.push(new StripeGatewayError({ code, type: code === null ? 'StripeAPIError' : 'StripeInvalidRequestError', requestId: 'req_fake', transient: code === null, param }));
@@ -194,12 +203,12 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   }
 
   /** Stripe's own subscriptions per customer (review: Checkout asks Stripe, not only the mirror). */
-  readonly stripeSubscriptions = new Map<string, { status: string; currentPeriodEnd: Date; offerId?: string | null }[]>();
+  readonly stripeSubscriptions = new Map<string, { tier?: 'ACCOUNTANT' | null; status: string; currentPeriodEnd: Date; offerId?: string | null }[]>();
   /** Open Checkout sessions per customer, and the ones expired. */
   readonly openCheckouts = new Map<string, number>();
   expiredCheckouts = 0;
 
-  async subscriptionsOf(customer: string): Promise<{ status: string; currentPeriodEnd: Date; offerId?: string | null }[]> {
+  async subscriptionsOf(customer: string): Promise<{ tier?: 'ACCOUNTANT' | null; status: string; currentPeriodEnd: Date; offerId?: string | null }[]> {
     this.take(`subscriptions:${customer}`);
     return this.stripeSubscriptions.get(customer) ?? [];
   }

@@ -57,6 +57,8 @@ export function billingGrantActions({ store }: BillingGrantActionOptions) {
 
   async function create(input: CreateGrantInput, ctx: ActionContext): Promise<EntitlementGrantRecord> {
     const expiresAt = assertFutureExpiry(input.expiresAt, ctx.at);
+    // MUT-565 (ADR-251, P9): the Accountant plan is a person's (client books); a profile can't hold it (DB CHECK too).
+    if (input.tier === 'ACCOUNTANT' && input.target.organizationId) throw new ApiError('VALIDATION_FAILED', 'An Accountant plan grant names a person, never a profile', { field: 'organizationId', reason: 'ACCOUNTANT_PERSON_ONLY' });
     if (input.target.organizationId && !(await store.organizations.getById(input.target.organizationId))) throw new ApiError('NOT_FOUND', 'Organization not found');
     const id = randomUUID();
     const metadata: JsonObject = { ...input.target, tier: input.tier, reason: input.reason, expiresAt: expiresAt?.toISOString() ?? null };

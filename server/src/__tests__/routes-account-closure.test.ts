@@ -196,6 +196,17 @@ describe('POST /v1/me/closure (MUT-333)', () => {
     expect((await me(h, auth)).user.closure).toBeNull();
   });
 
+  it('MUT-565 (test 10): ends both plans on one customer, the Freelancer and the Accountant subscription', async () => {
+    const h = harness();
+    const p = await person(h);
+    await h.store.billing.saveAccount({ stripeCustomerId: 'cus_BOTH', userId: p.userId, country: 'IL', currency: 'ILS', at: T0, linkAudit: [] });
+    h.accountStripe.customer('cus_BOTH', { email: p.email, userId: p.userId }, 1).subscription('sub_freelancer', 'cus_BOTH', 'active').subscription('sub_accountant', 'cus_BOTH', 'active');
+    const { auth } = await deviceSession(h, p);
+    expect(await read(await close(h, auth, p.password))).toMatchObject({ subscriptionsEnded: 2 });
+    expect(h.accountStripe.subscriptions.get('sub_freelancer')?.cancelAtPeriodEnd).toBe(true);
+    expect(h.accountStripe.subscriptions.get('sub_accountant')?.cancelAtPeriodEnd).toBe(true);
+  });
+
   it('cancels a failing subscription only after the closing commits, and a failure there never changes the answer (R20)', async () => {
     const h = harness();
     const p = await person(h);

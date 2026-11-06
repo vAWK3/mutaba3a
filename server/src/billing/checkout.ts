@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import countriesFile from './billing-countries.json' with { type: 'json' };
-import { periodOver, type Entitlement } from './entitlement.js';
+import { grantIsLive, periodOver, type BillingTier, type Entitlement, type GrantFact } from './entitlement.js';
 import { formatMinor } from './money.js';
 
 /**
@@ -18,6 +18,23 @@ export const GA_PRICE_LOOKUP_KEYS: Readonly<Record<BillingCurrency, Readonly<Rec
   ILS: { month: 'freelancer_list_monthly_ils', year: 'freelancer_list_yearly_ils' },
   USD: { month: 'freelancer_list_monthly_usd', year: 'freelancer_list_yearly_usd' },
 };
+
+/**
+ * MUT-565 (ADR-251): the Accountant plan's list prices, monthly only at launch (Question 2). The amounts live in Stripe
+ * (placeholder ₪99 / $25 until Basel sets the final price); a key on a product not tagged `tier: accountant` leaves
+ * the plan unsellable (PRICES_NOT_SET), never mischarges.
+ */
+export const ACCOUNTANT_PRICE_LOOKUP_KEYS: Readonly<Record<BillingCurrency, { month: string }>> = {
+  ILS: { month: 'accountant_list_monthly_ils' },
+  USD: { month: 'accountant_list_monthly_usd' },
+};
+export const ALL_ACCOUNTANT_LOOKUP_KEYS: readonly string[] = Object.values(ACCOUNTANT_PRICE_LOOKUP_KEYS).map((k) => k.month);
+/** Which plan a Checkout is for (CheckoutSessionRequest.plan; absent is freelancer). */
+export type CheckoutPlanName = 'freelancer' | 'accountant';
+/** The Stripe product tier a lookup key must sit on: `accountant_*` keys on the Accountant product, every other on Freelancer. */
+export function expectedTierOfLookupKey(key: string): 'freelancer' | 'accountant' {
+  return key.startsWith('accountant_') ? 'accountant' : 'freelancer';
+}
 
 export interface CatalogPrice {
   id: string;
@@ -55,8 +72,11 @@ const TAX_NUMBER_FIELD_LABEL = 'Business tax number · الرقم الضريبي
 export const BUSINESS_TAX_NUMBER_KEY = 'business_tax_number';
 const COUNTRY = /^[A-Z]{2}$/;
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-/** A portal path: `/` or a profile's page. Never an origin, a query or `..`, so the return URL can't leave the portal. */
-const RETURN_PATH = new RegExp(`^/(p/${UUID}(/[a-z0-9-]+)*)?$`);
+/**
+ * A portal path: `/` or a profile's page; MUT-565: or the accountant invite page, or the client books (one of them).
+ * Never an origin, a query or `..`, so the return URL can't leave the portal.
+ */
+const RETURN_PATH = new RegExp(`^/((p/${UUID}(/[a-z0-9-]+)*)|accountant-invite|client-books(/${UUID})?)?$`);
 
 /** Statuses that already bill the person (or are about to): a second Checkout would charge twice. */
 const LIVE_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due', 'incomplete']);
@@ -73,6 +93,8 @@ const OPEN_RANK: ReadonlyMap<string, number> = new Map([
 export const TRIAL_CARRY_MIN_MS = 48 * 60 * 60 * 1000;
 
 export interface SubscriptionState {
+  /** MUT-565: the plan it is for; Stripe's own list reads it off the price's lookup key. Absent or null: a profile plan. */
+  tier?: BillingTier | null;
   status: string;
   currentPeriodEnd: Date;
   /** MUT-534 (R7): the offer its Checkout carried (`metadata.mutaba3a_offer`), from Stripe's own list; absent from the mirror's. */
@@ -191,6 +213,50 @@ export function planCheckout(input: CheckoutInput, person: PersonBilling, countr
   const prices = catalog[currency];
   if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
   return { ok: true, currency, params: paramsOf(input, currency, prices[input.interval], countries) };
+}
+
+/** MUT-565: the Accountant plan's sellable catalog: a currency needs its monthly price, in that currency and interval. */
+export type AccountantCatalog = Record<BillingCurrency, { month: CatalogPrice } | null>;
+
+export function accountantCatalogFrom(prices: ReadonlyMap<string, { id: string; currency: string; unitAmount: number; interval: BillingInterval; productId: string }>): AccountantCatalog {
+  const of = (currency: BillingCurrency) => {
+    const price = prices.get(ACCOUNTANT_PRICE_LOOKUP_KEYS[currency].month);
+    return price && price.currency === currency && price.interval === 'month' ? { month: { id: price.id, unitAmount: price.unitAmount, productId: price.productId } } : null;
+  };
+  return { ILS: of('ILS'), USD: of('USD') };
+}
+
+/** MUT-565: what the Accountant plan's Checkout refusals read: the person's ACCOUNTANT subscriptions and grants only. */
+export interface AccountantPersonBilling {
+  subscriptions: readonly SubscriptionState[];
+  grants: readonly Pick<GrantFact, 'tier' | 'userId' | 'organizationId' | 'expiresAt' | 'revokedAt'>[];
+}
+
+/**
+ * MUT-565 (ADR-251, P7): the Accountant plan's refusals. Only that plan's subscriptions count (a Freelancer payer may
+ * buy it, and the reverse); a no-expiry ACCOUNTANT grant means there is nothing to pay. No profile rules: the plan
+ * covers client books, never the person's own profiles. Monthly only. Country rules as for the Freelancer plan.
+ */
+export function accountantCheckoutRefusalOf(input: Pick<CheckoutInput, 'country' | 'buyer' | 'now' | 'interval'>, person: AccountantPersonBilling, countries: BillingCountries): CheckoutRefusal | null {
+  if (input.interval !== 'month') return 'VALIDATION_FAILED';
+  const statuses = person.subscriptions.filter((s) => s.tier === 'ACCOUNTANT' && !(LIVE_STATUSES.has(s.status) && periodOver(s, input.now))).map((s) => s.status);
+  if (statuses.some((s) => LIVE_STATUSES.has(s))) return 'ALREADY_SUBSCRIBED';
+  if (statuses.includes('unpaid')) return 'RESUME_IN_PORTAL';
+  if (statuses.includes('paused')) return 'CONTACT_US';
+  if (person.grants.some((g) => g.tier === 'ACCOUNTANT' && g.organizationId === null && g.expiresAt === null && grantIsLive(g, input.now))) return 'COVERED_BY_GRANT';
+  if (!COUNTRY.test(input.country)) return 'VALIDATION_FAILED';
+  if (input.buyer === 'person' && !isConsumerCountry(countries, input.country)) return 'COUNTRY_NEEDS_BUSINESS';
+  return null;
+}
+
+/** MUT-565: the Accountant plan's Checkout: the same parameters as the Freelancer plan's, with no trial and no offer. */
+export function planAccountantCheckout(input: CheckoutInput, person: AccountantPersonBilling, countries: BillingCountries, catalog: AccountantCatalog): CheckoutPlan {
+  const refusal = accountantCheckoutRefusalOf(input, person, countries);
+  if (refusal) return { ok: false, code: refusal };
+  const currency = currencyOf(input.country);
+  const prices = catalog[currency];
+  if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
+  return { ok: true, currency, params: paramsOf({ ...input, trialEndsAt: null, offer: null }, currency, prices.month, countries) };
 }
 
 /** Every refusal that needs no price: the route checks these before asking Stripe for the catalog. */

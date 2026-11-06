@@ -34,7 +34,7 @@ function harness() {
   const mailer = createMailer({ transport: outbox, store, logger, now: () => NOW, fromAddress: 'no-reply@mail.example.test', replyTo: null, limits: { daily: 500, securityReserve: 50, perRecipient: 3 } });
   const paid = new Map<string, number>();
 
-  async function lapsed(opts: { locale?: UserLocale; endedDaysAgo?: number; tier?: 'FREELANCER' | 'FIRM'; currency?: 'ILS' | 'USD'; paidInvoices?: number } = {}) {
+  async function lapsed(opts: { locale?: UserLocale; endedDaysAgo?: number; tier?: 'FREELANCER' | 'FIRM' | 'ACCOUNTANT'; currency?: 'ILS' | 'USD'; paidInvoices?: number } = {}) {
     const { user } = await store.users.create({
       email: `back${++seq}@studio.example`,
       displayName: 'Rana Saleh',
@@ -122,6 +122,14 @@ describe('runComebackMail (MUT-534)', () => {
     expect(summary).toMatchObject({ sent: 0, skipped: { neverPaid: 1, firm: 1, stayOfferRecent: 1, covered: 1, noStage: 1, suppressed: 1 } });
     expect(h.outbox.list({})).toHaveLength(0);
     expect(await h.store.billing.retentionEventsOf(quiet.user.id)).toEqual([]);
+  });
+
+  it('MUT-565: an Accountant plan that ended is no come-back for the Freelancer plan: nobody is looked at or mailed', async () => {
+    const h = harness();
+    const { user } = await h.lapsed({ tier: 'ACCOUNTANT' });
+    const { summary } = await h.run();
+    expect(summary).toMatchObject({ checked: 0, sent: 0 });
+    expect(h.outbox.list({ to: user.email })).toHaveLength(0);
   });
 
   it('no running offer (no coupon, or a wrong one) mails nobody and records nothing', async () => {

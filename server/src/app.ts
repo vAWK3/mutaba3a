@@ -63,6 +63,7 @@ import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
+import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
 import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, shareLinkRoutes } from './routes/share-links.js';
 import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_SUMMARY_POLICY, SHARE_LINK_VIEW_IP_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
@@ -226,6 +227,8 @@ export interface AppDependencies {
   accountantsPerProfileMax?: number;
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
   accountantInviteLimiter?: RateLimiter;
+  /** MUT-565 (ACCOUNTANT_PLAN, ADR-251): the client-books cap. Absent = off: no cap. */
+  accountantPlan?: AccountantPlanConfig;
   /**
    * MUT-560 (SHARE_LINKS, ADR-247): one-time share links. Absent or false = every share-link route answers the uniform
    * 404 before authentication (the server deploys dark).
@@ -329,7 +332,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.104.0-mut575';
+export const API_VERSION = '1.105.0-mut565';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -341,7 +344,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
   const accountantAccess = deps.accountantAccess ?? false;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess });
+  const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -412,6 +416,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       routeAccess: resolveRouteAccess,
       organizationIndependent: SESSION_ORGANIZATION_INDEPENDENT_ROUTES,
       accountantAccess,
+      accountantPlan,
     }),
   );
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
@@ -487,6 +492,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
       inviteLimiter: deps.accountantInviteLimiter ?? new SlidingWindowRateLimiter(ACCOUNTANT_INVITE_POLICY.perUserPerHour, 3_600_000),
       maxPerProfile: deps.accountantsPerProfileMax ?? ACCOUNTANTS_PER_PROFILE_DEFAULT,
+      accountantPlan,
       terms,
       mailer,
       logger: deps.logger,
@@ -531,6 +537,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
       ...(deps.offers ? { offers: deps.offers } : {}),
       plan: deps.stripe?.planGateway ?? null,
+      accountantAccess,
     }),
   );
   // MUT-531/532: changing one's own plan (switch, pause, cancel, the stay offer), person-level like the rest of Billing.

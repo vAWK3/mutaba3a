@@ -234,3 +234,14 @@ describe('runCardFailedMail (MUT-533)', () => {
     expect(summary).toMatchObject({ checked: 1, incomplete: true });
   });
 });
+
+describe('MUT-565 (test 10): the card-failed mails name no plan, so an Accountant plan invoice reads right', async () => {
+  const { renderMail } = await import('../../email/templates/index.js');
+  it('neither mail, in either language, names the Freelancer plan', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const first = renderMail('card-failed', locale, { updateLink: 'https://app.example.test/?billing=true' });
+      const reminder = renderMail('card-failed-reminder', locale, { daysLeft: 5, readOnlyAfter: false, updateLink: 'https://app.example.test/?billing=true' });
+      for (const mail of [first, reminder]) expect(`${mail.subject}\n${mail.text}`).not.toMatch(/Freelancer|المستقل/);
+    }
+  });
+});

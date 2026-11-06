@@ -6,6 +6,7 @@ import { comebackOfferOf, type ComebackFacts, type ComebackOffer } from './comeb
 import type { CheckoutGateway } from './stripe/checkout-gateway.js';
 import { StripeGatewayError } from './stripe/gateway.js';
 import { entitlementsFor, memberProfilesForBilling } from './coverage.js';
+import { profilePlanSubscriptions } from './entitlement.js';
 import { comebackEntryOf, OFFERS, type OfferEntry } from './offer.js';
 
 /** What the come-back facts read: the person's billing rows, their profiles and those profiles' coverage. */
@@ -25,7 +26,8 @@ export async function comebackFactsOf(
 ): Promise<ComebackFacts> {
   // Review: a caller that already read the person's subscriptions (GET /v1/billing) passes them in.
   const [subscriptions, events, profiles] = await Promise.all([
-    known ? Promise.resolve(known.subscriptions) : store.billing.summaryOf(userId).then((s) => s.subscriptions),
+    // MUT-565: the come-back offer is the Freelancer plan's; an Accountant plan ending (or running) never counts.
+    known ? Promise.resolve(profilePlanSubscriptions(known.subscriptions)) : store.billing.summaryOf(userId).then((s) => profilePlanSubscriptions(s.subscriptions)),
     store.billing.retentionEventsOf(userId),
     memberProfilesForBilling(store, userId),
   ]);

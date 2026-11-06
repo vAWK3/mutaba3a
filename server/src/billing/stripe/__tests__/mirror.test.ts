@@ -162,3 +162,21 @@ describe('ids out of payloads', () => {
     expect(customerIdOf({ id: 'cus_2' } as Stripe.Customer)).toBe('cus_2');
   });
 });
+
+describe('mirrorOf: the Accountant plan (MUT-565, test 8)', () => {
+  const accountant = (metadata: Record<string, string> = {}) =>
+    mirrorOf(subscription({ metadata }, [item(product('prod_A', 'accountant'), 1796083200, 'accountant_list_monthly_ils')]), new Map());
+
+  it('a product tagged tier: accountant mirrors as ACCOUNTANT with no organization', () => {
+    expect(accountant()).toEqual({ ok: expect.objectContaining({ tier: 'ACCOUNTANT', organizationId: null, priceLookupKey: 'accountant_list_monthly_ils' }), notes: [] });
+  });
+
+  it('an organization in the metadata is ignored and noted, never tied', () => {
+    expect(accountant({ mutaba3a_organization_id: ORG })).toEqual({ ok: expect.objectContaining({ tier: 'ACCOUNTANT', organizationId: null }), notes: ['ACCOUNTANT_ORG_IGNORED'] });
+  });
+
+  it('a subscription mixing the Accountant and Freelancer products is UNKNOWN_TIER, as any mixed tier', () => {
+    const mixed = subscription({}, [item(product('prod_A', 'accountant'), 1796083200, 'accountant_list_monthly_ils'), item(product('prod_F', 'freelancer'), 1796083200)]);
+    expect(mirrorOf(mixed, new Map())).toEqual({ error: 'UNKNOWN_TIER' });
+  });
+});

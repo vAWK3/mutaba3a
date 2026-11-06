@@ -291,7 +291,8 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
 
 // ---- MUT-358 (ADR-160): operator billing ------------------------------------
 
-const BillingTierSchema = z.enum(['FREELANCER', 'FIRM']).openapi('BillingTier');
+/** MUT-565 (ADR-251): ACCOUNTANT is the person's Accountant plan (client books), only ever on a person, never a profile. */
+const BillingTierSchema = z.enum(['FREELANCER', 'FIRM', 'ACCOUNTANT']).openapi('BillingTier');
 
 /** An operator grant: covers a person's own profiles (`userId`) or one profile (`organizationId`), never both. */
 export const EntitlementGrantSchema = z
@@ -396,7 +397,8 @@ export const BillingStatusSchema = z
     subscriptions: z.array(
       z.object({
         stripeSubscriptionId: z.string(),
-        tier: z.enum(['FREELANCER', 'FIRM']),
+        /** MUT-565: ACCOUNTANT is the person's Accountant plan; it never covers a profile (see `profiles`). */
+        tier: z.enum(['FREELANCER', 'FIRM', 'ACCOUNTANT']),
         status: z.string(),
         currentPeriodEnd: z.string().datetime(),
         cancelAtPeriodEnd: z.boolean(),
@@ -562,6 +564,25 @@ export const BillingComebackSchema = z
   })
   .openapi('BillingComeback');
 
+/** MUT-565 (ADR-251): GET /v1/billing `accountantPlan`. */
+const BillingAccountantPlanSchema = z
+  .object({
+    state: z.enum(['NONE', 'ACTIVE', 'GRACE', 'LAPSED']),
+    source: z.enum(['OPERATOR', 'STRIPE']).nullable(),
+    until: z.string().datetime().nullable(),
+    cancelAtPeriodEnd: z.boolean(),
+    /** The plan's subscription interval (always `month` at launch); null without a subscription. */
+    interval: z.enum(['month', 'year']).nullable(),
+    /** The billing account's currency; null with no Stripe customer linked. */
+    currency: z.string().nullable(),
+    /** The monthly list price per currency, minor units; null where it isn't sellable. */
+    catalog: z.object({
+      ILS: z.object({ month: z.number().int() }).nullable(),
+      USD: z.object({ month: z.number().int() }).nullable(),
+    }),
+  })
+  .openapi('BillingAccountantPlan');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -608,6 +629,12 @@ export const BillingOverviewSchema = z
     yearlySwitch: z.union([BillingYearlySwitchSchema, z.null()]),
     /** MUT-534: the come-back offer once the come-back mail offered it and the person still may have it; else null. Additive since 1.99.0-mut534. */
     comeback: z.union([BillingComebackSchema, z.null()]),
+    /**
+     * MUT-565 (ADR-251): the person's Accountant plan and its monthly price per currency (`catalog`, from Stripe, cached
+     * 10 minutes; a currency without a sellable price is null). Null where accountant access is off. `subscription`
+     * above is never the Accountant plan. Additive since 1.105.0-mut565.
+     */
+    accountantPlan: z.union([BillingAccountantPlanSchema, z.null()]),
   })
   .openapi('BillingOverview');
 
@@ -625,6 +652,11 @@ export const CheckoutSessionRequestSchema = z
     returnPath: ReturnPathSchema,
     /** MUT-525 DD4: the offer the drawer showed; if it no longer applies the server answers 409 OFFER_ENDED instead of charging the full price. */
     expectedOffer: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
+    /**
+     * MUT-565 (ADR-251): which plan. Absent is `freelancer`. `accountant` (monthly only: `interval` must be `month`)
+     * covers client books, never the person's own profiles; no trial carried over and no offers. Additive since 1.105.0-mut565.
+     */
+    plan: z.enum(['freelancer', 'accountant']).optional(),
   })
   .strict()
   .openapi('CheckoutSessionRequest');
@@ -1158,8 +1190,43 @@ export const AccountantClientSchema = z
     endedReason: z.enum(['revoked', 'closed']).nullable(),
     /** MUT-575: when it ended; null while active. */
     endedAt: z.string().datetime().nullable(),
+    /**
+     * MUT-565 (ADR-251): active, but past the client books the accountant may read without the Accountant plan (the
+     * oldest `clientBooks.freeLimit` stay readable); every profile-scoped call answers 402 ACCOUNTANT_PLAN_REQUIRED.
+     * Always false on an ended row and while the plan is switched off. Since 1.105.0-mut565.
+     */
+    needsPlan: z.boolean(),
   })
   .openapi('AccountantClient');
+
+/** MUT-565 (ADR-251): the person's Accountant plan, as /v1/me and GET /v1/billing report it. No price. */
+const AccountantPlanStateSchema = z
+  .object({
+    /** NONE: never had it. ACTIVE: paid or granted. GRACE: a payment failed and Stripe is retrying (still covers). LAPSED: it ended. */
+    state: z.enum(['NONE', 'ACTIVE', 'GRACE', 'LAPSED']),
+    /** OPERATOR: an operator grant (a comp). STRIPE: a subscription. Null with NONE. */
+    source: z.enum(['OPERATOR', 'STRIPE']).nullable(),
+    /** When it ends or renews, if known: the grant's expiry or the paid period's end. */
+    until: z.string().datetime().nullable(),
+    /** The subscription ends at `until` (cancelled in the Customer Portal). */
+    cancelAtPeriodEnd: z.boolean(),
+  })
+  .openapi('AccountantPlanState');
+
+/** MUT-565: /v1/me `clientBooks`, beside `clients`. */
+export const ClientBooksSummarySchema = z
+  .object({
+    /** ACTIVE client books (grants) the person holds. */
+    count: z.number().int().nonnegative(),
+    /** How many they read without the plan (3 by default). */
+    freeLimit: z.number().int().positive(),
+    /** How many they may hold now: `freeLimit` without the plan, the server ceiling with it; null while the plan is switched off (no cap). */
+    cap: z.number().int().positive().nullable(),
+    /** How many of `count` they may open now (the oldest accepted first). */
+    readable: z.number().int().nonnegative(),
+    plan: AccountantPlanStateSchema,
+  })
+  .openapi('ClientBooksSummary');
 
 /** MUT-575: a row of GET /v1/clients: the /v1/me row plus this month's stats (null on an ended client). */
 export const AccountantClientWithStatsSchema = AccountantClientSchema.extend({
@@ -1236,6 +1303,12 @@ export const MeSchema = z
      * accountant access off. Additive since 1.100.0-mut559.
      */
     clients: z.array(AccountantClientSchema).optional(),
+    /**
+     * MUT-565 (ADR-251): with `clients`, the cap and the person's Accountant plan. The 4th-client card shows when
+     * `cap` is set, `count >= cap` and the plan is neither ACTIVE nor GRACE. Never a price (GET /v1/billing has it).
+     * Additive since 1.105.0-mut565.
+     */
+    clientBooks: ClientBooksSummarySchema.optional(),
   })
   .openapi('Me');
 

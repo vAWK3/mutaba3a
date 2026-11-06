@@ -80,7 +80,7 @@ const USAGE = [
   '          on in place; an owned Business profile needs no --owner (its owner is OWNER); an operator firm needs at least one member',
   '  firm-disable --organization-id <uuid>',
   '  firm-decline --organization-id <uuid>',
-  '  billing-grant  (--email <email> | --organization-id <uuid>) --tier FREELANCER|FIRM --reason <text> [--expires <ISO date-time>]',
+  '  billing-grant  (--email <email> | --organization-id <uuid>) --tier FREELANCER|FIRM|ACCOUNTANT --reason <text> [--expires <ISO date-time>]',
   '          covers the person\'s own profiles, or one profile (MUT-358); a pilot user gets one until their Stripe subscription is linked',
   '  billing-revoke --grant-id <uuid>',
   '  billing-grants [--email <email> | --organization-id <uuid>] [--active]',

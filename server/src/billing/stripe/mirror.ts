@@ -10,7 +10,7 @@ import type { BillingTier } from '../entitlement.js';
 /** The subscription can't be mirrored; the sync records the code and writes nothing. */
 export type MirrorError = 'UNKNOWN_TIER' | 'UNSUPPORTED_CURRENCY' | 'NO_PERIOD';
 /** Mirrored, with something the operator should look at. */
-export type MirrorNote = 'FIRM_WITHOUT_ORG' | 'UNKNOWN_ORG' | 'PAUSE_NOT_OURS';
+export type MirrorNote = 'FIRM_WITHOUT_ORG' | 'UNKNOWN_ORG' | 'PAUSE_NOT_OURS' | 'ACCOUNTANT_ORG_IGNORED';
 
 export interface MirrorFields {
   tier: BillingTier;
@@ -36,7 +36,8 @@ export interface MirrorFields {
   currency: 'ILS' | 'USD';
 }
 
-const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', firm: 'FIRM' };
+/** MUT-565 (ADR-251): `accountant` is the person's Accountant plan (client books). */
+const TIERS: Record<string, BillingTier> = { freelancer: 'FREELANCER', firm: 'FIRM', accountant: 'ACCOUNTANT' };
 const LOOKUP_KEY_MAX = 100;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** offers.json's id rule, and billing_subscriptions.offerId's VarChar(40). */
@@ -60,8 +61,11 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
 
   const notes: MirrorNote[] = [];
   const orgMeta = sub.metadata?.['mutaba3a_organization_id'] ?? null;
-  const organizationId = orgMeta !== null && UUID_RE.test(orgMeta) ? orgMeta.toLowerCase() : null;
-  if (orgMeta !== null && organizationId === null) notes.push('UNKNOWN_ORG');
+  const named = orgMeta !== null && UUID_RE.test(orgMeta) ? orgMeta.toLowerCase() : null;
+  // MUT-565: the Accountant plan is the person's; it never ties to a profile, whatever the metadata says.
+  const organizationId = tier === 'ACCOUNTANT' ? null : named;
+  if (tier === 'ACCOUNTANT' && orgMeta !== null) notes.push('ACCOUNTANT_ORG_IGNORED');
+  else if (orgMeta !== null && organizationId === null) notes.push('UNKNOWN_ORG');
   if (tier === 'FIRM' && organizationId === null && orgMeta === null) notes.push('FIRM_WITHOUT_ORG');
   const pause = pauseOf(sub);
   if (pause.notOurs) notes.push('PAUSE_NOT_OURS');

@@ -111,6 +111,8 @@ describe('GET /v1/billing (MUT-362)', () => {
       // MUT-531: no subscription, so no switch to yearly.
       yearlySwitch: null,
       comeback: null,
+      // MUT-565: accountant access is off in this harness.
+      accountantPlan: null,
     });
   });
 
@@ -215,7 +217,7 @@ describe('POST /v1/billing/checkout-session (MUT-362)', () => {
     });
     const audit = await billingAudit(h, u.personalId);
     expect(audit.map((e) => [e.action, e.actorType, e.actorId])).toEqual([['billing.checkout_started', 'USER', u.userId]]);
-    expect(audit[0]!.metadata).toEqual({ interval: 'month', currency: 'ILS', buyer: 'person', country: 'IL', offer: null });
+    expect(audit[0]!.metadata).toEqual({ plan: 'freelancer', interval: 'month', currency: 'ILS', buyer: 'person', country: 'IL', offer: null });
   });
 
   it('a person with a linked customer reuses it, never creating another (MUT-360 OV-7)', async () => {
