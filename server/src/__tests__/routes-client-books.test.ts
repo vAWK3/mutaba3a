@@ -121,7 +121,8 @@ describe('3. GET /v1/clients (MUT-575)', () => {
     expect(items[0].lastActivityAt).toBe('2026-10-31T22:30:02.000Z');
     expect(items[2]).toMatchObject({ entriesThisMonth: null, lastActivityAt: null, endedReason: 'revoked' });
     // The same rows as /v1/me, plus the stats.
-    expect((await me(h, acc)).clients).toEqual(items.map(({ entriesThisMonth: _e, lastActivityAt: _l, ...row }: Loose) => row));
+    const withoutStats = (row: Loose) => Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'entriesThisMonth' && key !== 'lastActivityAt'));
+    expect((await me(h, acc)).clients).toEqual(items.map(withoutStats));
   });
 
   it('a person who reads no client gets an empty list; the switch off answers 404', async () => {

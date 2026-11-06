@@ -93,14 +93,15 @@ export function clientRows(grants: readonly AccountantGrantRecord[], profiles: R
     const held = chosen.get(grant.organizationId);
     if (!held || outranks(grant, held)) chosen.set(grant.organizationId, grant);
   }
-  const rows: Array<AccountantClientRow & { order: number }> = [];
+  const rows: Array<{ row: AccountantClientRow; order: number }> = [];
   for (const grant of chosen.values()) {
     const facts = profiles.get(grant.organizationId);
     if (facts) rows.push(clientRowOf(grant, facts));
   }
-  const active = rows.filter((r) => r.status === 'active').sort((a, b) => a.order - b.order || a.profileId.localeCompare(b.profileId));
-  const ended = rows.filter((r) => r.status === 'ended').sort((a, b) => b.order - a.order || a.profileId.localeCompare(b.profileId));
-  return [...active, ...ended].map(({ order: _order, ...row }) => row);
+  const byId = (a: { row: AccountantClientRow }, b: { row: AccountantClientRow }) => a.row.profileId.localeCompare(b.row.profileId);
+  const active = rows.filter((r) => r.row.status === 'active').sort((a, b) => a.order - b.order || byId(a, b));
+  const ended = rows.filter((r) => r.row.status === 'ended').sort((a, b) => b.order - a.order || byId(a, b));
+  return [...active, ...ended].map((r) => r.row);
 }
 
 /** An ACTIVE grant beats a REVOKED one; between two REVOKED, the later revoke. */
@@ -110,12 +111,12 @@ function outranks(grant: AccountantGrantRecord, held: AccountantGrantRecord): bo
 }
 
 /** `order` sorts: the accept instant for an active row, the end instant for an ended one. */
-function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts): AccountantClientRow & { order: number } {
+function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts): { row: AccountantClientRow; order: number } {
   const { organization, ownerName, closingSince } = facts;
   const endedAt = grant.status === 'REVOKED' ? grant.revokedAt : closingSince;
   const endedReason = grant.status === 'REVOKED' ? 'revoked' : closingSince ? 'closed' : null;
   const shared = grant.acceptedAt ?? grant.createdAt;
-  return {
+  const row: AccountantClientRow = {
     profileId: organization.id,
     name: organization.name,
     ownerName,
@@ -124,8 +125,8 @@ function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts): A
     status: endedReason ? 'ended' : 'active',
     endedReason,
     endedAt: endedReason && endedAt ? endedAt.toISOString() : null,
-    order: (endedReason ? endedAt ?? shared : shared).getTime(),
   };
+  return { row, order: (endedReason ? (endedAt ?? shared) : shared).getTime() };
 }
 
 /** The facts behind each profile in `grants`: one organization read and one owner read per profile (bounded by grants). */
