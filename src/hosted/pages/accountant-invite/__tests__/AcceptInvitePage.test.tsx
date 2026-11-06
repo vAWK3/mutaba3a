@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { fakeTurnstile } from '../../../__tests__/turnstile';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
@@ -176,7 +176,7 @@ describe('signed in', () => {
 
 describe('the Accountant plan (MUT-565, gated on its fields)', () => {
   const plan = (state: string, count = 3) => ({ count, freeLimit: 3, cap: 3, readable: 3, plan: { state, source: state === 'NONE' ? null : 'STRIPE', until: null, cancelAtPeriodEnd: false } });
-  const billing = () => ok({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: null } } });
+  const billing = () => ok({ configured: true, countries: { consumer: ['IL'], consumerEverywhere: false, customTaxId: [] }, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: null } } });
 
   it('with the free client books used, the plan card takes Accept’s place, with the price; Subscribe returns to the invite', async () => {
     const api = stubApi(
@@ -221,5 +221,23 @@ describe('the Accountant plan (MUT-565, gated on its fields)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/client-books/${STUDIO}`), { timeout: 8000 });
     expect(api.count(ACCEPT)).toBe(1);
   }, 12_000);
+
+  it('after 30 s without the plan, a timer says it is taking longer and Accept works again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      sessionStorage.setItem('mtb3a-accountant-invite', TOKEN);
+      stubApi(routes(true, { 'GET /v1/me': () => ok({ ...signedInMe(), clientBooks: plan('NONE') }) }));
+      renderPortal('/accountant-invite?billing=true&checkout=success');
+      expect(await screen.findByText('Confirming your Accountant plan…')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(await screen.findByText('Your payment is still being confirmed. Press Accept again in a minute.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 

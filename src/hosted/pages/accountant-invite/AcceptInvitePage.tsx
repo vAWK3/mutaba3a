@@ -277,16 +277,21 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
   const { t, language } = useLanguage();
   const land = useLandOnClient();
   const returned = useLocation({ select: (location) => (location.search as Record<string, unknown>).checkout === 'success' });
-  const [startedAt] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [refused, setRefused] = useState<Extract<InviteOutcome, { kind: 'needsPlan' }> | null>(null);
-  // Back from Checkout: /v1/me is read every 2 s for at most 30 s, until the plan covers client books (MUT-565)
+  // Back from Checkout: /v1/me is read every 2 s until the plan covers client books (MUT-565), for at most 30 s; then a
+  // timer says it's taking longer and Accept works again (review fix 3)
   const confirming = returned && !refused;
-  const me = useQuery({ ...meQuery, refetchInterval: (query) => (confirming && !planCovers(clientBooksOf(query.state.data)) && Date.now() - startedAt < CONFIRM_LIMIT_MS ? CONFIRM_POLL_MS : false) });
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = setTimeout(() => setTimedOut(true), CONFIRM_LIMIT_MS);
+    return () => clearTimeout(timer);
+  }, [confirming]);
+  const me = useQuery({ ...meQuery, refetchInterval: (query) => (confirming && !timedOut && !planCovers(clientBooksOf(query.state.data)) ? CONFIRM_POLL_MS : false) });
   const summary = clientBooksOf(me.data);
   const covered = planCovers(summary);
-  const timedOut = confirming && !covered && Date.now() - startedAt >= CONFIRM_LIMIT_MS;
   // The card shows before any press when /v1/me says the free books are used (gated on MUT-565's fields), or on a 402
   const card = refused ?? (atFreeCap(summary) && !confirming ? { kind: 'needsPlan' as const, freeLimit: summary!.freeLimit, inviteExpiresAt: invite.expiresAt } : null);
 
@@ -334,12 +339,12 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
       <h1>{heading}</h1>
       <p className="hp-setup-lead">{t('hosted.accountantInvite.accept.body', { profile: invite.profileName, email: `\u2068${email}\u2069` })}</p>
       <AccessScopeList />
-      {confirming && !timedOut && (
+      {confirming && !timedOut && !covered && (
         <p className="hp-banner" role="status">
           <span>{t('hosted.accountantInvite.fourth.confirming')}</span>
         </p>
       )}
-      {timedOut && (
+      {confirming && timedOut && !covered && (
         <p className="hp-banner" role="status">
           <span>{t('hosted.accountantInvite.fourth.slow')}</span>
         </p>
@@ -351,7 +356,7 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
         </p>
       )}
       <div className="hp-two-panel-actions">
-        <Button variant="primary" className="hp-block" onClick={() => void accept()} disabled={busy || (confirming && !timedOut)} aria-busy={busy}>
+        <Button variant="primary" className="hp-block" onClick={() => void accept()} disabled={busy || (confirming && !timedOut && !covered)} aria-busy={busy}>
           {t(busy ? 'hosted.accountantInvite.accept.accepting' : 'hosted.accountantInvite.accept.accept')}
         </Button>
         <Link to="/" className="btn btn-secondary btn-md hp-block">
