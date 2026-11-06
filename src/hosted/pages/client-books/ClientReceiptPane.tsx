@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../../../lib/i18n/core';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
-import type { ExpenseReceipt } from '../../api/client';
+import { api, type ExpenseReceipt } from '../../api/client';
 import { Drawer } from '../../components/Drawer';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { isClientGone, useClientExpense, useClientReceiptUrl } from '../../data/clientBooksQueries';
@@ -57,26 +57,37 @@ export function ClientReceiptPane({ profileId, expenseId, onClose, onGone }: { p
 function ReceiptPreview({ profileId, expenseId, receipt }: { profileId: string; expenseId: string; receipt: ExpenseReceipt }) {
   const { t } = useLanguage();
   const inline = useClientReceiptUrl(profileId, expenseId, receipt.id, 'inline');
-  const [wantsDownload, setWantsDownload] = useState(false);
-  const download = useClientReceiptUrl(profileId, expenseId, receipt.id, 'attachment', wantsDownload);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
   const isPdf = receipt.mimeType === 'application/pdf';
 
-  // The attachment URL arrives after the press: follow it once, so the browser saves the file
-  useEffect(() => {
-    if (wantsDownload && download.data?.url) {
-      window.location.assign(download.data.url);
-      setWantsDownload(false);
+  /** The attachment URL is signed on the press (it lives minutes), then followed so the browser saves the file. */
+  async function download() {
+    setDownloading(true);
+    setDownloadFailed(false);
+    try {
+      const { url } = await api.expenseReceiptDownload(profileId, expenseId, receipt.id, 'attachment');
+      window.location.assign(url);
+    } catch {
+      setDownloadFailed(true);
+    } finally {
+      setDownloading(false);
     }
-  }, [wantsDownload, download.data?.url]);
+  }
 
   return (
     <figure className="hp-receipt-preview" aria-label={t('hosted.receipts.preview.label', { name: receipt.filename })}>
       <div className="hp-receipt-preview-toolbar">
         <bdi className="hp-receipt-preview-name">{receipt.filename}</bdi>
-        <button type="button" className="hp-link-button press" onClick={() => setWantsDownload(true)} disabled={wantsDownload}>
+        <button type="button" className="hp-link-button press" onClick={() => void download()} disabled={downloading}>
           {t('hosted.clientBooks.receipt.download')}
         </button>
       </div>
+      {downloadFailed && (
+        <p className="hp-field-error" role="alert">
+          {t('hosted.clientBooks.receipt.failed')}
+        </p>
+      )}
       <div className="hp-receipt-preview-frame">
         {inline.isError ? (
           <p className="hp-muted" role="alert">

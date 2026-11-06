@@ -113,6 +113,27 @@ export function countWelcomeChoice(choice: WelcomeChoice): void {
   });
 }
 
+/**
+ * MUT-562 (ADR-250): the public pages' counts, a share link's page and an accountant invite's page, sent the welcome's
+ * cookieless way (its own instance, nothing stored, no person id, no consent prompt) and only from a release build
+ * (the gate behind POSTHOG_KEY). Never a token, PIN, email, name or profile id: only the contract's enums.
+ */
+export type PublicPageEvent =
+  | { event: 'share_link_opened'; properties: { period: 'last_1_month' | 'last_2_months' | 'last_3_months' | 'whole_profile' } }
+  | { event: 'accountant_accepted'; properties: { via: 'signed_in' | 'signup' } }
+  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months: number } };
+
+export function countPublicPage({ event, properties }: PublicPageEvent): void {
+  if (!POSTHOG_KEY) return;
+  void loadWelcomeInstance().then((instance) => {
+    try {
+      instance?.capture(event, properties);
+    } catch {
+      // Counting must never break the page
+    }
+  });
+}
+
 function readRecord(): { owner: string; choice: UsageChoice } | null {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(USAGE_RECORD_KEY) ?? 'null');

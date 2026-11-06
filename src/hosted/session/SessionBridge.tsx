@@ -21,7 +21,8 @@ import { onModeChangedElsewhere, useIsLocalMode } from './mode';
 // MUT-368: /signup and /recover too: someone there is mid-way through asking for a link, typed email and all.
 // MUT-291: the carry-over pages too. The old tab lands on the new address right after `done`, and that tab's mode hint
 // would pull the receiver to Overview, losing its done screen or, worse, a summary not saved yet.
-const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup', '/signup', '/recover', '/carry-over', '/carry-over/receive']);
+// MUT-562: an accountant invite and a share link too: a stranger is mid-way through accepting or reading.
+const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup', '/signup', '/recover', '/carry-over', '/carry-over/receive', '/accountant-invite', '/share']);
 
 export function SessionBridge() {
   const queryClient = useQueryClient();

@@ -22,8 +22,14 @@ export function isMonth(value: unknown): value is Month {
   return typeof value === 'string' && MONTH.test(value);
 }
 
+/** A date's digits as numbers. Not an amount: a calendar part, already checked to be digits. */
+function digitsOf(text: string): number[] {
+  // eslint-disable-next-line no-restricted-syntax
+  return text.split('-').map((part) => Number.parseInt(part, 10));
+}
+
 function parts(month: Month): [number, number] {
-  const [year, m] = month.split('-').map((part) => Number.parseInt(part, 10));
+  const [year, m] = digitsOf(month);
   return [year, m];
 }
 
@@ -215,6 +221,6 @@ export function dayLabel(iso: string, language: Language): string {
 
 /** A money date (`YYYY-MM-DD`) as "30 Oct". */
 export function moneyDay(isoDate: string, language: Language): string {
-  const [year, m, d] = isoDate.split('-').map((part) => Number.parseInt(part, 10));
+  const [year, m, d] = digitsOf(isoDate);
   return new Intl.DateTimeFormat(latn(language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(year, m - 1, d)));
 }

@@ -185,7 +185,10 @@ function ClientBook({ client, search, setSearch, onGone }: { client: AccountantC
 }
 
 function withoutPeriod(search: ClientBookSearch): ClientBookSearch {
-  const { preset: _preset, from: _from, to: _to, ...rest } = search;
+  const rest = { ...search };
+  delete rest.preset;
+  delete rest.from;
+  delete rest.to;
   return rest;
 }
 

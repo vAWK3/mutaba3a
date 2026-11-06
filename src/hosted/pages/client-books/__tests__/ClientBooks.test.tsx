@@ -27,7 +27,12 @@ function client(over: Partial<AccountantClientWithStats> = {}): AccountantClient
   };
 }
 const ended = client({ profileId: BAKERY, name: 'Bakery', ownerName: 'Lina Sabbagh', status: 'ended', endedReason: 'revoked', endedAt: '2026-11-01T00:00:00.000Z', entriesThisMonth: null, lastActivityAt: null });
-const meRow = ({ entriesThisMonth: _e, lastActivityAt: _l, ...row }: AccountantClientWithStats): AccountantClient => row;
+const meRow = (row: AccountantClientWithStats): AccountantClient => {
+  const copy: Partial<AccountantClientWithStats> = { ...row };
+  delete copy.entriesThisMonth;
+  delete copy.lastActivityAt;
+  return copy as AccountantClient;
+};
 
 const expenseEntry: Entry = {
   kind: 'expense',

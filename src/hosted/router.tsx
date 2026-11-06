@@ -34,6 +34,12 @@ import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { ConsentPage } from './pages/connect/ConsentPage';
+import { AcceptInvitePage } from './pages/accountant-invite/AcceptInvitePage';
+import { ShareLinkPage } from './pages/share-link/ShareLinkPage';
+import { ClientBooksPage } from './pages/client-books/ClientBooksPage';
+import { ClientBookPage } from './pages/client-books/ClientBookPage';
+import { DeskPill } from './pages/client-books/DeskPill';
+import { parseClientBookSearch, type ClientBookSearch } from './pages/client-books/clientBooksRules';
 import { parseConsentSearch } from './pages/connect/consentSearch';
 import { HostedShell } from './shell/HostedShell';
 import { supportsViewTransitionTypes, viewTransitionOption } from './shell/pageMotion';
@@ -130,6 +136,13 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   /** MUT-513: the welcome, reopened from You › Account on this device. Signed in, there's nothing to choose. */
   const welcomeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/welcome', component: WelcomeRoute });
+
+  /**
+   * MUT-562: the pages a stranger opens from a mail or a message, public like sign-in and working signed in too. Each
+   * reads its token from the fragment and strips it at once.
+   */
+  const acceptInviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/accountant-invite', component: AcceptInvitePage });
+  const shareLinkRoute = createRoute({ getParentRoute: () => rootRoute, path: '/share', component: ShareLinkPage });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -349,6 +362,49 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   });
 
   /**
+   * MUT-562 (layout C): the accountant's Client books desk, outside any profile, with its own pill. Signed out (local
+   * mode) there are no client books: sign in first. Only the desk's own search keys reach the page (AC3: no drawer).
+   */
+  function Desk({ children }: { children: ReactNode }) {
+    const local = useIsLocalMode();
+    if (local) return <RedirectToSignIn />;
+    return (
+      <HostedShell profile={null} pill={<DeskPill />}>
+        {children}
+      </HostedShell>
+    );
+  }
+
+  const clientBooksRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/client-books',
+    component: () => (
+      <Desk>
+        <ClientBooksPage />
+      </Desk>
+    ),
+  });
+
+  const clientBookRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/client-books/$profileId',
+    validateSearch: parseClientBookSearch,
+    component: function ClientBook() {
+      const { profileId } = clientBookRoute.useParams();
+      const navigate = useNavigate();
+      const search = parseClientBookSearch(clientBookRoute.useSearch());
+      const setSearch = (next: ClientBookSearch) => void navigate({ to: '.', search: parseClientBookSearch(next as Raw), replace: true });
+      return (
+        <Desk>
+          <ClientBookPage key={profileId} profileId={profileId} search={search} setSearch={setSearch} />
+        </Desk>
+      );
+    },
+  });
+
+  /**
    * MUT-460 (ADR-213, design 6A): the operator console, outside any profile. Only an operator (/v1/me says so) sees it;
    * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
    */
@@ -434,11 +490,15 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     carryOverRoute,
     carryOverReceiveRoute,
     welcomeRoute,
+    acceptInviteRoute,
+    shareLinkRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,
       connectApproveRoute,
       glanceRoute,
+      clientBooksRoute,
+      clientBookRoute,
       operatorRoute,
       operatorSignupsRoute,
       operatorAccountsRoute,
