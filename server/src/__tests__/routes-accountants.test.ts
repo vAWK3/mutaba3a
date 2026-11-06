@@ -153,14 +153,15 @@ describe('the owner invites (MUT-559)', () => {
     expect((await read(after)).error.details).toEqual({ reason: 'PROFILE_NOT_FOUND' });
     expect((await listOf(h, owner, profileId)).items).toEqual([]);
     expect((await h.app.request(`/v1/profiles/${profileId}/accountants/${grant.id}`, { method: 'DELETE', headers: owner.auth })).status).toBe(404);
-    expect((await me(h, acc)).clients).toEqual([]);
+    // MUT-575: the revoked client stays on the accountant's list as ended until they remove it.
+    expect((await me(h, acc)).clients).toEqual([expect.objectContaining({ profileId, status: 'ended', endedReason: 'revoked' })]);
   });
 
   it('the accountant leaves: gone from /v1/me clients, and the profile answers 404', async () => {
     const h = accountantHarness();
     const { owner, profileId } = await ownerWithProfile(h);
     const acc = await shared(h, owner, profileId);
-    expect((await me(h, acc)).clients).toEqual([{ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', sharedSince: T0.toISOString() }]);
+    expect((await me(h, acc)).clients).toEqual([{ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null }]);
     expect((await h.app.request(`/v1/clients/${profileId}`, { method: 'DELETE', headers: acc.auth })).status).toBe(204);
     expect((await me(h, acc)).clients).toEqual([]);
     expect((await h.app.request('/v1/expenses', { headers: acc.on(profileId) })).status).toBe(404);
@@ -181,7 +182,7 @@ describe('who may accept (MUT-559 D4)', () => {
   it('the exact address → ACTIVE, and the response names the client', async () => {
     const { res, profileId } = await invitedAs('hadi@books.ps', 'hadi@books.ps');
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', sharedSince: T0.toISOString() });
+    expect(await read(res)).toEqual({ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null });
   });
 
   it('a colleague on the same professional domain → ACTIVE, and the owner’s list shows who really accepted', async () => {

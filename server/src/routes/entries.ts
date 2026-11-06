@@ -2,10 +2,10 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { lapsedError } from '../billing/gate.js';
-import { decodeFeedCursor, encodeFeedCursor } from '../entries/merge.js';
+import { feedPage } from '../entries/feed-page.js';
+import { decodeFeedCursor } from '../entries/merge.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { EntryPageSchema, ListEntriesQuerySchema } from '../schemas.js';
-import { serializeEntry } from '../serializers.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
 /** MUT-390 review: how far back `loggedSince` may reach. The phone asks for 7 days; 31 leaves room without a whole-history walk. */
@@ -72,7 +72,7 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (lockedAsked) throw lapsedError(lockedAsked, entitlements!.get(lockedAsked)!);
       const organizationIds = (requested.length > 0 ? requested : mine).filter((id) => !locked.has(id));
 
-      const page = await store.entries.list(organizationIds, {
+      const page = await feedPage(store, organizationIds, {
         limit: q.limit,
         order: q.order,
         cursor,
@@ -80,14 +80,7 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         ...(q.occurredBefore !== undefined && { occurredBefore: q.occurredBefore }),
         ...(q.loggedSince !== undefined && { loggedSince: new Date(q.loggedSince) }),
       });
-      const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
-      // Only a capture with money applied can be a settle; most pages ask nothing.
-      const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
-      const [receiptCounts, settledOwed] = await Promise.all([
-        store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds),
-        store.entries.settledOwedIds(organizationIds, settleCandidates),
-      ]);
-      return c.json({ items: page.items.map((row) => serializeEntry(row, { receiptCounts, settledOwed })), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
+      return c.json(page, 200);
     },
   );
 

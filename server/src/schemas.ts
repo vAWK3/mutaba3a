@@ -1150,8 +1150,24 @@ export const AccountantClientSchema = z
     ownerName: z.string().nullable(),
     /** When the accountant accepted. */
     sharedSince: z.string().datetime(),
+    /** MUT-575: the profile's kind, for the client list's icon; null for an operator firm. Since 1.104.0-mut575. */
+    profileType: z.enum(['personal', 'business']).nullable(),
+    /** MUT-575: `ended` when the owner revoked access or is closing their account; every profile-scoped call then answers 404. Since 1.104.0-mut575. */
+    status: z.enum(['active', 'ended']),
+    /** MUT-575: why an ended client ended (`revoked`, or `closed`: the owner is closing their account); null while active. */
+    endedReason: z.enum(['revoked', 'closed']).nullable(),
+    /** MUT-575: when it ended; null while active. */
+    endedAt: z.string().datetime().nullable(),
   })
   .openapi('AccountantClient');
+
+/** MUT-575: a row of GET /v1/clients: the /v1/me row plus this month's stats (null on an ended client). */
+export const AccountantClientWithStatsSchema = AccountantClientSchema.extend({
+  entriesThisMonth: z.number().int().nonnegative().nullable().openapi({ description: 'Live expenses and received payments dated in the current calendar month, in the profile’s timezone. Null when ended.' }),
+  lastActivityAt: z.string().datetime().nullable().openapi({ description: 'When the newest live expense or received payment was logged. Null when ended or when there is none.' }),
+}).openapi('AccountantClientWithStats');
+
+export const AccountantClientListSchema = z.object({ items: z.array(AccountantClientWithStatsSchema) }).openapi('AccountantClientList');
 
 export const MeSchema = z
   .object({
@@ -4385,6 +4401,15 @@ export const ListEntriesQuerySchema = z.object({
   loggedSince: z.string().datetime({ offset: true }).optional().openapi({ description: 'Logged at or after this instant (ISO 8601, Z or an offset), at most 31 days back. Default order only (422 otherwise).' }),
 });
 
+/** MUT-575 (ADR-249): one profile's feed, named by X-Mutaba3a-Profile; always by money date. */
+export const ProfileEntriesQuerySchema = z.object({
+  kinds: repeatable(z.enum(['expense', 'received', 'owed', 'conversion'])).openapi({ description: 'Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent.', param: { style: 'form', explode: true } }),
+  occurredFrom: IsoDateSchema.optional().openapi({ description: 'Money date on or after this day.' }),
+  occurredBefore: IsoDateSchema.optional().openapi({ description: 'Money date before this day.' }),
+  cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
+});
+
 /** What every feed item says about itself, whatever it is. */
 const entryEnvelope = {
   /** The profile (organization) the entry is on. */
@@ -4524,6 +4549,9 @@ export const ShareLinkEntriesRequestSchema = z
     viewerToken,
     limit: z.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
     cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+    kinds: z.array(z.enum(['expense', 'received'])).min(1).optional().openapi({ description: 'MUT-575: only these kinds (expense, received); both when absent. Never more than the link shows.' }),
+    occurredFrom: IsoDateSchema.optional().openapi({ description: 'MUT-575: money date on or after this day, clamped inside the link’s period (never widened).' }),
+    occurredBefore: IsoDateSchema.optional().openapi({ description: 'MUT-575: money date before this day, clamped inside the link’s period (never widened).' }),
   })
   .strict()
   .openapi('ShareLinkEntriesRequest');

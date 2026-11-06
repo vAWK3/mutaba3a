@@ -14,7 +14,9 @@ export interface AppAssociationConfig {
  * Deliberately excludes /sign-in, /clients*, /documents*, /receivables*,
  * /v1/* and /assets/* — those must keep opening in Safari/Chrome, not the app.
  */
-const ALLOWED_APPLINKS_PATHS = ['/p/*/expenses*', '/p/*/payments*', '/capture*'];
+// MUT-575: the accountant invite link opens in the app. Never /share* or /client-books*: link visitors and the desk
+// stay on the web.
+const ALLOWED_APPLINKS_PATHS = ['/p/*/expenses*', '/p/*/payments*', '/capture*', '/accountant-invite*'];
 
 /**
  * iOS/Android app-association files (MUT-111, hosted-portal.md §9-adjacent):
