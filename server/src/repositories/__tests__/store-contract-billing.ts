@@ -88,8 +88,8 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       const orphan = (await store.billing.saveSubscription({ ...subscription(unlinked), status: 'past_due' })).subscription;
       const found = await store.billing.pastDueCandidates();
       expect(found.filter((c) => c.userId === user.id)).toEqual([
-        { stripeSubscriptionId: sooner.stripeSubscriptionId, userId: user.id, email: user.email, locale: user.locale },
-        { stripeSubscriptionId: later.stripeSubscriptionId, userId: user.id, email: user.email, locale: user.locale },
+        { stripeSubscriptionId: sooner.stripeSubscriptionId, tier: sooner.tier, userId: user.id, email: user.email, locale: user.locale },
+        { stripeSubscriptionId: later.stripeSubscriptionId, tier: later.tier, userId: user.id, email: user.email, locale: user.locale },
       ]);
       expect(found.some((c) => c.stripeSubscriptionId === orphan.stripeSubscriptionId)).toBe(false);
     });
@@ -168,6 +168,14 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       await expect(store.billing.createGrant({ id: randomUUID(), userId: user.id, organizationId: personalOrganization.id, ...base })).rejects.toThrow();
       await expect(store.billing.createGrant({ id: randomUUID(), userId: randomUUID(), organizationId: null, ...base })).rejects.toThrow(/userId/);
       await expect(store.billing.createGrant({ id: randomUUID(), userId: null, organizationId: randomUUID(), ...base })).rejects.toThrow(/organizationId/);
+    });
+
+    it('MUT-565: an ACCOUNTANT grant names a person, never a profile (the CHECK, in both stores)', async () => {
+      const store = await makeStore();
+      const { user, personalOrganization } = await store.users.create(userInput());
+      const base = { tier: 'ACCOUNTANT' as const, reason: 'x', expiresAt: null, grantedBy: 'admin', at: at(1), audit: [] };
+      await expect(store.billing.createGrant({ id: randomUUID(), userId: null, organizationId: personalOrganization.id, ...base })).rejects.toThrow(/ACCOUNTANT_PERSON_ONLY/);
+      expect(await store.billing.createGrant({ id: randomUUID(), userId: user.id, organizationId: null, ...base })).toMatchObject({ tier: 'ACCOUNTANT', userId: user.id });
     });
 
     it('links a customer to one person, idempotently, and refuses every other pairing', async () => {

@@ -116,12 +116,12 @@ export interface TemplateVars {
    * MUT-533: a renewal payment failed and Stripe is retrying. No amount and no card details (Basel, 2026-11-02).
    * `updateLink` opens Billing, whose past-due panel goes straight to Stripe's card form.
    */
-  'card-failed': { updateLink: string };
+  'card-failed': { updateLink: string; /** MUT-565: the Accountant plan's card failed: its free client books (the client-books copy). */ accountantFreeClients?: number };
   /**
    * MUT-533: the one reminder, from the retry window's midpoint. `daysLeft` is an upper bound (Stripe may give up
    * sooner), worded "within N days at most"; `readOnlyAfter` says the lapse gate is on, so an ended plan is read-only.
    */
-  'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; updateLink: string };
+  'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; updateLink: string; /** MUT-565: the Accountant plan's card: only client books past this many lock, never the account. */ accountantFreeClients?: number };
   /**
    * MUT-534 (ADR-243 overrides ADR-159 §5 for this mail): 30 or 90 days after a paid plan ended. The prices are minor
    * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;

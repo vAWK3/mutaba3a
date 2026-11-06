@@ -79,8 +79,14 @@ export async function buildMe(
   const ownedIds = loaded.filter(({ organization, membership }) => ownsProfile(organization, user.id, membership.role)).map(({ organization }) => organization.id);
   const [billingRead, ownerEntries] = await Promise.all([billingAt ? entitlementsWithFactsFor(store, loaded, billingAt, user.id) : null, store.memberships.listOwnersOf(ownedIds)]);
   const entitlements = billingRead?.entitlements ?? null;
-  // MUT-565: the Accountant plan from the facts just read; no billing (the signed-out portal) is no plan.
-  const plan: AccountantPlan = billingRead && billingAt ? resolveAccountantPlan(user.id, billingRead.facts, billingAt) : { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false };
+  // MUT-565: the Accountant plan from the facts just read (no query of its own). Without that read (billing off), the
+  // same resolution as the accountant door, so `readable` never disagrees with what opens.
+  const planAt = billingAt ?? new Date();
+  const plan: AccountantPlan = billingRead
+    ? resolveAccountantPlan(user.id, billingRead.facts, planAt)
+    : accountantAccess && accountantPlan.on
+      ? resolveAccountantPlan(user.id, await store.billing.factsFor({ ownerUserIds: [user.id], organizationIds: [] }), planAt)
+      : { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false };
   const profiles = loaded.map(({ organization, membership, malafatConnected }) => {
     const entitlement = entitlements?.get(organization.id);
     return {

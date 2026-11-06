@@ -4,6 +4,7 @@ import { expectedTierOfLookupKey } from '../../checkout.js';
 import { CATALOG_FAILURE_TTL_MS, CATALOG_TTL_MS, CHECKOUT_BUDGET, INVOICE_TAX_NUMBER_FIELD, createCheckoutGateway, sellableFactOf } from '../checkout-gateway.js';
 import { STRIPE_API_VERSION, StripeGatewayError } from '../gateway.js';
 import { fakeStripe, type SeenRequest } from './fake-http.js';
+import { mirrorOf } from '../mirror.js';
 
 /**
  * MUT-362 (plan §2.2, eng review D2/D3): the write door to Stripe under the real SDK and a fake fetch. Pinned here:
@@ -75,17 +76,28 @@ describe('CheckoutGateway customer (MUT-362 eng review D3)', () => {
 
 describe('CheckoutGateway before a Checkout (MUT-362 review: no double charge)', () => {
   it('reads every subscription Stripe holds for the customer, whatever the mirror says', async () => {
-    const sub = (status: string, end: number, lookupKey?: string) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end, ...(lookupKey ? { price: { id: 'price_1', lookup_key: lookupKey } } : {}) }]) });
-    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([sub('active', 1796083200), sub('canceled', 1790000000), sub('trialing', 1796083200, 'accountant_list_monthly_ils')]) }));
-    // MUT-565: the Accountant plan is told apart by its price's lookup key; anything else is a profile plan (null).
+    const sub = (status: string, end: number) => ({ id: `sub_${status}`, object: 'subscription', status, items: list([{ id: 'si_1', object: 'subscription_item', current_period_end: end }]) });
+    const { seen, gateway } = gatewayWith(() => ({ status: 200, body: list([sub('active', 1796083200), sub('canceled', 1790000000)]) }));
     expect(await gateway.subscriptionsOf('cus_MINE')).toEqual([
       { tier: null, status: 'active', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
       { tier: null, status: 'canceled', currentPeriodEnd: new Date(1790000000 * 1000), offerId: null },
-      { tier: 'ACCOUNTANT', status: 'trialing', currentPeriodEnd: new Date(1796083200 * 1000), offerId: null },
     ]);
     expect(seen.map(route)).toEqual(['GET /v1/subscriptions']);
     expect(seen[0]!.query.get('customer')).toBe('cus_MINE');
     expect(seen[0]!.query.get('status')).toBe('all');
+  });
+
+  it('MUT-565 review: expires only the open sessions of the same plan (no metadata is the Freelancer plan)', async () => {
+    const session = (id: string, plan?: string) => ({ id, object: 'checkout.session', status: 'open', metadata: plan ? { mutaba3a_plan: plan } : {} });
+    const { seen, gateway } = gatewayWith((request) =>
+      request.method === 'GET'
+        ? { status: 200, body: list([session('cs_free'), session('cs_acc', 'accountant'), session('cs_free2', 'freelancer')]) }
+        : { status: 200, body: { id: request.path.split('/')[4], object: 'checkout.session', status: 'expired' } },
+    );
+    expect(await gateway.expireOpenCheckouts('cus_MINE', 'accountant')).toBe(1);
+    expect(seen.map(route)).toEqual(['GET /v1/checkout/sessions', 'POST /v1/checkout/sessions/cs_acc/expire']);
+    expect(await gateway.expireOpenCheckouts('cus_MINE', 'freelancer')).toBe(2);
+    expect(seen.slice(2).map(route)).toEqual(['GET /v1/checkout/sessions', 'POST /v1/checkout/sessions/cs_free/expire', 'POST /v1/checkout/sessions/cs_free2/expire']);
   });
 
   it('expires the customer’s open Checkout sessions, so a second tab can’t be paid as well', async () => {
@@ -386,5 +398,37 @@ describe('sellableFactOf: each plan’s keys on its own product (MUT-565, test 7
     expect(sellableFactOf(onProduct('accountant_list_monthly_ils', 'accountant'), expectedTierOfLookupKey('accountant_list_monthly_ils'))).toMatchObject({ unitAmount: 9900, productId: 'prod_accountant' });
     expect(sellableFactOf(onProduct('accountant_list_monthly_ils', 'freelancer'), expectedTierOfLookupKey('accountant_list_monthly_ils'))).toBeNull();
     expect(sellableFactOf(onProduct('freelancer_list_monthly_ils', 'accountant'), expectedTierOfLookupKey('freelancer_list_monthly_ils'))).toBeNull();
+  });
+});
+
+describe('one tier reading: Stripe’s list and the mirror agree (MUT-565 review 6)', () => {
+  const stripeSub = (id: string, productId: string, lookupKey: string) =>
+    ({
+      id,
+      object: 'subscription',
+      status: 'active',
+      currency: 'ils',
+      customer: 'cus_MINE',
+      metadata: {},
+      items: list([{ id: `si_${id}`, object: 'subscription_item', current_period_end: 1796083200, price: { id: `price_${id}`, lookup_key: lookupKey, product: productId } }]),
+    }) as unknown as Stripe.Subscription;
+  const products: Record<string, Stripe.Product> = {
+    prod_A: { id: 'prod_A', object: 'product', active: true, metadata: { tier: 'accountant' } } as unknown as Stripe.Product,
+    prod_F: { id: 'prod_F', object: 'product', active: true, metadata: { tier: 'freelancer' } } as unknown as Stripe.Product,
+  };
+  const subs = [stripeSub('sub_acc', 'prod_A', 'accountant_list_monthly_ils'), stripeSub('sub_free', 'prod_F', 'freelancer_list_monthly_ils'), stripeSub('sub_mislabelled', 'prod_F', 'accountant_list_monthly_ils')];
+
+  it('reads the tier from the product’s metadata, as mirrorOf does, never from the lookup key; products are read once', async () => {
+    const { seen, gateway } = gatewayWith((request) =>
+      request.path.startsWith('/v1/products/') ? { status: 200, body: products[request.path.split('/')[3]!] } : { status: 200, body: list(subs) },
+    );
+    const listed = await gateway.subscriptionsOf('cus_MINE');
+    const mirrored = subs.map((sub) => {
+      const result = mirrorOf(sub, new Map(Object.entries(products)));
+      return 'ok' in result ? result.ok.tier : null;
+    });
+    expect(listed.map((s) => s.tier)).toEqual(['ACCOUNTANT', 'FREELANCER', 'FREELANCER']);
+    expect(listed.map((s) => s.tier)).toEqual(mirrored);
+    expect(seen.filter((r) => r.path.startsWith('/v1/products/')).map(route).sort()).toEqual(['GET /v1/products/prod_A', 'GET /v1/products/prod_F']);
   });
 });

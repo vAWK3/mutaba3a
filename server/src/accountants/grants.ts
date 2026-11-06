@@ -178,7 +178,8 @@ export async function clientBooksOf(store: LedgerStore, userId: string, cap: num
 export async function clientBooksOf(store: LedgerStore, userId: string, cap: number | null = null, activityAt?: Date) {
   const grants = await store.accountantGrants.listForAccountant(userId);
   const profiles = await profileFactsOf(store, grants);
-  const active = grants.filter((g) => g.status === 'ACTIVE');
+  // MUT-565 review: a client shown as ended (owner closing, or the profile gone) takes no place, as in the store's count.
+  const active = grants.filter((g) => g.status === 'ACTIVE' && profiles.has(g.organizationId) && profiles.get(g.organizationId)!.closingSince === null);
   const rows = clientRows(grants, profiles, cap === null ? null : readableClientIds(active, cap));
   if (!activityAt) return { rows, activeCount: active.length };
   const read = rows.filter((r) => r.status === 'active' && !r.needsPlan);

@@ -193,6 +193,8 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     this.take(`checkout:${String(params.customer)}`);
     this.checkoutSessions.push(params);
     this.openCheckouts.set(String(params.customer), (this.openCheckouts.get(String(params.customer)) ?? 0) + 1);
+    const planKey = `${String(params.customer)}:${params.metadata?.['mutaba3a_plan'] ?? 'freelancer'}`;
+    this.openByPlan.set(planKey, (this.openByPlan.get(planKey) ?? 0) + 1);
     return { url: `https://checkout.stripe.com/c/pay/cs_test_${this.checkoutSessions.length}` };
   }
 
@@ -206,6 +208,8 @@ export class FakeCheckoutGateway implements CheckoutGateway {
   readonly stripeSubscriptions = new Map<string, { tier?: 'ACCOUNTANT' | null; status: string; currentPeriodEnd: Date; offerId?: string | null }[]>();
   /** Open Checkout sessions per customer, and the ones expired. */
   readonly openCheckouts = new Map<string, number>();
+  /** MUT-565: open sessions per `customer:plan` (the session's mutaba3a_plan metadata; absent is freelancer). */
+  readonly openByPlan = new Map<string, number>();
   expiredCheckouts = 0;
 
   async subscriptionsOf(customer: string): Promise<{ tier?: 'ACCOUNTANT' | null; status: string; currentPeriodEnd: Date; offerId?: string | null }[]> {
@@ -213,10 +217,12 @@ export class FakeCheckoutGateway implements CheckoutGateway {
     return this.stripeSubscriptions.get(customer) ?? [];
   }
 
-  async expireOpenCheckouts(customer: string): Promise<number> {
+  async expireOpenCheckouts(customer: string, plan: 'freelancer' | 'accountant' = 'freelancer'): Promise<number> {
     this.take(`expire:${customer}`);
-    const open = this.openCheckouts.get(customer) ?? 0;
-    this.openCheckouts.set(customer, 0);
+    const key = `${customer}:${plan}`;
+    const open = this.openByPlan.get(key) ?? 0;
+    this.openByPlan.set(key, 0);
+    this.openCheckouts.set(customer, Math.max(0, (this.openCheckouts.get(customer) ?? 0) - open));
     this.expiredCheckouts += open;
     return open;
   }

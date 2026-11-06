@@ -73,8 +73,10 @@ export interface BillingRouteOptions {
   offers?: readonly OfferEntry[];
   /** MUT-531: the plan door, for the paid-invoice count behind `yearlySwitch`. Null: no switch line. */
   plan?: PlanGateway | null;
-  /** MUT-565 (ACCOUNTANT_ACCESS): GET /v1/billing reports `accountantPlan`, and Checkout sells it. Absent = off. */
+  /** MUT-565 (ACCOUNTANT_ACCESS): GET /v1/billing reports `accountantPlan`. Absent = off. */
   accountantAccess?: boolean;
+  /** MUT-565 (ACCOUNTANT_PLAN): Checkout sells the plan only while the cap is on too. Absent = off. */
+  accountantPlanOn?: boolean;
 }
 
 export const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -180,7 +182,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const returnUrl = returnUrlOf(c, body.returnPath, options.portalOrigin);
       // MUT-565 (ADR-251): the Accountant plan's Checkout is its own path; nothing below applies to it.
       if (body.plan === 'accountant') {
-        if (!options.accountantAccess) throw new ApiError('NOT_FOUND', 'Not found');
+        // Review: no sale while the cap is off (nothing to pay for), whatever ACCOUNTANT_ACCESS says.
+        if (!options.accountantAccess || !options.accountantPlanOn) throw new ApiError('NOT_FOUND', 'Not found');
         const url = await accountantCheckout(c, store, checkout, user, body, returnUrl, now, options);
         return c.json({ url }, 200);
       }
@@ -220,7 +223,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           const final = applied ? planCheckout({ userId: user.id, ...body, returnUrl, now, trialEndsAt, offer: applied }, person, options.countries, catalog) : plan;
           if (!final.ok) throw refusalError(final.code);
           // Only the newest Checkout can be paid: another tab's, or an abandoned one, can't charge a second time.
-          await checkout.expireOpenCheckouts(customer);
+          await checkout.expireOpenCheckouts(customer, 'freelancer');
           return { ...(await checkout.createCheckoutSession({ ...final.params, customer })), applied };
         },
         user,
@@ -286,8 +289,12 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
       const plan = options.plan;
       if (!plan) throw new ApiError('BILLING_NOT_CONFIGURED', 'Stripe is not configured on this server');
       const summary = await store.billing.summaryOf(user.id);
-      const shown = currentSubscription(profilePlanSubscriptions(summary.subscriptions), now);
-      if (!summary.account || !shown || shown.status !== 'past_due') return c.json(nothing, 200);
+      // MUT-565 review: the profile plan's past-due invoice first, else the Accountant plan's (one customer, one card).
+      const pastDue = [profilePlanSubscriptions(summary.subscriptions), accountantPlanSubscriptions(summary.subscriptions)]
+        .map((subs) => currentSubscription(subs, now))
+        .find((s) => s?.status === 'past_due');
+      const shown = pastDue;
+      if (!summary.account || !shown) return c.json(nothing, 200);
       const customer = summary.account.stripeCustomerId;
       const result = await viaStripe(
         async () => {
@@ -610,7 +617,8 @@ async function accountantCheckout(
       const inStripe = accountantPlanSubscriptions(await checkout.subscriptionsOf(customer));
       const stillRefused = accountantCheckoutRefusalOf({ ...body, now }, { ...person, subscriptions: [...person.subscriptions, ...inStripe] }, options.countries);
       if (stillRefused) throw refusalError(stillRefused);
-      await checkout.expireOpenCheckouts(customer);
+      // Review: only this plan's open Checkouts; a Freelancer one in another tab stays payable.
+      await checkout.expireOpenCheckouts(customer, 'accountant');
       return checkout.createCheckoutSession({ ...plan.params, customer });
     },
     user,

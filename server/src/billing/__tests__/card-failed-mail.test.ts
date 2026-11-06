@@ -71,7 +71,7 @@ function harness() {
   const stripe = new Map<string, FailedPaymentFacts | Error | null>();
   const asked: string[] = [];
 
-  async function payer(opts: { locale?: UserLocale; status?: string; linked?: boolean; facts?: FailedPaymentFacts | Error | null } = {}) {
+  async function payer(opts: { locale?: UserLocale; status?: string; linked?: boolean; facts?: FailedPaymentFacts | Error | null; tier?: 'FREELANCER' | 'ACCOUNTANT' } = {}) {
     const { user } = await store.users.create({
       email: `card${++seq}@studio.example`,
       displayName: 'Rana Saleh',
@@ -86,7 +86,7 @@ function harness() {
     await store.billing.saveSubscription({
       stripeCustomerId: customer,
       stripeSubscriptionId: subscriptionId,
-      tier: 'FREELANCER',
+      tier: opts.tier ?? 'FREELANCER',
       organizationId: null,
       status: opts.status ?? 'past_due',
       currentPeriodEnd: later(30 * DAY),
@@ -235,13 +235,28 @@ describe('runCardFailedMail (MUT-533)', () => {
   });
 });
 
-describe('MUT-565 (test 10): the card-failed mails name no plan, so an Accountant plan invoice reads right', async () => {
-  const { renderMail } = await import('../../email/templates/index.js');
-  it('neither mail, in either language, names the Freelancer plan', () => {
+describe('MUT-565 (test 10, review 1): an Accountant plan’s failed card', () => {
+  it('the mails for a Freelancer plan never name a plan; the account lines stay as they were', async () => {
+    const { renderMail } = await import('../../email/templates/index.js');
     for (const locale of ['en', 'ar'] as const) {
       const first = renderMail('card-failed', locale, { updateLink: 'https://app.example.test/?billing=true' });
-      const reminder = renderMail('card-failed-reminder', locale, { daysLeft: 5, readOnlyAfter: false, updateLink: 'https://app.example.test/?billing=true' });
-      for (const mail of [first, reminder]) expect(`${mail.subject}\n${mail.text}`).not.toMatch(/Freelancer|المستقل/);
+      expect(`${first.subject}\n${first.text}`).not.toMatch(/Freelancer|المستقل/);
     }
+  });
+
+  it('an ACCOUNTANT past_due run mails the client-books copy: only books past the free 3 lock, never "read-only"', async () => {
+    const h = harness();
+    const en = await h.payer({ tier: 'ACCOUNTANT', facts: failing({ invoiceId: 'in_acc_en', firstFailedAt: ago(8 * DAY) }) });
+    const ar = await h.payer({ tier: 'ACCOUNTANT', locale: 'ar', facts: failing({ invoiceId: 'in_acc_ar' }) });
+    await h.run();
+    const [reminder] = h.outbox.list({ to: en.user.email });
+    expect(reminder!.template).toBe('card-failed-reminder');
+    expect(reminder!.text).toContain('Accountant plan');
+    expect(reminder!.text).toContain('3 oldest client books');
+    expect(reminder!.text).not.toMatch(/read-only/);
+    const [first] = h.outbox.list({ to: ar.user.email });
+    expect(first!.template).toBe('card-failed');
+    expect(first!.text).toContain('خطة المحاسب');
+    expect(first!.text).toContain('دفاتر عملائك');
   });
 });

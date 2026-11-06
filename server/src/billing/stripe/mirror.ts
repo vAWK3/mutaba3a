@@ -44,13 +44,24 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const OFFER_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
 /** `products`: by id, for list results, which can't expand `price.product` (five levels; Stripe allows four). */
+/**
+ * MUT-565 (review): the one tier reading, shared with CheckoutGateway.subscriptionsOf: the products' `tier` metadata,
+ * one tier across the items, else null (UNKNOWN_TIER here).
+ */
+export function tierOfItems(items: readonly Stripe.SubscriptionItem[], products: ReadonlyMap<string, Stripe.Product>): BillingTier | null {
+  const tiers = new Set(items.flatMap((item) => {
+    const tier = tierOf(item.price.product, products);
+    return tier ? [tier] : [];
+  }));
+  return tiers.size === 1 ? [...tiers][0]! : null;
+}
+
 export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string, Stripe.Product>): { ok: MirrorFields; notes: MirrorNote[] } | { error: MirrorError } {
   const tiered = sub.items.data.flatMap((item) => {
     const tier = tierOf(item.price.product, products);
     return tier ? [{ item, tier }] : [];
   });
-  const tiers = new Set(tiered.map((t) => t.tier));
-  if (tiers.size !== 1) return { error: 'UNKNOWN_TIER' };
+  if (tierOfItems(sub.items.data, products) === null) return { error: 'UNKNOWN_TIER' };
   const [{ item: tieredItem, tier }] = tiered as [{ item: Stripe.SubscriptionItem; tier: BillingTier }];
 
   const currency = sub.currency.toUpperCase();

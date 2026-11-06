@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { expectedTierOfLookupKey, OFFER_METADATA_KEY, type SubscriptionState } from '../checkout.js';
+import { CHECKOUT_PLAN_METADATA_KEY, expectedTierOfLookupKey, OFFER_METADATA_KEY, type CheckoutPlanName, type SubscriptionState } from '../checkout.js';
 import type { CouponFact } from '../offer.js';
 import type { RenewalFacts } from '../renewal-mail.js';
 import { STRIPE_API_VERSION, StripeGatewayError, toGatewayError } from './gateway.js';
-import { periodEndOf, stateOf } from './mirror.js';
+import { periodEndOf, stateOf, tierOfItems } from './mirror.js';
 
 /**
  * MUT-362 (plan §2.2, eng review D1–D3, ADR-170): the server's write door to Stripe, apart from MUT-360's read-only
@@ -37,8 +37,11 @@ export interface CheckoutGateway {
   findOrCreateCustomer(person: CheckoutPerson): Promise<string>;
   /** Every subscription Stripe holds for the customer, ended ones included (review: no double charge). */
   subscriptionsOf(customer: string): Promise<SubscriptionState[]>;
-  /** Expires the customer's open Checkout sessions, so only the newest can be paid; returns how many. */
-  expireOpenCheckouts(customer: string): Promise<number>;
+  /**
+   * Expires the customer's open Checkout sessions of `plan` (MUT-565: by the session's `mutaba3a_plan` metadata, absent =
+   * freelancer), so only the newest of that plan can be paid; returns how many.
+   */
+  expireOpenCheckouts(customer: string, plan?: CheckoutPlanName): Promise<number>;
   createCheckoutSession(params: Stripe.Checkout.SessionCreateParams): Promise<{ url: string }>;
   /** MUT-533 (D5): `flow: 'card'` opens straight on the card form and redirects to `returnUrl` once the card is saved. */
   createPortalSession(input: { customer: string; returnUrl: string; flow?: 'card' }): Promise<{ url: string }>;
@@ -93,6 +96,22 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
   const inFlight = new Map<string, Promise<Map<string, PriceFact>>>();
   const coupons = new Map<string, CouponEntry>();
   const couponTtl = options.couponTtlMs ?? CATALOG_TTL_MS;
+
+  const productCache = new Map<string, { at: number; product: Stripe.Product | null }>();
+  /** A product by id, cached for CATALOG_TTL_MS; null when Stripe has none (deleted). */
+  async function productById(id: string): Promise<Stripe.Product | null> {
+    const hit = productCache.get(id);
+    if (hit && options.now().getTime() - hit.at < CATALOG_TTL_MS) return hit.product;
+    try {
+      const found = await wrapped(() => stripe.products.retrieve(id));
+      const product = 'deleted' in found && found.deleted ? null : (found as Stripe.Product);
+      productCache.set(id, { at: options.now().getTime(), product });
+      return product;
+    } catch (err) {
+      if (err instanceof StripeGatewayError && err.code === 'resource_missing') return null;
+      throw err;
+    }
+  }
 
   async function readCoupon(id: string): Promise<CouponFact | null> {
     const at = options.now().getTime();
@@ -158,18 +177,25 @@ export function createCheckoutGateway(options: CheckoutGatewayOptions): Checkout
     },
     async subscriptionsOf(customer) {
       const page = await wrapped(() => stripe.subscriptions.list({ customer, status: 'all', limit: SUBSCRIPTIONS_PAGE }));
+      // MUT-565 review: the tier is read as the mirror reads it (the product's `tier` metadata, mirror.ts `tierOfItems`).
+      // A list can't expand the product (five levels), so each product is read once and kept like the catalog.
+      const ids = new Set(page.data.flatMap((sub) => sub.items.data.flatMap((item) => (typeof item.price?.product === 'string' ? [item.price.product] : []))));
+      const products = new Map<string, Stripe.Product>();
+      for (const id of ids) {
+        const product = await productById(id);
+        if (product) products.set(id, product);
+      }
       return page.data.flatMap((sub) => {
         const currentPeriodEnd = periodEndOf(sub);
-        // MUT-565: the plan from the price's lookup key (a list can't expand the product): the Accountant plan's keys
-        // are ours alone, so anything else is a profile plan, as the Checkout refusals need to tell them apart.
-        const accountant = sub.items.data.some((item) => (item.price?.lookup_key ?? '').startsWith('accountant_'));
-        return currentPeriodEnd ? [{ tier: accountant ? ('ACCOUNTANT' as const) : null, status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
+        const tier = sub.items.data.some((item) => item.price) ? tierOfItems(sub.items.data, products) : null;
+        return currentPeriodEnd ? [{ tier, status: sub.status, currentPeriodEnd, offerId: sub.metadata?.[OFFER_METADATA_KEY] ?? null }] : [];
       });
     },
-    async expireOpenCheckouts(customer) {
+    async expireOpenCheckouts(customer, plan = 'freelancer') {
       const page = await wrapped(() => stripe.checkout.sessions.list({ customer, status: 'open', limit: OPEN_SESSIONS_PAGE }));
-      for (const session of page.data) await wrapped(() => stripe.checkout.sessions.expire(session.id));
-      return page.data.length;
+      const ours = page.data.filter((session) => (session.metadata?.[CHECKOUT_PLAN_METADATA_KEY] ?? 'freelancer') === plan);
+      for (const session of ours) await wrapped(() => stripe.checkout.sessions.expire(session.id));
+      return ours.length;
     },
     async createCheckoutSession(params) {
       const session = await wrapped(() => stripe.checkout.sessions.create(params));

@@ -32,6 +32,8 @@ export interface CardFailedMailRouteOptions {
   gateOn: boolean;
   /** Production: refuse a real operator run whose links would point at a loopback origin (the trial mail's R11). */
   refuseLoopbackLinks: boolean;
+  /** MUT-565: ACCOUNTANT_FREE_CLIENTS, named in the Accountant plan's copy. */
+  accountantFreeClients?: number;
 }
 
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -56,6 +58,7 @@ export function cardFailedMailRoutes(options: CardFailedMailRouteOptions): OpenA
       updateLink: `${origin}/?billing=true`,
       windowDays: options.windowDays,
       readOnlyAfter: options.gateOn,
+      ...(options.accountantFreeClients ? { accountantFreeClients: options.accountantFreeClients } : {}),
       dryRun,
     });
   };

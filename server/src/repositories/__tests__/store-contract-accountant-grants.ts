@@ -333,5 +333,31 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       await activeFor(store, b, 0);
       expect(await store.accountantGrants.countActiveBefore(a.id, g1)).toBe(0);
     });
+
+    it('MUT-565 review: a client whose owner is closing takes no place: not counted at accept, not ranked', async () => {
+      const store = await makeStore();
+      const a = (await store.users.create(userInput('acc'))).user;
+      const g1 = await activeFor(store, a, 1);
+      const g2 = await activeFor(store, a, 2);
+      const closingGrant = await activeFor(store, a, 3);
+      const closing = (await store.organizations.getById(closingGrant.organizationId))!;
+      const ownerId = closing.ownerUserId ?? closing.personalOwnerUserId!;
+      const session = await store.sessions.create({ userId: ownerId, tokenDigest: `s-${unique()}`, kind: 'cookie', at: at(4), idleExpiresAt: at(30), absoluteExpiresAt: at(30), userAgent: null });
+      expect(await store.users.requestClosure({ userId: ownerId, at: at(4), deleteAfter: closureDeadline(at(4)), endedSubscriptionIds: [], exceptSessionId: session.id, audit: [] })).not.toBeNull();
+      // 2 live + 1 closing: the next accept is free (maxActive 3).
+      const o4 = await owner(store);
+      const fourth = await invite(store, o4, `fourth-${unique()}@books.ps`, 5);
+      if (fourth.kind !== 'created') throw new Error('invite failed');
+      const accepted = await store.accountantGrants.accept({ tokenDigest: fourth.grant.tokenDigest!, accountantUserId: a.id, at: at(5), maxActive: 3, auditFor: () => [] });
+      if (accepted?.kind !== 'accepted') throw new Error(`expected a free accept, got ${JSON.stringify(accepted)}`);
+      const g4 = accepted.grant;
+      expect(await store.accountantGrants.countActiveBefore(a.id, g4)).toBe(2);
+      const o = await owner(store);
+      const next = await invite(store, o, `next-${unique()}@books.ps`, 6);
+      if (next.kind !== 'created') throw new Error('invite failed');
+      // 2 live + 1 closing + g4 = 3 live: at the cap of 3 the next is refused, and its count names only the live ones.
+      expect(await store.accountantGrants.accept({ tokenDigest: next.grant.tokenDigest!, accountantUserId: a.id, at: at(7), maxActive: 3, auditFor: () => [] })).toEqual({ kind: 'cap_reached', active: 3 });
+      expect([g1, g2].length).toBe(2);
+    });
   });
 }

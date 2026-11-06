@@ -786,7 +786,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const grant = this.claimableGrant(tokenDigest, at);
       if (!grant || this.hasActiveGrant(accountantUserId, grant.organizationId)) return null;
       // MUT-565: one synchronous block, so the count and the claim can't interleave with another accept.
-      const active = [...this.accountantGrantMap.values()].filter((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId).length;
+      const active = [...this.accountantGrantMap.values()].filter((g) => this.isLiveClientGrant(g, accountantUserId)).length;
       if (maxActive !== undefined && maxActive !== null && active >= maxActive) return { kind: 'cap_reached', active };
       Object.assign(grant, { status: 'ACTIVE', accountantUserId, acceptedAt: at, tokenDigest: null });
       this.pushEvents(auditFor({ ...grant }), at);
@@ -795,7 +795,7 @@ export class MemoryLedgerStore implements LedgerStore {
     countActiveBefore: async (accountantUserId, { id, acceptedAt }) => {
       const at = acceptedAt?.getTime() ?? 0;
       return [...this.accountantGrantMap.values()].filter(
-        (g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && ((g.acceptedAt?.getTime() ?? 0) < at || ((g.acceptedAt?.getTime() ?? 0) === at && g.id < id)),
+        (g) => this.isLiveClientGrant(g, accountantUserId) && ((g.acceptedAt?.getTime() ?? 0) < at || ((g.acceptedAt?.getTime() ?? 0) === at && g.id < id)),
       ).length;
     },
     signupAndAccept: async (input) => {
@@ -842,6 +842,17 @@ export class MemoryLedgerStore implements LedgerStore {
   };
 
   /** MUT-559: a PENDING grant with this digest, unexpired at `at`; what accept and signup may claim. */
+  /**
+   * MUT-565 (ADR-251): a grant that takes one of the accountant's places: ACTIVE, and its profile's owner isn't closing
+   * their account (that client shows as ended and can't be opened). The Prisma store's LIVE_CLIENT_GRANT, in memory.
+   */
+  private isLiveClientGrant(grant: AccountantGrantRecord, accountantUserId: string): boolean {
+    if (grant.status !== 'ACTIVE' || grant.accountantUserId !== accountantUserId) return false;
+    const organization = this.orgs.get(grant.organizationId);
+    const ownerId = organization ? (organization.ownerUserId ?? organization.personalOwnerUserId) : null;
+    return !(ownerId && this.people.get(ownerId)?.closure);
+  }
+
   private claimableGrant(tokenDigest: string, at: Date): AccountantGrantRecord | null {
     const grant = [...this.accountantGrantMap.values()].find((g) => g.tokenDigest === tokenDigest);
     return grant && grant.status === 'PENDING' && grant.inviteExpiresAt > at ? grant : null;
@@ -3499,10 +3510,12 @@ export class MemoryLedgerStore implements LedgerStore {
         .flatMap((sub) => {
           const payer = this.billingAccounts.get(sub.billingAccountId)?.userId ?? null;
           const person = payer ? this.people.get(payer) : undefined;
-          return person && person.status === 'ACTIVE' && !person.closure ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, userId: payer!, email: person.email, locale: person.locale }] : [];
+          return person && person.status === 'ACTIVE' && !person.closure ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, tier: sub.tier, userId: payer!, email: person.email, locale: person.locale }] : [];
         }),
     createGrant: async (input) => {
       if ((input.userId === null) === (input.organizationId === null)) throw new StateConflict('entitlement_grant', 'ONE_TARGET');
+      // MUT-565: the Accountant plan is a person's (the CHECK on entitlement_grants).
+      if (input.tier === 'ACCOUNTANT' && input.userId === null) throw new StateConflict('entitlement_grant', 'ACCOUNTANT_PERSON_ONLY');
       if (input.userId !== null && !this.people.has(input.userId)) throw new ForeignKeyViolation('entitlement_grants.userId');
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('entitlement_grants.organizationId');
       const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;

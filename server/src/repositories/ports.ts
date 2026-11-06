@@ -2314,6 +2314,8 @@ export interface ComebackCandidate {
 /** MUT-533: a past_due subscription whose payer the failed-card mail may reach. */
 export interface PastDueCandidate {
   stripeSubscriptionId: string;
+  /** MUT-565: which plan failed, so the mail names what an ended plan would mean (client books for ACCOUNTANT). */
+  tier: BillingTierRecord;
   userId: string;
   email: string;
   locale: UserLocale;

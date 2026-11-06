@@ -6,8 +6,8 @@
 >   ACCOUNTANT_PLAN_REQUIRED, or to 409 CLIENT_BOOKS_CEILING when the plan covers and the ceiling is hit.
 > - The lapse door runs in `finishSessionAuth` right after the accountant method gate (`assertClientReadable`), not
 >   inside `selectProfile`, so an accountant's write stays 403 and never becomes 402 (MUT-559's rule).
-> - Stripe's own subscription list (the "ask Stripe first" re-check) tells the Accountant plan apart by its price's
->   lookup key (`accountant_*`): a list can't expand the product.
+> - Stripe's own subscription list (the "ask Stripe first" re-check) reads each product's `tier` metadata (cached),
+>   the mirror's own rule (`tierOfItems`). Review fixes 1–8 are listed in ADR-251 item 8.
 > - The come-back mail run skips ACCOUNTANT candidates (a leak the plan's reader list didn't name).
 > - `GET /v1/billing.accountantPlan` costs one extra `factsFor` (the person's grants), only with ACCOUNTANT_ACCESS on.
 > - Runbook: the Stripe steps are §1.12 (§1.7 step 1 names the `accountant` tier and points there).

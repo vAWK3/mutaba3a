@@ -3,7 +3,9 @@ import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex } from '../auth/middleware.js';
 import { accountantMayRead } from '../auth/writability.js';
 import { parseBillingCountries } from '../billing/checkout.js';
-import { FakeCheckoutGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
+import { FakeCheckoutGateway, FakePlanGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
+import { buildMe } from '../routes/me.js';
+import { closureDeadline } from '../accounts/closure.js';
 import {
   ADMIN,
   DAY,
@@ -34,12 +36,14 @@ import {
 const PLAN_ON = { on: true, freeClients: 3, maxClients: 100 };
 const COUNTRIES = parseBillingCountries({ consumerCountries: ['IL', 'GB'], customTaxIdCountries: ['IL', 'JO'] });
 
-function planHarness(options: { on?: boolean; maxClients?: number; checkout?: FakeCheckoutGateway } = {}) {
+function planHarness(options: { on?: boolean; maxClients?: number; checkout?: FakeCheckoutGateway; plan?: FakePlanGateway } = {}) {
   const stripe = new FakeStripeGateway(() => T0);
   return accountantHarness({
     accountantPlan: { ...PLAN_ON, on: options.on ?? true, maxClients: options.maxClients ?? 100 },
     billingCountries: COUNTRIES,
-    ...(options.checkout ? { stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: options.checkout } } : {}),
+    ...(options.checkout || options.plan
+      ? { stripe: { webhookGateway: stripe, reconcileGateway: stripe, checkoutGateway: options.checkout ?? new FakeCheckoutGateway(), ...(options.plan ? { planGateway: options.plan } : {}) } }
+      : {}),
   });
 }
 
@@ -355,5 +359,69 @@ describe('9. operator grants are person-only (MUT-565)', () => {
     const res = await h.app.request('/admin/v1/billing/grants', json({ organizationId: a.personalId, tier: 'ACCOUNTANT', reason: 'x' }, ADMIN));
     expect(res.status).toBe(422);
     expect((await read(res)).error.details).toMatchObject({ reason: 'ACCOUNTANT_PERSON_ONLY' });
+  });
+});
+
+describe('MUT-565 review fixes', () => {
+  it('3: a client whose owner is closing takes no free place: 2 live + 1 closing → the next accept is free', async () => {
+    const h = planHarness();
+    const acc = await person(h);
+    await client(h, acc, 'One');
+    await client(h, acc, 'Two');
+    const closing = await client(h, acc, 'Closing');
+    expect((await h.app.request('/v1/me/closure', json({ password: closing.owner.password }, closing.owner.auth))).status).toBe(200);
+    const fourth = await pendingInvite(h, acc);
+    expect((await acceptInvite(h, acc, fourth.token)).status).toBe(200);
+    const body = await me(h, acc);
+    expect(body.clientBooks).toMatchObject({ count: 3, cap: 3, readable: 3 });
+    expect(body.clients.filter((c: Loose) => c.status === 'active').every((c: Loose) => c.needsPlan === false)).toBe(true);
+    expect((await h.app.request('/v1/expenses', { headers: acc.on(fourth.profileId) })).status).toBe(200);
+    expect(closureDeadline).toBeTypeOf('function');
+  });
+
+  it('2: card retry pays an Accountant plan’s past-due invoice when the profile plan isn’t past due', async () => {
+    const plan = new FakePlanGateway();
+    const h = planHarness({ plan });
+    const acc = await person(h);
+    await subscribe(h, acc.userId, 'FREELANCER', 'active');
+    await subscribe(h, acc.userId, 'ACCOUNTANT', 'past_due');
+    plan.failedPayments.set(`sub_ACCOUNTANT_${acc.userId.slice(0, 8)}_past_due`, {
+      status: 'past_due',
+      episode: { invoiceId: 'in_acc', attemptCount: 1, nextPaymentAttempt: new Date(T0.getTime() + DAY), firstFailedAt: new Date(T0.getTime() - DAY), needsAuthentication: false },
+    });
+    const res = await h.app.request('/v1/billing/card-retry', json({}, acc.auth));
+    expect(await read(res)).toEqual({ outcome: 'paid', hostedInvoiceUrl: null });
+    expect(plan.retries).toEqual([{ invoiceId: 'in_acc', attemptCount: 1 }]);
+  });
+
+  it('4: the Accountant Checkout needs ACCOUNTANT_PLAN on as well (404 while it is off)', async () => {
+    const h = planHarness({ on: false, checkout: new FakeCheckoutGateway().withGaPrices().withAccountantPrices() });
+    const a = await person(h);
+    const res = await h.app.request('/v1/billing/checkout-session', json({ interval: 'month', country: 'IL', buyer: 'person', returnPath: '/', plan: 'accountant' }, a.auth));
+    expect(res.status).toBe(404);
+  });
+
+  it('5: an Accountant Checkout leaves an open Freelancer Checkout payable, and says which plan it is', async () => {
+    const checkout = new FakeCheckoutGateway().withGaPrices().withAccountantPrices();
+    const h = planHarness({ checkout });
+    const a = await person(h);
+    const body = { interval: 'month', country: 'IL', buyer: 'person', returnPath: '/' };
+    expect((await h.app.request('/v1/billing/checkout-session', json(body, a.auth))).status).toBe(200);
+    expect((await h.app.request('/v1/billing/checkout-session', json({ ...body, plan: 'accountant' }, a.auth))).status).toBe(200);
+    const customer = [...checkout.customers.keys()][0]!;
+    expect(checkout.openByPlan.get(`${customer}:freelancer`)).toBe(1);
+    expect(checkout.openByPlan.get(`${customer}:accountant`)).toBe(1);
+    expect(checkout.checkoutSessions.at(-1)!.metadata).toEqual({ mutaba3a_plan: 'accountant' });
+  });
+
+  it('8: /v1/me.clientBooks resolves the real plan where billing is off (the signed-out portal shape)', async () => {
+    const h = planHarness();
+    const acc = await person(h);
+    await grantPlan(h, acc.userId);
+    for (const n of ['One', 'Two', 'Three', 'Four']) await client(h, acc, n);
+    const user = (await h.store.users.getById(acc.userId))!;
+    const built = await buildMe(h.store, user, null, null, false, null, undefined, true, PLAN_ON);
+    expect(built.clientBooks).toMatchObject({ count: 4, cap: 100, readable: 4, plan: { state: 'ACTIVE', source: 'OPERATOR' } });
+    expect(built.clients!.every((c) => !c.needsPlan)).toBe(true);
   });
 });

@@ -658,7 +658,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // MUT-565: the grant's rank among the accountant's client books, on the (accountantUserId, status) index.
     countActiveBefore: async (accountantUserId, { id, acceptedAt }) =>
       this.prisma.accountantGrant.count({
-        where: { accountantUserId, status: 'ACTIVE', OR: [{ acceptedAt: { lt: acceptedAt ?? new Date(0) } }, { acceptedAt: acceptedAt ?? new Date(0), id: { lt: id } }] },
+        where: { AND: [liveClientGrantWhere(accountantUserId), { OR: [{ acceptedAt: { lt: acceptedAt ?? new Date(0) } }, { acceptedAt: acceptedAt ?? new Date(0), id: { lt: id } }] }] },
       }),
     dismiss: async ({ organizationId, accountantUserId, at }) =>
       (await this.prisma.accountantGrant.updateMany({ where: { organizationId, accountantUserId, status: 'REVOKED', dismissedAt: null }, data: { dismissedAt: at } })).count,
@@ -672,7 +672,7 @@ export class PrismaLedgerStore implements LedgerStore {
               await tx.$queryRaw`SELECT id FROM users WHERE id = ${accountantUserId}::uuid FOR NO KEY UPDATE`;
               const claimable = await tx.accountantGrant.findFirst({ where: { tokenDigest, status: 'PENDING', inviteExpiresAt: { gt: at } }, select: { id: true } });
               if (!claimable) return null;
-              const active = await tx.accountantGrant.count({ where: { accountantUserId, status: 'ACTIVE' } });
+              const active = await tx.accountantGrant.count({ where: liveClientGrantWhere(accountantUserId) });
               if (active >= maxActive) return { kind: 'cap_reached', active };
             }
             const grant = await claimAccountantGrant(tx, tokenDigest, accountantUserId, at);
@@ -2902,18 +2902,20 @@ export class PrismaLedgerStore implements LedgerStore {
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({
         where: { status: 'past_due', billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },
-        select: { stripeSubscriptionId: true, billingAccount: { select: { user: { select: { id: true, email: true, locale: true } } } } },
+        select: { stripeSubscriptionId: true, tier: true, billingAccount: { select: { user: { select: { id: true, email: true, locale: true } } } } },
         orderBy: [{ currentPeriodEnd: 'asc' }, { stripeSubscriptionId: 'asc' }],
       });
       return subs.flatMap((s) => {
         const user = s.billingAccount.user;
-        return user ? [{ stripeSubscriptionId: s.stripeSubscriptionId, userId: user.id, email: user.email, locale: user.locale as UserLocale }] : [];
+        return user ? [{ stripeSubscriptionId: s.stripeSubscriptionId, tier: s.tier, userId: user.id, email: user.email, locale: user.locale as UserLocale }] : [];
       });
     },
     createGrant: (input) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
           const { id, userId, organizationId, tier, reason, expiresAt, grantedBy, at } = input;
+          // MUT-565: the same refusal the memory store gives; the CHECK stays the backstop for a raw insert.
+          if (tier === 'ACCOUNTANT' && userId === null) throw new StateConflict('entitlement_grant', 'ACCOUNTANT_PERSON_ONLY');
           const grant = await tx.entitlementGrant.create({ data: { id, userId, organizationId, tier, reason, expiresAt, grantedBy, createdAt: at } });
           if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, at) });
           return grant;
@@ -3562,6 +3564,22 @@ function toAccountantGrant(row: Prisma.AccountantGrantGetPayload<object>): Accou
     dismissedAt: row.dismissedAt,
     lastViewedAt: row.lastViewedAt,
     createdAt: row.createdAt,
+  };
+}
+
+/**
+ * MUT-565 (ADR-251): the grants that take one of an accountant's places: ACTIVE, on a profile whose owner (its creator,
+ * else the personal profile's person: `profileOwnerOf`) isn't closing their account. Such a client shows as ended.
+ */
+function liveClientGrantWhere(accountantUserId: string): Prisma.AccountantGrantWhereInput {
+  return {
+    accountantUserId,
+    status: 'ACTIVE',
+    NOT: {
+      organization: {
+        OR: [{ owner: { is: { closeRequestedAt: { not: null } } } }, { ownerUserId: null, personalOwner: { is: { closeRequestedAt: { not: null } } } }],
+      },
+    },
   };
 }
 

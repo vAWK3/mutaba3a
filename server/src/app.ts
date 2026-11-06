@@ -538,6 +538,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ...(deps.offers ? { offers: deps.offers } : {}),
       plan: deps.stripe?.planGateway ?? null,
       accountantAccess,
+      accountantPlanOn: accountantPlan.on,
     }),
   );
   // MUT-531/532: changing one's own plan (switch, pause, cancel, the stay offer), person-level like the rest of Billing.
@@ -645,6 +646,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       windowDays: deps.retryWindowDays ?? 14,
       gateOn: deps.billingGate ?? false,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+      accountantFreeClients: accountantPlan.freeClients,
     }),
   );
   // MUT-534: the daily come-back mails (job + operator), on the unguarded store like the trial mails.

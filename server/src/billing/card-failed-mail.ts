@@ -3,6 +3,7 @@ import { normalizeEmail } from '../auth/users.js';
 import type { Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import type { LedgerStore, UserLocale } from '../repositories/ports.js';
+import { ACCOUNTANT_FREE_CLIENTS_DEFAULT } from './accountant-plan.js';
 
 /**
  * MUT-533 (plan D1–D7, ADR-242): our own "your card didn't go through" mail, ar + en, in place of Stripe's English one.
@@ -108,6 +109,8 @@ export interface CardFailedRunOptions {
   windowDays: number;
   /** The lapse gate is on: a plan that ends turns the account read-only, and the reminder may say so. */
   readOnlyAfter: boolean;
+  /** MUT-565: the client books an accountant keeps without the plan (ACCOUNTANT_FREE_CLIENTS); the Accountant plan's copy names it. */
+  accountantFreeClients?: number;
   dryRun: boolean;
   elapsedMs?: () => number;
   budgetMs?: number;
@@ -128,6 +131,7 @@ export async function runCardFailedMail(options: CardFailedRunOptions): Promise<
       break;
     }
     const { userId, email, locale, stripeSubscriptionId } = candidate;
+    const accountant = candidate.tier === 'ACCOUNTANT';
     const row: CardFailedMailRow = { userId, email, locale, stripeSubscriptionId, stage: null, action: 'skip', skip: null, outcome: null };
     try {
       const due = cardFailedStageOf(await options.stripe.failedPaymentOf(stripeSubscriptionId), now, options.windowDays);
@@ -137,7 +141,7 @@ export async function runCardFailedMail(options: CardFailedRunOptions): Promise<
         if (await store.email.isSuppressed(normalizeEmail(email))) row.skip = 'suppressed';
         else {
           row.action = 'send';
-          if (!dryRun) row.outcome = (await send(options, row, due)).status;
+          if (!dryRun) row.outcome = (await send(options, row, due, accountant)).status;
         }
       }
     } catch (err) {
@@ -155,10 +159,12 @@ export async function runCardFailedMail(options: CardFailedRunOptions): Promise<
   return { summary, rows };
 }
 
-function send(options: CardFailedRunOptions, row: CardFailedMailRow, due: Exclude<CardFailedStageNow, { skip: string }>): Promise<SendResult> {
+function send(options: CardFailedRunOptions, row: CardFailedMailRow, due: Exclude<CardFailedStageNow, { skip: string }>, accountant: boolean): Promise<SendResult> {
   const base = { to: row.email, locale: row.locale, idempotencyKey: `card-failed:${due.invoiceId}:${due.stage}` };
-  if (due.stage === 'first') return options.mailer.send({ ...base, template: 'card-failed', vars: { updateLink: options.updateLink } });
-  return options.mailer.send({ ...base, template: 'card-failed-reminder', vars: { daysLeft: due.daysLeft, readOnlyAfter: options.readOnlyAfter, updateLink: options.updateLink } });
+  // MUT-565 review: the Accountant plan's copy says what its end means (client books past the free ones lock), never read-only.
+  const plan = accountant ? { accountantFreeClients: options.accountantFreeClients ?? ACCOUNTANT_FREE_CLIENTS_DEFAULT } : {};
+  if (due.stage === 'first') return options.mailer.send({ ...base, template: 'card-failed', vars: { updateLink: options.updateLink, ...plan } });
+  return options.mailer.send({ ...base, template: 'card-failed-reminder', vars: { daysLeft: due.daysLeft, readOnlyAfter: options.readOnlyAfter, updateLink: options.updateLink, ...plan } });
 }
 
 function summarize(rows: readonly CardFailedMailRow[], dryRun: boolean, incomplete: boolean): CardFailedMailSummary {

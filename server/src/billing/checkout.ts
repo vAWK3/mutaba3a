@@ -29,6 +29,8 @@ export const ACCOUNTANT_PRICE_LOOKUP_KEYS: Readonly<Record<BillingCurrency, { mo
   USD: { month: 'accountant_list_monthly_usd' },
 };
 export const ALL_ACCOUNTANT_LOOKUP_KEYS: readonly string[] = Object.values(ACCOUNTANT_PRICE_LOOKUP_KEYS).map((k) => k.month);
+/** MUT-565 review: the Checkout Session metadata naming its plan; absent is the Freelancer plan (sessions made before). */
+export const CHECKOUT_PLAN_METADATA_KEY = 'mutaba3a_plan';
 /** Which plan a Checkout is for (CheckoutSessionRequest.plan; absent is freelancer). */
 export type CheckoutPlanName = 'freelancer' | 'accountant';
 /** The Stripe product tier a lookup key must sit on: `accountant_*` keys on the Accountant product, every other on Freelancer. */
@@ -256,7 +258,8 @@ export function planAccountantCheckout(input: CheckoutInput, person: AccountantP
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
   if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
-  return { ok: true, currency, params: paramsOf({ ...input, trialEndsAt: null, offer: null }, currency, prices.month, countries) };
+  // Review: the session names its plan, so expiring open Checkouts touches only this plan's (`expireOpenCheckouts`).
+  return { ok: true, currency, params: { ...paramsOf({ ...input, trialEndsAt: null, offer: null }, currency, prices.month, countries), metadata: { [CHECKOUT_PLAN_METADATA_KEY]: 'accountant' } } };
 }
 
 /** Every refusal that needs no price: the route checks these before asking Stripe for the catalog. */
