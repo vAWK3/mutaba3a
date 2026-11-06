@@ -4,6 +4,7 @@ import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
 import { ProfileKindLine } from '../../components/ProfileKindLine';
 import { RowButton, RowGroup } from '../../components/YouRows';
+import { SharingEntryRow } from '../../components/SharingEntryRow';
 import { atProfileCap, canCreateProfile } from '../../data/profileRules';
 import { useMe } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
@@ -61,6 +62,8 @@ export function YouProfiles({ active, from }: { active: HostedProfile | null; fr
           );
         })}
       </RowGroup>
+      {/* MUT-561: the open profile's Sharing page, for its owner on a server with accountant access */}
+      {active && <SharingEntryRow profile={active} place="you" />}
       <RowGroup>
         <RowButton tone="action" inert={!canCreate} label={t('hosted.shell.switcher.newProfile')} sub={newProfileSub} onClick={drawers.openNew} />
         <RowButton tone="action" label={t('hosted.shell.switcher.manage')} onClick={drawers.openManage} />

@@ -2194,6 +2194,73 @@
         "continue": "Continue on this device"
       },
       "whatIs": "What is MTB3A?"
+    },
+    "accessScope": {
+      "label": "What whoever you share with can do",
+      "sees": "Sees this profile’s expenses, income and receipts",
+      "download": "Can download them for a period",
+      "cannotChange": "Can’t add, change or delete anything",
+      "cannotSeeOther": "Doesn’t see your other profiles or your account"
+    },
+    "sharing": {
+      "title": "Sharing {profile}",
+      "back": "Profiles",
+      "scopeNote": "Whoever you share with reads expenses, income and receipts only. They can't add or change anything.",
+      "entryRow": "Share with your accountant",
+      "manageRow": "Sharing",
+      "manageSub": "Who reads this profile",
+      "accountants": {
+        "heading": "Accountants",
+        "invite": "Invite by email",
+        "limit": "Up to {limit} accountants per profile.",
+        "atLimit": "This profile has {limit}, the most it can. Stop one to invite someone else.",
+        "since": "Since {date}",
+        "viewed": "viewed {when}",
+        "notViewed": "not viewed yet",
+        "sent": "Sent {date}",
+        "ends": "ends {date}",
+        "expiredMeta": "Not accepted within 14 days",
+        "chip": {
+          "active": "Active",
+          "pending": "Pending",
+          "expired": "Expired"
+        },
+        "stop": "Stop",
+        "stopAria": "Stop {name}'s access",
+        "stopConfirm": "Stop {name}'s access to {profile}? They won't be able to open it any more. You can invite them again later.",
+        "stopAction": "Stop access",
+        "cancel": "Cancel",
+        "cancelAria": "Cancel the invite to {name}",
+        "cancelConfirm": "Cancel the invite to {name}? The link in their email stops working.",
+        "cancelAction": "Cancel invite",
+        "keep": "Keep invite",
+        "inviteAgain": "Invite again",
+        "inviteAgainAria": "Invite {name} again",
+        "stopped": "{name} can no longer open {profile}",
+        "cancelled": "Invite to {name} cancelled",
+        "revokeFailed": "That didn't go through. Check your connection and try again."
+      },
+      "invite": {
+        "title": "Invite an accountant",
+        "intro": "They'll get an email to accept. It ends after 14 days.",
+        "email": "Email",
+        "send": "Send invite",
+        "sent": "Invite sent to {email}",
+        "errors": {
+          "self": "That's your own email. Use your accountant's.",
+          "refused": "We can't send invites to this address. Use your accountant's own email.",
+          "invalid": "Enter an email address, like name@firm.ps.",
+          "already": "{email} already has an invite or access to this profile.",
+          "limit": "This profile already has {limit} accountants or invites, the most it can. Stop one first.",
+          "notOwner": "Only the profile's owners can share it.",
+          "gone": "This profile isn't available to share any more.",
+          "rate": "Too many invites in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and send again."
+        }
+      },
+      "empty": {
+        "title": "You haven't shared this profile yet"
+      }
     }
   }
 }

@@ -17,6 +17,7 @@ import { ReadOnlyFields } from './Drawer';
 import { LockIcon } from './Icons';
 import { FirmRequestSection } from './FirmRequestSection';
 import { ProfileOwnersSection } from './ProfileOwnersSection';
+import { SharingEntryRow } from './SharingEntryRow';
 import { ProfileBanner } from './ProfileBanner';
 import { ProfileTypeCards } from './ProfileTypeCards';
 import { mapProfileError, type ProfileBanner as Banner } from './profileApiErrors';
@@ -276,6 +277,8 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
       {step.kind !== 'confirm' && (
         <ProfileOwnersSection profileId={profile.id} onLeft={onLeftProfile} onBusyChange={onOwnersBusy} onLeaveConfirmChange={setLeaveConfirmOpen} />
       )}
+      {/* MUT-561: this profile's Sharing page (accountants, links), after who owns it */}
+      {step.kind !== 'confirm' && !leaveConfirmOpen && <SharingEntryRow profile={profile} place="manage" />}
       {/* MUT-300: outside the form, so asking for firm features never submits or dirties it */}
       {step.kind !== 'confirm' && !leaveConfirmOpen && !readOnly && <FirmRequestSection profileId={profile.id} />}
     </>

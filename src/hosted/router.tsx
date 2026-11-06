@@ -33,6 +33,8 @@ import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
 import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
+import { SharingPage } from './pages/sharing/SharingPage';
+import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
 import { parseConsentSearch } from './pages/connect/consentSearch';
 import { HostedShell } from './shell/HostedShell';
@@ -349,6 +351,20 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   });
 
   /**
+   * MUT-561 (D1): one profile's Sharing page, a child of the profile (not a You tab), so the You island stays lit and
+   * no destination is added. `?invite=true` opens the invite drawer; the shell's own keys pass through untouched.
+   */
+  const sharingRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/you/sharing',
+    validateSearch: (raw: Raw) => ({ ...pickShellOverlay(raw), ...parseSharingSearch(raw) }),
+    component: function Sharing() {
+      return <SharingPage profile={useProfile()} search={parseSharingSearch(omitShellOverlay(sharingRoute.useSearch()))} />;
+    },
+  });
+
+  /**
    * MUT-460 (ADR-213, design 6A): the operator console, outside any profile. Only an operator (/v1/me says so) sees it;
    * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
    */
@@ -461,6 +477,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         receiptRoute,
         conversionsRoute,
         ...youRoutes.map((route) => route.inProfile),
+        sharingRoute,
       ]),
     ]),
   ]);
