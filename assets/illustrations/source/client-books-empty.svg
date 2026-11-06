@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<path id="shelf" d="M22 132h116M34 132v8M126 132v8" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+<g id="books"><rect x="35" y="56" width="26" height="76" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></rect><rect x="99" y="64" width="26" height="68" rx="6" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></rect><path d="M35 72h26M35 116h26M99 80h26M99 116h26" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></g>
+<rect id="slot" x="67" y="56" width="26" height="76" rx="6" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"></rect>
+<circle id="nuqta" cx="80" cy="40" r="7" fill="#E89960"></circle>
+</svg>
