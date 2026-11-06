@@ -149,12 +149,21 @@ export function accountantScopes(): readonly Scope[] {
 }
 
 /**
- * MUT-559 (D1): whether an accountant may call a GET whose `requireScope` tags are `routeScopes` (the route-access
- * index). Derived, never listed: at least one tag, every one of them the accountant's. An untagged GET (the records
- * export) is refused, as is one tagged with any scope the accountant lacks (the retainer charges' agreements:read), so
- * a route added later is closed until it declares what it reads.
+ * MUT-559 (ADR-245): GETs an accountant is refused although every scope they tag is the accountant's. Kept tiny and
+ * explicit, keyed as the route-access index keys them (a test fails if one names no route):
+ *  - the retainer charges: tagged payments:read (Malafat's key reads them as payments, and the matrix's agreements row
+ *    says "except charges"), but they return the retainer's agreement terms and the charges its terms post.
  */
-export function accountantMayRead(routeScopes: readonly Scope[]): boolean {
+export const ACCOUNTANT_EXCLUDED_ROUTES: ReadonlySet<string> = new Set(['GET /v1/retainers/:agreementId/charges']);
+
+/**
+ * MUT-559 (D1): whether an accountant may call the GET `endpoint` (`METHOD /hono/:path`) whose `requireScope` tags are
+ * `routeScopes` (the route-access index). Derived, not listed: at least one tag, every one of them the accountant's,
+ * and not one of the few ACCOUNTANT_EXCLUDED_ROUTES. An untagged GET (the records export) is refused, as is one tagged
+ * with a scope the accountant lacks, so a route added later is closed until it declares what it reads.
+ */
+export function accountantMayRead(endpoint: string, routeScopes: readonly Scope[]): boolean {
+  if (ACCOUNTANT_EXCLUDED_ROUTES.has(endpoint)) return false;
   const held = new Set<Scope>(accountantScopes());
   return routeScopes.length > 0 && routeScopes.every((s) => held.has(s));
 }

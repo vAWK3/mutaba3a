@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
-import { accountantMayRead } from '../auth/writability.js';
+import { ACCOUNTANT_EXCLUDED_ROUTES, accountantMayRead } from '../auth/writability.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { accountantHarness, businessOf, expenseOn, idem, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 
@@ -160,7 +160,7 @@ describe('the accountant route matrix (MUT-559)', () => {
   });
 
   it('derives exactly the reviewed GET allowlist from the routes’ scope tags (D1)', () => {
-    const allowed = operations.filter((op) => op.method === 'GET' && accountantMayRead(scopesOf(op))).map((op) => op.key).sort();
+    const allowed = operations.filter((op) => op.method === 'GET' && accountantMayRead(`${op.method} ${hono(op.path)}`, scopesOf(op))).map((op) => op.key).sort();
     expect(allowed).toEqual(ALLOWED_GETS);
     // The records export has no scope tag, so it is refused (download is MUT-314).
     expect(allowed).not.toContain('GET /v1/records-export');
@@ -204,9 +204,14 @@ describe('the accountant route matrix (MUT-559)', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('refuses the retainer charges: they need agreements:read, which an accountant never holds', async () => {
+  it('every explicit exclusion names a route that exists (a renamed route can’t silently reopen)', () => {
+    expect(ACCOUNTANT_EXCLUDED_ROUTES.size).toBeGreaterThan(0);
+    for (const endpoint of ACCOUNTANT_EXCLUDED_ROUTES) expect(routeAccess.has(endpoint), endpoint).toBe(true);
+  });
+
+  it('refuses the retainer charges by explicit exclusion; their scope stays payments:read for Malafat', async () => {
     const op = operations.find((o) => o.key === 'GET /v1/retainers/{agreementId}/charges')!;
-    expect(scopesOf(op)).toEqual(expect.arrayContaining(['payments:read', 'agreements:read']));
+    expect(scopesOf(op)).toEqual(['payments:read']);
     const res = await call(op);
     expect(res.status).toBe(403);
     expect((await read(res)).error.details).toEqual({ reason: 'ACCOUNTANT_READ_ONLY' });

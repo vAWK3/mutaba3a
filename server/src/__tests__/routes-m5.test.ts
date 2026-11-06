@@ -4,6 +4,7 @@ import { createApp, API_VERSION } from '../app.js';
 import { SCOPES } from '../auth/scopes.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import { provisionUser } from './helpers/provision.js';
 import { reconcileAll } from '../scripts/reconcile.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,6 +64,23 @@ const cancelPreview = (h: Harness, f: Firm, id: string, body: Record<string, unk
 const cancel = (h: Harness, f: Firm, id: string, body: Record<string, unknown>, headers = idem()) => h.app.request(`/v1/retainers/${id}/cancel`, json(body, { ...f.auth, ...headers }));
 const charges = async (h: Harness, f: Firm, id: string) => read(await h.app.request(`/v1/retainers/${id}/charges`, { headers: f.auth }));
 const auditActions = async (h: Harness, orgId: string): Promise<string[]> => ((await read(await h.app.request(`/admin/v1/organizations/${orgId}/audit`, { headers: admin }))).events as Loose[]).map((e) => e.action);
+
+describe('retainer charges stay a payments read for Malafat and members (MUT-559)', () => {
+  it('an API key holding only payments:read, and a member’s session, still read them (accountants alone are refused, ADR-245)', async () => {
+    const h = harness();
+    const f = await firm(h);
+    const id = (await createRetainer(h, f)).agreement.id;
+    const narrow = (await read(await h.app.request(`/admin/v1/organizations/${f.org.id}/api-keys`, json({ name: 'Payments only', scopes: ['payments:read'] }, admin)))) as { secret: string };
+    const res = await h.app.request(`/v1/retainers/${id}/charges`, { headers: { authorization: `Bearer ${narrow.secret}` } });
+    expect(res.status).toBe(200);
+    expect((await read(res)).charges.length).toBeGreaterThan(0);
+
+    const member = await provisionUser(h.app, { email: `member${++seq}@firm.ps`, displayName: 'Nour', organizationId: f.org.id });
+    const device = await read(await h.app.request('/v1/device-sessions', json({ email: member.user.email, password: member.password })));
+    const session = await h.app.request(`/v1/retainers/${id}/charges`, { headers: { authorization: `Bearer ${device.token}`, 'x-mutaba3a-profile': f.org.id } });
+    expect(session.status).toBe(200);
+  });
+});
 
 describe('retainer changes', () => {
   it('previews previous vs next terms at the rate in force, names what changed and the first charged month; refuses bad changes', async () => {

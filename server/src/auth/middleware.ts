@@ -246,7 +246,7 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
     c.set('auth', auth);
     profileWriter = auth.writerOfRecord;
     // MUT-559: an accountant's request is refused before the lapse gate, so a write is always 403, never 402.
-    if (grant) assertAccountantMayCall(c.req.method, options.routeAccess().get(endpoint));
+    if (grant) assertAccountantMayCall(c.req.method, endpoint, options.routeAccess().get(endpoint));
     if (gated) await gateSelectedProfile(c, auth, endpoint, options.store);
     if (grant) await touchAccountantView(c, options.store, grant, identity.user.id);
   } else if (endpoint && gated) {
@@ -259,11 +259,11 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
  * MUT-559 (ADR-245): the first two refusal layers for an accountant, before any route work. Layer 1, the method gate:
  * only GET and HEAD, which also covers writes no scope guards (income, inbox filing, previews). Layer 2 (D1), the
  * derived allowlist: a GET whose `requireScope` tags are all the accountant's, and at least one; an untagged GET (the
- * records export) is refused. The third layer is the store guard (accountantStoreGuard).
+ * records export) is refused, and so are the few ACCOUNTANT_EXCLUDED_ROUTES. The third layer is the store guard (accountantStoreGuard).
  */
-function assertAccountantMayCall(method: string, access: RouteAccess | undefined): void {
+function assertAccountantMayCall(method: string, endpoint: string, access: RouteAccess | undefined): void {
   if (method !== 'GET' && method !== 'HEAD') throw accountantReadOnly();
-  if (!access || !accountantMayRead(access.scopes)) throw accountantReadOnly();
+  if (!access || !accountantMayRead(endpoint, access.scopes)) throw accountantReadOnly();
 }
 
 /**

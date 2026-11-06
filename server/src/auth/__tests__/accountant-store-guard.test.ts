@@ -20,12 +20,15 @@ describe('accountantScopes (MUT-559)', () => {
   });
 
   it('allows a GET only when it names at least one scope and every one is the accountant’s (D1)', () => {
-    expect(accountantMayRead(['expenses:read'])).toBe(true);
-    expect(accountantMayRead(['payments:read', 'customers:read'])).toBe(true);
-    expect(accountantMayRead([])).toBe(false);
-    expect(accountantMayRead(['agreements:read'])).toBe(false);
-    expect(accountantMayRead(['payments:read', 'agreements:read'])).toBe(false);
-    expect(accountantMayRead(['expenses:write'])).toBe(false);
+    const get = 'GET /v1/expenses';
+    expect(accountantMayRead(get, ['expenses:read'])).toBe(true);
+    expect(accountantMayRead(get, ['payments:read', 'customers:read'])).toBe(true);
+    expect(accountantMayRead(get, [])).toBe(false);
+    expect(accountantMayRead(get, ['agreements:read'])).toBe(false);
+    expect(accountantMayRead(get, ['payments:read', 'agreements:read'])).toBe(false);
+    expect(accountantMayRead(get, ['expenses:write'])).toBe(false);
+    // An explicit exclusion wins over scopes the accountant holds (the retainer charges carry agreement terms).
+    expect(accountantMayRead('GET /v1/retainers/:agreementId/charges', ['payments:read'])).toBe(false);
   });
 });
 

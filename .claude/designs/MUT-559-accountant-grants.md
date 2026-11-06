@@ -216,7 +216,7 @@ Where the build follows the code rather than the plan's letter:
 - **Expired invites.** A new invite to the same address replaces an expired PENDING one (it is ended in the invite's transaction); expired invites don't count toward the cap.
 - **Expense categories.** GET /v1/expense-categories seeded the preset on a first read (a write); it now seeds only for members, so an accountant's read never writes.
 - **Telemetry.** The API has no PostHog client (`observability/telemetry-gate.ts`: "The API sends nothing to PostHog"), so the server events are left to the client stories.
-- **Allowlist (D1) today:** 33 GETs (`accountant-route-matrix.test.ts` pins them and reads each on a real record), including `/v1/summaries/activity`. Review decision B: `/v1/retainers/{id}/charges` also requires `agreements:read`, so it is refused.
+- **Allowlist (D1) today:** 33 GETs (`accountant-route-matrix.test.ts` pins them and reads each on a real record), including `/v1/summaries/activity`. Review decision B (revised): `/v1/retainers/{id}/charges` keeps `payments:read` only (Malafat's key contract, unchanged from main) and is refused to accountants by an explicit exclusion, `ACCOUNTANT_EXCLUDED_ROUTES` in `auth/writability.ts`, because it returns agreement terms.
 - **Review fixes:** the purge deletes only PENDING invites to a purged address; the owner's list shows the accepting account's address on an active grant; `touchViewed` stamps ACTIVE grants only; the Prisma invite's unique-violation path re-reads the table instead of trusting the constraint name.
 
 ## QA scenarios

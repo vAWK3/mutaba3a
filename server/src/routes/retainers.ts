@@ -96,9 +96,7 @@ export function retainerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Retainers'],
       summary: 'The retainer and its charges to date',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
-      // MUT-559 (ADR-245): the retainer's terms are agreement data, so it also needs agreements:read; an accountant,
-      // who holds no agreement scope, is refused by the derived allowlist (D1). Members and keys hold both.
-      middleware: [requireScope('payments:read'), requireScope('agreements:read')] as const,
+      middleware: [requireScope('payments:read')] as const,
       request: { params: AgreementIdParamSchema },
       responses: { 200: { description: 'Charges', content: { 'application/json': { schema: RetainerChargesResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
     }),

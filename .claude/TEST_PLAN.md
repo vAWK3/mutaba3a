@@ -4403,7 +4403,7 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - `server/src/__tests__/accountant-route-matrix.test.ts`: every profile-scoped route from the published contract and
   the route-access index, as an accountant: key-only routes 403; every write 403 ACCOUNTANT_READ_ONLY; every GET outside
   the derived allowlist the same; every allowlisted GET answers 200 on a real seeded record (the 33 it yields today are
-  pinned, so a new one fails until reviewed); the retainer charges refused (agreements:read); list reads carry only the
+  pinned, so a new one fails until reviewed); the retainer charges refused by explicit exclusion (scope still payments:read), and every exclusion names a real route; `routes-m5.test.ts`: an API key with only payments:read and a member's session still read the charges (Malafat's contract); list reads carry only the
   shared profile's rows.
 - `routes-accountants.test.ts`: invite (mail ar + en, token in the fragment), duplicate, cap, self, non-owner, rate
   limit; 14-day expiry and re-invite; revoke → next request 404; leave; accept by exact address, same business domain,
